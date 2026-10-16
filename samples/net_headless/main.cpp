@@ -32,6 +32,12 @@
 //   sample_net_headless -ticks 300
 //   sample_net_headless -sim 1 -clients 4 -latency 75 -jitter 20 -loss 0.05 -ticks 600
 //   sample_net_headless -sim 1 -relay 1 -clients 3 -latency 40 -jitter 10 -loss 0.05 -ticks 600
+//   sample_net_headless -sim 1 -clients 3 -spectators 2 -latency 75 -ticks 600
+//
+// Spectators (M-NET3 step 2, -sim 1 without -relay): -spectators N more clients send WATCH instead
+// of JOIN. They get no player and send no input, only acknowledgements; the server marks them
+// set_sees_all and sends them per-client snapshots like the players, and they must mirror
+// everything too.
 
 #include <algorithm>
 #include <chrono>
@@ -64,6 +70,7 @@ MCE_CVAR(cv_predict, "predict", true, "Clients predict their own player and reco
 MCE_CVAR(cv_delta, "delta", true,
          "Per-client snapshots coded against each client's acknowledged one (M-NET3 step 1); 0: one broadcast",
          CVarFlags::None);
+MCE_CVAR(cv_spectators, "spectators", 0, "-sim 1: clients that only watch (no player, no input)", CVarFlags::None);
 MCE_CVAR(cv_relay, "relay", false, "-sim: everybody meets in a room on a relay instead of connecting to the server (M-NET2 step 6)",
          CVarFlags::None);
 
@@ -77,6 +84,7 @@ constexpr u8 kMsgInput = 2;
 constexpr u8 kMsgWelcome = 3;  // server -> client: the net id of your player
 constexpr u8 kMsgShot = 4;     // client -> server: a ray from the origin and the tick the client drew
 constexpr u8 kMsgAck = 5;      // client -> server: the newest snapshot applied (delta snapshots)
+constexpr u8 kMsgWatch = 6;    // client -> server: a spectator, instead of JOIN
 constexpr u64 kShotTicks = 30;
 constexpr f32 kShotRange = 20.0f;
 constexpr u64 kGustTicks = 120;
@@ -142,6 +150,7 @@ struct Server {
     net::LagCompensator lag;
     u32 shots = 0, hits_rewound = 0, hits_present = 0;
     u32 too_old = 0;  // arrived after the rewind window (a reliable shot lost and resent): checked late
+    Array<net::PeerId> watchers;  // spectators: snapshots, no player
 
     void start(net::Transport& transport) {
         net = &transport;
@@ -177,6 +186,11 @@ struct Server {
             if (ev.kind == net::EventKind::Disconnected) {
                 if (const Entity e = player_of(ev.peer); !e.is_null()) world.destroy(e);
                 replication.forget_client(ev.peer);
+                for (usize i = 0; i < watchers.size(); ++i)
+                    if (watchers[i] == ev.peer) {
+                        watchers.erase(i);
+                        break;
+                    }
             } else if (ev.kind == net::EventKind::Received) {
                 net::ByteReader r(ev.data);
                 const u8 msg = r.read_u8();
@@ -186,6 +200,11 @@ struct Server {
                     welcome.write_u8(kMsgWelcome);
                     welcome.write_u32(replication.assign(world, e, kKindPlayer));
                     net->send(ev.peer, kChannelControl, welcome.data(), net::Delivery::Reliable);
+                } else if (msg == kMsgWatch && r.ok() && player_of(ev.peer).is_null()) {
+                    if (std::find(watchers.begin(), watchers.end(), ev.peer) == watchers.end()) {
+                        watchers.push_back(ev.peer);
+                        replication.set_sees_all(ev.peer, true);  // a caster: every entity, whatever its relevance
+                    }
                 } else if (msg == kMsgAck && r.ok()) {
                     replication.read_ack(ev.peer, r);
                 } else if (msg == kMsgInput && r.ok()) {
@@ -232,13 +251,15 @@ struct Server {
             return;
         }
         const usize full = snapshot.size();
-        world.query<const Player>().each([&](const Player& p) {
+        auto send_to = [&](net::PeerId peer) {
             snapshot.clear();
-            replication.write_snapshot_for(world, static_cast<u32>(tick), p.peer, snapshot);
-            net->send(p.peer, kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
+            replication.write_snapshot_for(world, static_cast<u32>(tick), peer, snapshot);
+            net->send(peer, kChannelSnapshot, snapshot.data(), net::Delivery::Sequenced);
             bytes_sent += snapshot.size();
             bytes_full += full;
-        });
+        };
+        world.query<const Player>().each([&](const Player& p) { send_to(p.peer); });
+        for (net::PeerId peer : watchers) send_to(peer);
         net->flush();
     }
 
@@ -273,6 +294,7 @@ struct Client {
     net::PeerId server = net::kInvalidPeer;
     f32 move = 1.0f;  // the input this client holds
     bool connected = false;
+    bool watch = false;  // a spectator
     u32 own_id = 0;  // our player's net id, from WELCOME
     net::Predictor<PlayerInput, PlayerState> predictor;
     u64 applied_hash = 0;  // of the newest snapshot applied
@@ -371,7 +393,7 @@ struct Client {
             if (ev.peer != server) continue;  // through a relay the other clients are peers too
             if (ev.kind == net::EventKind::Connected) {
                 connected = true;
-                const u8 join[1] = {kMsgJoin};
+                const u8 join[1] = {watch ? kMsgWatch : kMsgJoin};
                 net->send(server, kChannelControl, Span<const u8>(join, 1), net::Delivery::Reliable);
             } else if (ev.kind == net::EventKind::Disconnected) {
                 connected = false;
@@ -398,12 +420,12 @@ struct Client {
     // One tick holding `move` (input: false keeps resending the unacknowledged inputs only).
     void step(bool input = true) {
         receive();
-        if (connected && predictor.active()) {
-            if (input) predictor.push(PlayerInput{move});
-            send_inputs();
+        if (connected && (predictor.active() || watch)) {
+            if (input && !watch) predictor.push(PlayerInput{move});
+            send_inputs();  // a spectator: only the acknowledgement
         }
         world.tick(kDt, ++tick);
-        if (input && tick > 120 && tick % kShotTicks == 0) fire();
+        if (input && !watch && tick > 120 && tick % kShotTicks == 0) fire();
         track();
         net->flush();
     }
@@ -457,10 +479,26 @@ bool caught_up(const Client& c, u32 final_tick, u64 snapshot_hash) {
 }
 
 // Every client mirrors the server bit for bit, and each player moved the way its client held.
-bool check(Server& server, Client* clients, u32 count) {
+bool check(Server& server, Client* clients, u32 count, u32 spectators = 0) {
     u32 replicated = 0;
     server.world.query<const net::NetId>().each([&](const net::NetId&) { ++replicated; });
     bool ok = replicated == 8 + count;
+    for (u32 c = count; c < count + spectators; ++c) {
+        Client& watcher = clients[c];
+        u32 matched = 0;
+        server.world.query<const net::NetId, const LocalTransform>().each(
+            [&](const net::NetId& id, const LocalTransform& t) {
+                const Entity mirror = watcher.replication.find(id.id);
+                const LocalTransform* mt =
+                    watcher.world.alive(mirror) ? watcher.world.try_get<LocalTransform>(mirror) : nullptr;
+                if (mt && same_bits(*mt, t)) ++matched;
+            });
+        const bool watcher_ok = watcher.connected && watcher.own_id == 0 && matched == replicated &&
+                                watcher.world.entity_count() == replicated;
+        std::printf("  spectator %u: %u snapshots applied (%u deltas), %u/%u entities match -> %s\n", c - count,
+                    watcher.snapshots, watcher.deltas, matched, replicated, watcher_ok ? "OK" : "FAILED");
+        ok = ok && watcher_ok;
+    }
     for (u32 c = 0; c < count; ++c) {
         Client& client = clients[c];
         u32 matched = 0;
@@ -513,6 +551,10 @@ int run_sim() {
     // A room holds the host and up to 7 others.
     const i32 most = relayed ? static_cast<i32>(net::kRelayMaxMembers - 1) : static_cast<i32>(kMaxClients);
     const u32 count = static_cast<u32>(std::min(std::max(cv_clients.get_int(), 1), most));
+    // Spectators take the client slots the players leave (direct only).
+    const u32 spectators =
+        relayed ? 0u : static_cast<u32>(std::clamp(cv_spectators.get_int(), 0, static_cast<i32>(kMaxClients - count)));
+    const u32 total = count + spectators;
     const net::LinkConditions link = conditions_from_cvars();
     net::SimNetwork network(static_cast<u64>(cv_seed.get_int()));
     network.set_default_conditions(link);
@@ -537,7 +579,8 @@ int run_sim() {
         server.start(server_end);
     }
     Client clients[kMaxClients];
-    for (u32 c = 0; c < count; ++c) {
+    for (u32 c = 0; c < total; ++c) {
+        clients[c].watch = c >= count;
         net::SimEndpoint& end = network.add_endpoint(1, relayed ? 2 : kChannels);
         if (relayed) {
             rooms[c].start(end, end.connect(*relay_end), room_desc);
@@ -569,7 +612,7 @@ int run_sim() {
     for (u64 i = 0; i < ticks; ++i) {
         run_relay();
         server.step();
-        for (u32 c = 0; c < count; ++c) clients[c].step();
+        for (u32 c = 0; c < total; ++c) clients[c].step();
         advance(++session_tick);
     }
 
@@ -578,7 +621,7 @@ int run_sim() {
     // extrapolation limit every entity holds the newest snapshot. Up to 10 virtual seconds.
     const u32 final_tick = static_cast<u32>(server.tick);
     auto all_caught_up = [&] {
-        for (u32 c = 0; c < count; ++c)
+        for (u32 c = 0; c < total; ++c)
             if (!caught_up(clients[c], final_tick, server.snapshot_hash)) return false;
         return true;
     };
@@ -586,10 +629,11 @@ int run_sim() {
         run_relay();
         server.receive();
         server.broadcast_snapshot();
-        for (u32 c = 0; c < count; ++c) clients[c].step(false);  // resend unacknowledged inputs
+        for (u32 c = 0; c < total; ++c) clients[c].step(false);  // resend unacknowledged inputs
         advance(++session_tick);
     }
 
+    if (spectators) std::printf("net_headless: %u spectators watch\n", spectators);
     std::printf("net_headless (sim%s): %u clients, latency %u ms, jitter %u ms, loss %.3f, seed %d, %u ticks\n",
                 relayed ? ", through a relay" : "", count, link.latency_ms, link.jitter_ms, static_cast<double>(link.loss),
                 cv_seed.get_int(), final_tick);
@@ -600,7 +644,7 @@ int run_sim() {
                     rooms[kMaxClients].connected_count() + 1, static_cast<unsigned long long>(rs.forwarded),
                     static_cast<unsigned long long>(rs.forwarded_bytes), static_cast<unsigned long long>(rs.dropped));
     }
-    const bool ok = check(server, clients, count);
+    const bool ok = check(server, clients, count, spectators);
     FixedString<160> stats;
     meter.format(stats);
     std::printf("  server %s\n", stats.c_str());
@@ -610,7 +654,7 @@ int run_sim() {
                 static_cast<double>(is.delay_s) * 1000.0, static_cast<double>(is.jitter_s) * 1000.0);
     if (cv_delta.get_bool()) {
         u32 deltas = 0, snapshots = 0;
-        for (u32 c = 0; c < count; ++c) {
+        for (u32 c = 0; c < total; ++c) {
             deltas += clients[c].deltas;
             snapshots += clients[c].snapshots;
         }
@@ -629,7 +673,7 @@ int run_sim() {
     // the traffic.
     Hasher64 h;
     h.u64v(server.world.state_hash());
-    for (u32 c = 0; c < count; ++c) {
+    for (u32 c = 0; c < total; ++c) {
         h.u64v(clients[c].world.state_hash());
         u64 jerk_bits = 0;  // the path the client drew, not just where it ended
         std::memcpy(&jerk_bits, &clients[c].motion.jerk, sizeof jerk_bits);
