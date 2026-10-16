@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- M-VISUAL2 is done (step 5, SBA-105). `Environment3D` gains `ssr_steps`, `ssr_edge_fade` and
+  `contact_steps`, and MCP's Material schema lists the clear coat, sheen, anisotropy, transmission and ior
+  keys. `samples/06_showcase` shows reflections, contact shadows, sharpening, glass, lacquer and brushed
+  metal on its High profile, and `-profile highbase` draws High without them for the on/off sheet in the
+  milestone record.
 - Occlusion and Doppler, M-AUDIO2 step 5 (SBA-122): `AudioOcclusion` on a 3D source fades it down and closes
   a low-pass while a physics ray from the listener hits a wall, and `AudioDoppler` bends its pitch with how fast
   it and the listener close. `mce_player -headless 1 -audio_record run.wav` renders a run's mix offline and

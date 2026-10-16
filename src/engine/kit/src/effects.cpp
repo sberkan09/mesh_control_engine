@@ -16,6 +16,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/pathfinding.h"
+#include "mce/kit/vehicles3d.h"
 #include "mce/log.h"
 #include "mce/physics/components.h"
 #include "mce/render/camera2d.h"
@@ -57,6 +58,7 @@ struct Named {
     Array<Entity> trigger;
     Array<Entity> contact;
     Array<Entity> landed;  // characters that touched down (Landed3D)
+    Array<Entity> skid;    // vehicles a wheel of which started to skid (Skid3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -81,6 +83,7 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::TriggerEnter: go = go || named(n.trigger, e); break;
     case FireOn::ContactBegin: go = go || named(n.contact, e); break;
     case FireOn::Landed: go = go || named(n.landed, e); break;
+    case FireOn::Skid: go = go || named(n.skid, e); break;
     }
     return go;
 }
@@ -135,6 +138,8 @@ void record_physics_events(Frame& f, Named& n) {
                     if (p->touching > 0) --p->touching;
                 }
     }
+    if (w.event_queue<Skid3D>())
+        for (const Skid3D& ev : events.read<Skid3D>()) add_unique(n.skid, ev.vehicle);
     if (w.event_queue<Landed3D>())
         for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
     if (w.event_queue<TriggerEnter3D>()) {

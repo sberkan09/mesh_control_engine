@@ -1,6 +1,8 @@
 // M-MOVE3D, with the numbers each feature promises. Step 1, character feel: CharacterController3D's
 // acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch and the Landed3D event.
 // Step 2, the camera: CameraFollow3D's spring arm, look-ahead, first person and lock-on.
+// Step 3, vehicle feel: Vehicle3D's anti-roll bars, downforce, gears and shift points, skids and
+// self-righting.
 
 #include <doctest/doctest.h>
 
@@ -12,6 +14,7 @@
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/vehicles3d.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -32,6 +35,7 @@ struct Scene {
         install_bodies3d(w, nullptr);
         install_particles(w, nullptr);
         install_effects(w, nullptr);
+        install_vehicles3d(w, nullptr);
         box({0, -0.5f, 0}, {floor_half_x, 0.5f, 20.0f});  // top at y = 0
     }
     Entity box(math::vec3 p, math::vec3 half) {
@@ -411,3 +415,207 @@ TEST_CASE("move3d: a camera run with every feature replays to the same hash") {
     };
     CHECK(play() == play());
 }
+
+// ---- step 3: vehicle feel --------------------------------------------------------------------------
+
+namespace {
+
+// A 1.2 t car (1.8 x 0.8 x 4 m) facing -Z on a 600 m road, all-wheel drive.
+struct Road {
+    World w;
+    u64 t = 0;
+    u32 skids = 0;
+    Road() {
+        w.register_components<LocalTransform>();
+        install_vehicles3d(w, nullptr);
+        install_particles(w, nullptr);
+        install_effects(w, nullptr);
+        BoxCollider3D road;
+        road.half = {300.0f, 0.5f, 300.0f};
+        road.friction = 1.0f;
+        w.spawn_with(at(0, -0.5f, 0), road);
+    }
+    Entity car(const Vehicle3D& tune = {}, math::quat rot = math::quat::identity(), f32 y = 1.2f) {
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v = tune;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        v.drive = VehicleDrive3D::All;
+        return w.spawn_with(LocalTransform{{0, y, 0}, rot, {1, 1, 1}}, b, v);
+    }
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            w.tick(kDt, t++);
+            skids += static_cast<u32>(EventAccess(w).read<Skid3D>().size());
+        }
+    }
+    Vehicle3D& veh(Entity e) { return *w.try_get_mut<Vehicle3D>(e); }
+    const LocalTransform& pose(Entity e) { return *w.try_get<LocalTransform>(e); }
+    f32 roll(Entity e) {  // how far the body's up leans from vertical, rad
+        const math::vec3 up = math::rotate(pose(e).rotation, math::vec3{0, 1, 0});
+        return std::acos(math::clamp(up.y, -1.0f, 1.0f));
+    }
+};
+
+// The most the body leans, and the fewest wheels down, in a turn at 10 m/s.
+f32 corner_lean(f32 anti_roll, u32& fewest_wheels) {
+    Road r;
+    Vehicle3D v;
+    v.anti_roll = anti_roll;
+    const Entity c = r.car(v);
+    r.veh(c).throttle = 1.0f;
+    r.run(100);
+    r.veh(c).steer = 0.5f;
+    r.veh(c).throttle = 0.5f;
+    f32 most = 0.0f;
+    fewest_wheels = 4;
+    for (u32 i = 0; i < 90; ++i) {
+        r.run(1);
+        most = math::max(most, r.roll(c));
+        fewest_wheels = math::min(fewest_wheels, r.veh(c).wheels_on_ground);
+    }
+    return most;
+}
+
+}  // namespace
+
+TEST_CASE("move3d: anti-roll bars keep the car flat and on four wheels in a turn") {
+    u32 soft_wheels = 0, stiff_wheels = 0;
+    const f32 soft = corner_lean(0.0f, soft_wheels), stiff = corner_lean(8000.0f, stiff_wheels);
+    CHECK(soft > 0.5f);  // without bars it rolls up onto two wheels
+    CHECK(soft_wheels <= 2);
+    CHECK(stiff < 0.1f);
+    CHECK(stiff_wheels == 4);
+}
+
+TEST_CASE("move3d: downforce presses the car down at speed and not at rest") {
+    auto ride = [](f32 downforce, bool drive) {
+        Road r;
+        Vehicle3D v;
+        v.downforce = downforce;
+        const Entity c = r.car(v);
+        r.veh(c).throttle = drive ? 1.0f : 0.0f;
+        r.run(240);
+        return r.pose(c).position.y;
+    };
+    CHECK(ride(12.0f, true) < ride(0.0f, true) - 0.02f);
+    CHECK(ride(12.0f, false) == doctest::Approx(ride(0.0f, false)).epsilon(1e-4));
+}
+
+TEST_CASE("move3d: gears and shift points are data") {
+    auto top_gear = [](u8 gears, f32 shift_up, u32& first_shift) {
+        Road r;
+        Vehicle3D v;
+        v.gears = gears;
+        v.shift_up_rpm = shift_up;
+        const Entity c = r.car(v);
+        r.veh(c).throttle = 1.0f;
+        i32 most = 0;
+        first_shift = 0;
+        for (u32 i = 0; i < 900; ++i) {
+            r.run(1);
+            if (r.veh(c).gear > 1 && first_shift == 0) first_shift = i;
+            most = std::max(most, r.veh(c).gear);
+        }
+        return most;
+    };
+    u32 early = 0, late = 0, stock = 0;
+    CHECK(top_gear(2, 4000.0f, early) == 2);  // two gears: never past second
+    CHECK(top_gear(0, 4000.0f, stock) > 2);   // the stock five
+    top_gear(0, 3000.0f, early);
+    top_gear(0, 5000.0f, late);
+    CHECK(early < stock);  // a lower shift point leaves first sooner
+    CHECK(stock < late);
+}
+
+TEST_CASE("move3d: a handbrake turn skids, raises Skid3D and fires effects; gentle driving does not") {
+    Road r;
+    Vehicle3D v;
+    v.skid_slip = 0.3f;
+    const Entity c = r.car(v);
+    ParticleBurst burst;
+    burst.on = FireOn::Skid;
+    r.w.add(c, burst);
+    r.veh(c).throttle = 0.4f;
+    r.run(180);
+    CHECK(r.skids == 0);
+    CHECK(r.veh(c).skidding == 0);
+    r.veh(c).throttle = 1.0f;
+    r.run(120);
+    r.veh(c).handbrake = 1.0f;
+    r.veh(c).steer = 1.0f;
+    u32 skidding_ticks = 0;
+    f32 most = 0.0f;
+    for (u32 i = 0; i < 60; ++i) {
+        r.run(1);
+        skidding_ticks += r.veh(c).skidding != 0 ? 1u : 0u;
+        most = math::max(most, r.veh(c).lateral_slip);
+    }
+    CHECK(r.skids >= 1);
+    CHECK(skidding_ticks > 10);
+    CHECK(most > 0.3f);
+    CHECK(r.w.try_get<ParticleBurst>(c)->fired >= 1);
+
+    // skid_slip 0: the same turn raises nothing.
+    Road q;
+    const Entity d = q.car();
+    q.veh(d).throttle = 1.0f;
+    q.run(120);
+    q.veh(d).handbrake = 1.0f;
+    q.veh(d).steer = 1.0f;
+    q.run(60);
+    CHECK(q.skids == 0);
+}
+
+TEST_CASE("move3d: self_right puts a flipped car back on its wheels after right_after") {
+    const math::quat roof = math::quat_from_axis_angle({0, 0, 1}, math::kPi);
+    const math::quat turned = math::quat_from_axis_angle({0, 1, 0}, 0.7f);
+    Road r;
+    Vehicle3D v;
+    v.self_right = 1;
+    v.right_after = 0.5f;
+    const Entity c = r.car(v, math::normalize(turned * roof), 0.6f);
+    r.run(20);
+    CHECK(r.roll(c) > 0.95f);  // stuck on its side (max_tilt holds it at 60 degrees)
+    CHECK(r.veh(c).rightings == 0);
+    r.run(60);
+    CHECK(r.veh(c).rightings == 1);
+    r.run(90);
+    CHECK(r.roll(c) < 0.1f);
+    CHECK(r.veh(c).wheels_on_ground == 4);
+    const math::vec3 fwd = math::rotate(r.pose(c).rotation, math::vec3{0, 0, -1});
+    CHECK(math::near(fwd, {-std::sin(0.7f), 0, -std::cos(0.7f)}, 0.02f));  // facing the way it did
+
+    Road q;  // off: stays on its roof
+    const Entity d = q.car({}, math::normalize(turned * roof), 0.6f);
+    q.run(170);
+    CHECK(q.roll(d) > 0.95f);
+}
+
+TEST_CASE("move3d: a vehicle run with every feature replays to the same hash") {
+    auto play = [] {
+        Road r;
+        Vehicle3D v;
+        v.anti_roll = 20000.0f;
+        v.downforce = 3.0f;
+        v.gears = 4;
+        v.skid_slip = 0.3f;
+        v.self_right = 1;
+        const Entity c = r.car(v);
+        for (u32 i = 0; i < 300; ++i) {
+            Vehicle3D& k = r.veh(c);
+            k.throttle = 1.0f;
+            k.steer = i > 150 ? 1.0f : 0.0f;
+            k.handbrake = i > 200 && i < 230 ? 1.0f : 0.0f;
+            r.run(1);
+        }
+        return r.w.state_hash();
+    };
+    CHECK(play() == play());
+}
+
+
