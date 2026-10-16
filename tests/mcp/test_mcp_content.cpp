@@ -131,6 +131,15 @@ TEST_CASE("saving generated content: file, sidecar, CREDITS.md row, cooks with n
     CHECK(c.fails("gen_pixels", R"({"rows":["a"],"palette":{"ab":"#000000"}})").find("'palette'") != std::string::npos);
     // Pretty-printed tool JSON still goes out as one line (asset_schema's templates).
     c.ok("asset_schema", R"({"type":"Tilemap"})");
+    {  // the material extensions (M-VISUAL2 4) are in the Material schema
+        auto m = c.ok("asset_schema", R"({"type":"Material"})");
+        std::string names;
+        const cook::JsonValue fields = m.v().get("fields");
+        for (u32 i = 0; i < fields.size(); ++i) names += str(fields.at(i).get("name")) + " ";
+        for (const char* k : {"clearcoat", "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy",
+                              "anisotropy_rotation", "transmission", "ior"})
+            CHECK(names.find(std::string(k) + " ") != std::string::npos);
+    }
 
     auto s = c.ok("gen_sprite", R"({"seed":2,"kind":"blob","save":"sprites/slime.png"})");
     const std::string guid = str(s.v().get("saved").get("guid"));

@@ -247,7 +247,7 @@ column, never silently. Where they are declared, for code that names them:
 | `RigidBody3D`, `CharacterController3D`, `Trigger3D` and its events | `mce::kit` | `mce/kit/bodies3d.h` |
 | `SfxTrigger`, `CameraFollow2D`, `CameraFollow3D`, `CameraShake2D` | `mce::kit` | `mce/kit/effects.h` |
 | `RigidBody2D`, `Collider2D`, `CharacterController2D` | `mce::physics` | `mce/physics/components.h` (in `mce/gameplay.h`) |
-| `AudioSource`, `AudioListener`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter` | `mce::audio` | `mce/audio/components.h` (in `mce/gameplay.h`) |
+| `AudioSource`, `AudioListener`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter`, `AudioDuck`, `AudioSnapshot` | `mce::audio` | `mce/audio/components.h` (in `mce/gameplay.h`) |
 | `InputState` | `mce::input` | `mce/input/ecs.h` (in `mce/gameplay.h`) |
 
 A respawned `RigidBody3D` keeps its spin unless you clear it: set `velocity` to zero with

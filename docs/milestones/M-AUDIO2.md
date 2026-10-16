@@ -1,6 +1,6 @@
 # M-AUDIO2 — Audio a shipped game needs (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 done). Plan: ROADMAP §M-AUDIO2; Linear SBA-118 … SBA-122.
+**Status:** active (added 2026-10-16; steps 1–4 done). Plan: ROADMAP §M-AUDIO2; Linear SBA-118 … SBA-122.
 
 **Why:** MCE's mixer has buses, 3D attenuation, voice virtualisation and streaming. A shipped game needs more,
 and the user guide says what is missing (10.6): "WAV only", and "reverb sends, per-voice pitch and device
@@ -32,7 +32,7 @@ It needs no device. The mixer can render offline into a buffer, so every step ga
 | 1 | Compressed clips: `.ogg` (Vorbis, stb_vorbis) in the cook, and `"compress": "vorbis"` on WAV imports. Decoding happens at load for short clips and in the stream pages for long ones | SBA-118 | done |
 | 2 | Variation: per-voice pitch (resampling playback rate), and sound sets (`.mcsound`: clips picked at random or in sequence, with pitch and volume ranges), seeded from the sim so replays repeat | SBA-119 | done |
 | 3 | Bus effects: biquad low/high-pass, a reverb send (Freeverb-style), a master limiter. Each bus's chain is project data, with parameters as convars and components | SBA-120 | done |
-| 4 | Ducking and snapshots: a bus ducks under another bus's level (sidechain), and named mixer snapshots (e.g. "paused" = muffled world) blend in over a fade from game events and the pause | SBA-121 | not started |
+| 4 | Ducking and snapshots: a bus ducks under another bus's level (sidechain), and named mixer snapshots (e.g. "paused" = muffled world) blend in over a fade from game events and the pause | SBA-121 | done |
 | 5 | Occlusion for 3D sources (a physics ray: low-pass and gain), Doppler, the user guide, MCP reach and the demo | SBA-122 | not started |
 
 **Demo:** a sample walks a listener through rooms. Footsteps come from a sound set with pitch variation, a
@@ -117,4 +117,33 @@ reachable only from code. This step adds what was missing and puts the mix in th
   `audio.reverb` off; defaults send nothing; the components drive the device, the first wins, an unchanged
   tick sends nothing, and removal resets.
 - **Docs.** User guide 10.5 (bus effects), 4 and 6 (component tables).
+
+## Step 4 — Ducking and snapshots (done, SBA-121)
+
+- **Ducking.** `AudioDevice::set_bus_duck(bus, DuckDesc)` on Music, SFX or UI, keyed by any other bus but
+  Master. After the user buses fold, every bus holds its whole signal, so the duckers read their keys then,
+  before effects and volume, and the stock buses fold with the duck gain. That gain comes from a 50 ms peak hold
+  and one-pole attack and release, per sample. Turned off, a ducker releases before it goes idle. A step too
+  small to change the float lands on the target, so a released bus is bit-exact again.
+- **Trim.** `set_bus_trim(bus, db)`: a ramped gain after the bus gain, on every bus and Master, kept apart
+  from the options-screen volume.
+- **Voice bus.** `AudioBus::Voice` names the first user bus (dialogue), with a saved `audio.voice_db`.
+- **Snapshots.** `AudioSnapshot` (bus, `active`, `while_paused`, `fade_s`, `gain_db`, `lowpass_hz`,
+  `highpass_hz`). `audio::update_mix` (step 3's effect pass, now public) advances each fade and blends the
+  snapshots into the bus's trim and filters. Gains add; a filter moves from the bus's own cutoff (open when
+  off) toward the snapshot's in octaves, and the tightest wins. Fades live in the `AudioRef` resource by
+  entity, not in the component, so the state hash never moves. The bridge calls `update_mix` every tick; the
+  stock player calls it every frame while paused with `paused = true`, so the pause snapshot fades in
+  although no tick runs.
+- **Reach.** `engine_capabilities` lists ducking and snapshots as data.
+- **Tests.** `tests/audio/test_duck_snapshots.cpp`:
+  - Music under a silent-at-Master Voice line falls to -12 dB and comes back with no step larger than 1%
+    of the level.
+  - A ducker switched off releases, then the bus is bit-exact again.
+  - Bad routes are refused, and trim ramps.
+  - A pause snapshot at a quarter second sits half-way in gain and octaves, with the sim hash unchanged.
+  - Ticks fade it back to off, a bus's own low-pass blends toward the snapshot's, an instant snapshot
+    applies at once, and removing one resets its bus.
+  - `AudioDuck` drives the device and switches off when removed.
+- **Docs.** User guide 10.5 (ducking, snapshots, `audio.voice_db`), 4 and 6.
 

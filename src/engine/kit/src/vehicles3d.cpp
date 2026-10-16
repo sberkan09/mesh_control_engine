@@ -14,7 +14,7 @@
 namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(Vehicle3D) == 136);
+static_assert(sizeof(Vehicle3D) == 184);
 
 namespace {
 
@@ -40,6 +40,11 @@ Vehicle3D structural(const Vehicle3D& v) {
     s.speed = s.rpm = 0.0f;
     s.gear = 0;
     s.wheels_on_ground = 0;
+    s.downforce = s.skid_slip = s.right_after = 0.0f;
+    s.self_right = 0;
+    s.skidding = 0;
+    s.lateral_slip = 0.0f;
+    s.flipped_ticks = s.rightings = 0;
     return s;
 }
 
@@ -77,7 +82,16 @@ u32 build(Physics3D& phys, Entity e, const Vehicle3D& v) {
     if (v.drive != VehicleDrive3D::Rear) axles[n++] = physics::AxleDesc3D{0, 1, 1.0f, 3.42f};
     if (v.drive != VehicleDrive3D::Front) axles[n++] = physics::AxleDesc3D{2, 3, 1.0f, 3.42f};
     for (u32 i = 0; i < n; ++i) axles[i].torque_share = 1.0f / static_cast<f32>(n);
+    physics::AntiRollBar3D bars[2] = {{0, 1, v.anti_roll}, {2, 3, v.anti_roll}};
+    f32 ratios[10];
+    const u32 gears = math::min<u32>(v.gears, 10u);
+    for (u32 i = 0; i < gears; ++i)  // geometric from first to top
+        ratios[i] = gears == 1 ? v.first_gear : v.first_gear * std::pow(v.top_gear / v.first_gear, static_cast<f32>(i) / static_cast<f32>(gears - 1));
     physics::VehicleDesc3D d;
+    if (v.anti_roll > 0.0f) d.anti_roll_bars = Span<const physics::AntiRollBar3D>(bars, 2);
+    d.gears = Span<const f32>(ratios, gears);
+    d.shift_up_rpm = v.shift_up_rpm;
+    d.shift_down_rpm = v.shift_down_rpm;
     d.body = e;
     d.wheels = Span<const physics::WheelDesc3D>(wheels, 4);
     d.axles = Span<const physics::AxleDesc3D>(axles, n);
@@ -126,6 +140,24 @@ void kit3d_vehicles(Frame& f) {
             }
             b = &st.built.insert_or_assign(e, Built{id, shape});
         }
+        physics::BodyState3D body;
+        if (phys.world.body_state(e, body)) {
+            const math::vec3 up = math::rotate(body.rotation, math::vec3{0.0f, 1.0f, 0.0f});
+            if (v.downforce > 0.0f) phys.world.apply_impulse(e, up * (-v.downforce * v.speed * v.speed * f.dt));
+            // Self-righting: on its side or roof and nearly still for right_after seconds.
+            const bool flipped = up.y < 0.6f && math::length_sq(body.linear_velocity) < 1.0f;  // past ~53 degrees
+            v.flipped_ticks = flipped && v.self_right ? static_cast<u16>(math::min<u32>(v.flipped_ticks + 1u, 60000u)) : u16{0};
+            if (v.self_right && v.flipped_ticks > 0 && static_cast<f32>(v.flipped_ticks) * f.dt >= v.right_after) {
+                math::vec3 fwd = math::rotate(body.rotation, math::vec3{0.0f, 0.0f, -1.0f});
+                if (fwd.x * fwd.x + fwd.z * fwd.z < 1e-4f) fwd = math::rotate(body.rotation, math::vec3{0.0f, 1.0f, 0.0f});
+                const math::quat upright = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, std::atan2(-fwd.x, -fwd.z));
+                phys.world.teleport(e, body.position + math::vec3{0.0f, 1.0f, 0.0f}, upright);
+                phys.world.set_linear_velocity(e, {});
+                phys.world.set_angular_velocity(e, {});
+                v.flipped_ticks = 0;
+                ++v.rightings;
+            }
+        }
         f32 throttle = v.throttle, steer = v.steer, brake = v.brake, handbrake = v.handbrake;
         if (v.use_input && in) {
             throttle = in->move.y;
@@ -161,6 +193,22 @@ void kit3d_vehicle_state(Frame& f) {
         v.rpm = s.rpm;
         v.gear = s.gear;
         v.wheels_on_ground = s.wheels_on_ground;
+        u32 skidding = 0;
+        f32 widest = 0.0f;
+        const bool moving = std::fabs(s.speed) > 3.0f;  // slip ratios are noise at a crawl
+        for (u32 i = 0; i < 4; ++i) {
+            if (!wheels[i].contact) continue;
+            // Sideways sliding and braking lock-up skid; wheelspin under power does not.
+            const f32 side = std::fabs(wheels[i].lateral_slip), along = math::max(-wheels[i].longitudinal_slip, 0.0f);
+            widest = math::max(widest, side);
+            // A skid starts past skid_slip and holds until the slip falls below 70% of it.
+            const f32 limit = (v.skidding & (1u << i)) ? 0.7f * v.skid_slip : v.skid_slip;
+            if (v.skid_slip <= 0.0f || !moving || (side <= limit && along <= limit)) continue;
+            skidding |= 1u << i;
+            if ((v.skidding & (1u << i)) == 0) f.events().push(Skid3D{e, i, math::max(side, along), wheels[i].position});
+        }
+        v.skidding = skidding;
+        v.lateral_slip = widest;
         const Entity models[4] = {v.wheel_fl, v.wheel_fr, v.wheel_rl, v.wheel_rr};
         for (u32 i = 0; i < 4; ++i) {
             if (models[i].is_null() || !w.alive(models[i])) continue;
@@ -179,6 +227,7 @@ void install_vehicles3d(World& world, asset::AssetSystem* assets) {
     if (world.try_resource<Vehicles3DState>()) return;
     world.set_resource(Vehicles3DState{});
     world.register_components<Vehicle3D>();
+    world.register_event<Skid3D>(Phase::FixedUpdate_Physics);
     world.set_hooks<Vehicle3D>(nullptr, &on_vehicle_removed);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_vehicles", &kit3d_vehicles, "kit3d_bodies");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_vehicle_state", &kit3d_vehicle_state, "kit3d_writeback");

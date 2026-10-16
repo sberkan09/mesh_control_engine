@@ -89,6 +89,7 @@ Mixer::Mixer(RingBuffer<AudioCommand>& commands, RingBuffer<AudioReply>& replies
     for (BusRT& b : bus_) {
         b.highpass.cur_hz = kHighpassOpen;
         b.lowpass.cur_hz = kLowpassOpen;
+        b.trim.cur = b.trim.target = 1.f;
     }
 }
 
@@ -129,6 +130,20 @@ void Mixer::process_commands() {
                 break;
             case CmdType::BusSend:
                 if (c.index > 0 && c.index < kBusCount && c.flags < kReverbUnits) bus_[c.index].send[c.flags].set(c.voice.gain);
+                break;
+            case CmdType::BusTrim:
+                if (c.index < kBusCount) bus_[c.index].trim.set(c.voice.gain);
+                break;
+            case CmdType::BusDuck:
+                if (c.index > Bus_Master && c.index < Bus_User0 && c.bus > Bus_Master && c.bus < kBusCount && c.bus != c.index) {
+                    DuckRT& d = duck_[c.index];
+                    d.on = c.flags != 0;
+                    d.key = c.bus;
+                    d.threshold = c.duck.threshold;
+                    d.depth = c.duck.depth;
+                    d.attack = c.duck.attack;
+                    d.release = c.duck.release;
+                }
                 break;
             case CmdType::Reverb:
                 if (c.index < kReverbUnits)
@@ -467,6 +482,8 @@ void Mixer::render(f32* out, u32 frames) {
         // descending pass, then Music/SFX/UI into Master in ascending order — the same summation
         // order as the MVP's fixed four-bus mix. Each bus is EQ'd after its children arrive.
         for (u32 b = kBusCount - 1; b >= Bus_User0; --b) fold_bus(b, n);
+        // Every bus now holds its whole signal (children folded in): the duckers read their keys.
+        for (u32 b = 1; b < Bus_User0; ++b) ducking_[b] = run_duck(b, n);
         for (u32 b = 1; b < Bus_User0; ++b) fold_bus(b, n);
         f32* master = bus_buf_[Bus_Master];
         // Reverb returns land in Master in unit order, then Master's own filters and EQ.
@@ -479,7 +496,8 @@ void Mixer::render(f32* out, u32 frames) {
         f32* dst = out + done * kChannels;
         BusRT& mb = bus_[Bus_Master];
         for (u32 i = 0; i < n; ++i) {
-            f32 l = master[i * 2] * mb.cur, r = master[i * 2 + 1] * mb.cur;
+            const f32 mg = mb.cur * mb.trim.next();
+            f32 l = master[i * 2] * mg, r = master[i * 2 + 1] * mg;
             if (mb.ramp_left) {
                 mb.cur += mb.inc;
                 if (--mb.ramp_left == 0) mb.cur = mb.target;
@@ -510,16 +528,19 @@ void Mixer::fold_bus(u32 b, u32 frames) {
     for (BiquadRT& q : bus.eq) q.process(src, frames);
     bool sends = false;
     for (const SendRamp& r : bus.send) sends = sends || !r.silent();
+    const f32* duck = b < Bus_User0 && ducking_[b] ? duck_buf_[b] : nullptr;
     for (u32 i = 0; i < frames; ++i) {
-        const f32 l = src[i * 2] * bus.cur, r = src[i * 2 + 1] * bus.cur;
+        f32 g = bus.cur * bus.trim.next();
+        if (duck) g *= duck[i];
+        const f32 l = src[i * 2] * g, r = src[i * 2 + 1] * g;
         dst[i * 2] += l;
         dst[i * 2 + 1] += r;
         if (sends) {
             // Post-fader sends: what the bus passes on, at each unit's ramped level.
             for (u32 u = 0; u < kReverbUnits; ++u) {
-                const f32 g = bus.send[u].next();
-                reverb_buf_[u][i * 2] += l * g;
-                reverb_buf_[u][i * 2 + 1] += r * g;
+                const f32 send = bus.send[u].next();
+                reverb_buf_[u][i * 2] += l * send;
+                reverb_buf_[u][i * 2 + 1] += r * send;
             }
         }
         if (bus.ramp_left) {
@@ -527,6 +548,26 @@ void Mixer::fold_bus(u32 b, u32 frames) {
             if (--bus.ramp_left == 0) bus.cur = bus.target;
         }
     }
+}
+
+bool Mixer::run_duck(u32 b, u32 frames) {
+    DuckRT& d = duck_[b];
+    if (d.idle()) return false;
+    // A peak envelope that holds about 50 ms, so a voice's zero crossings do not open the duck.
+    constexpr f32 kHold = 0.9995834f;  // exp(-1 / (0.05 * 48000))
+    const f32* key = bus_buf_[d.key];
+    f32* out = duck_buf_[b];
+    for (u32 i = 0; i < frames; ++i) {
+        const f32 peak = d.on ? math::max(std::fabs(key[i * 2]), std::fabs(key[i * 2 + 1])) : 0.f;
+        d.env = math::max(peak, d.env * kHold);
+        const f32 want = d.on && d.env > d.threshold ? d.depth : 1.f;
+        // A step too small to change the float lands on the target (a residual under 0.002 dB).
+        const f32 next = d.gain + (want - d.gain) * (want < d.gain ? d.attack : d.release);
+        d.gain = next == d.gain ? want : next;
+        if (d.env < 1e-20f) d.env = 0.f;
+        out[i] = d.gain;
+    }
+    return true;
 }
 
 void Mixer::publish_stats(f32 peak, f32 limiter_gain) {

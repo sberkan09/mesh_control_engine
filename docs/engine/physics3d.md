@@ -35,6 +35,10 @@ One header, `include/mce/physics3d/world3d.h`, namespace `mce::physics`. It name
   feet kept in place: the shorter capsule hangs below the standing centre, and queries see it
   there. Without `force` it refuses (false) when the new capsule would overlap geometry, which is how a
   crouched character stays down under a ceiling.
+- Vehicles: `create_vehicle(VehicleDesc3D)` (Jolt wheeled vehicle with any wheels and axles; M-MOVE3D 3 adds
+  `anti_roll_bars` as `AntiRollBar3D` wheel pairs with a stiffness, and `shift_up_rpm` /
+  `shift_down_rpm`), `set_vehicle_input`, `vehicle_state`. Each `WheelState3D` reports
+  `longitudinal_slip` and `lateral_slip` (rad) while it touches the ground, 0 otherwise.
 - `camera_sweep(from, to, radius)`: sphere sweep along a camera boom against static and kinematic
   geometry. Dynamic props and characters never pull the camera in. Returns `ShapeHit3D`, whose
   `position` is the safe camera centre.

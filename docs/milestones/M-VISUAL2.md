@@ -1,6 +1,6 @@
 # M-VISUAL2 — Rendering gaps left after M-VISUAL (milestone record)
 
-**Status:** active (steps 1–3 done, 2026-10-15). Plan: ROADMAP §M-VISUAL2; Linear SBA-101 … SBA-105.
+**Status:** done in the cloud (steps 1–5 and the demo, 2026-10-16); real-GPU budgets and Metal pixels wait on the Mac/device session. Plan: ROADMAP §M-VISUAL2; Linear SBA-101 … SBA-105.
 **Why:** the engine comparison (`assessments/motor-kiyaslama-eksikler.md`, item 10) lists what the 3D frame
 still lacks next to Godot, Unity and Unreal after M-VISUAL. Every step is opt-in, keeps GL as the reference
 backend with SDL GPU gated alongside, and leaves today's frame unchanged when off. Real-GPU and mobile budgets
@@ -14,7 +14,7 @@ and Metal pixels wait on the Mac/device session, as for M-VISUAL.
 | 2 | Spatial upscaler and contrast-adaptive sharpening | SBA-102 | done: GL and SDL GPU (gated + golden), saved player convars; Metal untested |
 | 3 | Contact shadows | SBA-103 | done for the sun: GL and SDL GPU (gated + golden), Low tier drops it; local lights keep their shadow maps (see below); Metal untested |
 | 4 | Material extensions: clear coat, sheen, anisotropy, transmission | SBA-104 | done: `.mcmat` keys and glTF KHR factors, GL and SDL GPU (gated + goldens); textures of the extensions not imported; Metal untested |
-| 5 | Kit/MCP reach, `samples/06_showcase`, docs and goldens | SBA-105 | not started |
+| 5 | Kit/MCP reach, `samples/06_showcase`, docs and goldens | SBA-105 | done: every knob on `Environment3D` / `.mcmat` and over MCP; the showcase's on/off sheet below |
 
 ## Step 1 — screen-space reflections
 
@@ -139,3 +139,54 @@ SDL GPU): an all-zero table draws byte-identically to no table; clear coat and s
 under a white sky, anisotropy changes a metal box; ior 2.4 brightens a dielectric; a transmissive box shows
 the ground behind it with 4× MSAA and without, open ground unchanged, `transmissive` counts it. Goldens
 `material_lobes` and `material_glass` on both backends; every earlier golden is unchanged.
+
+## Step 5 — reach and the demo
+
+**Reach.** Every knob of steps 1–4 is data:
+
+| effect | kit (`Environment3D` unless noted) | MCP | player convar |
+|---|---|---|---|
+| screen-space reflections | `ssr`, `ssr_max_distance`, `ssr_thickness`, `ssr_max_roughness`, `ssr_roughness_fade`, `ssr_intensity`, `ssr_steps`, `ssr_edge_fade` | `component_set` on the resource | `r.ssr` |
+| spatial upsample, sharpening | `upscaler`, `sharpen` | `component_set` | `r.upscaler`, `r.sharpen` (saved) |
+| contact shadows | `contact_shadows`, `contact_length`, `contact_thickness`, `contact_intensity`, `contact_steps` | `component_set` | `r.contact_shadows` |
+| material extensions | `.mcmat` `clearcoat`, `clearcoat_roughness`, `sheen_color`, `sheen_roughness`, `anisotropy`, `anisotropy_rotation`, `transmission`, `ior` (a `MeshRef`'s `material`); glTF `KHR_materials_*` factors | `asset_schema` lists the keys; `asset_create` / `asset_write` | — |
+
+This step added `ssr_steps`, `ssr_edge_fade` and `contact_steps` (the only render knobs the kit did not reach)
+and the eight material keys to the MCP Material schema.
+
+**Demo.** `samples/06_showcase` turns the effects on in its Low, Medium and High profiles. Reflections reach
+12 m and show in the polished floor and the puddle. Contact shadows are on, and the final frame is
+sharpened at 0.3. A green glass slab stands beside the path, a lacquered crate sits on its edge, and the
+statue is brushed metal. The Low tier drops SSR and contact shadows. The new profile `highbase` is High
+without any of them. `06_showcase -sheet sheet.ppm -sheet.profiles highbase,high` renders the on/off sheet
+below (rows: dusk, interior, noon; columns: highbase, high):
+
+![06_showcase M-VISUAL2 sheet](img/m-visual2-showcase.jpg)
+
+**Changes from the first column.** Inside, the floor mirrors the red wall and the crates (SSR). The crates
+and the statue sit in their contact shadows. The statue's highlights stretch along its brushed metal. At
+dusk, the glass slab shows the pavilion wall behind it tinted green, and the lacquered crate carries a sharp sky
+reflection over its matte red.
+
+**Budget (480×270 cells, 24 frames per shot, means over the settled half, debug build, Mesa llvmpipe;
+relative only):**
+
+| stage (ms) | highbase | high |
+|---|---|---|
+| SSR | 0 | 1.8 |
+| contact shadows | 0 | 1.8 |
+| main pass | 163.4 | 159.4 |
+| last pass (FXAA slot: the sharpen) | 0 | 1.9 |
+| 3D frame total | 501.0 | 423.4 |
+
+On llvmpipe the run-to-run noise of the big stages (shadows, SSAO, GI, TAA) is larger than everything
+M-VISUAL2 adds: SSR and contact shadows cost about 2 ms each at this size, and the sharpen about 2 ms. The
+transmissive draw's frame copy is part of the main pass. The real-GPU budget is the Mac/device session's
+to measure with the same run (`-sheet.w 1920 -sheet.h 1080`).
+
+**Gates.** The goldens and pixel tests of steps 1–4 on GL and SDL GPU. `test_kit3d` checks that the new kit
+knobs reach the scene. `test_mcp_content` checks that the Material schema lists the extension keys.
+`sample_06_showcase_gpu` runs 60 frames of the High profile with no GL errors. The headless hash run
+(`sample_06_showcase_300`) prints a new hash, because the High scene gained the new props. No test pins
+that hash.
+

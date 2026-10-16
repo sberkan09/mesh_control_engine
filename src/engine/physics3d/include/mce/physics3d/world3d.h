@@ -252,6 +252,13 @@ struct AxleDesc3D {
     f32 ratio = 3.42f;                 // gearbox to wheel
 };
 
+// A bar between two wheels that resists the body rolling (M-MOVE3D 3).
+struct AntiRollBar3D {
+    i32 left = 0;                      // wheel indices
+    i32 right = 1;
+    f32 stiffness = 1000.0f;           // N/m
+};
+
 struct VehicleDesc3D {
     Entity body;                       // a dynamic body
     vec3 forward{0.0f, 0.0f, -1.0f};   // body space
@@ -264,6 +271,9 @@ struct VehicleDesc3D {
     Span<const f32> gears;             // forward ratios, 1st first (empty: 2.66, 1.78, 1.3, 1.0, 0.74)
     f32 reverse_gear = -2.9f;
     f32 max_tilt = 3.14159265f;        // rad the body may pitch or roll before it is held (pi: free)
+    Span<const AntiRollBar3D> anti_roll_bars;
+    f32 shift_up_rpm = 4000.0f;        // the automatic gearbox shifts up above this
+    f32 shift_down_rpm = 2000.0f;      // and down below this
 };
 
 struct WheelState3D {
@@ -274,6 +284,8 @@ struct WheelState3D {
     f32 steer = 0.0f;       // rad
     vec3 position;          // world: the wheel's centre
     quat rotation;          // world: local +X is the axle (pointing right), local -Z forward
+    f32 longitudinal_slip = 0.0f;  // (wheel - ground speed) / ground speed along the tyre; 0 without contact
+    f32 lateral_slip = 0.0f;       // rad between the tyre's heading and its travel; 0 without contact
 };
 
 struct VehicleState3D {
