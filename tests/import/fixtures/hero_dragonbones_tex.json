@@ -1,0 +1,6 @@
+{ "name": "hero", "imagePath": "page.png", "width": 128, "height": 128,
+  "SubTexture": [
+    { "name": "body", "x": 2, "y": 2, "width": 40, "height": 60 },
+    { "name": "head", "x": 44, "y": 2, "width": 30, "height": 30, "frameX": -5, "frameY": -2, "frameWidth": 40, "frameHeight": 40 },
+    { "name": "cape", "x": 2, "y": 64, "width": 50, "height": 50 }
+  ] }

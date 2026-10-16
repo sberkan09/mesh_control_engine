@@ -149,7 +149,12 @@ def project_outputs(project, args):
         sys.exit(f"ship: {project} is not a project directory (expected one <name>.mceproj)")
     with open(os.path.join(proj_dir, files[0]), encoding="utf-8") as f:
         meta = json.load(f)
-    game = meta["games"][0]
+    script_project = not meta.get("games")  # Luau scripts and data (mce new --template script): the stock player, no module
+    if script_project:
+        # The game id mce_add_script_project gives it: MyGame -> my_game.
+        game = re.sub(r"[^A-Za-z0-9]+", "_", re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", meta["name"])).lower()
+    else:
+        game = meta["games"][0]
     rel = os.path.relpath(proj_dir, ROOT)
     if rel.startswith(".."):
         sys.exit("ship: --project must be inside the engine checkout (projects/<name>)")
@@ -161,14 +166,15 @@ def project_outputs(project, args):
         "title": title,
         "source": proj_dir,
         "target": game,
-        "host_targets": [game + "_cook"],  # --target android/ios: the project's cook runs on the host
+        # --target android/ios: the project's cook runs on the host (a script project cooks with mce_cook)
+        "host_targets": [] if script_project else [game + "_cook"],
         "android_lib": os.path.join(out_dir, "lib" + game + ".so"),
         "ios_app": os.path.join(out_dir, game + ".app"),
-        "targets": [game] + ([game + "_game"] if os.name != "nt" else []),
+        "targets": [game] + ([game + "_game"] if os.name != "nt" and not script_project else []),
         "exe": os.path.join(out_dir, game + EXE),
         "pack": os.path.join(out_dir, "project", "assets.mce"),
-        "module": game,
-        "module_file": os.path.join(out_dir, MODULE_PREFIX + game + MODULE_SUFFIX),
+        "module": None if script_project else game,
+        "module_file": None if script_project else os.path.join(out_dir, MODULE_PREFIX + game + MODULE_SUFFIX),
         "credits": credits if os.path.isfile(credits) else None,
         "controls": "Esc pauses, ` or F1 opens the developer console.",
         "autoplay": False,

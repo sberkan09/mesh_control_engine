@@ -6,6 +6,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/render_textures.h"
 #include "mce/log.h"
 #include "mce/render/accessibility.h"
 #include "mce/string_id.h"
@@ -626,8 +627,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     pending_entity_.clear();
     pose_first_.clear();
     // TAA velocity: this frame's world matrices go to worlds_[parity]; last frame's are in the other.
-    world_parity_ ^= 1u;
-    ++frame_stamp_;
+    if (!extra_view_) {
+        world_parity_ ^= 1u;
+        ++frame_stamp_;
+    }
 
     // The irradiance volume first: while it captures at runtime, meshes and lights near it stay in the
     // scene off-screen too, so its probes see the same room whichever way the camera looks.
@@ -673,6 +676,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         return length_sq(c - q) <= r * r;
     };
 
+    // Screens (M-VIEWS 3): one material per ShowRenderTexture, kept until the next extract; the
+    // array never grows past what is reserved here, so the scene's pointers stay put.
+    screen_materials_.clear();
+    if (render_textures_) {
+        usize screens = 0;
+        world.query<const ShowRenderTexture&>().each([&](const ShowRenderTexture&) { ++screens; });
+        screen_materials_.reserve(screens);
+    }
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
@@ -697,6 +708,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) lod_states_.resize(e.index + 1, 0);
         if (world_stamp_.size() <= e.index) {
             world_stamp_.resize(e.index + 1, ~0u);  // never drawn: ~0u + 1 matches no stamp
+            prev_ok_.resize(e.index + 1, 0);
             for (Array<mat4>& w : worlds_) w.resize(e.index + 1, mat4::identity());
         }
         inst.tint = m.tint;
@@ -704,6 +716,37 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         inst.material = material(m.material.guid);
+        if (render_textures_ && screen_materials_.size() < screen_materials_.capacity()) {
+            const ShowRenderTexture* show = world.try_get<ShowRenderTexture>(e);
+            const u32 rt = show ? render_textures_->texture_key(show->source) : ~0u;
+            if (rt != ~0u && !mesh->submeshes.empty()) {
+                render::MaterialOverride o;
+                if (inst.material) {
+                    o = *inst.material;
+                } else {
+                    const render::GpuSubmesh& s0 = mesh->submeshes[0];
+                    o.params = s0.material;
+                    o.ext = s0.material_ext;
+                    o.albedo_key = s0.albedo_key;
+                    o.normal_key = s0.normal_key;
+                    o.orm_key = s0.orm_key;
+                    o.emissive_key = s0.emissive_key;
+                }
+                if (show->slot == 1) {
+                    o.emissive_key = rt;
+                    for (f32& c : o.params.emissive) c = show->intensity;
+                } else {
+                    o.albedo_key = rt;
+                }
+                // A drawn texture holds its top row at v = 1 (uploaded art at v = 0): the repeat's
+                // negative v flips it upright (the material sampler repeats).
+                f32 uv[2];
+                o.params.uv_scale(uv);
+                o.params.uv_scale_half = asset::MaterialChunk::pack_uv_scale(uv[0], -uv[1]);
+                screen_materials_.push_back(o);
+                inst.material = &screen_materials_.back();
+            }
+        }
         if (!mesh->nodes.empty()) {
             const Animator* a = world.try_get<Animator>(e);
             const usize first = poses_.size();
@@ -742,9 +785,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (meshes_->get(inst.mesh)->lod_levels > 1) inst.lod_state = &lod_states_[ent];
         // Drawn last frame too: its world then (the entity index may have been reused; the TAA
         // neighborhood clip absorbs that one frame).
-        if (world_stamp_[ent] + 1 == frame_stamp_) inst.prev_world = &worlds_[world_parity_ ^ 1u][ent];
+        // Another view drew it this frame already (extract_view): that draw knew whether last frame's was there.
+        const bool prev = world_stamp_[ent] == frame_stamp_ ? prev_ok_[ent] != 0 : world_stamp_[ent] + 1 == frame_stamp_;
+        if (prev) inst.prev_world = &worlds_[world_parity_ ^ 1u][ent];
         worlds_[world_parity_][ent] = inst.world;
         world_stamp_[ent] = frame_stamp_;
+        prev_ok_[ent] = prev ? 1 : 0;
         scene.add(inst);
     }
     extract_terrains(world, scene);
@@ -803,7 +849,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     });
 
     // Scale (M-VISUAL 9): foliage batches, decals, GPU particles on the scene's clock.
-    if (!bake_mode_) time_ += max(frame_dt_, 0.0f);
+    if (!bake_mode_ && !extra_view_) time_ += max(frame_dt_, 0.0f);
     scene.set_time(time_, bake_mode_ ? 0.0f : max(frame_dt_, 0.0f));
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;

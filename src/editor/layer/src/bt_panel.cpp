@@ -415,7 +415,7 @@ private:
     }
 
     char new_path_[256] = "ai/brain.mcbt";
-    char new_error_[256] = {};
+    char new_error_[512] = {};  // as long as the FixedString<512> format_error fills, so snprintf cannot truncate
     char tree_name_[64] = {};
     u64 name_rev_ = ~u64(0);
     char value_[256] = {};

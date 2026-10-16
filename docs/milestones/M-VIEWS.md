@@ -1,0 +1,102 @@
+# M-VIEWS — Several views and local players (milestone record)
+
+**Status:** active (added 2026-10-16; design note written; steps 1-3 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+
+**Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
+texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
+minimap, a mirror, a monitor in the world, picture-in-picture or a split screen, and cannot be played by
+two people on one machine, from scene data or over MCP.
+
+**Not in scope:** online play (M-NET2/3), VR/stereo, portals with recursion, ray-traced mirrors, per-view
+global illumination (the probe volume is shared by all views).
+
+## Design note (interfaces; render steps wait for the coordinator's model decision)
+
+- **View.** One view = camera entity + normalized `viewport` (x, y, w, h in 0..1) + `target` (`window` or a
+  `RenderTexture` entity). The extract step builds a `ViewList` sorted by `(target, order, entity id)`;
+  the order is part of the sim-independent render state, never of the sim hash.
+- **Per-view state.** Cull, cascades, post chain and TAA history are per view. Shared across views: mesh and
+  material uploads, the shadow atlas budget (split by screen area), the GI volume, the particle sim.
+- **RenderTexture.** Component `{size, format, update_hz, camera}`; allocated from the renderer's transient
+  pool, shown by a `TextureRef` that `Sprite`, a `MeshRef` material slot and a `mce_ui` image accept. A
+  texture is drawn before the views that sample it; a cycle is a `project_check` error.
+- **Fallback.** No `RenderTexture` and one camera takes today's path unchanged (golden-image gate).
+- **Local players (as built, step 1).** A map flagged for slot N is always active and publishes
+  `player_action_id(N, name)`; gamepad bindings read the slot's assigned pad; scripts spell `P2/Move`.
+  The `LocalPlayer` component `{slot}` arrives with the co-op kit (step 5).
+- **Model split.** Steps 2–4 change the render pipeline and per-frame GPU resources: Opus. Steps 1, 5 and 6
+  follow existing patterns (input maps, kit components, MCP tools): Sonnet.
+
+## Interfaces as built (steps 2–4; steps 5–6 build on these)
+
+**Step 2 — viewports, several cameras a frame** (render/forward3d.h, render/renderer.h, kit/views.h):
+- `kit::CameraView {viewport vec4 (x, y, w, h; 0..1, top-left), target Entity, order i32, enabled u32}` on a
+  camera entity (Camera3DComponent or Camera2DComponent). No enabled CameraView anywhere = today's path,
+  untouched (the golden gate). With one: every camera with an enabled CameraView is a view, plus each
+  primary camera without one (full window, order 0), so a minimap needs only its own CameraView.
+- `kit::collect_views(world, window, out, target_size?)` -> `ViewEntry {camera, target, rect (pixels),
+  order, is_3d}` sorted by (texture targets first, target, order, 3D before 2D, entity index). Rects round
+  their edges, so split halves share an edge exactly.
+- `kit::record_views(cmd, world, views, ViewRecordContext)`: clears the target once, then per view: 3D =
+  its own `Scene3D` (`Kit3DExtract::extract` for the first view, `extract_view` for the rest: no second
+  clock step, TAA previous transforms kept) recorded with `Forward3D::ViewOutput {slot, rect, first}`; 2D =
+  a sprite batch in a pass whose viewport is the rect, cleared to its camera's color unless a 3D view
+  covering its rect was drawn before it (a HUD camera). The player and the editor's play view both use it.
+- `Forward3D` view slots (`kMaxViews = 8`): each slot owns its size-dependent targets and temporal state
+  (TAA/SSR history, velocity previous view, auto exposure buffer, occlusion pyramid, volumetric froxels,
+  post-fx ping-pong). Slot 0 is the members themselves (the single-view path); another slot is swapped
+  into them for its record (handles only, no allocation). Shared: pipelines, meshes, IBL, probes, GI
+  volume (rolling update on the frame's first view only), shadow atlas, particle rings (simulated on the
+  first view only), instance batches (freed when no view drew them the previous frame).
+- `Renderer::view_slot(key)` / `end_views()` / `release_views()`: a stable slot per view key (the camera
+  entity's bits); a slot no key asked for since the last `end_views()` is released (its textures retired
+  by the RHI past the frames in flight). The player calls `end_views()` every frame; the editor releases
+  every slot when play stops.
+- Known limits (step 2): 2D post (`Post2D`) is off in the
+  multi-view path; GPU timestamps and `last_stats()` describe the first 3D view; per-entity LOD
+  hysteresis is shared by the views; a particle emitter only the later views see is not simulated.
+
+**Step 3 — render textures** (kit/render_textures.h; changes from the design note marked *):
+- `kit::RenderTexture {width, height, update_hz, enabled, ui_image}` on its own entity. *No `format` (always
+  linear RGBA16F) and no `camera` field: a camera points at the texture with `CameraView.target`, so one
+  texture can hold several cameras' rects.
+- *`kit::ShowRenderTexture {source, slot, intensity}` instead of a `TextureRef` type: on a `Sprite` it
+  replaces the sprite's texture; on a `MeshRef` it replaces submesh 0's material (base color for slot 0,
+  emission times `intensity` for slot 1) on every submesh. A `.mcui` image widget whose name equals
+  `RenderTexture.ui_image` shows it (`ui::Document::set_image_texture`, `player::UiScreens::bind_render_textures`).
+- `kit::RenderTextures` (host-owned, like `VideoTextures`): `sync(world, frame_dt)` once a frame makes,
+  re-makes (size change) and frees the textures and decides which are due (`update_hz`); `release()` on the
+  editor's play stop, `shutdown()` with the host. *Textures are made on the device and adopted by the
+  `TextureStore` under a local key (`TextureStore::adopt`), not taken from a transient pool; freeing goes
+  through `release(key)`, which the RHI defers past the frames in flight. Creation and resize allocate;
+  steady frames do not.
+- Drawing: `collect_views(..., &kit::render_texture_size, &rts)` sorts texture views first;
+  `record_views` clears a due texture once (black), draws its views with `ViewOutput::linear_output` /
+  `record_2d(..., linear_output)` (no sRGB encode; a 2D camera's clear color is linearized so it shows as
+  in the window), then the window's views. A texture no view has drawn yet is cleared black once
+  (`RenderTextures::clear_new`, which the single-view paths call too).
+- Orientation: a drawn texture holds its top row at v = 1 (uploaded art at v = 0) on both backends; the
+  sprite region is flipped and the screen material gets `uv_scale` v = -1 (the material sampler repeats).
+- *No `project_check` cycle error: a view never samples the texture it draws (that surface falls back to
+  its own look), and two textures that show each other show each other's previous frame.
+- Known limits (step 3): the anti-aliasing filter of a 3D view into a texture runs on linear values (edges
+  differ by a few levels from the window); the v flip of a screen material also flips its normal and ORM
+  maps; on the single-view debug paths (`-view.*` overrides, `-ui_preview`) textures keep their last
+  picture; the editor counts `update_hz` at 60 frames a second.
+
+## Steps
+
+| # | Step | Linear | Model | State |
+|---|---|---|---|---|
+| 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
+| 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
+| 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | done |
+| 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
+| 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |
+| 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | not started |
+
+**Gates:**
+- One camera and no `RenderTexture` draws the same pixels as before (GL and SDL GPU goldens).
+- The sim hash is independent of the number of views and of the split layout.
+- Single-player input and the existing samples behave as before.
+- `local_ci.sh` green on every step.

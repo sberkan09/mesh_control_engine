@@ -46,6 +46,9 @@ public:
     // Uploads `upload` as `generation` of `key` and makes it current. Validates sizes and formats
     // (cooked bytes are untrusted); on failure the key keeps its previous generation.
     Result<rhi::TextureHandle> upload(u32 key, u32 generation, const TextureUpload& upload);
+    // Takes `texture` (made by the caller on this store's device) as `generation` of `key`, the
+    // key's current one; the store destroys it with the key (M-VIEWS render textures).
+    void adopt(u32 key, u32 generation, rhi::TextureHandle texture);
     // Destroys one generation (the device defers the GL delete past frames in flight). Retiring
     // the current generation leaves the key resolving to the error texture.
     void retire(u32 key, u32 generation);

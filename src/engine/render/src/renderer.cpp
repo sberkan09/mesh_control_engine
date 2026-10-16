@@ -346,6 +346,45 @@ void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::Tex
     forward_.record(cmd, scene, target);
 }
 
+void Renderer::record_3d(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const Forward3D::ViewOutput& out) {
+    MCE_ASSERT_MSG(forward_.initialized(), "record_3d before init_3d");
+    if (!forward_.initialized()) return;
+    forward_.record(cmd, scene, target, out);
+}
+
+u32 Renderer::view_slot(u64 key) {
+    for (u32 i = 0; i < Forward3D::kMaxViews; ++i) {
+        if (view_slots_[i].held && view_slots_[i].key == key) {
+            view_slots_[i].asked = true;
+            return i;
+        }
+    }
+    for (u32 i = 0; i < Forward3D::kMaxViews; ++i) {
+        if (view_slots_[i].held) continue;
+        view_slots_[i] = {key, true, true};
+        return i;
+    }
+    return ~0u;
+}
+
+void Renderer::end_views() {
+    for (u32 i = 0; i < Forward3D::kMaxViews; ++i) {
+        ViewSlot& v = view_slots_[i];
+        if (v.held && !v.asked) {
+            if (i > 0) forward_.release_view(i);
+            v = {};
+        }
+        v.asked = false;
+    }
+}
+
+void Renderer::release_views() {
+    for (u32 i = 0; i < Forward3D::kMaxViews; ++i) {
+        if (i > 0 && view_slots_[i].held) forward_.release_view(i);
+        view_slots_[i] = {};
+    }
+}
+
 void make_identity_lut(Array<u8>& out) {
     out.resize(usize(kLutSize) * kLutSize * kLutSize * 4);
     for (u32 y = 0; y < kLutSize; ++y)
@@ -383,7 +422,7 @@ void Renderer::record_post_2d(rhi::CommandBuffer& cmd, rhi::TextureHandle source
     cmd.end_pass();
 }
 
-void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
+void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch, bool linear_output) {
     MCE_ASSERT_MSG(batch.built(), "record_2d: batch not built");
     MCE_ASSERT_MSG(cmd.in_pass(), "record_2d: no open pass");
     if (!batch.built() || batch.groups().empty()) return;
@@ -391,7 +430,7 @@ void Renderer::record_2d(rhi::CommandBuffer& cmd, const SpriteBatch& batch) {
     cmd.push_debug_scope("sprites");
     FrameU fu;
     fu.view_proj = batch.view().view_proj;
-    fu.params[0] = desc_.encode_srgb_output ? 1.0f : 0.0f;
+    fu.params[0] = desc_.encode_srgb_output && !linear_output ? 1.0f : 0.0f;
     fu.params[1] = fu.params[2] = fu.params[3] = 0.0f;
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     const Lights2D& lights = batch.lights();

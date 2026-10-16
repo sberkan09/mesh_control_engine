@@ -8,14 +8,18 @@
 #   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
 #
-# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, web. linux-gcc-release
-# runs only when named: determinism already builds and runs the gcc Release tree, and linux-clang-release
-# runs the tests in Release.
+# Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
+# release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
+# the targets it runs. linux-gcc-release runs only when named: it is that tree plus its tests, and
+# linux-clang-release runs the tests in Release.
 # GPU tests run under Xvfb + Mesa llvmpipe (GL) and lavapipe (Vulkan, for mce_rhi_sdlgpu, ADR-0038), in
 # linux-gcc-debug only; the other presets build them without running them.
 #
 # --task adds determinism when the change touches simulation code: src/engine/{core,ecs,refl,scene,kit,
 # kit_novel,physics2d,physics3d,audio,input,net,monetize}, or a changed file with MCE_COMPONENT or state_hash.
+#
+# --task also adds release-build when the change touches C++ code: -O2 enables warnings (format-truncation,
+# maybe-uninitialized) the Debug tree cannot raise.
 #
 # tidy checks the translation units changed since the merge base with $MCE_TIDY_BASE (default
 # origin/dev_claude), committed or not, plus the ones that include a changed header. It covers the whole
@@ -38,6 +42,10 @@
 # run when the snapshot is missing or older than 12 h (after any green run with --save-cache).
 # MCE_CCACHE_SNAPSHOT overrides the snapshot path; an empty value turns the snapshot off.
 #
+# Stages always run in a fixed order (stages that share a build tree together). When the disk runs short
+# (a project container's allowance is about 40 GB; a tree is 8-15 GB) the trees no later stage needs are
+# deleted before the next stage; MCE_CI_MIN_FREE_GB (22) and MCE_CI_HARD_MIN_GB (3) tune it.
+#
 # Exit code 0 only if every selected stage passed. A summary table is printed at the end.
 
 set -uo pipefail
@@ -47,7 +55,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism web)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -94,6 +102,19 @@ if [[ $task_run -eq 1 ]] && touches_sim; then
     stages+=(determinism)
 fi
 
+# --task: a change to C++ code also builds the gcc Release tree, where -O2 raises warnings Debug does not.
+touches_cpp() {
+    local f
+    while IFS= read -r f; do
+        [[ "$f" =~ ^(src|samples|tests|projects|tools)/.*\.(h|hpp|cpp|cc|c)$ ]] && return 0
+    done < <(changed_files)
+    return 1
+}
+if [[ $task_run -eq 1 ]] && touches_cpp; then
+    echo "=== --task: the change touches C++ code, the gcc Release build runs too"
+    stages+=(release-build)
+fi
+
 # --task: a change to the web build (the WebGPU backend, the web glue, the shell and its scripts) also runs web.
 touches_web() {
     local f
@@ -112,6 +133,79 @@ fi
 
 LOG_DIR="$ROOT/build/local-ci-logs"
 mkdir -p "$LOG_DIR"
+
+# Stages run in this order whatever order they were named or added in: the ones that share a build tree
+# sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
+# the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
+# and fail in run_stage with the list of known ones.
+CANON_ORDER=(walls linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+order_stages() {
+    local -A seen=()
+    local c s sorted=()
+    for c in "${CANON_ORDER[@]}"; do
+        for s in "${stages[@]}"; do
+            [[ "$s" == "$c" && -z "${seen[$s]:-}" ]] && { sorted+=("$s"); seen[$s]=1; }
+        done
+    done
+    for s in "${stages[@]}"; do [[ -z "${seen[$s]:-}" ]] && { sorted+=("$s"); seen[$s]=1; }; done
+    stages=("${sorted[@]}")
+}
+order_stages
+
+# The build trees (build/<preset>) a stage uses.
+stage_trees() {
+    case "$1" in
+        linux-*) echo "$1" ;;
+        tidy) echo linux-clang-debug ;;
+        determinism) echo "linux-gcc-debug linux-gcc-release" ;;
+        release-build) echo linux-gcc-release ;;
+    esac
+}
+
+# Disk: a project container's writable space is a fixed allowance (about 40 GB), and one tree is 8-15 GB,
+# so a full run cannot keep them all. Before each stage, when less than MCE_CI_MIN_FREE_GB (default 22: the ASan tree is 18 GB and its sdk_install test copies binaries, a
+# Debug or Release tree) is free, the build trees no later stage needs are deleted, largest first, until
+# there is room, then, if still short, the ones only later stages need (the ccache survives, so they are
+# rebuilt from cache). With less than
+# MCE_CI_HARD_MIN_GB (default 3) free after that the stage is not started and says so. A run with plenty
+# of room deletes nothing.
+MIN_FREE_GB="${MCE_CI_MIN_FREE_GB:-22}"
+HARD_MIN_GB="${MCE_CI_HARD_MIN_GB:-3}"
+free_gb() { df -BG --output=avail "$ROOT/build" 2>/dev/null | tail -1 | tr -dc '0-9'; }
+reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 when there is no room
+    local free i t d
+    free="$(free_gb)"
+    [[ -z "$free" || "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    local -A needed=()
+    for ((i = $1; i < ${#stages[@]}; i++)); do
+        for t in $(stage_trees "${stages[$i]}"); do needed[$t]=1; done
+    done
+    while IFS= read -r d; do
+        t="$(basename "$d")"
+        [[ -n "${needed[$t]:-}" ]] && continue
+        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing the finished build tree build/$t ($(du -sh "$d" | cut -f1))"
+        rm -rf "$d"
+        free="$(free_gb)"
+        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
+    # Still short: a tree only a later stage needs, left over from an earlier run, costs less to rebuild
+    # (the ccache has it) than the stage about to run costs to fail.
+    local -A now=()
+    for t in $(stage_trees "${stages[$1]}"); do now[$t]=1; done
+    while IFS= read -r d; do
+        t="$(basename "$d")"
+        [[ -n "${now[$t]:-}" ]] && continue
+        echo "=== disk: ${free} GB free (want ${MIN_FREE_GB}); removing build/$t, a later stage rebuilds it ($(du -sh "$d" | cut -f1))"
+        rm -rf "$d"
+        free="$(free_gb)"
+        [[ "$free" -ge "$MIN_FREE_GB" ]] && return 0
+    done < <(du -s "$ROOT"/build/linux-*/ 2>/dev/null | sort -rn | cut -f2-)
+    if [[ "$free" -lt "$HARD_MIN_GB" ]]; then
+        echo "=== disk: only ${free} GB free and no finished build tree is left to delete; free space or run fewer stages at once"
+        return 1
+    fi
+    echo "=== disk: ${free} GB free, less than the ${MIN_FREE_GB} GB wanted; going on"
+}
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
@@ -210,6 +304,7 @@ preconfigure() {
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
+            release-build) want[linux-gcc-release]=1 ;;
         esac
     done
     [[ ${#want[@]} -gt 1 ]] || return 0
@@ -311,6 +406,15 @@ stage_demo_games_determinism() {
             build/linux-gcc-debug/projects/MarbleGarden/marble_garden build/linux-gcc-release/projects/MarbleGarden/marble_garden
 }
 
+# Every target of the gcc Release tree, tests included, compiled but not run. The determinism stage builds
+# only the targets it runs, so a -Werror that fires in the editor, the MCP server or a sample in Release
+# (gcc 13's -Wformat-truncation did, #359) passed every earlier stage; the SDK build (release_sdk.sh) is
+# this tree.
+stage_release_build() {
+    configure linux-gcc-release &&
+        cmake --build --preset linux-gcc-release
+}
+
 stage_determinism() {
     # Reuses the gcc debug/release trees (tests stay ON so it doesn't thrash the test stages' caches).
     configure linux-gcc-debug &&
@@ -356,8 +460,12 @@ stage_determinism() {
 # ADR-0041 spike: the Luau system hashes the same across runs and Debug/Release, and the same as
 # its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
 stage_script_determinism() {
-    cmake --build --preset linux-gcc-debug --target sample_script_headless &&
-        cmake --build --preset linux-gcc-release --target sample_script_headless &&
+    cmake --build --preset linux-gcc-debug --target sample_script_headless ember_script &&
+        cmake --build --preset linux-gcc-release --target sample_script_headless ember_script &&
+        python3 scripts/ci/determinism.py --runs 3 \
+            --args="-headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input" \
+            build/linux-gcc-debug/projects/EmberScript/ember_script \
+            build/linux-gcc-release/projects/EmberScript/ember_script &&
         python3 scripts/ci/determinism.py --runs 3 --args "-ticks 1200" \
             build/linux-gcc-debug/samples/script_headless/sample_script_headless \
             build/linux-gcc-release/samples/script_headless/sample_script_headless &&
@@ -438,10 +546,11 @@ stage_web() {
 
 run_stage() {
     case "$1" in
-        walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check && python3 scripts/ci/capabilities.py --check ;;
+        walls) python3 scripts/ci/check_walls.py && python3 scripts/bump_version.py --check && python3 scripts/ci/capabilities.py --check && python3 scripts/ci/check_docs.py ;;
         linux-*) [[ -n "${GPU_TESTS[$1]:-}" ]] || { echo "unknown preset stage: $1"; return 2; }; stage_preset "$1" ;;
         tidy) stage_tidy ;;
         determinism) stage_determinism ;;
+        release-build) stage_release_build ;;
         web) stage_web ;;
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
     esac
@@ -453,10 +562,14 @@ preconfigure
 
 declare -A RESULT
 failed=0
-for s in "${stages[@]}"; do
+for ((si = 0; si < ${#stages[@]}; si++)); do
+    s="${stages[$si]}"
     echo "=== $s"
     start=$SECONDS
-    if run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
+    if ! reclaim_space "$si"; then
+        RESULT[$s]="FAIL (0s) — no disk space, see above"
+        failed=1
+    elif run_stage "$s" > "$LOG_DIR/$s.log" 2>&1; then
         RESULT[$s]="PASS ($((SECONDS - start))s)"
     else
         RESULT[$s]="FAIL ($((SECONDS - start))s) — see build/local-ci-logs/$s.log"

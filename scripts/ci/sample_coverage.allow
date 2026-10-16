@@ -4,38 +4,6 @@
 
 Blackboard | state the engine writes and games read; nothing to author
 SceneChunkStatus | state the engine writes and games read; nothing to author
-AttachToBone | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-IKTarget3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Locomotion3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-CameraShake3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-CameraBlend3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-ReflectionProbe3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-GiVolume3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Foliage3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-TerrainCollider3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Decal3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-ParticleEmitter3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavArea3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavLink3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-NavObstacle3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Raycast3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-Waypoint3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-VehicleDriver3D | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-WorldSettings | tested in tests/ but no sample scene uses it yet; M-COVER step 2 shows it in a 3D tour sample
-PathAgent | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-ParticleBurst | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-ShakeTrigger | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-CameraShake2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-PhysicsEvents | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-NavGridSource | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Bone2DFollow | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DAnimator | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DSlots | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DIK | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-IKTarget2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-SoundCaption | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-AiTokenPool | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-ScriptSystem | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
-Dialogue | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
-DialogueInput | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
+CameraView | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen)
+RenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)
+ShowRenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)

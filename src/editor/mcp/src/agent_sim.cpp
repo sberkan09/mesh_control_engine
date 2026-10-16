@@ -431,7 +431,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
                           log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
-                          scene = v.get("scene");
+                          scene = v.get("scene"), reachable = v.get("reachable");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -461,6 +461,14 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.expected = Value{};
         out.expected.kind = Value::Kind::String;
         out.expected.s.assign(want);
+    } else if (reachable.valid()) {
+        // Seeded levels (M-PROCGEN 4): every seed of the run must generate and have its exit reachable
+        // from its start. Independent of the game; "procgen_run" shows one level.
+        out.what = Condition::What::Reachable;
+        if (have_value) return err_out(err, "a reachable check takes no comparison: {\"reachable\": {\"kind\": \"caves\", \"width\": 64, \"height\": 64, \"count\": 100}}");
+        if (!parse_procgen_run(reachable, out.procgen, err)) return false;
+        out.op = CompareOp::Eq;
+        number(out.expected, 0);
     } else if (log_has.valid()) {
         out.what = Condition::What::LogContains;
         if (!log_has.is_string() || log_has.as_string().empty()) return err_out(err, "'log_contains' is the text to find");
@@ -481,7 +489,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel, reachable");
     }
     return true;
 }
@@ -547,7 +555,7 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
 
 void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel) {
     if (c.what != Condition::What::LogContains && c.what != Condition::What::LogErrors && c.what != Condition::What::LogWarnings &&
-        c.what != Condition::What::Feel)
+        c.what != Condition::What::Feel && c.what != Condition::What::Reachable)
         return;  // world checks were evaluated in the run
     c.actual = Value{};
     switch (c.what) {
@@ -570,6 +578,20 @@ void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTrac
         case Condition::What::Feel: {
             f64 m = 0;
             if (feel && feel->metric(c.text.view(), m)) number(c.actual, m);
+            break;
+        }
+        case Condition::What::Reachable: {
+            // The number of seeds that fail; the first few are named in the note.
+            u64 bad = 0;
+            c.note.clear();
+            for (u64 i = 0; i < c.procgen.count; ++i) {
+                const u64 seed = c.procgen.seed + i;
+                Result<kit::procgen::ProcGrid> r = procgen_generate(c.procgen, seed);
+                if (r.has_value() && procgen_exit_reachable(r.value())) continue;
+                if (bad++ < 5) cook::appendf(c.note, "%sseed %llu: %s", bad > 1 ? "; " : "", static_cast<unsigned long long>(seed),
+                                             r.has_value() ? "exit not reachable from start" : r.error().stage);
+            }
+            number(c.actual, static_cast<f64>(bad));
             break;
         }
         default: return;
@@ -606,6 +628,10 @@ void write_condition(JsonWriter& w, const Condition& c) {
         case Condition::What::Feel:
             what += "feel ";
             what += c.text.view();
+            break;
+        case Condition::What::Reachable:
+            cook::appendf(what, "failing %s levels (%llu seeds from %llu)", c.procgen.kind.c_str(), static_cast<unsigned long long>(c.procgen.count),
+                          static_cast<unsigned long long>(c.procgen.seed));
             break;
     }
     w.key("check").str(what.view());

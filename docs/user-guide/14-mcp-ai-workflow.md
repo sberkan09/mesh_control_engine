@@ -83,6 +83,16 @@ each result's `content[0].text` is the tool's JSON).
 | Timeline | `timeline_create` | `path`, `tracks` (one or more), `name?`, `duration?` | a new `.mctimeline` with a fresh GUID; `tracks` in the `.mctimeline` track format (`asset_schema` type `Timeline`, user guide 13.5). Play it with a `TimelinePlayer` (`component_add` with `{"timeline": "guid:<uuid>"}`), and add a `Cutscene` for the letterbox, hold and skip |
 | | `timeline_add_track` | `timeline`, `track`, `index?` (last) | adds a `.mctimeline` track object (`{"type": "property", "target": 0, "path": "CameraRail3D.t", "keys": [...]}`) |
 | | `timeline_add_key` | `timeline`, `track` (index), `key` or `keys` | adds keys (or ranges, cuts, lines, in the track's own form) merged in by time; returns the play length |
+| AI | `bt_create` | `path`, `name?`, `blackboard?`, `root?` (a selector over a wait) | a new `.mcbt` with a fresh GUID; `blackboard` maps a key to its type or `{"type", "default"}`, `root` is a node in the `.mcbt` form (user guide 13.8). Returns the tree as numbered outline lines |
+| | `bt_add_node` | `tree`, `node`, `parent?` (0, the root), `index?` (last) | adds a node (with its children) under a composite, or under a decorator with no child |
+| | `bt_set` | `tree`, `node?` (outline number), `value?`, `fields?` (`null` removes one), `replace?`, `remove?`, `name?`, `blackboard?` (`null` removes a key) | edits the tree; each edit is cooked first, and one that does not cook fails with the cook's message and writes nothing |
+| | `bt_trace` | `entity`, `ticks?` (300), `every?` (30) | plays the saved scene headless and reports the entity's brain: rows of tick, result, runs, running path and blackboard, and the tick each node `started` |
+| 2D skeleton | `skel2d_create` | `path`, `name?`, `root?` ("root") | a new `.mcskel2d` with a fresh GUID and one root bone (user guide 7.13). Every `skel2d_*` edit is cooked by the real importer before it is written, so an error names `file:line` and nothing changes |
+| | `skel2d_add_bone` | `skeleton`, `name`, `parent?`, `x?`, `y?`, `rotation?` (degrees), `scale?` (number or `[sx, sy]`), `length?` | adds a bone, last; the parent must already exist |
+| | `skel2d_add_slot` | `skeleton`, `name`, `bone`, `texture?` (`guid:`), `rect?`, `size?`, `pivot?`, `offset?`, `rotation?`, `tint?`, `attachments?`, `attachment?` | adds a slot (a textured quad on a bone, drawn after the earlier slots); `attachments` makes it a list of quads and meshes in the `.mcskel2d` form |
+| | `skel2d_add_ik` | `skeleton`, `name`, `bones` (parent first), `target?`, `mix?`, `type?`, `bend?`, `iterations?`, `order?` | adds a two-bone or CCD IK constraint |
+| | `skel2d_key` | `skeleton`, `animation`, `channel` (`rotate`, `translate`, `scale`, `color`, `attachment`, `ik_mix`), `target`, `t` and the channel's value, or `keys`; `curve?`, `duration?`, `loop?` | keys a channel at a time, creating the animation when missing; a key at the same time is replaced |
+| | `skel2d_preview` | `skeleton`, `animation?`, `time?`, `ik_targets?`, `render?`, `width?`, `height?` | the bone world transforms of the rest pose or an animation at a time (the runtime's pose functions), and an image: a line drawing of the bones and slot quads |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
@@ -136,6 +146,9 @@ each result's `content[0].text` is the tool's JSON).
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
+
+
+For a local-multiplayer game (chapter 11.3), name the second player's actions `P2/<Action>` in `input` (`P3/`, `P4/` likewise); `P1/<Action>` is the plain `<Action>`.
 
 The `ui_*` tools edit a document through the cook's own reader and writer: each edit is read back
 as a whole document (so a duplicate name or a nav path to a removed widget fails with the cook's
@@ -292,6 +305,22 @@ entity by entity and component by component, gives a new entity whose id the oth
 id, and refuses with the list of conflicts when both changed the same component, until `resolve` picks a
 side. A prefab saved with `scene_save` merges the same way; a material or other file two agents both write is
 last-write-wins, so lock it first.
+
+#### Several agents on one scene
+
+Each server holds its own copy of the scene, so another agent's save does not appear until you look. The
+rules, in the order you will meet them:
+
+- `scene_open` on the scene you already have open re-reads the file from disk, so it shows what the others
+  saved. It refuses to drop your unsaved edits unless you pass `force: true`, which discards them and reloads.
+  Opening a scene also replaces the copy `scene_switch` parked for it.
+- `scene_save` merges a teammate's save in (their new entities stay). If it cannot (no common version, a
+  file it cannot parse), it refuses and lists the entities on disk your copy lacks and the ones only yours
+  has. Then either `scene_open {"path": ..., "force": true}` to reload, or `overwrite: true` to save your copy over
+  theirs and lose their entities.
+- `entity_delete` also deletes the entity's children, and every entity reference to them from entities that
+  stay becomes null. The result lists each as `nulled_links` (the entity that holds it, the component and
+  the field); set them again with `component_set`, or `scene_undo` the delete.
 
 When the engine makes something hard (a tool that is missing, an error that does not say what to do, a doc
 that was wrong), the agent calls `report_friction` before it works around it. The notes collect in the

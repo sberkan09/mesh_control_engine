@@ -1,0 +1,10 @@
+{
+  "format": "mce-animgraph", "version": 2, "guid": "b0a30000-0000-4000-8000-000000000020", "name": "hero",
+  "params": ["speed", "look"],
+  "start": "locomotion",
+  "states": [
+    { "name": "locomotion",
+      "blend": { "param": "speed", "points": [ { "clip": "Idle", "at": 0 }, { "clip": "Walk", "at": 2 } ] } } ],
+  "ik": [
+    { "name": "head", "type": "look_at", "bone": "head", "axis": [0, 0, 1], "limit": 70, "param": "look" } ]
+}

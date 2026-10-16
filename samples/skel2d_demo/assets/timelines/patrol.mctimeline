@@ -1,0 +1,27 @@
+{
+  "format": "mce-timeline",
+  "version": 1,
+  "guid": "5d1e0000-0000-4000-8000-000000000004",
+  "name": "patrol",
+  "duration": 12,
+  "tracks": [
+    { "type": "transform", "target": 0, "keys": [
+      { "t": 0, "position": [-2, 0, 0] },
+      { "t": 1.5, "position": [-2, 0, 0] },
+      { "t": 4.5, "position": [2, 0, 0] },
+      { "t": 7, "position": [2, 0, 0] },
+      { "t": 10, "position": [-2, 0, 0] },
+      { "t": 12, "position": [-2, 0, 0] } ] },
+    { "type": "property", "target": 0, "path": "Skeleton2DAnimator.params.x", "keys": [
+      { "t": 0, "value": 0, "ease": "step" },
+      { "t": 1.5, "value": 1, "ease": "step" },
+      { "t": 4.5, "value": 0, "ease": "step" },
+      { "t": 7, "value": 1, "ease": "step" },
+      { "t": 10, "value": 0, "ease": "step" } ] },
+    { "type": "property", "target": 0, "path": "Skeleton2DAnimator.params.y", "keys": [
+      { "t": 0, "value": 0, "ease": "step" },
+      { "t": 5.5, "value": 1, "ease": "step" },
+      { "t": 5.7, "value": 0, "ease": "step" } ] },
+    { "type": "activation", "target": 0, "path": "Skeleton2D.flip_x", "ranges": [ { "from": 6.9, "to": 12 } ] }
+  ]
+}

@@ -19,6 +19,7 @@ mce_add_library(mce_gameplay_kit
         src/sensors3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
+        src/procgen.cpp
         src/sequence.cpp
         src/skeleton2d.cpp
         src/skeleton2d_anim.cpp
@@ -32,6 +33,8 @@ mce_add_library(mce_gameplay_kit
         src/perception.cpp
         src/cinematic.cpp
         src/video.cpp
+        src/render_textures.cpp
+        src/views.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl

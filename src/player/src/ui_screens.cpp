@@ -174,6 +174,19 @@ void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
     }
 }
 
+void UiScreens::bind_render_textures(const kit::RenderTextures& rts) {
+    for (const FixedString<32>& name : rt_images_)
+        for (Screen& s : screens_)
+            if (s.doc) s.doc->set_image_texture(name.view(), {});
+    rt_images_.clear();
+    for (const kit::RenderTextures::Entry& e : rts.entries()) {
+        if (e.ui_image.empty() || !e.set.valid()) continue;
+        rt_images_.push_back(e.ui_image);
+        for (Screen& s : screens_)
+            if (s.doc) s.doc->set_image_texture(e.ui_image.view(), rts.sprite_set(e.entity));
+    }
+}
+
 void UiScreens::submit(render::SpriteBatch& batch, i16 base) const {
     i32 layer = base;
     for (const Screen& s : screens_) {

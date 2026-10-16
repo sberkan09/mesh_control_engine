@@ -1,0 +1,12 @@
+{
+  "format": "mce-bt",
+  "version": 1,
+  "guid": "a1de0000-0000-4000-8000-000000000005",
+  "name": "stone",
+  "root": {"sequence": [
+    {"wait": 1},
+    {"task": "log", "text": "a stone lands"},
+    {"task": "make_noise", "loudness": 20},
+    {"wait": 1000}
+  ]}
+}

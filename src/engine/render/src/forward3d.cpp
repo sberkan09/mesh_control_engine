@@ -729,6 +729,7 @@ void Forward3D::ensure_targets(rhi::Extent2D size) {
 
 void Forward3D::shutdown() {
     if (!device_) return;
+    for (u32 slot = 1; slot < kMaxViews; ++slot) release_view(slot);
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
@@ -768,7 +769,7 @@ void Forward3D::shutdown() {
 }
 
 void Forward3D::timestamp(rhi::CommandBuffer& cmd, u32 stage) {
-    if (desc_.timestamps) cmd.write_timestamp(desc_.timestamp_base + stage);
+    if (desc_.timestamps && out_.first) cmd.write_timestamp(desc_.timestamp_base + stage);  // the frame's first view
 }
 
 Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
@@ -795,11 +796,68 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     return t;
 }
 
-void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
+void Forward3D::swap_view(ViewState& v) {
+#define MCE_FORWARD3D_VIEW_SWAP(m) std::swap(m, v.m);
+    MCE_FORWARD3D_VIEW_STATE(MCE_FORWARD3D_VIEW_SWAP)
+#undef MCE_FORWARD3D_VIEW_SWAP
+}
+
+// Everything per-view but the exposure buffer (slot 0 keeps it for the life of the renderer).
+void Forward3D::destroy_view_resources() {
+    destroy_targets();
+    for (rhi::TextureHandle* t : {&vol_media_, &vol_light_, &fx_[0], &fx_[1], &occ_color_, &occ_depth_}) destroy(*device_, *t);
+    for (rhi::TextureHandle& t : hiz_) destroy(*device_, t);
+    for (rhi::Extent2D& e : hiz_size_) e = {};
+    fx_size_ = {};
+    fx_next_ = 0;
+    velocity_prev_valid_ = false;
+    exposure_reset_ = true;
+}
+
+void Forward3D::release_view(u32 slot) {
+    if (!device_ || slot >= kMaxViews) return;
+    if (slot == 0) {
+        destroy_view_resources();
+        return;
+    }
+    ViewState& v = views_[slot - 1];
+    if (!v.alive) return;
+    swap_view(v);
+    destroy_view_resources();
+    if (!exposure_buf_.is_null()) device_->destroy_buffer(exposure_buf_);
+    exposure_buf_ = {};
+    swap_view(v);
+    v = ViewState{};
+}
+
+void Forward3D::record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out) {
+    MCE_ASSERT_MSG(out.slot < kMaxViews, "Forward3D::record: view slot out of range");
+    if (out.slot == 0 || out.slot >= kMaxViews) {
+        record_view(cmd, scene, target, out);
+        return;
+    }
+    ViewState& v = views_[out.slot - 1];
+    if (!v.alive) {
+        v = ViewState{};
+        v.alive = true;
+        v.ssr_prev_vp_ = v.prev_view_proj_ = v.velocity_prev_vp_used_ = mat4::identity();
+        v.exposure_reset_ = true;
+        ExposureData init{};
+        init.exposure = 1.0f;
+        v.exposure_buf_ = device_->create_buffer({rhi::BufferUsage::Storage, sizeof(ExposureData), "mce.3d.exposure"},
+                                                 std::as_bytes(Span<const ExposureData>(&init, 1)));
+    }
+    swap_view(v);
+    record_view(cmd, scene, target, out);
+    swap_view(v);
+}
+
+void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out) {
     MCE_ASSERT_MSG(device_, "Forward3D::record before init");
     MCE_ASSERT_MSG(scene.built(), "Forward3D::record: scene not built");
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
+    out_ = out;
     const rhi::Extent2D view = scene.view().viewport;
     if (view.width == 0 || view.height == 0) return;
     // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
@@ -1736,6 +1794,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 // changes, then `probes_per_frame` probes re-captured every frame and blended in by the hysteresis.
 void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     gi_shadowed_ = false;
+    if (!out_.first) return;  // one rolling update a frame; later views read the volume as it is
     const GiVolume& gi = scene.gi_volume();
     if (!gi.enabled || gi_project_.is_null()) return;
     const rhi::Extent2D vs = gi_volume_size(gi);
@@ -2480,12 +2539,15 @@ void Forward3D::record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
     const PostFx& post = scene.post();
-    auto fullscreen = [&](rhi::TextureHandle dst, rhi::LoadOp load, const char* name) {
+    // The passes that write `target` write the view's rect of it (M-VIEWS), keeping the rest.
+    const bool sub_rect = out_.rect.width > 0 && out_.rect.height > 0;
+    auto fullscreen = [&](rhi::TextureHandle dst, rhi::LoadOp load, const char* name, bool final = false) {
         rhi::PassAttachment out;
         out.texture = dst;
-        out.load = load;
+        out.load = final && sub_rect ? rhi::LoadOp::Load : load;
         rhi::RenderPassDesc p;
         p.colors = Span<const rhi::PassAttachment>(&out, 1);
+        if (final && sub_rect) p.viewport = out_.rect;
         p.debug_name = name;
         cmd.begin_pass(p);
     };
@@ -2530,7 +2592,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fu.view = view.view;
     fu.inv_view_proj = mat4::identity();
     fu.camera_pos = vec4(view.position, 0.0f);
-    fu.params = {scene.exposure(), desc_.encode_srgb_output ? 1.0f : 0.0f,
+    fu.params = {scene.exposure(), desc_.encode_srgb_output && !out_.linear_output ? 1.0f : 0.0f,
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
     // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off), z color-vision
@@ -2563,7 +2625,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         have = want;
     };
     if (finish) ensure(fin_src_, fin_src_size_, post_size_, "mce.3d.fin_src");
-    fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap");
+    fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap", !fxaa && !finish);
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
@@ -2576,7 +2638,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsTonemap);
 
     if (fxaa) {
-        fullscreen(finish ? fin_src_ : target, rhi::LoadOp::DontCare, "fxaa");
+        fullscreen(finish ? fin_src_ : target, rhi::LoadOp::DontCare, "fxaa", !finish);
         cmd.bind_pipeline(fxaa_);
         cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
         cmd.bind_texture(rhi::bank::kAlbedo, ldr_, linear_clamp_);
@@ -2590,7 +2652,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         PostU pu;
         if (spatial) {
             if (sharpen > 0.0f) ensure(fin_up_, fin_up_size_, out, "mce.3d.fin_up");
-            fullscreen(sharpen > 0.0f ? fin_up_ : target, rhi::LoadOp::DontCare, "upscale");
+            fullscreen(sharpen > 0.0f ? fin_up_ : target, rhi::LoadOp::DontCare, "upscale", sharpen <= 0.0f);
             cmd.bind_pipeline(upscale_pipe_);
             pu.texel = {1.0f / f32(src_size.width), 1.0f / f32(src_size.height), f32(src_size.width), f32(src_size.height)};
             pu.params = {};
@@ -2603,7 +2665,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
             src_size = out;
         }
         if (sharpen > 0.0f) {
-            fullscreen(target, rhi::LoadOp::DontCare, "sharpen");
+            fullscreen(target, rhi::LoadOp::DontCare, "sharpen", true);
             cmd.bind_pipeline(sharpen_pipe_);
             pu.texel = {1.0f / f32(src_size.width), 1.0f / f32(src_size.height), f32(src_size.width), f32(src_size.height)};
             pu.params = {sharpen, 0.0f, 0.0f, 0.0f};
