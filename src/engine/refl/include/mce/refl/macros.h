@@ -195,6 +195,12 @@ private:
                                                    "no destructors)");                                \
     MCE_REFL_TYPE_(T, ::mce::refl::TypeFlags::Component, __VA_ARGS__)
 
+// Reflected ECS event (an EventQueue<T> payload): plain, trivially copyable; scripts read and push
+// it by name (M-SCRIPT 2).
+#define MCE_EVENT(T, ...)                                                                              \
+    static_assert(std::is_trivially_copyable_v<T>, "events must be trivially copyable");              \
+    MCE_REFL_TYPE_(T, ::mce::refl::TypeFlags::Event, __VA_ARGS__)
+
 // Reflected plain value struct (nested field type, settings schema, save header...).
 #define MCE_REFL_STRUCT(T, ...) MCE_REFL_TYPE_(T, ::mce::refl::TypeFlags::None, __VA_ARGS__)
 
