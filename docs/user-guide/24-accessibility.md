@@ -13,7 +13,7 @@ with different settings share the state hash, replays and multiplayer included.
 
 | Need | Convars | Where it is explained |
 |---|---|---|
-| Subtitles and sound captions | `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`, `access.subtitle_background` | 10.7 |
+| Subtitles and sound captions | `access.subtitles`, `access.captions`, `access.subtitle_speaker`, `access.subtitle_size`, `access.subtitle_background` | 10.8 |
 | Color vision | `access.colorblind` (0 off, 1 protanopia, 2 deuteranopia, 3 tritanopia), `access.colorblind_strength` | 24.3 |
 | Text size | `access.text_scale` (0.5..3, on top of `ui_scale`) | 24.3 |
 | High-contrast menus | `access.high_contrast` | 24.3 |

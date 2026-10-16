@@ -8,6 +8,7 @@ namespace mce::audio {
 Result<ClipPayload> clip_payload_from_sfx(Span<const byte> payload) {
     constexpr const char* kStage = "audio.clip.sfx";
     MCE_TRY_ASSIGN(asset::SfxView v, asset::SfxView::read(payload));
+    if (v.set) return Error(Errc::Unsupported, kStage, "a sound set: ClipBank::pick plays it");
     const asset::SfxHeader& h = *v.header;
     if (h.sample_rate != kSampleRate) return Error(Errc::Unsupported, kStage, "sample rate is not 48 kHz");
     if (h.channels != 1 && h.channels != 2) return Error(Errc::Unsupported, kStage, "channels must be 1 or 2");
@@ -54,6 +55,17 @@ ClipBank::ClipBank(asset::AssetSystem& assets, AudioDevice& device, mem::IAlloca
 ClipBank::~ClipBank() { release_all(); }
 
 ClipHandle ClipBank::register_entry(Entry& e) {
+    // A sound set registers nothing: it keeps its members' GUIDs and picks per play.
+    if (const auto view = asset::SfxView::read(assets_->resolve(e.ref)); view && view.value().set) {
+        e.set = true;
+        e.params = *view.value().set;
+        e.members.clear();
+        for (const asset::Guid g : view.value().set_clips) e.members.push_back(g);
+        e.cursor = 0;
+        e.last = 0xFFFFFFFFu;
+        return {};
+    }
+    e.set = false;
     const auto payload = clip_payload_from_sfx(assets_->resolve(e.ref));
     if (!payload) {
         MCE_LOG_ERROR("audio: bad Sfx asset {} ({})", asset::to_string(e.ref.guid).c_str(), errc_name(payload.error().code));
@@ -95,6 +107,51 @@ ClipHandle ClipBank::acquire(asset::Guid guid, bool stream) {
     e.generation = h.value().generation;
     e.clip = register_entry(e);
     return e.clip;
+}
+
+namespace {
+// splitmix64: decorrelated values from one seed.
+u64 mix(u64& s) {
+    u64 z = (s += 0x9E3779B97F4A7C15ull);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+f32 unit(u64 v) { return static_cast<f32>(v >> 40) * (1.f / 16777216.f); }  // [0, 1)
+}  // namespace
+
+ClipPick ClipBank::pick(asset::Guid guid, u64 seed, bool stream) {
+    ClipPick out;
+    out.clip = acquire(guid, stream);
+    Entry* e = entries_.find(guid);
+    if (!e || !e->set || e->members.empty()) return out;
+    const u32 n = static_cast<u32>(e->members.size());
+    u64 s = seed;
+    const u64 r = mix(s);
+    u32 index = 0;
+    if (e->params.pick == asset::SoundSetPick::Sequence) {
+        index = e->cursor++ % n;
+    } else {
+        index = static_cast<u32>(r % n);
+        if ((e->params.flags & asset::SoundSetFlags::NoRepeat) && n > 1 && index == e->last)
+            index = (index + 1 + static_cast<u32>((r >> 32) % (n - 1))) % n;
+        e->last = index;
+    }
+    out.pitch = e->params.pitch_min + (e->params.pitch_max - e->params.pitch_min) * unit(mix(s));
+    out.gain_db = e->params.gain_min_db + (e->params.gain_max_db - e->params.gain_min_db) * unit(mix(s));
+    const asset::Guid member = e->members[index];  // `e` may move: acquire() can grow the table
+    if (member == guid) return out;
+    out.clip = acquire(member, stream);
+    if (const Entry* m = entries_.find(member); m && m->set) {
+        MCE_LOG_ERROR("audio: sound set {} contains another set; it plays nothing", asset::to_string(guid).c_str());
+        out.clip = {};
+    }
+    return out;
+}
+
+bool ClipBank::is_set(asset::Guid guid) const {
+    const Entry* e = entries_.find(guid);
+    return e && e->set;
 }
 
 ClipHandle ClipBank::find(asset::Guid guid) const {

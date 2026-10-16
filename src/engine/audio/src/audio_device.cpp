@@ -61,6 +61,11 @@ struct StreamMain {
     AudioHandle playing;   // the one voice reading the ring (null when idle)
 };
 
+u16 encode_rate(f32 pitch) {
+    const f32 p = std::isnan(pitch) ? 1.f : math::clamp(pitch, kMinPitch, kMaxPitch);  // NaN plays at 1
+    return static_cast<u16>(std::lround(p * static_cast<f32>(kRateUnit)));
+}
+
 void hash_command(u64& h, const AudioCommand& c) {
     // Only sim-determined fields: never pointers.
     Hasher64 hs(h);
@@ -68,6 +73,8 @@ void hash_command(u64& h, const AudioCommand& c) {
     hs.u32v(c.index);
     hs.u32v(c.voice.generation);
     hs.u32v(c.voice.clip);
+    // Only pitched voices carry a rate: plays at the original pitch hash as they did before M-AUDIO2.
+    if ((c.type == CmdType::Play || c.type == CmdType::VoicePitch) && c.voice.rate != kRateUnit) hs.u32v(c.voice.rate);
     hs.f32v(c.voice.gain);
     hs.f32v(c.voice.pan);
     hs.u32v(static_cast<u32>(c.bus) | (static_cast<u32>(c.priority) << 8) | (static_cast<u32>(c.flags) << 16));
@@ -316,7 +323,8 @@ AudioHandle AudioDevice::play_at(ClipHandle clip, u64 mix_sample, const PlayPara
     c.priority = p.priority;
     c.flags = p.loop ? CmdFlag::Loop : 0;
     c.voice.generation = slot.generation;
-    c.voice.clip = clip.index;
+    c.voice.clip = static_cast<u16>(clip.index);
+    c.voice.rate = m.stream >= 0 ? kRateUnit : encode_rate(p.pitch);
     c.voice.gain = db_to_linear(p.gain_db);
     c.voice.pan = p.pan;
     c.voice.start_sample = mix_sample;
@@ -437,6 +445,17 @@ void AudioDevice::set_handle_pan(AudioHandle h, f32 pan) {
     c.index = h.index;
     c.voice.generation = h.generation;
     c.voice.pan = pan;
+    if (impl_->commands.push(c)) hash_command(command_hash_, c);
+    else ++impl_->commands_dropped;
+}
+
+void AudioDevice::set_handle_pitch(AudioHandle h, f32 pitch) {
+    if (!is_playing(h)) return;
+    AudioCommand c;
+    c.type = CmdType::VoicePitch;
+    c.index = h.index;
+    c.voice.generation = h.generation;
+    c.voice.rate = encode_rate(pitch);
     if (impl_->commands.push(c)) hash_command(command_hash_, c);
     else ++impl_->commands_dropped;
 }
