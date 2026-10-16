@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
+  `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
+  equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
+  inspector and MCP's `ui_widget_set` reach it. User guide 12.
 - Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
   component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
   'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at

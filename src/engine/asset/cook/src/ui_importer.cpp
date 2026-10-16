@@ -16,6 +16,7 @@
 //         { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true,
 //           "style": { "text_size": 24 },                // UiStyle fields over every state
 //           "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1] } },  // one state's fields over that
+//           "own_style": ["tint"],                       // keep the kind's default tint over a theme
 //           "nav": { "down": "menu/volume" } },
 //         { "name": "volume", "kind": "Slider", "range": [0, 1, 0.05], "value": 0.8, "convar": "snd.volume" },
 //         { "name": "tabs", "kind": "Tabs", "value": 0,
@@ -178,7 +179,7 @@ private:
                                     "at",      "style",        "styles",         "text",          "value",   "range",
                                     "visible", "interactable", "blocks_pointer", "default_focus", "stack",   "grid",
                                     "nav",     "convar",       "children",       "tabs",          "action",  "bind",
-                                    "format",  "font_role", "text_align"},
+                                    "format",  "font_role", "text_align", "own_style"},
                                 file_, kStage, diags_))
             return;
         const JsonValue name = w.get("name");
@@ -311,6 +312,22 @@ private:
                 error(a, "'text_align' must be a UiTextAlign: Left, Center or Right");
             else
                 d.text_align = static_cast<ui::TextAlign>(ev->value);
+        }
+        if (const JsonValue o = w.get("own_style"); o.valid()) {
+            // A widget's style fields a theme must not replace, even where they equal the kind's default.
+            bool ok = o.is_array();
+            for (u32 i = 0; ok && i < o.size(); ++i) {
+                u32 bit = ui::kStyleOwnCount;
+                if (o.at(i).is_string())
+                    for (u32 b = 0; b < ui::kStyleOwnCount; ++b)
+                        if (o.at(i).as_string() == StringView(ui::kStyleOwnNames[b])) bit = b;
+                ok = bit < ui::kStyleOwnCount;
+                if (ok) d.own_style |= static_cast<u8>(1u << bit);
+            }
+            if (!ok)
+                error(o,
+                      "'own_style' must be a list of tint, text_color, accent, sprite, text_size, letter_spacing, "
+                      "text_outline or text_shadow");
         }
         if (const JsonValue a = w.get("action"); a.valid()) {
             if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31)
@@ -604,6 +621,18 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
         field("font_role");
         const refl::EnumValue* role = font_role_enum().find(static_cast<i64>(w.font_role));
         append_json_string(out, role ? StringView(role->name_str) : StringView("Auto"));
+    }
+    if (w.own_style != 0) {
+        field("own_style");
+        out += '[';
+        bool first_name = true;
+        for (u32 b = 0; b < ui::kStyleOwnCount; ++b) {
+            if ((w.own_style & (1u << b)) == 0) continue;
+            if (!first_name) out += ", ";
+            first_name = false;
+            append_json_string(out, ui::kStyleOwnNames[b]);
+        }
+        out += ']';
     }
     if (w.text_align != ui::TextAlign::Left) {
         field("text_align");

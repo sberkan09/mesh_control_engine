@@ -107,6 +107,12 @@ ui::build_document(data, doc);                          // the skin (data.font, 
   across its own rect, so a centered title needs no wrapping Stack: give it the full width
   (`"anchors"` or `"at"` with a width) and `"text_align": "Center"`. In C++ it is
   `Document::set_text_align`. Buttons always center their label.
+- A theme restyles every field a widget leaves at its kind's default look, so a field you set *to*
+  that default reads as unset and the theme's value wins. `"own_style": ["tint", "text_size"]` says
+  "the kind's default, not the theme's" for those fields (`tint`, `text_color`, `accent`, `sprite`
+  = region + slice + quad, `text_size`, `letter_spacing`, `text_outline`, `text_shadow`), in every
+  state; fields not listed still take the theme's. In C++ it is `Document::set_own_style`; the
+  editor's inspector has a "Keep over the theme" group.
 - Names are unique among siblings; `"nav"` edges and `Document::find` take paths of names.
 - The cook rejects a document the runtime would misread (an unknown kind or field, a duplicate
   name, a nav path that leads nowhere, a value outside its range) with `file:line:col`.

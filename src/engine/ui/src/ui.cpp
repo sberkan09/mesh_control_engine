@@ -695,6 +695,13 @@ TextAlign Document::text_align(WidgetId w) const {
 void Document::set_text_align(WidgetId w, TextAlign align) {
     if (Node* n = node(w)) n->text_align = align;
 }
+u8 Document::own_style(WidgetId w) const {
+    const Node* n = node(w);
+    return n ? n->own_style : u8(0);
+}
+void Document::set_own_style(WidgetId w, u8 own) {
+    if (Node* n = node(w)) n->own_style = own;
+}
 const render::Font* Document::node_font(const Node& n) const { return skin_.font_for(resolve_font_role(n.kind, n.font_role)); }
 StringView Document::binding(WidgetId w) const {
     const Node* n = node(w);
