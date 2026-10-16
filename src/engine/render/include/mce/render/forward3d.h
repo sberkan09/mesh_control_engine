@@ -177,6 +177,9 @@ public:
         // The frame's first record(): it runs the once-a-frame work (the particle simulation, the
         // GI volume's rolling update). Later views of the same frame only draw.
         bool first = true;
+        // The target holds linear color (a float render texture that materials and sprites sample):
+        // the final pass skips the sRGB encode the window and the editor targets need.
+        bool linear_output = false;
     };
 
     // Records every pass for a built scene. Outside any pass; `target` null = backbuffer.

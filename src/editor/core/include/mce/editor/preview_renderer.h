@@ -9,6 +9,7 @@
 #include "mce/editor/viewport2d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/views.h"
 #include "mce/render/asset_upload.h"
 #include "mce/ui/ui.h"
@@ -71,11 +72,15 @@ public:
     // into `out`. Records, submits and reads back by itself: call it outside any command recording.
     // Fails without a 3D path or without a volume.
     Result<void> bake_gi(World& world, GiBake& out);
-    // M-VIEWS: play-in-editor through the game's views. False, with nothing recorded, when the world
-    // has no enabled CameraView (the caller then draws its single camera as before).
+    // M-VIEWS: play-in-editor through the game's views. False when the world has no enabled
+    // CameraView (the caller then draws its single camera as before; only the clears of new
+    // render textures were recorded).
     bool record_views(rhi::CommandBuffer& cmd, World& world, rhi::TextureHandle target, rhi::Extent2D size, math::Color clear);
     // Releases the renderer's view slots (play stopped); cheap when none is held.
-    void release_views() { renderer_.release_views(); }
+    void release_views() {
+        renderer_.release_views();
+        render_textures_.release();
+    }
     // The primary Camera3DComponent's view of `world` (false: none, or no 3D path).
     bool game_camera_3d(World& world, render::Camera3D& out);
 
@@ -109,6 +114,7 @@ private:
     kit::SpriteExtract extract_;
     kit::Kit3DExtract extract3d_;
     Array<kit::ViewEntry> views_;  // record_views', reused frame to frame
+    kit::RenderTextures render_textures_;  // play's RenderTexture components (M-VIEWS 3)
     bool three_d_ = false, three_d_failed_ = false;
     asset::AssetSystem* assets_ = nullptr;
     render::BatchStats stats_;
