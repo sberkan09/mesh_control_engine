@@ -23,6 +23,102 @@ vec3 world_pos(World& w, Entity e) { return w.try_get<WorldTransform>(e)->positi
 
 }  // namespace
 
+namespace {
+
+// For the install-order test: the parent and child, what a FixedUpdate_Post reader saw, and what a
+// FixedUpdate_Post writer moves.
+struct LateInstall {
+    Entity parent, child, carried, carrier;
+    f32 seen_x = 0.0f;
+};
+
+void move_parent_pre(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    LocalTransform t = *f.world().try_get<LocalTransform>(s.parent);
+    t.position.x += 1.0f;
+    f.world().set(s.parent, t);
+}
+
+void read_child_post(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    if (const WorldTransform* wt = f.world().try_get<WorldTransform>(s.child)) s.seen_x = wt->position.x;
+}
+
+void move_carrier_post(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    LocalTransform t = *f.world().try_get<LocalTransform>(s.carrier);
+    t.position.y += 1.0f;
+    f.world().set(s.carrier, t);
+}
+
+}  // namespace
+
+TEST_CASE("hierarchy: installed after FixedUpdate_Post systems, they still see this tick's moves") {
+    // The order a shipped game has: the kit's systems first, the hierarchy at scene load.
+    World w;
+    w.register_components<LocalTransform>();
+    w.add_system(Phase::FixedUpdate_Pre, "move_parent", &move_parent_pre);
+    w.add_system(Phase::FixedUpdate_Post, "read_child", &read_child_post);
+    w.add_system(Phase::FixedUpdate_Post, "move_carrier", &move_carrier_post);
+    ecs::install_hierarchy(w);
+    const Span<const char* const> post = w.system_names(Phase::FixedUpdate_Post);
+    REQUIRE(post.size() == 4);
+    CHECK(StringView(post[0]) == "transform_propagate_early");
+    CHECK(StringView(post[3]) == "transform_propagate");
+
+    LateInstall s;
+    s.parent = w.spawn_with(at(0, 0));
+    s.child = w.spawn_with(at(2, 0), ChildOf{s.parent});
+    s.carrier = w.spawn_with(at(0, 0));
+    s.carried = w.spawn_with(at(0, 3), ChildOf{s.carrier});
+    ecs::propagate_transforms(w);  // what a scene load does
+    w.set_resource(s);
+    for (u64 t = 0; t < 3; ++t) {
+        w.tick(1.0 / 60, t);
+        // The reader saw the parent's FixedUpdate_Pre move of this tick (it ran before the late run).
+        CHECK(w.resource<LateInstall>().seen_x == doctest::Approx(3.0f + static_cast<f32>(t)));
+        // A FixedUpdate_Post writer ahead of the late run: its child follows the same tick.
+        CHECK(math::near(world_pos(w, s.carried), {0, 4.0f + static_cast<f32>(t), 0}));
+    }
+    // One tick's stats count both runs: the early run composes the moved parent's subtree, the
+    // late one the carrier's.
+    CHECK(ecs::hierarchy_stats(w).propagated == 4);
+}
+
+TEST_CASE("hierarchy: the runs' ticks age with the World's, so a move after a long wait is seen") {
+    World w;
+    ecs::install_hierarchy(w);
+    const Entity parent = w.spawn_with(at(0, 0));
+    const Entity child = w.spawn_with(at(0, 1), ChildOf{parent});
+    ecs::propagate_transforms(w);
+    w.tick(1.0 / 60, 0);
+    // 2^32 + 100 ticks on with no propagation, the parent moved 200 ticks ago: unaged, the last
+    // run's tick would wrap to look 100 ticks old, newer than the move, and the move would be lost.
+    w.debug_set_change_tick(w.change_tick() + 0xFFFFFF9Cu);  // 2^32 - 100
+    w.try_get_mut<LocalTransform>(parent)->position = {5, 0, 0};
+    w.debug_set_change_tick(w.change_tick() + 200u);
+    w.tick(1.0 / 60, 1);
+    CHECK(math::near(world_pos(w, child), {5, 1, 0}));
+    CHECK(ecs::hierarchy_stats(w).propagated == 2);
+}
+
+TEST_CASE("hierarchy: poses written back between ticks (a rollback load) propagate on the next tick") {
+    World w;
+    ecs::install_hierarchy(w);
+    const Entity parent = w.spawn_with(at(0, 0));
+    const Entity child = w.spawn_with(at(0, 1), ChildOf{parent});
+    ecs::propagate_transforms(w);
+    w.add_system(Phase::FixedUpdate_Pre, "walk", [](Frame& f) {
+        f.world().query<LocalTransform&>().without<ChildOf>().each([](Entity, LocalTransform& t) { t.position.x += 1.0f; });
+    });
+    for (u64 t = 0; t < 5; ++t) w.tick(1.0 / 60, t);
+    CHECK(math::near(world_pos(w, child), {5, 1, 0}));
+    // Rewind as net rollback does: the saved pose is written back outside the tick, then re-simulated.
+    w.try_get_mut<LocalTransform>(parent)->position = {2, 0, 0};
+    w.tick(1.0 / 60, 3);
+    CHECK(math::near(world_pos(w, child), {3, 1, 0}));
+}
+
 TEST_CASE("hierarchy: rotating a parent moves its children in the same tick") {
     World w;
     ecs::install_hierarchy(w);

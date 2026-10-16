@@ -3,7 +3,11 @@
 //
 // Users write ChildOf{parent}; the engine keeps the parent -> children index (a resource
 // maintained by ChildOf hooks and reconciled against ChildOf writes) and writes WorldTransform.
-// Propagation runs in FixedUpdate_Post as "transform_propagate":
+// Propagation runs twice in FixedUpdate_Post: "transform_propagate_early" first in the phase, so
+// every FixedUpdate_Post system sees this tick's moves whenever the hierarchy was installed, and
+// "transform_propagate" where install_hierarchy was called, for what the systems registered before
+// it moved (the late run only takes changes newer than the early one, and HierarchyStats sums
+// the two):
 //
 //   seed  entities whose LocalTransform or ChildOf changed since the system's previous run, plus
 //         entities that still lack a WorldTransform
@@ -45,9 +49,10 @@ struct HierarchyStats {
     u64 runs = 0;
 };
 
-// Registers LocalTransform/ChildOf/WorldTransform, the ChildOf hooks, the destroy hook and the
-// "transform_propagate" system (FixedUpdate_Post, registered at the call — install before any
-// FixedUpdate_Post system that reads WorldTransform). Idempotent.
+// Registers LocalTransform/ChildOf/WorldTransform, the ChildOf hooks, the destroy hook and the two
+// propagation systems: "transform_propagate_early" at the front of FixedUpdate_Post and
+// "transform_propagate" at the call. Installing it late (scene::load does, after the kit) is
+// fine: readers of WorldTransform in FixedUpdate_Post still see this tick's moves. Idempotent.
 void install_hierarchy(World& w);
 bool hierarchy_installed(World& w);
 

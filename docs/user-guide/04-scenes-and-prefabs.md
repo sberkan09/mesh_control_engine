@@ -97,8 +97,10 @@ read-only `WorldTransform` every tick after the fixed update. Rules:
 - A `ChildOf` that would form a cycle is rejected; the entity stays a root.
 - In 2D, a bodied child (one with `RigidBody2D`) is placed by physics, not by its parent, during
   play. Keep physics bodies as roots or make them kinematic and move them yourself.
-- Systems that read `WorldTransform` must run after `transform_propagate` in `FixedUpdate_Post`
-  (chapter 6).
+- `WorldTransform` is propagated twice in `FixedUpdate_Post`: `transform_propagate_early` runs
+  first, so every Post system sees this tick's moves, and `transform_propagate` runs where the
+  hierarchy was installed to catch what Post systems moved. Systems in earlier phases read last
+  tick's world poses (chapter 6).
 
 ## 4.4 Entity references
 

@@ -104,9 +104,9 @@ struct Rig {
         const StringView roots[] = {StringView(cooked.c_str()), StringView(mesh_root.c_str())};
         REQUIRE(assets.mount(Span<const StringView>(roots, 2)));
         w.register_components<LocalTransform>();
-        if (hierarchy) ecs::install_hierarchy(w);  // before the kit's FixedUpdate_Post readers
         install_kit3d(w, &assets);
         install_bodies3d(w, &assets);
+        if (hierarchy) ecs::install_hierarchy(w);  // after the kit, as scene::load installs it
         if (floor) {
             BoxCollider3D f;
             f.half = {20.0f, 0.5f, 20.0f};
