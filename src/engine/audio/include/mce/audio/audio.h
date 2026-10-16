@@ -6,6 +6,8 @@
 // v0.5 (ROADMAP M6, ADR-0026): 48 real voices, a bus graph (Master/Music/SFX/UI + 8 user buses)
 // with a per-bus RBJ biquad EQ, a look-ahead master limiter, sample-accurate play_at on the mixer
 // clock, and 3D spatialization (listener + cooked attenuation curves, computed at command time).
+// M-AUDIO2 3: per-bus low/high-pass filters that glide to new cutoffs, and Freeverb reverb units fed
+// by post-fader bus sends and returned into Master.
 
 #include "mce/math/math.h"
 #include "mce/memory/allocator.h"
@@ -33,6 +35,7 @@ inline constexpr u32 kBusCount = 12;     // Master/Music/SFX/UI + user buses 4..
 inline constexpr u32 kEqBands = 4;       // biquads per bus, run in band order
 inline constexpr u32 kMaxAttenuationCurves = 32;  // id 0 = 2D (pan only)
 inline constexpr u32 kLimiterLookahead = 240;     // 5 ms at 48 kHz: the limiter's added latency
+inline constexpr u32 kReverbUnits = 2;            // reverb returns (e.g. a room and a cave)
 
 using ClipHandle = Handle<class AudioClip>;  // generational; stale handles are silent no-ops
 using AudioHandle = Handle<class Voice>;     // gameplay-visible voice handle
@@ -94,6 +97,28 @@ struct LimiterDesc {
     bool enabled = false;
     f32 ceiling_db = -1.f;
     f32 release_ms = 80.f;
+    bool operator==(const LimiterDesc&) const = default;
+};
+
+// A bus's low-pass and high-pass (M-AUDIO2 3): 12 dB/octave Butterworth bands that run before the
+// bus's EQ. 0 turns one off. A new cutoff glides there by at most an octave per 512 frames, so a
+// muffle or a sweep does not click.
+struct BusFilterDesc {
+    f32 lowpass_hz = 0.f;   // 20..20000; 0 = off
+    f32 highpass_hz = 0.f;  // 20..20000; 0 = off
+    bool operator==(const BusFilterDesc&) const = default;
+};
+
+// A Freeverb reverb unit (M-AUDIO2 3): eight damped combs and four allpasses per channel. Buses
+// feed it through set_bus_send; its wet output adds into Master before Master's EQ and gain. A
+// unit turned on starts from silence; turned off, its tail stops.
+struct ReverbDesc {
+    bool enabled = false;
+    f32 room_size = 0.5f;  // 0..1: decay length
+    f32 damping = 0.5f;    // 0..1: how fast the highs die
+    f32 width = 1.f;       // 0 = mono return, 1 = full stereo
+    f32 wet_db = 0.f;      // return level; 0 dB is Freeverb's stock level
+    bool operator==(const ReverbDesc&) const = default;
 };
 
 // ---- 3D spatialization (FR-AUD-050) -------------------------------------------------------------
@@ -136,7 +161,7 @@ struct AudioDesc {
     const char* driver = nullptr;  // platform audio driver override (e.g. "dummy")
     u32 period_frames = 480;       // requested device period
     u32 command_capacity = 1024;   // FIFO depth (power of two)
-    bool bind_convars = false;     // drive bus gains from audio.*_db convars
+    bool bind_convars = false;     // drive bus gains from audio.*_db convars, and reverbs from audio.reverb
     // When the device cannot open, fall back to Silent (the game runs mute + one error) instead
     // of failing create() — FR-DX-050's failure taxonomy.
     bool silent_on_failure = true;
@@ -213,6 +238,19 @@ public:
     // Per-bus EQ band (Off bypasses it). Applied after the bus's children are summed, before its gain.
     Result<void> set_bus_eq(BusId bus, u32 band, const BiquadDesc& desc);
     void set_limiter(const LimiterDesc& desc);
+    const LimiterDesc& limiter() const { return limiter_; }
+    // Bus effects (M-AUDIO2 3). Each setter sends only a change, so a caller may set the same values
+    // every tick. Filters run on Master too; Master cannot send.
+    void set_bus_filter(BusId bus, const BusFilterDesc& desc);
+    BusFilterDesc bus_filter(BusId bus) const { return bus < kBusCount ? filter_[bus] : BusFilterDesc{}; }
+    // Post-fader send from `bus` into reverb `unit` (-96 dB or less = none), ramped over 10 ms.
+    Result<void> set_bus_send(BusId bus, u32 unit, f32 send_db);
+    f32 bus_send_db(BusId bus, u32 unit) const { return bus < kBusCount && unit < kReverbUnits ? send_db_[bus][unit] : -96.f; }
+    Result<void> set_reverb(u32 unit, const ReverbDesc& desc);
+    ReverbDesc reverb(u32 unit) const { return unit < kReverbUnits ? reverb_[unit] : ReverbDesc{}; }
+    // The audio.reverb option (bind_convars): false keeps every unit off, whatever set_reverb asks.
+    void set_reverb_allowed(bool allowed);
+    bool reverb_allowed() const { return reverb_allowed_; }
 
     // ---- 3D -------------------------------------------------------------------------------------
     // Curves 1..kMaxAttenuationCurves-1 (cooked ids); every id starts as the default curve.
@@ -248,12 +286,18 @@ public:
 private:
     friend struct Impl;
     void respatialize(u32 handle_index);
+    void send_reverb(u32 unit);
 
     Backend backend_ = Backend::Silent;
     bool paused_ = false;
     Impl* impl_ = nullptr;
     f32 bus_db_[kBusCount] = {};
     BusId bus_parent_[kBusCount] = {};
+    BusFilterDesc filter_[kBusCount];
+    f32 send_db_[kBusCount][kReverbUnits] = {};
+    ReverbDesc reverb_[kReverbUnits];
+    LimiterDesc limiter_;
+    bool reverb_allowed_ = true;
     Listener listener_;
     u64 command_hash_ = 0;
     u32 free_handle_count_ = kMaxHandles;

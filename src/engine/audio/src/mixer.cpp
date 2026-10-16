@@ -23,11 +23,73 @@ void pan_gains(f32 gain, f32 pan, bool stereo, f32& l, f32& r) {
     }
 }
 
+// Bus filters (M-AUDIO2 3) glide toward a new cutoff one step per kGlideFrames of the mixer clock,
+// an octave per 512 frames, and refresh their coefficients at each step. An off band glides to its
+// open end (above or below anything audible) and is bypassed once there.
+constexpr u32 kGlideFrames = 32;
+constexpr f32 kGlideStep = 1.0442737824274138f;  // 2^(1/16)
+constexpr f32 kLowpassOpen = 22000.f, kHighpassOpen = 10.f;
+
+void glide_step(BusFilterRT& f, BiquadDesc::Type type, f32 open) {
+    const f32 goal = f.target_hz > 0.f ? f.target_hz : open;
+    const f32 ratio = goal / f.cur_hz;
+    if (ratio > kGlideStep) f.cur_hz *= kGlideStep;
+    else if (ratio < 1.f / kGlideStep) f.cur_hz /= kGlideStep;
+    else f.cur_hz = goal;
+    if (f.target_hz <= 0.f && f.cur_hz == open) {
+        f.q.on = false;
+        return;
+    }
+    if (!f.q.on) {
+        f.q.rest();
+        f.fade_in = 1;  // fade it in over the dry signal
+    }
+    f.q.tune(f.cur_hz, type == BiquadDesc::Type::HighPass);
+    f.q.on = true;
+}
+
+// Runs one bus filter over `frames` frames that start on mixer frame `clock`.
+void run_filter(BusFilterRT& f, BiquadDesc::Type type, f32 open, f32* buf, u32 frames, u64 clock) {
+    u32 i = 0;
+    while (i < frames) {
+        const f32 goal = f.target_hz > 0.f ? f.target_hz : open;
+        const bool gliding = f.cur_hz != goal;
+        const u32 phase = static_cast<u32>((clock + i) % kGlideFrames);
+        if (gliding && phase == 0) glide_step(f, type, open);
+        u32 seg = frames - i;
+        if (f.cur_hz != goal && kGlideFrames - phase < seg) seg = kGlideFrames - phase;  // to the next step
+        f32* p = buf + i * kChannels;
+        if (f.fade_in != 0) {
+            // A band that was bypassed starts at rest, which would click against the running signal:
+            // crossfade from dry over its first kGlideFrames frames.
+            f32 dry[kGlideFrames * kChannels];
+            const u32 m = seg < kGlideFrames ? seg : kGlideFrames;
+            std::memcpy(dry, p, sizeof(f32) * m * kChannels);
+            if (f.fade_in == 1 && type == BiquadDesc::Type::LowPass) f.q.prime(p);
+            f.q.process(p, seg);
+            for (u32 j = 0; j < m && f.fade_in != 0; ++j) {
+                const f32 t = static_cast<f32>(f.fade_in) / static_cast<f32>(kGlideFrames + 1);
+                p[j * 2] = dry[j * 2] + (p[j * 2] - dry[j * 2]) * t;
+                p[j * 2 + 1] = dry[j * 2 + 1] + (p[j * 2 + 1] - dry[j * 2 + 1]) * t;
+                f.fade_in = f.fade_in == kGlideFrames ? 0 : f.fade_in + 1;
+            }
+        } else {
+            f.q.process(p, seg);
+        }
+        i += seg;
+    }
+}
+
 }  // namespace
 
 Mixer::Mixer(RingBuffer<AudioCommand>& commands, RingBuffer<AudioReply>& replies, StreamRing* const* streams)
     : commands_(commands), replies_(replies), streams_(streams) {
     std::memset(bus_buf_, 0, sizeof(bus_buf_));
+    std::memset(reverb_buf_, 0, sizeof(reverb_buf_));
+    for (BusRT& b : bus_) {
+        b.highpass.cur_hz = kHighpassOpen;
+        b.lowpass.cur_hz = kLowpassOpen;
+    }
 }
 
 // ---------------------------------------------------------------------------- commands
@@ -59,6 +121,19 @@ void Mixer::process_commands() {
                     bus_[c.index].eq[c.flags & 0x7f].set(c.eq.coeffs, (c.flags & 0x80) == 0);
                 break;
             case CmdType::Limiter: limiter_.configure(c.flags != 0, c.voice.gain, c.voice.pan); break;
+            case CmdType::BusFilter:
+                if (c.index < kBusCount) {
+                    bus_[c.index].lowpass.target_hz = c.voice.gain;
+                    bus_[c.index].highpass.target_hz = c.voice.pan;
+                }
+                break;
+            case CmdType::BusSend:
+                if (c.index > 0 && c.index < kBusCount && c.flags < kReverbUnits) bus_[c.index].send[c.flags].set(c.voice.gain);
+                break;
+            case CmdType::Reverb:
+                if (c.index < kReverbUnits)
+                    reverb_[c.index].configure(c.flags != 0, c.reverb.feedback, c.reverb.damp, c.reverb.wet1, c.reverb.wet2);
+                break;
             case CmdType::BusGain:
                 if (c.index < kBusCount) {
                     BusRT& b = bus_[c.index];
@@ -378,6 +453,7 @@ void Mixer::render(f32* out, u32 frames) {
     while (done < frames) {
         const u32 n = frames - done < kBlockFrames ? frames - done : kBlockFrames;
         for (f32* b : bus_buf_) std::memset(b, 0, sizeof(f32) * n * kChannels);
+        for (f32* b : reverb_buf_) std::memset(b, 0, sizeof(f32) * n * kChannels);
 
         for (VoiceRT& v : real_)
             if (v.active) mix_voice(v, bus_buf_[v.bus], n);
@@ -393,6 +469,10 @@ void Mixer::render(f32* out, u32 frames) {
         for (u32 b = kBusCount - 1; b >= Bus_User0; --b) fold_bus(b, n);
         for (u32 b = 1; b < Bus_User0; ++b) fold_bus(b, n);
         f32* master = bus_buf_[Bus_Master];
+        // Reverb returns land in Master in unit order, then Master's own filters and EQ.
+        for (u32 u = 0; u < kReverbUnits; ++u) reverb_[u].process(reverb_buf_[u], master, n);
+        run_filter(bus_[Bus_Master].highpass, BiquadDesc::Type::HighPass, kHighpassOpen, master, n, mix_sample_);
+        run_filter(bus_[Bus_Master].lowpass, BiquadDesc::Type::LowPass, kLowpassOpen, master, n, mix_sample_);
         for (BiquadRT& q : bus_[Bus_Master].eq) q.process(master, n);
 
         // Master gain → look-ahead limiter (when on) → hard clip as the last safety.
@@ -425,10 +505,23 @@ void Mixer::fold_bus(u32 b, u32 frames) {
     BusRT& bus = bus_[b];
     f32* src = bus_buf_[b];
     f32* dst = bus_buf_[bus.parent];
+    run_filter(bus.highpass, BiquadDesc::Type::HighPass, kHighpassOpen, src, frames, mix_sample_);
+    run_filter(bus.lowpass, BiquadDesc::Type::LowPass, kLowpassOpen, src, frames, mix_sample_);
     for (BiquadRT& q : bus.eq) q.process(src, frames);
+    bool sends = false;
+    for (const SendRamp& r : bus.send) sends = sends || !r.silent();
     for (u32 i = 0; i < frames; ++i) {
-        dst[i * 2] += src[i * 2] * bus.cur;
-        dst[i * 2 + 1] += src[i * 2 + 1] * bus.cur;
+        const f32 l = src[i * 2] * bus.cur, r = src[i * 2 + 1] * bus.cur;
+        dst[i * 2] += l;
+        dst[i * 2 + 1] += r;
+        if (sends) {
+            // Post-fader sends: what the bus passes on, at each unit's ramped level.
+            for (u32 u = 0; u < kReverbUnits; ++u) {
+                const f32 g = bus.send[u].next();
+                reverb_buf_[u][i * 2] += l * g;
+                reverb_buf_[u][i * 2 + 1] += r * g;
+            }
+        }
         if (bus.ramp_left) {
             bus.cur += bus.inc;
             if (--bus.ramp_left == 0) bus.cur = bus.target;
