@@ -195,3 +195,148 @@ TEST_CASE("procgen: bad parameters are errors that say what to change") {
     REQUIRE_FALSE(r.has_value());
     CHECK(std::string(r.error().stage).find("procgen.caves") == 0);
 }
+
+// ---- wave function collapse (M-PROCGEN 2) --------------------------------------------------------
+
+namespace {
+
+enum : u32 { kGrass = 10, kSand = 20, kWater = 30 };
+
+// Grass touches grass and sand, sand touches everything, water touches sand and water.
+WfcRules shore_rules() {
+    WfcRules r;
+    const u32 pairs[][2] = {{kGrass, kGrass}, {kGrass, kSand}, {kSand, kSand}, {kSand, kWater}, {kWater, kWater}};
+    for (const auto& pr : pairs)
+        for (WfcDir d : {WfcDir::East, WfcDir::South}) {
+            REQUIRE(r.add_pair(pr[0], d, pr[1]).has_value());
+            REQUIRE(r.add_pair(pr[1], d, pr[0]).has_value());
+        }
+    return r;
+}
+
+// Every neighbouring pair in the grid is allowed by the rules.
+void check_wfc(const WfcGrid& g, const WfcRules& r) {
+    REQUIRE(g.tiles.size() == static_cast<usize>(g.width) * g.height);
+    for (u32 y = 0; y < g.height; ++y)
+        for (u32 x = 0; x < g.width; ++x) {
+            if (x + 1 < g.width) CHECK(r.allows(g.at(x, y), WfcDir::East, g.at(x + 1, y)));
+            if (y + 1 < g.height) CHECK(r.allows(g.at(x, y), WfcDir::South, g.at(x, y + 1)));
+        }
+}
+
+}  // namespace
+
+TEST_CASE("wfc: hand-written rules give a grid whose neighbours are all allowed") {
+    const WfcRules r = shore_rules();
+    CHECK(r.tile_count() == 3);
+    CHECK(r.id_of(0) == kGrass);  // ascending ids
+    for (u64 seed = 0; seed < 200; ++seed) {
+        auto g = generate_wfc(16, 12, seed, r);
+        REQUIRE_MESSAGE(g.has_value(), "seed " << seed);
+        check_wfc(g.value(), r);
+    }
+    // Grass never touches water, which the rules only allow through sand.
+    CHECK_FALSE(r.allows(kGrass, WfcDir::East, kWater));
+    CHECK_FALSE(r.allows(kWater, WfcDir::North, kGrass));
+}
+
+TEST_CASE("wfc: the same seed gives the same grid, another seed another one") {
+    const WfcRules r = shore_rules();
+    auto a = generate_wfc(20, 20, 5, r), b = generate_wfc(20, 20, 5, r), c = generate_wfc(20, 20, 6, r);
+    REQUIRE(a.has_value());
+    REQUIRE(b.has_value());
+    REQUIRE(c.has_value());
+    CHECK(a.value().hash() == b.value().hash());
+    CHECK(a.value().hash() != c.value().hash());
+    CHECK(generate_wfc(20, 20, 5, r).value().hash() == 0xc1b99171fdbb078bull);  // pinned: a change moves every saved seed
+}
+
+TEST_CASE("wfc: rules learned from an example, in any tile order") {
+    // 0 = grass, 1 = sand, 2 = water laid out as a shore: water never touches grass in the example.
+    const u32 example[] = {0, 0, 0, 1, 2, 2,   //
+                           0, 0, 1, 2, 2, 2,   //
+                           0, 1, 1, 2, 2, 2,   //
+                           1, 1, 2, 2, 2, 2};
+    auto r = WfcRules::from_example(example, 6, 4);
+    REQUIRE(r.has_value());
+    CHECK(r.value().tile_count() == 3);
+    CHECK_FALSE(r.value().allows(0, WfcDir::East, 2));
+    CHECK(r.value().allows(1, WfcDir::East, 2));
+    for (u64 seed = 0; seed < 100; ++seed) {
+        auto g = generate_wfc(14, 10, seed, r.value());
+        REQUIRE_MESSAGE(g.has_value(), "seed " << seed);
+        check_wfc(g.value(), r.value());
+    }
+    // The same example with the ids renamed in a different order learns the same dense order.
+    const u32 renamed[] = {7, 7, 7, 5, 9, 9, 7, 7, 5, 9, 9, 9, 7, 5, 5, 9, 9, 9, 5, 5, 9, 9, 9, 9};
+    auto r2 = WfcRules::from_example(renamed, 6, 4);
+    REQUIRE(r2.has_value());
+    CHECK(r2.value().id_of(0) == 5);
+    CHECK(r2.value().id_of(2) == 9);
+    CHECK_FALSE(r2.value().allows(7, WfcDir::East, 9));
+}
+
+TEST_CASE("wfc: weights come from how often the example uses a tile") {
+    // 90 grass and 10 sand cells in a row-by-row example: grass should dominate the output.
+    Array<u32> example;
+    for (u32 i = 0; i < 100; ++i) example.push_back(i % 10 == 9 ? 1 : 0);
+    // Rows of 10 with sand in the last column would force columns; shuffle by laying a single row.
+    auto r = WfcRules::from_example(std::span<const u32>(example.data(), example.size()), 100, 1);
+    REQUIRE(r.has_value());
+    u32 grass = 0, sand = 0;
+    for (u64 seed = 0; seed < 50; ++seed) {
+        auto g = generate_wfc(40, 1, seed, r.value());
+        REQUIRE(g.has_value());
+        for (u32 x = 0; x < 40; ++x) (g.value().at(x, 0) == 0 ? grass : sand)++;
+    }
+    CHECK(grass > sand * 3);
+    WfcRules w = shore_rules();
+    REQUIRE(w.set_weight(kWater, 0).has_value());  // 0 becomes 1
+    CHECK(w.weight_of(static_cast<u32>(w.index_of(kWater))) == 1);
+}
+
+TEST_CASE("wfc: pinned cells are kept and constrain the rest") {
+    const WfcRules r = shore_rules();
+    const WfcPin pins[] = {{0, 0, kWater}, {15, 11, kGrass}, {8, 6, kSand}};
+    for (u64 seed = 0; seed < 100; ++seed) {
+        auto g = generate_wfc(16, 12, seed, r, pins);
+        REQUIRE_MESSAGE(g.has_value(), "seed " << seed);
+        CHECK(g.value().at(0, 0) == kWater);
+        CHECK(g.value().at(15, 11) == kGrass);
+        CHECK(g.value().at(8, 6) == kSand);
+        check_wfc(g.value(), r);
+    }
+}
+
+TEST_CASE("wfc: contradictions are errors that name the cause, never a hang") {
+    const WfcRules r = shore_rules();
+    // Grass and water side by side cannot both be pinned.
+    const WfcPin touching[] = {{3, 3, kGrass}, {4, 3, kWater}};
+    auto a = generate_wfc(8, 8, 1, r, touching);
+    REQUIRE_FALSE(a.has_value());
+    CHECK(std::string(a.error().stage).find("contradict") != std::string::npos);
+    const WfcPin same[] = {{2, 2, kGrass}, {2, 2, kSand}};
+    CHECK_FALSE(generate_wfc(8, 8, 1, r, same).has_value());
+    const WfcPin outside[] = {{9, 0, kGrass}};
+    CHECK_FALSE(generate_wfc(8, 8, 1, r, outside).has_value());
+    const WfcPin unknown[] = {{0, 0, 99}};
+    CHECK_FALSE(generate_wfc(8, 8, 1, r, unknown).has_value());
+    // A chain 10 -> 20 -> 30 that stops: a row of four cannot be filled, on every attempt.
+    WfcRules chain;
+    REQUIRE(chain.add_pair(10, WfcDir::East, 20).has_value());
+    REQUIRE(chain.add_pair(20, WfcDir::East, 30).has_value());
+    auto c = generate_wfc(4, 1, 1, chain, {}, 5);
+    REQUIRE_FALSE(c.has_value());
+    CHECK(std::string(c.error().stage).find("procgen.wfc: contradiction") == 0);
+    CHECK_FALSE(generate_wfc(0, 4, 1, r).has_value());
+    CHECK_FALSE(generate_wfc(4, 4, 1, WfcRules{}).has_value());
+}
+
+TEST_CASE("wfc: more than 64 tiles is an error") {
+    Array<u32> example;
+    for (u32 i = 0; i < 65; ++i) example.push_back(i);
+    auto r = WfcRules::from_example(std::span<const u32>(example.data(), example.size()), 65, 1);
+    REQUIRE_FALSE(r.has_value());
+    CHECK(std::string(r.error().stage).find("64") != std::string::npos);
+    CHECK_FALSE(WfcRules::from_example(std::span<const u32>(example.data(), 3), 2, 2).has_value());
+}

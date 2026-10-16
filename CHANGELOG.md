@@ -14,6 +14,7 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
   Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
   themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
+- Wave function collapse, M-PROCGEN step 2 (SBA-172): `kit::procgen::generate_wfc` fills a grid with tiles from adjacency rules written by hand or learned from an example map, with pinned cells, weights and bounded restarts.
 - Procedural levels, M-PROCGEN step 1 (SBA-171): `mce/kit/procgen.h` makes a connected level from a seed, deterministically: BSP rooms, cellular caves, a drunkard's walk and thresholded noise, each with a start and a farthest exit.
 - Planned: M-PROCGEN (SBA-171 … SBA-175), deterministic procedural levels as data (docs/milestones/M-PROCGEN.md).
 - Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
