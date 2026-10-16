@@ -147,12 +147,15 @@ constexpr AssetKind kKinds[] = {
      "A 2D cut-out skeleton: a bone tree and the slots (textured quads) drawn on its bones. A Skeleton2D component "
      "(skeleton: \"guid:...\") poses and draws it; Skeleton2D.pose[i] offsets bone i from its rest pose. Metres and "
      "degrees, Y up. Bones list parents before children; slots are in draw order (first drawn first, behind). At most "
-     "64 bones and 256 slots.",
+     "64 bones and 256 slots. 'animations' are named clips of per-bone keys (offsets from the rest pose: rotate and "
+     "translate add, scale multiplies) and timed events; a Skeleton2DAnimator component (clip: name, or graph: "
+     "\"guid:<AnimGraph>\" whose states name the animations) plays them.",
      R"json([
 {"name":"name","type":"string"},
 {"name":"bones","type":"array of bone objects","help":"{\"name\": 1-31 chars, unique, \"parent\": a bone listed earlier (absent: a root), \"x\": m, \"y\": m, \"rotation\": degrees, \"scale\": [sx, sy] or s, \"length\": m}; the first bone is a root"},
-{"name":"slots","type":"array of slot objects","help":"{\"name\": 1-31 chars, unique, \"bone\": a bone name, \"texture\": \"guid:<Texture>\" | null (a solid quad), \"rect\": [u0, v0, u1, v1] (v0 = top), \"size\": [w, h] m, \"pivot\": [x, y] 0-1, \"offset\": [x, y] m in the bone's space, \"rotation\": degrees, \"tint\": [r, g, b, a]}"}])json",
-     R"json({"name":"skeleton","bones":[{"name":"root"},{"name":"body","parent":"root","y":0.5,"length":0.5}],"slots":[{"name":"body","bone":"body","texture":null,"size":[0.4,0.6],"pivot":[0.5,0],"tint":[1,1,1,1]}]})json"},
+{"name":"slots","type":"array of slot objects","help":"{\"name\": 1-31 chars, unique, \"bone\": a bone name, \"texture\": \"guid:<Texture>\" | null (a solid quad), \"rect\": [u0, v0, u1, v1] (v0 = top), \"size\": [w, h] m, \"pivot\": [x, y] 0-1, \"offset\": [x, y] m in the bone's space, \"rotation\": degrees, \"tint\": [r, g, b, a]}"},
+{"name":"animations","type":"array of animation objects","help":"{\"name\": 1-31 chars, unique, \"duration\": s (default: the last key or event), \"loop\": true, \"bones\": {bone name: {\"rotate\": [{\"t\", \"value\": degrees, \"curve\"}], \"translate\": [{\"t\", \"x\", \"y\", \"curve\"}] (m, default 0), \"scale\": [{\"t\", \"x\", \"y\", \"curve\"}] (factors, default 1)}}, \"events\": [{\"t\", \"name\": 1-23 chars}]}; keys in increasing t; \"curve\" shapes the interval to the next key: \"linear\" (default), \"stepped\" or a bezier [cx1, cy1, cx2, cy2] with cx in 0..1"}])json",
+     R"json({"name":"skeleton","bones":[{"name":"root"},{"name":"body","parent":"root","y":0.5,"length":0.5}],"slots":[{"name":"body","bone":"body","texture":null,"size":[0.4,0.6],"pivot":[0.5,0],"tint":[1,1,1,1]}],"animations":[{"name":"idle","bones":{"body":{"rotate":[{"t":0,"value":0},{"t":0.5,"value":5},{"t":1,"value":0}]}}}]})json"},
     {"AnimGraph", ".mcanim", "mce-animgraph", 2,
      "A 3D animation state graph: states play a mesh clip, a 1D blend of clips or a 2D blend space, transitions fire "
      "on parameter conditions or when a one-shot state finishes; layers play clips over a bone mask on top (override "
