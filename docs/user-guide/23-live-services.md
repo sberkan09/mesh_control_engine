@@ -335,6 +335,8 @@ mce_player -pack assets.mce -steam.app_id 480
 | `steam.app_id` | `0` | open Steam for this app (0: no Steam). A run outside Steam names the app to the client the way `steam_appid.txt` does |
 | `steam.library` | next to the executable | the `steam_api` to open |
 | `steam.restart` | `0` | a run started outside Steam asks Steam to relaunch it and quits (release builds) |
+| `steam.input` | `1` | read controllers through Steam Input while Steam runs |
+| `steam.write_input_config` | empty | write the Steam Input action manifest and default configurations to this folder (needs `steam.app_id`) |
 
 The log says `Steam on (app 480, <player name>)`, or `no Steam (<reason>)` and the game goes on
 without it: no library, Steam not running, a client older than the library. Steam never changes the
@@ -375,5 +377,34 @@ friends see. The first enabled one by entity order is shown; none clears it. Its
 | `key1` / `value1`, `key2` / `value2` | the key | substitutions the token uses: `level` = `Ashen Court` fills `%level%` |
 
 The player sends it when it changes, never every frame. Neither the overlay requests nor the
-presence change the state hash. Steam Input and `ship --steam` come in the next M-STEAM steps.
+presence change the state hash.
+
+**Steam Input.** While Steam runs, Steam reads every controller (Xbox, PlayStation, Switch, the
+Steam Deck's own) as the game's actions, and each player can rebind them in Steam. The player feeds
+those values into the input map's actions by name, next to the map's own keyboard, mouse and touch
+bindings, so gameplay code reads `Jump` and `Move` as before. Steam has to know the actions first:
+write its files from the same pack the game ships with,
+
+```
+mce_player -pack assets.mce -headless 1 -ticks 1 -steam.app_id 480 -steam.write_input_config steam_input
+```
+
+which writes `game_actions_480.vdf` (the action manifest) and a default configuration per controller
+type (`controller_neptune.vdf` for the Steam Deck, `controller_xboxone.vdf`, `controller_ps4.vdf`,
+`controller_switch_pro.vdf`). Put them in the game's `steam_input` folder next to the executable while
+testing, and upload the manifest on the app's Steamworks page (Steam Input, "custom configuration")
+for release.
+
+- There is one action set, `Game`, holding every action of the map that has a name in the input map
+  editor: a Button is a Steam button, a trigger axis an analog trigger, any other axis a stick.
+- The default configurations take the map's own gamepad bindings: face buttons, d-pad, shoulders,
+  Back/Start, stick clicks, sticks and triggers. The Steam Deck's adds the right trackpad to the
+  action on the right stick.
+- The options screen names a gamepad binding by Steam's own name for it ("A Button", or whatever
+  the player rebound it to), since Steam owns the controller's bindings.
+- `-steam.input 0` leaves Steam Input off; controllers then go through the map's own gamepad
+  bindings as without Steam.
+
+Headless runs play scripted input only, so Steam Input never changes a `-headless` state hash.
+`ship --steam` comes in the next M-STEAM step.
 

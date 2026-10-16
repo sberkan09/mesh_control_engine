@@ -244,6 +244,13 @@ Times are the machine's own: on a box without a GPU, `gpu_ms` is the software ra
 counters first. `headless: true` measures the simulation alone (no window), which is the quickest way to
 find a slow system.
 
+A person reads the same captures in the editor: the Profiler panel's **Capture** tab opens a `.mcperf`
+(`cooked/.perf/last.mcperf` by default, or `mce_editor -editor.perf_capture <file>`). It shows the verdict
+for the chosen target, every frame as a bar (spikes red, frames over the frame budget amber), the frame you
+click taken apart into sim and render phases, GPU stages and counters, the spikes with their cause, and the
+slowest systems. **Compare with** a second capture (`previous.mcperf` by default) adds the `perf_compare`
+tables, with what got better in green and what got worse in red.
+
 ### Before shipping
 
 `project_check` is the review a person would do before a release, as data. Errors (an asset or scene that

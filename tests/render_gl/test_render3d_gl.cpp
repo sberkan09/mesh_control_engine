@@ -867,6 +867,128 @@ TEST_CASE("render3d_gl: SSR shares the prepass with SSAO") {
     CHECK(f.device->validation_error_count() == 0);
 }
 
+// ---- contact shadows (M-VISUAL2 3) -----------------------------------------------------------------
+
+namespace {
+
+// A low sun from behind the box, travelling toward the camera, so the box's shadow falls on the ground
+// in front of it; no ambient, so the sun is all the ground's light. A 0.6 m reach: the fixture's half-size
+// target is coarse (a texel spans about 0.1 m at the box).
+void contact_scene(Scene3D& s, bool on, bool sun_opts_in = true) {
+    DirectionalLight sun = s.light();
+    sun.direction = {0.0f, -1.0f, 1.2f};
+    sun.ambient_sky = sun.ambient_ground = {0.0f, 0.0f, 0.0f};
+    sun.contact_shadows = sun_opts_in;
+    s.set_light(sun);
+    Sky sky;
+    sky.specular_ambient = 0.0f;
+    s.set_sky(sky);
+    ContactShadows cs;
+    cs.enabled = on;
+    cs.length = 0.6f;
+    s.set_contact_shadows(cs);
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: contact shadows darken the ground at the box's foot, not past their reach") {
+    Fixture3D f;
+    const Forward3D& fw = f.renderer.forward_3d();
+    // Without the cascades (shadows false) the sun lights the foot fully; the ray toward the sun from
+    // there enters the box. Farther out the ray ends before the box: the ground stays lit.
+    const vec3 foot{0.0f, 0.0f, 0.65f}, beyond{0.0f, 0.0f, 1.6f}, open{2.5f, 0.0f, 2.5f}, top{0.0f, 1.0f, 0.0f};
+    f.render(0.0f, false, [](Scene3D& s) { contact_scene(s, false); });
+    CHECK_FALSE(fw.last_stats().contact_shadows);
+    const Array<u8> off = f.pixels;
+    const Rgb foot_off = f.at_world(foot), beyond_off = f.at_world(beyond), open_off = f.at_world(open), top_off = f.at_world(top);
+    f.render(0.0f, false, [](Scene3D& s) { contact_scene(s, true); });
+    CHECK(fw.last_stats().contact_shadows);
+    CHECK(fw.last_stats().ssao_draws == 2);  // the shared prepass: the ground and the box
+    const Rgb foot_on = f.at_world(foot), beyond_on = f.at_world(beyond), open_on = f.at_world(open), top_on = f.at_world(top);
+    INFO("foot " << foot_off.luma() << " -> " << foot_on.luma() << ", beyond " << beyond_off.luma() << " -> " << beyond_on.luma()
+                 << ", open " << open_off.luma() << " -> " << open_on.luma() << ", top " << top_off.luma() << " -> "
+                 << top_on.luma());
+    CHECK(foot_on.luma() < foot_off.luma() - 40);
+    CHECK(std::abs(beyond_on.luma() - beyond_off.luma()) <= 2);
+    CHECK(std::abs(open_on.luma() - open_off.luma()) <= 2);
+    CHECK(std::abs(top_on.luma() - top_off.luma()) <= 2);  // nothing above the box's top
+    CHECK(differing_bytes(off, f.pixels) > 0);
+
+    // The target: half size, the sun's visibility in g, 1 (no SSAO) in r.
+    const rhi::TextureHandle ct = fw.contact_shadows();
+    MCE_REQUIRE_OR_RETURN(!ct.is_null());
+    const rhi::Extent2D size = f.device->texture_desc(ct).size;
+    CHECK(size.width == kW / 2);
+    CHECK(size.height == kH / 2);
+    Array<u8> vis;
+    vis.resize(usize(size.width) * size.height * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(ct, rhi::Rect2D{0, 0, size.width, size.height}, vis.span()).has_value());
+    u8 lo = 255, r_lo = 255;
+    for (usize i = 0; i < vis.size(); i += 4) {
+        lo = vis[i + 1] < lo ? vis[i + 1] : lo;
+        r_lo = vis[i] < r_lo ? vis[i] : r_lo;
+    }
+    CHECK(lo < 64);
+    CHECK(r_lo == 255);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: contact shadows off, or a sun that opts out, draw the frame without them") {
+    Fixture3D f;
+    f.render(0.0f, true, [](Scene3D& s) { contact_scene(s, false); });
+    const Array<u8> off = f.pixels;
+    f.render(0.0f, true, [](Scene3D& s) { contact_scene(s, true, false); });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().contact_shadows);
+    CHECK(differing_bytes(off, f.pixels) == 0);
+    f.render(0.0f, true, [](Scene3D& s) { contact_scene(s, true); });
+    CHECK(f.renderer.forward_3d().last_stats().contact_shadows);
+    f.render(0.0f, true, [](Scene3D& s) { contact_scene(s, false); });
+    CHECK(differing_bytes(off, f.pixels) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: contact shadows keep the SSAO visibility they share its slot with") {
+    Fixture3D f;
+    const Forward3D& fw = f.renderer.forward_3d();
+    f.render(0.0f, false, [](Scene3D& s) {
+        contact_scene(s, true);
+        AmbientOcclusion ao;
+        ao.enabled = true;
+        s.set_ambient_occlusion(ao);
+    });
+    CHECK(fw.last_stats().ssao);
+    CHECK(fw.last_stats().contact_shadows);
+    CHECK(fw.last_stats().ssao_draws == 2);  // one prepass for both
+    const rhi::Extent2D size = f.device->texture_desc(fw.ssao()).size;
+    Array<u8> ao, ct;
+    ao.resize(usize(size.width) * size.height * 4);
+    ct.resize(ao.size());
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels(fw.ssao(), rhi::Rect2D{0, 0, size.width, size.height}, ao.span()).has_value());
+    MCE_REQUIRE_OR_RETURN(
+        f.device->read_pixels(fw.contact_shadows(), rhi::Rect2D{0, 0, size.width, size.height}, ct.span()).has_value());
+    usize differing = 0, occluded = 0;
+    for (usize i = 0; i < ao.size(); i += 4) {
+        differing += ao[i] != ct[i];
+        occluded += ao[i] < 200;
+    }
+    CHECK(differing == 0);  // r: the SSAO's visibility, copied
+    CHECK(occluded > 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: -r.contact_shadows 0 creates no contact-shadow pipeline") {
+    ConVar* cv = ConVar::find(StringId("r.contact_shadows"));
+    REQUIRE(cv != nullptr);
+    REQUIRE(cv->set_string("0"));
+    {
+        Fixture3D f;
+        f.render(0.0f, true, [](Scene3D& s) { contact_scene(s, true); });
+        CHECK_FALSE(f.renderer.forward_3d().last_stats().contact_shadows);
+        CHECK(f.device->validation_error_count() == 0);
+    }
+    cv->reset();
+}
+
 // ---- local-light shadows (M-VISUAL 4) -----------------------------------------------------------------
 
 namespace {

@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "mce/cook/fs.h"
+#include "mce/editor/perf_compare.h"
 #include "mce/editor/perf_file.h"
 #include "mce/editor/project_settings.h"
 #include "mce/perf_budget.h"
@@ -76,21 +77,6 @@ void write_verdict(JsonWriter& w, const perf::Verdict& v) {
     w.end_array().end_object();
 }
 
-// The systems by time per captured frame, slowest first.
-void ranked_systems(const perf::Capture& cap, Array<usize>& order) {
-    order.clear();
-    for (usize i = 0; i < cap.systems.size(); ++i) order.push_back(i);
-    std::sort(order.begin(), order.end(), [&](usize a, usize b) {
-        return cap.systems[a].total_ms != cap.systems[b].total_ms ? cap.systems[a].total_ms > cap.systems[b].total_ms : a < b;
-    });
-}
-
-f64 per_frame(const perf::Capture& cap, const perf::SystemStats& s) {
-    return cap.frames.empty() ? 0.0 : s.total_ms / static_cast<f64>(cap.frames.size());
-}
-
-StringView phase_of(const perf::Capture& cap, u8 phase) { return phase < cap.phases.size() ? cap.phases[phase].view() : StringView("?"); }
-
 void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& s, u64 top) {
     w.key("app").str(cap.app.view()).key("backend").str(cap.backend.view()).key("scene").str(cap.scene.view());
     w.key("frames").num_u(s.frames);
@@ -102,13 +88,13 @@ void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& 
     write_counters(w, "counters_avg", s.counters_avg);
 
     Array<usize> order;
-    ranked_systems(cap, order);
+    editor::rank_capture_systems(cap, order);
     w.key("top_systems").begin_array();
     for (usize i = 0; i < order.size() && i < top; ++i) {
         const perf::SystemStats& sy = cap.systems[order[i]];
         if (sy.runs == 0) continue;
-        w.begin_object().key("name").str(sy.name.view()).key("phase").str(phase_of(cap, sy.phase));
-        w.key("ms_per_frame").num_f(round3(per_frame(cap, sy))).key("max_frame_ms").num_f(round3(sy.max_frame_ms));
+        w.begin_object().key("name").str(sy.name.view()).key("phase").str(editor::perf_phase_name(cap, sy.phase));
+        w.key("ms_per_frame").num_f(round3(editor::system_ms_per_frame(cap, sy))).key("max_frame_ms").num_f(round3(sy.max_frame_ms));
         w.key("runs").num_u(sy.runs).end_object();
     }
     w.end_array();
@@ -308,83 +294,49 @@ bool perf_compare(ToolCall& c) {
     }
     perf::Budget budget;
     if (!editor::project_budget(c.server.session().project(), target, budget, c.error)) return false;
-    const perf::Summary sa = perf::summarize(a), sb = perf::summarize(b);
+    editor::Comparison cmp;
+    editor::compare_captures(a, b, cmp);
 
     JsonWriter& w = c.out;
     w.begin_object().key("before").str(before_rel).key("after").str(after_rel).key("target").str(perf::target_name(target));
-    if (a.scene.view() != b.scene.view()) w.key("note").str("the captures are of different scenes");
+    if (!cmp.same_scene) w.key("note").str("the captures are of different scenes");
 
     // Times: p50 and p95 before and after. A change of 10% and 0.1 ms or more counts as one.
-    Array<cook::String> better, worse;
     w.key("times").begin_object();
-    const auto time = [&](const char* name, const perf::Stat& x, const perf::Stat& y) {
-        w.key(name).begin_object();
-        if (x.count == 0 || y.count == 0) {
+    for (const editor::TimeChange& t : cmp.times) {
+        w.key(t.metric).begin_object();
+        if (!t.measured) {
             w.key("measured").boolean(false).end_object();
-            return;
+            continue;
         }
-        w.key("p50_before").num_f(round3(x.p50)).key("p50_after").num_f(round3(y.p50));
-        w.key("p95_before").num_f(round3(x.p95)).key("p95_after").num_f(round3(y.p95));
-        const f64 d = static_cast<f64>(y.p95) - static_cast<f64>(x.p95);
-        const f64 pct = x.p95 > 0 ? d / static_cast<f64>(x.p95) * 100.0 : 0.0;
-        w.key("p95_change_pct").num_f(std::round(pct * 10.0) / 10.0).end_object();
-        if (std::fabs(d) >= 0.1 && std::fabs(pct) >= 10.0) (d < 0 ? better : worse).push_back(cook::String(name));
-    };
-    time("frame_ms", sa.frame, sb.frame);
-    time("sim_ms", sa.sim, sb.sim);
-    time("render_ms", sa.render, sb.render);
-    time("gpu_ms", sa.gpu, sb.gpu);
+        w.key("p50_before").num_f(round3(t.p50_before)).key("p50_after").num_f(round3(t.p50_after));
+        w.key("p95_before").num_f(round3(t.p95_before)).key("p95_after").num_f(round3(t.p95_after));
+        w.key("p95_change_pct").num_f(t.p95_change_pct).end_object();
+    }
     w.end_object();
 
     // Counters: the worst frame before and after; any change counts (they repeat run to run).
     w.key("counters").begin_object();
-    const auto counter = [&](const char* name, u64 x, u64 y) {
-        w.key(name).begin_object().key("before").num_u(x).key("after").num_u(y).key("change").num_i(static_cast<i64>(y) - static_cast<i64>(x)).end_object();
-        if (x != y) (y < x ? better : worse).push_back(cook::String(name));
-    };
-    const perf::Counters &ka = sa.counters_max, &kb = sb.counters_max;
-    counter("draws", ka.draws, kb.draws);
-    counter("passes", ka.passes, kb.passes);
-    counter("triangles", ka.triangles, kb.triangles);
-    counter("meshes", ka.meshes, kb.meshes);
-    counter("sprites", ka.sprites, kb.sprites);
-    counter("sprite_batches", ka.sprite_batches, kb.sprite_batches);
-    counter("upload_bytes", ka.upload_bytes, kb.upload_bytes);
-    counter("heap_allocations", ka.heap_allocations, kb.heap_allocations);
+    for (const editor::CounterChange& k : cmp.counters)
+        w.key(k.metric).begin_object().key("before").num_u(k.before).key("after").num_u(k.after)
+            .key("change").num_i(static_cast<i64>(k.after) - static_cast<i64>(k.before)).end_object();
     w.end_object();
 
     // Systems whose time per frame moved the most (either way), by name and phase.
-    struct Row {
-        StringView name, phase;
-        f64 before, after;
-    };
-    Array<Row> rows;
-    for (const perf::SystemStats& s : a.systems) rows.push_back({s.name.view(), phase_of(a, s.phase), per_frame(a, s), 0.0});
-    for (const perf::SystemStats& s : b.systems) {
-        bool hit = false;
-        for (Row& r : rows)
-            if (r.name == s.name.view() && r.phase == phase_of(b, s.phase)) {
-                r.after = per_frame(b, s);
-                hit = true;
-            }
-        if (!hit) rows.push_back({s.name.view(), phase_of(b, s.phase), 0.0, per_frame(b, s)});
-    }
-    std::sort(rows.begin(), rows.end(), [](const Row& x, const Row& y) {
-        const f64 dx = std::fabs(x.after - x.before), dy = std::fabs(y.after - y.before);
-        return dx != dy ? dx > dy : x.name < y.name;
-    });
     w.key("systems").begin_array();
-    for (usize i = 0; i < rows.size() && i < top; ++i)
-        w.begin_object().key("name").str(rows[i].name).key("phase").str(rows[i].phase).key("ms_per_frame_before").num_f(round3(rows[i].before))
-            .key("ms_per_frame_after").num_f(round3(rows[i].after)).end_object();
+    for (usize i = 0; i < cmp.systems.size() && i < top; ++i) {
+        const editor::SystemChange& r = cmp.systems[i];
+        w.begin_object().key("name").str(r.name.view()).key("phase").str(r.phase.view()).key("ms_per_frame_before").num_f(round3(r.before_ms))
+            .key("ms_per_frame_after").num_f(round3(r.after_ms)).end_object();
+    }
     w.end_array();
 
     w.key("better").begin_array();
-    for (const cook::String& s : better) w.str(s.view());
+    for (const char* m : cmp.better) w.str(m);
     w.end_array().key("worse").begin_array();
-    for (const cook::String& s : worse) w.str(s.view());
+    for (const char* m : cmp.worse) w.str(m);
     w.end_array();
-    const perf::Verdict va = perf::judge(sa, budget), vb = perf::judge(sb, budget);
+    const perf::Verdict va = perf::judge(cmp.before, budget), vb = perf::judge(cmp.after, budget);
     w.key("pass_before").boolean(va.pass);
     write_verdict(w, vb);
     w.end_object();

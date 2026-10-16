@@ -35,7 +35,12 @@ One header, `include/mce/physics3d/world3d.h`, namespace `mce::physics`. It name
   geometry. Dynamic props and characters never pull the camera in. Returns `ShapeHit3D`, whose
   `position` is the safe camera centre.
 - Queries: `raycast` and sphere `shape_cast`, closest hit, ties broken by creation order, filtered by
-  `QueryFilter3D` (layer mask, exclude span, `include_dynamic`).
+  `QueryFilter3D` (layer mask, exclude span, `include_dynamic`, `include_characters`).
+  `overlap_sphere` and `overlap_box` (turned by a quaternion) list every body touching the shape in
+  creation order and return the total count, even past the span's end (M-GAMEPLAY3D 6). Characters
+  are `CharacterVirtual`s outside Jolt's body queries, so with `include_characters` `raycast` and
+  the overlaps test their capsules directly; a body wins a tie with a character. `shape_cast` never
+  sees characters.
 - `hash_state(seed)` and `stats()` (bodies, active bodies, characters).
 
 `World3D` mirrors `World2D`'s method spelling (`step`, `create_body`, `destroy_body`, `has_body`,
@@ -71,7 +76,9 @@ ctest `test_physics3d` (no GPU), sources in `tests/physics3d/`. No test names Jo
   kinematic velocity and teleport, "step asserts on a non-fixed dt", layers and masks, same-binary
   hash, "Jolt allocations go through the MCE heap and are released with the last world".
 - `test_queries.cpp`: raycast (including a triangle mesh), sphere cast, "camera_sweep: the boom
-  stops in front of walls, ignores props and characters".
+  stops in front of walls, ignores props and characters", "queries: sphere and box overlaps list
+  every touching body in creation order", "queries: characters show in rays and overlaps only when
+  asked".
 - `test_character.cpp`: ground, walls and sliding, step climbing up to `step_height`, slope limits,
   ceiling, moving-platform carry, pushing props, "same-binary determinism of a scripted walk".
 - `test_mirror.cpp`: "mirror: 2D and 3D worlds share method spelling (compile-time)".
