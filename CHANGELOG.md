@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
+  that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
+  `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
+  two ticks keeps the state hash. User guide 27.4.
 - Utility AI, attack tokens and point queries, M-AI step 4 (SBA-131): a `utility` node runs the child whose
   `score` (a base plus weighted linear, power, logistic or step curves of blackboard keys) is highest, and
   keeps a running child until another beats it by `hysteresis`. An `AiTokenPool` hands out a few tokens and a

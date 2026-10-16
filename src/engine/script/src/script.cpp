@@ -493,6 +493,42 @@ int l_log(lua_State* L) {
     return 0;
 }
 
+// ---- iteration -------------------------------------------------------------------------------
+
+// pairs() and next() refuse keys whose hash follows their address (tables, functions, buffers,
+// threads, userdata): their order differs between runs (M-SCRIPT 3). pairs hands the loop this
+// sentinel as the first key, so the VM calls checked_next instead of its built-in traversal.
+constexpr int kPairsStartTag = 2;
+
+int checked_next(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_settop(L, 2);
+    if (lua_tolightuserdatatagged(L, 2, kPairsStartTag)) {
+        lua_pushnil(L);
+        lua_replace(L, 2);
+    }
+    if (lua_next(L, 1) == 0) return 0;
+    switch (lua_type(L, -2)) {
+        case LUA_TTABLE:
+        case LUA_TFUNCTION:
+        case LUA_TUSERDATA:
+        case LUA_TTHREAD:
+        case LUA_TBUFFER:
+            luaL_error(L, "pairs over a table keyed by a %s: the order differs between runs; key by entity, number or string",
+                       luaL_typename(L, -2));
+            return 0;
+        default: return 2;
+    }
+}
+
+int checked_pairs(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_pushcfunction(L, checked_next, "next");
+    lua_pushvalue(L, 1);
+    lua_pushlightuserdatatagged(L, reinterpret_cast<void*>(uintptr_t{1}), kPairsStartTag);
+    return 3;
+}
+
 const luaL_Reg kMceLib[] = {
     {"field", l_field}, {"get", l_get},       {"set", l_set}, {"each", l_each},
     {"tick", l_tick},   {"random", l_random}, {"log", l_log}, {nullptr, nullptr},
@@ -529,6 +565,10 @@ ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), 
         lua_pushnil(L_);
         lua_setglobal(L_, g);
     }
+    lua_pushcfunction(L_, checked_pairs, "pairs");
+    lua_setglobal(L_, "pairs");
+    lua_pushcfunction(L_, checked_next, "next");
+    lua_setglobal(L_, "next");
     lua_getglobal(L_, "math");  // math.random is seeded from the clock: scripts use mce.random
     lua_pushnil(L_);
     lua_setfield(L_, -2, "random");
