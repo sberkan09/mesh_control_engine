@@ -498,11 +498,83 @@ bool entity_create(ToolCall& c) {
     return true;
 }
 
+// One entity-reference field that points into a set of entities about to be deleted.
+struct NulledLink {
+    EntityId owner;
+    const char* component;
+    cook::String field;  // "target", "slots[2].post"
+    EntityId target;
+};
+
+void find_links(const refl::TypeRecord& type, const u8* value, const Array<EntityId>& dead, EntityId owner, const char* component,
+                const cook::String& prefix, Array<NulledLink>& out) {
+    for (const refl::FieldRecord& f : type.fields) {
+        for (u32 i = 0; i < f.count; ++i) {
+            const u8* p = value + f.offset + usize(i) * f.size;
+            cook::String name = prefix;
+            if (!name.empty()) name += '.';
+            name += f.name_str;
+            if (f.count > 1) cook::appendf(name, "[%u]", i);
+            if (f.kind == refl::FieldKind::EntityRef && f.size == sizeof(Entity)) {
+                const EntityId target = editor::doc_entity_id(*reinterpret_cast<const Entity*>(p));
+                if (target != editor::kNoEntity && std::find(dead.begin(), dead.end(), target) != dead.end())
+                    out.push_back(NulledLink{owner, component, name, target});
+            } else if (f.kind == refl::FieldKind::Struct) {
+                if (const refl::TypeRecord* t = refl::find_type(f.type_id)) find_links(*t, p, dead, owner, component, name, out);
+            }
+        }
+    }
+}
+
+// The entity and its subtree (they go together), then every reference to one of them from an
+// entity that stays: those fields become null. Called before the delete.
+void entity_with_subtree(EditorScene& s, EntityId id, Array<EntityId>& out) {
+    out.push_back(id);
+    for (usize i = 0; i < out.size() && out.size() <= s.doc().size(); ++i) {
+        Array<EntityId> kids;
+        s.children_of(out[i], kids);
+        for (EntityId k : kids)
+            if (std::find(out.begin(), out.end(), k) == out.end()) out.push_back(k);
+    }
+}
+
+void collect_nulled_links(EditorScene& s, const Array<EntityId>& dead, Array<NulledLink>& out) {
+    for (const DocEntity& e : s.doc().entities()) {
+        if (std::find(dead.begin(), dead.end(), e.id) != dead.end()) continue;
+        for (const DocComponent& comp : e.components) find_links(*comp.type, static_cast<const u8*>(comp.data()), dead, e.id, comp.type->name, cook::String(), out);
+    }
+}
+
+void write_nulled_links(ToolCall& c, EditorScene& s, const Array<NulledLink>& links) {
+    c.out.key("nulled_links").begin_array();
+    for (const NulledLink& l : links) {
+        const DocEntity* owner = s.doc().find(l.owner);
+        c.out.begin_object().key("entity").num_u(l.owner).key("name").str(owner ? owner->name.view() : StringView());
+        c.out.key("component").str(l.component).key("field").str(l.field.view()).key("was").num_u(l.target).end_object();
+    }
+    c.out.end_array();
+}
+
 bool entity_delete(ToolCall& c) {
     EntityId id = editor::kNoEntity;
     if (!arg_entity(c, "entity", id)) return false;
-    scene(c).destroy_entity(id);
-    c.out.begin_object().key("deleted").num_u(id).end_object();
+    EditorScene& s = scene(c);
+    Array<EntityId> dead;
+    entity_with_subtree(s, id, dead);
+    Array<NulledLink> links;
+    collect_nulled_links(s, dead, links);
+    s.destroy_entity(id);
+    c.out.begin_object().key("deleted").num_u(id);
+    if (dead.size() > 1) {
+        c.out.key("deleted_children").begin_array();
+        for (usize i = 1; i < dead.size(); ++i) c.out.num_u(dead[i]);
+        c.out.end_array();
+    }
+    if (!links.empty()) {
+        write_nulled_links(c, s, links);
+        c.out.key("warning").str("entity references to the deleted entities are now null (nulled_links); set them again or undo with scene_undo");
+    }
+    c.out.end_object();
     return true;
 }
 
@@ -615,7 +687,26 @@ bool scene_open(ToolCall& c) {
     StringView path;
     if (!arg_string(c, "path", path, true)) return false;
     if (refuse_unsaved(c, "discard them")) return false;
+    // A copy of this file parked by scene_switch would come back stale (and with its edits) on the
+    // next switch: opening re-reads the disk, so it replaces the parked copy; unsaved edits there need force.
+    bool force = false;
+    if (!arg_bool(c, "force", force)) return false;
+    Array<Server::ParkedScene>& parked = c.server.parked_scenes();
+    for (usize i = 0; i < parked.size(); ++i) {
+        if (parked[i].file.rel.view() != path) continue;
+        if (parked[i].dirty && !force) {
+            c.error += "a parked copy of ";
+            c.error += path;
+            c.error += " has unsaved changes (scene_documents): scene_switch to it and scene_save first, or pass force: true to discard them";
+            return false;
+        }
+    }
     if (!open_scene_file(c.server, path, c.error)) return false;
+    for (usize i = 0; i < parked.size(); ++i)
+        if (parked[i].file.rel.view() == c.server.scene_file().rel.view()) {
+            parked.erase(i);
+            break;
+        }
     write_scene_summary(c);
     return true;
 }
@@ -636,9 +727,9 @@ asset::Guid guid_of_file(StringView abs) {
 
 bool scene_save(ToolCall& c) {
     StringView path, name;
-    bool force = false;
+    bool force = false, overwrite = false;
     if (!need_project(c) || !arg_string(c, "path", path, false) || !arg_string(c, "name", name, false) ||
-        !arg_bool(c, "force", force))
+        !arg_bool(c, "force", force) || !arg_bool(c, "overwrite", overwrite))
         return false;
     if (!name.empty() && name.size() >= 64) return fail(c, "argument 'name' must be 1-63 bytes");
     Server::SceneFile& file = c.server.scene_file();
@@ -663,8 +754,8 @@ bool scene_save(ToolCall& c) {
         abs = session.project().asset_path(file.rel.view());
         const u64 on_disk = file_content_hash(abs.view());
         // Another agent saved it meanwhile: merge their edits into ours by entity (tools_team.cpp),
-        // or refuse with the conflicts; force overwrites theirs.
-        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force && !merge_scene_from_disk(c, abs.view())) return false;
+        // or refuse with the conflicts (naming the entities); overwrite (or force) saves ours over theirs.
+        if (file.disk_hash != 0 && on_disk != file.disk_hash && !force && !overwrite && !merge_scene_from_disk(c, abs.view())) return false;
         if (Result<void> r = session.save_scene(); !r) {
             FixedString<512> msg;
             format_error(r.error(), msg);
@@ -1398,7 +1489,10 @@ const ToolDef kTools[] = {
      "\"$<id>\", the entity's unique name, or null. Returns its id.",
      R"({"type":"object","properties":{"name":{"type":"string"},"prefab":{"type":"string","description":"\"guid:<uuid>\" of a .mcprefab: place an instance; components then override the prefab root's fields"},"transform":{"type":"boolean","default":true},"at":{"type":"integer","description":"Index in the hierarchy; default: the end"},"components":{"type":"object","description":"Type name -> object of fields"}},"required":["name"]})",
      entity_create},
-    {"entity_delete", "Delete an entity (references to it become null).", kEntityArg, entity_delete},
+    {"entity_delete",
+     "Delete an entity and its children. Entity references to them from other entities become null: the result "
+     "lists each as nulled_links (owning entity, component, field) so you can set them again or scene_undo.",
+     kEntityArg, entity_delete},
     {"scene_clear", "Delete every entity of the open scene (one undo step): re-author a scene keeping its GUID and path.", kNoArgs, scene_clear},
     {"entity_duplicate", "Duplicate an entity right after itself. Returns the new id(s).", kEntityArg, entity_duplicate},
     {"component_add", "Add a component (default values, or patched with 'value': an object of fields).",
@@ -1415,17 +1509,23 @@ const ToolDef kTools[] = {
      component_set},
     {"scene_new", "Start a new, empty, unsaved scene (refuses to drop unsaved changes unless force).",
      R"({"type":"object","properties":{"name":{"type":"string"},"force":{"type":"boolean"}},"required":["name"]})", scene_new},
-    {"scene_open", "Open a .mcscene, or a .mcprefab to edit the prefab itself (entity 0 is its root), by its path under assets/ (refuses to drop unsaved changes unless force).",
+    {"scene_open",
+     "Open a .mcscene, or a .mcprefab to edit the prefab itself (entity 0 is its root), by its path under assets/. "
+     "Always re-reads the file from disk (also when it is already open), so it shows what other agents saved; it refuses "
+     "to drop unsaved changes unless force.",
      R"({"type":"object","properties":{"path":{"type":"string","description":"e.g. scenes/demo.mcscene"},"force":{"type":"boolean"}},"required":["path"]})",
      scene_open},
     {"scene_save",
      "Save the scene (atomic write; entity ids are saved with it). With 'path' (under assets/): save as, with a "
      "fresh GUID for a new file. 'name' renames the scene. When another agent saved the file since it was opened, "
-     "their edits are merged in entity by entity; edits to the same component of an entity conflict and nothing is "
-     "written unless resolve picks a side. Refuses to overwrite another existing file unless force (an overwritten "
+     "their edits are merged in entity by entity (their new entities are kept); edits to the same component of an "
+     "entity conflict and nothing is written unless resolve picks a side. When the file cannot be merged the error "
+     "names the entities on disk your copy lacks: scene_open with force reloads it, or overwrite: true saves yours "
+     "over it. Refuses to overwrite another existing file unless force (an overwritten "
      "file keeps its GUID; force skips the merge). A path ending in .mcprefab saves the document as a prefab "
      "(entity 0 is the root; prefab_create_from makes one from an entity).",
      R"({"type":"object","properties":{"path":{"type":"string"},"name":{"type":"string","description":"New scene name"},"force":{"type":"boolean"},)"
+     R"("overwrite":{"type":"boolean","description":"Save over the file even if another agent changed it; their edits are lost"},)"
      R"("resolve":{"type":"string","enum":["ours","theirs"],"description":"How merge conflicts are settled"}}})", scene_save},
     {"navmesh_bake",
      "Bake the scene's first NavMeshSurface3D into assets/navmesh/<scene>/nav_<entity id>.mcnav from the colliders "
@@ -1476,7 +1576,7 @@ Span<const ToolDef> tool_table() {
     static const Array<ToolDef> all = [] {
         Array<ToolDef> a;
         for (const ToolDef& t : kTools) a.push_back(t);
-        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), timeline_tool_table(), bt_tool_table(), script_tool_table(), skeleton2d_tool_table(), import_tool_table()})
+        for (Span<const ToolDef> group : {agent_tool_table(), asset_tool_table(), prefab_tool_table(), project_tool_table(), ui_tool_table(), terrain_tool_table(), procgen_tool_table(), timeline_tool_table(), bt_tool_table(), script_tool_table(), skeleton2d_tool_table(), import_tool_table()})
             for (const ToolDef& t : group) a.push_back(t);
         return a;
     }();

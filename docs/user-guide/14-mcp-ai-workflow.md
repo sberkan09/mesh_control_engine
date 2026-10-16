@@ -307,6 +307,22 @@ id, and refuses with the list of conflicts when both changed the same component,
 side. A prefab saved with `scene_save` merges the same way; a material or other file two agents both write is
 last-write-wins, so lock it first.
 
+#### Several agents on one scene
+
+Each server holds its own copy of the scene, so another agent's save does not appear until you look. The
+rules, in the order you will meet them:
+
+- `scene_open` on the scene you already have open re-reads the file from disk, so it shows what the others
+  saved. It refuses to drop your unsaved edits unless you pass `force: true`, which discards them and reloads.
+  Opening a scene also replaces the copy `scene_switch` parked for it.
+- `scene_save` merges a teammate's save in (their new entities stay). If it cannot (no common version, a
+  file it cannot parse), it refuses and lists the entities on disk your copy lacks and the ones only yours
+  has. Then either `scene_open {"path": ..., "force": true}` to reload, or `overwrite: true` to save your copy over
+  theirs and lose their entities.
+- `entity_delete` also deletes the entity's children, and every entity reference to them from entities that
+  stay becomes null. The result lists each as `nulled_links` (the entity that holds it, the component and
+  the field); set them again with `component_set`, or `scene_undo` the delete.
+
 When the engine makes something hard (a tool that is missing, an error that does not say what to do, a doc
 that was wrong), the agent calls `report_friction` before it works around it. The notes collect in the
 project's `friction.jsonl`; `mce friction <project>...` turns the notes of one or many projects into a

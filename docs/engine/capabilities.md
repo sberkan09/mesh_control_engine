@@ -237,6 +237,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `bt_set` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
+| `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
 | `script_check` | `tools_script.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_create` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_add_bone` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
