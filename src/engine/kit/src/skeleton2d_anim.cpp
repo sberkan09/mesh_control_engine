@@ -88,6 +88,16 @@ void Skeleton2DBlend::add(const Skeleton2DRegistry::Def& def, u32 anim, f32 t, f
     const u32 bones = static_cast<u32>(def.bones.size() < kSkeleton2DBones ? def.bones.size() : kSkeleton2DBones);
     for (u32 i = 0; i < a.timeline_count; ++i) {
         const asset::Skeleton2DTimeline& tl = def.timelines[a.first_timeline + i];
+        if (tl.channel == asset::Skeleton2DChannel::IKMix) {
+            // An IK constraint's mix (M-ANIM2D 4): summed by weight like a color.
+            if (tl.bone >= def.ik.size() || tl.bone >= kSkeleton2DIKCount) continue;
+            f32 v[2];
+            asset::skeleton2d_sample(def.keys.span().subspan(tl.first_key, tl.key_count), t, v);
+            ik_mix[tl.bone] += v[0] * w;
+            ik_weight[tl.bone] += w;
+            ik_keyed |= 1u << tl.bone;
+            continue;
+        }
         if (tl.channel > asset::Skeleton2DChannel::Scale || tl.bone >= bones) continue;
         f32 v[2];
         asset::skeleton2d_sample(def.keys.span().subspan(tl.first_key, tl.key_count), t, v);
@@ -120,7 +130,8 @@ void Skeleton2DBlend::add(const Skeleton2DRegistry::Def& def, u32 anim, f32 t, f
     const u32 slots = static_cast<u32>(def.slots.size() < kSkeleton2DSlotCount ? def.slots.size() : kSkeleton2DSlotCount);
     for (u32 i = 0; i < a.timeline_count; ++i) {
         const asset::Skeleton2DTimeline& tl = def.timelines[a.first_timeline + i];
-        if (tl.channel <= asset::Skeleton2DChannel::Scale || tl.bone >= slots) continue;
+        if (tl.channel <= asset::Skeleton2DChannel::Scale || tl.channel == asset::Skeleton2DChannel::IKMix || tl.bone >= slots)
+            continue;
         if (u64(tl.first_key) + tl.key_count > def.slot_keys.size()) continue;
         const Span<const asset::Skeleton2DSlotKey> keys = def.slot_keys.span().subspan(tl.first_key, tl.key_count);
         u32 ka = 0, kb = 0;
@@ -177,6 +188,15 @@ void Skeleton2DBlend::write_slots(const Skeleton2DRegistry::Def& def, Skeleton2D
             slots.color[i] = {color[i].r + setup[0] * rest, color[i].g + setup[1] * rest, color[i].b + setup[2] * rest,
                               color[i].a + setup[3] * rest};
         }
+    }
+}
+
+void Skeleton2DBlend::write_ik(const Skeleton2DRegistry::Def& def, Skeleton2DIK& ik) const {
+    const u32 n = static_cast<u32>(def.ik.size() < kSkeleton2DIKCount ? def.ik.size() : kSkeleton2DIKCount);
+    for (u32 i = 0; i < n; ++i) {
+        if (!(ik_keyed & (1u << i))) continue;
+        // Samples that did not key the mix hold the asset's.
+        ik.mix[i] = ik_mix[i] + def.ik[i].mix * (1.0f - ik_weight[i]);
     }
 }
 
@@ -332,6 +352,19 @@ void kit_skeleton2d_animators(Frame& f) {
         Skeleton2DBlend blend;
         skeleton2d_animator_sample(*def, a, graphed ? &g : nullptr, blend);
         blend.write(static_cast<u32>(def->bones.size()), sk.pose);
+        // Keyed IK mixes go to Skeleton2DIK; the first tick adds one, set up from the skeleton.
+        if (def->ik_timelines) {
+            if (Skeleton2DIK* ik = f.world().try_get_mut<Skeleton2DIK>(e)) {
+                if (ik->constraint_count != (def->ik.size() < kSkeleton2DIKCount ? def->ik.size() : kSkeleton2DIKCount))
+                    skeleton2d_ik_setup(*def, *ik);
+                blend.write_ik(*def, *ik);
+            } else {
+                Skeleton2DIK fresh;
+                skeleton2d_ik_setup(*def, fresh);
+                blend.write_ik(*def, fresh);
+                f.commands().add<Skeleton2DIK>(e, fresh);
+            }
+        }
         if (!def->slot_timelines) return;
         // Keyed slots go to Skeleton2DSlots; the first tick adds one, set up from the skeleton.
         if (Skeleton2DSlots* slots = f.world().try_get_mut<Skeleton2DSlots>(e)) {

@@ -13,6 +13,7 @@
 #include "mce/editor/editor_session.h"
 #include "mce/editor/gizmo.h"
 #include "mce/editor/animgraph_editor.h"
+#include "mce/editor/bt_editor.h"
 #include "mce/editor/terrain_editor.h"
 #include "mce/editor/tilemap_editor.h"
 #include "mce/editor/timeline_editor.h"
@@ -71,6 +72,7 @@ struct ViewSettings {
     GizmoMode gizmo = GizmoMode::Move;  // W / E / R
     bool tile_paint = false;  // the viewport paints the selected TilemapLayer (Tilemap panel, T)
     bool terrain_sculpt = false;  // the orbit view sculpts the selected Terrain3D (Terrain panel)
+    bool show_perception = true;  // while playing, the viewport draws each Perceiver's cone and target (Behavior Tree panel)
 };
 
 class EditorShell {
@@ -124,6 +126,9 @@ public:
     // The animation graph the Animation panel edits (open_anim_graph: a double click in Assets).
     AnimGraphEditor& anim_graph() { return anim_graph_; }
     void open_anim_graph(asset::Guid guid);
+    // The behavior tree the Behavior Tree panel edits (open_bt: a double click in Assets).
+    BtEditor& bt() { return bt_; }
+    void open_bt(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -209,6 +214,7 @@ private:
     TimelineEditor timeline_;
     TimelinePreview timeline_preview_;
     AnimGraphEditor anim_graph_;
+    BtEditor bt_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

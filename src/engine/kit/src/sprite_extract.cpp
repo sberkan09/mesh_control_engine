@@ -391,8 +391,16 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
             skeleton2d_animator_sample(*def, *a, graphed ? &g : nullptr, blend);
             deform = &deform_;
         }
-        skeleton2d_draws(*def, sk, world.try_get<Skeleton2DSlots>(e), deform, transform_2d(t.position, t.rotation, t.scale),
-                         draws_);
+        // IK (M-ANIM2D 4): the same targets and mixes the tick solves with.
+        Skeleton2DIKTargets targets;
+        Skeleton2DIK ik_scratch;
+        const Skeleton2DIK* ik = nullptr;
+        if (!def->ik.empty()) {
+            skeleton2d_ik_targets(world, e, *def, sk, targets);
+            ik = skeleton2d_ik_state(world, e, *def, *skeletons, ik_scratch);
+        }
+        skeleton2d_draws(*def, sk, world.try_get<Skeleton2DSlots>(e), deform, ik, &targets,
+                         transform_2d(t.position, t.rotation, t.scale), draws_);
         // Merge quads and meshes by slot: both lists are in slot order.
         usize qi = 0, mi = 0;
         while (qi < draws_.quads.size() || mi < draws_.meshes.size()) {

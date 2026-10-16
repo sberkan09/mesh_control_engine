@@ -9,9 +9,21 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
   equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
   inspector and MCP's `ui_widget_set` reach it. User guide 12.
+- The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
+  (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
+  cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its
+  status, shows utility scores and live blackboard values, runs unsaved edits in the play world, and the viewport
+  draws perceivers' sight cones. User guide 13.8.
 - Text alignment in UI documents, M-UI-DATA2 step 1 (SBA-153): a `.mcui` Text widget takes
   `"text_align": "Center"` (or `Right`) to place its text across its own rect, so a centered title no
   longer needs a wrapping Stack. The editor's inspector and MCP's `ui_widget_set` reach it. User guide 12.
+- 2D IK as data, M-ANIM2D step 4 (SBA-143): a `.mcskel2d` lists `"ik"` constraints. Two-bone chains solve
+  exactly (law of cosines, a bend side, a straight arm at an out-of-reach target); longer chains use CCD for a
+  fixed number of passes, so every run gives the same bits. A target is a bone, or any entity with an
+  `IKTarget2D` (a cursor, a raycast hit). Animations key a constraint's mix and cross-fades blend it; an
+  optional `Skeleton2DIK` component holds the mix in use and a gameplay override. IK runs every tick after
+  the pose and before `Bone2DFollow`, and the sprite extract draws the same solve. Skeletons without IK cook
+  byte for byte as before. User guide 7.13.
 - No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
   that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
   `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
