@@ -25,6 +25,10 @@ inline constexpr u32 kWidgetKindCount = static_cast<u32>(WidgetKind::Tabs) + 1;
 enum class FontRole : u8 { Auto, Body, Title, Button };
 using UiFontRole = FontRole;
 MCE_ENUM(UiFontRole, Auto, Body, Title, Button)
+// Where a Text widget's lines sit across its rect (M-UI-DATA2 1); buttons always center theirs.
+enum class TextAlign : u8 { Left, Center, Right };
+using UiTextAlign = TextAlign;
+MCE_ENUM(UiTextAlign, Left, Center, Right)
 
 // What a widget's anchors are fractions of: its parent's rect (the default; for the root's
 // children that is the safe area), the safe area (the screen minus the notch and the home
