@@ -112,6 +112,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
 | M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | done 2026-10-16 (`mce import aseprite`, `tiled`, `ldtk`; MCP `asset_import`; `samples/import_demo`) | none |
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | done | steps 1–5 |
+| M-SCRIPT2 | [M-SCRIPT2.md](milestones/M-SCRIPT2.md) (Linear SBA-190 … SBA-194, added 2026-10-16) | active (not started) | steps 1–5 |
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
 | M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | active (steps 1, 2 and 4 done: a capture with no display falls back to the offscreen driver and software GL by itself and says so, the player logs its save folder (user guide 16.8, 2.5); a rotation-only change no longer resets a `CharacterController3D`'s speed (#377); `scene_open` always re-reads and replaces a parked copy, an unmergeable `scene_save` names the entities and takes `overwrite`, `entity_delete` reports the links that become null; step 3 done: the missing-sidecar error names `cook_run {"adopt":true}` / `mce cook --adopt`, `cook_run` `paths` (cooks a subtree into `cooked/`, never the pack) and `skip_errors` (`failed_files`), `mce play` / `mce headless` warn about a stale pack, an unknown component or field names the module to rebuild and the server to restart) | steps 5–7 |
 | M-CONTENT | ROADMAP section (issue #383, added 2026-10-16) | not started | steps 1–3 |
@@ -599,6 +600,15 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** the dungeon sample played headless on three seeds gives the same hash across runs and builds, and a different level per seed.
 **Gates:** every generator is a pure function of its inputs (same bytes out twice, Debug = Release); connectivity holds on every tested seed; a project without `ProcLevel` builds and hashes as today; `local_ci.sh` green on every step.
+
+### M-SCRIPT2 — A Luau API that reaches the whole kit · **size M (rough guess, ≈ 40–70 h engineering)** · tier: off-tier, opt-in, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Scripts read and write every component but have about twenty-six functions; M-PROCGEN found that a script cannot even move a 2D body. Needs no device.*
+
+**Builds, in order:** (1) 2D physics completeness: forces, torque, angular velocity, circle and shape overlaps and casts, gravity and sleep controls. (2) Navigation from Luau: `mce.find_path` over a grid from the static colliders, line of sight. (3) Game plumbing: save and load a slot, time scale, stop and fade sounds, camera shake, one-shot particles. (4) 3D bodies: overlap, move_and_collide and velocity, navmesh path. (5) Demo and gates: Dungeon gets chasing enemies, a 3D script-only blind test, guide recipes.
+
+**Demo:** Dungeon's walkers chase the player through the generated level with `mce.find_path`, still hashing the same in Debug and Release.
+**Gates:** every registered function has a `mce.d.luau` entry and a `tests/script` case; `local_ci.sh --task` green on every step.
 
 ### M-FUZZ — Hostile input: loaders and parsers never crash · **size S–M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing · priority 3
 
