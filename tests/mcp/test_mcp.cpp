@@ -798,6 +798,51 @@ TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one c
     CHECK(c.ok("cook_run").v().get("ok").as_bool());
 }
 
+TEST_CASE("mcp tools: procgen_run shows a seeded level, checks a run of seeds and bakes it into a tilemap (M-PROCGEN 4)") {
+    const std::string root = demo_project("mcp_procgen");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto a = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7})");
+    auto b = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7})");
+    CHECK(compact(a.v()) == compact(b.v()));  // deterministic: the same arguments, the same level
+    CHECK(a.v().get("reachable").as_bool());
+    CHECK(a.v().get("rows").size() == 24);
+    CHECK(str(a.v().get("rows").at(0)).size() == 32);
+    CHECK(str(a.v().get("hash")).size() == 16);
+    CHECK(a.v().get("floor_cells").as_number() > 0);
+    CHECK(compact(c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":8})").v().get("hash")) != compact(a.v().get("hash")));
+
+    for (const char* kind : {"caves", "walk", "noise"}) {
+        auto r = c.ok("procgen_run", std::string(R"({"kind":")") + kind + R"(","width":40,"height":30,"seed":3,"ascii":false})");
+        CHECK(r.v().get("reachable").as_bool());
+        CHECK_FALSE(r.v().get("rows").valid());
+    }
+
+    // A run of seeds lists only the failures: none on the shipped defaults.
+    auto run = c.ok("procgen_run", R"({"kind":"rooms","width":48,"height":32,"seed":1,"count":50})");
+    CHECK(run.v().get("ok").as_number() == 50);
+    CHECK(run.v().get("failures").size() == 0);
+
+    // Bake: the grid's top row becomes the map's top row.
+    c.ok("asset_create", std::string(R"({"path":"maps/dungeon.mctilemap","content":{"tileset":")") + kBallGuid +
+                             R"(","columns":2,"rows":2,"width":32,"height":24}})");
+    auto baked = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7,"bake":"maps/dungeon.mctilemap","floor_tile":1,"wall_tile":2,"ascii":false})");
+    CHECK(baked.v().get("baked").get("painted").as_number() == 32 * 24);
+    CHECK(baked.v().get("baked").get("outside").as_number() == 0);
+    auto top = c.ok("tilemap_paint", R"({"path":"maps/dungeon.mctilemap","preview":true})");
+    const std::string first_row = str(top.v().get("preview").at(0));
+    const std::string grid_row = str(a.v().get("rows").at(0));
+    REQUIRE(first_row.size() == grid_row.size());
+    for (usize i = 0; i < grid_row.size(); ++i) CHECK(first_row[i] == (grid_row[i] == '#' ? '2' : '1'));
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+
+    CHECK(c.fails("procgen_run", R"({"kind":"maze","width":32,"height":24})").find("rooms, caves, walk or noise") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":4,"height":24})").find("width") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":32,"height":24,"bake":"maps/dungeon.mctilemap"})").find("floor_tile") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":32,"height":24,"count":2,"bake":"maps/dungeon.mctilemap","floor_tile":1,"wall_tile":2})").find("count") != std::string::npos);
+}
+
 TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrain_import shape a terrain (M-TERRAIN 6)") {
     const std::string root = demo_project("mcp_terrain");
     Client c;

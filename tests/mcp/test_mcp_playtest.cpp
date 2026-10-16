@@ -336,6 +336,18 @@ TEST_CASE("test_run: .mctest files under tests/ with field, tick, alive, event, 
     CHECK(c.fails("test_run", R"({"path":"../x"})").find("inside the project") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"input":"1 Jump","bot":{"kind":"masher"}}})").find("not both") != std::string::npos);
     CHECK(c.fails("test_run", R"({"test":{"assert":[{"feel":"fun","==":1}]}})").find("'feel' is") != std::string::npos);
+
+    // reachable (M-PROCGEN 4): every seed of the run generates a level whose exit can be reached from its start.
+    auto reach_ok = c.ok("test_run", R"({"test":{"input":"1 Move=0,0","ticks":5,"assert":[
+        {"reachable":{"kind":"rooms","width":48,"height":32,"seed":1,"count":40}},
+        {"reachable":{"kind":"caves","width":48,"height":32,"count":40}}]}})");
+    CHECK(reach_ok.v().get("ok").as_bool());
+    CHECK(str(reach_ok.v().get("results").at(0).get("checks").at(0).get("check")).find("rooms") != std::string::npos);
+    // A grid the generator refuses fails the check and names the seed.
+    auto reach_bad = c.ok("test_run", R"({"test":{"input":"1 Move=0,0","ticks":5,"assert":[{"reachable":{"kind":"caves","width":8,"height":8,"count":3}}]}})");
+    CHECK_FALSE(reach_bad.v().get("ok").as_bool());
+    CHECK(str(reach_bad.v().get("results").at(0).get("checks").at(0).get("note")).find("seed 1:") != std::string::npos);
+    CHECK(c.fails("test_run", R"({"test":{"assert":[{"reachable":{"kind":"maze","width":32,"height":32}}]}})").find("rooms, caves, walk or noise") != std::string::npos);
 }
 
 TEST_CASE("test_run: a scene check follows the game's scene changes (scene::request_change)") {

@@ -8,6 +8,7 @@
 // the run by file order (spawned[i] is scene entity i), so an entity after a prefab instance (the
 // cook expands it into several) is refused.
 
+#include "procgen_check.h"
 #include "mce/editor/scene_document.h"
 #include "mce/input/script.h"
 #include "mce/log.h"
@@ -104,13 +105,14 @@ enum class CompareOp : u8 { Eq, Ne, Lt, Le, Gt, Ge };
 // One check of a test: a component field, whether an entity is alive, how many events of a type
 // were pushed, the log, or a feel metric; at the end of the run or after tick `tick`.
 struct Condition {
-    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel };
+    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel, Reachable };
     What what = What::Field;
     FieldProbe probe;          // Field, Alive (index only)
     CompareOp op = CompareOp::Eq;
     Value expected;
     f64 tolerance = 1e-4;      // numbers compare equal within this
     cook::String text;         // event type, scene path, log text, feel metric
+    ProcgenRun procgen;        // Reachable: the seeded levels whose exit must be reachable
     u64 tick = 0;              // 0: at the end
     // Result.
     bool checked = false;
@@ -118,7 +120,8 @@ struct Condition {
     Value actual;
     cook::String note;  // why the check could not read what it names (an unknown event type)
 };
-// Field, Alive, Event and Scene: read from the world during the run (the rest after it).
+// Field, Alive, Event and Scene: read from the world during the run (the rest after it; Reachable needs
+// neither: it generates its levels when evaluated).
 inline bool is_world_check(Condition::What w) {
     return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene;
 }
