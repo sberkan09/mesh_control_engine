@@ -17,6 +17,7 @@
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce import aseprite <export.json> [--out f.mcsheet] [--werror]   Aseprite's JSON export + PNG into a .mcsheet
+    mce import tiled <map.tmj> [--out-dir d] [--tile-size m] [--werror]   Tiled map into a .mcscene + .mctilemap per layer
                                                 (frames, tags as clips, slices; unsupported features warn)
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
     mce ship <project> --steam <app id> [--steam-library f]   ... and the Steam depot for this OS with the
