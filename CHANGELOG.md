@@ -9,6 +9,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
   Console and Cook panels open the script an error line names. User guide 27.6.
+- 3D tour sample, M-COVER step 2 (SBA-158): `samples/kit3d_tour` shows 18 more 3D components in one scene with no
+  code: look-at IK, bone attachment, locomotion, camera shake and blends, a reflection probe, a GI volume, foliage,
+  a decal, a 3D fire, a terrain collider, navigation areas, obstacles and links, a ray sensor, and a car on a
+  waypoint circuit. It plays headless twice for the same hash (`ctest -R kit3d_tour`).
 - Sample coverage gate, M-COVER step 1 (SBA-157): `local_ci.sh`'s walls stage now fails for a component that no
   sample, project or template names, unless `scripts/ci/sample_coverage.allow` lists it with a reason. 39
   components start on the list; the next steps show them in three tour samples. The capability table gains a
