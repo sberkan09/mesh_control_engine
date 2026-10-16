@@ -14,6 +14,8 @@ enum class CmdType : u8 {
     VoicePitch,
     // M-AUDIO2 3
     BusFilter, BusSend, Reverb,
+    // M-AUDIO2 4
+    BusTrim, BusDuck,
 };
 
 namespace CmdFlag {
@@ -43,6 +45,14 @@ struct ReverbArgs {
     f32 wet1, wet2;  // same-side and cross-side return gains (wet level and width)
 };
 
+// A ducker's parameters, computed on the main thread (linear levels, per-sample coefficients).
+struct DuckArgs {
+    f32 threshold;
+    f32 depth;
+    f32 attack;   // per-sample approach factor toward depth
+    f32 release;  // per-sample approach factor back to 1
+};
+
 struct ClipArgs {
     const f32* frames;
     u32 frame_count;
@@ -60,12 +70,14 @@ struct AudioCommand {
         ClipArgs clip;
         EqArgs eq;
         ReverbArgs reverb;
+        DuckArgs duck;
     };
     // RegisterClip extras packed in the header bytes: bus = channels, priority = stream index + 1
     // (0 = in-memory clip). BusParent: index = bus, bus = parent. BusEq: index = bus, flags = band
     // (bit 7 = bypass). Limiter: flags = enabled. BusFilter: index = bus, voice.gain = low-pass Hz,
     // voice.pan = high-pass Hz (0 = off). BusSend: index = bus, flags = unit, voice.gain = linear send.
-    // Reverb: index = unit, flags = enabled.
+    // Reverb: index = unit, flags = enabled. BusTrim: index = bus, voice.gain = linear trim.
+    // BusDuck: index = ducked bus, bus = key bus, flags = enabled.
 
     AudioCommand() : voice{0, 0, kRateUnit, 0.f, 0.f, 0} {}
 };

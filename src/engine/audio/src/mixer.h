@@ -78,6 +78,16 @@ struct BusFilterRT {
     u32 fade_in = 0;  // frames into the dry-to-filtered crossfade of a band just switched on
 };
 
+// A sidechain ducker on a stock bus (M-AUDIO2 4): a peak envelope of the key bus drives the gain
+// toward depth (attack) or back to 1 (release). Turned off, it releases before it goes idle.
+struct DuckRT {
+    bool on = false;
+    u8 key = Bus_UI;
+    f32 threshold = 0.01f, depth = 1.f, attack = 1.f, release = 1.f;
+    f32 env = 0.f, gain = 1.f;
+    bool idle() const { return !on && gain == 1.f; }
+};
+
 class Mixer {
 public:
     Mixer(RingBuffer<AudioCommand>& commands, RingBuffer<AudioReply>& replies, StreamRing* const* streams);
@@ -108,9 +118,11 @@ private:
     // Mixes `frames` of `v` into `dst` (stereo interleaved); ends the voice when it finishes.
     void mix_voice(VoiceRT& v, f32* dst, u32 frames);
     void promote_virtual();
-    // Sums bus `b` (filtered, EQ'd) into its parent with b's ramped gain, and into the reverb
-    // inputs it sends to.
+    // Sums bus `b` (filtered, EQ'd) into its parent with b's ramped gain, trim and duck, and into
+    // the reverb inputs it sends to.
     void fold_bus(u32 b, u32 frames);
+    // Fills duck_buf_[b] with stock bus b's ducking gain for this block; false when it is idle.
+    bool run_duck(u32 b, u32 frames);
     void publish_stats(f32 peak, f32 limiter_gain);
 
     RingBuffer<AudioCommand>& commands_;
@@ -132,7 +144,11 @@ private:
         BusFilterRT highpass, lowpass;
         BiquadRT eq[kEqBands];
         SendRamp send[kReverbUnits];
+        SendRamp trim;
     } bus_[kBusCount];
+    DuckRT duck_[Bus_User0];
+    bool ducking_[Bus_User0] = {};
+    f32 duck_buf_[Bus_User0][kBlockFrames];
     LimiterRT limiter_;
     ReverbRT reverb_[kReverbUnits];
 
