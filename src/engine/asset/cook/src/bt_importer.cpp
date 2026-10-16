@@ -24,9 +24,20 @@
 // invert / succeed / fail / repeat ("count") / retry ("count") / cooldown ("seconds") / timeout
 // ("seconds") / guard ("key", "op", "value") take one child; check (a key, "op", "value"),
 // wait (seconds), set (a key and one of "value", "add", "clear": true, "from": key), emit (a
-// signal) and task (a registered task's name, with "key", "value" and "vector" arguments) are
-// leaves. Ops: "is_set", "not_set", "==", "!=", "<", "<=", ">", ">=" (the default is "==" when
+// signal) and task (a registered task's name, with "key", "value", "vector" and "arg" arguments)
+// are leaves. Ops: "is_set", "not_set", "==", "!=", "<", "<=", ">", ">=" (the default is "==" when
 // there is a "value", else "is_set").
+//
+// M-AI 2: a guard's "abort" ("self", "lower" or "both"; "lower" only on a selector's child) makes it
+// an observer (asset::BtAbort). The stock tasks (kit::install_ai registers them) take named
+// arguments instead of key / value / vector / arg:
+//   {"task": "move_to", "key": "<vec3 or entity key>", "radius": 0.5}
+//   {"task": "look_at", "key": "<vec3 or entity key>"}
+//   {"task": "animate", "clip": "attack", "finish": true}
+//   {"task": "play_sound", "sound": "guid:<sfx>", "gain_db": -3}
+//   {"task": "spawn", "prefab": "guid:<prefab>", "key": "<vec3 or entity key>", "offset": [0, 1, 0]}
+//   {"task": "raise", "event": "alarm"}       {"task": "wait_event", "event": "alarm"}
+//   {"task": "log", "text": "patrolling"}
 
 #include <cstdio>
 #include <cstring>
@@ -41,6 +52,34 @@ namespace {
 
 constexpr const char* kStage = "cook.bt";
 constexpr u32 kBtFormatVersion = 1;
+
+// The stock tasks' arguments (kit::install_ai). Each maps onto the node: "key" to `key`; "radius",
+// "gain_db" and "finish" to `a`; "offset" to `v`; the one string argument to `arg`.
+struct StockTask {
+    const char* name;
+    const char* fields[3];
+    const char* string;    // the field stored in `arg` (required), or null
+    bool needs_key;        // "key" is required (a vec3 or entity key)
+};
+
+constexpr StockTask kStockTasks[] = {
+    {"move_to", {"key", "radius"}, nullptr, true},
+    {"look_at", {"key"}, nullptr, true},
+    {"animate", {"clip", "finish"}, "clip", false},
+    {"play_sound", {"sound", "gain_db"}, "sound", false},
+    {"spawn", {"prefab", "key", "offset"}, "prefab", false},
+    {"raise", {"event"}, "event", false},
+    {"wait_event", {"event"}, "event", false},
+    {"log", {"text"}, "text", false},
+};
+
+const StockTask* stock_task(StringView name) {
+    for (const StockTask& t : kStockTasks)
+        if (name == t.name) return &t;
+    return nullptr;
+}
+
+bool guid_field(StringView field) { return field == "sound" || field == "prefab"; }
 
 using asset::BtKey;
 using asset::BtKeyType;
@@ -66,12 +105,12 @@ constexpr Kind kKinds[] = {
     {"retry", BtNodeKind::Retry, {"count"}},
     {"cooldown", BtNodeKind::Cooldown, {"seconds"}},
     {"timeout", BtNodeKind::Timeout, {"seconds"}},
-    {"guard", BtNodeKind::Guard, {"key", "op", "value"}},
+    {"guard", BtNodeKind::Guard, {"key", "op", "value", "abort"}},
     {"check", BtNodeKind::Check, {"op", "value"}},
     {"wait", BtNodeKind::Wait, {}},
     {"set", BtNodeKind::Set, {"value", "add", "clear", "from"}},
     {"emit", BtNodeKind::Emit, {}},
-    {"task", BtNodeKind::Task, {"key", "value", "vector"}},
+    {"task", BtNodeKind::Task, {"key", "value", "vector", "arg"}},  // a stock task: its own fields
 };
 
 constexpr const char* kOps[] = {"is_set", "not_set", "==", "!=", "<", "<=", ">", ">="};
@@ -225,13 +264,21 @@ struct Builder {
                   "guard, check, wait, set, emit or task");
             return nullptr;
         }
+        const JsonValue task = node.get("task");
+        const StockTask* stock = found->kind == BtNodeKind::Task && task.is_string() ? stock_task(task.as_string()) : nullptr;
         for (u32 i = 0; i < node.size(); ++i) {
             const StringView key = node.key_at(i);
             bool ok = key == found->key || key == "name";
-            for (const char* e : found->extras) ok |= e && key == e;
+            if (stock)
+                for (const char* e : stock->fields) ok |= e && key == e;
+            else
+                for (const char* e : found->extras) ok |= e && key == e;
             if (!ok) {
                 String msg;
-                appendf(msg, "'%.*s' is not a key of a %s node", static_cast<int>(key.size()), key.data(), found->key);
+                if (stock)
+                    appendf(msg, "'%.*s' is not an argument of the %s task", static_cast<int>(key.size()), key.data(), stock->name);
+                else
+                    appendf(msg, "'%.*s' is not a key of a %s node", static_cast<int>(key.size()), key.data(), found->key);
                 error(node.get(key), msg);
                 return nullptr;
             }
@@ -286,8 +333,58 @@ struct Builder {
         n.a = static_cast<f32>(v.as_number());
     }
 
+    // A stock task's named arguments (kStockTasks).
+    void stock_args(JsonValue node, const StockTask& t, BtNode& n) {
+        if (const JsonValue key = node.get("key"); key.valid()) {
+            n.key = key_of(key);
+            if (n.key != asset::kBtNoKey && keys[n.key].type != BtKeyType::Vec3 && keys[n.key].type != BtKeyType::Entity) {
+                String msg;
+                appendf(msg, "the %s task's 'key' is a vec3 or entity key (a place or a target)", t.name);
+                error(key, msg);
+            }
+        } else if (t.needs_key) {
+            String msg;
+            appendf(msg, "the %s task needs 'key' (a vec3 or entity key)", t.name);
+            error(node, msg);
+        }
+        if (t.string) {
+            const JsonValue s = node.get(t.string);
+            const StringView field = t.string;
+            if (!s.valid()) {
+                String msg;
+                appendf(msg, "the %s task needs '%s'", t.name, t.string);
+                error(node, msg);
+            } else if (guid_field(field)) {
+                Guid g;
+                if (!s.is_string() || !parse_guid_ref(s.as_string(), g)) error(s, "expected \"guid:<uuid>\"");
+                else n.arg = intern(asset::to_string(g).view());
+            } else if (!s.is_string() || s.as_string().empty()) {
+                String msg;
+                appendf(msg, "'%s' must be a non-empty string", t.string);
+                error(s, msg);
+            } else {
+                n.arg = intern(s.as_string());
+            }
+        }
+        for (const char* number : {"radius", "gain_db"})
+            if (const JsonValue x = node.get(number); x.valid()) {
+                if (!x.is_number() || (StringView(number) == "radius" && x.as_number() < 0)) {
+                    String msg;
+                    appendf(msg, "'%s' must be a number%s", number, StringView(number) == "radius" ? " >= 0" : "");
+                    error(x, msg);
+                } else {
+                    n.a = static_cast<f32>(x.as_number());
+                }
+            }
+        if (const JsonValue w = node.get("finish"); w.valid()) {
+            if (!w.is_bool()) error(w, "'finish' is true or false");
+            else n.a = w.as_bool() ? 1.0f : 0.0f;
+        }
+        if (const JsonValue o = node.get("offset"); o.valid()) vec3(o, n.v);
+    }
+
     // Emits `node` and its subtree in pre-order; returns false on an error that stops the walk.
-    bool emit(JsonValue node, u32 depth) {
+    bool emit(JsonValue node, u32 depth, bool under_selector) {
         if (depth >= asset::kBtMaxDepth) {
             String msg;
             appendf(msg, "the tree is deeper than %u nodes", asset::kBtMaxDepth);
@@ -307,7 +404,7 @@ struct Builder {
         n.kind = k->kind;
         n.slot = asset::kBtNoSlot;
         n.key = n.key2 = asset::kBtNoKey;
-        n.name = n.text = asset::kBtNoString;
+        n.name = n.text = n.arg = asset::kBtNoString;
         if (const JsonValue name = node.get("name"); name.valid()) {
             if (!name.is_string() || name.as_string().empty()) error(name, "'name' must be a non-empty string");
             else n.name = intern(name.as_string());
@@ -344,6 +441,17 @@ struct Builder {
             n.key = key_of(node.get("key"));
             if (!node.get("key").valid()) error(node, "a guard node needs 'key'");
             condition(node, n);
+            if (const JsonValue ab = node.get("abort"); ab.valid()) {
+                const StringView a = ab.is_string() ? ab.as_string() : StringView();
+                asset::BtAbort mode = asset::BtAbort::None;
+                if (a == "self") mode = asset::BtAbort::Self;
+                else if (a == "lower") mode = asset::BtAbort::Lower;
+                else if (a == "both") mode = asset::BtAbort::Both;
+                else if (a != "none") error(ab, "'abort' is \"none\", \"self\", \"lower\" or \"both\"");
+                if (mode >= asset::BtAbort::Lower && !under_selector)
+                    error(ab, "a guard aborts lower-priority branches only as a selector's child");
+                n.abort = static_cast<u8>(mode);
+            }
             break;
         case BtNodeKind::Check:
             n.key = key_of(v);
@@ -395,12 +503,20 @@ struct Builder {
             n.id = StringId(v.as_string()).value;
             n.text = intern(v.as_string());
             if (n.kind == BtNodeKind::Task) {
+                if (const StockTask* stock = stock_task(v.as_string())) {
+                    stock_args(node, *stock, n);
+                    break;
+                }
                 if (const JsonValue key = node.get("key"); key.valid()) n.key = key_of(key);
                 if (const JsonValue val = node.get("value"); val.valid()) {
                     if (!val.is_number()) error(val, "a task's 'value' is a number");
                     else n.a = static_cast<f32>(val.as_number());
                 }
                 if (const JsonValue vec = node.get("vector"); vec.valid()) vec3(vec, n.v);
+                if (const JsonValue arg = node.get("arg"); arg.valid()) {
+                    if (!arg.is_string()) error(arg, "a task's 'arg' is a string");
+                    else n.arg = intern(arg.as_string());
+                }
             }
             break;
         default: break;
@@ -423,11 +539,11 @@ struct Builder {
                 return false;
             }
             for (u32 i = 0; i < v.size(); ++i) {
-                if (!emit(v.at(i), depth + 1)) return false;
+                if (!emit(v.at(i), depth + 1, n.kind == BtNodeKind::Selector)) return false;
                 ++children;
             }
         } else if (n.kind <= BtNodeKind::Guard) {
-            if (!emit(v, depth + 1)) return false;
+            if (!emit(v, depth + 1, false)) return false;
             children = 1;
         }
         nodes[index].child_count = static_cast<u8>(children);
@@ -439,12 +555,36 @@ struct Builder {
 class BtImporter final : public IImporter {
 public:
     StringView id() const override { return "bt"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::BehaviorTree; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcbt"; }
 
-    void scan_dependencies(const ImportInput&, Array<DepRef>&, DiagList&) const override {}
+    // The sounds and prefabs the stock tasks name (malformed ones are the cook's errors).
+    void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList&) const override { scan(in.settings.get("root"), 0, out); }
+
+    static void scan(JsonValue node, u32 depth, Array<DepRef>& out) {
+        if (!node.is_object() || depth > asset::kBtMaxDepth) return;
+        for (u32 i = 0; i < node.size(); ++i) {
+            const StringView key = node.key_at(i);
+            const JsonValue v = node.at(i);
+            if (v.is_array()) {
+                for (u32 j = 0; j < v.size(); ++j) scan(v.at(j), depth + 1, out);
+            } else if (v.is_object()) {
+                scan(v, depth + 1, out);
+            } else if (guid_field(key) && node.get("task").valid()) {
+                Guid g;
+                if (!v.is_string() || !parse_guid_ref(v.as_string(), g)) continue;
+                DepRef d;
+                d.guid = g;
+                d.expected = key == "sound" ? ChunkType::Sfx : ChunkType::Prefab;
+                d.line = v.line();
+                d.col = v.col();
+                d.where.assign(key);
+                out.push_back(d);
+            }
+        }
+    }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
         const JsonValue doc = in.settings;
@@ -476,7 +616,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, doc, kStage, "a behavior tree needs a 'root' node");
             return false;
         }
-        b.emit(root, 0);
+        b.emit(root, 0, false);
         if (diags.error_count() != errors_before) return false;
 
         header.slot_count = b.slots;

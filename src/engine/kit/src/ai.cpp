@@ -2,11 +2,17 @@
 
 #include <cstring>
 
+#include "kit3d_internal.h"
+#include "mce/ecs/transform.h"
 #include "mce/hash.h"
 #include "mce/log.h"
 
 namespace mce::kit {
 
+// ai_tasks.cpp: the stock tasks (install_ai registers them).
+void register_stock_tasks(BtRegistry& reg);
+
+using asset::BtAbort;
 using asset::BtKey;
 using asset::BtKeyType;
 using asset::BtNode;
@@ -75,7 +81,7 @@ struct Run {
             return BtStatus::Failure;
         }
         if (entering) b.slots[n.slot] = 0.0f;
-        BtTaskCall call{f, e, bb, n, b.slots[n.slot], entering, halting};
+        BtTaskCall call{f, e, bb, d, n, b.slots[n.slot], entering, halting};
         const BtStatus r = fn(call);
         return r == BtStatus::Idle ? BtStatus::Failure : r;
     }
@@ -161,7 +167,18 @@ struct Run {
         case BtNodeKind::Sequence:
         case BtNodeKind::Selector: {
             const BtStatus stop = n.kind == BtNodeKind::Sequence ? BtStatus::Failure : BtStatus::Success;
-            for (u32 k = cursor_of(b.nodes[i]); k < n.child_count; ++k) {
+            u32 first = cursor_of(b.nodes[i]);
+            if (n.kind == BtNodeKind::Selector && first > 0) {
+                // A higher-priority guard that observes lower branches and now holds takes over.
+                for (u32 k = 0, c = i + 1; k < first; ++k, c = node(c).end) {
+                    const BtNode& g = node(c);
+                    if (g.kind != BtNodeKind::Guard || g.abort < static_cast<u8>(BtAbort::Lower) || !holds(g)) continue;
+                    halt(child(i, first));
+                    first = k;
+                    break;
+                }
+            }
+            for (u32 k = first; k < n.child_count; ++k) {
                 b.nodes[i] = pack(BtStatus::Running, k);
                 const BtStatus r = tick(child(i, k));
                 if (r == BtStatus::Running) return r;
@@ -225,6 +242,10 @@ struct Run {
         }
         case BtNodeKind::Guard:
             if (entering && !holds(n)) return BtStatus::Failure;
+            if (!entering && (n.abort == static_cast<u8>(BtAbort::Self) || n.abort == static_cast<u8>(BtAbort::Both)) && !holds(n)) {
+                halt(i + 1);
+                return BtStatus::Failure;
+            }
             return tick(i + 1);
         case BtNodeKind::Check: return holds(n) ? BtStatus::Success : BtStatus::Failure;
         case BtNodeKind::Wait:
@@ -429,6 +450,27 @@ void install_ai(World& world, asset::AssetSystem* assets) {
     world.register_event<BtSignal>(Phase::FixedUpdate_Pre);
     world.set_resource(BtRegistry(assets));
     world.add_system(Phase::FixedUpdate_Pre, "ai_brains", &ai_brains);
+    register_stock_tasks(world.resource<BtRegistry>());
+}
+
+bool bt_key_position(const BtTaskCall& call, math::vec3& out, Entity* target) {
+    if (call.node.key >= call.tree.keys.size() || !call.blackboard) return false;
+    const BtKey& k = call.tree.keys[call.node.key];
+    World& w = call.frame.world();
+    if (!key_set(w, call.blackboard, k)) return false;
+    if (k.type == BtKeyType::Vec3) {
+        out = call.blackboard->vectors[k.slot];
+        return true;
+    }
+    if (k.type != BtKeyType::Entity) return false;
+    const Entity e = call.blackboard->entities[k.slot];
+    const LocalTransform* t = w.try_get<LocalTransform>(e);
+    if (!t) return false;
+    math::quat rot;
+    math::vec3 scale;
+    world_pose(w, e, *t, out, rot, scale);
+    if (target) *target = e;
+    return true;
 }
 
 BtStatus bt_node_status(const AiBrain& b, u32 node) { return node < asset::kBtMaxNodes ? status_of(b.nodes[node]) : BtStatus::Idle; }
