@@ -1,0 +1,22 @@
+{
+  "name": "the walker sends the player back to the start",
+  "scene": "scenes/main.mcscene",
+  "ticks": 1500,
+  "bot": {
+    "kind": "walk_to",
+    "actor": "Player",
+    "target": [
+      41,
+      0.5
+    ],
+    "plane": "x"
+  },
+  "assert": [
+    {
+      "log_contains": "player hurt"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

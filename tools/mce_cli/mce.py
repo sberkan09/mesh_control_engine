@@ -16,6 +16,8 @@
     mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
+    mce import aseprite <export.json> [--out f.mcsheet] [--werror]   Aseprite's JSON export + PNG into a .mcsheet
+                                                (frames, tags as clips, slices; unsupported features warn)
     mce ship <project> [--out dir] [--version v]   zip the host, module, engine and pack for distribution
     mce ship <project> --steam <app id> [--steam-library f]   ... and the Steam depot for this OS with the
                                                 steamcmd build scripts in <out>/<Name>-steam (uploads nothing)
@@ -306,6 +308,11 @@ def story_compiler():
 
 def cmd_story(args):
     return run([sys.executable, story_compiler(), args.project] + args.rest)
+
+
+def cmd_import(args):
+    import mce_import  # installed beside this script
+    return mce_import.main(args.rest)
 
 
 def sdk_version():
@@ -694,6 +701,10 @@ def main(argv):
     s.add_argument("project", nargs="?", default=".")
     s.add_argument("rest", nargs=argparse.REMAINDER, help="--check, --werror, --out <header>, --report <md>")
     s.set_defaults(fn=cmd_story)
+
+    s = sub.add_parser("import", help="2D authoring-tool exports into native assets (mce import aseprite <export.json>)")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="aseprite <export.json> [--out f] [--name n] [--werror]")
+    s.set_defaults(fn=cmd_import)
 
     s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "
                                           "and, with --desktop, Claude Desktop")

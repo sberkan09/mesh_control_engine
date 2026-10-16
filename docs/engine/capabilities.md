@@ -60,7 +60,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | templates/script/assets/scenes/main.mcscene |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
+| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
@@ -108,6 +109,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
+| `CameraView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen) |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md | projects/Undelivered/assets/scenes/main.mcscene |

@@ -4,3 +4,4 @@
 
 Blackboard | state the engine writes and games read; nothing to author
 SceneChunkStatus | state the engine writes and games read; nothing to author
+CameraView | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen)

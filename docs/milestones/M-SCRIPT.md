@@ -1,6 +1,6 @@
 # M-SCRIPT — Luau scripting for games without a compiler (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–4 done, 5 in progress). Plan: ROADMAP §M-SCRIPT; design of record
+**Status:** done (added 2026-10-16; steps 1–6 merged; the phone and web builds with the Luau runtime are unverified in this environment). Plan: ROADMAP §M-SCRIPT; design of record
 ADR-0041; Linear SBA-147 … SBA-152.
 
 **Why:** today every game needs a C++ toolchain and, on phones and the web, its own build. A script game is
@@ -157,3 +157,29 @@ Step 4 was split: 4a is the checks every host shares, 4b the editor work.
   Emscripten SDK here), so the Luau VM on those targets is untested; `ship.py --project` for a script project was
   checked for its paths only, not run to a zip.
 
+
+## Step 6a as built (the demo)
+
+- `kit::ScriptVars` (`mce/kit/components.h`): 16 saved numbers per entity, the memory of a script in a game with no
+  C++ (a script keeps nothing between ticks and cannot define components). Arrays come through `mce.get` /
+  `mce.set` as tables; user guide 27.8.
+- `projects/EmberScript`: a script project (no C++) with a side-view level, `player.luau` (run, coyote time, jump
+  buffer, short hop, respawn), `enemy.luau` (patrol / chase / return, stomp or hurt) and `goal.luau`. Scripts that
+  move bodies run in the `Post` phase: the 2D bodies do not exist before the first physics step.
+- Gates: three `.mctest` scenarios (`reach_goal` by the `walk_to` bot, `hurt_by_walker`, `stomp_walker` by an input
+  script) run by ctest `EmberScript_mctests` (the demo gate on the stock `mce_mcp`, `cmake/ScriptProject`); the
+  determinism stage plays `ember_script -input tests/run_right.input` three times, Debug = Release.
+- Not done: the demo is a smaller game than `samples/03_platformer`, not a port, and that sample has no `.mctest`
+  files, so "the same scenarios as the C++ version" does not exist to compare against. The Luau-versus-C++ twin
+  stays the bouncing-box sample.
+
+## Step 6b as built (agents)
+
+- The `start_game` prompt (step 3) offers Luau scripts and a script project when the game needs no module;
+  `docs_search` already indexed chapter 27 (`test_mcp_docs` checks it ranks for "ScriptVars script memory luau").
+- Blind test: a Sonnet agent with only the MCP tools and chapters 14 and 27 built a script-only platformer (three
+  coins, a patrolling enemy; scripts, scene, two passing `.mctest`) in about 20 tool calls with no engine bug found.
+  Friction it hit and what changed: `script_check` rejected `assets/scripts/x.luau` (now accepted); the `walk_to` bot
+  ignores y, `mce.quit()` ends every test, kinematic bodies block each other, scripts that move bodies need `Post`
+  (all in the guide, 27.2 and 27.8). Not changed: `cook_run`'s "cooked 0" right after an edit (the tool cooks on
+  demand), `run_headless` `inspect` verbosity.

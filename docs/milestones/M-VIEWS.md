@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** active (added 2026-10-16; design note written; steps 1-2 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -27,12 +27,41 @@ global illumination (the probe volume is shared by all views).
 - **Model split.** Steps 2–4 change the render pipeline and per-frame GPU resources: Opus. Steps 1, 5 and 6
   follow existing patterns (input maps, kit components, MCP tools): Sonnet.
 
+## Interfaces as built (steps 2–4; steps 5–6 build on these)
+
+**Step 2 — viewports, several cameras a frame** (render/forward3d.h, render/renderer.h, kit/views.h):
+- `kit::CameraView {viewport vec4 (x, y, w, h; 0..1, top-left), target Entity, order i32, enabled u32}` on a
+  camera entity (Camera3DComponent or Camera2DComponent). No enabled CameraView anywhere = today's path,
+  untouched (the golden gate). With one: every camera with an enabled CameraView is a view, plus each
+  primary camera without one (full window, order 0), so a minimap needs only its own CameraView.
+- `kit::collect_views(world, window, out, target_size?)` -> `ViewEntry {camera, target, rect (pixels),
+  order, is_3d}` sorted by (texture targets first, target, order, 3D before 2D, entity index). Rects round
+  their edges, so split halves share an edge exactly.
+- `kit::record_views(cmd, world, views, ViewRecordContext)`: clears the target once, then per view: 3D =
+  its own `Scene3D` (`Kit3DExtract::extract` for the first view, `extract_view` for the rest: no second
+  clock step, TAA previous transforms kept) recorded with `Forward3D::ViewOutput {slot, rect, first}`; 2D =
+  a sprite batch in a pass whose viewport is the rect, cleared to its camera's color unless a 3D view
+  covering its rect was drawn before it (a HUD camera). The player and the editor's play view both use it.
+- `Forward3D` view slots (`kMaxViews = 8`): each slot owns its size-dependent targets and temporal state
+  (TAA/SSR history, velocity previous view, auto exposure buffer, occlusion pyramid, volumetric froxels,
+  post-fx ping-pong). Slot 0 is the members themselves (the single-view path); another slot is swapped
+  into them for its record (handles only, no allocation). Shared: pipelines, meshes, IBL, probes, GI
+  volume (rolling update on the frame's first view only), shadow atlas, particle rings (simulated on the
+  first view only), instance batches (freed when no view drew them the previous frame).
+- `Renderer::view_slot(key)` / `end_views()` / `release_views()`: a stable slot per view key (the camera
+  entity's bits); a slot no key asked for since the last `end_views()` is released (its textures retired
+  by the RHI past the frames in flight). The player calls `end_views()` every frame; the editor releases
+  every slot when play stops.
+- Known limits (step 2): views into textures are skipped until step 3; 2D post (`Post2D`) is off in the
+  multi-view path; GPU timestamps and `last_stats()` describe the first 3D view; per-entity LOD
+  hysteresis is shared by the views; a particle emitter only the later views see is not simulated.
+
 ## Steps
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
 | 1 | Local players and per-slot input: slot maps (`MapFlag` bits 8..11), per-slot pads, join by button, `P2/` script names (the `LocalPlayer` component moves to step 5, where something uses it) | SBA-161 | Sonnet | done |
-| 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | not started |
+| 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | not started |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | not started |
 | 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |

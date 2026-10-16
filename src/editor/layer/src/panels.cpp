@@ -94,9 +94,13 @@ public:
         EditorScene& scene = shell.scene();
         lines_.clear();
         const ViewSettings& view = shell.view();
-        if (PlaySession& play = shell.session().play(); play.active()) {
-            // Play-in-editor: the play world, through the game's camera (or the editor's: the orbit
-            // camera for a 3D game).
+        PlaySession& play = shell.session().play();
+        if (!play.active()) shell.preview().release_views();
+        if (play.active()) {
+            // Play-in-editor: the play world through the game's views (M-VIEWS), else its camera (or
+            // the editor's: the orbit camera for a 3D game).
+            if (view.play_camera && shell.preview().record_views(cmd, *play.world(), v.target, v.size, math::Color{0.08f, 0.09f, 0.12f, 1.0f}))
+                return;
             if (world_is_3d(*play.world())) {
                 render::Camera3D cam3;
                 if (!view.play_camera || !shell.preview().game_camera_3d(*play.world(), cam3)) {

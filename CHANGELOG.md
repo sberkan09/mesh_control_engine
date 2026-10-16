@@ -5,6 +5,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
+- Script games for agents, M-SCRIPT step 6b (SBA-152): the `start_game` prompt offers a script-only game, `docs_search`
+  finds chapter 27, `script_check` takes `assets/scripts/x.luau` as well as `scripts/x.luau`, and the guide lists the
+  gotchas a blind agent hit (27.8).
+- A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
+  data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
+  script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
 - Systems tour sample, M-COVER step 4 (SBA-160): `samples/systems_tour` shows `NetReplicated`, `NetOwner`, `Dialogue`
   and `DialogueInput` on one NPC with a compiled story and runs the conversation to its end
   (`ctest -R sample_systems_tour`). The sample coverage list now holds only `Blackboard` and `SceneChunkStatus`.

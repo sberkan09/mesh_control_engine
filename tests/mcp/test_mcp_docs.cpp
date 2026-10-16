@@ -65,6 +65,12 @@ TEST_CASE("docs_search: ranked sections with their resource URI and a snippet") 
     CHECK(code.v().get("results").size() <= 3);
     for (u32 i = 0; i < code.v().get("results").size(); ++i)
         CHECK(str(code.v().get("results").at(i).get("uri")).find("mce://docs/samples/") == 0);
+    // M-SCRIPT 6: a script-only game finds its chapter (ScriptVars, the memory of a script).
+    auto script = c.ok("docs_search", R"({"query":"ScriptVars script memory luau","limit":5})");
+    bool chapter = false;
+    for (u32 i = 0; i < script.v().get("results").size(); ++i)
+        chapter = chapter || str(script.v().get("results").at(i).get("uri")) == "mce://docs/guide/27-scripting.md";
+    CHECK(chapter);
     CHECK(c.fails("docs_search", R"({"query":"!"})").find("words") != std::string::npos);
     CHECK(c.fails("docs_search", R"({"query":"x","group":"blog"})").find("'group'") != std::string::npos);
 }
@@ -81,6 +87,7 @@ TEST_CASE("prompts: listed, filled with their arguments, missing ones refused") 
     const std::string text = str(got->root().get("result").get("messages").at(0).get("content").get("text"));
     CHECK(text.find("A lighthouse keeper relights lamps.") != std::string::npos);
     CHECK(text.find("{brief}") == std::string::npos);
+    CHECK(text.find("27-scripting.md") != std::string::npos);  // a script-only game is offered (M-SCRIPT 6)
     CHECK(got->root().get("result").get("messages").at(0).get("role").as_string() == "user");
     CHECK(c.request("prompts/get", R"({"name":"start_game"})")->root().get("error").is_object());
     CHECK(c.request("prompts/get", R"({"name":"nope"})")->root().get("error").is_object());
