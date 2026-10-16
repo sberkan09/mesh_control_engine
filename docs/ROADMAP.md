@@ -112,7 +112,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-VIEWS | [M-VIEWS.md](milestones/M-VIEWS.md) (Linear SBA-161 … SBA-166, added 2026-10-16) | active (step 1 done: local players, per-slot maps and pads, join by button, `P2/` script names) | steps 1–6 |
 | M-IMPORT | [M-IMPORT.md](milestones/M-IMPORT.md) (Linear SBA-167 … SBA-170, added 2026-10-16) | active (steps 1–2 done: `mce import aseprite`, `mce import tiled`) | steps 3–4 |
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
-| M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | active (step 1 done: `scripts/ci/check_docs.py` in the walls stage checks relative links, anchors and `#include` lines of `mce/` headers in every document, with `scripts/ci/docs.allow`; step 2 done: `mce_player` flags in documents are console variables the source declares) | steps 3–4 |
+| M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | active (step 1 done: `scripts/ci/check_docs.py` in the walls stage checks relative links, anchors and `#include` lines of `mce/` headers in every document, with `scripts/ci/docs.allow`; steps 2–3 done: `mce_player` flags in documents are console variables the source declares; every sample and project has a test) | step 4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -604,7 +604,7 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:**
 1. `scripts/ci/check_docs.py` in the walls stage: relative links and `#anchors` in every Markdown file resolve, and `#include` lines of `mce/` headers name a real header; existing misses are fixed or on `scripts/ci/docs.allow` with a reason.
 2. The same for command-line flags: a flag shown after `mce_player` in a document is a console variable the source declares.
-3. Every `samples/` and `projects/` directory is named by a test, or listed with a reason.
+3. Every `samples/` and `projects/` directory is run by a test, or listed with a reason.
 4. The guide and contributor docs describe the checks; the gates run.
 
 **Demo:** the walls stage fails on a seeded broken link, flag and untested sample, and passes on the repo.
