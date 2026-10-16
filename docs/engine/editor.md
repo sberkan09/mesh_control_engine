@@ -164,7 +164,7 @@ the mod"). It depends on `mce_player` being built.
 MCP (`tests/mcp/`): ctest `test_mcp` (JSON-RPC framing, tools through the funnel, undo/redo,
 persistence rails, cheats refused, the game install and `inspect`, `cook_run` adopt, "FR-EDT-160 gate: MCP edit == SceneCommand edit (same .mcscene
 bytes, same run_headless hash, same as mce_player)", and a fuzz case); `mcp_transcript` (drives the
-real `mce_mcp` over pipes against `transcripts/demo_edit.golden.jsonl`); `mcp_symbol_wall` (no
+real `mce_mcp` over pipes against `transcripts/demo_edit.golden.jsonl`); `test_mcp_bt.cpp` (the `bt_*` tools: create, edit, refusals that leave the file as it was, and `bt_trace` over the demo), `mcp_symbol_wall` (no
 socket symbols in `mce_mcp_core`, no ImGui symbols in `mce_mcp_core` or `mce_mcp`; not on Windows).
 
 GPU (label `gpu`, `MCE_GPU_TESTS`): `editor_smoke` (default layout over the stub world),

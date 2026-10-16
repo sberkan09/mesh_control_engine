@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
+  `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
+  headless and reports one brain's running path and blackboard over time and when each node started.
+  `samples/ai_demo` gains `scenes/yard_squad.mcscene`: two guards investigate a thrown stone, take turns
+  attacking through one attack token and fall back when hurt. A 500-brain tick stays within 2 ms in optimized
+  builds. User guide 13.8 and 14. M-AI is done.
 - The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
   (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
   cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its
