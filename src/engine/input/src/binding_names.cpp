@@ -145,4 +145,20 @@ void binding_name(const BindingDef& b, BindingName& out) {
     out.assign("?");
 }
 
+namespace {
+GamepadNamer g_namer = nullptr;
+void* g_namer_user = nullptr;
+}  // namespace
+
+void set_gamepad_namer(GamepadNamer fn, void* user) {
+    g_namer = fn;
+    g_namer_user = user;
+}
+
+void action_binding_name(StringId action, const BindingDef& b, BindingName& out) {
+    const bool pad = b.device == Device::GamepadButton || b.device == Device::GamepadAxis;
+    if (pad && g_namer && g_namer(g_namer_user, action, out)) return;
+    binding_name(b, out);
+}
+
 }  // namespace mce::input

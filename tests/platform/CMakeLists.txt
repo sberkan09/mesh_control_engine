@@ -3,7 +3,7 @@ mce_add_test(test_platform SOURCES test_platform.cpp test_review.cpp test_haptic
              DEPS mce::mce_platform)
 target_compile_definitions(test_platform PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")
 
-# Stand-ins for Valve's steam_api (M-STEAM step 1): the flat entry points the loader opens, and an old
+# Stand-ins for Valve's steam_api (M-STEAM steps 1-4): the flat entry points the loader opens, and an old
 # library without manual dispatch. Built here only; the Steamworks SDK is not part of the build.
 if(NOT IOS AND NOT ANDROID)
     add_library(mce_steam_stub SHARED steam_stub.cpp)
@@ -30,6 +30,11 @@ if(NOT IOS AND NOT ANDROID)
                  COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
                          -DSTEAM_STUB=$<TARGET_FILE:mce_steam_stub> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/steam_overlay_test
                          -P ${CMAKE_CURRENT_SOURCE_DIR}/player_steam_overlay_test.cmake)
+        # Steam Input reading the input map's actions, and its configuration files (M-STEAM step 4).
+        add_test(NAME player_steam_input
+                 COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                         -DSTEAM_STUB=$<TARGET_FILE:mce_steam_stub> -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/steam_input_test
+                         -P ${CMAKE_CURRENT_SOURCE_DIR}/player_steam_input_test.cmake)
     endif()
 endif()
 

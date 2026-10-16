@@ -154,7 +154,7 @@ void OptionsPanel::refresh_labels() {
         for (u32 ai = 0; ai < m->action_count; ++ai) {
             const input::ActionDef& a = set.actions[m->first_action + ai];
             if (a.name != s.action || s.index >= a.binding_count) continue;
-            input::binding_name(set.bindings[a.first_binding + s.index], text);
+            input::action_binding_name(a.name, set.bindings[a.first_binding + s.index], text);
             doc_->set_text(s.button, text.view());
         }
     }
