@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Compressed audio clips, M-AUDIO2 step 1 (SBA-118, ADR-0044). `.ogg` files import (importer `ogg`), and a
+  `.wav` sidecar's `"compress": "vorbis"` stores the clip as Ogg Vorbis, about a tenth of float PCM
+  (`"quality"`, default 0.4). A compressed clip decodes when it loads; on the Music bus its stream pages decode
+  as they fill. libvorbis encodes in the cook, stb_vorbis decodes at run time. The WAV importer's version is
+  now 2, so clips re-cook once.
 - Performance counter gate and guide, M-PERF step 5 (SBA-117). `scripts/ci/perf_gate.py` runs `perf_run` on
   a copy of a project and fails when draws, passes, dispatches, triangles, meshes, sprites or sprite batches
   grow past the project's `perf/counters.json` (`--update` writes new ones). Glowmoth and Marble Garden run it

@@ -10,10 +10,20 @@ mce_add_library(mce_asset
         src/formats.cpp
         src/guid.cpp
         src/mods.cpp
+        src/vorbis.cpp
         src/xxhash.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_refl)
+# stb_vorbis (ADR-0044): the runtime decoder for Ogg Vorbis clips, one third-party TU folded into
+# mce_asset and compiled without the engine warning policy; only vorbis.cpp includes it.
+target_sources(mce_asset PRIVATE src/stb_vorbis_impl.c)
+target_include_directories(mce_asset SYSTEM PRIVATE "${stb_SOURCE_DIR}")
+if(MSVC)
+    set_source_files_properties(src/stb_vorbis_impl.c PROPERTIES COMPILE_OPTIONS "/W0")
+else()
+    set_source_files_properties(src/stb_vorbis_impl.c PROPERTIES COMPILE_OPTIONS "-w")
+endif()
 # The async loader thread (AssetSystem::request_async).
 find_package(Threads REQUIRED)
 target_link_libraries(mce_asset PUBLIC Threads::Threads)

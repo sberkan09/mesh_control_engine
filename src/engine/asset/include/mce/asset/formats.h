@@ -13,7 +13,7 @@ namespace mce::asset {
 // Schema majors (TocEntry::chunk_version high byte) this build reads and writes.
 inline constexpr u8 MANIFEST_VERSION = 1;
 inline constexpr u8 TEXTURE_VERSION = 1;
-inline constexpr u8 SFX_VERSION = 1;
+inline constexpr u8 SFX_VERSION = 1;  // minor 1: SfxFlags::Vorbis payloads (M-AUDIO2 1)
 inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 SCENE_VERSION = 1;
@@ -148,6 +148,7 @@ void write_texture(TextureFormat format, u32 layers, u32 flags, Span<const Textu
 namespace SfxFlags {
 enum : u32 {
     Looping = 1u << 0,
+    Vorbis = 1u << 1,  // data_offset holds a u64 byte count and an Ogg Vorbis stream (M-AUDIO2 1)
 };
 }
 
@@ -159,16 +160,19 @@ struct SfxHeader {
     u64 loop_end;
     u32 flags;         // SfxFlags
     f32 gain;          // normalization gain the cook applied (informational)
-    u64 data_offset;   // float32 interleaved samples
+    u64 data_offset;   // float32 interleaved samples, or (Vorbis) a u64 byte count then the stream
 };
 static_assert(sizeof(SfxHeader) == 48);
 
 struct SfxView {
     const SfxHeader* header = nullptr;
-    Span<const f32> samples;  // frame_count * channels
+    Span<const f32> samples;  // frame_count * channels (empty for Vorbis)
+    Span<const byte> vorbis;  // the Ogg Vorbis stream (Vorbis only); it decodes to frame_count frames
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
+// A Vorbis clip: `header` without SfxFlags::Vorbis is fine, the writer sets it.
+void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<byte>& out);
 
 // ------------------------------------------------------------------ video (CHNK_VID)
 // The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with

@@ -1,7 +1,8 @@
 #pragma once
 // Cook-time audio processing (assets.md §5.2 Audio row): own WAV reader (PCM 8/16/24/32-bit,
 // IEEE float 32/64, WAVE_FORMAT_EXTENSIBLE), windowed-sinc resampler, peak normalization.
-// Exposed for tests; the runtime never sees WAV.
+// Exposed for tests; the runtime never sees WAV. Ogg Vorbis: encoded here (libvorbis), decoded by
+// asset::VorbisReader (stb_vorbis) in the cook and the runtime alike (M-AUDIO2 1).
 
 #include "mce/containers/array.h"
 #include "mce/fixed_string.h"
@@ -32,6 +33,10 @@ u64 rescale_frames(u64 frames, u32 src_rate, u32 dst_rate);
 
 // Scales so the absolute peak sits at `target` (linear); returns the gain applied (1 if silent).
 f32 normalize_peak(Span<f32> samples, f32 target);
+
+// Ogg Vorbis (VBR, libvorbis) of interleaved samples; `quality` -0.1..1 (0.4 is about 128 kbit/s
+// stereo). Same input, same bytes on a host. False with `why` set when the encoder refuses.
+bool encode_vorbis(Span<const f32> samples, u32 channels, u32 sample_rate, f32 quality, Array<byte>& out, FixedString<128>& why);
 
 inline constexpr u32 kCookSampleRate = 48000;
 inline constexpr f32 kMinus1dBFS = 0.891250938f;

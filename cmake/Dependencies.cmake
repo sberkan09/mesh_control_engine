@@ -147,9 +147,12 @@ if(MCE_BUILD_TESTS AND MCE_PHYSICS_ORACLE)
     FetchContent_MakeAvailable(box2d)
 endif()
 
-# ---- stb (cook-time only: stb_image, stb_truetype, stb_rect_pack; stb_image_write in tests) ----
+# ---- stb (cook-time: stb_image, stb_truetype, stb_rect_pack; stb_image_write in tests) ----------
 # Header-only, no release tags upstream: pinned by commit. Confined to mce_asset_cook (and tests)
 # by the "stb wall" in scripts/ci/check_walls.py — never linked into a runtime target (FR-AST-010).
+# The one exception is stb_vorbis, the Ogg Vorbis decoder compiled into mce_asset (ADR-0044, the
+# "stb_vorbis wall"): it reads from memory, allocates only from the reader's arena, and is fetched on
+# every build, cross builds included.
 FetchContent_Declare(stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG        2c980bb59875b0d32144a71867fbdebb2f77cd20
@@ -215,6 +218,49 @@ if(NOT CMAKE_CROSSCOMPILING)
     else()
         target_compile_options(mce_astcenc PRIVATE -w -ffp-contract=off)
     endif()
+endif()
+
+# ---- libogg + libvorbis (cook-time only: Ogg Vorbis encoding of audio clips — ADR-0044) ----------
+# The encoder half of the Xiph reference codec, built from its sources like astcenc (its own CMake
+# needs find_package(Ogg) and installs). Confined to the cook's audio importer by the "libvorbis wall"
+# in scripts/ci/check_walls.py; the runtime decodes with stb_vorbis (mce_asset). Host builds only:
+# a cross build cooks with the host's mce_cook. -ffp-contract=off keeps one host's output repeatable.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(ogg
+        GIT_REPOSITORY https://github.com/xiph/ogg.git
+        GIT_TAG        v1.3.5
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_Declare(vorbis
+        GIT_REPOSITORY https://github.com/xiph/vorbis.git
+        GIT_TAG        v1.3.7
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(ogg vorbis)
+    set(_ogg_gen "${CMAKE_BINARY_DIR}/_deps/ogg-config/ogg")
+    file(MAKE_DIRECTORY "${_ogg_gen}")
+    file(WRITE "${_ogg_gen}/config_types.h.tmp" "#ifndef __CONFIG_TYPES_H__\n#define __CONFIG_TYPES_H__\n#include <stdint.h>\n"
+        "typedef int16_t ogg_int16_t;\ntypedef uint16_t ogg_uint16_t;\ntypedef int32_t ogg_int32_t;\n"
+        "typedef uint32_t ogg_uint32_t;\ntypedef int64_t ogg_int64_t;\ntypedef uint64_t ogg_uint64_t;\n#endif\n")
+    configure_file("${_ogg_gen}/config_types.h.tmp" "${_ogg_gen}/config_types.h" COPYONLY)
+    set(_vl "${vorbis_SOURCE_DIR}/lib")
+    add_library(mce_vorbisenc STATIC
+        "${ogg_SOURCE_DIR}/src/bitwise.c" "${ogg_SOURCE_DIR}/src/framing.c"
+        ${_vl}/mdct.c ${_vl}/smallft.c ${_vl}/block.c ${_vl}/envelope.c ${_vl}/window.c ${_vl}/lsp.c ${_vl}/lpc.c
+        ${_vl}/analysis.c ${_vl}/synthesis.c ${_vl}/psy.c ${_vl}/info.c ${_vl}/floor1.c ${_vl}/floor0.c ${_vl}/res0.c
+        ${_vl}/mapping0.c ${_vl}/registry.c ${_vl}/codebook.c ${_vl}/sharedbook.c ${_vl}/lookup.c ${_vl}/bitrate.c
+        ${_vl}/vorbisenc.c)
+    target_include_directories(mce_vorbisenc SYSTEM PUBLIC "${ogg_SOURCE_DIR}/include" "${CMAKE_BINARY_DIR}/_deps/ogg-config"
+                               "${vorbis_SOURCE_DIR}/include")
+    target_include_directories(mce_vorbisenc PRIVATE "${_vl}")
+    set_target_properties(mce_vorbisenc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_vorbisenc PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_vorbisenc PRIVATE -w -ffp-contract=off)
+        target_link_libraries(mce_vorbisenc PRIVATE m)
+    endif()
+    add_library(mce::vorbisenc ALIAS mce_vorbisenc)
 endif()
 
 # ---- Jolt Physics 5 (3D physics; mce_physics3d only — ADR-0003) ----------------------------------

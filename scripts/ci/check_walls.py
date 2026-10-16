@@ -94,6 +94,21 @@ WALLS = [
     # runtime target; runtime code never includes the cook library.
     ("stb wall", re.compile(r"\bstb(i|tt|rp)_\w*\s*\(|[<\"]stb_\w+\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # Ogg Vorbis (ADR-0044): stb_vorbis decodes, private to mce_asset's VorbisReader (cook and runtime
+    # alike); libvorbis encodes, private to the cook's vorbis_encode.cpp. Everything else goes through
+    # asset::VorbisReader / cook::encode_vorbis.
+    (
+        "stb_vorbis wall",
+        re.compile(r"\bstb_vorbis_\w*\s*\(|[<\"]stb_vorbis\.c"),
+        ["src/engine/asset/src/vorbis.cpp", "src/engine/asset/src/stb_vorbis_impl.c"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    (
+        "libvorbis wall",
+        re.compile(r"[<\"](vorbis|ogg)/|\b(vorbis|ogg)_[a-z_]+\s*\(|\bvorbis_(info|dsp_state|block|comment)\b"),
+        ["src/engine/asset/cook/src/vorbis_encode.cpp"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     ("cook wall", re.compile(r"[<\"]mce/cook/"), ["src/engine/asset/cook/", "src/editor/", "tools/cook/"], ["src/", "samples/", "games/"]),
     (
         "engine container ban",
@@ -157,6 +172,7 @@ LINK_WALLS = [
     ("net opt-in wall", re.compile(r"\bmce_net\b"), ["src/engine/net/", "samples/", "games/", "projects/", "templates/", "tests/"]),
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
+    ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # The Luau scripting spike (ADR-0041) is opt-in: its test and its headless sample link it, no
     # engine library, host or tool does; Luau's targets are linked by mce_script alone.
     ("script opt-in wall", re.compile(r"\bmce_script\b"), ["src/engine/script/", "samples/script_headless/", "tests/script/"]),

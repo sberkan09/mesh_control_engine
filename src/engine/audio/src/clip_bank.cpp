@@ -1,5 +1,6 @@
 #include "mce/audio/clip_bank.h"
 
+#include "mce/asset/vorbis.h"
 #include "mce/log.h"
 
 namespace mce::audio {
@@ -19,10 +20,15 @@ Result<ClipPayload> clip_payload_from_sfx(Span<const byte> payload) {
     }
     if (frames == 0) return Error(Errc::InvalidArgument, kStage, "empty clip");
     if (frames > 0xFFFFFFFFull) return Error(Errc::Unsupported, kStage, "clip longer than 2^32 frames");
-    if (v.samples.size() < frames * h.channels) return Error(Errc::Truncated, kStage);
-
     ClipPayload p;
-    p.frames = v.samples.data();
+    if ((h.flags & asset::SfxFlags::Vorbis) != 0) {
+        if (v.vorbis.size() > 0xFFFFFFFFull) return Error(Errc::Unsupported, kStage, "Vorbis stream over 4 GB");
+        p.encoded = v.vorbis.data();
+        p.encoded_bytes = static_cast<u32>(v.vorbis.size());
+    } else {
+        if (v.samples.size() < frames * h.channels) return Error(Errc::Truncated, kStage);
+        p.frames = v.samples.data();
+    }
     p.frame_count = static_cast<u32>(frames);
     p.channels = h.channels;
     p.sample_rate = h.sample_rate;
@@ -30,8 +36,20 @@ Result<ClipPayload> clip_payload_from_sfx(Span<const byte> payload) {
     return p;
 }
 
+Result<void> decode_clip(ClipPayload& p, Array<f32>& pcm) {
+    constexpr const char* kStage = "audio.clip.vorbis";
+    u32 channels = 0, rate = 0;
+    MCE_TRY(asset::decode_vorbis(Span<const byte>(p.encoded, p.encoded_bytes), pcm, channels, rate));
+    if (channels != p.channels || rate != p.sample_rate) return Error(Errc::InvalidArgument, kStage, "stream differs from its header");
+    if (pcm.size() < static_cast<usize>(p.frame_count) * channels) return Error(Errc::Truncated, kStage, "stream shorter than its header");
+    p.frames = pcm.data();
+    p.encoded = nullptr;
+    p.encoded_bytes = 0;
+    return ok();
+}
+
 ClipBank::ClipBank(asset::AssetSystem& assets, AudioDevice& device, mem::IAllocator& a)
-    : assets_(&assets), device_(&device), entries_(a) {}
+    : assets_(&assets), device_(&device), entries_(a), retired_(a) {}
 
 ClipBank::~ClipBank() { release_all(); }
 
@@ -41,10 +59,18 @@ ClipHandle ClipBank::register_entry(Entry& e) {
         MCE_LOG_ERROR("audio: bad Sfx asset {} ({})", asset::to_string(e.ref.guid).c_str(), errc_name(payload.error().code));
         return {};
     }
-    Result<ClipHandle> clip = e.stream ? device_->register_stream(payload.value()) : device_->register_clip(payload.value());
-    if (!clip && e.stream) {
+    ClipPayload p = payload.value();
+    auto in_memory = [&]() -> Result<ClipHandle> {
+        if (p.encoded) {
+            const Result<void> decoded = decode_clip(p, e.pcm);
+            if (!decoded) return decoded.error();
+        }
+        return device_->register_clip(p);
+    };
+    Result<ClipHandle> clip = e.stream ? device_->register_stream(p) : in_memory();
+    if (!clip && e.stream && clip.error().code == Errc::OutOfMemory) {
         MCE_LOG_WARN("audio: no free stream for {}; it plays from memory", asset::to_string(e.ref.guid).c_str());
-        clip = device_->register_clip(payload.value());
+        clip = in_memory();
     }
     if (!clip) {
         MCE_LOG_ERROR("audio: cannot register clip {} ({})", asset::to_string(e.ref.guid).c_str(), errc_name(clip.error().code));
@@ -76,8 +102,23 @@ ClipHandle ClipBank::find(asset::Guid guid) const {
     return e ? e->clip : ClipHandle{};
 }
 
-void ClipBank::drop(Entry& e) {
+void ClipBank::retire(Entry& e) {
     if (!e.clip.is_null()) device_->release_clip(e.clip);
+    if (!e.pcm.empty()) retired_.push_back(Retired{e.clip, std::move(e.pcm)});
+    e.pcm = Array<f32>();
+    e.clip = {};
+}
+
+void ClipBank::sweep() {
+    for (usize i = retired_.size(); i-- > 0;)
+        if (!device_->is_clip_registered(retired_[i].clip)) {
+            retired_[i] = std::move(retired_.back());
+            retired_.pop_back();
+        }
+}
+
+void ClipBank::drop(Entry& e) {
+    retire(e);
     if (e.ref.handle.valid()) assets_->release(e.ref.handle);
     e = Entry{};
 }
@@ -101,9 +142,11 @@ void ClipBank::release_all() {
         drop(kv.value);
     }
     entries_.clear();
+    retired_.clear();
 }
 
 void ClipBank::sync() {
+    sweep();
     for (auto& kv : entries_) {
         Entry& e = kv.value;
         if (!e.ref.handle.valid()) continue;
@@ -111,7 +154,7 @@ void ClipBank::sync() {
         if (live == e.generation) continue;
         // Re-stamps the handle to the new generation; the asset retain carries over (it is
         // counted per row, not per generation).
-        if (!e.clip.is_null()) device_->release_clip(e.clip);
+        retire(e);
         e.clip = register_entry(e);
         e.generation = e.ref.handle.generation;
     }
