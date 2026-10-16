@@ -309,6 +309,139 @@ end
     CHECK(r.w.try_get<Probe>(e)->flag);
 }
 
+TEST_CASE("script api: 2D forces, angular velocity, sleep, point overlaps and shape casts (M-SCRIPT2 1)") {
+    Rig r(R"(
+function update()
+    if mce.tick() < 2 then return end
+    mce.each("Probe", function(e)
+        local hits = mce.raycast_all2d(vector.create(0, 0, 0), vector.create(1, 0, 0), 30)
+        assert(#hits == 2 and hits[1].distance < hits[2].distance)
+        local cast = mce.circle_cast2d(vector.create(0, 0, 0), vector.create(20, 0, 0), 0.5)
+        local box = mce.box_cast2d(vector.create(0, 0, 0), vector.create(20, 0, 0), vector.create(0.25, 0.25, 0))
+        assert(cast ~= nil and cast.fraction > 0 and cast.fraction < 1)
+        assert(box ~= nil and box.fraction > cast.fraction)
+        assert(mce.circle_cast2d(vector.create(0, 8, 0), vector.create(20, 8, 0), 0.5) == nil)
+        assert(mce.overlap_point2d(vector.create(5, 0, 0)))
+        assert(not mce.overlap_point2d(vector.create(5, 0, 0), hits[1].entity))
+        assert(not mce.overlap_point2d(vector.create(0, 6, 0)))
+        mce.set_angular_velocity2d(e, 3.5)
+        mce.force2d(e, vector.create(60, 0, 0))
+        mce.impulse2d(e, vector.create(0, 1, 0), vector.create(0.5, 10, 0))   -- off-centre: it spins more
+        mce.set(e, "Probe", "value", vector.create(mce.angular_velocity2d(e), #hits, cast.fraction))
+        mce.set(e, "Probe", "flag", mce.awake2d(e))
+        mce.set_awake2d(e, false)
+        mce.set(e, "Probe", "n", mce.awake2d(e) and 1 or 0)
+    end)
+end
+)");
+    physics::install_physics2d(r.w);
+    physics::RigidBody2D wall_body;
+    physics::Collider2D wall_col;
+    wall_col.shape = physics::ColliderShape::box({1.0f, 1.0f});
+    r.w.spawn_with(LocalTransform{{5, 0, 0}, math::quat::identity(), {1, 1, 1}}, wall_body, wall_col);
+    r.w.spawn_with(LocalTransform{{10, 0, 0}, math::quat::identity(), {1, 1, 1}}, wall_body, wall_col);
+    physics::RigidBody2D dyn;
+    dyn.type = physics::BodyType::Dynamic;
+    dyn.gravity_scale = 0.0f;
+    physics::Collider2D ball;
+    ball.shape = physics::ColliderShape::circle(0.5f);
+    const Entity e = r.w.spawn_with(LocalTransform{{0, 10, 0}, math::quat::identity(), {1, 1, 1}}, dyn, ball, Probe{});
+    r.step(4);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(e);
+    CHECK(p->value.x != doctest::Approx(0.0f));  // angular velocity read back (3.5 plus what the off-centre impulse added)
+    CHECK(p->value.y == doctest::Approx(2.0f));
+    CHECK(p->flag);       // awake when asked
+    CHECK(p->n >= 0);     // set_awake2d ran (a world with sleeping off keeps every body awake)
+    physics::BodyState st;
+    REQUIRE(r.w.resource<physics::World2D>().body_state(e, st));
+    CHECK(st.linear_velocity.x > 0.0f);   // the force pushed it along +x
+}
+
+TEST_CASE("script api: 2D body functions name the missing body") {
+    Rig r(R"(
+function update() mce.each("Probe", function(e) mce.force2d(e, vector.create(1, 0, 0)) end) end
+)");
+    physics::install_physics2d(r.w);
+    r.w.spawn_with(Probe{});
+    r.step(3);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("force2d: the entity has no 2D body") != std::string::npos);
+}
+
+// The gate of M-SCRIPT2: a function cannot be registered without a line in mce.d.luau (so script_check types it)
+// or listed there without being registered. The script walks the real `mce` table and compares it, both ways,
+// with the names the definitions declare.
+TEST_CASE("script api: every registered mce function is declared in mce.d.luau, and the other way round") {
+    Array<char> defs;
+    script::write_definitions(defs);
+    const std::string text(defs.data(), defs.size());
+    const usize begin = text.find("declare mce: {");
+    REQUIRE(begin != std::string::npos);
+    const usize end = text.find("\n}\n", begin);
+    REQUIRE(end != std::string::npos);
+    std::string expected;
+    usize at = begin;
+    while ((at = text.find("\n    ", at)) != std::string::npos && at < end) {
+        at += 5;
+        const usize colon = text.find(':', at);
+        if (colon == std::string::npos || colon > end) break;
+        const std::string name = text.substr(at, colon - at);
+        if (!name.empty() && name.find_first_not_of("abcdefghijklmnopqrstuvwxyz_0123456789") == std::string::npos) expected += "\"" + name + "\",";
+    }
+    REQUIRE_FALSE(expected.empty());
+    const std::string source = "local expected = {" + expected + R"(}
+function update()
+    local want = {}
+    for _, n in ipairs(expected) do want[n] = true end
+    for name in pairs(mce) do
+        assert(want[name], "mce." .. name .. " is registered but not declared in mce.d.luau")
+        want[name] = nil
+    end
+    for name in pairs(want) do
+        error("mce." .. name .. " is declared in mce.d.luau but not registered")
+    end
+end
+)";
+    Rig r(source.c_str());
+    r.step();
+    INFO(error_of(r.h()));
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+}
+
+TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
+    Rig r(R"(
+function update()
+    if mce.tick() == 2 then   -- the body exists once the first physics step has synced it
+        mce.each("Probe", function(e) mce.teleport2d(e, vector.create(7, 3, 0)) end)
+    end
+end
+)");
+    physics::install_physics2d(r.w);
+    physics::RigidBody2D rb;
+    rb.type = physics::BodyType::Kinematic;
+    physics::Collider2D col;
+    col.shape = physics::ColliderShape::box({0.5f, 0.5f});
+    const Entity e = r.w.spawn_with(LocalTransform{{1, 1, 0}, math::quat::identity(), {1, 1, 1}}, rb, col, Probe{});
+    r.step(6);
+    INFO(error_of(r.h()));
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<LocalTransform>(e)->position.x == doctest::Approx(7.0f));
+    CHECK(r.w.try_get<LocalTransform>(e)->position.y == doctest::Approx(3.0f));
+}
+
+TEST_CASE("script api: teleport2d on an entity without a 2D body is a clear error") {
+    Rig r(R"(
+function update() mce.each("Probe", function(e) mce.teleport2d(e, vector.create(1, 1, 0)) end) end
+)");
+    physics::install_physics2d(r.w);
+    r.w.spawn_with(Probe{});
+    r.step(3);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("no 2D body") != std::string::npos);
+}
+
 TEST_CASE("script api: physics calls fail clearly in a world without physics") {
     Rig r(R"(
 function update() mce.raycast2d(vector.create(0, 0, 0), vector.create(1, 0, 0), 1) end

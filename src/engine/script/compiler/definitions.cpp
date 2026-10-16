@@ -26,6 +26,7 @@ type Entity = number
 declare extern type FieldHandle with end
 type Fields = { [string]: any }
 type RayHit = { entity: Entity, point: vector, normal: vector, distance: number }
+type ShapeHit = { entity: Entity, point: vector, normal: vector, fraction: number }
 type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceiling: boolean, wall_left: boolean, wall_right: boolean }
 
 declare mce: {
@@ -68,9 +69,20 @@ declare mce: {
     raycast2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
+    teleport2d: (e: Entity, position: vector) -> (),
     velocity2d: (e: Entity) -> vector,
     set_velocity2d: (e: Entity, velocity: vector) -> (),
-    impulse2d: (e: Entity, impulse: vector) -> (),
+    impulse2d: (e: Entity, impulse: vector, point: vector?) -> (),
+    force2d: (e: Entity, force: vector) -> (),
+    angular_velocity2d: (e: Entity) -> number,
+    set_angular_velocity2d: (e: Entity, w: number) -> (),
+    awake2d: (e: Entity) -> boolean,
+    set_awake2d: (e: Entity, awake: boolean) -> (),
+    set_enabled2d: (e: Entity, enabled: boolean) -> (),
+    overlap_point2d: (point: vector, skip: Entity?) -> boolean,
+    raycast_all2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> { RayHit },
+    circle_cast2d: (from: vector, to: vector, radius: number, skip: Entity?) -> ShapeHit?,
+    box_cast2d: (from: vector, to: vector, half: vector, skip: Entity?) -> ShapeHit?,
     raycast3d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
 }
 )";

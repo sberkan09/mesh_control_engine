@@ -595,6 +595,7 @@ bool merge_scene_from_disk(ToolCall& c, StringView abs) {
             c.error += m.what.view();
         }
         c.error += "\nscene_save with resolve: \"ours\" keeps your side of each conflict, \"theirs\" theirs (everything else merges); "
+                   "overwrite: true saves your whole copy over the file (their changes are lost); "
                    "project_watch says who saved it";
         return false;
     }

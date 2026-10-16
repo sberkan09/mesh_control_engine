@@ -1,6 +1,21 @@
 # 15. Shipping
 
-One command builds, cooks, packages and zips a game:
+From the SDK, with the path of your project folder (`MyGame` below), build the project and zip it:
+
+```sh
+mce build MyGame                        # cooks the assets, builds the module and the pack
+mce ship MyGame                         # MyGame/dist/MyGame-<version>-<os>.zip
+mce ship MyGame --version 1.0.0 --out release
+```
+
+`mce ship` zips the host, the game module, the engine library and the cooked pack, with `VERSION.txt`, `README.txt` and
+your `CREDITS.md`; it stops with "run `mce build` first" when the pack is missing, and a script project (no C++
+module) gets the stock player and a launcher script instead. `<os>` is `linux-x64`, `win64` or `macos`. It takes
+`--target web` and `--steam` (15.6 and 15.7); it has no `--preset`, `--smoke` for desktop or symbols zip.
+
+**From an engine checkout** (the repository, not the SDK) `scripts/ship.py` does the same with the full set of
+options and is what the rest of this chapter shows: it builds the CMake preset itself, strips and keeps the
+symbols, and runs a smoke test. Projects there live under `projects/`.
 
 ```sh
 python3 scripts/ship.py --project projects/MyGame
@@ -8,10 +23,9 @@ python3 scripts/ship.py --project projects/MyGame --version 1.0.0 --preset linux
 python3 scripts/ship.py --project projects/MyGame --smoke --smoke-headless   # run it once after packaging
 ```
 
-Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`, where
-`<os>` is `linux-x64`, `win64` or `macos`.
+Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`.
 
-| Option | Meaning |
+| `ship.py` option | Meaning |
 |---|---|
 | `--preset` | the CMake preset to build (default: the platform's release preset) |
 | `--version` | default `<engine version>+<short commit>` |
@@ -20,7 +34,7 @@ Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-
 | `--keep-symbols` | do not strip the binaries (Linux, macOS) |
 | `--smoke`, `--smoke-headless` | run the packaged game once (headless needs no display) |
 
-The samples ship the same way: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
+The samples ship the same way from a checkout: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
 
 ## 15.1 What is in the zip
 
@@ -204,9 +218,9 @@ path as `steam_build_script`.
 
 ## 15.8 Checklist before shipping
 
-1. Every scene cooks clean (`my_game_cook projects/MyGame --pack` exits 0).
+1. Every scene cooks clean (`mce cook MyGame` exits 0; in a checkout `my_game_cook projects/MyGame --pack`).
 2. `my_game -headless 1 -ticks 3600` runs a minute without an error in the log.
 3. `CREDITS.md` names every third-party asset and licence (Kenney CC0 packs, fonts, sounds).
-4. `python3 scripts/ship.py --project projects/MyGame --smoke` starts and quits cleanly on the
-   target platform.
+4. The packaged game starts and quits cleanly on the target platform (unzip the `mce ship` zip and run it with
+   `-headless 1 -ticks 60`; in a checkout `python3 scripts/ship.py --project projects/MyGame --smoke`).
 5. Keep the symbols zip with the version.

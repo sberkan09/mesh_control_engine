@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -22,6 +23,7 @@
 #include "mce/asset/formats.h"
 #include "mce/input/input_map.h"
 #include "mce/liveops/game_services.h"
+#include "mce/hash.h"
 #include "mce/log.h"
 #include "mce/liveops/remote_config.h"
 #include "mce/loc/string_table.h"
@@ -88,7 +90,16 @@ bool read_chunk(ChunkType t, Span<const byte> p) {
             (void)ui::build_document(o, doc);
             return true;
         }
-        case ChunkType::NavMesh: return physics::navmesh_blob_valid(p);
+        case ChunkType::NavMesh: {
+            physics::NavMesh3D nav;
+            if (!nav.load(p, 4)) return false;
+            Array<math::vec3> path;
+            const math::aabb3 b = nav.bounds();
+            nav.find_path(b.min, b.max, path);
+            (void)nav.nearest_point(b.max);
+            (void)nav.raycast(b.min, b.max);
+            return true;
+        }
         default: return true;
     }
 }
@@ -158,10 +169,16 @@ TEST_CASE("fuzz: chunk readers survive mutated payloads of every cooked sample c
             // The untouched payload reads (or is refused) without a fault.
             read_chunk(type, good);
             fuzz::Mutator m(fnv(rel) ^ (static_cast<u64>(i) * 0x100000001B3ull));
-            const u32 iters = iterations(good.size());
+            const u32 iters = type == ChunkType::NavMesh ? 4000u : iterations(good.size());
             for (u32 it = 0; it < iters; ++it) {
                 const usize n = m.mutate(good, storage);
-                const auto* p = reinterpret_cast<const byte*>(storage.data());
+                auto* p = reinterpret_cast<byte*>(storage.data());
+                // A nav mesh bake ends with a hash of the bytes before it, so most mutants die there. Half of
+                // them are re-hashed, which is what gets the layers to the validation behind it.
+                if (type == ChunkType::NavMesh && it % 2 == 0 && n >= 8) {
+                    const u64 h = fnv1a64(p, n - 8);
+                    std::memcpy(p + n - 8, &h, 8);
+                }
                 INFO("replay: pack " << rel << " chunk " << i << " (" << chunk_type_name(type) << ") iteration " << it);
                 if (read_chunk(type, Span<const byte>(p, n))) ++accepted;
                 ++mutants;

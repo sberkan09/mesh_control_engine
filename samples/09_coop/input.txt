@@ -1,0 +1,8 @@
+# 09_coop scripted run: players 2-4 press Join, player 1 and 2 walk, player 3 leaves again.
+5 P2/Join
+8 P3/Join
+11 P4/Join
+20-120 Move=1,0
+20-120 P2/Move=-1,0
+30-90 P4/Move=0,1
+100 P3/Leave

@@ -85,6 +85,7 @@
 #include "mce/input/input_system.h"
 #include "mce/input/script.h"
 #include "mce/kit/captions.h"
+#include "mce/kit/coop.h"
 #include "mce/kit/presence.h"
 #include "mce/kit/stock.h"
 #if MCE_HAS_SCRIPT
@@ -469,6 +470,7 @@ public:
         script::install_scene_scripts(world_, &assets_);  // the scene's ScriptSystems (M-SCRIPT 1)
 #endif
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
+        MCE_LOG_INFO("{}: save folder {}", desc_.app_name, save::root().c_str());  // -save_dir, else the per-user default
         monetize_on_ = desc_.monetize || cv_monetize.get_bool();
         if (monetize_on_) MCE_TRY(init_monetize(cv_store_catalog.get_string()));
         else if (!cv_monetize_test.get_string().empty())
@@ -606,6 +608,7 @@ public:
             input::publish(world_, *t.actions);
         }
         publish_view_info();
+        input_.set_join_slots(0, kit::coop_join_slots(world_));  // a scene with a CoopGame lets pads join (M-VIEWS 5)
         scene::pump_streaming(world_);
         if (!monetize_test_.empty()) monetize_test_requests();
         if (!game_services_test_.empty()) game_services_test_requests();
@@ -3033,6 +3036,34 @@ int run_windowed(const player::PlayerDesc& pd) {
     return rc;
 }
 
+// -capture / -capture_tick(s), or -frames with -capture, asked for a picture.
+bool capture_requested() {
+    return !cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 || !cv_capture_ticks.get_string().empty();
+}
+
+// platform::init, and for a capture run on a box with no display (a container, CI: SDL says "No available
+// video device") the same init again on SDL's offscreen driver with Mesa's software GL, so
+// `mce_player -pack p.mce -capture_tick 300 -capture a.ppm` works as it is. An explicit
+// -platform.video_driver is never second-guessed: its failure is reported as before.
+ResultV init_platform_or_offscreen(const player::PlayerDesc& pd) {
+    ResultV r = platform::init();
+    if (r || !capture_requested()) return r;
+    ConVar* driver = ConVar::find(StringId("platform.video_driver"));
+    if (!driver || !driver->get_string().empty()) return r;
+    driver->set_string("offscreen");
+#if !defined(_WIN32)
+    ::setenv("LIBGL_ALWAYS_SOFTWARE", "1", 0);  // the player's GL context is Mesa's llvmpipe; a set value wins
+#endif
+    ResultV again = platform::init();
+    if (!again) {
+        driver->set_string("");
+        return r;  // the original error is the useful one
+    }
+    std::printf("%s: no display for the capture: drawing offscreen with software GL (-platform.video_driver offscreen)\n",
+                pd.app_name);
+    return again;
+}
+
 }  // namespace
 
 int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
@@ -3061,7 +3092,7 @@ int mce::player::run(int argc, char** argv, const PlayerDesc& pd) {
     int rc = 1;
     if (is_headless) {
         rc = run_headless(pd);
-    } else if (ResultV r = platform::init(); !r) {
+    } else if (ResultV r = init_platform_or_offscreen(pd); !r) {
         rc = fail("platform init failed", r.error());
     } else {
         rc = run_windowed(pd);

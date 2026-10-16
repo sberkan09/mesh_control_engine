@@ -651,6 +651,32 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: cook_run paths and skip_errors") {
+    const std::string root = demo_project("mcp_cook_paths");
+    std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    // The error for a file without a sidecar names the MCP fix.
+    auto plain = c.ok("cook_run");
+    CHECK(compact(plain.v().get("diagnostics")).find("cook_run {\\\"adopt\\\": true}") != std::string::npos);
+    // skip_errors: the rest cooks, and the failing file is listed.
+    auto skip = c.ok("cook_run", R"({"skip_errors":true})");
+    CHECK_FALSE(skip.v().get("ok").as_bool());
+    CHECK(skip.v().get("cooked").as_number() + skip.v().get("up_to_date").as_number() > 0);
+    CHECK(compact(skip.v().get("failed_files")).find("assets/textures/new_ball.png") != std::string::npos);
+    // paths: only the named subtree, so the unadopted file outside it is not this run's error, and the pack is left alone.
+    auto sub = c.ok("cook_run", R"({"paths":["textures/ball.png"],"pack":true})");
+    CHECK(sub.v().get("ok").as_bool());
+    CHECK(sub.v().get("subset").as_bool());
+    CHECK(sub.v().get("skipped").as_number() > 0);
+    CHECK_FALSE(sub.v().get("pack_written").as_bool());
+    CHECK_FALSE(std::filesystem::exists(root + "/assets.mce"));
+    CHECK(c.fails("cook_run", R"({"paths":"textures"})").find("paths") != std::string::npos);
+    auto missing = c.ok("cook_run", R"({"paths":["textures/nope.png"]})");
+    CHECK_FALSE(missing.v().get("ok").as_bool());
+}
+
 TEST_CASE("mcp tools: scene_clear empties the scene in one undo step") {
     const std::string root = demo_project("mcp_clear");
     Client c;
@@ -739,7 +765,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
               .find("missing reference") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
-    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool and kept from the file: leave them out of 'content'") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));

@@ -6,7 +6,9 @@
 //   - Walls are merged into rectangles (rows first, then equal-width neighbours stack), each a Static
 //     RigidBody2D + box Collider2D + solid Sprite; one Sprite is the floor. A 128x128 cave is a few hundred
 //     rectangles, not 16384 tiles.
-//   - Two ProcMarker entities, Start and Exit, sit at the centres of their cells.
+//   - Two ProcMarker entities, Start and Exit, sit at the centres of their cells. With `path_markers` a Path
+//     marker (index 1, 2, ... n) stands on each cell of a shortest 4-neighbour walk from Start to Exit (n is the
+//     Exit cell): a guide for hints, bots and tests.
 //   - Everything built carries ProcLevelOwned{owner}. The ProcLevel entity is the one that is saved
 //     (give it a SaveKey); the built entities are not: loading rebuilds them from the seed, so a replay and a
 //     save/load give the same level. A project with no ProcLevel creates nothing.
@@ -40,8 +42,8 @@ MCE_ENUM(ProcKind, Rooms, Caves, Walk, Noise)
 struct ProcLevel {
     bool enabled = true;
     bool reroll = false;
+    bool path_markers = false;
     ProcKind kind = ProcKind::Rooms;
-    u8 pad_ = 0;
     u32 width = 48;
     u32 height = 32;
     u32 seed = 1;
@@ -55,6 +57,7 @@ struct ProcLevel {
 };
 MCE_COMPONENT(ProcLevel, (enabled, Help{"off: nothing is built (what was built stays)"}),
               (reroll, Help{"set true: the next tick adds one to the seed and clears this"}),
+              (path_markers, Help{"also stand a Path marker (index 1..n) on each cell of a shortest walk from Start to Exit"}),
               (kind, Help{"Rooms: BSP rooms and corridors; Caves: cellular automaton; Walk: drunkard's walk; Noise: value-noise blobs"}),
               (width, Range{8, 512}), (height, Range{8, 512}), (seed, Help{"the level is a function of kind, size, param and seed"}),
               (tile_size, Help{"metres per cell"}),
@@ -67,14 +70,16 @@ struct ProcLevelOwned {
 };
 MCE_COMPONENT(ProcLevelOwned, owner)
 
-enum class ProcMarkerKind : u8 { Start, Exit };
-MCE_ENUM(ProcMarkerKind, Start, Exit)
+enum class ProcMarkerKind : u8 { Start, Exit, Path };
+MCE_ENUM(ProcMarkerKind, Start, Exit, Path)
 
 // A point the generator picked; scripts find it with mce.each("ProcMarker", ...).
 struct ProcMarker {
     ProcMarkerKind kind = ProcMarkerKind::Start;
+    u8 pad_[3] = {};
+    u32 index = 0;  // Path: 1 is the cell after Start, the last is the Exit cell
 };
-MCE_COMPONENT(ProcMarker, kind)
+MCE_COMPONENT(ProcMarker, kind, (index, Help{"Path markers: 1 .. n along the walk from Start to Exit; 0 for Start and Exit"}))
 
 // Registers the components and "kit_proclevel" (FixedUpdate_Pre). Idempotent.
 void install_proclevel(World& world);

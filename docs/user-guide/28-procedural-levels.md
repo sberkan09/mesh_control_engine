@@ -81,6 +81,8 @@ builds the level beside it when the scene loads:
   neighbouring rows stack, so a 128x128 cave is a few hundred entities, not 16384). A solid sprite per rectangle and one
   floor sprite draw it (`wall_color`, `floor_color`, `layer`).
 - Two `ProcMarker` entities, `Start` and `Exit`, stand at the centres of the generator's start and exit cells.
+- `path_markers: true` also stands a `Path` marker (`index` 1 to n) on each cell of a shortest walk from Start to Exit, n being the
+  Exit cell: a guide for hints, bots and tests.
 - `param` overrides one knob of the generator (0 = its default): caves wall fill %, walk coverage %, noise floor %.
 - Everything built carries `ProcLevelOwned`. Only the `ProcLevel` entity is saved (give it a `SaveKey`): loading a scene
   or a save rebuilds the level from the seed, so a replay gets the same level. Destroying the `ProcLevel` entity
@@ -89,7 +91,8 @@ builds the level beside it when the scene loads:
   seed and clears itself on the next tick.
 - A grid the generator cannot make (caves smaller than 16 cells a side) logs a warning once and builds nothing.
 
-From Luau no new API is needed. A script finds the markers and asks for the next level:
+From Luau no new API is needed (a script moves a 2D body to the Start marker with `mce.teleport2d`; writing
+`LocalTransform.position` alone does not move a body). A script finds the markers and asks for the next level:
 
 ```lua
 function update()
@@ -107,6 +110,9 @@ end
 The built entities appear at the end of the tick that rebuilds the level (the engine's usual spawn timing), so a script
 sees the new level on the next tick. For pathfinding, `proclevel_nav_grid` (C++) returns a `NavGrid` with the level's
 cell size and origin, so `mark_static_colliders` lines up with the walls.
+
+`projects/Dungeon` is a whole game built this way: three scenes (rooms, caves, walk), one script, and a
+`.mctest` per generator in which an autopilot following the Path markers clears seeds 1 to 10.
 
 ## 28.6 Things to know
 
