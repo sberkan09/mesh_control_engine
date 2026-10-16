@@ -1,6 +1,6 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Step 1 done; steps 2–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
+**Status:** active. Steps 1–2 done; steps 3–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
 the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
@@ -13,7 +13,7 @@ user's standing instruction to extend the roadmap when it runs out.
 | Step | Linear | State |
 |---|---|---|
 | 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | done |
-| 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | — |
+| 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | done |
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | — |
 | 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | — |
 | 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | — |
@@ -29,3 +29,16 @@ user's standing instruction to extend the roadmap when it runs out.
 | The stock player: `-steam.app_id`, `-steam.library`, `-steam.restart`; Steam opens first, a relaunch quits before anything loads or saves, callbacks are pumped every tick, Steam shuts down on quit | `src/player/src/player.cpp` | ctest `scene_demo_player_steam`: "Steam on (app 480, Stub Player)" and the same state hash as `scene_demo_player_600` (`cb0197e002e36782` in Debug) |
 | A stand-in `steam_api` (and an old one without manual dispatch) built for tests | `tests/platform/steam_stub.cpp`, `steam_stub_old.cpp` | built only off phones |
 | The Steam wall: Steamworks names only in `src/engine/platform/src/steam*.cpp` and `tests/platform/` | `scripts/ci/check_walls.py` | walls stage |
+
+## Step 2 — game services on Steam
+
+| Item | Where | Evidence |
+|---|---|---|
+| `.mcservices` entries take a `steam` name (Steam uses the catalog `id` without one); the catalog chunk is v2 with the Steam id | `mce/liveops/game_services.h`, `game_services_catalog.cpp`, `services_importer.cpp` | `test_cook_services` "cooks to CHNK_GSVC and decodes"; `test_liveops` "the catalog chunk round-trips" |
+| `IPlatformGamesBackend::store_ids()` picks the ios, android or steam id | `mce/liveops/platform_games.h` | `test_liveops` "Steam takes the steam id, or the catalog id when there is none" |
+| Asynchronous call results: `steam::await_call` waits for a call's handle, and `run_callbacks` fetches its result before freeing the callback | `mce/platform/steam.h`, `steam.cpp` | `test_platform` "an asynchronous call's result reaches the one waiting for it" |
+| `game_services::Backend::Steam` on desktop while Steam runs: sign-in from the client, `SetAchievement` + `StoreStats` (progress below the total through `IndicateAchievementProgress`), `FindLeaderboard` then `UploadLeaderboardScore` keep-best with the handle kept, Steam Cloud files for blobs, the overlay's achievements and stats pages | `src/engine/platform/src/steam_games.cpp`, `game_services.cpp` | `test_platform` "game services on Steam: sign-in, achievements, leaderboards, Steam Cloud, the overlay" |
+| The stock player picks Steam as the game services backend when no provider is named | `src/player/src/player.cpp` | ctest `player_game_services_steam`: `SignedIn`, `AchievementSent first_win`, `AchievementSent win_10 value 3`, `ScoreSent best_time value 4200`, `CloudSaved progress value 1` on the stand-in |
+
+Not measured: the real Steam client (achievements and boards defined on a Steamworks page, Cloud quota);
+that is SBA-112.

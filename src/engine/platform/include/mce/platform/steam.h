@@ -60,6 +60,14 @@ using CallbackFn = void (*)(void* user, const Callback& cb);
 // how many there were. Main thread, once a frame.
 u32 run_callbacks(CallbackFn fn, void* user);
 
+// An asynchronous call's answer: the result struct Steam filled (valid during the call only), or
+// `failed` when Steam lost the call. Delivered from run_callbacks.
+using CallResultFn = void (*)(void* user, Span<const byte> result, bool failed);
+// Waits for `call` (an asynchronous call's handle) to answer with the callback `expected_id`. False
+// (and `fn` never called) while Steam is off, for the invalid handle 0, or with kMaxCalls waiting.
+inline constexpr u32 kMaxCalls = 32;
+bool await_call(u64 call, i32 expected_id, CallResultFn fn, void* user);
+
 // About the signed-in player and the device (0 / "" / false while off).
 u32 app_id();
 u64 steam_id();

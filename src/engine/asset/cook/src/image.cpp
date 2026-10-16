@@ -22,6 +22,14 @@ void append_bytes(void* ctx, void* data, int size) {
 
 }  // namespace
 
+bool image_size(Span<const byte> bytes, u32& width, u32& height) {
+    int w = 0, h = 0, comp = 0;
+    if (!stbi_info_from_memory(reinterpret_cast<const stbi_uc*>(bytes.data()), static_cast<int>(bytes.size()), &w, &h, &comp)) return false;
+    width = static_cast<u32>(w);
+    height = static_cast<u32>(h);
+    return true;
+}
+
 Result<Image> decode_png(Span<const byte> bytes) {
     if (bytes.size() > 0x7FFFFFFF) return Error(Errc::ImportFailed, kStage, "image too large");
     int w = 0, h = 0, comp = 0;

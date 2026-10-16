@@ -335,13 +335,17 @@ private:
     liveops::ConfigFetchSink* sink_ = nullptr;
 };
 
-// Game Center / Play Games (platform/game_services.h) for liveops::PlatformGameServices: the game
-// services provider on a phone build that has them.
+// Game Center / Play Games / Steam (platform/game_services.h) for liveops::PlatformGameServices: the
+// game services provider on a phone build that has them, or on desktop while Steam runs.
 class PlatformGamesBridge final : public liveops::IPlatformGamesBackend {
 public:
     const char* name() const override { return platform::game_services::backend_name(platform::game_services::backend()); }
-    bool ios_ids() const override {
-        return platform::game_services::backend() == platform::game_services::Backend::GameCenter;
+    liveops::StoreIds store_ids() const override {
+        switch (platform::game_services::backend()) {
+            case platform::game_services::Backend::GameCenter: return liveops::StoreIds::Ios;
+            case platform::game_services::Backend::Steam: return liveops::StoreIds::Steam;
+            default: return liveops::StoreIds::Android;
+        }
     }
     bool start(liveops::PlatformGamesSink& sink) override {
         sink_ = &sink;
@@ -1140,7 +1144,7 @@ private:
         } else if (mode == "none") {
             provider = nullptr;
         } else if (!provider && platform::game_services::backend() != platform::game_services::Backend::None) {
-            // The phone's own: Game Center or Play Games, when the build has them.
+            // The platform's own: Game Center or Play Games when the build has them, Steam while it runs.
             platform_games_.emplace(platform_games_bridge_);
             provider = &*platform_games_;
             MCE_LOG_INFO("{}: game services on {}", desc_.app_name, platform_games_bridge_.name());

@@ -7,6 +7,8 @@
 
 #if defined(SDL_PLATFORM_ANDROID)
 #include "android_jni.h"
+#else
+#include "steam_games.h"
 #endif
 
 namespace mce::platform::game_services {
@@ -40,6 +42,8 @@ const char* backend_name(Backend b) {
             return "game_center";
         case Backend::PlayGames:
             return "play_games";
+        case Backend::Steam:
+            return "steam";
     }
     return "none";
 }
@@ -239,25 +243,55 @@ void show_leaderboard(StringView id) {
     mce_gamekit_show_leaderboard(z.c_str());
 }
 
-// ---- everywhere else: no game services ------------------------------------------------------------
+// ---- everywhere else: Steam while it runs (steam_games.cpp), otherwise no game services --------------
 #else
 
-Backend backend() { return Backend::None; }
+Backend backend() { return steam::games::available() ? Backend::Steam : Backend::None; }
 
 bool start(AnswerFn fn, void* user) {
     g_games.fn = fn;
     g_games.user = user;
-    return false;
+    g_games.started = steam::games::start(fn, user);
+    return g_games.started;
 }
 
-void stop() { g_games = {}; }
-void sign_in(bool) { answer(AnswerKind::SignedIn, false, 0); }
-void report_achievement(StringView, u32, u32, u16 tag) { answer(AnswerKind::Achievement, false, tag); }
-void submit_score(StringView, i64, u16 tag) { answer(AnswerKind::Score, false, tag); }
-void read_blob(StringView, u16 tag) { answer(AnswerKind::BlobRead, false, tag); }
-void write_blob(StringView, Span<const byte>, u16 tag) { answer(AnswerKind::BlobWritten, false, tag); }
-void show_achievements() {}
-void show_leaderboard(StringView) {}
+void stop() {
+    if (g_games.started) steam::games::stop();
+    g_games = {};
+}
+
+void sign_in(bool) {
+    if (g_games.started) return steam::games::sign_in();
+    answer(AnswerKind::SignedIn, false, 0);
+}
+
+void report_achievement(StringView id, u32 steps, u32 total, u16 tag) {
+    if (g_games.started) return steam::games::report_achievement(id, steps, total, tag);
+    answer(AnswerKind::Achievement, false, tag);
+}
+
+void submit_score(StringView id, i64 score, u16 tag) {
+    if (g_games.started) return steam::games::submit_score(id, score, tag);
+    answer(AnswerKind::Score, false, tag);
+}
+
+void read_blob(StringView name, u16 tag) {
+    if (g_games.started) return steam::games::read_blob(name, tag);
+    answer(AnswerKind::BlobRead, false, tag);
+}
+
+void write_blob(StringView name, Span<const byte> bytes, u16 tag) {
+    if (g_games.started) return steam::games::write_blob(name, bytes, tag);
+    answer(AnswerKind::BlobWritten, false, tag);
+}
+
+void show_achievements() {
+    if (g_games.started) steam::games::show_achievements();
+}
+
+void show_leaderboard(StringView id) {
+    if (g_games.started) steam::games::show_leaderboard(id);
+}
 
 #endif
 

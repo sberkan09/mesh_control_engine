@@ -249,7 +249,12 @@ private:
             if (doc.start == i) dl->AddRectFilled(m, ImVec2(m.x + 5.0f, m.y + kBoxH), kStartCol, 6.0f, ImDrawFlags_RoundCornersLeft);
             dl->AddText(add(m, ImVec2(10.0f, 6.0f)), IM_COL32(240, 240, 240, 255), s.name.c_str());
             char sub_line[96];
-            if (s.is_blend())
+            if (s.blend_2d)
+                std::snprintf(sub_line, sizeof(sub_line), "2D blend by %s, %s (%u)",
+                              s.blend_param < doc.params.size() ? doc.params[s.blend_param].c_str() : "?",
+                              s.blend_param_y < doc.params.size() ? doc.params[s.blend_param_y].c_str() : "?",
+                              static_cast<u32>(s.points2d.size()));
+            else if (s.is_blend())
                 std::snprintf(sub_line, sizeof(sub_line), "blend by %s (%u)",
                               s.blend_param < doc.params.size() ? doc.params[s.blend_param].c_str() : "?", static_cast<u32>(s.points.size()));
             else
@@ -502,6 +507,10 @@ private:
             ImGui::PopID();
         }
         ImGui::BeginDisabled(doc.params.size() >= asset::kAnimGraphMaxParams);
+        if (!doc.layers.empty() || !doc.ik.empty() || !doc.root_motion.empty())
+            ImGui::TextDisabled("%u layer(s), %u IK chain(s)%s%s (edited in the .mcanim file)", static_cast<u32>(doc.layers.size()),
+                                static_cast<u32>(doc.ik.size()), doc.root_motion.empty() ? "" : ", root motion from ",
+                                doc.root_motion.c_str());
         if (ImGui::SmallButton("+ Parameter")) {
             char n[24];
             std::snprintf(n, sizeof(n), "param%u", static_cast<u32>(doc.params.size()) + 1);
@@ -536,7 +545,15 @@ private:
         ImGui::InputText("Name##state", state_name_, sizeof(state_name_));
         commit |= ImGui::IsItemDeactivatedAfterEdit();
         bool blend = state_.is_blend();
-        if (ImGui::Checkbox("Blend by a parameter", &blend)) {
+        if (state_.blend_2d) {
+            ImGui::TextDisabled("A 2D blend space over %s and %s, %u points:",
+                                state_.blend_param < doc.params.size() ? doc.params[state_.blend_param].c_str() : "?",
+                                state_.blend_param_y < doc.params.size() ? doc.params[state_.blend_param_y].c_str() : "?",
+                                static_cast<u32>(state_.points2d.size()));
+            for (const cook::AnimGraphDocPoint2D& p : state_.points2d)
+                ImGui::TextDisabled("  %s at (%.2f, %.2f)", p.clip.c_str(), static_cast<double>(p.x), static_cast<double>(p.y));
+            ImGui::TextDisabled("Its points are edited in the .mcanim file.");
+        } else if (ImGui::Checkbox("Blend by a parameter", &blend)) {
             if (blend && doc.params.empty()) {
                 ed.add_param("speed");
             } else if (blend) {
@@ -562,7 +579,8 @@ private:
                 commit = true;
             }
         }
-        if (!blend) {
+        if (state_.blend_2d) {
+        } else if (!blend) {
             commit |= clip_field("Clip", state_clip_, sizeof(state_clip_));
         } else {
             commit |= param_combo("Parameter", doc, state_.blend_param);

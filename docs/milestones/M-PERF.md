@@ -1,6 +1,6 @@
 # M-PERF — Performance tooling for games and agents (milestone record)
 
-**Status:** active (added 2026-10-15; step 1 done). Plan: ROADMAP §M-PERF; Linear SBA-113 … SBA-117.
+**Status:** active (added 2026-10-15; steps 1–2 done). Plan: ROADMAP §M-PERF; Linear SBA-113 … SBA-117.
 **Why:** a game made with MCE, by a person or by an agent, has no way to answer "where does my frame go, and
 does it fit the phone or the browser?". Today's parts are scattered and editor-only: the editor's Profiler
 panel (`PerfMonitor`, FR-EDT-140), `World::set_profiling` per-system timings, Forward3D's GPU stage
@@ -19,7 +19,7 @@ replacement (Tracy stays the developer's deep-dive tool).
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | `.mcperf` captures from the stock player: CPU stages, sim phases and systems, GPU passes, render counters, memory | SBA-113 | done: headless and windowed, hash-neutral |
-| 2 | Budgets per target in the project and static `project_check` rules | SBA-114 | not started |
+| 2 | Budgets per target in the project and static `project_check` rules | SBA-114 | done |
 | 3 | MCP `perf_run` and `perf_compare` | SBA-115 | not started |
 | 4 | The editor's Profiler panel reads captures: frame strip, frame breakdown, compare | SBA-116 | not started |
 | 5 | Counter gate in `local_ci.sh`, user guide chapter, demo | SBA-117 | not started |
@@ -62,3 +62,35 @@ and frame times differ as wall time does.
 **Known limits.** Memory is the live heap allocation count; GPU memory and asset bytes are not counted yet.
 Frame counts by tick depend on pacing, so a windowed run's ticks per frame vary; the counter gate (step 5) runs
 with a fixed step. The last few frames have no GPU time (still in flight at exit).
+
+## Step 2 — budgets per target
+
+**What.** `mce/perf_budget.h` (mce_core): `perf::Target` (desktop, mobile, web), `perf::Budget` and its
+defaults, the fields by name (`budget_fields`), and `perf::judge(Summary, Budget)`. It gives one line per limited,
+measured field: times on their p95, counters on their worst frame, and `pass`. A headless capture has no GPU
+time, so the GPU limit gets no line instead of a pass. The `.mceproj` takes `"budgets": {"mobile": {...}}`.
+`editor::check_budgets` validates it (`project_set` refuses an unknown target, an unknown field, a fraction
+where a count goes, a negative time). `editor::project_budget` lays the file's fields over the defaults, and
+`project_get` returns all three as `budgets_in_force`.
+
+**Static rules.** `project_check` takes `target` (default desktop). The per-tick sim budget is now the target's
+`sim_ms`; `budget_ms` still overrides it. Two warnings read the files without running anything:
+- An image larger than `texture_size` on a side (`cook::image_size` reads the header only).
+- A scene whose `Sprite`s name more distinct textures than `sprite_textures`, since each one is a separate
+  batch and draw. The fix points at a spritesheet.
+
+The result's `performance` block carries `target` and the `budget`.
+
+**Defaults.** 60 fps on desktop and web, 30 on a phone. Draws 3000 / 1000 / 400, triangles 3M / 1M / 500k,
+largest image 8192 / 4096 / 2048, distinct sprite textures 64 / 32 / 16, and 4 ms of sim per frame everywhere.
+They are starting points for a mid-range phone and integrated graphics in a browser, not measurements. The
+device session should tune them.
+
+**Gates.** `test_core` (perf): targets and fields by name; judge passes at the limit, names what is over,
+and leaves out an unmeasured GPU. `test_mcp_check` (M-PERF budgets): the defaults; a patch overrides only
+what it names; four bad patches leave the file byte-identical. For mobile with tightened limits, the demo's
+32-pixel textures and its three sprite textures are flagged with their numbers. The desktop defaults flag
+nothing, and an unknown target is refused.
+
+**Known limits.** The static rules see `Sprite` components written in the scene file, not ones game code
+or prefab instances add. A capture's verdict over MCP comes with `perf_run` (step 3).

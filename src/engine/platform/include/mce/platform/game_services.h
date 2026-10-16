@@ -12,6 +12,8 @@
 //   the Play Console).
 // - iOS: GameKit (game_services_gamekit.swift), built when MCE_GAMEKIT is ON. Cloud saves are Game
 //   Center saved games, which need the iCloud capability in the provisioning profile.
+// - Desktop with Steam running (steam.h, M-STEAM step 2): Steam achievements, leaderboards and Steam
+//   Cloud files; answers arrive from steam::run_callbacks on the main thread.
 // - Everywhere else: backend() is None and start() fails.
 //
 // Calls are made on the main thread; answers arrive through the handler on the platform's thread,
@@ -21,7 +23,7 @@
 
 namespace mce::platform::game_services {
 
-enum class Backend : u8 { None, GameCenter, PlayGames };
+enum class Backend : u8 { None, GameCenter, PlayGames, Steam };
 
 enum class AnswerKind : u8 {
     SignedIn,          // ok: signed in; otherwise the player is not (or cancelled)
@@ -42,7 +44,7 @@ struct Answer {
 using AnswerFn = void (*)(void* user, const Answer& a);
 
 Backend backend();
-const char* backend_name(Backend b);  // "none", "game_center", "play_games"
+const char* backend_name(Backend b);  // "none", "game_center", "play_games", "steam"
 
 // Answers go to `fn` until stop(). False when backend() is None.
 bool start(AnswerFn fn, void* user);

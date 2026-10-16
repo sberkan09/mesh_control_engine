@@ -9,6 +9,18 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
   miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
   `r.contact_shadows 0` turns it off. User guide 8.
+- Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
+  `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
+  uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
+  otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
+  results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
+- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
+- Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
+  and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
+  sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`
+  checks the limits, and `project_get` shows each target's budget in force. `project_check` takes a `target` and
+  flags images over its `texture_size` and scenes over its `sprite_textures`, with the target's `sim_ms` as the
+  per-tick budget. `perf::judge` gives a capture's verdict against a budget. User guide 2.2 and 14.
 - Steam, M-STEAM step 1 (SBA-106, ADR-0043): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
   talks to it through the Steamworks flat API, so neither the repository nor the build needs the SDK and a game
   without Steam loads nothing. The stock player signs in with `-steam.app_id <id>` (`-steam.library`,

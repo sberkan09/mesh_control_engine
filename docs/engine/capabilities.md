@@ -19,6 +19,7 @@ reach all of its non-transient fields.
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
+| `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md |
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md |
@@ -176,7 +177,7 @@ reach all of its non-transient fields.
 | `gen_music` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `library_search` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `library_add` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `project_check` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `project_check` | `tools_agent.cpp` | docs/user-guide/02-projects.md |
 | `ship_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `project_watch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_lock` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
