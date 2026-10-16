@@ -223,3 +223,38 @@ from there). The engine's CMake gives such a project a host that is the stock pl
 (`mce_add_script_project`), and the host build's `mce_cook` cooks the pack. The phone and web toolchains (the
 Android NDK, Xcode, the Emscripten SDK) are the ones the other projects use.
 
+
+## 27.8 Remembering things: `ScriptVars`
+
+A script keeps nothing between ticks, and a game with no C++ cannot define its own components, so the kit
+has one made for this: `ScriptVars`, 16 numbers (`v`) on any entity, saved and hashed like every other
+component. A script names the slots however it likes; write the layout in a comment at the top.
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+
+function update()
+    mce.each("ScriptVars", function(e)
+        local v = mce.get(e, VARS)      -- a table of 16 numbers (v[1] .. v[16])
+        v[1] = v[1] + 1                 -- a counter
+        mce.set(e, VARS, v)             -- write the table back
+    end)
+end
+```
+
+The scene gives the first values (`"ScriptVars": { "v": [0, 1, 38, 3, 4, 0, ...] }`). A convention that scales
+to several kinds of entity: keep the kind in the last slot (`v[16]`: 1 = player, 2 = enemy, 3 = goal) and let
+each script skip the entities that are not its own.
+
+**Example: `projects/EmberScript`.** Ember Step's controller and an enemy state machine in Luau, with no
+C++ at all: `player.luau` (run, coyote time, jump buffer, a shorter hop when Jump is let go, respawn),
+`enemy.luau` (patrol / chase / return, stomp or hurt) and `goal.luau`. Scripts that move bodies run in the
+`Post` phase, so the physics bodies exist on the first tick. Its `.mctest` scenarios (`tests/`) are the ones
+`test_run` plays: a bot reaches the goal, the walker sends the player back, a jump lands on the walker.
+
+    cmake --build build/linux-gcc-debug --target ember_script
+    build/linux-gcc-debug/projects/EmberScript/ember_script -headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input
+
+It is a smaller game than the C++ sample `samples/03_platformer` (one level, one enemy, no wall jump or dash),
+not a line-by-line port; the Luau-versus-C++ twin the determinism stage compares is the bouncing-box sample
+(`samples/script_headless`).

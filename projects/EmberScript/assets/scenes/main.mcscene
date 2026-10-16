@@ -1,0 +1,344 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "6513270e-269e-4d37-b2a7-4de452e6b438",
+ "name": "main",
+ "entities": [
+  {
+   "name": "Camera",
+   "components": {
+    "Camera2DComponent": {
+     "pixels_per_meter": 32,
+     "zoom": 1
+    },
+    "LocalTransform": {
+     "position": [
+      20,
+      4,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "World Settings",
+   "components": {
+    "WorldSettings": {}
+   }
+  },
+  {
+   "name": "Ground",
+   "components": {
+    "Collider2D": {
+     "shape": {
+      "half": [
+       23,
+       1
+      ]
+     },
+     "density": 0
+    },
+    "LocalTransform": {
+     "position": [
+      21,
+      -1,
+      0
+     ]
+    },
+    "RigidBody2D": {},
+    "Sprite": {
+     "texture": "guid:d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+     "size": [
+      46,
+      2
+     ],
+     "tint": [
+      0.35,
+      0.3,
+      0.4,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Ledge",
+   "components": {
+    "Collider2D": {
+     "shape": {
+      "half": [
+       2,
+       1
+      ]
+     },
+     "density": 0
+    },
+    "LocalTransform": {
+     "position": [
+      11,
+      0.5,
+      0
+     ]
+    },
+    "RigidBody2D": {},
+    "Sprite": {
+     "texture": "guid:d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+     "size": [
+      4.0,
+      2.0
+     ],
+     "tint": [
+      0.5,
+      0.4,
+      0.3,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Wall Left",
+   "components": {
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.5,
+       10
+      ]
+     },
+     "density": 0
+    },
+    "LocalTransform": {
+     "position": [
+      -2.5,
+      10,
+      0
+     ]
+    },
+    "RigidBody2D": {}
+   }
+  },
+  {
+   "name": "Wall Right",
+   "components": {
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.5,
+       10
+      ]
+     },
+     "density": 0
+    },
+    "LocalTransform": {
+     "position": [
+      44.5,
+      10,
+      0
+     ]
+    },
+    "RigidBody2D": {}
+   }
+  },
+  {
+   "name": "Player",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      2,
+      0.6,
+      0
+     ]
+    },
+    "Sprite": {
+     "texture": "guid:d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+     "size": [
+      0.8,
+      1.0
+     ],
+     "tint": [
+      1,
+      0.6,
+      0.15,
+      1
+     ],
+     "layer": 2
+    },
+    "RigidBody2D": {
+     "type": "Kinematic",
+     "fixed_rotation": true,
+     "layer": 1,
+     "mask": 65531
+    },
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.4,
+       0.5
+      ]
+     },
+     "density": 0
+    },
+    "CharacterController2D": {},
+    "ScriptVars": {
+     "v": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Walker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      38,
+      0.45,
+      0
+     ]
+    },
+    "Sprite": {
+     "texture": "guid:d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+     "size": [
+      0.9,
+      0.9
+     ],
+     "tint": [
+      0.8,
+      0.15,
+      0.2,
+      1
+     ],
+     "layer": 2
+    },
+    "RigidBody2D": {
+     "type": "Kinematic",
+     "fixed_rotation": true,
+     "layer": 2,
+     "mask": 65533
+    },
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.45,
+       0.45
+      ]
+     },
+     "density": 0
+    },
+    "CharacterController2D": {},
+    "ScriptVars": {
+     "v": [
+      0,
+      1,
+      38,
+      3,
+      4,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2
+     ]
+    }
+   }
+  },
+  {
+   "name": "Goal",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      28,
+      1,
+      0
+     ]
+    },
+    "Sprite": {
+     "texture": "guid:d23f0824-128b-4f33-8c5c-7fd0a6a3a450",
+     "size": [
+      0.6,
+      2.0
+     ],
+     "tint": [
+      0.95,
+      0.9,
+      0.3,
+      1
+     ],
+     "layer": 1
+    },
+    "ScriptVars": {
+     "v": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3
+     ]
+    }
+   }
+  },
+  {
+   "name": "Script: player",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:d60b51b6-30bb-49c6-81e3-3453ff103379",
+     "order": 0,
+     "phase": "Post"
+    }
+   }
+  },
+  {
+   "name": "Script: enemy",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:70691b4f-c0f6-4895-9159-b2157ab678ad",
+     "order": 1,
+     "phase": "Post"
+    }
+   }
+  },
+  {
+   "name": "Script: goal",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:5155c98b-c8b3-469b-8aa0-fb64e595f873",
+     "order": 2,
+     "phase": "Post"
+    }
+   }
+  }
+ ]
+}

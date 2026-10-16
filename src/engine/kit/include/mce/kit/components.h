@@ -362,4 +362,14 @@ MCE_COMPONENT(ScriptSystem, (script, Help{"the .luau script; its update() runs e
               (order, Help{"scripts of a phase run lowest first; ties in ECS order"}),
               (phase, Help{"Pre: before physics; Post: after physics"}), (enabled, Help{"off: the script is not loaded"}))
 
+// Per-entity numbers for scripts (M-SCRIPT 6). A script keeps nothing between ticks, and a game
+// with no C++ cannot define its own components, so this is where it writes what it must remember:
+// a jump buffer, a coyote timer, a state number. `v` has 16 slots a script names however it likes
+// (mce.field("ScriptVars", "v") gives the array; read it with mce.get, write it with mce.set).
+// Saved, hashed and replayed like any component, so the rule "no state between ticks" still holds.
+struct ScriptVars {
+    f32 v[16] = {};
+};
+MCE_COMPONENT(ScriptVars, (v, Save, Help{"16 numbers a script uses as its per-entity memory"}))
+
 }  // namespace mce::kit

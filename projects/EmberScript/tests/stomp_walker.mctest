@@ -1,0 +1,650 @@
+{
+  "name": "jumping onto the walker stomps it",
+  "scene": "scenes/main.mcscene",
+  "ticks": 900,
+  "actor": "Player",
+  "input": [
+    {
+      "from": 1,
+      "to": 14,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 15,
+      "to": 50,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 51,
+      "to": 64,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 65,
+      "to": 100,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 101,
+      "to": 114,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 115,
+      "to": 150,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 151,
+      "to": 164,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 165,
+      "to": 200,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 201,
+      "to": 214,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 215,
+      "to": 250,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 251,
+      "to": 264,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 265,
+      "to": 300,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 301,
+      "to": 314,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 315,
+      "to": 350,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 351,
+      "to": 364,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 365,
+      "to": 400,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 401,
+      "to": 414,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 415,
+      "to": 450,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 451,
+      "to": 464,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 465,
+      "to": 500,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 501,
+      "to": 514,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 515,
+      "to": 550,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 551,
+      "to": 564,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 565,
+      "to": 600,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 601,
+      "to": 614,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 615,
+      "to": 650,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 651,
+      "to": 664,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 665,
+      "to": 700,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 701,
+      "to": 714,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 715,
+      "to": 750,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 751,
+      "to": 764,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 765,
+      "to": 800,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 801,
+      "to": 814,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 815,
+      "to": 850,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 851,
+      "to": 864,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 865,
+      "to": 900,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 901,
+      "to": 914,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 915,
+      "to": 950,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 951,
+      "to": 964,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 965,
+      "to": 1000,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1001,
+      "to": 1014,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1015,
+      "to": 1050,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1051,
+      "to": 1064,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1065,
+      "to": 1100,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1101,
+      "to": 1114,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1115,
+      "to": 1150,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1151,
+      "to": 1164,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1165,
+      "to": 1200,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1201,
+      "to": 1214,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1215,
+      "to": 1250,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1251,
+      "to": 1264,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1265,
+      "to": 1300,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1301,
+      "to": 1314,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1315,
+      "to": 1350,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1351,
+      "to": 1364,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1365,
+      "to": 1400,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1401,
+      "to": 1414,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1415,
+      "to": 1450,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "from": 1451,
+      "to": 1464,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ],
+        "Jump": true
+      }
+    },
+    {
+      "from": 1465,
+      "to": 1500,
+      "actions": {
+        "Move": [
+          1,
+          0
+        ]
+      }
+    }
+  ],
+  "assert": [
+    {
+      "log_contains": "enemy stomped"
+    },
+    {
+      "alive": "Walker",
+      "value": false
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}
