@@ -463,6 +463,9 @@ public:
     // Registration order within a phase IS execution order. `after` (optional) names a system
     // that must already be registered in the same phase — asserted, never reordered.
     void add_system(Phase phase, const char* name, SystemFn fn, const char* after = nullptr);
+    // Registers `name` ahead of every system already in `phase`: for a system installed late that
+    // must still run before the rest (the hierarchy's early propagation, installed at scene load).
+    void add_system_first(Phase phase, const char* name, SystemFn fn);
     // Held ticks (a pause screen, M-UI-DATA demo): while held, the fixed phases run only the
     // systems marked run_when_held (the one that releases the hold, say); the tick index,
     // commands and events still advance, Startup and the render phases are unaffected. The hold

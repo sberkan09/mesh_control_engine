@@ -23,6 +23,68 @@ vec3 world_pos(World& w, Entity e) { return w.try_get<WorldTransform>(e)->positi
 
 }  // namespace
 
+namespace {
+
+// For the install-order test: the parent and child, what a FixedUpdate_Post reader saw, and what a
+// FixedUpdate_Post writer moves.
+struct LateInstall {
+    Entity parent, child, carried, carrier;
+    f32 seen_x = 0.0f;
+};
+
+void move_parent_pre(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    LocalTransform t = *f.world().try_get<LocalTransform>(s.parent);
+    t.position.x += 1.0f;
+    f.world().set(s.parent, t);
+}
+
+void read_child_post(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    if (const WorldTransform* wt = f.world().try_get<WorldTransform>(s.child)) s.seen_x = wt->position.x;
+}
+
+void move_carrier_post(Frame& f) {
+    LateInstall& s = f.resource<LateInstall>();
+    LocalTransform t = *f.world().try_get<LocalTransform>(s.carrier);
+    t.position.y += 1.0f;
+    f.world().set(s.carrier, t);
+}
+
+}  // namespace
+
+TEST_CASE("hierarchy: installed after FixedUpdate_Post systems, they still see this tick's moves") {
+    // The order a shipped game has: the kit's systems first, the hierarchy at scene load.
+    World w;
+    w.register_components<LocalTransform>();
+    w.add_system(Phase::FixedUpdate_Pre, "move_parent", &move_parent_pre);
+    w.add_system(Phase::FixedUpdate_Post, "read_child", &read_child_post);
+    w.add_system(Phase::FixedUpdate_Post, "move_carrier", &move_carrier_post);
+    ecs::install_hierarchy(w);
+    const Span<const char* const> post = w.system_names(Phase::FixedUpdate_Post);
+    REQUIRE(post.size() == 4);
+    CHECK(StringView(post[0]) == "transform_propagate_early");
+    CHECK(StringView(post[3]) == "transform_propagate");
+
+    LateInstall s;
+    s.parent = w.spawn_with(at(0, 0));
+    s.child = w.spawn_with(at(2, 0), ChildOf{s.parent});
+    s.carrier = w.spawn_with(at(0, 0));
+    s.carried = w.spawn_with(at(0, 3), ChildOf{s.carrier});
+    ecs::propagate_transforms(w);  // what a scene load does
+    w.set_resource(s);
+    for (u64 t = 0; t < 3; ++t) {
+        w.tick(1.0 / 60, t);
+        // The reader saw the parent's FixedUpdate_Pre move of this tick (it ran before the late run).
+        CHECK(w.resource<LateInstall>().seen_x == doctest::Approx(3.0f + static_cast<f32>(t)));
+        // A FixedUpdate_Post writer ahead of the late run: its child follows the same tick.
+        CHECK(math::near(world_pos(w, s.carried), {0, 4.0f + static_cast<f32>(t), 0}));
+    }
+    // One tick's stats count both runs: the early run composes the moved parent's subtree, the
+    // late one the carrier's.
+    CHECK(ecs::hierarchy_stats(w).propagated == 4);
+}
+
 TEST_CASE("hierarchy: rotating a parent moves its children in the same tick") {
     World w;
     ecs::install_hierarchy(w);

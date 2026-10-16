@@ -402,6 +402,14 @@ void World::add_system(Phase phase, const char* name, SystemFn fn, const char* a
     system_name_cache_[static_cast<usize>(phase)].push_back(name);
 }
 
+void World::add_system_first(Phase phase, const char* name, SystemFn fn) {
+    assert_not_in_phase("add_system_first");
+    const auto id = static_cast<u16>(system_names_all_.size());
+    system_names_all_.push_back(name);
+    systems_[static_cast<usize>(phase)].insert(0, SystemEntry{name, fn, id});
+    system_name_cache_[static_cast<usize>(phase)].insert(0, name);
+}
+
 void World::run_when_held(Phase phase, const char* name) {
     bool found = false;
     for (SystemEntry& e : systems_[static_cast<usize>(phase)])
