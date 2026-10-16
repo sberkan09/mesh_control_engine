@@ -1,10 +1,16 @@
 # Changelog
 
 Engine versions and what each one added. How and when the version moves: [docs/VERSIONING.md](docs/VERSIONING.md).
-Every PR that changes what a user of the engine sees adds one line under **Unreleased**.
+Every PR that changes what a user of the engine sees adds a fragment file `changelog.d/<ticket>.md` instead of editing
+this file ([changelog.d/README.md](changelog.d/README.md)); `scripts/changelog.py` appends the fragments under **Unreleased**
+when a version is cut.
 
 ## Unreleased
 
+- Procedural levels, M-PROCGEN step 5 (SBA-175): `projects/Dungeon`, a script-only top-down crawl over seeded levels (rooms,
+  caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
+  seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
+  writes it back), so scripts could not respawn one; EmberScript's respawn now works. M-PROCGEN is done.
 - Captures without a display, M-WORKFLOW step 4 (SBA-183, #380): `-capture`, `-capture_tick` and `-capture_ticks` on a machine with
   no display switch the player to the offscreen driver and software GL by themselves (one line says so; an explicit
   `-platform.video_driver` is kept), the player logs its save folder at start, and user guide 16.8 and 2.5 give the container
