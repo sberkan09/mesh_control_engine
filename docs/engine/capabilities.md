@@ -61,8 +61,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
-| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
+| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/prefabs/player.mcprefab |
@@ -101,9 +101,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Perceiver` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
-| `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: tested in tests/kit/test_proclevel.cpp; M-PROCGEN step 5 shows it in samples/10_dungeon |
+| `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
-| `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
+| `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scripts/dungeon.luau |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
@@ -202,7 +202,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `cook_run` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `cook_run` | `tools.cpp` | docs/user-guide/05-assets.md |
 | `cook_errors` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_delete` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `run_headless` | `tools.cpp` | docs/user-guide/02-projects.md |
@@ -214,7 +214,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |
 | `perf_compare` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `module_build` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `module_build` | `tools_agent.cpp` | docs/user-guide/05-assets.md |
 | `module_test` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `test_run` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `playtest` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

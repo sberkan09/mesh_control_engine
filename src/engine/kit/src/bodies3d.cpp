@@ -209,8 +209,10 @@ void kit3d_bodies(Frame& f) {
                 return;
             }
         } else if (const Pose* p = st.poses.find(e); p && !same(*p, t.position, t.rotation)) {
+            // A moved entity restarts the walk; a turn alone (face_motion, a script) keeps its speed.
+            const bool moved = p->position.x != t.position.x || p->position.y != t.position.y || p->position.z != t.position.z;
             phys.world.teleport(e, t.position, t.rotation);
-            c.velocity = {};
+            if (moved) c.velocity = {};
         }
         // Crouching shrinks the capsule at once; standing back up waits for room overhead.
         const bool want_crouch = c.crouch_half_height > 0.0f && c.crouch_half_height < c.half_height &&

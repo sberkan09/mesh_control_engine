@@ -13,7 +13,7 @@
     mce mcp-config <project> [--desktop] [--remove]   register that server with Claude: <project>/.mcp.json
                                                 (Claude Code, also Claude Desktop's Code tab); --desktop
                                                 also adds it to Claude Desktop's own config
-    mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt)
+    mce cook <project> [cook flags...]          cook assets/ with the module loaded (--pack, --force, --adopt, --only <path>, --skip-errors)
     mce story compile [<project>] [--check] [--werror]   compile story/*.story (story/story.json) into the
                                                 game's C++ header (mce/kit/novel.h) and story/REPORT.md
     mce import aseprite <export.json> [--out f.mcsheet] [--werror]   Aseprite's JSON export + PNG into a .mcsheet
@@ -265,11 +265,51 @@ def cmd_build(args):
     return rc
 
 
+def newest_source(assets_dir):
+    """(mtime, path) of the most recently modified file under assets_dir (sidecars and scenes included), or None."""
+    best = None
+    for root, dirs, files in os.walk(assets_dir):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in files:
+            if name.startswith("."):
+                continue
+            path = os.path.join(root, name)
+            try:
+                t = os.stat(path).st_mtime
+            except OSError:
+                continue
+            if best is None or t > best[0]:
+                best = (t, path)
+    return best
+
+
+def stale_pack_warning(pack, assets_dir, project_dir=None):
+    """The warning `mce play` / `mce headless` print when the pack they run is older than the newest source asset or scene
+    (only `mce build` refreshes build/project/assets.mce; `cook_run` and `mce cook` write cooked/ only), else None."""
+    pack = pathlib.Path(pack)
+    if not pack.is_file():
+        return None
+    newest = newest_source(assets_dir)
+    if newest is None or newest[0] <= pack.stat().st_mtime:
+        return None
+    name = os.path.relpath(newest[1], assets_dir).replace(os.sep, "/")
+    return (f"mce: warning: {pack} is older than assets/{name}, so this run plays the stale scene and assets.\n"
+            f"  Run `mce build {project_dir if project_dir else '<project>'}` to refresh it "
+            f"(`cook_run` and `mce cook` update cooked/, not this pack).")
+
+
+def warn_stale_pack(p):
+    msg = None if p.script else stale_pack_warning(p.pack, p.dir / "assets", p.dir)
+    if msg:
+        print(msg, file=sys.stderr)
+
+
 def cmd_play(args):
     p = Project(args.project)
     if p.script:
         return cook_script_pack(p) or run([p.host] + p.player_args() + args.rest)
     p.built()
+    warn_stale_pack(p)
     return run([p.host] + args.rest)
 
 
@@ -278,6 +318,7 @@ def cmd_headless(args):
     if p.script:
         return cook_script_pack(p) or run([p.host] + p.player_args() + ["-headless", "1", "-ticks", str(args.ticks)] + args.rest)
     p.built()
+    warn_stale_pack(p)
     return run([p.host, "-headless", "1", "-ticks", str(args.ticks)] + args.rest)
 
 

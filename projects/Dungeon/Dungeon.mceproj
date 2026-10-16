@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "Dungeon",
+  "title": "Dungeon",
+  "engine_version": "0.9.0",
+  "games": [],
+  "start_scene": "f0ec6ae3-e2cb-4f09-9e7d-78461d8b96e1",
+  "plugins": []
+}
