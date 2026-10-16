@@ -203,6 +203,9 @@ public:
     void remove(Entity e);
     template <class T>
     void set(Entity e, const T& value);
+    // Type-erased set (component known by id): copies component(c).size bytes from `value` at
+    // record time; adds the component when missing. Replication of reflected fields uses it.
+    void set_raw(Entity e, ecs::ComponentId c, const void* value);
 
     u32 pending() const { return count_; }
     bool empty() const { return count_ == 0; }

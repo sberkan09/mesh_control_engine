@@ -56,6 +56,17 @@ later read returns zero.
 - `ReplicationHooks`: `write_extra` / `read_extra` carry per-entity game state (health, animation)
   after the transform, length-prefixed; `on_spawn` adds the client-only parts (sprite, mesh) from
   `NetId::kind`; `on_despawn` runs before a mirrored entity is destroyed.
+- Replication as data (M-NET2 step 7): `NetReplicated { kind }` and `NetOwner { peer }` live in
+  `mce/ecs/replicated.h` (mce_ecs, so scenes, the editor, cook and MCP know them without mce_net).
+  `assign_tagged(world)` / `assign_tagged(cmd, world)` gives every `NetReplicated` entity without a
+  `NetId` one. Reflected fields with `refl::attr::Replicated` travel after `extra` in each entry:
+  varu32 component count, then per component its refl type id (u64), `replicated_layout()` (u32, a
+  hash of the flagged fields' names, kinds, sizes and counts) and a length-prefixed blob of the flagged
+  fields in declaration order; `Entity` fields go as the target's NetId (0 when not replicated). The
+  client starts from its own value (or the type's default), writes the flagged fields with
+  `Commands::set_raw`, maps NetIds back to its entities after every mirror exists, and registers a
+  component type it has not seen. A type unknown on the client, or with another layout, is skipped
+  (`ApplyResult::skipped_components`). Snapshot version 2.
 
 `websocket.h` — `WebSocketHost` (M-NET2 step 6), a `Transport` over WebSocket with Host's shape:
 `listen(WebSocketDesc)` / `open_client()` + `connect(host, port, user_data, path)`. Native builds speak
@@ -118,6 +129,9 @@ loopback, a client-driven player, and the bit-for-bit check.
   ordered reliable messages, graceful disconnect on both sides, port clash, invalid descriptions);
   replication between two worlds (spawn/update/despawn, every truncation of a snapshot rejected with no
   command queued, stale tick ignored, hooks, local-destroy repair, `reset`, apply from inside a system).
+  Replicated fields: flagged fields arrive and unflagged ones keep the client's value, `Entity`
+  fields map to the client's entities (null when the target is not replicated or gone), a changed
+  layout is skipped while the rest applies, `assign_tagged` in and out of a phase, `NetOwner` travels.
 - `sample_net_headless_300`: 300 ticks of a server and client; the client's mirror must match the
   server bit for bit and the client-driven player must have moved.
 - The SDK contract test (`tests/sdk`) builds a template project with `DEPS mce::mce_net` against the

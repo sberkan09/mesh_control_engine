@@ -1,6 +1,7 @@
 # M-NET2 — Multiplayer that games can ship (milestone record)
 
-**Status:** active. Steps 1–6 merged into `dev_claude`; step 7 to come (Linear SBA-82 … SBA-88).
+**Status:** done. Steps 1–7 merged into `dev_claude` (Linear SBA-82 … SBA-88); see "Demo and gates" for what is
+shown headless and what the M-WEB track verifies.
 **Why:** M-NET gives server-authoritative snapshots over ENet with no prediction or interpolation, so a moving player
 feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `assessments/motor-kiyaslama-eksikler.md`).
 **Measured on:** the Linux CI container.
@@ -15,7 +16,7 @@ feels the round trip (ROADMAP "Engine gap tracks"; comparison in the project's `
 | 4. Lag compensation for hit checks (rewound colliders) | SBA-85 | done |
 | 5. Deterministic rollback/lockstep mode with desync detection by hash | SBA-86 | done |
 | 6. Sessions: `mce_relay` relay/lobby server, room codes; WebSocket/WebRTC transport | SBA-87 | done (WebSocket; WebRTC not built) |
-| 7. Replication as data: `NetReplicated` / `NetOwner`, per-field flags, MCP, user guide | SBA-88 | — |
+| 7. Replication as data: `NetReplicated` / `NetOwner`, per-field flags, MCP, user guide | SBA-88 | done |
 
 ## Step 1 — the network test harness
 
@@ -106,7 +107,7 @@ Notes:
 | Item | Where | Evidence |
 |---|---|---|
 | `net::WebSocketHost`: a Transport over RFC 6455 WebSocket, server (`listen`) and client (`connect`), native over non-blocking TCP; binary messages `[channel][payload]`, masked client frames, 7/16/64-bit lengths, fragments, ping/pong round trip in `stats()`, close frames carrying the disconnect `user_data`, a size limit (1009) and handshake and silence timeouts | `mce/net/websocket.h`, `src/websocket.cpp`, `src/socket.cpp`, `src/ws_crypto.cpp` | `test_net` "the handshake's accept key matches RFC 6455's example", "a client connects over loopback, messages of every length cross, then it disconnects" (0 B to 70,000 B both ways), "the server closing tells the client, and a full server turns a client away", "a message over the limit closes the connection; nobody listening fails the connect" |
-| The web build's client over the browser's WebSocket (`emscripten_websocket_*`, `-lwebsocket.js`); `listen()` fails there | `src/websocket_web.cpp` | **not compiled here** (no Emscripten in the CI container); the M-WEB track's web builds compile it |
+| The web build's client over the browser's WebSocket (`emscripten_websocket_*`, `-lwebsocket.js`); `listen()` fails there | `src/websocket_web.cpp` | not compiled by `local_ci.sh` (no Emscripten in the CI container). The M-WEB track compiles it in its web-release build (`-Werror`, `MCE_WITH_NET=ON`) and runs it in headless Chromium with its `mce_relay_web_probe` (SBA-65, see `M-WEB.md`) |
 | `net::RelayServer`: rooms with six-character codes (no 0/O/1/I, seeded), up to 8 members, host is member 0, joiners take the lowest free id; forwarding to one member or all with the sender's delivery; refusals (no such room, full, already in a room, bad request, too many rooms); the host leaving closes the room, the host can remove a member; served over any number of Transports at once | `mce/net/relay.h`, `src/relay.cpp` | `test_net` "a host makes a room, others join with its code, and members are peers", "codes are case-insensitive, and wrong codes, full rooms and double joins are refused", "the host can remove a member, a lost link closes the room, and room limits hold" |
 | `net::RelayClient`: a Transport whose peers are the room's members, so replication, prediction and rollback run through a room unchanged | same | `test_net` "snapshot replication runs unchanged through a room"; `sample_net_headless -sim 1 -relay 1` (ctest `sample_net_headless_relay`; `local_ci.sh` determinism stage across runs and Debug/Release): 3 clients at 40 ms ± 10 per hop, 5% loss, 600 ticks, every mirror matches, 48 of 48 shots hit when rewound |
 | `mce_relay`: UDP (ENet) on 7777 and WebSocket on 7778 in one process, counters in the log; `-selftest 1` puts a native client (UDP) and a WebSocket client in one room over loopback, sends both ways, checks a third is refused and that the room closes with its host | `src/engine/net/relay/` (under `src/engine/net/` because only mce_net may link mce_net) | ctest `mce_relay_selftest` |
@@ -121,5 +122,37 @@ Notes:
   takes a `wss://host` address as it is.
 - Over WebSocket, Sequenced and Unreliable messages are delivered reliably (TCP); a lossy browser link
   queues instead of dropping.
-- The gate "a web build joins a native host through the relay" waits on M-WEB's Emscripten build;
-  the selftest covers the same path with the native WebSocket client.
+- The gate "a web build joins a native host through the relay": M-WEB's `mce_relay_web_probe` runs two
+  `RelayClient`s over `websocket_web.cpp` in headless Chromium against a native `mce_relay`; one makes a
+  room, the other joins, messages cross both ways ("relay web probe: OK"), from M-WEB's SBA-65; `local_ci.sh` has no
+  Emscripten, so here the selftest covers the same path with the native WebSocket client.
+
+## Step 7 — replication as data
+
+| Item | Where | Evidence |
+|---|---|---|
+| `refl::attr::Replicated` (`FieldFlags::Replicated`): a field opts in to replication the way `Save` opts in to saves | `mce/refl/type.h`, `mce/refl/macros.h` | `test_net` "flagged fields reach the client, other fields keep the client's values" |
+| `NetReplicated { kind }` and `NetOwner { peer }` in mce_ecs (no network code), so scenes, the editor, cook and MCP know them; `NetOwner::peer` is replicated | `mce/ecs/replicated.h`, registered by `world.cpp` and the tools' `engine_components.cpp` | `test_net` "NetReplicated entities get ids from assign_tagged, and NetOwner travels" |
+| `ReplicationServer::assign_tagged(world)` / `(cmd, world)`: a NetId for every `NetReplicated` entity without one, kind from the component | `mce/net/replication.h`, `replication.cpp` | same (outside a phase, then through `Commands` for an entity spawned later) |
+| Snapshot version 2: each entry's flagged fields after its extra bytes (type id, layout hash, field bytes); `Entity` fields as NetIds mapped back to the client's entities once every mirror exists; unflagged fields keep the client's value; a component missing on the client is added, an unknown type registered | `replication.cpp`, `Commands::set_raw` (`world.h`, `world.cpp`) | `test_net` "flagged fields reach the client…" (hp and the target arrive, a client-only field keeps 9.0 across snapshots, a target that is not replicated or gone arrives null) |
+| A component whose flagged fields differ between server and client builds is skipped and counted (`ApplyResult::skipped_components`), never misread; the rest of the snapshot applies | `replication.cpp` (`replicated_layout`) | `test_net` "a component laid out differently on the client is skipped, not misread" |
+| MCP: `refl_describe_component` marks flagged fields `"replicated": true` (and `"save": true`) | `src/editor/mcp/src/values.cpp` | `test_mcp` "discover components from mce_refl" (`NetOwner.peer` replicated, `NetReplicated.kind` not) |
+| User guide 20.9 "Replication as data" (the old 20.9 is 20.10) | `docs/user-guide/20-multiplayer.md`, `docs/engine/net.md` | — |
+
+Notes:
+- Fields go as raw bytes in declaration order. That is safe because the layout hash covers each
+  flagged field's name, kind, size and count, and every engine target is little-endian.
+- Every flagged field of every replicated entity is in every snapshot (full snapshots, as before);
+  there is no delta compression or interest management yet.
+
+## Demo and gates
+
+| Item | State |
+|---|---|
+| Demo: a 2–4 player game that feels local at 150 ms | shown headless: `sample_net_headless -sim 1 -clients 4 -latency 150 -jitter 40 -loss 0.15 -ticks 900`: each player is predicted, drawn 11 ms behind its input against 401 ms with `-predict 0`, every mirror matches the server and 104 of 104 rewound shots hit; no windowed arena was built |
+| Demo: a rollback sample stays in sync at 100 ms | `samples/net_rollback`, 4 peers at 100 ms ± 20, 5% loss, 900 frames: all agree |
+| Demo: a web build joins a native host through the relay | M-WEB's `mce_relay_web_probe` in headless Chromium (`scripts/web/probe_smoke.cjs <dir> relay <mce_relay>`, SBA-65): OK |
+| Gate: headless multi-client runs give stable hashes | `local_ci.sh` determinism stage: same hash across runs and Debug/Release, direct and through the relay |
+| Gate: rollback detects an injected desync | `sample_net_rollback -desync_at 300` (ctest), `test_net` |
+| Gate: no sim code includes networking headers | `check_walls.py` net opt-in link wall and socket wall |
+| Gate: `local_ci.sh` green on every step | `--task` on each PR, `--batch` on steps 3 and 6 and at the milestone end (step 7) |
