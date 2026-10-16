@@ -55,6 +55,7 @@ bool position_of(World& w, Entity e, math::vec3& out) {
 struct Named {
     Array<Entity> trigger;
     Array<Entity> contact;
+    Array<Entity> landed;  // characters that touched down (Landed3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -78,6 +79,7 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::Start: go = go || fired == 0; break;
     case FireOn::TriggerEnter: go = go || named(n.trigger, e); break;
     case FireOn::ContactBegin: go = go || named(n.contact, e); break;
+    case FireOn::Landed: go = go || named(n.landed, e); break;
     }
     return go;
 }
@@ -132,6 +134,8 @@ void record_physics_events(Frame& f, Named& n) {
                     if (p->touching > 0) --p->touching;
                 }
     }
+    if (w.event_queue<Landed3D>())
+        for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
     if (w.event_queue<TriggerEnter3D>()) {
         for (const TriggerEnter3D& ev : events.read<TriggerEnter3D>()) {
             add_unique(n.trigger, ev.trigger);
