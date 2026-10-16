@@ -104,6 +104,10 @@ acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch via
 static colliders), `"kit3d_writeback"` and `"kit3d_triggers"` after `"kit3d_physics"`; remove hooks
 destroy the bodies.
 
+`vehicles3d.h`: `Vehicle3D` (Jolt wheeled car on a `RigidBody3D`; M-MOVE3D 3 feel: `anti_roll` bars,
+`downforce`, `gears` / `first_gear` / `top_gear` and shift rpm as data, `skid_slip` with `Skid3D`
+events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped).
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
