@@ -447,6 +447,26 @@ TEST_CASE("kit3d: box and mesh colliders become static bodies at Startup") {
     w.tick(kDt, 1);
 }
 
+TEST_CASE("kit3d: a BoxCollider3D follows the entity's rotation (user guide 8.7)") {
+    World w;
+    kit::install_kit3d(w, nullptr);
+    kit::BoxCollider3D slab;
+    slab.half = {2.0f, 1.0f, 0.5f};  // long along x
+    LocalTransform plain = at({0, 0, 0});
+    w.spawn_with(plain, slab);
+    LocalTransform turned = at({0, 0, 20});
+    turned.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, math::radians(90.0f));  // now long along z
+    w.spawn_with(turned, slab);
+    w.tick(kDt, 0);
+    kit::Physics3D& phys = w.resource<kit::Physics3D>();
+    // A ray along -x at 1.5 m from the centre line: past the unrotated box's 0.5 m depth, inside the turned one's 2 m.
+    const auto miss = phys.world.raycast({10, 0, 1.5f}, {-1, 0, 0}, 30.0f);
+    CHECK_FALSE(miss.has_value());
+    const auto hit = phys.world.raycast({10, 0, 21.5f}, {-1, 0, 0}, 30.0f);
+    REQUIRE(hit.has_value());
+    CHECK(hit->point.x == doctest::Approx(0.5f).epsilon(1e-3));
+}
+
 TEST_CASE("kit3d: a game's own Physics3D config survives install") {
     World w;
     physics::PhysicsConfig3D cfg;

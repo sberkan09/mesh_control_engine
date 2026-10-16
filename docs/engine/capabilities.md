@@ -32,7 +32,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `NetRelevance` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/20-multiplayer.md | samples/net_headless/main.cpp |
 | `SaveKey` | `mce/ecs/save.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `LocalTransform` | `mce/ecs/transform.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
-| `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | allowed: state the engine writes and games read; nothing to author |
+| `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: state the engine writes and games read; nothing to author |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard_squad.mcscene |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -42,7 +42,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
 | `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
+| `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
 | `CameraLookAt3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -52,7 +52,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/scene_demo/assets/scenes/demo.mcscene |
 | `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/ui_screens/assets/scenes/main.mcscene |
 | `UiFlow` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | projects/Kindle/assets/scenes/main.mcscene |
-| `Camera2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
+| `Camera2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `Post2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
 | `TilemapLayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/import_demo/assets/levels/cave.mcscene |
 | `ParticleEmitter` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/main.cpp |
@@ -63,6 +63,11 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
+| `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/prefabs/player.mcprefab |
+| `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/11-input.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
@@ -100,8 +105,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
 | `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scripts/dungeon.luau |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-| `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
-| `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap) |
+| `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Overlap3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Skeleton2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
@@ -110,14 +115,14 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `VideoPlayer` | `mce/kit/video.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
-| `CameraView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen) |
-| `SplitScreen` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit; M-VIEWS step 5 shows it in samples/09_coop (four-way split) |
-| `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player; M-VIEWS step 5 shows it in samples/09_coop (a HUD per player) |
+| `CameraView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `SplitScreen` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md | projects/Undelivered/assets/scenes/main.mcscene |
@@ -167,7 +172,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 |---|---|---|
 | `asset_schema` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_create` | `asset_tools.cpp` | docs/user-guide/07-2d.md |
-| `asset_write` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `asset_write` | `asset_tools.cpp` | docs/user-guide/05-assets.md |
 | `asset_read` | `asset_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `tilemap_paint` | `asset_tools.cpp` | docs/user-guide/07-2d.md |
 | `prefab_create_from` | `prefab_tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

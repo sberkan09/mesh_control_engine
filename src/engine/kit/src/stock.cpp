@@ -9,6 +9,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/coop.h"
 #include "mce/kit/components.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/effects.h"
@@ -102,6 +103,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_timelines(world, assets);  // before kit3d: an animation key starts its clip the same tick
     install_ai(world, assets);  // before the path and navmesh agents: a move the tree asks for starts the same tick
     install_kit3d(world, assets);
+    install_coop(world, assets);  // before the 3D controllers: its Move and Jump drive them the same tick
     install_bodies3d(world, assets);
     install_nav3d(world, assets);
     install_joints3d(world, assets);

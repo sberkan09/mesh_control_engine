@@ -1,12 +1,13 @@
 // .mcnav -> CHNK_NAV: a baked 3D navmesh (physics::bake_navmesh, M-GAMEPLAY3D 1), stored as baked.
 // The editor and MCP's navmesh_bake write the file; the runtime loads the payload with
-// physics::NavMesh3D::load, which validates it in full. Here only the magic and version are checked
-// (the cook does not link the navigation code).
+// physics::NavMesh3D::load, which validates it in full. Here the magic, the version and the trailing
+// hash are checked (the cook does not link the navigation code), so a damaged file stops at the cook.
 
 #include <cstring>
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/hash.h"
 
 namespace mce::cook {
 
@@ -14,12 +15,12 @@ namespace {
 
 constexpr const char* kStage = "cook.navmesh";
 constexpr char kNavMagic[4] = {'M', 'C', 'N', 'V'};
-constexpr u32 kNavBlobVersion = 1;
+constexpr u32 kNavBlobVersion = 2;  // 2: a trailing FNV-1a 64 of every byte before it
 
 class NavMeshImporter final : public IImporter {
 public:
     StringView id() const override { return "navmesh"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::NavMesh; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override { return ext == ".mcnav"; }
@@ -35,6 +36,16 @@ public:
         std::memcpy(&version, src.data() + 4, 4);
         if (version != kNavBlobVersion) {
             diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "unknown .mcnav version (re-bake the navmesh)");
+            return false;
+        }
+        u64 stored = 0;
+        if (src.size() < 16) {
+            diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "truncated .mcnav file");
+            return false;
+        }
+        std::memcpy(&stored, src.data() + src.size() - 8, 8);
+        if (stored != fnv1a64(src.data(), src.size() - 8)) {
+            diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "damaged .mcnav file (the hash does not match; re-bake the navmesh)");
             return false;
         }
         asset::ContainerWriter::ChunkDesc d;

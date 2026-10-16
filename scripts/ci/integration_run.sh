@@ -12,6 +12,8 @@
 #    rest: walls + gcc debug (+ GPU tests) + the `slow` tests (when local_ci.sh has that stage) + determinism +
 #    release build, clang release, ASan, tidy + web.
 # 3. refreshes the ccache snapshot (/mnt/project-files/.cache) after the run, green or not.
+# 3b. keeps each group's log and a progress line in /mnt/project-files/.cache/integration/ as it finishes (a container
+#    restart kills the run; the folder survives).
 # 4. writes build/local-ci-logs/integration-report.md and prints it: result per group, and on red the
 #    suspect PRs, i.e. the first-parent merges on dev_claude since the last green integration run
 #    (MCE_INTEGRATION_STATE, default /mnt/project-files/.cache/integration-last-green when that folder exists,
@@ -31,7 +33,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --no-push) push=0 ;;
         --branch) branch="$2"; shift ;;
-        -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+        -h|--help) sed -n "2,26p" "$0"; exit 0 ;;
         *) echo "unknown argument: $1"; exit 2 ;;
     esac
     shift
@@ -45,6 +47,9 @@ if [[ -d /mnt/project-files/.cache ]]; then
 else
     STATE="${MCE_INTEGRATION_STATE:-$LOG_DIR/integration-last-green}"
 fi
+
+KEEP=""
+[[ -d /mnt/project-files/.cache ]] && KEEP="${MCE_INTEGRATION_KEEP:-/mnt/project-files/.cache/integration}" && mkdir -p "$KEEP"
 
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
     echo "integration: the working tree has uncommitted changes; run it on a clean checkout"; exit 2
@@ -102,6 +107,11 @@ for g in "${GROUPS_RUN[@]}"; do
         failed+=("$i")
     fi
     echo "    ${RESULT[$i]}"
+    # A container restart kills the run and everything under build/: keep what finished where it survives.
+    if [[ -d "$KEEP" ]]; then
+        cp "$LOG_DIR/integration-group-$i.log" "$KEEP/$head_sha-group-$i.log" 2> /dev/null
+        echo "group $i ($g): ${RESULT[$i]}" >> "$KEEP/$head_sha-progress.txt"
+    fi
 done
 
 # --- 3. ccache snapshot -----------------------------------------------------------------------------

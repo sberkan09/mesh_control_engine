@@ -1,6 +1,6 @@
 # M-VIEWS — Several views and local players (milestone record)
 
-**Status:** active (added 2026-10-16; design note written; steps 1-4 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
+**Status:** active (added 2026-10-16; design note written; steps 1-5 done). Plan: ROADMAP §M-VIEWS; Linear SBA-161 … SBA-166.
 
 **Why:** one camera draws into the window. `Renderer::record_3d(cmd, scene, target)` already renders to a
 texture, but only a C++ host can use it. Input has no notion of a second player. A game cannot show a
@@ -112,6 +112,28 @@ global illumination (the probe volume is shared by all views).
   editor does not draw UiScreens per view); Doppler and occlusion follow the first listener; three
   players in the Grid layout leave the fourth cell to the window's clear color.
 
+**Step 5 — the co-op kit** (kit/coop.h, kit/src/coop.cpp; changes from the design note marked *):
+- `CoopGame {player (prefab), join/leave/move/jump_action, max_players, auto_join, tint_players, enabled}` (one per
+  scene), `PlayerSpawn {player}`, `LocalPlayer {player, drive, speed}`, `PlayerCamera {player, offset, smoothing}`,
+  `SharedCamera2D {margin, min_width, min_height, smoothing}`; `install_coop` is part of `install_stock`.
+  *`LocalPlayer.player` is 1..4 (the script name `P2/…`), not a 0-based `slot`.
+- `kit_coop` (FixedUpdate_Pre): leave, join (the first `auto_join` slots once, the rest on their `Join` edge), spawn at
+  the player's `PlayerSpawn` (else any free spawn, else a row). The prefab is instantiated with overrides on
+  `LocalPlayer.player` and `LocalTransform.position`; without a prefab a bare `LocalPlayer` + `Sprite` is made.
+  Drive: `CharacterController3D.move` / `jump` from the player's Move / Jump, or `World2D::set_linear_velocity` for
+  a non-static `RigidBody2D`. `kit_coop_cameras` (FixedUpdate_Post): `PlayerCamera` follows and toggles its
+  `CameraView.enabled`; `SharedCamera2D` frames the players' box (both fits set).
+- `.mcinput` maps take `"player": 1..4` (`map_player_flags(player-1)`); the player calls
+  `input.set_join_slots(0, kit::coop_join_slots(world))` each tick, so a pad's Start joins any free slot that the
+  scene allows.
+- Components are in `mce_cook`'s and the editors' `engine_components.cpp` (a scene that names an unregistered
+  component loads without it, silently: register new components there).
+- `samples/09_coop`: data only; four-way split, prefab players, a 10 Hz minimap `RenderTexture` on a monitor sprite;
+  headless `coop_sample_player` runs `input.txt` (P2..P4 join, P3 leaves) twice with the same hash. The headless
+  entity count is the scene's (18), not the live world's.
+- Known limits: a 3D player needs a `Camera3DComponent` per `PlayerCamera` (the offset is yours); two players on one
+  pad is not possible; the player count is not part of any resource hash (the entities are).
+
 ## Steps
 
 | # | Step | Linear | Model | State |
@@ -120,7 +142,7 @@ global illumination (the probe volume is shared by all views).
 | 2 | Camera viewports and targets, several cameras per frame | SBA-162 | Opus | done |
 | 3 | `RenderTexture`: minimap, mirror, monitor, picture-in-picture | SBA-163 | Opus | done |
 | 4 | Split-screen: layouts, per-view HUD, listener, budgets | SBA-164 | Opus | done |
-| 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | not started |
+| 5 | The co-op kit and `samples/09_coop` | SBA-165 | Sonnet | done |
 | 6 | MCP `view_*` / `player_*`, `render_frame` view argument, guide and gates | SBA-166 | Sonnet | not started |
 
 **Gates:**
