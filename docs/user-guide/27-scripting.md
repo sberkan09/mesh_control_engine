@@ -186,3 +186,16 @@ An agent checks a script without cooking with the MCP tool `script_check` (`path
 `{ok, problems: [{line, col, message}]}`. When a script fails while the game runs, `run_headless` and
 `test_run` return it under `script_errors` (`{script, error}` with `file:line`), and a test with a failed
 script does not pass.
+
+## 27.6 While you work
+
+- **Hot reload.** Edit a `.luau` file while the game plays in the editor: the editor recooks it and the
+  next tick runs the new code. Scripts keep no state between ticks, so nothing is lost, and a script
+  that had failed runs again once the fix cooks.
+- **Errors in the editor.** A script error in the Console or the Cook panel names the script and line.
+  Double-click the Console line to open the script in the system's editor (the `scripts/x.luau:3` text
+  is copied for its "go to line"); the Cook panel's context menu has "Open script".
+- **Profiler.** In a Tracy build each script's `update()` has its own zone, named after the script.
+- **Crash reports.** When the game crashes while a script runs, the `.crash` report has a `context:` section
+  with the script's name and its Luau call stack (`at scripts/spin.luau:2 in spin`).
+

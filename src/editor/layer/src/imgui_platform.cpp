@@ -27,6 +27,14 @@ void apply_mods(ImGuiIO& io, u32 flags) {
 
 }  // namespace
 
+bool open_file_externally(const char* absolute_path) {
+    char* url = nullptr;
+    if (SDL_asprintf(&url, "file://%s", absolute_path) < 0 || !url) return false;
+    const bool ok = SDL_OpenURL(url);
+    SDL_free(url);
+    return ok;
+}
+
 int imgui_key_from_hid(u32 hid) {
     if (hid >= 4 && hid <= 29) return ImGuiKey_A + static_cast<int>(hid - 4);
     if (hid >= 30 && hid <= 38) return ImGuiKey_1 + static_cast<int>(hid - 30);

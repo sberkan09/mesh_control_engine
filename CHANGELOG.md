@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
+  editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
+  running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
+  Console and Cook panels open the script an error line names. User guide 27.6.
 - Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
   component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
   'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at

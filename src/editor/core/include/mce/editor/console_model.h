@@ -11,6 +11,15 @@
 
 namespace mce::editor {
 
+// A script error in a log line ("script failed: scripts/push.luau:3: ...", a cook line
+// "assets/scripts/push.luau:2:13: ..."): the .luau path and the line. False when the text names none.
+// `path` points into `text`; a leading "assets/" is kept (the caller strips it).
+struct ScriptLocation {
+    StringView path;
+    u32 line = 0;
+};
+bool find_script_location(StringView text, ScriptLocation& out);
+
 class ConsoleModel {
 public:
     static constexpr usize kDefaultScrollback = 4096;
