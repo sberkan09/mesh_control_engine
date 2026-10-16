@@ -61,6 +61,7 @@ bool collect_views(World& world, rhi::Extent2D window, Array<ViewEntry>& out, Ta
 
 class Kit3DExtract;
 class SpriteExtract;
+class RenderTextures;
 
 // What record_views() draws with. `extract3d` null: 3D views are skipped (the host's 3D path is
 // not running).
@@ -68,6 +69,7 @@ struct ViewRecordContext {
     render::Renderer* renderer = nullptr;
     Kit3DExtract* extract3d = nullptr;
     SpriteExtract* extract2d = nullptr;
+    RenderTextures* render_textures = nullptr;  // views into textures (M-VIEWS 3); null: those are skipped
     rhi::TextureHandle target;            // the window's: null = backbuffer, or the editor's play view
     rhi::Extent2D target_size;
     math::Color clear{0.08f, 0.09f, 0.12f, 1.0f};
@@ -78,12 +80,15 @@ struct ViewRecordContext {
 struct ViewRecordStats {
     u32 views_3d = 0;
     u32 views_2d = 0;
-    render::Scene3D::Stats first_3d;       // the first 3D view's scene
-    render::BatchStats first_2d;
+    u32 views_texture = 0;  // of those, drawn into render textures
+    u32 window_3d = 0, window_2d = 0;      // of those, drawn into the window
+    render::Scene3D::Stats first_3d;       // the window's first 3D view's scene
+    render::BatchStats first_2d;           // the window's first 2D view's batch
 };
 
-// Records the window's views of `views` (collect_views): the target cleared once to ctx.clear,
-// then each view in order. A 3D view is its own Scene3D (extract, then extract_view for the later
+// Records `views` (collect_views) in order: views into render textures first (each texture due a
+// redraw cleared before its first view, drawn in linear color; see render_textures.h), then the
+// window's, the window cleared once to ctx.clear first. A 3D view is its own Scene3D (extract, then extract_view for the later
 // ones) in its own Forward3D view slot (Renderer::view_slot, keyed by the camera entity); a 2D view
 // is a sprite batch drawn with the pass's viewport on its rect, cleared to its camera's clear color
 // unless a 3D view drawn before it covers its rect (a HUD camera over a 3D world). Outside any pass.

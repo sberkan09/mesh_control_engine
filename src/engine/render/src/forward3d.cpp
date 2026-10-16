@@ -2592,7 +2592,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     fu.view = view.view;
     fu.inv_view_proj = mat4::identity();
     fu.camera_pos = vec4(view.position, 0.0f);
-    fu.params = {scene.exposure(), desc_.encode_srgb_output ? 1.0f : 0.0f,
+    fu.params = {scene.exposure(), desc_.encode_srgb_output && !out_.linear_output ? 1.0f : 0.0f,
                  post.bloom_intensity / f32(max(bloom_levels_, 1u)), bloom ? 1.0f : 0.0f};
     fu.viewport = {f32(size_.width), f32(size_.height), 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
     // The tonemap pass's u_cluster: x auto exposure, y color-grade strength (0 = off), z color-vision
