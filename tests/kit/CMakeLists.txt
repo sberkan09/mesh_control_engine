@@ -8,11 +8,13 @@ mce_add_test(test_kit UMBRELLA
     SOURCES
         test_bodies3d.cpp
         test_captions.cpp
+        test_presence.cpp
         test_effects.cpp
         test_ui_flow.cpp
         test_fsm.cpp
         test_kit3d.cpp
         test_anim3d.cpp
+        test_sensors3d.cpp
         test_nav3d.cpp
         test_joints3d.cpp
         test_ragdolls3d.cpp

@@ -12,6 +12,8 @@
 #include "test_support.h"
 
 #include <thread>
+#include <new>
+#include <type_traits>
 
 using namespace mce;
 
@@ -260,6 +262,22 @@ TEST_CASE("HandleTable: stale handles fail, never alias") {
     CHECK_FALSE(t.erase(a));
     Handle<Tag> null_handle;
     CHECK(t.try_get(null_handle) == nullptr);
+}
+
+// Components hold FixedStrings and World::state_hash hashes their bytes: no padding, sizes kept.
+static_assert(std::has_unique_object_representations_v<FixedString<24>>);
+static_assert(std::has_unique_object_representations_v<FixedString<41>>);
+static_assert(std::has_unique_object_representations_v<FixedString<66>>);
+static_assert(sizeof(FixedString<24>) == 32 && sizeof(FixedString<41>) == 52 && sizeof(FixedString<66>) == 76);
+
+TEST_CASE("FixedString: a copy carries no stray bytes") {
+    alignas(FixedString<24>) unsigned char dirty[sizeof(FixedString<24>)];
+    std::memset(dirty, 0x30, sizeof dirty);
+    auto* tmp = new (dirty) FixedString<24>("step");
+    FixedString<24> a;
+    a = *tmp;
+    const FixedString<24> clean("step");
+    CHECK(std::memcmp(&a, &clean, sizeof a) == 0);
 }
 
 TEST_CASE("FixedString truncates safely") {

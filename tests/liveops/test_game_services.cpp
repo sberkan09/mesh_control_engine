@@ -52,6 +52,7 @@ ServicesCatalog catalog() {
     a.id = "first_win";
     a.ios_id = "com.studio.first_win";
     a.android_id = "CgkIabc";
+    a.steam_id = "ACH_FIRST_WIN";
     REQUIRE(c.add_achievement(a));
     a = AchievementInfo{};
     a.id = "win_10";
@@ -149,6 +150,7 @@ TEST_CASE("game services: the catalog chunk round-trips and rejects damage") {
     REQUIRE(decode_services_catalog(bytes.span(), back));
     REQUIRE(back.achievements().size() == 2);
     CHECK(back.achievements()[0].android_id.view() == "CgkIabc");
+    CHECK(back.achievements()[0].steam_id.view() == "ACH_FIRST_WIN");
     CHECK(back.achievements()[1].steps == 10);
     CHECK(back.leaderboards()[0].lower_is_better);
     CHECK_FALSE(back.leaderboards()[1].lower_is_better);

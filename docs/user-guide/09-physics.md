@@ -149,6 +149,14 @@ pw.raycast_all(...);  pw.shape_cast(shape, from, to, filter);  pw.overlap_point(
 queries skip sensors) and an optional `predicate`.
 Results are sorted, so queries are deterministic.
 
+In 3D, `kit::Physics3D::world` answers `raycast`, `shape_cast` (a sphere), `overlap_sphere(center,
+radius, out, filter)` and `overlap_box(center, half, rotation, out, filter)`; the overlaps fill `out`
+in creation order and return how many touch, even when `out` is shorter. `QueryFilter3D` has
+`layer_mask`, `exclude`, `include_dynamic` and `include_characters` (false by default: characters'
+capsules are not bodies, so set it to see them in a ray or an overlap). Without code, the
+`Raycast3D` and `Overlap3D` components (section 8.7) run these every tick from an entity and raise
+trigger events when what they see changes.
+
 ## 9.6 Joints
 
 From code: `DistanceJointDesc` (a rod, a rope with `min_length < max_length`, or a spring with

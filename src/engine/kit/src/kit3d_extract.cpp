@@ -587,6 +587,13 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     ssr.intensity = env.ssr_intensity;
     render::apply_quality(quality_, ssr);
     scene.set_reflections(ssr);
+    render::ContactShadows contact;
+    contact.enabled = env.contact_shadows != 0;
+    contact.length = env.contact_length;
+    contact.thickness = env.contact_thickness;
+    contact.intensity = env.contact_intensity;
+    render::apply_quality(quality_, contact);
+    scene.set_contact_shadows(contact);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
     shadows.resolution = quality_.shadow_size;

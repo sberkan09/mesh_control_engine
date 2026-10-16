@@ -39,7 +39,7 @@ SDK); without `-module` it knows engine components only.
 | **Animation** | an `.mcanim` animation graph as boxes and arrows, its parameters, states and transitions, and a preview of an entity's clips and graph in the viewport (chapter 8.9, "Editing graphs and previewing clips"). Opens from the View menu or a double click on an `.mcanim` in Assets |
 | **Console** | the engine log and a command line for convars and confuncs |
 | **Stats** | editor frame rate, sim ticks, viewport size |
-| **Profiler** | editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings |
+| **Profiler** | **Live**: editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings. **Capture**: a `.mcperf` from the player or MCP `perf_run`, with its budget verdict, a frame strip, a per-frame breakdown, spikes, systems, and a compare with a second capture (chapter 14, "Is it fast enough?") |
 
 Panels dock anywhere; View > Reset layout restores the default. The layout persists in
 `mce_editor.ini`.
