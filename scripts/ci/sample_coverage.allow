@@ -4,21 +4,8 @@
 
 Blackboard | state the engine writes and games read; nothing to author
 SceneChunkStatus | state the engine writes and games read; nothing to author
-PathAgent | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-ParticleBurst | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-ShakeTrigger | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-CameraShake2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-PhysicsEvents | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-NavGridSource | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Bone2DFollow | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DAnimator | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DSlots | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-Skeleton2DIK | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-IKTarget2D | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-SoundCaption | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
-AiTokenPool | tested in tests/ but no sample scene uses it yet; M-COVER step 3 shows it in a 2D and gameplay tour sample
 NetReplicated | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
 NetOwner | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
 Dialogue | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
 DialogueInput | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
+CameraView | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen)

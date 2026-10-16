@@ -8,6 +8,7 @@ mce_add_test(test_input
         test_touch.cpp
         test_options.cpp
         test_steam_config.cpp
+        test_local_players.cpp
     DEPS
         mce::mce_input)
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/tmp")

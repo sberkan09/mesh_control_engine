@@ -8,11 +8,21 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
   data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
   script-only game 16 saved numbers per entity to remember things in. User guide 27.8.
+- Behavior tree MCP tools, the squad demo and the gates, M-AI step 6 (SBA-133): `bt_create`, `bt_add_node` and
+  `bt_set` write a `.mcbt` the cook checks before anything is written, and `bt_trace` plays a saved scene
+  headless and reports one brain's running path and blackboard over time and when each node started.
+  `samples/ai_demo` gains `scenes/yard_squad.mcscene`: two guards investigate a thrown stone, take turns
+  attacking through one attack token and fall back when hurt. A 500-brain tick stays within 2 ms in optimized
+  builds. User guide 13.8 and 14. M-AI is done.
 - A game with no C++, M-SCRIPT step 5 (SBA-151): `mce new MyGame --template script` makes a project of Luau
   scripts and data with no `CMakeLists.txt`; `mce build` cooks and checks it, `mce play` / `headless` run it on
   the stock player, `mce ship` zips the player, the engine library, the pack and a launcher, and the editor and
   MCP server open it without a module. The engine checkout builds such a project for phones and the browser
   (`scripts/ship.py --project`), and the android, ios and web presets build the Luau runtime. User guide 27.7.
+- 2D and gameplay tour sample, M-COVER step 3 (SBA-159): `samples/kit2d_tour` shows 14 more components with no code: a
+  cut-out puppet with animator, slots, IK goal and a bone follower, a sensor gate that counts events and fires a
+  burst, a camera shake and a captioned sound, a path agent over a collider-built nav grid, and a token pool. It
+  plays headless twice for the same hash (`ctest -R kit2d_tour`).
 - Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
@@ -35,6 +45,13 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `file:line:col`. It writes `cooked/mce.d.luau` for editors (luau-lsp). The MCP tool `script_check` runs the
   same checks without cooking, and `run_headless` / `test_run` report failed scene scripts as
   `script_errors`. User guide 27.5.
+- The Skeleton panel and `skel2d_*` MCP tools, M-ANIM2D step 5 (SBA-144): rig and animate a 2D character
+  without writing the `.mcskel2d` text. The editor panel shows the bone tree, slots and IK constraints, edits a
+  bone's rest pose, scrubs an animation to preview the pose, aims IK constraints at points, keys bones at the
+  current time, and the viewport draws the bones of selected entities. MCP gets `skel2d_create`,
+  `skel2d_add_bone`, `skel2d_add_slot`, `skel2d_add_ik`, `skel2d_key` and `skel2d_preview` (the bone
+  transforms from the runtime's pose functions, plus a line drawing). Both write through the same code and the
+  importer checks every edit, so a bad one names `file:line` and changes nothing. User guide 7.13 and 14.
 - The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
   (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
   cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its

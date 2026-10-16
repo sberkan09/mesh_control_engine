@@ -10,6 +10,7 @@ mce_add_test(test_kit UMBRELLA
         test_ai_tasks.cpp
         test_ai_perception.cpp
         test_ai_utility.cpp
+        test_ai_budget.cpp
         test_audio_occlusion.cpp
         test_bodies3d.cpp
         test_move3d.cpp
@@ -37,6 +38,7 @@ mce_add_test(test_kit UMBRELLA
         test_cinematic.cpp
         test_video.cpp
         test_view_info.cpp
+        test_views.cpp
     DEPS
         mce::mce_gameplay_kit
         mce::mce_scene

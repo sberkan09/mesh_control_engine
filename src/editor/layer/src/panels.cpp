@@ -94,9 +94,13 @@ public:
         EditorScene& scene = shell.scene();
         lines_.clear();
         const ViewSettings& view = shell.view();
-        if (PlaySession& play = shell.session().play(); play.active()) {
-            // Play-in-editor: the play world, through the game's camera (or the editor's: the orbit
-            // camera for a 3D game).
+        PlaySession& play = shell.session().play();
+        if (!play.active()) shell.preview().release_views();
+        if (play.active()) {
+            // Play-in-editor: the play world through the game's views (M-VIEWS), else its camera (or
+            // the editor's: the orbit camera for a 3D game).
+            if (view.play_camera && shell.preview().record_views(cmd, *play.world(), v.target, v.size, math::Color{0.08f, 0.09f, 0.12f, 1.0f}))
+                return;
             if (world_is_3d(*play.world())) {
                 render::Camera3D cam3;
                 if (!view.play_camera || !shell.preview().game_camera_3d(*play.world(), cam3)) {
@@ -135,6 +139,8 @@ public:
             quad_lines(q, math::Color{1.0f, 1.0f, 1.0f, 0.35f}, 1.0f, lines_);
         for (EntityId id : scene.selection().items())
             if (entity_quad(scene, id, q)) quad_lines(q, math::Color{1.0f, 0.62f, 0.1f, 1.0f}, 2.0f, lines_);
+        // The open 2D skeleton's bones on the selected entities that play it (Skeleton panel).
+        for (EntityId id : scene.selection().items()) skeleton2d_entity_lines(shell.skeleton2d(), scene, id, lines_);
         math::vec2 pivot;
         if (painting_tiles(shell)) {
             tile_lines(shell);
@@ -756,6 +762,7 @@ void add_default_panels(EditorShell& shell) {
     add_timeline_panel(shell);
     add_animation_panel(shell);
     add_bt_panel(shell);
+    add_skeleton_panel(shell);
     add_project_settings_panel(shell);
 }
 

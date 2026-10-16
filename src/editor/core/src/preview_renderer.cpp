@@ -129,6 +129,25 @@ bool PreviewRenderer::ensure_3d() {
     return true;
 }
 
+bool PreviewRenderer::record_views(rhi::CommandBuffer& cmd, World& world, rhi::TextureHandle target, rhi::Extent2D size,
+                                   Color clear) {
+    if (!kit::collect_views(world, size, views_)) return false;
+    bool any_3d = false;
+    for (const kit::ViewEntry& v : views_) any_3d = any_3d || v.is_3d;
+    kit::ViewRecordContext vc;
+    vc.renderer = &renderer_;
+    vc.extract3d = any_3d && ensure_3d() ? &extract3d_ : nullptr;
+    vc.extract2d = &extract_;
+    vc.target = target;
+    vc.target_size = size;
+    vc.clear = clear;
+    const kit::ViewRecordStats st = kit::record_views(cmd, world, views_.span(), vc);
+    renderer_.end_views();
+    stats_ = st.first_2d;
+    if (st.views_3d > 0) stats3d_ = st.first_3d;
+    return true;
+}
+
 bool PreviewRenderer::game_camera_3d(World& world, render::Camera3D& out) {
     if (!ensure_3d()) return false;
     return extract3d_.camera(world, 1.0f, out);

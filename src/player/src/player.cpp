@@ -98,6 +98,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/kit/video.h"
+#include "mce/kit/views.h"
 #include "mce/liveops/game_services.h"
 #include "mce/liveops/liveops.h"
 #include "mce/liveops/platform_games.h"
@@ -723,6 +724,39 @@ public:
         if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
         rhi::CommandBuffer cmd(mem::frame());
+        // M-VIEWS: with a CameraView in the scene every view draws into its rect (render_views);
+        // the debug view overrides (-view.*) and the UI preview keep the single view.
+        const bool multi = !ui_preview_ && !film_ && view_entity().is_null() && view_free_.empty() &&
+                           kit::collect_views(world_, bb, views_);
+        if (multi) {
+            kit::ViewRecordContext vc;
+            vc.renderer = &renderer_;
+            vc.extract3d = three_d_ ? &extract3d_ : nullptr;
+            vc.extract2d = &extract_;
+            vc.target_size = bb;
+            vc.clear = clear;
+            vc.alpha = alpha;
+            vc.frame_dt = capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt);
+            vc.lod.enabled = cv_lod.get_bool();
+            vc.lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
+            vc.lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
+            const kit::ViewRecordStats vs = kit::record_views(cmd, world_, views_.span(), vc);
+            if (vs.views_3d > 0) {
+                stats3d_ = vs.first_3d;
+                drew_3d_ = true;
+            }
+            batch_stats_ = vs.first_2d;
+            if (overlay) {
+                rhi::PassAttachment over;
+                over.load = rhi::LoadOp::Load;
+                rhi::RenderPassDesc op;
+                op.colors = Span<const rhi::PassAttachment>(&over, 1);
+                op.debug_name = "player.overlay";
+                cmd.begin_pass(op);
+                record_overlay(cmd, bb);
+                cmd.end_pass();
+            }
+        } else {
         if (draw_3d) {
             render::Scene3D scene3(renderer_.meshes(), mem::frame());
             scene3.begin(cam3, bb);
@@ -780,6 +814,8 @@ public:
             if (overlay) record_overlay(cmd, bb);
             cmd.end_pass();
         }
+        }  // !multi
+        renderer_.end_views();
         device_->submit(cmd);
 
         // The run ends on the Nth frame (-frames) or on the first frame after the last capture tick
@@ -2727,6 +2763,7 @@ private:
     usize capture_next_ = 0;    // the next of them to capture
     Array<f64> ticks_tmp_;
     Array<f64> view_free_;      // -view.free
+    Array<kit::ViewEntry> views_;  // this frame's views (M-VIEWS), reused frame to frame
     Array<f64> safe_override_;  // -safe_area
     bool paused_ = false;
     bool settings_on_ = false;  // this run reads and writes <save folder>/settings.cfg

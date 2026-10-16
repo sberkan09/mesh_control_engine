@@ -63,6 +63,12 @@ replays stay exact.
 JSON text, and `build_behavior_tree` (the importer's cook) decides validity. The editor maps the running tree back
 to the document by pre-order, which the cook's one-node-per-document-node layout guarantees.
 
+**Step 6 (SBA-133).** The `bt_*` tools name nodes by pre-order index, the number the editor panel and the
+debugger use, and every write goes through `build_behavior_tree` first, so a tool cannot leave a tree that does
+not cook. `bt_trace` is a `run_headless` that samples one brain through `RunHooks`; it reads the brain without
+touching it, so a traced run hashes like an untraced one. The 500-brain budget is a test, not a cap: nothing in
+the runtime limits the number of brains.
+
 **Step 4 (SBA-131).** Utility selection is a node kind whose children are `Score` nodes; considerations are a
 table after the nodes in `CHNK_BT` v3, each a blackboard key, a response curve and a weight. The selector
 recomputes every score each tick and switches only when another child beats the running one by `hysteresis`.

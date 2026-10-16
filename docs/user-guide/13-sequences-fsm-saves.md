@@ -420,8 +420,8 @@ Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministi
 state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
 `BtRegistry::validate_tasks()` names a task that a loaded tree uses but your game never registered;
 such a node fails and is logged once. The design is ADR-0045. `samples/ai_demo` is a data-only project
-in which the stock player runs a guard that patrols, spots a thief and catches it. Utility choices and
-the editor's tree panel come in the next steps of M-AI.
+in which the stock player runs guards that patrol, investigate, take turns attacking and flee (the
+demo, at the end of this section).
 
 ### Perception
 
@@ -549,3 +549,53 @@ current scores in brackets, and the blackboard shows each key's live value. **Ru
 tree as it is now in the play world (its brains start again) without saving. The viewport draws
 each `Perceiver`'s sight cone and a line to the target it sees (green) or last saw (yellow); turn it
 off with **Perception** in the panel or the View menu.
+
+### Writing and checking trees over MCP
+
+An agent edits trees with four tools (chapter 14). `bt_create` writes a new `.mcbt` from a
+`blackboard` (a key's type, or `{"type", "default"}`) and a `root` in the `.mcbt` node form above.
+`bt_add_node` adds a node under `parent` (by default the root) at `index`. `bt_set` changes a node's
+`value` or `fields` (`null` removes a field), replaces it with another subtree (`replace`) or removes
+it (`remove`), and changes the tree's `name` and its blackboard keys (`null` removes a key). Every
+answer is the tree as an outline, one line per node, numbered in the order the tools use:
+
+```
+0 parallel
+1   sequence  "listen"
+2     task "wait_event"
+...
+5   selector
+6     guard  "chase"
+...
+12    guard  "investigate"
+```
+
+Each edit is cooked before it is written, so a mistake (a key the tree does not have, a second child
+under a decorator, a field a node does not take) fails with the cook's message and the file stays
+as it was. What is written is the canonical form the editor's panel also writes.
+
+`bt_trace` plays the open scene headless (save it first) and reports what one entity's brain did:
+every `every` ticks, the tree's result, how many times it ran, the running path and the blackboard,
+and in `started` the tick each named or leaf node started running. That is how an agent checks a
+tree it wrote:
+
+```
+bt_trace {"entity": "Guard", "ticks": 1200, "every": 200}
+  rows: {"tick": 200, "running": "0 parallel > 5 selector > 12 guard \"investigate\" > 13 sequence > 15 task \"move_to\"",
+         "blackboard": "sees=false heard_at=(8.00, 0.10, 8.00) alert=false ..."}, ...
+  started: ["tick 2: 19 repeat \"patrol\"", "tick 182: 12 guard \"investigate\"",
+            "tick 305: 6 guard \"chase\"", "tick 498: 11 wait 1000"]
+```
+
+The trace is deterministic: the same scene and ticks report the same thing.
+
+### The demo
+
+`samples/ai_demo` is a data-only project the stock player runs. In `scenes/yard.mcscene` a guard
+patrols between two posts on the navmesh, hears a thief's noise, leaves its patrol to look, spots
+the thief and catches it, and a bell's alarm reaches it through `wait_event`. In
+`scenes/yard_squad.mcscene` (`mce_player -scene scenes/yard_squad.mcscene`) two guards run one
+utility tree: a thrown stone makes them investigate; when they see the thief they take turns
+attacking through the thief's `AiTokenPool` of one token while the other waits its turn, and a guard
+the thief strikes back at loses health, so its flee score wins and it falls back to a point far from
+the thief that `find_point` picks, giving the token to the other guard.
