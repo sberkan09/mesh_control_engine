@@ -1,0 +1,442 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0c90000-0000-4000-8000-000000000003",
+ "name": "arena",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Splits",
+   "components": {
+    "SplitScreen": {
+     "layout": 3,
+     "divider": 4
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "Game",
+   "components": {
+    "CoopGame": {
+     "player": "guid:b0c90000-0000-4000-8000-000000000001",
+     "auto_join": 1
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Minimap texture",
+   "components": {
+    "RenderTexture": {
+     "width": 256,
+     "height": 192,
+     "update_hz": 10
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Minimap camera",
+   "components": {
+    "Camera2DComponent": {
+     "primary": false,
+     "pixel_snap": false,
+     "fit_width": 26,
+     "fit_height": 18,
+     "clear_color": [
+      0.04,
+      0.05,
+      0.07,
+      1
+     ]
+    },
+    "CameraView": {
+     "target": "$3"
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 5,
+   "name": "Monitor",
+   "components": {
+    "Sprite": {
+     "size": [
+      5.2,
+      3.9
+     ],
+     "layer": -1,
+     "tint": [
+      1,
+      1,
+      1,
+      1
+     ]
+    },
+    "ShowRenderTexture": {
+     "source": "$3"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      5.5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Floor",
+   "components": {
+    "Sprite": {
+     "size": [
+      24,
+      16
+     ],
+     "layer": -3,
+     "tint": [
+      0.16,
+      0.18,
+      0.2,
+      1
+     ]
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 7,
+   "name": "Wall N",
+   "components": {
+    "RigidBody2D": {},
+    "Collider2D": {
+     "shape": {
+      "half": [
+       13,
+       0.5
+      ]
+     },
+     "density": 0
+    },
+    "Sprite": {
+     "size": [
+      26,
+      1.0
+     ],
+     "layer": -2,
+     "tint": [
+      0.4,
+      0.42,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      8.5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Wall S",
+   "components": {
+    "RigidBody2D": {},
+    "Collider2D": {
+     "shape": {
+      "half": [
+       13,
+       0.5
+      ]
+     },
+     "density": 0
+    },
+    "Sprite": {
+     "size": [
+      26,
+      1.0
+     ],
+     "layer": -2,
+     "tint": [
+      0.4,
+      0.42,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -8.5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Wall W",
+   "components": {
+    "RigidBody2D": {},
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.5,
+       9
+      ]
+     },
+     "density": 0
+    },
+    "Sprite": {
+     "size": [
+      1.0,
+      18
+     ],
+     "layer": -2,
+     "tint": [
+      0.4,
+      0.42,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -12.5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Wall E",
+   "components": {
+    "RigidBody2D": {},
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.5,
+       9
+      ]
+     },
+     "density": 0
+    },
+    "Sprite": {
+     "size": [
+      1.0,
+      18
+     ],
+     "layer": -2,
+     "tint": [
+      0.4,
+      0.42,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      12.5,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Spawn 1",
+   "components": {
+    "PlayerSpawn": {
+     "player": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -9,
+      5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Spawn 2",
+   "components": {
+    "PlayerSpawn": {
+     "player": 2
+    },
+    "LocalTransform": {
+     "position": [
+      9,
+      5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Spawn 3",
+   "components": {
+    "PlayerSpawn": {
+     "player": 3
+    },
+    "LocalTransform": {
+     "position": [
+      -9,
+      -5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Spawn 4",
+   "components": {
+    "PlayerSpawn": {
+     "player": 4
+    },
+    "LocalTransform": {
+     "position": [
+      9,
+      -5,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Camera P1",
+   "components": {
+    "Camera2DComponent": {
+     "primary": true,
+     "pixel_snap": false,
+     "fit_height": 10,
+     "clear_color": [
+      0.03,
+      0.03,
+      0.04,
+      1
+     ]
+    },
+    "PlayerCamera": {
+     "player": 1,
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "smoothing": 8
+    },
+    "CameraView": {
+     "split": 1,
+     "enabled": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 16,
+   "name": "Camera P2",
+   "components": {
+    "Camera2DComponent": {
+     "primary": false,
+     "pixel_snap": false,
+     "fit_height": 10,
+     "clear_color": [
+      0.03,
+      0.03,
+      0.04,
+      1
+     ]
+    },
+    "PlayerCamera": {
+     "player": 2,
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "smoothing": 8
+    },
+    "CameraView": {
+     "split": 2,
+     "enabled": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 17,
+   "name": "Camera P3",
+   "components": {
+    "Camera2DComponent": {
+     "primary": false,
+     "pixel_snap": false,
+     "fit_height": 10,
+     "clear_color": [
+      0.03,
+      0.03,
+      0.04,
+      1
+     ]
+    },
+    "PlayerCamera": {
+     "player": 3,
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "smoothing": 8
+    },
+    "CameraView": {
+     "split": 3,
+     "enabled": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "id": 18,
+   "name": "Camera P4",
+   "components": {
+    "Camera2DComponent": {
+     "primary": false,
+     "pixel_snap": false,
+     "fit_height": 10,
+     "clear_color": [
+      0.03,
+      0.03,
+      0.04,
+      1
+     ]
+    },
+    "PlayerCamera": {
+     "player": 4,
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "smoothing": 8
+    },
+    "CameraView": {
+     "split": 4,
+     "enabled": 0
+    },
+    "LocalTransform": {}
+   }
+  }
+ ]
+}

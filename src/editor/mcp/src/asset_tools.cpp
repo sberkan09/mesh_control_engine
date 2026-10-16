@@ -204,7 +204,7 @@ constexpr AssetKind kKinds[] = {
     {"InputMap", ".mcinput", "mce-input", 1,
      "The project's input action maps; the first map is the one the stack starts with. run_headless input names these actions.",
      R"json([
-{"name":"maps","type":"array","help":"[{\"name\": \"Gameplay\", \"blocks_below\": false, \"actions\": [{\"name\": \"Move\", \"type\": \"button\" | \"axis1d\" | \"axis2d\", \"bindings\": [...]}]}]"},
+{"name":"maps","type":"array","help":"[{\"name\": \"Gameplay\", \"blocks_below\": false, \"player\": 1 (2..4: a local player's map, always active), \"actions\": [{\"name\": \"Move\", \"type\": \"button\" | \"axis1d\" | \"axis2d\", \"bindings\": [...]}]}]"},
 {"name":"maps[].actions[].bindings[]","type":"object","help":"Exactly one device key: {\"key\": \"Space\"} | {\"gamepad_button\": \"South\"} | {\"gamepad_axis\": \"LeftX\"} | {\"mouse_button\": \"Left\"} | {\"mouse_delta\": \"x\"} | {\"mouse_wheel\": \"y\"} | {\"touch_zone\": [x0, y0, x1, y1]} | {\"touch_tap\": [x0, y0, x1, y1]} | {\"touch_stick\": \"x\", \"zone\": [...]} | {\"touch_swipe\": \"x\"}; options: axis (x|y), scale, deadzone [lo, hi], curve, invert. Zones are 0..1 over the window, y down"}])json",
      R"json({"maps":[{"name":"Gameplay","actions":[{"name":"Jump","type":"button","bindings":[{"key":"Space"},{"gamepad_button":"South"}]}]}]})json"},
     {"StoreCatalog", ".mcstore", "mce-store", 1, "The project's in-app products and ad placements (M-MONETIZE).",

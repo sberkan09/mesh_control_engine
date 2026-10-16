@@ -21,6 +21,7 @@
 #include "mce/kit/video.h"            // VideoPlayer (M-CINEMA 5)
 #include "mce/kit/render_textures.h"  // RenderTexture, ShowRenderTexture (M-VIEWS 3)
 #include "mce/kit/views.h"            // CameraView (M-VIEWS)
+#include "mce/kit/coop.h"             // CoopGame, PlayerSpawn, LocalPlayer, PlayerCamera, SharedCamera2D (M-VIEWS 5)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
                                       // PhysicsEvents, NavGridSource
 #include "mce/kit/joints3d.h"          // Joint3D

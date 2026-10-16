@@ -49,7 +49,9 @@ TEST_CASE("input map: .mcinput cooks to CHNK_INPUT and loads into the input syst
             { "name": "Dash", "bindings": [ { "key": "LShift" }, { "gamepad_button": "RightShoulder" }, { "key": "F5" } ] },
             { "name": "Zoom", "type": "axis1d", "bindings": [ { "mouse_wheel": "y", "axis": "x" } ] } ] },
           { "name": "Menu", "blocks_below": true, "actions": [
-            { "name": "Confirm", "bindings": [ { "key": "Enter" }, { "mouse_button": "Left" } ] } ] } ] })");
+            { "name": "Confirm", "bindings": [ { "key": "Enter" }, { "mouse_button": "Left" } ] } ] },
+          { "name": "Gameplay P3", "player": 3, "actions": [
+            { "name": "Move", "type": "axis2d", "bindings": [ { "key": "L" } ] } ] } ] })");
     cook::CookService svc;
     const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
     INFO(diags_of(r));
@@ -67,12 +69,14 @@ TEST_CASE("input map: .mcinput cooks to CHNK_INPUT and loads into the input syst
 
     input::InputMapSet set;
     REQUIRE(input::decode_input_map(assets.resolve(h.value()), set));
-    REQUIRE(set.maps.size() == 2);
+    REQUIRE(set.maps.size() == 3);
     CHECK(set.maps[0].name == StringId("Gameplay"));
     CHECK(set.maps[0].action_count == 3);
     CHECK(set.maps[1].name == StringId("Menu"));
     CHECK((set.maps[1].flags & input::MapFlag::BlocksBelow) != 0);
-    REQUIRE(set.actions.size() == 4);
+    CHECK(input::map_player(set.maps[0].flags) == 0);
+    CHECK(input::map_player(set.maps[2].flags) == 2);  // "player": 3 is slot 2
+    REQUIRE(set.actions.size() == 5);
     const input::ActionDef& move = set.actions[0];
     CHECK(move.name == StringId("Move"));
     CHECK(move.type == input::ActionType::Axis2D);
