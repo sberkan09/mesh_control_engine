@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Bus effects, M-AUDIO2 step 3 (SBA-120): `AudioBusEffects` gives a bus a low-pass and high-pass (gliding, no
+  clicks) and a send into one of two Freeverb reverb units, `AudioReverb` sets a unit up, and `AudioLimiter`
+  turns on the master limiter, all from the scene and keyable in timelines. `AudioDevice::set_bus_filter`,
+  `set_bus_send` and `set_reverb` do the same from code. `audio.reverb 0` turns reverb off. User guide 10.5.
 - Behavior trees, M-AI step 1 (SBA-128, ADR-0045): `.mcbt` files describe an AI's decisions as data (sequence,
   selector, parallel, invert, succeed, fail, repeat, retry, cooldown, timeout, guard, check, wait, set, emit and
   task nodes) over typed blackboard keys, and cook to `CHNK_BT` with errors at file:line:col. An `AiBrain`
