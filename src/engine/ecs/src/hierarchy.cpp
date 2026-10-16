@@ -18,6 +18,11 @@ struct HierarchyIndex {
     HierarchyStats stats;
     u32 direct_since = 0;  // reader tick of propagate_transforms() calls
     bool direct_ran = false;
+    u32 early_tick = 0;    // the run tick of this tick's "transform_propagate_early"
+    bool early_ran = false;
+    u32 late_tick = 0;     // the run tick of the last "transform_propagate"
+    bool late_ran = false;
+    HashMap<Entity, u8> pending;  // WorldTransform adds the early run deferred (applied at phase end)
 };
 
 HierarchyIndex& index_of(World& w) {
@@ -110,11 +115,14 @@ WorldTransform current_world(World& w, HierarchyIndex& idx, Entity e, u32 depth 
     return compose(current_world(w, idx, *p, depth + 1), local);
 }
 
-void run_propagation(World& w, u32 since, bool has_since) {
+// `fresh` starts the stats over; the late run of a tick adds to the early one's.
+void run_propagation(World& w, u32 since, bool has_since, bool fresh = true) {
     HierarchyIndex& idx = index_of(w);
     HierarchyStats& st = idx.stats;
-    st.seeds = 0;
-    st.propagated = 0;
+    if (fresh) {
+        st.seeds = 0;
+        st.propagated = 0;
+    }
     ++st.runs;
 
     // 1. Reconcile ChildOf writes the hooks did not see (set on an existing component).
@@ -150,9 +158,14 @@ void run_propagation(World& w, u32 since, bool has_since) {
     for (Entity e : idx.relinked)
         if (w.alive(e)) seed(e);
     idx.relinked.clear();
-    w.query<const LocalTransform&>().without<WorldTransform>().each([&](Entity e, const LocalTransform&) { seed(e); });
-    w.query<const ChildOf&>().without<WorldTransform>().each([&](Entity e, const ChildOf&) { seed(e); });
-    st.seeds = static_cast<u32>(seeds.size());
+    // Still without a WorldTransform; the late run skips the adds the early one already queued.
+    if (fresh) idx.pending.clear();
+    auto unplaced = [&](Entity e) {
+        if (fresh || !idx.pending.contains(e)) seed(e);
+    };
+    w.query<const LocalTransform&>().without<WorldTransform>().each([&](Entity e, const LocalTransform&) { unplaced(e); });
+    w.query<const ChildOf&>().without<WorldTransform>().each([&](Entity e, const ChildOf&) { unplaced(e); });
+    st.seeds += static_cast<u32>(seeds.size());
 
     struct Keyed {
         u32 depth;
@@ -200,7 +213,10 @@ void run_propagation(World& w, u32 since, bool has_since) {
 
     // 4. Structural follow-ups: deferred inside a phase, immediate outside.
     if (w.in_phase()) {
-        for (const PendingAdd& a : adds) w.commands().add(a.e, a.value);
+        for (const PendingAdd& a : adds) {
+            w.commands().add(a.e, a.value);
+            idx.pending.insert_or_assign(a.e, u8(0));
+        }
         for (Entity e : orphans) w.commands().destroy(e);
     } else {
         for (const PendingAdd& a : adds) w.set(a.e, a.value);
@@ -208,10 +224,35 @@ void run_propagation(World& w, u32 since, bool has_since) {
     }
 }
 
+// First in FixedUpdate_Post: everything moved since the last tick's late run.
+void propagate_early_system(Frame& f) {
+    World& w = f.world();
+    HierarchyIndex& idx = index_of(w);
+    const u32 since = idx.late_ran ? idx.late_tick : w.reader_tick();
+    run_propagation(w, since, since != 0);
+    idx.early_tick = w.change_tick();  // this system's run tick: later systems' writes are newer
+    idx.early_ran = true;
+}
+
+// Where install_hierarchy was called: what the FixedUpdate_Post systems before it moved after the
+// early run (the two run on the same ticks: neither runs when held, both during cutscenes).
 void propagate_system(Frame& f) {
     World& w = f.world();
-    const u32 since = w.reader_tick();
-    run_propagation(w, since, since != 0);
+    const HierarchyIndex& idx = index_of(w);
+    const u32 since = idx.early_ran ? idx.early_tick : w.reader_tick();
+    run_propagation(w, since, since != 0, !idx.early_ran);
+    HierarchyIndex& late = index_of(w);
+    late.late_tick = w.change_tick();
+    late.late_ran = true;
+}
+
+// The ticks the runs keep, aged with the World's so a long run (or a long hold) never wraps them
+// into looking newer than they are.
+void clamp_ticks(World& w) {
+    HierarchyIndex& idx = index_of(w);
+    if (idx.direct_ran) w.clamp_tick(idx.direct_since);
+    if (idx.early_ran) w.clamp_tick(idx.early_tick);
+    if (idx.late_ran) w.clamp_tick(idx.late_tick);
 }
 
 }  // namespace
@@ -242,6 +283,13 @@ void install_hierarchy(World& w) {
     w.set_resource(HierarchyIndex{});
     w.set_hooks<ChildOf>(&on_child_of_added, &on_child_of_removed);
     w.add_destroy_hook(&on_destroy);
+    w.add_tick_clamp_hook(&clamp_ticks);
+    // Twice a tick: first in FixedUpdate_Post, so the systems there that read WorldTransform (the
+    // kit's animators, foot IK, bone attachments, cameras) see this tick's moves even when the
+    // hierarchy is installed after them (scene::load, after kit::install_stock); and where it is
+    // installed, after the FixedUpdate_Post systems registered before it, for what they move.
+    w.add_system_first(Phase::FixedUpdate_Post, "transform_propagate_early", &propagate_early_system);
+    w.run_during_cutscenes(Phase::FixedUpdate_Post, "transform_propagate_early");
     w.add_system(Phase::FixedUpdate_Post, "transform_propagate", &propagate_system);
     w.run_during_cutscenes(Phase::FixedUpdate_Post, "transform_propagate");
 }

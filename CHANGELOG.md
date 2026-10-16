@@ -5,6 +5,16 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Resetting a themed value in UI documents, M-UI-DATA2 step 2 (SBA-154): a `.mcui` widget's
+  `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
+  equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
+  inspector and MCP's `ui_widget_set` reach it. User guide 12.
+- Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
+  component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
+  'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at
+  `file:line:col`. It writes `cooked/mce.d.luau` for editors (luau-lsp). The MCP tool `script_check` runs the
+  same checks without cooking, and `run_headless` / `test_run` report failed scene scripts as
+  `script_errors`. User guide 27.5.
 - The Skeleton panel and `skel2d_*` MCP tools, M-ANIM2D step 5 (SBA-144): rig and animate a 2D character
   without writing the `.mcskel2d` text. The editor panel shows the bone tree, slots and IK constraints, edits a
   bone's rest pose, scrubs an animation to preview the pose, aims IK constraints at points, keys bones at the

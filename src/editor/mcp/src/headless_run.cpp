@@ -220,6 +220,11 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
         out.state_hash = app.world().state_hash();
         out.metrics = app.world().metrics();
         if (inspect) inspect(app.world(), app.hook_entities(), inspect_user);
+#if MCE_HAS_SCRIPT
+        if (const script::ScriptHost* host = script::scene_script_host(app.world()))
+            for (const script::ScriptInfo& s : host->scripts())
+                if (s.state == script::ScriptState::Failed) out.script_errors.push_back(ScriptFailure{s.name, s.error});
+#endif
     }
     return out;
 }

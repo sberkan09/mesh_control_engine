@@ -35,6 +35,7 @@ Result<void> build_document(const DocumentData& d, Document& doc) {
         doc.set_binding(id, w.bind.view(), w.format.view());
         doc.set_font_role(id, w.font_role);
         doc.set_text_align(id, w.text_align);
+        doc.set_own_style(id, w.own_style);
     }
     // What refers to other widgets or reads their state, once they all exist.
     for (u32 i = 0; i < d.widgets.size(); ++i) {
@@ -110,6 +111,7 @@ void extract_document(const Document& doc, DocumentData& out) {
         d.format.assign(doc.binding_format(w));
         d.font_role = doc.font_role(w);
         d.text_align = doc.text_align(w);
+        d.own_style = doc.own_style(w);
         out.widgets.push_back(d);
         push_children(w, index);
     }

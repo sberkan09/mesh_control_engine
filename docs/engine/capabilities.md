@@ -223,6 +223,7 @@ reach all of its non-transient fields.
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `script_check` | `tools_script.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_create` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_add_bone` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `skel2d_add_slot` | `tools_skeleton2d.cpp` | docs/user-guide/14-mcp-ai-workflow.md |

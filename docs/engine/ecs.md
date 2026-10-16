@@ -42,8 +42,9 @@ publicly on `mce::mce_ecs` and `mce::mce_asset`, so the ECS itself never include
 - `transform.h`: `LocalTransform` (position, rotation, scale; all `Save`), the pose of record, plus
   `rotation_z` / `angle_z` for 2D.
 - `hierarchy.h`: `ChildOf{parent}`, engine-written `WorldTransform` (read-only, transient, with a composed
-  `matrix`), `install_hierarchy` (registers the components, hooks and the `transform_propagate` system in
-  `FixedUpdate_Post`), `propagate_transforms`, `set_parent`, `parent_of`, `children_of`, `depth_of`,
+  `matrix`), `install_hierarchy` (registers the components, hooks, `transform_propagate_early` at the front of
+  `FixedUpdate_Post` and `transform_propagate` where it is called, so installing it after other Post
+  systems is fine), `propagate_transforms`, `set_parent`, `parent_of`, `children_of`, `depth_of`,
   `hierarchy_stats`, `compose`, `to_world`.
 
 `mce_ecs_scene`
