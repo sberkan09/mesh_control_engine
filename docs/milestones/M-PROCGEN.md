@@ -86,5 +86,15 @@ over it). Option B stays an open item and needs an Opus decision because it chan
   component that scripts find with `mce.find`.
 - Luau needs no new API: `mce.set(level, "seed", n)` or `reroll = true`; the system runs in the same tick.
 
-**Needs your decision (coordinator / Opus review):** option A vs B, and whether the system belongs in the stock hosts
-(like `ScriptSystem`) or as a kit system any game registers.
+**Decided (coordinator, Opus review, 2026-10-16): option A.** B stays an open item; the core is not touched. Review
+corrections that bind step 3:
+- Rectangle merging is 2D: rows first, then equal-width neighbours merge vertically. A test pins an upper bound of
+  rectangles (and so entities) per grid size.
+- The `ProcLevel` entity carries a `SaveKey`; the generated entities do not. The rule is "rebuild on load".
+- The (kind, seed, params) hash lives in a non-saved field of the component, not in the system's cache.
+- `reroll` is read and cleared on the system's next run. The system runs in the `Pre` phase at a fixed order.
+- An `on_remove` hook on `ProcLevel` deletes the `ProcLevelOwned` entities when the owner goes away.
+- Walls are `RigidBody2D` Static plus `Collider2D` (`pathfinding.cpp:147` needs the body).
+- `tile_size` and the pathfinding cell size are aligned.
+- The system is a kit system the game registers itself, not code inside the stock hosts.
+- Later, not now: runtime tilemap drawing without an asset could extend `draw_tilemap` (`sprite_extract.cpp:511`).
