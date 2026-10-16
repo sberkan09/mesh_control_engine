@@ -41,7 +41,7 @@ inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
 inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
-inline constexpr u8 BEHAVIOR_TREE_VERSION = 1;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h)
+inline constexpr u8 BEHAVIOR_TREE_VERSION = 2;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
@@ -821,7 +821,7 @@ enum class BtNodeKind : u8 {
     Retry,     // the child again after each failure, `a` attempts in all (0: forever)
     Cooldown,  // fails without running the child for `a` seconds after the child finished
     Timeout,   // fails (and halts the child) when the child runs `a` seconds
-    Guard,     // runs the child only when its condition holds on entry
+    Guard,     // runs the child only when its condition holds on entry (and, with `abort`, while it runs)
     Check,     // leaves: the condition as a result
     Wait,      // runs `a` seconds, then succeeds
     Set,       // writes a blackboard key, succeeds
@@ -837,6 +837,12 @@ enum class BtOp : u8 { IsSet, NotSet, Eq, Ne, Lt, Le, Gt, Ge };
 // Set: `a` (numbers) or `v` (Vec3) assigned, `a` added, the key cleared, `key2` copied, or the
 // running entity (Entity keys).
 enum class BtSetOp : u8 { Assign, Add, Clear, Copy, Self };
+
+// Guard observers (M-AI 2): the condition is checked again every tick, not only on entry. Self
+// halts the guard's running child when the condition stops holding (the guard fails); Lower, on a
+// guard that is a selector's child, halts the selector's running later child when it starts to
+// hold, and the selector runs the guard instead. Both does the two.
+enum class BtAbort : u8 { None, Self, Lower, Both };
 
 // Parallel: All succeeds when every child has and fails on the first failure; One succeeds on the
 // first success and fails when every child has.
@@ -879,7 +885,9 @@ struct BtNode {
     u32 name;          // the node's name for the debugger, or kBtNoString
     u32 text;          // Emit / Task: the signal's or task's name
     u16 key2;          // Set (Copy): the key copied
-    u8 pad_[6];
+    u8 abort;          // Guard: a BtAbort (0 elsewhere)
+    u8 pad_;
+    u32 arg;           // Task: its string argument (a clip, a guid, an event, a text), or kBtNoString
 };
 static_assert(sizeof(BtNode) == 48);
 

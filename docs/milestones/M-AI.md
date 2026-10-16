@@ -1,6 +1,6 @@
 # M-AI — Game AI as data (milestone record)
 
-**Status:** active (added 2026-10-16; step 1 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
+**Status:** active (added 2026-10-16; steps 1-2 done). Plan: ROADMAP §M-AI; ADR-0045; Linear SBA-128 … SBA-133.
 
 **Why:** MCE has the parts an enemy moves and senses with: grid A* and `PathAgent`, the navmesh and `NavAgent3D`
 (M-GAMEPLAY3D), `Raycast3D` / `Overlap3D` sensors, and the FSM helper. What it lacks is the layer that decides.
@@ -22,7 +22,7 @@ It needs no device. Every step gates headless in `local_ci.sh`.
 | # | Step | Linear | State |
 |---|---|---|---|
 | 1 | Behavior tree runtime: `.mcbt` cooked to `CHNK_BT`, typed blackboard keys, `AiBrain` and `Blackboard` components holding all run state, tasks by name (ADR-0045) | SBA-128 | done |
-| 2 | Stock data tasks (move to a key or entity on the grid or the navmesh, look at, animate, play a sound, spawn, raise and wait for events) and blackboard observer aborts; the stock player runs trees from scenes | SBA-129 | not started |
+| 2 | Stock data tasks (move to a key or entity on the grid or the navmesh, look at, animate, play a sound, spawn, raise and wait for events) and blackboard observer aborts; the stock player runs trees from scenes | SBA-129 | done |
 | 3 | Perception: `Perceiver` (sight cone and range, hearing, forget time) and `Stimulus` (a visible target with a team, noise events), line of sight through 2D and 3D rays, memory into blackboard keys | SBA-130 | not started |
 | 4 | A utility selector with response curves and hysteresis, `AiTokenPool` for attack and role tokens, point queries scored by distance, line of sight and cover | SBA-131 | not started |
 | 5 | The editor's Behavior Tree panel: tree, inspector, undo, cook validation; in play-in-editor the active path, results and blackboard, and a perception overlay | SBA-132 | not started |
@@ -55,3 +55,31 @@ It needs no device. Every step gates headless in `local_ci.sh`.
   subtree once with `halting` set.
 - **A new tree resets the brain.** `AiBrain::tree_hash` is the hash of the cooked payload, so a hot-reloaded tree
   never reads old statuses.
+
+## Step 2 — stock tasks and observer aborts (SBA-129)
+
+| Piece | Where |
+|---|---|
+| `BtNode::abort` (`asset::BtAbort`: none, self, lower, both) and `BtNode::arg` (a task's string), CHNK_BT v2; the reader refuses a lower abort without a selector parent | `formats.h`, `formats.cpp` |
+| `.mcbt`: a guard's `abort`; the stock tasks' named arguments, checked by the cook (keys of the right type, guids, numbers); `arg` for a game's tasks; the sounds and prefabs as dependencies | `bt_importer.cpp` |
+| The observers: a guard re-checks its condition every tick; a selector lets an earlier lower-aborting guard take over | `ai.cpp` |
+| The stock tasks `move_to`, `look_at`, `animate`, `play_sound`, `spawn`, `raise`, `wait_event`, `log`; `BtTaskCall::tree` and `arg()`, `bt_key_position` | `ai_tasks.cpp`, `ai.h` |
+| `samples/ai_demo`: the stock player runs a guard that patrols on a navmesh, hears a bell's alarm and catches a thief (`ctest -R ai_demo_player`) | `samples/ai_demo` |
+| Tests: the abort truth table, every stock task, the cook's errors, a chase that hashes the same on two runs | `tests/kit/test_ai_tasks.cpp` |
+
+**Design notes.**
+- **Observers poll, every tick.** Unreal re-evaluates a decorator when its blackboard key changes;
+  here the guard's condition is checked on each tick the branch is relevant. A key change between
+  ticks is seen on the next tick either way, and polling needs no subscription state in the save.
+- **Lower aborts are checked by the selector.** A selector resuming its running child first checks
+  its earlier children that are lower-aborting guards. The first that holds halts the running child
+  and the selector restarts at it, in the same tick. Every selector on the running path does this,
+  so a guard at the root interrupts a task any depth below.
+- **The stock tasks are registered names.** `install_ai` registers them; a game can register its own
+  function under a name to replace one. Their memory slot marks the first tick, because the agents
+  and animators run after the brain and their state is still the previous tick's.
+- **move_to chases through the agent.** An entity key becomes `NavAgent3D::follow`, so the navmesh
+  re-plans as the target moves without the tree re-planning every tick. A halt clears `move_to` and
+  `follow` (a `PathAgent` goes inactive).
+- **raise reaches the sequences.** It pushes a `BtSignal` and a `SeqSignal`, so a cutscene's
+  `wait_event` can wait on an AI beat; `wait_event` hears both.

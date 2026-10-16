@@ -340,12 +340,12 @@ that the debugger shows:
 | `repeat`, `retry: node`, `count` | runs the child again after each success (repeat) or failure (retry), `count` times in all; 0 means forever |
 | `cooldown: node`, `seconds` | after the child finishes, fails without running it for `seconds` |
 | `timeout: node`, `seconds` | fails, and stops the child, when it runs longer than `seconds` |
-| `guard: node`, `key`, `op`, `value` | runs the child only when the condition holds as it starts |
+| `guard: node`, `key`, `op`, `value`, `abort` | runs the child only when the condition holds as it starts; with `abort` it keeps watching (below) |
 | `check: key`, `op`, `value` | the condition as a result. Ops are `is_set`, `not_set`, `==`, `!=`, `<`, `<=`, `>` and `>=`; the default is `==` with a `value`, else `is_set` |
 | `wait: seconds` | runs that long, then succeeds |
 | `set: key` with `value`, `add`, `clear: true` or `from: key` | writes the key, then succeeds. An entity key's value is `"self"` |
 | `emit: signal` | raises a `kit::BtSignal`, readable on the next tick |
-| `task: name`, `key`, `value`, `vector` | a function your game registers by name |
+| `task: name`, `key`, `value`, `vector`, `arg` | a stock task (below) or a function your game registers by name |
 
 Keys are `bool`, `int`, `float`, `vec3` or `entity`, with an optional `default`. A tree has at most 16
 bool, int and float keys, 8 vec3 keys and 8 entity keys. Only numbers compare; a vec3 or entity key
@@ -371,10 +371,42 @@ BtStatus step_patrol(kit::BtTaskCall& t) {
 world.resource<kit::BtRegistry>().register_task("step_patrol", &step_patrol);
 ```
 
+The stock tasks need no code. Each takes its own named arguments:
+
+| Task | Does |
+|---|---|
+| `move_to`, `key`, `radius` | walks to a vec3 key, or after an entity key, with the entity's `NavAgent3D` (navmesh) or `PathAgent` (grid). Runs until it arrives or comes within `radius`; fails on no path or no agent. A parent that stops it stops the agent |
+| `look_at`, `key` | turns the entity toward a vec3 or entity key: about +Z on a 2D entity (one with a `PathAgent`, `Sprite` or `AnimatedSprite`; +X faces it), else about +Y (−Z faces it) |
+| `animate`, `clip`, `finish` | plays the clip on the entity's `AnimatedSprite`, or on its `Animator` when that has no graph. With `finish: true` it runs until a Once clip finishes |
+| `play_sound`, `sound`, `gain_db` | plays an Sfx asset (`"guid:<uuid>"`) once, through `audio::PlaySfx` |
+| `spawn`, `prefab`, `key`, `offset` | instantiates a prefab at the key's place (or the entity's), plus `offset` |
+| `raise`, `event` | raises a signal that `wait_event` and sequences' `wait_event` (13.1) hear on the next tick |
+| `wait_event`, `event` | runs until that signal is raised (by `raise`, `emit` or a sequence's `emit`) |
+| `log`, `text` | writes the text to the log with the tree's name and the entity |
+
+```json
+{"selector": [
+  {"guard": {"sequence": [{"task": "move_to", "key": "thief", "radius": 1}, {"task": "animate", "clip": "grab", "finish": true}]},
+   "key": "alert", "value": true, "abort": "lower", "name": "chase"},
+  {"repeat": {"sequence": [{"task": "move_to", "key": "post_a"}, {"wait": 0.5}, {"task": "move_to", "key": "post_b"}]},
+   "name": "patrol"}
+]}
+```
+
+A guard with `abort` watches its condition every tick, not only as it starts:
+- `"self"` stops the guard's running child as soon as the condition fails, and the guard fails.
+- `"lower"` (only on a selector's child) stops the selector's later, lower-priority branch as soon as
+  the condition holds, and the selector runs the guard's branch instead. Above, an alert stops the
+  patrol mid-walk.
+- `"both"` does the two.
+
+The tasks that were stopped hear it as `halting`, like any other stop.
+
 How a tree runs:
 - A running node carries on next tick where it was. A sequence or selector resumes at its running
-  child and does not look at the earlier ones again until the tree starts over. In the guard above,
-  an alert raised mid-patrol is noticed when the patrol finishes.
+  child and does not look at the earlier ones again until the tree starts over (unless an earlier
+  guard aborts lower branches). Without an abort, an alert raised mid-patrol is noticed when the
+  patrol finishes.
 - When the root finishes, `AiBrain.result` and `runs` record it, and the tree starts again on the
   next tick. Repeat and retry also restart their child on the next tick, so a tree never loops
   within one tick.
@@ -386,5 +418,6 @@ How a tree runs:
 Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministic, they are in the
 state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
 `BtRegistry::validate_tasks()` names a task that a loaded tree uses but your game never registered;
-such a node fails and is logged once. The design is ADR-0045. Perception, stock movement tasks,
-utility choices and the editor's tree panel come in the next steps of M-AI.
+such a node fails and is logged once. The design is ADR-0045. `samples/ai_demo` is a data-only project
+in which the stock player runs a patrolling guard and an alarm. Perception, utility choices and the
+editor's tree panel come in the next steps of M-AI.
