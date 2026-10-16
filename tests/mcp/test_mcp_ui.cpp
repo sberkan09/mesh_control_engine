@@ -226,6 +226,15 @@ TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, chec
     auto a = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240,"save":"shots/menu.png"})");
     REQUIRE(a.images.size() == 1);
     CHECK(a.images[0].width == 320);
+    // The reply names the document that was drawn (the cook inside the call rescans the project: it once echoed a
+    // freed asset record, so the name could belong to another document).
+    CHECK(str(a.v().get("document")) == "ui/menu.mcui");
+    c.ok("ui_create", std::string(R"({"path":"ui/zz_other.mcui","widgets":)") + kMenuWidgets + "}");
+    auto other = c.ok("ui_preview", R"({"document":"ui/zz_other.mcui","width":320,"height":240})");
+    CHECK(str(other.v().get("document")) == "ui/zz_other.mcui");
+    CHECK(str(other.v().get("guid")) != str(a.v().get("guid")));
+    auto back = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240})");
+    CHECK(str(back.v().get("document")) == "ui/menu.mcui");
     auto again = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240})");
     CHECK(a.images[0].rgba.size() == again.images[0].rgba.size());
     CHECK(std::equal(a.images[0].rgba.begin(), a.images[0].rgba.end(), again.images[0].rgba.begin()));

@@ -418,7 +418,7 @@ bool check_content(ToolCall& c, cook::JsonValue content) {
         if (!reserved_key(content.key_at(i))) continue;
         c.error += "content.";
         c.error += content.key_at(i);
-        c.error += ": format, version and guid are set by the tool";
+        c.error += ": format, version and guid are set by the tool and kept from the file: leave them out of 'content'";
         return false;
     }
     return true;

@@ -456,6 +456,10 @@ bool ui_preview(ToolCall& c) {
     const editor::ProjectAsset* doc = nullptr;
     if (!ui_document_arg(c, doc)) return false;
     rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
+    // The cook inside render_ticks rescans the project and frees `doc`: keep what the reply echoes.
+    const cook::String doc_path(doc->path.view());
+    const asset::Guid doc_guid = doc->guid;
+    doc = nullptr;
     const Server::SceneFile& file = c.server.scene_file();
     if (!file.rel.empty() && !scene(c).dirty()) {
         rq.scene_rel = cook::String(file.rel.view());
@@ -500,7 +504,7 @@ bool ui_preview(ToolCall& c) {
     draw_safe_area(img, rq);
     c.out.begin_object();
     if (!save.empty()) c.out.key("saved").str(save);
-    c.out.key("document").str(doc->path.view()).key("guid").str(asset_guid_ref(doc->guid).view());
+    c.out.key("document").str(doc_path.view()).key("guid").str(asset_guid_ref(doc_guid).view());
     write_result_head(c, rq, software);
     c.out.end_object();
     return attach_image(c, img);
