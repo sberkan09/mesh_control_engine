@@ -1,6 +1,6 @@
 # M-VISUAL3 — What keeps the engine from an AAA look with data alone (milestone record)
 
-**Status:** step 1 (the plan below) in review (2026-10-16). Plan: ROADMAP §M-VISUAL3 and the plan section of this file; Linear SBA-199 (step 1; the other steps are not filed, see below). Source: GitHub #428.
+**Status:** step 1 (the plan below) done (2026-10-16). Plan: ROADMAP §M-VISUAL3 and the plan section of this file; Linear SBA-199 (step 1; the other steps are not filed, see below). Source: GitHub #428.
 
 **Why:** blind test 3 (rounds 5 and 6) had an art agent dress a world with real scanned and low-poly content through
 data and MCP only and rate it about 4/10 against an AAA bar. #428 lists what stopped it: no parallax or displacement,
@@ -14,12 +14,12 @@ any change to the shaders or the draw path.
 
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
-| 1 | Plan and interfaces: #428 checked against the code, fields, keys, arguments, cost | SBA-199 | Opus | done: the plan section below (in review) |
+| 1 | Plan and interfaces: #428 checked against the code, fields, keys, arguments, cost | SBA-199 | Opus | done: the plan section below (PR #430) |
 | 1b | Seam: `asset/formats.h` (`MaterialExt` height fields, `TextureFormat::RGBA16F`) | not filed | Sonnet | not started |
 | 2 | Parallax occlusion mapping from a height map on `.mcmat` | not filed | Sonnet (Opus review) | not started |
 | 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | not started |
 | 4 | `.hdr` / `.exr` sky and image-based light (#409), sky rotation | not filed | Sonnet (Opus glance at the sky shader) | not started |
-| 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus (reason below) | not started |
+| 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus | not started |
 | 5b | `StaticMerge3D`: merged static props per material and cell | not filed | Sonnet (Opus review) | not started |
 | 6 | Foliage variation and wind, decal warnings, the demo, gates and the close | not filed | Sonnet (Opus review) | not started |
 
@@ -528,8 +528,10 @@ can be a stacked PR if the thread prefers); none touches three modules in one PR
 | 6 foliage, decals, demo, close | 14–20 |
 | **Total** | **86–133** (the ROADMAP's L, 80–140) |
 
-### Open questions for the coordinator
+### Decisions (coordinator, 2026-10-16, on PR #430)
 
-1. Step 4's `.exr` needs tinyexr through FetchContent. Accept the dependency, or ship `.hdr` only?
-2. Step 5a's default: on if every golden is byte-identical (the plan's gate), else off. Agreed?
-3. Step 5a on Opus instead of Sonnet (reason above). Agreed?
+1. `.exr` is in: tinyexr, vendored or through FetchContent with a pinned version, its license recorded in the
+   third-party notices.
+2. Step 5a ships with `r.instancing` on by default when every existing golden is byte-identical with it on, and off
+   otherwise.
+3. Step 5a runs on Opus.
