@@ -209,10 +209,11 @@ reclaim_space() {  # $1: index in stages of the stage about to run; returns 1 wh
 
 JOBS="$(nproc 2>/dev/null || echo 4)"
 
-# Extra configure arguments shared by every preset. -gz compresses the debug sections: a gcc-debug tree shrinks
-# from 13 GB to 8.2 GB (claude_communication R2), which matters for the ~40 GB allowance. Changing the flags
-# invalidates every cached object once, so the first run after this lands is cold and the next snapshot is rebuilt.
-COMMON_ARGS=(-DCMAKE_C_FLAGS=-gz -DCMAKE_CXX_FLAGS=-gz)
+# Extra configure arguments shared by every preset. The linux presets set -gz themselves (CMakePresets.json
+# linux-base: debug sections compressed, a gcc-debug tree 13 GB -> 8.2 GB, claude_communication R2), so a tree
+# configured by hand with `cmake --preset` and one configured here agree. Changing the flags invalidates every
+# cached object once: the first run after this lands is cold and the next snapshot is rebuilt.
+COMMON_ARGS=()
 SNAPSHOT=""
 HAVE_CCACHE=0
 if command -v ccache > /dev/null; then
