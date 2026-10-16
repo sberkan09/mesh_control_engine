@@ -15,6 +15,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
   actions, change scene, quit, and query 2D and 3D physics. `mce.field` handles and multi-field `get` / `set`
   halve the per-entity cost: the 2,000-entity bench runs in about 0.35 ms per tick. User guide 27.3 lists it all.
+- Ducking and mixer snapshots, M-AUDIO2 step 4 (SBA-121): `AudioDuck` turns Music, SFX or UI down while
+  another bus plays (the music under a voice line). `AudioSnapshot` fades a gain offset and a low-pass or
+  high-pass onto a bus while it is active, or while the game is paused (`while_paused`: the stock player's
+  pause overlay muffles the world). The new `Voice` bus is for dialogue, with a saved `audio.voice_db`.
+  `AudioDevice::set_bus_duck`, `set_bus_trim` and `audio::update_mix` do the same from code. User guide 10.5.
 - Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
   `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
