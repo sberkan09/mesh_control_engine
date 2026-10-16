@@ -26,6 +26,7 @@
 namespace mce::kit {
 
 class VideoTextures;
+class RenderTextures;
 
 class SpriteExtract {
 public:
@@ -57,9 +58,12 @@ public:
     render::SpriteSetId ui_sheet_set(asset::Guid sheet, u32* region_count = nullptr);
     // Draws a VideoPlayer's Sprite with its film (video.h); null (the default) draws the texture.
     void set_videos(const VideoTextures* videos) { videos_ = videos; }
+    // M-VIEWS 3: a Sprite with ShowRenderTexture draws the render texture instead of its texture.
+    void set_render_textures(const RenderTextures* rts) { render_textures_ = rts; }
 
 private:
     const VideoTextures* videos_ = nullptr;
+    const RenderTextures* render_textures_ = nullptr;
     struct TextureEntry {
         asset::Guid guid;
         asset::Guid normal;

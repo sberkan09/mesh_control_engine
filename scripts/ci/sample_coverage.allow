@@ -9,3 +9,5 @@ NetOwner | tested in tests/ but no sample scene uses it yet; M-COVER step 4 show
 Dialogue | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
 DialogueInput | tested in tests/ but no sample scene uses it yet; M-COVER step 4 shows it in a systems tour sample (net, script, dialogue)
 CameraView | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (split-screen)
+RenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)
+ShowRenderTexture | tested in tests/kit and tests/render_gl; M-VIEWS step 5 shows it in samples/09_coop (minimap)

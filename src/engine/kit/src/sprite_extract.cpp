@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/video.h"
 #include "mce/loc/loc.h"
 #include "mce/log.h"
@@ -347,6 +348,14 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         if (const render::SpriteSetId film = videos_ ? videos_->sprite_set(ent) : render::SpriteSetId{}; film.valid()) {
             inst.set = film;
             inst.region = 0;
+        }
+        if (render_textures_) {
+            if (const ShowRenderTexture* show = world.try_get<ShowRenderTexture>(ent)) {
+                if (const render::SpriteSetId rt = render_textures_->sprite_set(show->source); rt.valid()) {
+                    inst.set = rt;
+                    inst.region = 0;
+                }
+            }
         }
         inst.sort_layer = s.layer;
         inst.sort_order = s.order;

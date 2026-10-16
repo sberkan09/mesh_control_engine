@@ -8,6 +8,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 - Accessibility checks on themed UI documents, M-UI-DATA2 step 3 (SBA-155): `project_check` judges the Text,
   Button and Toggle labels of a `.mcui` document with the kind's default look and its theme applied (before,
   themed colors were skipped and unstated sizes unseen), and names the widget by its path. User guide 24.5.
+- Luau recipes (a countdown, a state machine, spawning, physics events), user guide 27.9; M-SCRIPT is done.
+- Script games for agents, M-SCRIPT step 6b (SBA-152): the `start_game` prompt offers a script-only game, `docs_search`
+  finds chapter 27, `script_check` takes `assets/scripts/x.luau` as well as `scripts/x.luau`, and the guide lists the
+  gotchas a blind agent hit (27.8).
 - A platformer in Luau, M-SCRIPT step 6a (SBA-152): `projects/EmberScript` is a side-view game of scripts and
   data (player controller, enemy state machine, goal) with `.mctest` scenarios, and `ScriptVars` gives a
   script-only game 16 saved numbers per entity to remember things in. User guide 27.8.

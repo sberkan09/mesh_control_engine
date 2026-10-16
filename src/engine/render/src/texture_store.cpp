@@ -124,6 +124,19 @@ Result<rhi::TextureHandle> TextureStore::upload(u32 key, u32 generation, const T
     return tex.value();
 }
 
+void TextureStore::adopt(u32 key, u32 generation, rhi::TextureHandle texture) {
+    MCE_ASSERT_MSG(device_, "TextureStore::adopt before init");
+    if (!device_ || texture.is_null()) return;
+    for (usize i = 0; i < entries_.size(); ++i) {
+        if (entries_[i].key == key && entries_[i].generation == generation) {
+            device_->destroy_texture(entries_[i].texture);
+            remove_ordered(entries_, i);
+            break;
+        }
+    }
+    entries_.push_back(Entry{key, generation, texture});
+}
+
 void TextureStore::retire(u32 key, u32 generation) {
     if (!device_) return;
     for (usize i = 0; i < entries_.size(); ++i) {
