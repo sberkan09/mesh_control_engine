@@ -5,6 +5,10 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Mutation tests for the chunk readers, M-FUZZ step 1 (SBA-185): `tests/fuzz` has a deterministic byte mutator and
+  runs the asset module's 19 chunk readers over 22,000 mutated payloads of every chunk the samples cook
+  (`ctest -R test_fuzz`); none crashes, hangs or asserts. `docs/milestones/M-FUZZ.md` lists every parser of
+  untrusted bytes and what covers it.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
 - Tested-sample check, M-DOCCHECK step 3 (SBA-178): `check_docs.py` also fails for a `samples/` or `projects/`

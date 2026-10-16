@@ -114,6 +114,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-PROCGEN | [M-PROCGEN.md](milestones/M-PROCGEN.md) (Linear SBA-171 … SBA-175, added 2026-10-16) | active (not started) | steps 1–5 |
 | M-DOCCHECK | [M-DOCCHECK.md](milestones/M-DOCCHECK.md) (Linear SBA-176 … SBA-179, added 2026-10-16) | done (`scripts/ci/check_docs.py` in the walls stage: links and anchors, `#include` lines of `mce/` headers, `mce_player` flags and a test for every sample and project; `scripts/ci/docs.allow`) | none |
 | M-WORKFLOW | [M-WORKFLOW.md](milestones/M-WORKFLOW.md) (Linear SBA-180 … SBA-184, added 2026-10-16) | planned | steps 1–5 |
+| M-FUZZ | [M-FUZZ.md](milestones/M-FUZZ.md) (Linear SBA-185 … SBA-188, added 2026-10-16) | active (step 1 done: `tests/fuzz` mutator and the asset module's 19 chunk readers over mutated cooked sample chunks, a survey of every parser of untrusted bytes) | steps 2–4 |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -597,6 +598,19 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 
 **Demo:** the dungeon sample played headless on three seeds gives the same hash across runs and builds, and a different level per seed.
 **Gates:** every generator is a pure function of its inputs (same bytes out twice, Debug = Release); connectivity holds on every tested seed; a project without `ProcLevel` builds and hashes as today; `local_ci.sh` green on every step.
+
+### M-FUZZ — Hostile input: loaders and parsers never crash · **size S–M (rough guess, ≈ 30–50 h engineering)** · tier: off-tier, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the standing instruction to extend the roadmap when no milestone is free. Only the `.mce` container and the MCP request path have a mutation test; every other reader of packs, saves, recordings, mods and packets trusts its input after a header check. Needs no device.*
+
+**Builds, in order:**
+1. A deterministic mutator (`tests/fuzz`) and a survey of every parser of untrusted bytes; the asset module's chunk readers over mutated payloads of every cooked sample chunk.
+2. Walk what the readers accept so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, nav mesh) and the importers; fix each finding with a regression test.
+3. Saves, replays, input recordings, `.mcperf`, net packet decoders and the Luau compile path.
+4. The targets in the ASan stage under a time budget; a walls check that a new chunk type has a fuzz target; the close.
+
+**Demo:** `ctest -R fuzz` replays a failure from (pack, chunk, iteration) alone; the survey table has no parser marked "none".
+**Gates:** `local_ci.sh` green on every step, ASan clean; a fix in shared loader, allocator or net code gets an Opus review.
 
 ### M-DOCCHECK — Docs that cannot rot · **size S (rough guess, ≈ 20–30 h engineering)** · tier: off-tier, gates nothing · priority 3
 
