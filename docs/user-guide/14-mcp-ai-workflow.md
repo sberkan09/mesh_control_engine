@@ -21,7 +21,7 @@ The server speaks JSON-RPC 2.0 over stdin and stdout, one message per line (the 
 transport); it opens no socket. Stdout carries nothing else: logs go to stderr, and so does the
 command line `mce mcp` prints before it starts the server. Use the **project's** server or the stock one **with the module**:
 without `--module`, `mce_mcp` knows only the engine's components (the visual-novel kit's included) and refuses scenes that use yours.
-After a rebuild that adds components, restart the server.
+After a rebuild that adds components, `module_build` maps them into a server started with `--module`; a server with the game compiled in (`<game>_mcp`) needs a restart. A scene that names a component or field the loaded module does not know fails `cook_run`, `run_headless`, `render_frame`, `ui_preview` and `timeline_preview` for every agent until then; the error says so.
 
 With the SDK, `mce new` and `mce example` register the server for you: they write a `.mcp.json`
 into the project naming the server `mce_<game>` (`mce mcp <project>` with absolute paths, so a
@@ -111,7 +111,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
 | | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
 | | `navmesh_bake` | none | bakes the scene's first `NavMeshSurface3D` into `assets/navmesh/<scene>/nav_<id>.mcnav` and points its `baked` at it (save the scene to keep that); returns the asset, its `content_hash` (the same scene bakes byte-identical), tiles, layers, triangles and bytes |
-| Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
+| Build | `cook_run` | `pack?`, `adopt?`, `paths?`, `skip_errors?` | incremental; `adopt` writes sidecars for new source files (the error for one without says so); `paths` (files or folders under `assets/`) cooks only those and what they depend on, into `cooked/` only, never the pack; `skip_errors` also returns `failed_files`, every file that could not be cooked; the pack is written only by a run with no errors (section 5.4) |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `script_check` | `path` or `source`, `definitions?` | the cook's checks on one Luau script (syntax, hidden state, names with "did you mean", types against `mce.d.luau`) without cooking; returns every problem with line and col (user guide 27.5) |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
@@ -431,13 +431,28 @@ The **feel report** (`feel` in each result, when there is an actor): `finished` 
 cells), `alive_at_end` and the `bounds` it reached. A level that a `walk_to` bot cannot finish, or
 that leaves it stuck at the same spot, is the first thing to look at with `render_frame`.
 
+### When a cook fails
+
+`cook_run` returns `ok: false` with diagnostics (file, line, column); `cook_errors` repeats them.
+`run_headless`, `render_frame`, `ui_preview` and `timeline_preview` cook the whole project first, so
+one bad file stops them all. Read the first error:
+
+- *no .mceasset sidecar* (a new `.luau`, texture or model): `cook_run {"adopt": true}`.
+- *unknown component type* or *unknown field*: the loaded module is older than your code. `module_build`
+  (or `mce build`), and restart the server if it was not started with `--module`.
+- A file you cannot fix yet: `cook_run {"paths": ["scenes/level_02.mcscene"]}` cooks only that and its
+  dependencies, or `{"skip_errors": true}` cooks what it can and lists the failing files in
+  `failed_files`. Neither writes a pack; fix the files, then `cook_run {"pack": true}`.
+
+Section 5.4 has the full table.
+
 ## 14.4 Pitfalls
 
 | Pitfall | What happens | Do this |
 |---|---|---|
 | Entity ids are per scene | ids are saved in the file and survive `scene_open`, but a batch written against another scene's ids edits the wrong entities | re-list with `scene_list_entities` after opening a different scene; address entities by unique name; `scene_undo` repairs a bad batch |
 | `run_headless` plays the saved file | unsaved edits are refused | `scene_save` first |
-| The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack | `cook_run {"pack": true}`, or rebuild `my_game` (the build cooks the pack) |
+| The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack (`mce play` and `mce headless` run `build/project/assets.mce`, which only `mce build` refreshes; they warn when it is older than `assets/`) | `cook_run {"pack": true}`, or `mce build` (the build cooks the pack) |
 | Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`; `module_build` reloads new and changed components without a restart |
 | `scene_new` makes a new GUID | a `.mceproj` that names the old scene points at nothing if you save over it | to re-author the start scene, `scene_open` it and `scene_clear` it |
 | `scene_save` with `force` over another file | the file keeps its own GUID but its content is replaced by the open scene | save as a new path (a fresh GUID), or `scene_open` and `scene_clear` the existing scene |

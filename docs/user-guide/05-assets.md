@@ -91,6 +91,8 @@ build/<preset>/projects/MyGame/my_game_cook projects/MyGame            # cook in
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --pack     # also write projects/MyGame/assets.mce
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --force    # ignore the cook DB, redo everything
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --adopt    # write missing sidecars first
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --only scenes/level_02.mcscene --only textures
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --skip-errors   # cook what can be cooked, list the rest
 ```
 
 Exit codes: 0 clean, 1 cook errors, 2 usage. Errors are printed as `file:line:col: error: message
@@ -118,6 +120,25 @@ What the cook does, so its behaviour makes sense:
 The build cooks for you: building `my_game` runs `my_game_cook` over a copy of `assets/` into
 `build/<preset>/projects/MyGame/project/assets.mce`, which is the pack the host loads from the
 build tree. The editor's F7 cooks into `<Project>/cooked/` for the editor's own use.
+
+### When a cook fails
+
+A failed cook still cooks everything that does not depend on the failed file (and the failed file's
+previous output keeps serving), but it writes no pack. Read the first error; these are the usual ones.
+
+| Error | Cause | Fix |
+|---|---|---|
+| `unregistered asset (no .mceasset sidecar)` | a new source file (a `.luau` script, texture, model, sound) with no sidecar | adopt it: over MCP `cook_run {"adopt": true}`, on the command line `mce cook <project> --adopt`. The same error stops `mce build`; adopt, then build again |
+| `unknown component type 'X'` or `unknown field 'x' on X` | the process that cooks has an older game module than your source (the component or field is new) | `mce build` (or MCP `module_build`), then restart the MCP server (`mce mcp <project>`); `mce cook` loads the module fresh each time |
+| `missing reference <guid>` | a scene or material names an asset that was deleted or never adopted | adopt the file, or fix the reference |
+| a pack that plays an old scene | the cook writes `cooked/`; `mce play` and `mce headless` run `build/project/assets.mce`, which only `mce build` refreshes (they print a warning when it is older than `assets/`) | `mce build`, or cook with `--pack` and run the player with `-pack` |
+
+To work around a file you are not ready to fix, cook around it. `--only <path>` (MCP `cook_run`
+`paths`) cooks just those assets and what they depend on, leaves the rest as it was, and does not
+look at the other files, so an unrelated unadopted file is not its error; it writes `cooked/` but
+never the pack, which must hold the whole project. `--skip-errors` (MCP `skip_errors`) keeps
+cooking past failures as a cook always does, and prints every failing file with its first error at
+the end; the pack is still written only by a run with no errors.
 
 ## 5.5 Development mount versus the pack
 

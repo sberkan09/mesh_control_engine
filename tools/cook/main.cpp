@@ -1,7 +1,7 @@
 // mce_cook — command-line cook (assets.md §5.1, FR-AST-070).
 //
 //   mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
-//            [--textures rgba8|astc]
+//            [--only <asset path>]... [--skip-errors] [--textures rgba8|astc]
 //
 // A project with a mod.json is a mod (ADR-0034): its pack carries a ModInfo chunk and drops into a
 // game's mods folder as <id>.mce.
@@ -21,7 +21,7 @@ namespace {
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fputs(
         "usage: mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]\n"
-        "                [--textures rgba8|astc]\n"
+        "                [--only <asset path>]... [--skip-errors] [--textures rgba8|astc]\n"
         "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --module <path>  load this game module (lib<game>.so / .dll) first, so scenes that use its\n"
         "                   components cook; without it only the engine's components are known\n"
@@ -29,7 +29,10 @@ int usage(std::FILE* out = stderr, int rc = 2) {
         "                   references may name its assets, and same-GUID assets here override them\n"
         "  --pack    also write <project-dir>/assets.mce (shipping pack; a mod's carries its mod.json identity)\n"
         "  --force   ignore the cook DB and re-cook every asset\n"
-        "  --adopt   create .mceasset sidecars for unregistered sources\n"
+        "  --adopt   create .mceasset sidecars for unregistered sources (a file with none is a cook error)\n"
+        "  --only <path>  cook only this file or folder under assets/ and what it depends on (repeatable);\n"
+        "                 cooks into cooked/ only, never the pack\n"
+        "  --skip-errors  cook what can be cooked and list every failing file at the end\n"
         "  --quiet   print errors and the summary only\n"
         "  --textures rgba8|astc  texture storage: rgba8 (default, desktops) or ASTC 4x4 blocks (phones)\n"
         "  --help    this text\n",
@@ -43,6 +46,7 @@ const char* status_name(mce::cook::AssetStatus s) {
         case mce::cook::AssetStatus::UpToDate: return "up-to-date";
         case mce::cook::AssetStatus::Failed: return "FAILED";
         case mce::cook::AssetStatus::Blocked: return "blocked";
+        case mce::cook::AssetStatus::Skipped: return "skipped";
     }
     return "?";
 }
@@ -62,6 +66,8 @@ int main(int argc, char** argv) {
         else if (a == "--pack") opt.pack = true;
         else if (a == "--force") opt.force = true;
         else if (a == "--adopt") opt.adopt = true;
+        else if (a == "--only" && i + 1 < argc) opt.paths.push_back(cook::String(argv[++i]));
+        else if (a == "--skip-errors") opt.skip_errors = true;
         else if (a == "--quiet") quiet = true;
         else if (a == "--textures" && i + 1 < argc) {
             const StringView t(argv[++i]);
@@ -106,6 +112,7 @@ int main(int argc, char** argv) {
         }
         if (!quiet) {
             for (const cook::AssetReport& a : report.assets)
+                if (a.status != mce::cook::AssetStatus::Skipped)
                 std::printf("  %-10s %-8s assets/%s\n", status_name(a.status), asset::chunk_type_name(a.type), a.path.c_str());
         }
         std::printf("mce_cook: %u cooked, %u up to date, %u failed; %u error(s), %u warning(s); manifest %016llx", report.cooked,
@@ -113,6 +120,13 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(report.manifest_hash));
         if (opt.pack && report.pack_hash) std::printf("; pack %016llx", static_cast<unsigned long long>(report.pack_hash));
         std::printf("\n");
+        if (opt.skip_errors && !report.failed_files.empty()) {
+            std::printf("mce_cook: %zu file(s) could not be cooked (the rest was):\n", static_cast<size_t>(report.failed_files.size()));
+            for (const cook::FailedFile& f : report.failed_files)
+                std::printf("  %s: %s\n", f.file.c_str(), f.message.c_str());
+        }
+        if (report.subset)
+            std::printf("mce_cook: only the named paths: %u asset(s) left as they were; the pack is not rewritten\n", report.skipped);
         if (report.mod || report.base_assets)
             std::printf("mce_cook: %s on %u base asset(s), %u override(s)\n", report.mod ? "mod" : "project", report.base_assets,
                         report.overrides);

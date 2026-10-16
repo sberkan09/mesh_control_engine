@@ -12,3 +12,7 @@ else()
     add_test(NAME import_skeletons
              COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_skel.py" "${CMAKE_CURRENT_BINARY_DIR}/import_skel_test")
 endif()
+
+# SBA-182: `mce play` / `mce headless` warn about a pack older than the sources.
+add_test(NAME cli_stale_pack
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_stale_pack.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_stale_pack")

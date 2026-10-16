@@ -1,7 +1,9 @@
 # Changelog
 
 Engine versions and what each one added. How and when the version moves: [docs/VERSIONING.md](docs/VERSIONING.md).
-Every PR that changes what a user of the engine sees adds one line under **Unreleased**.
+Every PR that changes what a user of the engine sees adds a fragment file `changelog.d/<ticket>.md` instead of editing
+this file ([changelog.d/README.md](changelog.d/README.md)); `scripts/changelog.py` appends the fragments under **Unreleased**
+when a version is cut.
 
 ## Unreleased
 
@@ -9,6 +11,14 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   scene, say) or has no saved scene, the preview cooks only the document and the theme, fonts, sheets and
   textures it references and starts an empty scene, so a UI screen can be drawn and checked at any time;
   `document_only: true` asks for it. User guide 14. M-UI-DATA2 is done.
+- Procedural levels, M-PROCGEN step 5 (SBA-175): `projects/Dungeon`, a script-only top-down crawl over seeded levels (rooms,
+  caves, walk) with an autopilot that follows the new `ProcLevel.path_markers`, and a `.mctest` per generator that clears ten
+  seeds. Luau gets `mce.teleport2d(e, position)`: writing `LocalTransform.position` never moved a 2D body (the physics step
+  writes it back), so scripts could not respawn one; EmberScript's respawn now works. M-PROCGEN is done.
+- Captures without a display, M-WORKFLOW step 4 (SBA-183, #380): `-capture`, `-capture_tick` and `-capture_ticks` on a machine with
+  no display switch the player to the offscreen driver and software GL by themselves (one line says so; an explicit
+  `-platform.video_driver` is kept), the player logs its save folder at start, and user guide 16.8 and 2.5 give the container
+  screenshot recipe, what `-frames` vs `-capture_tick` capture and the save folder per OS with `XDG_DATA_HOME` and `-save_dir`.
 - Windowed arena sample, M-NET3 step 5 (SBA-127): `samples/net_arena` is a 2–4 player top-down arena built from
   scene data (`NetReplicated` walls and pads, a server-made `NetOwner` player with `Replicated` health fields), with a
   predicted local player, interpolated others, lag-compensated shots and quick play through `mce_relay`. It runs
@@ -30,6 +40,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `NavMesh3D::load` crashes on a bake with damaged layer bytes; the fix follows in step 2b.
 - Docs checks in the guide, M-DOCCHECK step 4 (SBA-179): user guide 1.8 describes what the walls stage checks in the
   documents and where the accepted misses live. M-DOCCHECK is done.
+- Cook errors name the fix, M-WORKFLOW step 3 (SBA-182, #379): the error for a file without a sidecar says
+  `cook_run {"adopt": true}` or `mce cook <project> --adopt`; `cook_run` takes `paths` (cook only those assets and what
+  they depend on, into `cooked/`, never the pack) and `skip_errors` (returns `failed_files`); `mce_cook` has `--only`
+  and `--skip-errors`; `mce play` and `mce headless` warn when the pack is older than `assets/`; an unknown component or
+  field says to rebuild the module and restart the MCP server. User guide 5.4, 14, 16 and 17.
 - Several agents on one scene, M-WORKFLOW step 2 (SBA-181, #378): `scene_open` always re-reads the file and
   replaces a copy `scene_switch` parked; a `scene_save` that cannot merge a teammate's save is refused naming
   the entities on disk it lacks, and `overwrite: true` saves anyway; `entity_delete` reports the entity

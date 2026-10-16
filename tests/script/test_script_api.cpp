@@ -309,6 +309,38 @@ end
     CHECK(r.w.try_get<Probe>(e)->flag);
 }
 
+TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
+    Rig r(R"(
+function update()
+    if mce.tick() == 2 then   -- the body exists once the first physics step has synced it
+        mce.each("Probe", function(e) mce.teleport2d(e, vector.create(7, 3, 0)) end)
+    end
+end
+)");
+    physics::install_physics2d(r.w);
+    physics::RigidBody2D rb;
+    rb.type = physics::BodyType::Kinematic;
+    physics::Collider2D col;
+    col.shape = physics::ColliderShape::box({0.5f, 0.5f});
+    const Entity e = r.w.spawn_with(LocalTransform{{1, 1, 0}, math::quat::identity(), {1, 1, 1}}, rb, col, Probe{});
+    r.step(6);
+    INFO(error_of(r.h()));
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<LocalTransform>(e)->position.x == doctest::Approx(7.0f));
+    CHECK(r.w.try_get<LocalTransform>(e)->position.y == doctest::Approx(3.0f));
+}
+
+TEST_CASE("script api: teleport2d on an entity without a 2D body is a clear error") {
+    Rig r(R"(
+function update() mce.each("Probe", function(e) mce.teleport2d(e, vector.create(1, 1, 0)) end) end
+)");
+    physics::install_physics2d(r.w);
+    r.w.spawn_with(Probe{});
+    r.step(3);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("no 2D body") != std::string::npos);
+}
+
 TEST_CASE("script api: physics calls fail clearly in a world without physics") {
     Rig r(R"(
 function update() mce.raycast2d(vector.create(0, 0, 0), vector.create(1, 0, 0), 1) end

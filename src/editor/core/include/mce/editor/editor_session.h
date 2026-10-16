@@ -40,7 +40,8 @@ public:
     const cook::DiagList& scene_diags() const { return scene_diags_; }
 
     // Cooks the project (pack: also writes <root>/assets.mce) and remounts the preview.
-    const cook::CookReport& cook(bool pack = false, bool adopt = false);
+    const cook::CookReport& cook(bool pack = false, bool adopt = false, Span<const cook::String> paths = {},
+                                 bool skip_errors = false);
 
     // ---- autosave + recovery (editor-tools.md §2.11) ----
     // Where the open scene autosaves: <root>/.mce/autosave/<path under assets/>.autosave (an

@@ -556,6 +556,116 @@ TEST_CASE("cook: missing sidecar is an error; --adopt writes one") {
     CHECK(svc.cook(root.c_str(), CookOptions{}).ok());
 }
 
+TEST_CASE("cook: the missing-sidecar error names the fix, over MCP and on the command line") {
+    const std::string root = make_project("cook_adopt_hint");
+    write_file(root + "/assets/scripts/new_thing.luau", "return 1\n");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    CHECK(!r.ok());
+    const std::string text = diag_text(r);
+    CHECK(has_diag(r, Errc::MissingSidecar, "scripts/new_thing.luau"));
+    CHECK(text.find("cook_run {\"adopt\": true}") != std::string::npos);
+    CHECK(text.find("mce cook <project> --adopt") != std::string::npos);
+    // The report's failed-file list carries it too, once per file.
+    u32 named = 0;
+    for (const auto& f : r.failed_files)
+        if (std::string(f.file.c_str()).find("new_thing.luau") != std::string::npos && f.code == Errc::MissingSidecar) ++named;
+    CHECK(named == 1);
+}
+
+TEST_CASE("cook: skip_errors cooks the good files and lists the bad ones; no pack from a broken run") {
+    const std::string root = make_project("cook_skip_errors");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));                    // no sidecar
+    write_file(root + "/assets/textures/broken.png", "this is not a png");                      // importer fails
+    write_file(root + "/assets/textures/broken.png.mceasset", sidecar("a1a1a1a1-0000-4000-8000-0000000000b1", "texture"));
+    CookOptions opt;
+    opt.skip_errors = true;
+    opt.pack = true;
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), opt);
+    INFO(diag_text(r));
+    CHECK(!r.ok());
+    CHECK(r.cooked == 5);  // the five good assets of the fixture
+    CHECK(r.failed == 1);
+    bool extra = false, broken = false;
+    for (const auto& f : r.failed_files) {
+        const std::string name = f.file.c_str();
+        extra = extra || (name == "assets/textures/extra.png" && f.code == Errc::MissingSidecar);
+        broken = broken || name == "assets/textures/broken.png";
+    }
+    CHECK(extra);
+    CHECK(broken);
+    CHECK(!r.pack_written);
+    CHECK(!fs::exists(root + "/assets.mce"));
+    CHECK(fs::exists(root + "/cooked/manifest.mce"));
+    CHECK(report_for(r, kSceneGuid)->status == AssetStatus::Cooked);
+}
+
+TEST_CASE("cook: paths cooks only the named subtree and what it depends on, and never the pack") {
+    const std::string root = make_project("cook_paths");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));  // unregistered: not part of this run
+    CookOptions opt;
+    opt.paths.push_back(cook::String("materials"));  // a folder: the material and the texture it needs
+    opt.pack = true;
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), opt);
+    INFO(diag_text(r));
+    CHECK(r.ok());  // extra.png is outside the paths, so its missing sidecar is not this run's error
+    CHECK(r.subset);
+    CHECK(r.cooked == 2);
+    CHECK(r.skipped == 3);
+    CHECK(report_for(r, kMatGuid)->status == AssetStatus::Cooked);
+    CHECK(report_for(r, kTexGuid)->status == AssetStatus::Cooked);  // a dependency of the material
+    CHECK(report_for(r, kWavGuid)->status == AssetStatus::Skipped);
+    CHECK(report_for(r, kSceneGuid)->status == AssetStatus::Skipped);
+    CHECK(!r.pack_written);
+    CHECK(!fs::exists(root + "/assets.mce"));
+    CHECK(diag_text(r).find("pack not rewritten") != std::string::npos);
+
+    // The rest is untouched: a later full cook cooks exactly what the subset left.
+    const CookReport full = svc.cook(root.c_str(), CookOptions{});
+    CHECK(report_for(full, kMatGuid)->status == AssetStatus::UpToDate);
+    CHECK(report_for(full, kTexGuid)->status == AssetStatus::UpToDate);
+    CHECK(report_for(full, kWavGuid)->status == AssetStatus::Cooked);
+    CHECK(report_for(full, kSceneGuid)->status == AssetStatus::Cooked);
+
+    // A subset after a full cook keeps the manifest whole: same manifest hash, skipped assets still listed.
+    CookOptions one;
+    one.paths.push_back(cook::String("assets/audio/jump.wav.mceasset"));  // the prefix and the sidecar spelling are accepted
+    const CookReport r2 = svc.cook(root.c_str(), one);
+    CHECK(r2.up_to_date == 1);
+    CHECK(r2.skipped == 4);
+    CHECK(r2.manifest_hash == full.manifest_hash);
+
+    CookOptions none;
+    none.paths.push_back(cook::String("nope/missing.png"));
+    const CookReport r3 = svc.cook(root.c_str(), none);
+    CHECK(!r3.ok());
+    CHECK(has_diag(r3, Errc::NotFound, "nope/missing.png"));
+}
+
+TEST_CASE("cook: an unknown component or field says the module is stale and how to refresh it") {
+    const std::string root = make_project("cook_stale_module");
+    std::string s = scene_text();
+    s.insert(s.find("\"CtTransform\": { \"position\": [1, 2, 3]"), "\"BrandNewThing\": { \"hp\": 3 },\n        ");
+    write_file(root + "/assets/scenes/level_01.mcscene", s);
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    const std::string text = diag_text(r);
+    CHECK(!r.ok());
+    CHECK(text.find("unknown component type 'BrandNewThing'") != std::string::npos);
+    CHECK(text.find("module_build") != std::string::npos);
+    CHECK(text.find("restart the MCP server") != std::string::npos);
+
+    std::string t = scene_text();
+    t.insert(t.find("\"frame\": 4"), "\"stamina\": 9, ");
+    write_file(root + "/assets/scenes/level_01.mcscene", t);
+    const std::string field = diag_text(svc.cook(root.c_str(), CookOptions{}));
+    CHECK(field.find("unknown field 'stamina' on CtSprite") != std::string::npos);
+    CHECK(field.find("restart the MCP server") != std::string::npos);
+}
+
 TEST_CASE("cook: duplicate GUIDs are reported with both files") {
     const std::string root = make_project("cook_dup");
     write_file(root + "/assets/textures/copy.png", make_gradient_png(2, 2));
