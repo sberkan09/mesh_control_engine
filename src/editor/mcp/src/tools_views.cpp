@@ -307,7 +307,9 @@ bool player_list(ToolCall& c) {
     const kit::CoopGame* game = nullptr;
     const DocEntity* game_entity = nullptr;
     for (const DocEntity& e : doc.entities())
-        if (!game && (game = comp<kit::CoopGame>(e))) game_entity = &e;
+        if (game) continue;
+        game = comp<kit::CoopGame>(e);
+        if (game) game_entity = &e;
     w.key("coop_game");
     if (game) {
         w.begin_object().key("entity").str(game_entity->name.view()).key("prefab").str(asset::to_string(game->player.guid).view());
