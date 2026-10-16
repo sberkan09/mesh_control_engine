@@ -10,6 +10,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `forget` seconds and hears `kit::Noise` events (the tree's `make_noise` task makes one). It writes `target`,
   `sees`, `last_seen` and `heard_at` into its tree's blackboard. `interval` staggers a crowd's checks over the
   ticks. In `ai_demo` the guard now spots the thief. User guide 13.8.
+- The Luau script API, M-SCRIPT step 2 (SBA-148): scripts spawn, change and destroy entities (through
+  `Commands`), instantiate prefabs, read and emit events by name (`MCE_EVENT` reflects an event type; the
+  physics trigger and contact events have it), send and hear the kit's named signals, play sounds, read input
+  actions, change scene, quit, and query 2D and 3D physics. `mce.field` handles and multi-field `get` / `set`
+  halve the per-entity cost: the 2,000-entity bench runs in about 0.35 ms per tick. User guide 27.3 lists it all.
 - Luau scripts as assets, M-SCRIPT step 1 (SBA-147, ADR-0041): `.luau` files under `assets/` cook (importer
   `script`) to a `Script` asset of Luau bytecode, with syntax errors at `file:line:col`. A `ScriptSystem`
   component names a script, its phase (`Pre` or `Post`) and its order; `mce_player`, play-in-editor and MCP
