@@ -51,6 +51,7 @@ flowchart LR
     MVIS --> MVIS2["M-VISUAL2 SSR, spatial upscaler<br/>and sharpening, contact shadows,<br/>clear coat, sheen, transmission"]
     MWEB -.web transport.-> MNET2
     MAGENT --> MPERF["M-PERF captures, budgets per target,<br/>perf_run over MCP, counter gate"]
+    M6 --> MAUDIO2["M-AUDIO2 Ogg Vorbis clips, pitch and sound sets,<br/>bus effects, ducking, snapshots, occlusion"]
 ```
 
 Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because Artifact A is the earliest shippable artifact and the cut ladder's final rung reduces the MVE to Artifact A alone — Artifact B is structured as an **addition, not a dependency** (REQUIREMENTS cut-ladder rung 7). The cook pipeline precedes everything that loads content; the determinism harness precedes everything that could break it.
@@ -97,6 +98,7 @@ Sequencing rationale (binding): 2D gameplay precedes 3D rendering polish because
 | M-VISUAL2 | [M-VISUAL2.md](milestones/M-VISUAL2.md) (Linear SBA-101 … SBA-105) | active (step 1 done: screen-space reflections, `Environment3D.ssr`, `r.ssr`; step 2 done: spatial upsample and sharpening, `Environment3D.upscaler` / `sharpen`, `r.upscaler`, `r.sharpen`; step 3 done for the sun: contact shadows, `Environment3D.contact_shadows`, `r.contact_shadows`) | steps 4–5, local-light contact shadows, the demo and the gates |
 | M-PERF | [M-PERF.md](milestones/M-PERF.md) (Linear SBA-113 … SBA-117, added 2026-10-15) | done on the desktop (steps 1–5, the demo and the gates) | a capture on a phone and in a browser |
 | M-STEAM | [M-STEAM.md](milestones/M-STEAM.md), ADR-0042 (Linear SBA-106 … SBA-112) | active (step 1 done: the Steamworks flat API opened at run time, `mce/platform/steam.h`, the player's `-steam.app_id`; step 2 done: Steam achievements, leaderboards and Steam Cloud saves as the game services backend, `.mcservices` `steam` names; step 3 done: the overlay holds the game, `RichPresence`, `OpenOverlay`; step 4 done: Steam Input feeds the input map's actions, `-steam.write_input_config` writes the action manifest and controller defaults) | steps 5–6, the real-client run (needs the user's Steamworks account) |
+| M-AUDIO2 | [M-AUDIO2.md](milestones/M-AUDIO2.md) (Linear SBA-118 … SBA-122, added 2026-10-16) | active (no step done yet) | steps 1–5, the demo and the gates |
 
 As-built names the plan text predates: Artifact A is `samples/03_platformer` (Ember Step), Artifact B is `samples/04_diorama`, M7's slice is `samples/05_ashen_court`, UC-D is `projects/Kindle`; `mce/fsm.h` shipped as `mce/kit/fsm.h`; the new-project generator is `scripts/new_project.py` (also `.sh`/`.bat`) and `mce new`; dependencies are FetchContent (ADR-0017) and the CI is `scripts/ci/local_ci.sh` (hosted CI removed 2026-10-08), so every "CI" below means that script; the Box2D oracle runs in every `local_ci.sh` preset, not nightly; there is no `05_showcase` (the API specimen is the sample ladder plus `tests/sdk`).
 
@@ -395,6 +397,25 @@ As-built names the plan text predates: Artifact A is `samples/03_platformer` (Em
 **Builds, in order:** (1) `.mcperf` captures from the stock player (`-perf_capture <file>`): per frame the CPU stages, sim phases and the costliest systems, GPU passes from timestamp queries, render counters (draws, triangles, instances, texture and buffer bytes), frame-allocator high water and asset memory; a summary with p50/p95/p99/max and the spike frames with what was slow; observation only, never in the sim hash · (2) budgets per target (`desktop`, `mobile`, `web`) in the `.mceproj` (frame, sim, draws, triangles, texture MB, pack MB) with a verdict in each capture, and static `project_check` rules from cooked data (texture sizes, triangles per scene, pack size against the target) · (3) MCP `perf_run` (a scene in the player, offscreen, N ticks, an optional input script or bot; returns the summary, the verdict and the top systems, passes and spikes) and `perf_compare` (two captures, the deltas that matter) · (4) the editor's Profiler panel opens captures and records play-in-editor ones: a frame strip with spikes, a frame's breakdown (phases, systems, passes), two captures compared · (5) a `perf` counter stage in `local_ci.sh` against stored baselines for the samples, a user guide chapter, and the demo.
 **Demo:** an agent, over MCP alone, finds and fixes a planted CPU hotspot and a draw-call blow-up in a sample with `perf_run`, and shows `perf_compare` before and after inside the mobile budget.
 **Gates:** a capture never changes the sim hash; counters are identical across machines for the same run; a seeded over-budget scene fails the verdict; the counter stage catches a seeded draw-call regression; `local_ci.sh` green on every step.
+
+### M-AUDIO2 — Audio a shipped game needs · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier, opt-in per feature, gates nothing · priority 3
+
+*Reason: added 2026-10-16 under the project's standing instruction to extend the roadmap when no milestone is free (M-LIVEOPS' remaining work needs devices; M-UI-DATA is taken). The user guide lists the gaps (10.6: WAV only; no reverb sends or per-voice pitch), and the engine comparison (`assessments/motor-kiyaslama-eksikler.md`) has every other engine shipping effects and compressed audio. A 48 kHz float pack is the largest part of a phone or web download. Needs no device: the mixer renders offline, so every step gates on rendered samples.*
+
+**Builds, in order:**
+1. Compressed clips: `.ogg` Vorbis imports and `"compress": "vorbis"` on WAV, decoded at load or in the stream pages (stb_vorbis, already fetched with stb).
+2. Per-voice pitch and sound sets (`.mcsound`: random or sequence picks, with pitch and volume ranges), seeded from the sim.
+3. Bus effects: biquad filters, a reverb send and a master limiter, as project data with convar and component control.
+4. Sidechain ducking between buses, and named mixer snapshots blended in over a fade (the pause, game events).
+5. 3D occlusion by physics rays, Doppler, the user guide, MCP reach and the demo.
+
+**Demo:** a listener walks through rooms. A footstep set varies in pitch, a cave adds reverb, music ducks under a voice line, the pause muffles the world and a wall occludes a source. An offline render of the scripted run is the record, and the Ogg pack is smaller than the WAV one.
+**Gates:**
+- Offline renders of fixed scripts hash the same across runs and machines.
+- The sim hash is unchanged.
+- Nothing allocates or locks on the audio thread.
+- A Vorbis clip stays within a set error of its source.
+- `local_ci.sh` green on every step.
 
 ### M-STEAM — Steamworks · **size M (rough guess, ≈ 60–100 h engineering)** · tier: off-tier platform track, opt-in, gates nothing · priority 2
 
