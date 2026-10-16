@@ -450,6 +450,13 @@ bool draw_ui_inspector(DrawCtx& ui, UiDocumentEditor& ed, u32& state, bool& ever
         w.font_role = static_cast<ui::FontRole>(role);
         changed = true;
     }
+    if (w.kind == ui::WidgetKind::Text) {
+        i64 align = static_cast<i64>(w.text_align);
+        if (ui.enum_field("Text align", &align, ui::mce_refl_enum_record_UiTextAlign)) {
+            w.text_align = static_cast<ui::TextAlign>(align);
+            changed = true;
+        }
+    }
     if (ui.begin_group("Anchors", true)) {
         changed |= draw_fields(ui, refl::type_of<ui::UiAnchors>(), &w.anchors);
         ui.end_group();

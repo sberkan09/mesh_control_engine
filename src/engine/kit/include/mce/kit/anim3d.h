@@ -10,6 +10,9 @@
 // goals of the graphs' IK chains (IKTarget3D entities, the ground under foot chains);
 // "kit3d_attach" (after that) writes each AttachToBone entity's LocalTransform from the target's
 // pose and the bone's animated matrix.
+//
+// "kit3d_locomotion" (FixedUpdate_Post, before "kit3d_animators") writes each Locomotion3D's motion
+// into its Animator's graph parameters (M-MOVE3D 5).
 
 #include "mce/ecs/entity.h"
 #include "mce/fixed_string.h"
@@ -49,5 +52,40 @@ struct IKTarget3D {
 };
 MCE_COMPONENT(IKTarget3D, (animator, Help{"the entity whose Animator graph has the chain"}),
               (chain, Help{"the IK chain's name in the graph"}), (weight, Range{0, 1}), (found, ReadOnly, Transient))
+
+
+// Feeds how an entity moves to an Animator's graph parameters, by their names, so a character's
+// run, idle, jump and crouch animate with no code (M-MOVE3D 5). Every tick it measures this
+// entity's motion: a CharacterController3D's velocity, grounded and crouched; else a NavAgent3D's
+// velocity; else the change of its world position. Then it sets whichever of these parameters the
+// graph declares:
+//   speed           ground speed, m/s          grounded  1 on the ground, else 0
+//   move_x, move_y  ground velocity in the     airborne  1 - grounded
+//                   entity's frame (right,     crouch    1 while crouched
+//                   forward; forward is -Z)    vertical_speed  m/s, up positive
+// With stride_speed set, the Animator plays at ground speed / stride_speed (clamped to
+// min_rate..max_rate) while moving and at 1 when still, so feet keep pace with the ground.
+struct Locomotion3D {
+    Entity animator;               // the entity with the Animator (the model); null = this entity
+    f32 smoothing = 0.1f;          // s: how quickly the speeds follow the motion (0 = at once)
+    f32 stride_speed = 0.0f;       // m/s the moving clips are authored at; 0 = leave Animator.speed
+    f32 min_rate = 0.5f;
+    f32 max_rate = 2.0f;
+    f32 ground_speed = 0.0f;       // engine-written: m/s, smoothed
+    f32 vertical_speed = 0.0f;     // engine-written: m/s, smoothed, up positive
+    math::vec2 local_move;         // engine-written: m/s in the entity's frame (x right, y forward), smoothed
+    math::vec3 last_position;      // engine-written: the world position last tick
+    u8 grounded = 0;               // engine-written
+    u8 crouched = 0;               // engine-written
+    u8 seen = 0;                   // engine-written: 1 once last_position holds a position
+    u8 found = 0;                  // engine-written: parameters the graph declares, as a count
+};
+MCE_COMPONENT(Locomotion3D, (animator, Help{"the entity with the Animator; empty = this entity"}),
+              (smoothing, Range{0, 2}, Help{"seconds for the speeds to follow the motion"}),
+              (stride_speed, Range{0, 50}, Help{"m/s the moving clips are authored at: play rate = speed / this; 0 = off"}),
+              (min_rate, Range{0, 8}), (max_rate, Range{0, 8}), (ground_speed, ReadOnly, Transient),
+              (vertical_speed, ReadOnly, Transient), (local_move, ReadOnly, Transient), (last_position, ReadOnly, Transient),
+              (grounded, ReadOnly, Transient), (crouched, ReadOnly, Transient), (seen, ReadOnly, Transient),
+              (found, ReadOnly, Transient))
 
 }  // namespace mce::kit

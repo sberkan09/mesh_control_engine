@@ -10,6 +10,9 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its
   status, shows utility scores and live blackboard values, runs unsaved edits in the play world, and the viewport
   draws perceivers' sight cones. User guide 13.8.
+- Text alignment in UI documents, M-UI-DATA2 step 1 (SBA-153): a `.mcui` Text widget takes
+  `"text_align": "Center"` (or `Right`) to place its text across its own rect, so a centered title no
+  longer needs a wrapping Stack. The editor's inspector and MCP's `ui_widget_set` reach it. User guide 12.
 - No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
   that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
   `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between
