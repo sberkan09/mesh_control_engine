@@ -342,4 +342,24 @@ struct WorldSettings {
 };
 MCE_COMPONENT(WorldSettings, (gravity_2d, Help{"2D physics gravity, m/s^2"}), (gravity_3d, Help{"3D physics gravity, m/s^2"}))
 
+// One Luau script a scene runs as a system (M-SCRIPT 1, ADR-0041): a cooked .luau asset whose
+// update() runs once per fixed tick in `phase` (Pre: FixedUpdate_Pre, before physics; Post:
+// FixedUpdate_Post, after it). Scripts of a phase run by `order`, then in ECS order. The stock
+// hosts (mce_player, play-in-editor, MCP run_headless) run them where MCE_WITH_SCRIPT is on
+// (mce/script/scene_scripts.h); by convention the entities are named "Script: <name>" and sit next
+// to the World Settings. The set is read again whenever it changes (a scene change, an edit).
+enum class ScriptPhase : u8 { Pre, Post };
+MCE_ENUM(ScriptPhase, Pre, Post)
+
+struct ScriptSystem {
+    asset::AssetRef<asset::Script> script;
+    i32 order = 0;
+    ScriptPhase phase = ScriptPhase::Pre;
+    bool enabled = true;
+    u8 pad_[2]{};
+};
+MCE_COMPONENT(ScriptSystem, (script, Help{"the .luau script; its update() runs every fixed tick"}),
+              (order, Help{"scripts of a phase run lowest first; ties in ECS order"}),
+              (phase, Help{"Pre: before physics; Post: after physics"}), (enabled, Help{"off: the script is not loaded"}))
+
 }  // namespace mce::kit

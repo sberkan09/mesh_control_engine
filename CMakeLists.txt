@@ -133,7 +133,7 @@ if(MCE_WITH_NET)
     add_subdirectory(src/engine/net)
 endif()
 if(MCE_WITH_SCRIPT)
-    # Spike (ADR-0041): not in MCE_ENGINE_LIBS; only its test and samples/script_headless link it.
+    # Opt-in (ADR-0041, M-SCRIPT): not in MCE_ENGINE_LIBS; the stock hosts, the cook and tests link it.
     add_subdirectory(src/engine/script)
 endif()
 if(NOT CMAKE_CROSSCOMPILING)
