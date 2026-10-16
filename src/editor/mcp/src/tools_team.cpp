@@ -518,22 +518,60 @@ bool merge_entity_files(StringView base, StringView ours, StringView theirs, Str
     return true;
 }
 
+// Appends which entities the file on disk has that `ours` lacks, and the other way round (saving
+// `ours` over the file would drop the first group), to an error message.
+void append_entity_diff(cook::String& err, StringView ours, StringView theirs) {
+    Side O, T;
+    if (!parse_side(ours, O) || !parse_side(theirs, T)) return;
+    auto list = [&](const char* head, const Side& from, const Side& other) {
+        usize n = 0;
+        for (const Ent& e : from.ents) {
+            if (find_ent(other, e.id)) continue;
+            if (n == 0) {
+                err += '\n';
+                err += head;
+            }
+            if (n++ == 12) {
+                err += " ...";
+                break;
+            }
+            const cook::String name = ent_name(&e, nullptr);
+            cook::appendf(err, " %lld", static_cast<long long>(e.id));
+            if (!name.empty()) {
+                err += " \"";
+                err += name.view();
+                err += '"';
+            }
+            err += ';';
+        }
+    };
+    list("on disk, not in your copy (saving over the file would drop them):", T, O);
+    list("in your copy, not on disk:", O, T);
+}
+
 bool merge_scene_from_disk(ToolCall& c, StringView abs) {
     Server::SceneFile& file = c.server.scene_file();
     StringView resolve;
     if (!arg_string(c, "resolve", resolve, false)) return false;
     if (!resolve.empty() && resolve != "ours" && resolve != "theirs") return arg_missing(c, "resolve", "\"ours\" or \"theirs\"");
-    if (file.base.empty())
-        return fail(c, "the file changed on disk since it was opened or saved: scene_open it again, or pass force: true to overwrite");
     cook::String theirs, ours;
     if (!cook::fs::read_text(abs, theirs)) return fail(c, "cannot read the scene file on disk");
     c.server.session().scene().serialize(ours);
+    if (file.base.empty()) {
+        c.error += "the file changed on disk since it was opened or saved and cannot be merged (no common version): ";
+        c.error += "scene_open {\"path\": \"";
+        c.error += file.rel.view();
+        c.error += "\", \"force\": true} reloads it (dropping your unsaved edits), or pass overwrite: true to save yours over it anyway";
+        append_entity_diff(c.error, ours.view(), theirs.view());
+        return false;
+    }
     MergeResult res;
     cook::String err;
     if (!merge_entity_files(file.base.view(), ours.view(), theirs.view(), resolve, res, err)) {
         c.error += "the scene changed on disk and cannot be merged (";
         c.error += err.view();
-        c.error += "): scene_open it again, or pass force: true to overwrite";
+        c.error += "): scene_open {force: true} reloads it (dropping your unsaved edits), or pass overwrite: true to save yours over it anyway";
+        append_entity_diff(c.error, ours.view(), theirs.view());
         return false;
     }
     if (!res.conflicts.empty()) {
