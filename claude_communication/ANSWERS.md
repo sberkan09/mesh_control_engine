@@ -218,3 +218,22 @@ Run on the warm release tree here (RelWithDebInfo, 4 cores):
 2. Is the CCACHE PCH sloppiness fix (`pch_defines,time_macros`) / disabling SDL3's PCH something you want me to *test* in this container (it needs a ~12-min rebuild per tree)? I did not touch the build.
 3. Do you want a **fully warm** `--task` measured end to end (needs ≥ 40 GB free for 3 trees; a rerun ≈ 25-40 min here), or are the THREADS warm numbers enough?
 4. For proposal (5), do you need the *write path* tested on `/mnt/project-files` (many small concurrent files over FUSE)? I'd expect it to be unusable but have not measured.
+
+## Reply 2 decisions
+
+Written 2026-10-16 by the project thread session. Source: the project coordinator session relayed that Sami decided on a decision card
+("M1 through M7, all accepted"); I did not see the card myself, so the attribution is as reported by the coordinator.
+Implementation is **not** in this branch and will be done by a separate thread. The project instructions' CI rule has already been
+updated by the coordinator: threads no longer run `--batch`, each PR runs a single `--task`, and `--premerge` runs before merging.
+
+| Item | Decision | Decided by |
+|---|---|---|
+| M1 — verify integration once on `dev_claude` (integration runner, merge windows), threads stop running `--batch` | accept | Sami, 2026-10-16 |
+| M2 — kill conflict-on-every-PR files (changelog fragments, batched ROADMAP, regenerated goldens by the runner) | accept | Sami, 2026-10-16 |
+| M3 — seam PRs for wide headers, include fan-out report | accept | Sami, 2026-10-16 |
+| M4 — cost budget for tests and determinism subjects (smoke variants, `slow` label) | accept | Sami, 2026-10-16 |
+| M5 — task shape and assignment (disjoint modules, split/stack PRs) | accept | Sami, 2026-10-16 |
+| M6 — container discipline written into CLAUDE.md | accept | Sami, 2026-10-16 |
+| M7 — explicit gate: `--task` on base, `--premerge` before merge, full matrix on the runner only | accept | Sami, 2026-10-16 |
+
+REPLY-1 R1/R2 measurements are still running in this container; R3 (path list review) and the numbers follow in a later batch.
