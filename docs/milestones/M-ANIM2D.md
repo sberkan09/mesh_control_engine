@@ -1,6 +1,6 @@
 # M-ANIM2D — 2D skeletal animation (milestone record)
 
-**Status:** done (steps 1–6; SBA-146, the Spine/DragonBones import, is Later).
+**Status:** done (steps 1–6; SBA-146, the Spine/DragonBones import, is done).
 **Why:** 2D characters animate only by sprite frames today; cut-out rigs (bones, blended clips, skinned meshes, IK) are what Godot's Skeleton2D, Unity's 2D Animation and Spine give 2D games. Added 2026-10-16 under the user's standing instruction to extend the roadmap when no milestone is free.
 **Plan:** ROADMAP § M-ANIM2D.
 **Measured on:** the Linux CI container.
@@ -15,7 +15,7 @@
 | 4. Two-bone and CCD IK as data | SBA-143 | done |
 | 5. Editor skeleton panel and MCP `skel2d_*` tools | SBA-144 | done |
 | 6. Demo, user guide, gates | SBA-145 | done |
-| Later: Spine / DragonBones JSON import | SBA-146 | not scheduled |
+| Later: Spine / DragonBones JSON import (`mce import spine`, `mce import dragonbones`) | SBA-146 | done |
 
 ## Step 1 — skeletons, the world pose and the slots
 
@@ -114,3 +114,21 @@ foot bone is not kept level by IK (the foot turns with the shin while the legs b
 mirrored with `flip_x` from a timeline activation track, so a flipped courier's `ChildOf` foot targets
 mirror with it. A scripted-input replay is not part of this sample: it takes no input (the timeline
 is its player). Debug and Release (gcc) end 900 ticks on the same hash, 8270d46a01742050, checked by hand; ctest runs the Debug build only.
+
+## SBA-146: `mce import spine` and `mce import dragonbones`
+
+| Item | Where | Evidence |
+|---|---|---|
+| `mce import spine <file.json>` reads Spine 3.8 / 4.x JSON, `mce import dragonbones <file>` the DragonBones 5.x JSON skeleton, and both write a `.mcskel2d`: bones (pixels to metres with `--ppm`, DragonBones' Y-down and clockwise flipped), slots with color, region attachments placed from an optional libGDX `.atlas` / DragonBones `_tex.json` (trimmed regions kept inside their original), weighted and plain meshes, rotate / translate / scale / slot color / attachment / deform / IK-mix keys with linear, stepped and bezier curves (Spine 4.x absolute control points normalized), events by name, 1-bone (CCD) and 2-bone IK with mix and bend. Re-import keeps the GUID | `tools/mce_cli/mce_import_skel.py`, dispatched from `tools/mce_cli/mce.py`, installed by `cmake/MceInstall.cmake` | `ctest -R import_skeletons` |
+| Unsupported content is dropped with a named warning on stderr and exit 0 (path / transform / physics constraints, shear, inherit modes, other skins, two-color slots, blend modes, draw-order keys, event payloads, non-image displays, ...); `--strict` fails and writes nothing; over 64 bones is an error | same | the `unsup` and `dbu` cases of `tests/import/test_import_skel.py` |
+| The output goes through the engine's real `.mcskel2d` importer: the test builds a project with the atlas page as a texture and runs `mce_cook` over the Spine fixture, the DragonBones fixture and a skeleton converted from a file full of unsupported features (3 cooks, 0 errors) | `tests/import/test_import_skel.py`, `tests/import/fixtures/` (`hero_spine.json` + `.atlas`, `hero_dragonbones_ske.json` + `_tex.json`, hand-written) | `ctest -R import_skeletons` (cooks when `mce_cook` is built) |
+| User guide 7.13 "Importing from Spine and DragonBones" has the mapping table and the license note: only the open JSON is read, no Spine runtime code is used or shipped, and shipping Spine-authored content needs your own Spine license; command line chapter lists the rows | `docs/user-guide/07-2d.md`, `16-command-line.md` | `scripts/ci/check_walls.py` |
+
+Limits: the fixtures are hand-written from the formats' documentation, not exports of the real editors, so
+Spine 4.x absolute bezier control points, DragonBones' `tweenEasing` default (absent: stepped), the
+`bendPositive` sense under DragonBones' Y flip and the libGDX atlas `offset` (taken from the bottom) are as
+documented, unverified against real exports. Not mapped: skins beyond the default, rotated atlas regions,
+mirrored (negative scale) attachments, multi-page atlases (the first page only), keyed bend, soft / stretch
+IK, `translatex`-style and `rgb` / `alpha` timelines, and an animation's loop flag for Spine (clips loop).
+Spine 3.x's shortest-way rotation is reproduced by unwinding keys; a weighted mesh's deform is the weighted
+average of its per-bone offsets. The importer is Python with no dependencies.

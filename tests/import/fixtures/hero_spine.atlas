@@ -1,0 +1,27 @@
+
+page.png
+size: 128, 128
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 40, 60
+  orig: 40, 60
+  offset: 0, 0
+  index: -1
+body_hit
+  rotate: false
+  xy: 44, 2
+  size: 30, 50
+  orig: 40, 60
+  offset: 5, 4
+  index: -1
+cape
+  rotate: false
+  xy: 2, 64
+  size: 50, 50
+  orig: 50, 50
+  offset: 0, 0
+  index: -1
