@@ -353,7 +353,7 @@ vec3 direct(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
 // ---- M-VISUAL2 4 lobes (Filament's forms): anisotropic GGX along the UV tangent frame, the Charlie
 // sheen with Neubelt's visibility (no energy compensation of the base), and a clear coat: a second
 // GGX layer of F0 0.04 over the geometric normal that takes its Fresnel share from the base.
-vec3 g_tangent, g_bitangent, g_coat_n;  // set by main() when o_ext.x is on
+vec3 g_tangent = vec3(1.0, 0.0, 0.0), g_bitangent = vec3(0.0, 0.0, 1.0), g_coat_n = vec3(0.0, 1.0, 0.0);  // set by main() when o_ext.x is on
 float D_GGX_Aniso(float NoH, float ToH, float BoH, float at, float ab) {
     float a2 = at * ab;
     vec3 d = vec3(ab * ToH, at * BoH, a2 * NoH);
