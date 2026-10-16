@@ -17,6 +17,9 @@
 #include "mce/jobs.h"
 #include "mce/loc/loc.h"
 #include "strings_csv.h"
+#if MCE_HAS_SCRIPT
+#include "mce/script/compiler.h"
+#endif
 
 namespace mce::cook {
 
@@ -479,6 +482,18 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
     const String manifest_path = path_join(cooked_root, "manifest.mce");
     if (auto w = fs::write_file_atomic(manifest_path, manifest_file.span()); !w)
         report.diags.error(w.error().code, manifest_path, 0, 0, kStageWrite, "cannot write manifest");
+#if MCE_HAS_SCRIPT
+    // mce.d.luau (M-SCRIPT 4): the API the scripts were type-checked against, for editors.
+    bool has_scripts = false;
+    for (const asset::ManifestItem& it : items) has_scripts = has_scripts || it.type == ChunkType::Script;
+    if (has_scripts) {
+        Array<char> defs;
+        script::write_definitions(defs);
+        const String defs_path = path_join(cooked_root, "mce.d.luau");
+        if (auto w = fs::write_file_atomic(defs_path, Span<const byte>(reinterpret_cast<const byte*>(defs.data()), defs.size())); !w)
+            report.diags.warning(defs_path, 0, 0, kStageWrite, "cannot write mce.d.luau");
+    }
+#endif
     if (!db.commit(db_path, fresh.span())) report.diags.warning(db_path, 0, 0, kStageWrite, "cannot write cook DB (next cook re-cooks)");
 
     // 6. Pack (FR-SHP-010): manifest chunk first, then every live asset's chunks in GUID order.

@@ -12,6 +12,9 @@ target_include_directories(test_mcp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset
 target_compile_definitions(test_mcp PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp"
     MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}" MCE_PLAYER_EXE="$<TARGET_FILE:mce_player>")
 add_dependencies(test_mcp mce_player)
+if(MCE_WITH_SCRIPT)  # script_check and scene script errors (M-SCRIPT 4)
+    target_sources(test_mcp PRIVATE test_mcp_script.cpp)
+endif()
 if(TARGET template_probe_game)
     # The stock server loads the template probe's game module (Server::load_module): its components
     # cook and its systems run in run_headless, hashing like the probe's own host.

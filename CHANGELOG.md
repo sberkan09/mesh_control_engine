@@ -5,6 +5,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
+  component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
+  'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at
+  `file:line:col`. It writes `cooked/mce.d.luau` for editors (luau-lsp). The MCP tool `script_check` runs the
+  same checks without cooking, and `run_headless` / `test_run` report failed scene scripts as
+  `script_errors`. User guide 27.5.
 - No hidden state in Luau scripts, M-SCRIPT step 3 (SBA-149): the cook rejects, at `file:line:col`, a function
   that assigns a top-level local or changes a table one holds, and table or function keys the source shows;
   `pairs` and `next` raise on such keys at run time. A script's memory is its components, so a reload between

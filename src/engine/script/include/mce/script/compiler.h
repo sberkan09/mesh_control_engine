@@ -15,9 +15,24 @@ struct CompileError {
     FixedString<256> message;  // without the name and position
 };
 
-// Luau source -> bytecode. Fails with Errc::ParseError and "<name>:<line>:<col>: message" in path;
-// `error`, when given, gets the position and the bare message.
+// Every problem in a script, in source order: a syntax error (nothing else is checked then), state
+// kept outside components (M-SCRIPT 3), component / event / field names the engine does not know
+// and sandbox-removed globals, then Luau's type errors against mce.d.luau. Empty: the script is fine.
+void check(StringView name, StringView source, Array<CompileError>& out);
+
+// Luau source -> bytecode, after check(). Fails with Errc::ParseError and
+// "<name>:<line>:<col>: message" (the first problem) in path; `error`, when given, gets the
+// position and the bare message.
 Result<Array<u8>> compile(StringView name, StringView source, CompileError* error = nullptr);
+
+// luau_compile alone, with no check(): for tests of what the run-time sandbox stops on its own
+// (the cook and the tools always check).
+Result<Array<u8>> compile_unchecked(StringView name, StringView source);
+
+// mce.d.luau: the `mce` API as Luau type definitions, with the reflected components, events and
+// fields (sorted, so the text depends only on the registry). check() uses it; mce_cook writes it to
+// <project>/cooked/mce.d.luau for editors.
+void write_definitions(Array<char>& out);
 
 // compile() then host.add_bytecode(): the source path for tests, samples and tools.
 Result<u32> add_source(ScriptHost& host, StringView name, StringView source, u8 group = 0);
