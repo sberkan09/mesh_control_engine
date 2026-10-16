@@ -10,15 +10,21 @@ enum class CmdType : u8 {
     Play, Stop, VoiceGain, VoicePan, BusGain, RegisterClip, ReleaseClip, StopAll,
     // v0.5
     VoiceGainPan, BusParent, BusEq, Limiter,
+    // M-AUDIO2 2
+    VoicePitch,
 };
 
 namespace CmdFlag {
 enum : u8 { Loop = 1u << 0 };
 }
 
+// Playback rate as a 4.12 fixed-point number (4096 = 1.0, the original pitch; M-AUDIO2 2).
+inline constexpr u16 kRateUnit = 4096;
+
 struct VoiceArgs {
     u32 generation;
-    u32 clip;
+    u16 clip;
+    u16 rate;  // Play / VoicePitch: playback rate, kRateUnit = 1
     f32 gain;  // linear; Limiter: ceiling
     f32 pan;   // Play/VoicePan/VoiceGainPan; Stop: fade frames (as f32); Limiter: release coefficient
     u64 start_sample;  // Play: mixer frame to start on (0 = as soon as drained)
@@ -49,7 +55,7 @@ struct AudioCommand {
     // (0 = in-memory clip). BusParent: index = bus, bus = parent. BusEq: index = bus, flags = band
     // (bit 7 = bypass). Limiter: flags = enabled.
 
-    AudioCommand() : voice{0, 0, 0.f, 0.f, 0} {}
+    AudioCommand() : voice{0, 0, kRateUnit, 0.f, 0.f, 0} {}
 };
 static_assert(sizeof(AudioCommand) <= 32, "AudioCommand must stay a small POD (§3.3)");
 

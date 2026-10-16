@@ -13,7 +13,7 @@ namespace mce::asset {
 // Schema majors (TocEntry::chunk_version high byte) this build reads and writes.
 inline constexpr u8 MANIFEST_VERSION = 1;
 inline constexpr u8 TEXTURE_VERSION = 1;
-inline constexpr u8 SFX_VERSION = 1;  // minor 1: SfxFlags::Vorbis payloads (M-AUDIO2 1)
+inline constexpr u8 SFX_VERSION = 1;  // minor 1: SfxFlags::Vorbis payloads (M-AUDIO2 1); minor 2: sound sets (M-AUDIO2 2)
 inline constexpr u8 FONT_VERSION = 1;
 inline constexpr u8 MATERIAL_VERSION = 1;
 inline constexpr u8 MATERIAL_MINOR_EXT = 1;  // minor of a material chunk followed by a MaterialExt
@@ -152,8 +152,29 @@ namespace SfxFlags {
 enum : u32 {
     Looping = 1u << 0,
     Vorbis = 1u << 1,  // data_offset holds a u64 byte count and an Ogg Vorbis stream (M-AUDIO2 1)
+    Set = 1u << 2,     // a sound set (.mcsound, M-AUDIO2 2): data_offset holds a SoundSetHeader and its clips
 };
 }
+
+// A sound set: clips picked per play, with a pitch and gain range. It cooks into an Sfx chunk so
+// everything that names an Sfx (AudioSource, SfxTrigger, PlaySfx, timeline sound keys) can name a
+// set; audio::ClipBank does the picking. The header's frame_count is 0.
+enum class SoundSetPick : u32 { Random = 0, Sequence = 1 };
+namespace SoundSetFlags {
+enum : u32 {
+    NoRepeat = 1u << 0,  // Random never picks the clip it picked last (with two or more clips)
+};
+}
+struct SoundSetHeader {
+    u32 clip_count;  // 0..4096 (an empty set plays nothing)
+    SoundSetPick pick;
+    f32 pitch_min, pitch_max;      // playback rate, 1 = as recorded
+    f32 gain_min_db, gain_max_db;  // added to the play's own gain
+    u32 flags;                     // SoundSetFlags
+    u32 reserved;
+    // followed by clip_count Guids (the member Sfx assets)
+};
+static_assert(sizeof(SoundSetHeader) == 32);
 
 struct SfxHeader {
     u32 sample_rate;   // 48000 after cook
@@ -171,11 +192,15 @@ struct SfxView {
     const SfxHeader* header = nullptr;
     Span<const f32> samples;  // frame_count * channels (empty for Vorbis)
     Span<const byte> vorbis;  // the Ogg Vorbis stream (Vorbis only); it decodes to frame_count frames
+    const SoundSetHeader* set = nullptr;  // a sound set (SfxFlags::Set) and its member clips
+    Span<const Guid> set_clips;
     static Result<SfxView> read(Span<const byte> payload);
 };
 void write_sfx(const SfxHeader& header, Span<const f32> samples, Array<byte>& out);
 // A Vorbis clip: `header` without SfxFlags::Vorbis is fine, the writer sets it.
 void write_sfx_vorbis(const SfxHeader& header, Span<const byte> stream, Array<byte>& out);
+// A sound set (an Sfx chunk with SfxFlags::Set and frame_count 0).
+void write_sound_set(const SoundSetHeader& set, Span<const Guid> clips, Array<byte>& out);
 
 // ------------------------------------------------------------------ video (CHNK_VID)
 // The .mpg's bytes as imported (an MPEG-1 program stream; the runtime decodes its video with

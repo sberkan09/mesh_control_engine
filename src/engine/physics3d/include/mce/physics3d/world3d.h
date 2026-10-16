@@ -362,6 +362,10 @@ public:
     // ---- character controller (FR-PHY-080). `delta` = intended displacement this tick, gravity
     // and jumps included (gameplay owns them, as in 2D). Unknown entities return a zero result.
     MoveResult3D move_character(Entity e, vec3 delta, const ControllerParams3D& params = {});
+    // Resizes the character's capsule to a cylinder half height of `half_height`, feet kept where they
+    // are: the position stays the standing capsule's centre (`params` is the standing shape). False
+    // when the new capsule would overlap geometry (standing up under a ceiling), unless `force`.
+    bool set_character_height(Entity e, f32 half_height, const ControllerParams3D& params, bool force);
     // Last move result.
     bool controller_state(Entity e, MoveResult3D& out) const;
 
