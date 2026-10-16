@@ -9,6 +9,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `"own_style": ["tint", ...]` keeps those style fields at the kind's default look over a theme, where an
   equal value used to read as unset and the theme's won. Old documents cook and draw the same. The editor's
   inspector and MCP's `ui_widget_set` reach it. User guide 12.
+- Luau scripts are checked before they run, M-SCRIPT step 4a (SBA-150): the cook reports every unknown
+  component, event or field a script names, with the closest name (`unknown component 'Movr' (did you mean
+  'Mover'?)`), removed globals with what to use instead, and Luau type errors against the `mce` API, each at
+  `file:line:col`. It writes `cooked/mce.d.luau` for editors (luau-lsp). The MCP tool `script_check` runs the
+  same checks without cooking, and `run_headless` / `test_run` report failed scene scripts as
+  `script_errors`. User guide 27.5.
 - The editor's Behavior Tree panel, M-AI step 5 (SBA-132): open a `.mcbt` from Assets and edit it as an outline
   (add, wrap, unwrap, move and remove nodes, edit values and members as JSON, blackboard keys), with every edit
   cooked before it is kept, undo, and the cook's problems listed. While playing it colours each node by its
