@@ -218,7 +218,8 @@ void RollbackSession::hash_confirmed() {
         hash_valid_[slot] = true;
         hashed_ = h;
         for (u32 p = 0; p < desc_.players; ++p) {
-            if ((!desc_.spectator && p == desc_.local_player) || !remote_hash_valid_[p][slot] || remote_hash_frame_[p][slot] != h) continue;
+            const bool self = !desc_.spectator && p == desc_.local_player;
+            if (self || !remote_hash_valid_[p][slot] || remote_hash_frame_[p][slot] != h) continue;
             compare_hash(p, h, remote_hash_[p][slot]);
             remote_hash_valid_[p][slot] = false;
         }
