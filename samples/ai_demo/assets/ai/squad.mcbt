@@ -1,0 +1,45 @@
+{
+  "format": "mce-bt",
+  "version": 1,
+  "guid": "a1de0000-0000-4000-8000-000000000004",
+  "name": "squad",
+  "blackboard": {
+    "target": "entity",
+    "sees": "bool",
+    "last_seen": "vec3",
+    "heard_at": "vec3",
+    "retreat": "vec3",
+    "health": {"type": "float", "default": 100}
+  },
+  "root": {"utility": [
+    {"score": {"sequence": [
+      {"task": "log", "text": "hurt, falling back"},
+      {"task": "find_point", "store": "retreat", "from": "target", "prefer": "far", "radius": 8, "rings": 2, "count": 8},
+      {"task": "move_to", "key": "retreat"},
+      {"task": "look_at", "key": "target"},
+      {"wait": 1000}
+    ], "name": "flee"}, "by": [{"key": "health", "from": 0, "to": 100, "invert": true, "weight": 3}]},
+    {"score": {"selector": [
+      {"token": {"sequence": [
+        {"task": "log", "text": "my turn to attack"},
+        {"task": "move_to", "key": "target", "radius": 1.3},
+        {"task": "log", "text": "striking"},
+        {"task": "wait_event", "event": "hit"},
+        {"set": "health", "add": -80},
+        {"wait": 1000}
+      ]}, "pool": "attack", "key": "target", "name": "attack"},
+      {"sequence": [
+        {"task": "log", "text": "waiting for a turn"},
+        {"task": "look_at", "key": "target"},
+        {"wait": 0.5}
+      ], "name": "wait a turn"}
+    ], "name": "fight"}, "by": [{"key": "target"}]},
+    {"score": {"sequence": [
+      {"task": "log", "text": "heard something"},
+      {"task": "move_to", "key": "heard_at", "radius": 1},
+      {"wait": 1},
+      {"set": "heard_at", "clear": true}
+    ], "name": "investigate"}, "by": [{"key": "heard_at", "weight": 0.8}]},
+    {"score": {"wait": 0.5, "name": "idle"}, "base": 0.1}
+  ], "hysteresis": 0.1}
+}
