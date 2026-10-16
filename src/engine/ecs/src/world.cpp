@@ -165,7 +165,7 @@ void Commands::spawn_raw(Entity reserved, Span<const ecs::RawComponent> componen
 
 World::World(mem::IAllocator& alloc)
     : alloc_(alloc), components_(alloc), component_ids_(alloc), hooks_(alloc), generations_(alloc), locations_(alloc),
-      free_list_(alloc), tables_(alloc), table_index_(alloc), system_names_all_(alloc), destroy_hooks_(alloc),
+      free_list_(alloc), tables_(alloc), table_index_(alloc), system_names_all_(alloc), destroy_hooks_(alloc), tick_clamp_hooks_(alloc),
       events_(alloc), events_ordered_(alloc), resources_(alloc), commands_(*this) {
     for (usize i = 0; i < kPhaseCount; ++i) {
         systems_[i] = Array<SystemEntry>(alloc);
@@ -404,6 +404,9 @@ void World::add_system(Phase phase, const char* name, SystemFn fn, const char* a
 
 void World::add_system_first(Phase phase, const char* name, SystemFn fn) {
     assert_not_in_phase("add_system_first");
+    bool dup = false;
+    for (const SystemEntry& s : systems_[static_cast<usize>(phase)]) dup = dup || StringView(s.name) == StringView(name);
+    MCE_ASSERT_MSG(!dup, "add_system_first: the system is already registered in this phase");
     const auto id = static_cast<u16>(system_names_all_.size());
     system_names_all_.push_back(name);
     systems_[static_cast<usize>(phase)].insert(0, SystemEntry{name, fn, id});
@@ -667,6 +670,7 @@ void World::clamp_change_ticks() {
     }
     for (auto& list : systems_)
         for (SystemEntry& s : list) clamp(s.last_run);
+    for (TickClampFn fn : tick_clamp_hooks_) fn(*this);
     last_tick_clamp_ = now;
 }
 

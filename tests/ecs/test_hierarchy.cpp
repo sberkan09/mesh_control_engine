@@ -85,6 +85,40 @@ TEST_CASE("hierarchy: installed after FixedUpdate_Post systems, they still see t
     CHECK(ecs::hierarchy_stats(w).propagated == 4);
 }
 
+TEST_CASE("hierarchy: the runs' ticks age with the World's, so a move after a long wait is seen") {
+    World w;
+    ecs::install_hierarchy(w);
+    const Entity parent = w.spawn_with(at(0, 0));
+    const Entity child = w.spawn_with(at(0, 1), ChildOf{parent});
+    ecs::propagate_transforms(w);
+    w.tick(1.0 / 60, 0);
+    // 2^32 + 100 ticks on with no propagation, the parent moved 200 ticks ago: unaged, the last
+    // run's tick would wrap to look 100 ticks old, newer than the move, and the move would be lost.
+    w.debug_set_change_tick(w.change_tick() + 0xFFFFFF9Cu);  // 2^32 - 100
+    w.try_get_mut<LocalTransform>(parent)->position = {5, 0, 0};
+    w.debug_set_change_tick(w.change_tick() + 200u);
+    w.tick(1.0 / 60, 1);
+    CHECK(math::near(world_pos(w, child), {5, 1, 0}));
+    CHECK(ecs::hierarchy_stats(w).propagated == 2);
+}
+
+TEST_CASE("hierarchy: poses written back between ticks (a rollback load) propagate on the next tick") {
+    World w;
+    ecs::install_hierarchy(w);
+    const Entity parent = w.spawn_with(at(0, 0));
+    const Entity child = w.spawn_with(at(0, 1), ChildOf{parent});
+    ecs::propagate_transforms(w);
+    w.add_system(Phase::FixedUpdate_Pre, "walk", [](Frame& f) {
+        f.world().query<LocalTransform&>().without<ChildOf>().each([](Entity, LocalTransform& t) { t.position.x += 1.0f; });
+    });
+    for (u64 t = 0; t < 5; ++t) w.tick(1.0 / 60, t);
+    CHECK(math::near(world_pos(w, child), {5, 1, 0}));
+    // Rewind as net rollback does: the saved pose is written back outside the tick, then re-simulated.
+    w.try_get_mut<LocalTransform>(parent)->position = {2, 0, 0};
+    w.tick(1.0 / 60, 3);
+    CHECK(math::near(world_pos(w, child), {3, 1, 0}));
+}
+
 TEST_CASE("hierarchy: rotating a parent moves its children in the same tick") {
     World w;
     ecs::install_hierarchy(w);

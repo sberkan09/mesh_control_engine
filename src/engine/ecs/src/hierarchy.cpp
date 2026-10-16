@@ -246,6 +246,15 @@ void propagate_system(Frame& f) {
     late.late_ran = true;
 }
 
+// The ticks the runs keep, aged with the World's so a long run (or a long hold) never wraps them
+// into looking newer than they are.
+void clamp_ticks(World& w) {
+    HierarchyIndex& idx = index_of(w);
+    if (idx.direct_ran) w.clamp_tick(idx.direct_since);
+    if (idx.early_ran) w.clamp_tick(idx.early_tick);
+    if (idx.late_ran) w.clamp_tick(idx.late_tick);
+}
+
 }  // namespace
 
 WorldTransform to_world(const LocalTransform& local) {
@@ -274,6 +283,7 @@ void install_hierarchy(World& w) {
     w.set_resource(HierarchyIndex{});
     w.set_hooks<ChildOf>(&on_child_of_added, &on_child_of_removed);
     w.add_destroy_hook(&on_destroy);
+    w.add_tick_clamp_hook(&clamp_ticks);
     // Twice a tick: first in FixedUpdate_Post, so the systems there that read WorldTransform (the
     // kit's animators, foot IK, bone attachments, cameras) see this tick's moves even when the
     // hierarchy is installed after them (scene::load, after kit::install_stock); and where it is
