@@ -157,6 +157,17 @@ public:
     }
     // Focus a panel by name on the next frame (e.g. the cook panel after a failed cook).
     void focus_panel(const char* name) { focus_panel_ = name; }
+    // The Profiler opens this .mcperf (project-relative or absolute) in its Capture tab on its next draw.
+    void open_perf_capture(StringView path) {
+        perf_capture_request_ = path;
+        focus_panel("Profiler");
+    }
+    bool take_perf_capture(FixedString<256>& path) {
+        if (perf_capture_request_.empty()) return false;
+        path = perf_capture_request_;
+        perf_capture_request_ = StringView();
+        return true;
+    }
     void reset_layout() { reset_layout_ = true; }
 
     rhi::RenderDevice& device() { return *device_; }
@@ -209,6 +220,7 @@ private:
     bool show_demo_ = false;
     bool frame_request_ = false;
     const char* focus_panel_ = nullptr;
+    FixedString<256> perf_capture_request_;
     // Pending modal popups (opened on the next frame, inside the ImGui frame).
     enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover };
     Popup popup_ = Popup::None;

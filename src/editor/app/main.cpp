@@ -41,6 +41,8 @@ MCE_CVAR(cv_play, "editor.play", false, "Enter play-in-editor after opening the 
          CVarFlags::None);
 MCE_CVAR(cv_open, "editor.open", "", "Open this asset (relative to assets/) in its panel: a .mcui, .mctimeline or .mcanim",
          CVarFlags::None);
+MCE_CVAR(cv_perf_capture, "editor.perf_capture", "", "Open this .mcperf capture in the Profiler's Capture tab at startup",
+         CVarFlags::None);
 MCE_CVAR(cv_focus, "editor.panel", "", "Bring this panel's tab to the front at startup (e.g. Profiler)", CVarFlags::None);
 MCE_CVAR(cv_ini, "editor.ini", "mce_editor.ini", "Dock layout file (empty = no persistence)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
@@ -79,6 +81,7 @@ public:
             }
             if (cv_play.get_bool() && !shell_.play_in_editor()) return Error(Errc::InvalidArgument, "mce_editor", "play");
         }
+        if (!cv_perf_capture.get_string().empty()) shell_.open_perf_capture(cv_perf_capture.get_string());
         focus_.append(cv_focus.get_string());  // last: opening a project focuses the Cook panel
         if (!focus_.empty()) shell_.focus_panel(focus_.c_str());
         return ok();

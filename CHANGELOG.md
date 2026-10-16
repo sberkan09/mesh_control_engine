@@ -9,6 +9,12 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   marches a short screen-space ray toward the sun so creases, feet and small details get the shadows the cascades
   miss (`contact_length`, `contact_thickness`, `contact_intensity`). Sun only for now; off on the Low tier;
   `r.contact_shadows 0` turns it off. User guide 8.
+- The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
+  the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
+  amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.
+  **Compare with** adds a second capture's before/after tables. `mce_editor -editor.perf_capture <file>` opens
+  one at start-up. The comparison is now shared editor code (`mce/editor/perf_compare.h`) that MCP's
+  `perf_compare` uses too. User guide 3 and 14.
 - Steam overlay and rich presence, M-STEAM step 3 (SBA-108): the Steam overlay holds the game like a lost focus
   (pause, mute, the focus-loss save). A `RichPresence` component says what friends see (status, a localization
   token and two substitutions), sent only when it changes. The `OpenOverlay` event opens the friends,
