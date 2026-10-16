@@ -12,6 +12,28 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
   `NetOwner` names the player that controls an entity. A component built with other flagged fields on the
   client is skipped and counted, never misread. `refl_describe_component` marks the fields `"replicated"`.
   Snapshot version 2. User guide 20.9.
+- The editor's Profiler reads captures, M-PERF step 4 (SBA-116). A new **Capture** tab opens a `.mcperf` from
+  the player or `perf_run`: the budget verdict for a target, a strip of every frame (spikes red, over-budget
+  amber; click one), the chosen frame's phases, GPU stages and counters, the spikes and the slowest systems.
+  **Compare with** adds a second capture's before/after tables. `mce_editor -editor.perf_capture <file>` opens
+  one at start-up. The comparison is now shared editor code (`mce/editor/perf_compare.h`) that MCP's
+  `perf_compare` uses too. User guide 3 and 14.
+- Steam overlay and rich presence, M-STEAM step 3 (SBA-108): the Steam overlay holds the game like a lost focus
+  (pause, mute, the focus-loss save). A `RichPresence` component says what friends see (status, a localization
+  token and two substitutions), sent only when it changes. The `OpenOverlay` event opens the friends,
+  achievements, stats, community, settings, store or web page (`mce/kit/presence.h`). Neither changes the state
+  hash. Covered on the stand-in by `test_kit`, `test_platform` and `player_steam_overlay`.
+- `perf_run` and `perf_compare` over MCP, M-PERF step 3 (SBA-115). `perf_run` measures a scene with the real player,
+  one sim tick per frame, so its counters repeat run to run. It judges the result against a target's budget, with
+  advice for each limit it is over. It also returns frame, sim, render and GPU times, draws, triangles and sprites,
+  the slowest systems, the GPU stages and spike frames, and it keeps the `.mcperf` capture. `perf_compare` compares
+  two captures (by default the last two runs) and says what got better or worse. User guide 14.
+- Steam game services, M-STEAM step 2 (SBA-107): while Steam runs, it is the desktop game services backend, so
+  `GameServices` unlocks, progress, scores and cloud saves reach Steam achievements, leaderboards (found once,
+  uploaded keep-best) and Steam Cloud files. `.mcservices` entries take an optional `steam` name (the catalog id
+  otherwise); the catalog chunk is v2, so packs re-cook. `steam::await_call` waits for Steam's asynchronous call
+  results. The stand-in `steam_api` covers it all in CI (`test_platform`, `player_game_services_steam`).
+- Steam, M-STEAM step 1 (SBA-106, ADR-0042): `mce/platform/steam.h` opens Valve's `steam_api` at run time and
 - Performance budgets per target, M-PERF step 2 (SBA-114). The `.mceproj` takes `"budgets"` for desktop, mobile
   and web: frame, sim, render and GPU milliseconds, draws, triangles, sprites, upload bytes, heap allocations,
   sprite textures per scene and the largest texture edge. Fields left out keep the engine defaults. `project_set`

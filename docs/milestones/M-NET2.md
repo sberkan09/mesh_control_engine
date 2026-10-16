@@ -107,7 +107,7 @@ Notes:
 | Item | Where | Evidence |
 |---|---|---|
 | `net::WebSocketHost`: a Transport over RFC 6455 WebSocket, server (`listen`) and client (`connect`), native over non-blocking TCP; binary messages `[channel][payload]`, masked client frames, 7/16/64-bit lengths, fragments, ping/pong round trip in `stats()`, close frames carrying the disconnect `user_data`, a size limit (1009) and handshake and silence timeouts | `mce/net/websocket.h`, `src/websocket.cpp`, `src/socket.cpp`, `src/ws_crypto.cpp` | `test_net` "the handshake's accept key matches RFC 6455's example", "a client connects over loopback, messages of every length cross, then it disconnects" (0 B to 70,000 B both ways), "the server closing tells the client, and a full server turns a client away", "a message over the limit closes the connection; nobody listening fails the connect" |
-| The web build's client over the browser's WebSocket (`emscripten_websocket_*`, `-lwebsocket.js`); `listen()` fails there | `src/websocket_web.cpp` | not compiled by `local_ci.sh` (no Emscripten in the CI container). The M-WEB track compiles it in its web-release build (`-Werror`, `MCE_WITH_NET=ON`) and runs it in headless Chromium with its `mce_relay_web_probe` (lands with SBA-65) |
+| The web build's client over the browser's WebSocket (`emscripten_websocket_*`, `-lwebsocket.js`); `listen()` fails there | `src/websocket_web.cpp` | not compiled by `local_ci.sh` (no Emscripten in the CI container). The M-WEB track compiles it in its web-release build (`-Werror`, `MCE_WITH_NET=ON`) and runs it in headless Chromium with its `mce_relay_web_probe` (SBA-65, see `M-WEB.md`) |
 | `net::RelayServer`: rooms with six-character codes (no 0/O/1/I, seeded), up to 8 members, host is member 0, joiners take the lowest free id; forwarding to one member or all with the sender's delivery; refusals (no such room, full, already in a room, bad request, too many rooms); the host leaving closes the room, the host can remove a member; served over any number of Transports at once | `mce/net/relay.h`, `src/relay.cpp` | `test_net` "a host makes a room, others join with its code, and members are peers", "codes are case-insensitive, and wrong codes, full rooms and double joins are refused", "the host can remove a member, a lost link closes the room, and room limits hold" |
 | `net::RelayClient`: a Transport whose peers are the room's members, so replication, prediction and rollback run through a room unchanged | same | `test_net` "snapshot replication runs unchanged through a room"; `sample_net_headless -sim 1 -relay 1` (ctest `sample_net_headless_relay`; `local_ci.sh` determinism stage across runs and Debug/Release): 3 clients at 40 ms ± 10 per hop, 5% loss, 600 ticks, every mirror matches, 48 of 48 shots hit when rewound |
 | `mce_relay`: UDP (ENet) on 7777 and WebSocket on 7778 in one process, counters in the log; `-selftest 1` puts a native client (UDP) and a WebSocket client in one room over loopback, sends both ways, checks a third is refused and that the room closes with its host | `src/engine/net/relay/` (under `src/engine/net/` because only mce_net may link mce_net) | ctest `mce_relay_selftest` |
@@ -124,8 +124,8 @@ Notes:
   queues instead of dropping.
 - The gate "a web build joins a native host through the relay": M-WEB's `mce_relay_web_probe` runs two
   `RelayClient`s over `websocket_web.cpp` in headless Chromium against a native `mce_relay`; one makes a
-  room, the other joins, messages cross both ways ("relay web probe: OK"). It lands in `dev_claude` with
-  M-WEB's SBA-65; here the selftest covers the same path with the native WebSocket client.
+  room, the other joins, messages cross both ways ("relay web probe: OK"), from M-WEB's SBA-65; `local_ci.sh` has no
+  Emscripten, so here the selftest covers the same path with the native WebSocket client.
 
 ## Step 7 — replication as data
 
@@ -151,7 +151,7 @@ Notes:
 |---|---|
 | Demo: a 2–4 player game that feels local at 150 ms | shown headless: `sample_net_headless -sim 1 -clients 4 -latency 150 -jitter 40 -loss 0.15 -ticks 900`: each player is predicted, drawn 11 ms behind its input against 401 ms with `-predict 0`, every mirror matches the server and 104 of 104 rewound shots hit; no windowed arena was built |
 | Demo: a rollback sample stays in sync at 100 ms | `samples/net_rollback`, 4 peers at 100 ms ± 20, 5% loss, 900 frames: all agree |
-| Demo: a web build joins a native host through the relay | M-WEB's `mce_relay_web_probe` in headless Chromium (see step 6's notes); lands with SBA-65 |
+| Demo: a web build joins a native host through the relay | M-WEB's `mce_relay_web_probe` in headless Chromium (`scripts/web/probe_smoke.cjs <dir> relay <mce_relay>`, SBA-65): OK |
 | Gate: headless multi-client runs give stable hashes | `local_ci.sh` determinism stage: same hash across runs and Debug/Release, direct and through the relay |
 | Gate: rollback detects an injected desync | `sample_net_rollback -desync_at 300` (ctest), `test_net` |
 | Gate: no sim code includes networking headers | `check_walls.py` net opt-in link wall and socket wall |

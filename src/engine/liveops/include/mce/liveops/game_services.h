@@ -13,6 +13,9 @@
 //     "leaderboards": [ { "id": "best_time", "order": "lower_is_better", "ios": "...", "android": "..." } ],
 //     "cloud_saves": [ "progress" ] }
 //
+// "steam" names an entry's Steamworks API name when it differs from "id" (Steam takes any name the
+// game's Steamworks page defines, so most games use the engine id there and leave "steam" out).
+//
 // "steps" > 1 makes an incremental achievement (unlocked when its progress reaches steps). A
 // leaderboard's "order" is higher_is_better (the default) or lower_is_better. "cloud_saves" names
 // the saves (save::write names) that may be synced to the player's cloud.
@@ -63,6 +66,7 @@ struct AchievementInfo {
     FixedString<64> id;
     FixedString<128> ios_id;
     FixedString<128> android_id;
+    FixedString<128> steam_id;  // empty: Steam uses `id` (M-STEAM step 2)
     u32 steps = 1;  // > 1: incremental
 };
 
@@ -70,6 +74,7 @@ struct LeaderboardInfo {
     FixedString<64> id;
     FixedString<128> ios_id;
     FixedString<128> android_id;
+    FixedString<128> steam_id;  // empty: Steam uses `id`
     bool lower_is_better = false;  // a time; otherwise a score
 };
 

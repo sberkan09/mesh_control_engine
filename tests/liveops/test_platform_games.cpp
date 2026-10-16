@@ -37,6 +37,7 @@ ServicesCatalog catalog() {
     l.id = "best_time";
     l.ios_id = "com.studio.best_time";
     l.android_id = "CgkIbest";
+    l.steam_id = "BEST_TIME";
     REQUIRE(c.add_leaderboard(l));
     REQUIRE(c.add_cloud_save("progress"));
     return c;
@@ -52,13 +53,14 @@ struct Cloud {
 struct FakePlatform final : IPlatformGamesBackend {
     Cloud& cloud;
     bool ios;
+    liveops::StoreIds ids;
     bool can_start = true;
     PlatformGamesSink* sink = nullptr;
     std::vector<std::string> calls;
 
-    FakePlatform(Cloud& c, bool ios_ids) : cloud(c), ios(ios_ids) {}
+    FakePlatform(Cloud& c, bool ios_ids) : cloud(c), ios(ios_ids), ids(ios ? liveops::StoreIds::Ios : liveops::StoreIds::Android) {}
     const char* name() const override { return ios ? "game_center" : "play_games"; }
-    bool ios_ids() const override { return ios; }
+    liveops::StoreIds store_ids() const override { return ids; }
     bool start(PlatformGamesSink& s) override {
         sink = &s;
         return can_start;
@@ -161,6 +163,22 @@ TEST_CASE("platform games: achievements and scores go out under the platform's o
         }
         CHECK(seen.scores == std::vector<std::pair<u16, bool>>{{0, true}});
     }
+}
+
+TEST_CASE("platform games: Steam takes the steam id, or the catalog id when there is none") {
+    const ServicesCatalog c = catalog();
+    Cloud cloud;
+    FakePlatform platform(cloud, false);
+    platform.ids = liveops::StoreIds::Steam;
+    PlatformGameServices provider(platform);
+    Seen seen;
+    provider.start(c, seen);
+    provider.report_achievement(0, 1);
+    provider.submit_score(0, 4200);
+    REQUIRE(platform.calls.size() == 2);
+    CHECK(platform.calls[0] == "achievement first_win 1/1");
+    CHECK(platform.calls[1] == "score BEST_TIME 4200");
+    CHECK(seen.achievements == std::vector<std::pair<u16, bool>>{{0, true}});
 }
 
 TEST_CASE("platform games: cloud saves are versioned across devices") {
