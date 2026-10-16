@@ -46,7 +46,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_pos[4];   // capture position, w: intensity
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
-    vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3)
+    vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3), y: contact shadows on (u_ao.g, M-VISUAL2 3)
     vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0
     vec4 p_gi;             // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 p_gi_min;         // xyz: volume box
@@ -310,7 +310,7 @@ layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
 layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
-layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility
+layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
 layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
@@ -623,6 +623,10 @@ void main() {
         // The sun, shadowed.
         vec3 l = -p_light_dir.xyz;
         float sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
+        if (p_ao.y > 0.5 && sh > 0.0) {  // contact shadows: what the cascades are too coarse to see
+            vec4 c = u_view_proj * vec4(v_world, 1.0);
+            sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
+        }
         color = direct(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
 
         // Forward+ point and spot lights of this fragment's cluster.
@@ -1035,6 +1039,63 @@ void main() {
     float fade = r_params.w > 0.0 ? clamp(min(edge.x, edge.y) / r_params.w, 0.0, 1.0) : 1.0;
     fade *= facing * (1.0 - smoothstep(0.75, 1.0, hi));
     o_ssr = vec4(max(textureLod(u_prev, puv, 0.0).rgb, vec3(0.0)), fade);
+}
+)";
+
+// ---- contact shadows (M-VISUAL2 3), at half resolution ------------------------------------------
+// Each pixel of the SSAO prepass marches c_params.x meters toward the sun from just off its surface,
+// jittered per pixel by a 4x4 Bayer pattern. A sample that passes behind the depth buffer by more than
+// half a texel's footprint and less than the thickness (plus a texel's) occludes; the occlusion fades toward the screen's
+// edges and the ray's far end. Out: r = the SSAO visibility (or 1), g = the sun's contact visibility.
+constexpr const char* kContactFS = R"(#version 450 core
+layout(std140, binding = 1) uniform ContactU {
+    mat4 c_proj;     // this frame's projection, unjittered
+    vec4 c_dir;      // xyz: toward the sun, view space
+    vec4 c_params;   // x: length (m), y: thickness (m), z: steps, w: intensity
+    vec4 c_misc;     // x: copy u_ao_src.r
+};
+layout(binding = 6) uniform sampler2D u_gbuf;    // view normal (xyz), view depth (w; 0 = nothing drawn)
+layout(binding = 7) uniform sampler2D u_ao_src;  // the blurred SSAO
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_contact;
+vec3 view_pos(vec2 uv, float z) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    return vec3((ndc.x + c_proj[2][0]) * z / c_proj[0][0], (ndc.y + c_proj[2][1]) * z / c_proj[1][1], -z);
+}
+void main() {
+    float ao = c_misc.x > 0.5 ? textureLod(u_ao_src, v_uv, 0.0).r : 1.0;
+    o_contact = vec4(ao, 1.0, 0.0, 1.0);
+    vec4 g = textureLod(u_gbuf, v_uv, 0.0);
+    if (g.w <= 0.0) return;
+    vec3 n = normalize(g.xyz), l = c_dir.xyz;
+    if (dot(n, l) <= 0.0) return;  // facing away: the sun's own N·L leaves it dark
+    vec2 size = vec2(textureSize(u_gbuf, 0));
+    // The bias grows with distance: a half-size texel covers more of the surface there.
+    float texel = 2.0 * g.w / (abs(c_proj[1][1]) * size.y);
+    vec3 p = view_pos(v_uv, g.w) + n * texel;
+    float bias = 0.5 * texel, thickness = c_params.y + texel;
+    const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+    ivec2 q = ivec2(gl_FragCoord.xy) & 3;
+    float jitter = (bayer[q.x * 4 + q.y] + 0.5) / 16.0;
+    int steps = int(c_params.z);
+    float occ = 0.0;
+    for (int i = 0; i < 64 && i < steps; ++i) {
+        float t = (float(i) + jitter) / float(steps);
+        vec3 s = p + l * (c_params.x * t);
+        if (s.z >= -0.05) break;  // past the camera
+        vec4 c = c_proj * vec4(s, 1.0);
+        vec2 uv = c.xy / c.w * 0.5 + 0.5;
+        if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) break;
+        // Snapped to the texel centre the depth belongs to, as the SSAO does.
+        float sz = textureLod(u_gbuf, (floor(uv * size) + 0.5) / size, 0.0).w;
+        float dz = -s.z - sz;
+        if (sz > 0.0 && dz > bias && dz < thickness) {
+            vec2 edge = min(uv, 1.0 - uv);
+            occ = clamp(min(edge.x, edge.y) / 0.05, 0.0, 1.0) * (1.0 - smoothstep(0.6, 1.0, t));
+            break;
+        }
+    }
+    o_contact.g = 1.0 - occ * c_params.w;
 }
 )";
 

@@ -20,6 +20,7 @@ mce_add_library(mce_platform
         src/screen_reader.cpp
         src/steam.cpp
         src/steam_games.cpp
+        src/steam_input.cpp
     PUBLIC_DEPS
         mce::mce_core
     PRIVATE_DEPS

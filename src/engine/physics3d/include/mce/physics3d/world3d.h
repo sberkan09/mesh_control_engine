@@ -287,6 +287,7 @@ struct QueryFilter3D {
     u16 layer_mask = 0xFFFF;
     Span<const Entity> exclude;  // e.g. self
     bool include_dynamic = true;
+    bool include_characters = false;  // raycast and the overlaps also test characters' capsules (M-GAMEPLAY3D 6)
 };
 
 struct RayHit3D {
@@ -415,6 +416,11 @@ public:
     // `dir` need not be normalized; t is in metres along it.
     std::optional<RayHit3D> raycast(vec3 origin, vec3 dir, f32 max_dist, const QueryFilter3D& f = {}) const;
     std::optional<ShapeHit3D> shape_cast(f32 sphere_radius, vec3 from, vec3 to, const QueryFilter3D& f = {}) const;
+    // Overlaps (M-GAMEPLAY3D 6): every body whose shape touches a sphere, or a box turned by
+    // `rotation`, in creation order (and characters, with include_characters). Fills `out` up to
+    // its size and returns how many there are.
+    u32 overlap_sphere(vec3 center, f32 radius, Span<Entity> out, const QueryFilter3D& f = {}) const;
+    u32 overlap_box(vec3 center, vec3 half, quat rotation, Span<Entity> out, const QueryFilter3D& f = {}) const;
 
     // ---- editor / test surface ---------------------------------------------------------------------
     u64 hash_state(u64 seed) const;
@@ -432,6 +438,11 @@ public:
     struct Impl;
 
 private:
+    std::optional<RayHit3D> raycast_bodies(vec3 origin, vec3 unit_dir, f32 max_dist, const QueryFilter3D& f) const;
+    template <typename CharacterTest>
+    u32 overlap_shape(const void* jolt_shape, vec3 center, quat rotation, Span<Entity> out, const QueryFilter3D& f,
+                      CharacterTest&& touches) const;
+
     mem::UniquePtr<Impl> impl_;
 };
 

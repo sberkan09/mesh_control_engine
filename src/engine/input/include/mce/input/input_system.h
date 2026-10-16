@@ -112,6 +112,21 @@ public:
     // bindings when it moves.
     u64 bindings_generation() const { return bindings_generation_; }
 
+    // ---- action feeds (M-STEAM step 4) ----------------------------------------------------------
+    // A platform that reads controllers as actions itself (Steam Input) feeds their values by action
+    // name. Each feed adds to the action's bindings like one more device (a Button is held at 0.5 and
+    // up; an Axis2D y in the map's own sense), from the next sampled tick until replaced or cleared.
+    // Recorded and replayed like any device, since the sampled snapshot is what records.
+    struct ActionFeed {
+        StringId action;
+        f32 x = 0.f;
+        f32 y = 0.f;
+    };
+    static constexpr u32 kMaxFeeds = kMaxActions;
+    void set_action_feeds(Span<const ActionFeed> feeds);
+    void clear_action_feeds() { feeds_.clear(); }
+    Span<const ActionFeed> action_feeds() const { return feeds_.span(); }
+
     // ---- clock -----------------------------------------------------------------------
     void set_tick_rate(u32 hz);
     void set_tick_origin_us(u64 origin_us);
@@ -231,6 +246,7 @@ private:
         BindingDef result;
     } rebind_;
 
+    Array<ActionFeed> feeds_;
     f32 look_sensitivity_ = 1.f;
     Array<StringId> toggles_;
     mutable Array<StringId> toggle_raw_held_;  // toggle actions whose bindings were held last tick

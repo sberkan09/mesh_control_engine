@@ -1,6 +1,6 @@
 # M-STEAM — Steamworks (milestone record)
 
-**Status:** active. Steps 1–3 done; steps 4–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
+**Status:** active. Steps 1–4 done; steps 5–6 to come (Linear SBA-106 … SBA-111; SBA-112 is the run against
 the real Steam client, which needs the user's Steamworks account).
 **Why:** Steam is the desktop distribution channel; the engine comparison (the project's
 `assessments/motor-kiyaslama-eksikler.md`, item 2) lists it right after the web. Added 2026-10-15 under the
@@ -15,7 +15,7 @@ user's standing instruction to extend the roadmap when it runs out.
 | 1. ADR-0042 and the run-time loader: `mce/platform/steam.h`, init and its refusals, manual-dispatch callbacks, the player's `-steam.app_id`, a stand-in library for tests, the Steam wall | SBA-106 | done |
 | 2. Achievements, stats, leaderboards and cloud saves as `platform::game_services` `Backend::Steam` under `liveops::PlatformGameServices` | SBA-107 | done |
 | 3. Overlay (holds the world like a lost focus) and rich presence as data | SBA-108 | done |
-| 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | — |
+| 4. Steam Input: an action manifest from the cooked input map, glyphs, Steam Deck defaults | SBA-109 | done |
 | 5. `ship --steam`: depots per platform, `steam_api` beside the binary, generated steamcmd build scripts | SBA-110 | — |
 | 6. Demo, user guide, gates | SBA-111 | — |
 | Later: the real Steam client (achievements configured, overlay, Steam Input, a beta-branch upload) | SBA-112 | needs the user's account |
@@ -53,3 +53,16 @@ that is SBA-112.
 | The cook, the editor and the MCP server register `RichPresence` | the three `engine_components.cpp` | `capabilities.py --check` |
 
 Not measured: the real overlay and the friends list's rendering of a localized presence (SBA-112).
+
+## Step 4 — Steam Input
+
+| Item | Where | Evidence |
+|---|---|---|
+| `InputSystem::set_action_feeds`: a platform's values added to actions by name like one more device (recorded and replayed with the sampled state) | `mce/input/input_system.h`, `input_system.cpp` | `test_input` "feeds hold a button and move a stick, until cleared" |
+| A gamepad namer: the options screen names a gamepad binding by the platform's name for it | `mce/input/binding_names.h`, `options_panel.cpp` | `test_input` "a namer renames gamepad bindings only, and only the actions it knows" |
+| The action manifest (`game_actions_<appid>.vdf`, one set `Game`) and default configurations for the Steam Deck, Xbox, PlayStation and Switch Pro controllers from the input map; the Deck adds the right trackpad | `mce/input/steam_config.h`, `steam_config.cpp` | `test_input` "the action manifest and default configurations come from the map" |
+| `platform::steam::input`: Steam Input over the flat API (explicit frames, the set activated on every controller, digital and analog actions by handle, an action's origin name and glyph) | `mce/platform/steam_input.h`, `steam_input.cpp` | `test_platform` "Steam Input reads the actions of the set by name, and names their inputs" |
+| The stock player: `-steam.input`, `-steam.write_input_config`; Steam Input started with the map's named actions (a stick's y flipped where the map reads it down), fed every frame, the namer set | `src/player/src/player.cpp` | ctest `player_steam_input`: one stand-in controller holding Jump and Move, both read; the five files written; the state hash equal to the run without Steam; `-steam.input 0` and a missing app id |
+
+Not measured: a real controller through the Steam client, the Deck's trackpad, the Steamworks page's
+manifest upload (SBA-112). Several maps share the one set `Game`; per-map sets (menus) are not generated.

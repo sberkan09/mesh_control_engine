@@ -88,3 +88,84 @@ TEST_CASE("camera_sweep: the boom stops in front of walls, ignores props and cha
     CHECK(down->entity == ent(1000));
     CHECK(down->position.y == doctest::Approx(0.2f).epsilon(1e-2));
 }
+
+TEST_CASE("queries: sphere and box overlaps list every touching body in creation order") {
+    World3D w;
+    add_floor(w);
+    REQUIRE(add_box(w, ent(3), BodyType3D::Static, {2, 3, 0}, {0.5f, 0.5f, 0.5f}));
+    REQUIRE(add_box(w, ent(1), BodyType3D::Dynamic, {-2, 3, 0}, {0.5f, 0.5f, 0.5f}));
+    REQUIRE(add_box(w, ent(2), BodyType3D::Kinematic, {0, 3, 4}, {0.5f, 0.5f, 0.5f}));
+
+    Entity out[8];
+    // A sphere at y = 3 reaching both side boxes' faces (1.5 m away) but not the floor or the far box.
+    CHECK(w.overlap_sphere({0, 3, 0}, 1.6f, out) == 2);
+    CHECK(out[0] == ent(3));  // created first
+    CHECK(out[1] == ent(1));
+    CHECK(w.overlap_sphere({0, 3, 0}, 1.4f, out) == 0);
+        // Touching the floor too, and the count when `out` is short.
+    CHECK(w.overlap_sphere({0, 2.5f, 0}, 2.6f, Span<Entity>(out, 1)) == 3);
+    CHECK(out[0] == ent(1000));
+
+    // Filters: no dynamic bodies, an excluded entity, a layer nothing lives on.
+    QueryFilter3D f;
+    f.include_dynamic = false;
+    CHECK(w.overlap_sphere({0, 3, 0}, 1.6f, out, f) == 1);
+    CHECK(out[0] == ent(3));
+    const Entity skip[] = {ent(3)};
+    f = {};
+    f.exclude = skip;
+    CHECK(w.overlap_sphere({0, 3, 0}, 1.6f, out, f) == 1);
+    CHECK(out[0] == ent(1));
+    f = {};
+    f.layer_mask = 1u << 3;
+    CHECK(w.overlap_sphere({0, 3, 0}, 1.6f, out, f) == 0);
+
+    // A box turned 45 degrees about Y reaches further along its diagonals.
+    CHECK(w.overlap_box({0, 3, 3}, {0.3f, 0.3f, 0.3f}, {}, out) == 0);
+    CHECK(w.overlap_box({0, 3, 2.8f}, {0.5f, 0.3f, 0.5f}, math::quat_from_axis_angle({0, 1, 0}, math::kPi / 4.0f), out) == 1);
+    CHECK(out[0] == ent(2));
+    CHECK(w.overlap_box({0, 3, 0}, {0, 1, 1}, {}, out) == 0);  // a flat box is refused
+}
+
+TEST_CASE("queries: characters show in rays and overlaps only when asked") {
+    World3D w;
+    add_floor(w);
+    ControllerParams3D p;
+    p.radius = 0.4f;
+    p.half_height = 0.5f;
+    REQUIRE(w.create_character(ent(5), {0, 0.9f + 0.05f, 5}, p));
+    REQUIRE(add_box(w, ent(6), BodyType3D::Static, {0, 1, 10}, {2, 2, 0.5f}));
+
+    // Without include_characters the ray passes the capsule and hits the wall behind it.
+    auto hit = w.raycast({0, 1, 0}, {0, 0, 1}, 50.0f);
+    REQUIRE(hit);
+    CHECK(hit->entity == ent(6));
+    QueryFilter3D f;
+    f.include_characters = true;
+    hit = w.raycast({0, 1, 0}, {0, 0, 1}, 50.0f, f);
+    REQUIRE(hit);
+    CHECK(hit->entity == ent(5));
+    CHECK(hit->t == doctest::Approx(4.6f).epsilon(1e-3));
+    CHECK(math::near(hit->normal, {0, 0, -1}, 1e-3f));
+    // From above: the top cap.
+    hit = w.raycast({0, 5, 5}, {0, -1, 0}, 50.0f, f);
+    REQUIRE(hit);
+    CHECK(hit->entity == ent(5));
+    CHECK(hit->point.y == doctest::Approx(0.95f + 0.5f + 0.4f).epsilon(1e-3));
+    // A closer body still wins.
+    REQUIRE(add_box(w, ent(7), BodyType3D::Static, {0, 1, 2}, {1, 1, 0.1f}));
+    hit = w.raycast({0, 1, 0}, {0, 0, 1}, 50.0f, f);
+    REQUIRE(hit);
+    CHECK(hit->entity == ent(7));
+
+    Entity out[4];
+    CHECK(w.overlap_sphere({0.8f, 1, 5}, 0.5f, out) == 0);
+    CHECK(w.overlap_sphere({0.8f, 1, 5}, 0.5f, out, f) == 1);
+    CHECK(out[0] == ent(5));
+    CHECK(w.overlap_sphere({1.0f, 1, 5}, 0.5f, out, f) == 0);
+    CHECK(w.overlap_box({0, 2.0f, 5}, {0.5f, 0.2f, 0.5f}, {}, out, f) == 1);  // over the head, touching the cap
+    CHECK(w.overlap_box({0, 2.1f, 5}, {0.5f, 0.2f, 0.5f}, {}, out, f) == 0);
+    const Entity skip[] = {ent(5)};
+    f.exclude = skip;
+    CHECK(w.overlap_sphere({0.8f, 1, 5}, 0.5f, out, f) == 0);
+}
