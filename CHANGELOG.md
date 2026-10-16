@@ -5,6 +5,11 @@ Every PR that changes what a user of the engine sees adds one line under **Unrel
 
 ## Unreleased
 
+- A game with no C++, M-SCRIPT step 5 (SBA-151): `mce new MyGame --template script` makes a project of Luau
+  scripts and data with no `CMakeLists.txt`; `mce build` cooks and checks it, `mce play` / `headless` run it on
+  the stock player, `mce ship` zips the player, the engine library, the pack and a launcher, and the editor and
+  MCP server open it without a module. The engine checkout builds such a project for phones and the browser
+  (`scripts/ship.py --project`), and the android, ios and web presets build the Luau runtime. User guide 27.7.
 - Scripts while you work, M-SCRIPT step 4b (SBA-150): a `.luau` file recooked while the game plays in the
   editor takes effect on the next tick; each script's `update()` has a Tracy zone; a crash report names the
   running script and its Luau stack (`crash::add_context` lets other subsystems add sections too); the
