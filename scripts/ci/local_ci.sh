@@ -5,8 +5,18 @@
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
 #   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
 #   scripts/ci/local_ci.sh --task     # after each task: walls + linux-gcc-debug + tidy (+ determinism, below)
-#   scripts/ci/local_ci.sh --batch    # every 3rd task and at a milestone's end: everything (same as no stage)
+#   scripts/ci/local_ci.sh --premerge # right before merging, if dev_claude moved: walls + the PR's own tests (below)
+#   scripts/ci/local_ci.sh --batch    # the full matrix; the integration runner's job, threads do not run it
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages
+#
+# --premerge (the M7 gate, ~1-3 min) is for after dev_claude was merged into the branch: a PR goes green with ONE
+# --task on its own base and is not re-run. It runs walls (capabilities --check included), then builds mce_mcp
+# and the tests defined next to the files the PR changed (scripts/ci/premerge.py tests) and runs those plus the
+# MCP transcript golden (`ctest -R`). It also prints whether dev_claude changed files the PR also changes since
+# the last green --task (the base is recorded in build/local-ci-logs/last-task.env; MCE_PREMERGE_SINCE=<sha>
+# overrides): only then is a --task re-run needed. Generated files that went stale after the
+# merge (capabilities.md, transcript goldens, the sample coverage allow list) are the integration runner's to
+# regenerate; a failure in the golden check on a file the PR did not touch is not a reason for --task.
 #
 # Stages: walls, linux-gcc-debug, linux-clang-release, linux-asan, tidy, determinism, release-build, web.
 # release-build compiles the whole gcc Release tree (the SDK's) without running it: determinism builds only
@@ -55,7 +65,7 @@ cd "$ROOT"
 
 export LIBGL_ALWAYS_SOFTWARE=1  # Mesa llvmpipe: GL 4.5 core without a GPU
 
-ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web)
+ALL_STAGES=(walls linux-gcc-debug linux-clang-release linux-asan tidy determinism release-build web premerge)
 declare -A GPU_TESTS=([linux-gcc-debug]=ON [linux-clang-release]=OFF [linux-gcc-release]=OFF [linux-asan]=OFF)
 
 stages=()
@@ -66,10 +76,11 @@ for arg in "$@"; do
     case "$arg" in
         --quick) stages+=(walls linux-gcc-debug) ;;
         --task) stages+=(walls linux-gcc-debug tidy); task_run=1 ;;
+        --premerge) stages+=(walls premerge) ;;
         --batch) ;;
         --save-cache) save_cache=1 ;;
         --tidy-all) tidy_all=1 ;;
-        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,52p' "$0"; exit 0 ;;
         *) stages+=("$arg") ;;
     esac
 done
@@ -138,7 +149,7 @@ mkdir -p "$LOG_DIR"
 # sit together (the gcc trees: tests, determinism, the Release build), so a tree is finished with before
 # the next one starts and can be dropped when the disk is short (reclaim_space). Unknown names go last
 # and fail in run_stage with the list of known ones.
-CANON_ORDER=(walls linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
+CANON_ORDER=(walls premerge linux-gcc-debug determinism release-build linux-gcc-release linux-clang-release linux-asan tidy web)
 order_stages() {
     local -A seen=()
     local c s sorted=()
@@ -156,6 +167,7 @@ order_stages
 stage_trees() {
     case "$1" in
         linux-*) echo "$1" ;;
+        premerge) echo linux-gcc-debug ;;
         tidy) echo linux-clang-debug ;;
         determinism) echo "linux-gcc-debug linux-gcc-release" ;;
         release-build) echo linux-gcc-release ;;
@@ -302,6 +314,7 @@ preconfigure() {
     for s in "${stages[@]}"; do
         case "$s" in
             linux-*) [[ -n "${GPU_TESTS[$s]:-}" ]] && want[$s]=1 ;;
+            premerge) want[linux-gcc-debug]=1 ;;
             tidy) want[linux-clang-debug]=1 ;;
             determinism) want[linux-gcc-debug]=1; want[linux-gcc-release]=1 ;;
             release-build) want[linux-gcc-release]=1 ;;
@@ -330,6 +343,29 @@ stage_preset() {
     configure "$preset" &&
         cmake --build --preset "$preset" &&
         run_tests "$preset"
+}
+
+# --premerge: report whether a --task re-run is needed, build the PR's own tests and run them with the
+# transcript golden. An overlap makes the stage fail so the summary says so.
+stage_premerge() {
+    local since="${MCE_PREMERGE_SINCE:-}" rc=0 out regex targets full
+    python3 scripts/ci/premerge.py overlap ${since:+--since "$since"} || rc=$?
+    out="$(python3 scripts/ci/premerge.py tests)"
+    regex="$(sed -n 's/^REGEX=//p' <<< "$out")"
+    targets="$(sed -n 's/^TARGETS=//p' <<< "$out")"
+    full="$(sed -n 's/^FULL_BUILD=//p' <<< "$out")"
+    echo "premerge: tests $regex"
+    configure linux-gcc-debug || return 1
+    if [[ "$full" == 1 ]]; then
+        cmake --build --preset linux-gcc-debug || return 1
+    else
+        # shellcheck disable=SC2086
+        cmake --build --preset linux-gcc-debug --target $targets || return 1
+    fi
+    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset linux-gcc-debug -j "$JOBS" -R "$regex" || return 1
+    [[ $rc -eq 0 ]] && return 0
+    echo "premerge: tests pass, but a --task re-run is needed (see the overlap above, or no --task base is recorded)"
+    return 1
 }
 
 # Prints the run-clang-tidy file regexes: one per changed translation unit, or the whole tree.
@@ -552,6 +588,7 @@ run_stage() {
         determinism) stage_determinism ;;
         release-build) stage_release_build ;;
         web) stage_web ;;
+        premerge) stage_premerge ;;
         *) echo "unknown stage: $1 (known: ${ALL_STAGES[*]})"; return 2 ;;
     esac
 }
@@ -586,5 +623,11 @@ if [[ ${#COMMON_ARGS[@]} -gt 0 ]]; then
     ccache --show-stats 2> /dev/null | grep -E '^(Cacheable calls|  Hits|  Misses)' | awk '!seen[$0]++' |
         sed 's/^/  ccache: /'
     [[ $failed -eq 0 ]] && save_cache_snapshot
+fi
+# A green --task records the base it ran on, so --premerge can tell later whether dev_claude moved onto the
+# PR's files (scripts/ci/premerge.py overlap).
+if [[ $task_run -eq 1 && $failed -eq 0 ]]; then
+    printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
+        "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
 exit $failed
