@@ -18,6 +18,7 @@
 #include "mce/kit/sprite_extract.h"
 #include "mce/kit/views.h"
 #include "mce/loc/loc.h"
+#include "mce/log.h"
 #include "mce/memory/frame_slots.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -683,6 +684,101 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
         CHECK(c->ext.height_scale == 0.0f);
         CHECK((c->normal_key == ~0u || c->normal_key < render::TextureStore::kFirstLocalKey));  // no array key
     }
+    ex3.shutdown();
+    f.extract.reset(nullptr);
+}
+
+TEST_CASE("M-CONTENT 1b: BC cooks - a BC5 normal + BC4 height make a parallax array; a BC4 base colour warns") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_parallax_bc");
+    const std::vector<u8> grey(8 * 8 * 4, 128);
+    const char* guid_n = "7a270000-0000-4000-8000-000000000101";
+    const char* guid_h = "7a270000-0000-4000-8000-000000000102";
+    const struct {
+        const char* name;
+        const char* guid;
+        const char* compress;
+    } tex[] = {{"n", guid_n, "bc5"}, {"h", guid_h, "bc4"}};
+    for (const auto& t : tex) {
+        write_file(std::string(root + "/assets/") + t.name + ".png", make_png(8, 8, grey));
+        write_file(std::string(root + "/assets/") + t.name + ".png.mceasset",
+                   sidecar(t.guid, "texture", (std::string(R"({ "srgb": false, "mips": false, "compress": ")") + t.compress + R"(" })").c_str()));
+    }
+    auto mat = [&](const char* guid, const std::string& textures, const char* extra = R"("height_scale": 0.05,)") {
+        write_file(std::string(root + "/assets/") + guid + ".mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + guid + R"(", )" + extra + R"( "textures": )" + textures + " }");
+    };
+    const char* parallax = "7a270000-0000-4000-8000-000000000110";
+    const char* bc4_albedo = "7a270000-0000-4000-8000-000000000111";
+    mat(parallax, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_h + R"(" })");
+    mat(bc4_albedo, std::string(R"({ "base_color": "guid:)") + guid_h + R"(" })", "");
+    cook::CookService svc;
+    cook::CookOptions opts;
+    opts.textures = cook::TextureCompression::Bc;
+    REQUIRE(svc.cook(StringView(root.c_str()), opts).ok());
+
+    Fixture f;
+    if (!f.device->caps().texture_bc) {
+        MESSAGE("skipped: this device cannot sample BC (texture_bc false)");
+        return;
+    }
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    const Array<byte> blob = box.build();
+    REQUIRE(f.renderer.meshes().upload(1, 1, blob.span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+
+    World world;
+    kit::install_kit3d(world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), &assets);
+    ex3.set_texture_store(&f.renderer.textures());
+    ex3.bind_mesh(kBox, 1);
+    REQUIRE(ex3.preload().has_value());
+    world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
+    for (const char* g : {parallax, bc4_albedo}) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        m.material.guid = asset::parse_guid(g).value();
+        world.spawn_with(LocalTransform{{0, 0, -5}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    world.tick(1.0f / 60.0f, 0);
+    render::Camera3D cam;
+    REQUIRE(ex3.camera(world, 1.0f, cam));
+    render::Scene3D scene(f.renderer.meshes(), mem::heap());
+    scene.begin(cam, {64, 64});
+    log::set_level(log::Level::Info);
+    const u64 seq = log::console_last_seq();
+    ex3.extract(world, scene, 1.0f);
+    log::ConsoleLine lines[64];
+    const usize nlines = log::read_console(seq, Span<log::ConsoleLine>(lines, 64));
+    log::set_level(log::Level::Warn);
+    REQUIRE(scene.instances().size() == 2);
+
+    // BC5 normal + BC4 height: one BC5 array [normal, height], parallax on.
+    const render::MaterialOverride* a = scene.instances()[0].material;
+    REQUIRE(a != nullptr);
+    CHECK(a->parallax);
+    CHECK(a->parallax_normal);
+    CHECK(a->normal_key >= render::TextureStore::kFirstLocalKey);
+    CHECK(f.renderer.textures().contains(a->normal_key));
+
+    // A BC4 texture in the base-colour slot is warned about (once per material), and the BC5-only slot raises nothing.
+    usize bc4_warnings = 0;
+    for (usize i = 0; i < nlines; ++i)
+        if (StringView(lines[i].text.c_str()).find("cooked as BC4") != StringView::npos) ++bc4_warnings;
+    CHECK(bc4_warnings == 1);
     ex3.shutdown();
     f.extract.reset(nullptr);
 }

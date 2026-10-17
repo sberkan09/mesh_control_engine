@@ -102,7 +102,7 @@ Three importer rules that the error text alone does not make obvious:
   `max_size` (default 2048) and ignore the project cap. After every cook, `mce_cook` prints the cooked bytes by type
   (textures, meshes, audio, scenes, other), how many textures the cap cut, and the five largest assets, and MCP's
   `cook_run` returns the same as `sizes`: look there first when a pack is bigger than expected.
-- **Compress the pack with BC.** *(Status: BC packs cook now, but runtime sampling support lands in step 1b-iii, which is not merged yet, so a `--textures bc` pack does not draw yet.)* Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
+- **Compress the pack with BC.** Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
   as block-compressed data (BC7, BC5, BC4 or BC1) instead of RGBA8: the same 1024 × 1024 texture with mips drops from
   5.3 MB to 1.3 MB (BC7, BC5) or 0.67 MB (BC4, BC1), on disk and in GPU memory. The sidecar's `compress` key picks the
   format, and the cook mode decides what a value produces (a missing key means the mode's default, so a project that

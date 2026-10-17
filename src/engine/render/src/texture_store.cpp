@@ -1,5 +1,8 @@
 #include "mce/render/texture_store.h"
 
+#include <atomic>
+#include <cstring>
+
 #include "mce/log.h"
 #include "mce/math/math.h"
 
@@ -13,12 +16,44 @@ void remove_ordered(Array<T>& a, usize i) {
     a.pop_back();
 }
 
+// M-CONTENT 1b: no CPU decode at load, a pack is cooked for its target. A compressed format the device cannot sample is
+// refused, and the fix is named once per process and family (a pack holds hundreds of them).
+bool format_sampleable(const rhi::DeviceCaps& caps, rhi::TextureFormat f, const char*& family) {
+    family = nullptr;
+    switch (f) {
+        case rhi::TextureFormat::BC1_UNorm:
+        case rhi::TextureFormat::BC1_SRGB:
+        case rhi::TextureFormat::BC3_UNorm:
+        case rhi::TextureFormat::BC4_UNorm:
+        case rhi::TextureFormat::BC5_UNorm:
+        case rhi::TextureFormat::BC7_UNorm:
+        case rhi::TextureFormat::BC7_SRGB: family = "BC"; return caps.texture_bc;
+        case rhi::TextureFormat::ASTC_4x4_UNorm:
+        case rhi::TextureFormat::ASTC_4x4_SRGB: family = "ASTC"; return caps.texture_astc;
+        default: return true;
+    }
+}
+
+std::atomic<u32> g_refusal_logged{0};  // bit 0: BC, bit 1: ASTC
+
 }  // namespace
 
 Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const TextureUpload& up) {
     const char* name = up.debug_name ? up.debug_name : "";
     if (up.mips.empty()) return Error(Errc::InvalidArgument, "render.texture.upload", name);
     if (rhi::is_depth_format(up.format)) return Error(Errc::Unsupported, "render.texture.format", name);
+    {
+        const char* family = nullptr;
+        if (!format_sampleable(device.caps(), up.format, family)) {
+            const u32 bit = family[0] == 'B' ? 1u : 2u;
+            if (!(g_refusal_logged.fetch_or(bit) & bit)) {
+                MCE_LOG_ERROR("render: texture pack is {} but this device ({}) cannot sample {}; re-cook for this target "
+                              "(--textures {}). First texture refused: {}",
+                              family, device.caps().device_name.empty() ? "unknown" : device.caps().device_name.c_str(), family, family[0] == 'B' ? "rgba8|astc" : "rgba8|bc", name);
+            }
+            return Error(Errc::Unsupported, "render.texture.format", name);
+        }
+    }
     const u32 w = up.mips[0].width, h = up.mips[0].height;
     const u32 max_size = device.caps().max_texture_size ? device.caps().max_texture_size : 16384u;
     if (w == 0 || h == 0 || w > max_size || h > max_size)
@@ -43,6 +78,7 @@ Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const Textu
     desc.format = up.format;
     desc.debug_name = name;
     const rhi::TextureHandle tex = device.create_texture(desc, up.mips[0].pixels);
+    if (tex.is_null()) return Error(Errc::Unsupported, "render.texture.create", name);  // the backend refused (it logged why)
     for (usize m = 1; m < up.mips.size(); ++m) {
         const TextureMipUpload& mip = up.mips[m];
         const usize layer_bytes = rhi::level_bytes(up.format, mip.width, mip.height);
@@ -100,8 +136,12 @@ Result<rhi::TextureHandle> TextureStore::upload(u32 key, u32 generation, const T
     if (!device_) return Error(Errc::InvalidArgument, "render.texture.upload", "store not initialized");
     auto tex = create_texture(*device_, up);
     if (!tex) {
-        MCE_LOG_WARN("render: texture upload failed for key {} ({} at {})", key, errc_name(tex.error().code),
-                     tex.error().stage);
+        // The unsupported-format refusal was already logged once by create_texture; no per-texture line for it.
+        const bool refusal = tex.error().code == Errc::Unsupported && tex.error().stage &&
+                             std::strcmp(tex.error().stage, "render.texture.format") == 0;
+        if (!refusal)
+            MCE_LOG_WARN("render: texture upload failed for key {} ({} at {})", key, errc_name(tex.error().code),
+                         tex.error().stage);
         return tex.error();
     }
     // Re-uploading a generation that is still live replaces it.

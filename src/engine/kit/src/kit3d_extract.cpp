@@ -340,7 +340,7 @@ u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid 
     }
     render::LayerArray arr;
     u32 key = ~0u;
-    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax");
+    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax", true);
     // Layer 1 (the height) must have made it in; a normal map that did not match leaves layer 0 flat instead.
     if (composed && (arr.present & 2u)) {
         key = textures_->allocate_key();
@@ -377,6 +377,23 @@ const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
             m.normal_key = texture_key(m.params.texture(asset::MaterialSlot::Normal));
             m.orm_key = texture_key(m.params.texture(asset::MaterialSlot::MetallicRoughness));
             m.emissive_key = texture_key(m.params.texture(asset::MaterialSlot::Emissive));
+            // M-CONTENT 1b: a BC4 texture holds one channel (R). In a slot that reads more than R it draws red/grey, so say so once.
+            static constexpr asset::MaterialSlot kWide[] = {asset::MaterialSlot::BaseColor, asset::MaterialSlot::MetallicRoughness,
+                                                            asset::MaterialSlot::Emissive, asset::MaterialSlot::Normal};
+            for (const asset::MaterialSlot slot : kWide) {
+                const asset::Guid tg = m.params.texture(slot);
+                if (tg == asset::Guid{}) continue;
+                for (const TextureEntry& te : texture_entries_) {
+                    if (!(te.guid == tg) || te.handle.generation == 0) continue;
+                    const Result<asset::TextureView> tv =
+                        asset::TextureView::read(assets_->resolve(asset::AssetHandle<asset::Texture>{te.handle.index, te.handle.generation}));
+                    if (tv && tv.value().header->format == asset::TextureFormat::BC4)
+                        MCE_LOG_WARN("kit3d: material {} binds texture {} cooked as BC4 (one channel) to a slot that reads more than R; "
+                                     "set \"compress\": \"bc7\" (colour, ORM) or \"bc5\" (normal) on it",
+                                     asset::to_string(guid).view(), asset::to_string(tg).view());
+                    break;
+                }
+            }
             if (m.ext.parallax()) e.parallax_key = build_parallax_array(m, e.guid);
         } else {
             MCE_LOG_WARN("kit3d: material {} does not read", asset::to_string(guid).view());
