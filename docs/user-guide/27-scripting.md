@@ -128,7 +128,13 @@ The 2D body functions raise "the entity has no 2D body" for an entity without on
 | `mce.overlap_sphere3d(center, radius, skip?)`, `mce.overlap_box3d(center, half, skip?)` | the entities whose shapes touch a sphere or an axis-aligned box (at most 256) |
 | `mce.sphere_cast3d(from, to, radius, skip?)` | the first thing a sphere hits on its way, `{entity, point, normal, position, fraction}`, or `nil` |
 | `mce.velocity3d(e)`, `mce.set_velocity3d(e, v)`, `mce.angular_velocity3d(e)`, `mce.set_angular_velocity3d(e, w)`, `mce.impulse3d(e, impulse)` | a 3D body's velocities and a push at its centre of mass |
-| `mce.teleport3d(e, position)` | puts a 3D body or character at `position` with no sweep (keeps its rotation); writing `LocalTransform.position` alone does not move a body |
+| `mce.teleport3d(e, position, rotation?)` | puts a 3D body or character at `position` with no sweep; `rotation` (see below) defaults to the body's own; writing `LocalTransform.position` alone does not move a body |
+| `mce.rotation3d(e)` / `mce.set_rotation3d(e, rotation)` | a 3D body's rotation, and turning it in place |
+| `mce.look_rotation3d(from, to)` | the rotation that turns forward from `from` toward `to` (roll 0); pure, no entity |
+
+A rotation in Luau is a `vector` of Euler angles in degrees: `x` pitch, `y` yaw, `z` roll, applied yaw, then pitch, then roll.
+Forward is -Z and up is +Y, as for the camera, so a yaw of 0 faces -Z, +90 faces -X and a pitch of +90 looks straight up.
+There is no quaternion type; straight up or down has no yaw of its own (it reads back as 0 and the turn goes into roll).
 | `mce.find_path3d(from, to)` | the corner points along the baked navmesh after leaving `from`, ending at `to` (like `mce.find_path`), and `true` as a second result when the path is partial (the target cannot be reached; it ends at the closest point); `nil` when there is no path; an error when the world has no navmesh |
 
 A walking 3D character needs no call: set `CharacterController3D.move` and `jump` and the kit's own system moves it with the right slope, step and push rules. The 3D body functions raise "the entity has no 3D body" for an entity without one.

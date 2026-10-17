@@ -24,4 +24,7 @@ cannot yet say or check:
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | not started |
 | 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | not started |
 
+| 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | not started |
+| 6 | Docs the same notes asked for: the Luau limits (no state between ticks, one component per `("Comp", "field")` call, `Perceiver.sees` is a number) in the guide itself, and `mce.d.luau` as a reference page in the SDK docs | Sonnet | not started |
+
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry; `local_ci.sh --task` green on every step.
