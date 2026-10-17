@@ -129,6 +129,7 @@ bool PreviewRenderer::ensure_3d() {
     extract3d_.init(renderer_.meshes(), assets_);
     extract3d_.set_texture_store(&renderer_.textures());
     extract3d_.set_render_textures(&render_textures_);
+    extract3d_.set_static_merge(false);  // selection, gizmos and picking keep per-entity draws (StaticMerge3D, M-VISUAL3 5b)
     three_d_ = true;
     return true;
 }

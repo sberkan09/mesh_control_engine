@@ -247,6 +247,7 @@ void Kit3DExtract::release_handles() {
 }
 
 void Kit3DExtract::shutdown() {
+    release_static_merges();
     release_terrains();
     release_handles();
     meshes_ = nullptr;
@@ -256,6 +257,7 @@ void Kit3DExtract::shutdown() {
 }
 
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
+    release_static_merges();
     release_terrains();
     release_handles();
     foliage_.clear();
@@ -873,9 +875,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         world.query<const ShowRenderTexture&>().each([&](const ShowRenderTexture&) { ++screens; });
         screen_materials_.reserve(screens);
     }
+    // StaticMerge3D (M-VISUAL3 5b): merged once per frame, the later views of the frame reuse it.
+    if (!extra_view_) update_static_merges(world);
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
+        if (merge_stamp_ != 0 && e.index < merged_stamp_.size() && merged_stamp_[e.index] == merge_stamp_) return;  // drawn merged
         vec3 pos, scale;
         quat rot;
         if (!pose_of(world, e, pos, rot, scale)) return;
@@ -975,6 +980,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         worlds_[world_parity_][ent] = inst.world;
         world_stamp_[ent] = frame_stamp_;
         prev_ok_[ent] = prev ? 1 : 0;
+        scene.add(inst);
+    }
+    for (const MergedDraw& d : merged_draws_) {
+        if (!bake_mode_ && !in_view(d.center, d.radius)) continue;
+        render::MeshInstance inst;
+        inst.mesh = d.key;
+        inst.cast_shadows = d.cast_shadows;
+        inst.lod_state = d.lod_state;
         scene.add(inst);
     }
     extract_terrains(world, scene);

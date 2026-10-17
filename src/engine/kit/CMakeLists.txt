@@ -28,6 +28,7 @@ mce_add_library(mce_gameplay_kit
         src/skeleton2d_ik.cpp
         src/sprite_anim.cpp
         src/sprite_extract.cpp
+        src/static_merge3d.cpp
         src/stock.cpp
         src/timeline.cpp
         src/ai.cpp
