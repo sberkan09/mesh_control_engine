@@ -6,6 +6,7 @@
 // Paths: scene paths are absolute (or relative to the working directory); `scene_rel` helpers
 // take paths relative to the project's assets/ folder, which is how the catalog lists them.
 
+#include "mce/kit/chunk_lod3d.h"
 #include "mce/physics3d/navmesh3d.h"
 #include "mce/editor/editor_scene.h"
 #include "mce/editor/play_session.h"
@@ -112,6 +113,19 @@ public:
     // (+ sidecar; a re-bake keeps the file's GUID), hot-reloads it and points the component's `baked`
     // at it (one undo step). Returns the stats of the bake.
     Result<physics::NavBakeStats3D> bake_navmesh();
+
+    // HLOD bake (M-OPENWORLD A3): for every SceneChunk of the open scene (or only `only`, when not kNoEntity), merges
+    // the area scene's static meshes into one proxy (kit::bake_chunk_hlod, positions relative to the chunk entity),
+    // writes assets/hlod/<scene>/chunk_<entity id>.mchlod (+ sidecar; a re-bake keeps the GUID), hot-reloads it and
+    // points the chunk's ChunkLod3D `proxy` at it, adding the component when missing (one undo step). A chunk whose
+    // area has nothing to merge is left as it is. Returns one row per chunk tried.
+    struct HlodBakeRow {
+        EntityId chunk = 0;
+        asset::Guid proxy;  // null: nothing merged
+        u32 bytes = 0;
+        kit::HlodBakeStats3D stats;
+    };
+    Result<Array<HlodBakeRow>> bake_hlod(const kit::HlodBakeSettings3D& settings, EntityId only = kNoEntity);
 
     // Every scene in the catalog, by path.
     void list_scenes(Array<const ProjectAsset*>& out) const;

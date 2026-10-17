@@ -34,6 +34,7 @@ mce_add_library(mce_gameplay_kit
         src/sprite_anim.cpp
         src/sprite_extract.cpp
         src/static_merge3d.cpp
+        src/chunk_lod3d.cpp
         src/stock.cpp
         src/timeline.cpp
         src/ui_flow.cpp
