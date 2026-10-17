@@ -125,6 +125,13 @@ map does not define reads as not pressed and zero.
 
 The 2D body functions raise "the entity has no 2D body" for an entity without one (a body exists from the first physics step).
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
+| `mce.overlap_sphere3d(center, radius, skip?)`, `mce.overlap_box3d(center, half, skip?)` | the entities whose shapes touch a sphere or an axis-aligned box (at most 256) |
+| `mce.sphere_cast3d(from, to, radius, skip?)` | the first thing a sphere hits on its way, `{entity, point, normal, position, fraction}`, or `nil` |
+| `mce.velocity3d(e)`, `mce.set_velocity3d(e, v)`, `mce.angular_velocity3d(e)`, `mce.set_angular_velocity3d(e, w)`, `mce.impulse3d(e, impulse)` | a 3D body's velocities and a push at its centre of mass |
+| `mce.teleport3d(e, position)` | puts a 3D body or character at `position` with no sweep (keeps its rotation); writing `LocalTransform.position` alone does not move a body |
+| `mce.find_path3d(from, to)` | corner points along the baked navmesh (`from` first, `to` last) and `true` as a second result when the path is partial (the target cannot be reached; it ends at the closest point); `nil` when there is no path; an error when the world has no navmesh |
+
+A walking 3D character needs no call: set `CharacterController3D.move` and `jump` and the kit's own system moves it with the right slope, step and push rules. The 3D body functions raise "the entity has no 3D body" for an entity without one.
 
 **Game plumbing.**
 
