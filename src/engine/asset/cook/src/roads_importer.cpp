@@ -546,7 +546,7 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
         out_roads.push_back(rr);
         const Array<V3> core = trimmed(r.line, ta, tb);
         Array<V3> back;
-        for (u32 k = core.size(); k-- > 0;) back.push_back(core[k]);
+        for (u32 k = static_cast<u32>(core.size()); k-- > 0;) back.push_back(core[k]);
         const f32 w = r.lane_width;
         for (u32 dir = 0; dir < 2; ++dir) {
             const u32 count = dir == 0 ? r.forward : r.backward;
@@ -693,10 +693,10 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
                     // The tightest bend: the circle through three consecutive points.
                     f32 tight = 1e9f;
                     for (u32 k = 1; k + 1 < curve.size(); ++k) {
-                        const V3 a = curve[k - 1], b = curve[k], c = curve[k + 1];
-                        const f32 ab = flat_len(b - a), bc = flat_len(c - b), ca = flat_len(a - c);
-                        const f32 area2 = std::fabs(cross_y(b - a, c - a));
-                        if (area2 > 1e-6f) tight = std::fmin(tight, ab * bc * ca / (2.0f * area2));
+                        const V3 q0 = curve[k - 1], q1 = curve[k], q2 = curve[k + 1];
+                        const f32 l01 = flat_len(q1 - q0), l12 = flat_len(q2 - q1), l20 = flat_len(q0 - q2);
+                        const f32 area2 = std::fabs(cross_y(q1 - q0, q2 - q0));
+                        if (area2 > 1e-6f) tight = std::fmin(tight, l01 * l12 * l20 / (2.0f * area2));
                     }
                     const RoadLane& dst = lanes[p.to];
                     RoadLane c{};

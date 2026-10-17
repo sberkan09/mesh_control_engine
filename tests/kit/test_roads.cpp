@@ -105,8 +105,8 @@ TEST_CASE("roads: a placed network answers the nearest lane, keeping to the head
     CHECK_FALSE(road_nearest(net, {130.0f, 0.0f, 30.0f}, spot, q));
     // The point along the lane, with s.
     vec3 dir;
-    const vec3 p = road_lane_point(net, spot.lane, 0.0f, &dir);
     REQUIRE(road_nearest(net, {101.5f, 0.0f, 30.0f}, spot));
+    const vec3 p = road_lane_point(net, spot.lane, 0.0f, &dir);
     const vec3 p10 = road_lane_point(net, spot.lane, 10.0f, &dir);
     CHECK(dir.z == doctest::Approx(-1.0f));
     CHECK(p.z - p10.z == doctest::Approx(10.0f));

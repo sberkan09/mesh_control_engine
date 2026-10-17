@@ -78,9 +78,9 @@ public:
         Array<u32> cell_items;
         Array<u32> point_lane;  // the lane a point belongs to (kRoadNone: a road's centreline)
 
-        // The road named `name` (its source name) or kRoadNone; the node likewise.
-        u32 find_road(StringView name) const;
-        u32 find_node(StringView name) const;
+        // The road named `road_name` (its source name) or kRoadNone; the node likewise.
+        u32 find_road(StringView road_name) const;
+        u32 find_node(StringView node_name) const;
     };
 
     // The network a component places: its cooked asset (copied out once, re-read on hot reload) or one

@@ -77,7 +77,34 @@ everywhere for `all_red` seconds before the next phase. A `green` entry is a roa
 turn written `"from>to"` (a protected left, say). `offset` shifts the cycle so neighbouring lights make a green
 wave. Every turn at a signalled junction must be green in some phase, or the cook stops.
 
-## 29.4 Mistakes the cook catches
+## 29.4 Placing a network and asking it questions
+
+Put a `RoadNetwork3D` component on an entity and set its `roads` to the `.mcroads` asset. The network sits at
+the entity's position (its rotation and scale are ignored). `install_stock` installs the road kit; it runs the
+traffic lights on the component's `time`, which saves and replays with the scene. Clear `lights` to freeze them.
+
+Game code reaches the lanes through `mce/kit/roads.h`:
+
+```cpp
+kit::RoadNet net;
+if (kit::road_net_first(world, net)) {                 // or kit::road_net(world, entity, net)
+    kit::RoadNearestQuery q;
+    q.heading = car_forward;                           // only lanes going this way
+    kit::RoadSpot spot;
+    if (kit::road_nearest(net, car_position, spot, q)) {
+        math::vec3 dir;
+        const math::vec3 ahead = kit::road_lane_point(net, spot.lane, spot.s + 10.0f, &dir);
+        f32 left = 0.0f;
+        const kit::RoadLight light = kit::road_light(net, next_connector, &left);  // Green, Amber or Red
+    }
+    Array<u32> route;
+    kit::road_route(*net.def, from_lane, to_lane, route);  // the quickest lanes, junctions included
+}
+```
+
+`kit::road_debug_lines` returns every lane as lines, connectors coloured by their light, for an overlay.
+
+## 29.5 Mistakes the cook catches
 
 The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
 itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a

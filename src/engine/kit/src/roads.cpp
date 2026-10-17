@@ -118,15 +118,15 @@ void roads_clock(Frame& f) {
 
 }  // namespace
 
-u32 RoadRegistry::Def::find_road(StringView name) const {
-    const u64 id = StringId(name).value;
+u32 RoadRegistry::Def::find_road(StringView road_name) const {
+    const u64 id = StringId(road_name).value;
     for (u32 i = 0; i < roads.size(); ++i)
         if (roads[i].name == id) return i;
     return kRoadNone;
 }
 
-u32 RoadRegistry::Def::find_node(StringView name) const {
-    const u64 id = StringId(name).value;
+u32 RoadRegistry::Def::find_node(StringView node_name) const {
+    const u64 id = StringId(node_name).value;
     for (u32 i = 0; i < nodes.size(); ++i)
         if (nodes[i].name == id) return i;
     return kRoadNone;
