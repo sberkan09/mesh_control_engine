@@ -192,9 +192,16 @@ public:
             bool srgb = true;
             DiagList unused;
             if (in.lookup->native_document(height, ts, tpath)) detail::read_bool(ts, "srgb", true, srgb, tpath, kStage, unused);
+            if (tpath.empty()) {  // no settings in the sidecar: the path still names the file
+                Span<const byte> bytes;
+                in.lookup->source_bytes(height, bytes, tpath);
+            }
             if (srgb) {
-                String msg("the height map assets/");
-                msg += tpath;
+                String msg("the height map ");
+                if (!tpath.empty()) {
+                    msg += "assets/";
+                    msg += tpath;
+                }
                 msg += " is imported as sRGB (its \"srgb\" setting defaults to true): set \"srgb\": false in its .mceasset so the depth is not bent";
                 const JsonValue at = doc.get("textures").get(kHeightSlot);
                 diags.warning(file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, kStage, msg);
