@@ -41,3 +41,11 @@ foreach(_mce_import_py content retarget)
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_${_mce_import_py}.py" "${CMAKE_CURRENT_BINARY_DIR}/import_${_mce_import_py}_test")
     endif()
 endforeach()
+
+# M-OPENWORLD D2: real packs from the ledger (network or MCE_CONTENT_CACHE; skips without), cooked by mce_cook. Integration run only.
+if(TARGET mce_cook)
+    add_test(NAME import_content_real
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_content_real.py" "${CMAKE_CURRENT_BINARY_DIR}/import_content_real_test"
+                     "$<TARGET_FILE:mce_cook>")
+    mce_mark_slow(import_content_real)
+endif()

@@ -259,51 +259,51 @@
       ],
       "source": {
         "kind": "http",
-        "url": "https://ambientcg.com/get?file=Asphalt031_1K-JPG.zip",
+        "url": "https://ambientcg.com/get?file=Asphalt031_1K-PNG.zip",
         "archive": "zip",
-        "sha256": "f98114b8fb083fc65925c3b4568b131e37c9a23357d432a16e59676dbc69f964",
-        "size": 8699189
+        "sha256": "121070920d28b281c84bb5ef4d7122f8dae45f53b35ca988237ddcfd1933bdb3",
+        "size": 17694251
       },
       "cook": [
         {
           "from": "",
           "include": [
-            "Asphalt031_1K-JPG_Color.jpg",
-            "Asphalt031_1K-JPG_NormalGL.jpg",
-            "Asphalt031_1K-JPG_Roughness.jpg",
-            "Asphalt031_1K-JPG_AmbientOcclusion.jpg",
-            "Asphalt031_1K-JPG_Displacement.jpg"
+            "Asphalt031_1K-PNG_Color.png",
+            "Asphalt031_1K-PNG_NormalGL.png",
+            "Asphalt031_1K-PNG_Roughness.png",
+            "Asphalt031_1K-PNG_Displacement.png",
+            "Asphalt031_1K-PNG_AmbientOcclusion.png"
           ],
           "to": "textures",
           "settings": [
             {
-              "match": "*_Color.jpg",
+              "match": "*_NormalGL.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Color.png",
               "settings": {
                 "srgb": true
-              }
-            },
-            {
-              "match": "*_NormalGL.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Roughness.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_AmbientOcclusion.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Displacement.jpg",
-              "settings": {
-                "srgb": false
               }
             }
           ]
@@ -313,15 +313,19 @@
         {
           "path": "asphalt031.mcmat",
           "textures": {
-            "base_color": "textures/Asphalt031_1K-JPG_Color.jpg",
-            "normal": "textures/Asphalt031_1K-JPG_NormalGL.jpg"
+            "base_color": "textures/Asphalt031_1K-PNG_Color.png",
+            "normal": "textures/Asphalt031_1K-PNG_NormalGL.png"
           },
-          "roughness": 0.85,
-          "metallic": 0,
           "uv_scale": [
             8,
             8
-          ]
+          ],
+          "orm": {
+            "roughness": "textures/Asphalt031_1K-PNG_Roughness.png",
+            "out": "textures/Asphalt031_ORM.png",
+            "metallic": 0,
+            "ao": "textures/Asphalt031_1K-PNG_AmbientOcclusion.png"
+          }
         }
       ]
     },
@@ -345,51 +349,44 @@
       ],
       "source": {
         "kind": "http",
-        "url": "https://ambientcg.com/get?file=Road007_1K-JPG.zip",
+        "url": "https://ambientcg.com/get?file=Road007_1K-PNG.zip",
         "archive": "zip",
-        "sha256": "0a81951ed6a3fc55e8856d6f6842b36764b7330d4e196389f6f2725efa6f0031",
-        "size": 6520659
+        "sha256": "c39a3ff9d4422275ec13ed8fdbb19b30e9ec98560154891478329500f548e520",
+        "size": 15816473
       },
       "cook": [
         {
           "from": "",
           "include": [
-            "Road007_1K-JPG_Color.jpg",
-            "Road007_1K-JPG_NormalGL.jpg",
-            "Road007_1K-JPG_Roughness.jpg",
-            "Road007_1K-JPG_AmbientOcclusion.jpg",
-            "Road007_1K-JPG_Displacement.jpg"
+            "Road007_1K-PNG_Color.png",
+            "Road007_1K-PNG_NormalGL.png",
+            "Road007_1K-PNG_Roughness.png",
+            "Road007_1K-PNG_Displacement.png"
           ],
           "to": "textures",
           "settings": [
             {
-              "match": "*_Color.jpg",
+              "match": "*_NormalGL.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Color.png",
               "settings": {
                 "srgb": true
-              }
-            },
-            {
-              "match": "*_NormalGL.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Roughness.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_AmbientOcclusion.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Displacement.jpg",
-              "settings": {
-                "srgb": false
               }
             }
           ]
@@ -399,15 +396,18 @@
         {
           "path": "road007.mcmat",
           "textures": {
-            "base_color": "textures/Road007_1K-JPG_Color.jpg",
-            "normal": "textures/Road007_1K-JPG_NormalGL.jpg"
+            "base_color": "textures/Road007_1K-PNG_Color.png",
+            "normal": "textures/Road007_1K-PNG_NormalGL.png"
           },
-          "roughness": 0.85,
-          "metallic": 0,
           "uv_scale": [
             4,
             4
-          ]
+          ],
+          "orm": {
+            "roughness": "textures/Road007_1K-PNG_Roughness.png",
+            "out": "textures/Road007_ORM.png",
+            "metallic": 0
+          }
         }
       ]
     },
@@ -431,51 +431,44 @@
       ],
       "source": {
         "kind": "http",
-        "url": "https://ambientcg.com/get?file=Concrete034_1K-JPG.zip",
+        "url": "https://ambientcg.com/get?file=Concrete034_1K-PNG.zip",
         "archive": "zip",
-        "sha256": "5839d284d94ffb8d2a56df742ec522b13dd311c52dbd42b8fd33f0409ceedb81",
-        "size": 3657575
+        "sha256": "d79cbba91fa35bcd491400baf69e4428f60c33522e0221e17b2c0431025d0ecc",
+        "size": 8081290
       },
       "cook": [
         {
           "from": "",
           "include": [
-            "Concrete034_1K-JPG_Color.jpg",
-            "Concrete034_1K-JPG_NormalGL.jpg",
-            "Concrete034_1K-JPG_Roughness.jpg",
-            "Concrete034_1K-JPG_AmbientOcclusion.jpg",
-            "Concrete034_1K-JPG_Displacement.jpg"
+            "Concrete034_1K-PNG_Color.png",
+            "Concrete034_1K-PNG_NormalGL.png",
+            "Concrete034_1K-PNG_Roughness.png",
+            "Concrete034_1K-PNG_Displacement.png"
           ],
           "to": "textures",
           "settings": [
             {
-              "match": "*_Color.jpg",
+              "match": "*_NormalGL.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Color.png",
               "settings": {
                 "srgb": true
-              }
-            },
-            {
-              "match": "*_NormalGL.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Roughness.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_AmbientOcclusion.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Displacement.jpg",
-              "settings": {
-                "srgb": false
               }
             }
           ]
@@ -485,15 +478,18 @@
         {
           "path": "concrete034.mcmat",
           "textures": {
-            "base_color": "textures/Concrete034_1K-JPG_Color.jpg",
-            "normal": "textures/Concrete034_1K-JPG_NormalGL.jpg"
+            "base_color": "textures/Concrete034_1K-PNG_Color.png",
+            "normal": "textures/Concrete034_1K-PNG_NormalGL.png"
           },
-          "roughness": 0.8,
-          "metallic": 0,
           "uv_scale": [
             4,
             4
-          ]
+          ],
+          "orm": {
+            "roughness": "textures/Concrete034_1K-PNG_Roughness.png",
+            "out": "textures/Concrete034_ORM.png",
+            "metallic": 0
+          }
         }
       ]
     },
@@ -517,51 +513,51 @@
       ],
       "source": {
         "kind": "http",
-        "url": "https://ambientcg.com/get?file=PavingStones070_1K-JPG.zip",
+        "url": "https://ambientcg.com/get?file=PavingStones070_1K-PNG.zip",
         "archive": "zip",
-        "sha256": "84be05ad935c2a8ea0dd3b82dd18c9e1faf7eeae222b85d96beb14ed16276132",
-        "size": 9046803
+        "sha256": "ab81bd9ad76c50fce68d69de10a632640644d987581cc0856d8f6d3f66910d9e",
+        "size": 18096781
       },
       "cook": [
         {
           "from": "",
           "include": [
-            "PavingStones070_1K-JPG_Color.jpg",
-            "PavingStones070_1K-JPG_NormalGL.jpg",
-            "PavingStones070_1K-JPG_Roughness.jpg",
-            "PavingStones070_1K-JPG_AmbientOcclusion.jpg",
-            "PavingStones070_1K-JPG_Displacement.jpg"
+            "PavingStones070_1K-PNG_Color.png",
+            "PavingStones070_1K-PNG_NormalGL.png",
+            "PavingStones070_1K-PNG_Roughness.png",
+            "PavingStones070_1K-PNG_Displacement.png",
+            "PavingStones070_1K-PNG_AmbientOcclusion.png"
           ],
           "to": "textures",
           "settings": [
             {
-              "match": "*_Color.jpg",
+              "match": "*_NormalGL.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Color.png",
               "settings": {
                 "srgb": true
-              }
-            },
-            {
-              "match": "*_NormalGL.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Roughness.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_AmbientOcclusion.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Displacement.jpg",
-              "settings": {
-                "srgb": false
               }
             }
           ]
@@ -571,15 +567,19 @@
         {
           "path": "pavingstones070.mcmat",
           "textures": {
-            "base_color": "textures/PavingStones070_1K-JPG_Color.jpg",
-            "normal": "textures/PavingStones070_1K-JPG_NormalGL.jpg"
+            "base_color": "textures/PavingStones070_1K-PNG_Color.png",
+            "normal": "textures/PavingStones070_1K-PNG_NormalGL.png"
           },
-          "roughness": 0.75,
-          "metallic": 0,
           "uv_scale": [
             4,
             4
-          ]
+          ],
+          "orm": {
+            "roughness": "textures/PavingStones070_1K-PNG_Roughness.png",
+            "out": "textures/PavingStones070_ORM.png",
+            "metallic": 0,
+            "ao": "textures/PavingStones070_1K-PNG_AmbientOcclusion.png"
+          }
         }
       ]
     },
@@ -603,51 +603,51 @@
       ],
       "source": {
         "kind": "http",
-        "url": "https://ambientcg.com/get?file=Grass004_1K-JPG.zip",
+        "url": "https://ambientcg.com/get?file=Grass004_1K-PNG.zip",
         "archive": "zip",
-        "sha256": "4b63495f459db8481f4d5144e4e9069345c81cf898cc71f2216f5dd3bb344469",
-        "size": 11003149
+        "sha256": "9bdb8a28536f437e910824096dd8a3d8276d5186a27ad067dea4e2e762a6981b",
+        "size": 19597533
       },
       "cook": [
         {
           "from": "",
           "include": [
-            "Grass004_1K-JPG_Color.jpg",
-            "Grass004_1K-JPG_NormalGL.jpg",
-            "Grass004_1K-JPG_Roughness.jpg",
-            "Grass004_1K-JPG_AmbientOcclusion.jpg",
-            "Grass004_1K-JPG_Displacement.jpg"
+            "Grass004_1K-PNG_Color.png",
+            "Grass004_1K-PNG_NormalGL.png",
+            "Grass004_1K-PNG_Roughness.png",
+            "Grass004_1K-PNG_Displacement.png",
+            "Grass004_1K-PNG_AmbientOcclusion.png"
           ],
           "to": "textures",
           "settings": [
             {
-              "match": "*_Color.jpg",
+              "match": "*_NormalGL.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.png",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Color.png",
               "settings": {
                 "srgb": true
-              }
-            },
-            {
-              "match": "*_NormalGL.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Roughness.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_AmbientOcclusion.jpg",
-              "settings": {
-                "srgb": false
-              }
-            },
-            {
-              "match": "*_Displacement.jpg",
-              "settings": {
-                "srgb": false
               }
             }
           ]
@@ -657,15 +657,19 @@
         {
           "path": "grass004.mcmat",
           "textures": {
-            "base_color": "textures/Grass004_1K-JPG_Color.jpg",
-            "normal": "textures/Grass004_1K-JPG_NormalGL.jpg"
+            "base_color": "textures/Grass004_1K-PNG_Color.png",
+            "normal": "textures/Grass004_1K-PNG_NormalGL.png"
           },
-          "roughness": 0.9,
-          "metallic": 0,
           "uv_scale": [
             8,
             8
-          ]
+          ],
+          "orm": {
+            "roughness": "textures/Grass004_1K-PNG_Roughness.png",
+            "out": "textures/Grass004_ORM.png",
+            "metallic": 0,
+            "ao": "textures/Grass004_1K-PNG_AmbientOcclusion.png"
+          }
         }
       ]
     },

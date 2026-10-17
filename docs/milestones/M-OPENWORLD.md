@@ -46,7 +46,7 @@ Linear: the SBA workspace is at its free issue limit (save_issue refuses new iss
 ## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)
 
 Linear is at its free issue limit (creating SBA issues for D2/D3 failed with "exceeded the free issue limit"), so this
-section is the tracker. State: D2 and D3 implemented in one PR (PR number added at merge).
+section is the tracker. State: D2 and D3 merged in #504; the follow-up below (ORM packing, real-pack cook test, node-rig retarget) is the second PR.
 
 **D2: ledger and cook scripts.** `content/ledger.json` (13 packs, all CC0-1.0): Kenney City Kit commercial / suburban / roads,
 Car Kit, Blocky Characters, Impact Sounds; ambientCG Asphalt031, Road007, Concrete034, PavingStones070, Grass004 (1K PBR);
@@ -58,15 +58,41 @@ cache, extracts by rule into `assets/third_party/<pack>/`, writes sidecars with 
 materials for PBR sets (colour + normal, roughness as a factor), `third_party_content.json` and the generated block of
 `CREDITS.md`; `verify` is the ship gate. Tests: `tests/import/test_content.py` (offline: fake opener, synthetic zips; cooks with
 `mce_cook` when given). Docs: guide 5.3, 16.7.
-Open items: pin the Quaternius hash once someone downloads it; roughness maps are not packed into `metallic_roughness`
-(needs an image tool); `--online` check is not run in CI; ledger entries for Quaternius city/vehicle packs, OpenGameArt and
-Poly Haven models/textures; hooking the ledger into MCP `library_search` / `library_add`; a real-pack cook with `mce_cook` was
-not run here (the offline test cooks a synthetic pack).
+Follow-up (second PR): the ambientCG entries pin the 1K-PNG archives and an `orm` block packs roughness (+ occlusion) into
+the `metallic_roughness` texture (pure-Python 8-bit PNG codec, deterministic); `tests/import/test_content_real.py`
+(`import_content_real`, label `slow`, skips offline) fetches road, car, character, sound and PBR packs by their ledger
+hash and cooks them with `mce_cook`: 0 failed, run once here against the live downloads.
+Open items: pin the Quaternius hash once someone downloads it; `--online` check is not run in CI; ledger entries for Quaternius city/vehicle packs, OpenGameArt and
+Poly Haven models/textures; hooking the ledger into MCP `library_search` / `library_add`; 
 
 **D3: humanoid retarget.** `tools/mce_cli/mce_retarget.py` (`mce retarget <src>... --onto <character.glb>`): name-based humanoid
 map (Mixamo, Unreal, Rigify, VRM, Biped, engine names; `--map` overrides), world-space delta retarget (A-pose to T-pose,
 facing correction, spine chain resampling), hips translation scaled by hip height, `--in-place-motion`, `--no-translation`,
 `--prefix`, `--clips`, `--replace`, `--strict`; output is the character `.glb` plus clips (the importer puts clips in the mesh
 chunk), deterministic. Tests: `tests/import/test_retarget.py` (rigs built in code; cooks the output with `mce_cook` when
-given). Docs: guide 8.9, 16.7. Open items: no IK/foot-slide fix, Y-up only, skinless node rigs (Kenney Blocky) unsupported,
-fingers matched by name only, retarget not exposed as an MCP tool, not run on a real Mixamo/Quaternius file here.
+given). Docs: guide 8.9, 16.7. Follow-up: `--map-only` pairs exactly the nodes a `--map` file names, for skinless node rigs (Kenney Blocky Characters:
+retargeting `walk` from character-a onto character-b cooks with `mce_cook`); a skinless rig without it is refused with that
+explanation; the tool warns when the output is not beside the character's relative textures.
+Open items: no IK/foot-slide fix, Y-up only, fingers matched by name only, retarget not exposed as an MCP tool, not run on a
+real Mixamo/Quaternius skinned file (Quaternius needs a manual download).
+
+### E1 content set (ready from the ledger)
+
+Everything below is CC0 and comes from `mce content add <id> <project>`; `mce content verify` is the ship gate.
+Counts are the GLB models in each archive (read 2026-10-17).
+
+| Need | Pack id | What it gives | Gap |
+|---|---|---|---|
+| Roads, junctions, signals | `kenney-city-kit-roads` | 95 models: 62 road pieces (straight, bends, crossings, junctions, ramps, bridges), traffic lights (5), street lights (6), signs (3), electricity (8), construction props | no lane/graph data: the B1 `.mcroads` is authored from these piece sizes |
+| Downtown | `kenney-city-kit-commercial` | 41 models: 19 buildings, 16 low-detail blocks, 6 details | one colormap, low-poly style; no interiors |
+| Residential | `kenney-city-kit-suburban` | 40 models: 21 houses, fences, paths, driveways, trees | same |
+| Traffic and player cars | `kenney-car-kit` | 50 models: sedan, suv, truck, delivery, ambulance, race cars, karts, 8 wheel pieces, debris | wheels are separate nodes; collision shapes need authoring (`MeshCollider3D`/convex) |
+| Pedestrians | `kenney-blocky-characters` | 18 characters with idle, walk, sprint, sit, drive, die, pick-up, emotes, holding poses (node-animated) | blocky style; no weapon-fire clips; no skin, so no IK/ragdoll from the mesh |
+| Skinned humanoid animation | `quaternius-universal-animation-library` | locomotion, combat and vehicle clips for `mce retarget` | manual download (itch.io), hash not pinned yet; needs a skinned CC0 character (none in the ledger) |
+| Ground and walls | `ambientcg-asphalt031`, `-road007`, `-concrete034`, `-pavingstones070`, `-grass004` | 1K PBR sets with generated `.mcmat` (colour, normal, packed ORM) | 1K only; no displacement use yet |
+| Sky | `polyhaven-kloppenheim-06-puresky` | 1K day HDRI for `Environment3D` | day only; a dusk/night HDRI should be added for the day-night cycle |
+| Footsteps and impacts | `kenney-impact-sounds` | 130 `.ogg`: footsteps on surfaces, impacts | no engine, gun, siren, radio or ambience audio: needs new ledger entries (OpenGameArt/Kenney audio packs) |
+
+Not covered by any pack yet (add ledger entries before E1): engine/gun/siren/ambience audio, a skinned civilian and police
+character, weapons, a night HDRI, signage textures, a city skyline backdrop. The E1 slice can start with the table above and
+treat these as placeholders.
