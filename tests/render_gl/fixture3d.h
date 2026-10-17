@@ -16,6 +16,7 @@
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/renderer.h"
+#include "mce/render/static_merge.h"
 #include "mce/rhi/default_device.h"
 
 namespace mce::render_test {
@@ -464,6 +465,102 @@ inline void add_crate_grid(Scene3D& s, u32 key, u32 cols = 5, u32 rows = 4) {
                 math::trs({px, 0.0f, pz}, math::quat_from_axis_angle({0, 1, 0}, 0.15f * f32((x + z) % 3)), {1, 1, 1});
             s.add(m);
         }
+}
+
+
+// ---- M-VISUAL3 5b: static merge --------------------------------------------------------------------------------
+
+// A modular kit around the fixture's box: four small pieces (a wall, a pillar and a crate in stone, a beam in wood:
+// two materials) placed 32 times, in two cells split at x = 0. Pieces are meshes 30..33, the merged cells meshes
+// 40 and 41; add_merge_kit() draws either the pieces one by one or the two cells.
+struct MergeKit {
+    struct Placement {
+        u32 piece;
+        vec3 at;
+        f32 yaw;
+    };
+    Array<Placement> placements;
+    Array<Array<byte>> blobs;         // the pieces' payloads
+    Array<asset::MeshView> views;     // ... read
+    Array<u32> cell_keys;             // the merged cells' mesh keys
+    u32 cells = 0, materials = 2;
+    f32 merge_ms = 0.0f;
+};
+
+inline void upload_merge_kit(Fixture3D& f, MergeKit& kit) {
+    struct P {
+        vec3 half, center;
+        f32 r, g, b;
+    };
+    const P pieces[4] = {{{0.6f, 0.5f, 0.08f}, {0, 0.5f, 0}, 0.55f, 0.5f, 0.45f},  // wall, stone
+                         {{0.12f, 0.7f, 0.12f}, {0, 0.7f, 0}, 0.55f, 0.5f, 0.45f},  // pillar, stone
+                         {{0.6f, 0.06f, 0.1f}, {0, 0.06f, 0}, 0.45f, 0.28f, 0.14f},  // beam, wood
+                         {{0.2f, 0.2f, 0.2f}, {0, 0.2f, 0}, 0.55f, 0.5f, 0.45f}};    // crate, stone
+    kit.blobs.clear();
+    kit.views.clear();
+    for (u32 i = 0; i < 4; ++i) {
+        mesh_fixture::Builder b;
+        b.add_node(-1);
+        mesh_fixture::Box box;
+        box.center = pieces[i].center;
+        box.half = pieces[i].half;
+        box.color[0] = pieces[i].r;
+        box.color[1] = pieces[i].g;
+        box.color[2] = pieces[i].b;
+        b.add_box(box);
+        kit.blobs.push_back(b.build());
+        REQUIRE(f.renderer.meshes().upload(30 + i, 1, kit.blobs.back().span()).has_value());
+    }
+    for (const Array<byte>& blob : kit.blobs) kit.views.push_back(asset::MeshView::read(blob.span()).value());
+    kit.placements.clear();
+    for (u32 i = 0; i < 5; ++i) {  // a back wall of walls, pillars between them and beams across the top
+        const f32 x = (f32(i) - 2.0f) * 1.2f;
+        kit.placements.push_back({0, {x, 0.0f, -2.2f}, 0.0f});
+        kit.placements.push_back({1, {x - 0.6f, 0.0f, -2.2f}, 0.0f});
+        kit.placements.push_back({2, {x, 1.0f, -2.2f}, 0.0f});
+    }
+    kit.placements.push_back({1, {3.0f, 0.0f, -2.2f}, 0.0f});
+    for (u32 i = 0; i < 4; ++i) {  // side walls turned a quarter and crates on the floor
+        const f32 z = -1.2f + f32(i) * 1.1f;
+        kit.placements.push_back({0, {-3.1f, 0.0f, z}, 1.5707963f});
+        kit.placements.push_back({0, {3.1f, 0.0f, z}, 1.5707963f});
+        kit.placements.push_back({3, {-2.3f + 0.3f * f32(i), 0.0f, z + 0.5f}, 0.3f * f32(i)});
+        kit.placements.push_back({3, {1.9f - 0.2f * f32(i), 0.0f, z + 0.3f}, 0.2f * f32(i)});
+    }
+    // Cells of 4 m: x < 0 and x >= 0 (a piece belongs to the cell of its origin).
+    Array<render::MergeSource> cell[2];
+    for (const MergeKit::Placement& p : kit.placements) {
+        render::MergeSource s;
+        s.mesh = &kit.views[p.piece];
+        s.world = math::trs(p.at, math::quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
+        cell[p.at.x < 0.0f ? 0 : 1].push_back(s);
+    }
+    kit.cell_keys.clear();
+    for (u32 c = 0; c < 2; ++c) {
+        Array<byte> blob;
+        REQUIRE(render::build_merged_mesh(cell[c].span(), blob));
+        const u32 key = 40 + c;
+        REQUIRE(f.renderer.meshes().upload(key, 1, blob.span()).has_value());
+        kit.cell_keys.push_back(key);
+    }
+    kit.cells = 2;
+}
+
+inline void add_merge_kit(Scene3D& s, const MergeKit& kit, bool merged) {
+    if (merged) {
+        for (u32 key : kit.cell_keys) {
+            MeshInstance m;
+            m.mesh = key;
+            s.add(m);
+        }
+        return;
+    }
+    for (const MergeKit::Placement& p : kit.placements) {
+        MeshInstance m;
+        m.mesh = 30 + p.piece;
+        m.world = math::trs(p.at, math::quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
+        s.add(m);
+    }
 }
 
 }  // namespace mce::render_test
