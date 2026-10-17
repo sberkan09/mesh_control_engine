@@ -420,6 +420,14 @@ vec3 env_brdf(vec3 f0, float rough, float NoV) {
     vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
     return f0 * ab.x + ab.y;
 }
+// Normal-map decode (M-CONTENT 1b). BC5 samples as (x, y, 0, 1): z is rebuilt from x and y. Only a texel with
+// b == 0.0 takes that path; RGBA8 maps (b >= 128 in practice) return t.xyz * 2 - 1 with the same bits as before. (That holds for blue > 0; a blue == 0 texel,
+// RGBA8 or BC5, gets its z rebuilt.)
+vec3 unpack_normal(vec4 t) {
+    vec3 n = t.xyz * 2.0 - 1.0;
+    if (t.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));
+    return n;
+}
 // Normal mapping without stored tangents: the cotangent frame from screen derivatives (Schüler).
 vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
     vec3 dp1 = dFdx(p), dp2 = dFdy(p);
@@ -557,15 +565,15 @@ vec4 terrain_fetch(sampler2DArray t, vec3 p, vec3 dx, vec3 dy, float layer, floa
 vec3 terrain_normal(vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw, vec3 n) {
     vec3 r = vec3(0.0);
     if (bw.y > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s));
         r += vec3(t.x + n.x, abs(t.z) * n.y, n.z - t.y) * bw.y;
     }
     if (bw.x > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s));
         r += vec3(abs(t.z) * n.x, n.y - t.y, t.x + n.z) * bw.x;
     }
     if (bw.z > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s));
         r += vec3(t.x + n.x, n.y - t.y, abs(t.z) * n.z) * bw.z;
     }
     return r;
@@ -722,7 +730,7 @@ void main() {
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
-            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(uv, 0.0)).xyz * 2.0 - 1.0);
+            vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(texture(u_normal_map, vec3(uv, 0.0))));
             n = normalize(mix(nb, n, fill));
         }
 #endif
