@@ -344,3 +344,55 @@ end
 ```
 
 **Playing a sound on a press:** `if mce.pressed("Jump") then mce.play_sound("guid:<sfx>", -6) end`.
+
+**A chaser that goes around walls** (2D; `projects/Dungeon/assets/scripts/dungeon.luau` has the whole thing). Plan now and then, not every
+tick, and walk the first corner of the plan:
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+local POS = mce.field("LocalTransform", "position")
+-- v[1], v[2] the waypoint; v[3] ticks to the next plan
+local function chase(e, target)
+    local v = mce.get(e, VARS)
+    local pos = mce.get(e, POS)
+    v[3] = v[3] - 1
+    if v[3] <= 0 then
+        v[3] = 20
+        local path = mce.find_path(pos, target)          -- nil when the target is walled in
+        if path then v[1], v[2] = path[1].x, path[1].y end
+    end
+    local d = vector.create(v[1] - pos.x, v[2] - pos.y, 0)
+    if vector.magnitude(d) > 0.05 then
+        mce.set(e, POS, pos + vector.normalize(d) * math.min(3.5 * mce.dt, vector.magnitude(d)))
+    end
+    mce.set(e, VARS, v)
+end
+```
+
+A body-less chaser like this can move by writing `LocalTransform.position`; one with a 2D body moves with `mce.move_and_collide`
+or `mce.set_velocity2d`.
+
+**Hit-stop and a shake** (the moment a hit lands): `mce.shake(0.4)`, and slow the clock for a beat with `mce.set_time_scale(0.2)`;
+set it back to 1 a few ticks later (count them in a `ScriptVars` slot).
+
+**A save slot** (press F5 to save, F9 to load; only entities with a `SaveKey` and fields marked `Save` are written):
+
+```lua
+function update()
+    if mce.pressed("QuickSave") then mce.save("quick") end
+    if mce.pressed("QuickLoad") and mce.has_save("quick") then mce.load("quick") end   -- applied right after this tick
+end
+```
+
+**3D pickups** (a coin is collected when the player's sphere touches it):
+
+```lua
+function update()
+    mce.each("ScriptVars", function(p)
+        if mce.get(p, "ScriptVars", "v")[16] ~= 1 then return end
+        for _, thing in ipairs(mce.overlap_sphere3d(mce.get(p, "LocalTransform", "position"), 0.6, p)) do
+            if mce.has(thing, "Pickup") then mce.destroy(thing) end
+        end
+    end)
+end
+```
