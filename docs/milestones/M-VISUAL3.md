@@ -197,6 +197,15 @@ height warns. Kit (`tests/kit/test_kit3d.cpp`): a `.mcmat` with a height map yie
 incidence; beyond `parallax_distance` the frame equals the no-height frame; Low tier equals no-height. The golden. Docs:
 `docs/user-guide/05-assets.md` (keys), `08-3d.md` (when to use it, the tier table). Changelog fragment.
 
+**Step 2 on a real GPU (2026-10-17, PRs #470, #487).** The `parallax_cobble` golden stayed 1.8% off on an RTX 3070
+(GL and Vulkan; `gpu-runs/2026-10-17-rtx3070-r1`..`r4`). #470 moved the shifted maps to the mesh uv's gradients
+(coarse/fine `dFdx`), which did not change the 3070 number. The cause was the sampler's anisotropic filter
+(`max_aniso 4`) under `textureGrad`: its result is the driver's own, and llvmpipe alone moves 1.8% between 4x and 16x.
+#487 filters the shifted maps in the shader (`map_aniso`: up to 4 trilinear taps along the footprint's major axis)
+and marches the height map at one isotropic level, so the output no longer depends on the sampler's anisotropy;
+llvmpipe and lavapipe agree on the golden to 0.08% (2.3% before). Open: confirm on the next real-GPU round
+(`M-GPU-VERIFY.md`).
+
 ### Step 3 — filmic post chain, per-shot focus and exposure
 
 **Data.** `Environment3D` (kit3d.h) appends, before its `pad_`, keeping the layout padding-free:

@@ -56,7 +56,12 @@ The RHI is four L2 libraries (layer per the CMake comments):
 - Draws: `draw`, `draw_non_indexed`, and `draw_indirect` (one multi-draw-indirect over the
   `set_draw_args` records).
 - `resolve(src, dst)`: MSAA color target into a single-sample one, outside a pass.
-- `write_timestamp(index)`: GPU timestamp, read back `MCE_FRAMES_IN_FLIGHT` frames later.
+- `write_timestamp(index)`: GPU timestamp, read back `MCE_FRAMES_IN_FLIGHT` frames later. Real timestamp
+  queries where `caps().timestamp_queries` (GL, Metal); on SDL GPU, which has none, `caps().fence_timestamps`:
+  each timestamp outside a pass ends the SDL command buffer with a fence (inside a pass, at the pass's end), a
+  waiter thread stamps the CPU time each fence passes, and `begin_frame` turns them into `GpuTimestamps` on a
+  GPU-busy time line (idle time between submits left out). Upper bounds, and each one splits the submit, so
+  Forward3D's per-stage timestamps stay off there; the player's two frame timestamps (`-perf_capture`) use it.
 - `barrier()`: a no-op today.
 - `Reader` and `inline_data<P>()` let a backend walk the stream.
 
