@@ -217,6 +217,11 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
   tick is part of the run, so a script that pauses and resumes replays with the same state hash.
   Code reads it with `World::held()`, and a system that must run while held registers with
   `World::run_when_held`.
+- `keep_audio: true` (with `pause`) lets the sound go on under the screen: the audio bridge runs on held ticks,
+  so sources keep playing, fades and ducks continue and new sources start, and every `SfxTrigger` (a menu
+  click, a hover tick) fires. The game itself stays held. Without it a pause is silent and total, as before:
+  a `SfxTrigger` waits with its `fire` flag set until the screen hides. A scene that wants a quieter pause adds an
+  `AudioSnapshot` for it.
 
 #### Screens that react to the game (`UiFlowRules`)
 
