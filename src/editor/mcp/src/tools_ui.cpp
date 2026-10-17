@@ -212,8 +212,11 @@ void emit_list(cook::JsonValue list, StringView parent, Edit& e, cook::String& o
 
 // Applies `e` to the document and saves it; false with c.error set (nothing written).
 bool apply_edit(ToolCall& c, const editor::ProjectAsset& a, const ui::DocumentData& d, Edit& e) {
+    // asset_validate_and_write rescans the project and frees `a`: work from copies.
+    const cook::String path(a.path.view());
+    const asset::Guid guid = a.guid;
     cook::String canon;
-    cook::write_ui_document(d, a.guid, canon);
+    cook::write_ui_document(d, guid, canon);
     cook::JsonDoc doc;
     cook::JsonError err;
     if (!doc.parse(canon.view(), err)) return fail(c, "internal: the canonical document does not parse");
@@ -237,12 +240,12 @@ bool apply_edit(ToolCall& c, const editor::ProjectAsset& a, const ui::DocumentDa
         return false;
     }
     ui::DocumentData edited;
-    if (!read_doc(c, a.path.view(), text.view(), edited, "the edit does not make a valid document (nothing was written)")) return false;
+    if (!read_doc(c, path.view(), text.view(), edited, "the edit does not make a valid document (nothing was written)")) return false;
     cook::String out;
-    cook::write_ui_document(edited, a.guid, out);
-    if (!asset_validate_and_write(c, a.path.view(), a.guid, out.view())) return false;
+    cook::write_ui_document(edited, guid, out);
+    if (!asset_validate_and_write(c, path.view(), guid, out.view())) return false;
     c.out.begin_object();
-    c.out.key("document").str(a.path.view()).key("guid").str(asset_guid_ref(a.guid).view());
+    c.out.key("document").str(path.view()).key("guid").str(asset_guid_ref(guid).view());
     c.out.key("widgets").num_u(edited.widgets.size());
     c.out.end_object();
     return true;
@@ -401,11 +404,16 @@ bool ui_theme_set(ToolCall& c) {
     const editor::ProjectAsset* a = nullptr;
     ui::DocumentData d;
     if (!arg_document(c, a, d)) return false;
+    // asset_validate_and_write rescans the project and frees the records: keep copies.
+    const cook::String doc_path(a->path.view());
+    const asset::Guid doc_guid = a->guid;
+    a = nullptr;
     const cook::JsonValue t = arg(c, "theme");
     if (!t.valid() || !(t.is_null() || t.is_string()))
         return arg_missing(c, "theme", "a .mcuitheme path under assets/, \"guid:<uuid>\", or null for the default look");
     const editor::EditorProject& project = c.server.session().project();
     const editor::ProjectAsset* theme = nullptr;
+    cook::String theme_path;
     if (t.is_string()) {
         const StringView ref = t.as_string();
         if (ref.size() > 5 && ref.substr(0, 5) == "guid:") {
@@ -418,16 +426,18 @@ bool ui_theme_set(ToolCall& c) {
         if (!theme) return fail(c, "argument 'theme': no such asset (asset_list type UiTheme lists the themes)");
         if (theme->type != asset::ChunkType::UiTheme) return fail(c, "argument 'theme' is not a UI theme (.mcuitheme)");
     }
+    if (theme) theme_path = theme->path;
     d.theme = theme ? theme->guid : asset::Guid();
+    theme = nullptr;
     cook::String text;
-    cook::write_ui_document(d, a->guid, text);
+    cook::write_ui_document(d, doc_guid, text);
     ui::DocumentData edited;
-    if (!read_doc(c, a->path.view(), text.view(), edited, "the edit does not make a valid document (nothing was written)")) return false;
-    if (!asset_validate_and_write(c, a->path.view(), a->guid, text.view())) return false;
+    if (!read_doc(c, doc_path.view(), text.view(), edited, "the edit does not make a valid document (nothing was written)")) return false;
+    if (!asset_validate_and_write(c, doc_path.view(), doc_guid, text.view())) return false;
     c.out.begin_object();
-    c.out.key("document").str(a->path.view()).key("guid").str(asset_guid_ref(a->guid).view());
+    c.out.key("document").str(doc_path.view()).key("guid").str(asset_guid_ref(doc_guid).view());
     c.out.key("theme").str(edited.theme.is_null() ? StringView("default") : asset_guid_ref(edited.theme).view());
-    if (theme) c.out.key("theme_path").str(theme->path.view());
+    if (!theme_path.empty()) c.out.key("theme_path").str(theme_path.view());
     c.out.end_object();
     return true;
 }
@@ -483,21 +493,28 @@ const ToolDef kUiTools[] = {
     {"ui_preview",
      "See a UI document alone: the real player draws it over a plain background at a viewport size, safe area and UI "
      "scale, and the frame comes back as a PNG (offscreen software rendering when there is no display). Bound fields "
-     "read the open (saved) scene, else the project's first scene. 'save' also writes the PNG for image_diff.",
+     "read the open (saved) scene, else the project's first scene. A project that does not cook (a broken scene) "
+     "or has no saved scene is previewed from the document and what it references alone, with nothing bound "
+     "('document_only' forces that and skips the project cook). 'save' also writes the PNG for image_diff.",
      R"j({"type":"object","properties":{)j" MCE_UI_DOC
      R"j(,"width":{"type":"integer","minimum":64,"maximum":3840,"default":960},"height":{"type":"integer","minimum":64,"maximum":3840,"default":540},)j"
      R"j("safe_area":{"type":"object","description":"Insets in pixels {left, top, right, bottom}: the UI lays out inside them; the image outlines them"},)j"
      R"j("ui_scale":{"type":"number","minimum":0.25,"maximum":4,"description":"The player's -ui_scale (default 1)"},)j"
      R"j("save":{"type":"string","description":"Also write the PNG inside the project folder, e.g. shots/hud.png"},)j"
+     R"j("document_only":{"type":"boolean","description":"Cook only the document, its theme, fonts and sheets, and start an empty scene (bound fields show nothing)"},)j"
      R"j("software":{"type":"boolean","description":"Force the offscreen software renderer"}},"required":["document"]})j",
      ui_preview},
 };
 
 }  // namespace
 
-bool ui_document_arg(ToolCall& c, const editor::ProjectAsset*& out) {
+bool ui_document_arg(ToolCall& c, UiDocRef& out) {
     ui::DocumentData d;
-    return arg_document(c, out, d);
+    const editor::ProjectAsset* a = nullptr;
+    if (!arg_document(c, a, d)) return false;
+    out.path = cook::String(a->path.view());  // copied now; `a` is not used past this line
+    out.guid = a->guid;
+    return true;
 }
 
 Span<const ToolDef> ui_tool_table() { return Span<const ToolDef>(kUiTools, sizeof(kUiTools) / sizeof(kUiTools[0])); }

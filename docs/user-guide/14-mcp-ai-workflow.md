@@ -80,7 +80,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `ui_widget_set` | `document`, `widget` (path), `fields` | `.mcui` keys replace the widget's (`null` removes one); `style` changes the listed fields in every state, `styles` in one, `nav` the listed edges |
 | | `ui_widget_remove` | `document`, `widget` | the widget and its children; refused while a nav edge names it |
 | | `ui_theme_set` | `document`, `theme` (a `.mcuitheme` path or `guid:`; `null`: the default look) | sets the theme the document is drawn with (a `UiScreen`'s theme still wins in the player); `ui_list` with `document` names it |
-| | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff` |
+| | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `document_only?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff`. A project that does not cook (a broken scene) or has no saved scene is previewed from the document and what it references alone (bound fields show nothing), and the result says so in `document_only`; `document_only: true` does that on purpose, skipping the project cook |
 | Timeline | `timeline_create` | `path`, `tracks` (one or more), `name?`, `duration?` | a new `.mctimeline` with a fresh GUID; `tracks` in the `.mctimeline` track format (`asset_schema` type `Timeline`, user guide 13.5). Play it with a `TimelinePlayer` (`component_add` with `{"timeline": "guid:<uuid>"}`), and add a `Cutscene` for the letterbox, hold and skip |
 | | `timeline_add_track` | `timeline`, `track`, `index?` (last) | adds a `.mctimeline` track object (`{"type": "property", "target": 0, "path": "CameraRail3D.t", "keys": [...]}`) |
 | | `timeline_add_key` | `timeline`, `track` (index), `key` or `keys` | adds keys (or ranges, cuts, lines, in the track's own form) merged in by time; returns the play length |
@@ -116,9 +116,13 @@ each result's `content[0].text` is the tool's JSON).
 | | `script_check` | `path` or `source`, `definitions?` | the cook's checks on one Luau script (syntax, hidden state, names with "did you mean", types against `mce.d.luau`) without cooking; returns every problem with line and col (user guide 27.5) |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
 | Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?`, `trace?`, `convars?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail (and `script_errors` when a scene script failed). A pack with a `.mcstore` gets the fake store and ad network, one with a `.mcconfig` its cooked defaults, one with a `.mcservices` game services on this device; nothing is saved or sent |
-| See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
+| See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `view?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
 | | `timeline_preview` | `time`, and `render_frame`'s other arguments | the frame with every timeline in the scene held at `time` seconds: state tracks applied, cinematic cameras placed, a cutscene's letterbox and subtitle showing. Look at a cutscene at its beats without playing it through |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
+| Views | `view_list` | none | the open scene's camera views (window or texture, `viewport`, `order`, split-screen cell, `PlayerCamera`), the `SplitScreen` layout and every `RenderTexture` with its cameras and the surfaces that show it, plus `problems`: a texture nothing draws into, a view into an entity that is no texture, a split camera nothing enables |
+| | `view_add` | `name`, `camera?` (`2d`, `3d`), `width?`, `height?`, `update_hz?`, `position?`, `fit?` (2D), `look_at?` (3D), `show_on?` | a minimap, mirror, monitor or picture-in-picture in one call: the `RenderTexture` entity, the camera that fills it and, with `show_on` (an entity with a `Sprite` or `MeshRef`), the `ShowRenderTexture` that displays it |
+| Players | `player_list` | none | the co-op setup: the `CoopGame` and, per player 1-4, their `PlayerSpawn`s, `PlayerCamera`s and the project's `.mcinput` maps with `"player": n`, plus `problems` (no `CoopGame`, a player without a spawn, camera or input map, a camera whose `split` does not match its player) |
+| | `player_setup` | `players?` (1-4), `prefab?`, `layout?` (`auto`, `columns`, `rows`, `grid`), `mode?` (`2d`, `3d`), `spacing?` | a whole local co-op rig: a `CoopGame`, a `SplitScreen`, and per player a `PlayerSpawn` and a `PlayerCamera` with its split-screen `CameraView`. Add the input maps with `asset_create` (`.mcinput`, `"player"` key), then `player_list` |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
 | Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
 | | `perf_compare` | `before?`, `after?` (default: `perf_run`'s last two), `target?`, `top?` | two captures side by side: p50/p95 times, the worst frame's counters, the systems that moved most, `better` and `worse`, and the after capture's verdict |
@@ -244,6 +248,20 @@ skies; rock, grass, sand, water and lava textures; tile sets; sprite sets; retro
 a generator. `library_add` copies an entry into `assets/` (models into `models/` with their shared
 `Textures/colormap.png`, fonts into `fonts/` with their license file), writes fresh sidecars and adds a
 `CREDITS.md` row with the author, the source and the license, so `mce ship` carries the credits.
+
+### Views and local players
+
+A minimap, a mirror or a split screen is components (chapter 8.4 and 11.3); the view and player tools build and
+check them in one call:
+
+1. `player_setup {"players": 2, "prefab": "guid:..."}` adds the co-op rig; `asset_create` a `.mcinput` whose
+   maps carry `"player": 1` and `"player": 2` (Move, Join, Leave; `samples/09_coop/assets/input/coop.mcinput`).
+2. `view_add {"name": "Minimap", "fit": [26, 18], "show_on": "Monitor"}` makes a texture, its camera and the
+   surface that shows it.
+3. `view_list` and `player_list` name what is wrong before anything is drawn.
+4. `render_frame` looks at it. `input` joins the players (`"5 P2/Join\n20-60 P2/Move=-1,0"`); `view: {"player": 2}`
+   draws that player's camera alone and full size, `view: {"texture": "Minimap"}` the camera that fills a
+   render texture. Without `view` the frame is the window as the players see it, split cells included.
 
 ### A look for each game
 

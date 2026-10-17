@@ -8,10 +8,13 @@
 #include <cstdlib>
 
 #include "agent_image.h"
+#include "mce/cook/cook.h"
 #include "mce/cook/fs.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/process.h"
+#include "mce/kit/coop.h"
+#include "mce/kit/views.h"
 #include "tool_args.h"
 #include "tools_agent.h"
 
@@ -110,6 +113,7 @@ struct RenderRequest {
     const char* view_flag = nullptr;
     i64 safe[4] = {-1, -1, -1, -1};
     bool software = false;
+    cook::String pack_dir;    // a cooked dir to play instead of the project's (ui_preview's document-only cook)
     cook::String ui_preview;  // -ui_preview: a UiDocument GUID drawn alone
     cook::String ui_scale;    // -ui_scale, when set
     ConvarArgs convars;       // -<name> <value> for the player
@@ -132,6 +136,63 @@ bool numbers(const cook::JsonValue& v, usize n, f64* out) {
     return true;
 }
 
+// Views the scene entity `id` (a camera) alone: -view.entity takes its index in file order.
+bool set_entity_view(ToolCall& c, const char* what, const char* index_arg, editor::EntityId id, RenderRequest& rq) {
+    u64 index = 0;
+    for (const editor::DocEntity& e : scene(c).doc().entities()) {
+        if (e.id == id) break;
+        if (!e.prefab.is_null()) {
+            c.error += what;
+            c.error += ": a prefab instance comes before it in the file, so its run index differs; give ";
+            c.error += index_arg;
+            return false;
+        }
+        ++index;
+    }
+    rq.view_args = cook::String();
+    cook::appendf(rq.view_args, "%llu", static_cast<unsigned long long>(index));
+    rq.view_flag = "-view.entity";
+    return true;
+}
+
+// `view`: {"player": 1..4} (the camera of that local player: the entity with a PlayerCamera for them, else the one whose
+// CameraView.split is that number) or {"texture": entity} (the camera drawing into that RenderTexture). The frame is that
+// camera alone, full size; join the players with `input` ("5 P2/Join") so their cameras follow them.
+bool parse_view(ToolCall& c, const cook::JsonValue& view, bool open_scene, RenderRequest& rq) {
+    if (!view.valid()) return true;
+    if (arg(c, "camera").valid()) return fail(c, "give either 'camera' or 'view', not both");
+    if (!view.is_object() || (view.get("player").valid() == view.get("texture").valid()))
+        return arg_missing(c, "view", "an object with one of {player: 1..4} or {texture: entity id or name}");
+    if (!open_scene) return fail(c, "'view' looks at the open scene's cameras: leave 'scene' out, or give camera.index");
+    const editor::SceneDocument& doc = scene(c).doc();
+    editor::EntityId found = editor::kNoEntity;
+    if (const cook::JsonValue pv = view.get("player"); pv.valid()) {
+        if (!pv.is_integer() || pv.as_number() < 1 || pv.as_number() > 4) return arg_missing(c, "view.player", "a player number 1..4");
+        const u32 player = static_cast<u32>(pv.as_number());
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* pc = e.find(refl::type_of<kit::PlayerCamera>());
+            if (pc && static_cast<const kit::PlayerCamera*>(pc->data())->player == player) {
+                found = e.id;
+                break;
+            }
+        }
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* cv = found == editor::kNoEntity ? e.find(refl::type_of<kit::CameraView>()) : nullptr;
+            if (cv && static_cast<const kit::CameraView*>(cv->data())->split == player) found = e.id;
+        }
+        if (found == editor::kNoEntity) return fail(c, "view.player: no camera follows that player (no PlayerCamera and no CameraView with that split; player_list shows the rig)");
+    } else {
+        editor::EntityId tex = editor::kNoEntity;
+        if (!resolve_entity(c, "view.texture", view.get("texture"), tex)) return false;
+        for (const editor::DocEntity& e : doc.entities()) {
+            const editor::DocComponent* cv = e.find(refl::type_of<kit::CameraView>());
+            if (found == editor::kNoEntity && cv && editor::doc_entity_id(static_cast<const kit::CameraView*>(cv->data())->target) == tex) found = e.id;
+        }
+        if (found == editor::kNoEntity) return fail(c, "view.texture: no camera draws into that entity (view_list shows the textures and their cameras)");
+    }
+    return set_entity_view(c, "view", "camera.index", found, rq);
+}
+
 // `camera`: {"entity": id|name} (a camera entity of the open scene), {"index": n} (scene entity
 // index in file order), {"position": [x,y,z], "target": [x,y,z], "fov": deg} (a free 3D camera) or
 // {"center": [x,y], "zoom": z} (a free 2D camera).
@@ -144,17 +205,7 @@ bool parse_camera(ToolCall& c, const cook::JsonValue& cam, bool open_scene, Rend
         if (!open_scene) return fail(c, "camera.entity names an entity of the open scene; with 'scene' use camera.index");
         editor::EntityId id = editor::kNoEntity;
         if (!resolve_entity(c, "camera.entity", ent, id)) return false;
-        const Span<const editor::DocEntity> all = scene(c).doc().entities();
-        u64 index = 0;
-        for (const editor::DocEntity& e : all) {
-            if (e.id == id) break;
-            if (!e.prefab.is_null())
-                return fail(c, "camera.entity: a prefab instance comes before it in the file, so its run index differs; give camera.index");
-            ++index;
-        }
-        cook::appendf(rq.view_args, "%llu", static_cast<unsigned long long>(index));
-        rq.view_flag = "-view.entity";
-        return true;
+        return set_entity_view(c, "camera.entity", "camera.index", id, rq);
     }
     if (idx.valid()) {
         if (!idx.is_integer() || idx.as_number() < 0 || idx.as_number() > 1e6) return arg_missing(c, "camera.index", "an entity index >= 0");
@@ -212,6 +263,7 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
     }
     if (!arg_input(c, rq.script) || !arg_convars(c, rq.convars)) return false;
     if (!parse_camera(c, arg(c, "camera"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
+    if (!parse_view(c, arg(c, "view"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
@@ -231,18 +283,20 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
 
 // Cooks the project, runs the player once and reads one frame per requested tick.
 bool render_ticks(ToolCall& c, RenderRequest& rq, Array<cook::Image>& frames, bool& used_software) {
-    const cook::CookReport& r = c.server.session().cook(false);
-    if (!r.ok()) {
-        c.error += "cook failed:";
-        append_diags(c.error, r.diags, 10);
-        return false;
+    if (rq.pack_dir.empty()) {
+        const cook::CookReport& r = c.server.session().cook(false);
+        if (!r.ok()) {
+            c.error += "cook failed:";
+            append_diags(c.error, r.diags, 10);
+            return false;
+        }
     }
     cook::String player;
     if (!find_player(c.server, player))
         return fail(c, "no player to render with: start the server with --player <mce_player or the game's host>");
     const StringView root = c.server.session().project().root();
-    const cook::String cooked = cook::path_join(root, "cooked");
-    const cook::String work = cook::path_join(cooked.view(), ".render");
+    const cook::String cooked = rq.pack_dir.empty() ? cook::path_join(root, "cooked") : rq.pack_dir;
+    const cook::String work = cook::path_join(cook::path_join(root, "cooked").view(), ".render");
     if (Result<void> mk = cook::fs::create_directories(work.view()); !mk) return fail(c, "cannot create cooked/.render");
     const cook::String shot = cook::path_join(work.view(), "frame_{tick}.ppm");
     for (u64 t : rq.ticks) {
@@ -445,23 +499,97 @@ bool timeline_preview(ToolCall& c) {
     return attach_image(c, img);
 }
 
+// A UI document and what it needs to draw, cooked alone (M-UI-DATA2 4): the document, and by GUID
+// every theme, font, sprite sheet and texture named in its text and, in turn, in theirs, copied with
+// their sidecars into cooked/.render/ui_only/assets with an empty scene for the player to start,
+// then cooked there. A broken scene or asset elsewhere in the project cannot block the preview.
+bool cook_ui_only(ToolCall& c, const UiDocRef& doc, RenderRequest& rq) {
+    const editor::EditorProject& project = c.server.session().project();
+    Array<const editor::ProjectAsset*> need;
+    const editor::ProjectAsset* self = project.find(doc.guid);
+    if (!self) return fail(c, "the UI document is no longer in the project");
+    need.push_back(self);
+    for (usize i = 0; i < need.size(); ++i) {
+        // Only the engine's own text formats (.mcui, .mcuitheme, .mcsheet) name other assets.
+        const StringView rel = need[i]->path.view();
+        const usize dot = rel.rfind('.');
+        if (dot == StringView::npos || rel.substr(dot, 3) != ".mc") continue;
+        cook::String text;
+        if (!cook::fs::read_text(project.asset_path(rel).view(), text)) continue;
+        for (usize at = text.view().find("guid:"); at != StringView::npos; at = text.view().find("guid:", at + 5)) {
+            const Result<asset::Guid> g = asset::parse_guid(text.view().substr(at + 5, 36));
+            const editor::ProjectAsset* a = g ? project.find(g.value()) : nullptr;
+            bool known = a == nullptr;
+            for (usize k = 0; !known && k < need.size(); ++k) known = need[k]->guid == a->guid;
+            if (!known) need.push_back(a);
+        }
+    }
+    const cook::String base = cook::path_join(cook::path_join(cook::path_join(project.root(), "cooked").view(), ".render").view(), "ui_only");
+    const cook::String assets = cook::path_join(base.view(), "assets");
+    {
+        Array<cook::String> old;  // last preview's copies: a smaller closure must not keep old assets
+        if (cook::fs::is_directory(assets.view()) && cook::fs::list_files(assets.view(), old))
+            for (const cook::String& f : old) (void)cook::fs::remove(cook::path_join(assets.view(), f.view()).view());
+    }
+    auto copy = [&](StringView rel) {
+        cook::String bytes;
+        if (!cook::fs::read_text(project.asset_path(rel).view(), bytes)) return false;
+        const Span<const byte> data(reinterpret_cast<const byte*>(bytes.c_str()), bytes.size());
+        return static_cast<bool>(cook::fs::write_file_atomic(cook::path_join(assets.view(), rel).view(), data));
+    };
+    for (const editor::ProjectAsset* a : need) {
+        cook::String side(a->path.view());
+        side += ".mceasset";
+        // Native documents carry their GUID inside and may have no sidecar; textures and fonts do.
+        if (!copy(a->path.view())) {
+            c.error += "cannot copy '";
+            c.error += a->path.view();
+            c.error += "' into cooked/.render/ui_only";
+            return false;
+        }
+        (void)copy(side.view());
+    }
+    // The player needs a scene to start; this one is empty.
+    static constexpr const char* kEmptyScene = "75e3e000-0000-4000-8000-000000000001";
+    cook::String scene = "{\n  \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"";
+    scene += kEmptyScene;
+    scene += "\", \"name\": \"ui_only\",\n  \"entities\": []\n}\n";
+    const Span<const byte> scene_bytes(reinterpret_cast<const byte*>(scene.c_str()), scene.size());
+    if (!cook::fs::write_file_atomic(cook::path_join(assets.view(), "ui_only.mcscene").view(), scene_bytes))
+        return fail(c, "cannot write cooked/.render/ui_only/assets");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(base.view(), cook::CookOptions{});
+    if (!r.ok()) {
+        c.error += "cook of the document alone failed:";
+        append_diags(c.error, r.diags, 10);
+        return false;
+    }
+    rq.pack_dir = cook::path_join(base.view(), "cooked");
+    rq.scene_guid = asset::parse_guid(kEmptyScene).value();
+    return true;
+}
+
 // A UI document alone (M-UI-DATA step 5): the player's -ui_preview over the camera's clear color,
 // at a viewport, safe area and UI scale. Bindings read the scene the player starts (the open one
-// when it is saved, else the project's first scene).
+// when it is saved, else the project's first scene). When the project does not cook (a broken
+// scene, say), or has no saved scene, or "document_only": true, only the document and what it
+// references are cooked and the player starts an empty scene: bindings then show nothing.
 bool ui_preview(ToolCall& c) {
     RenderRequest rq;
     rq.width = 960;
     rq.height = 540;
     if (!need_project(c) || !arg_size(c, "width", "height", rq.width, rq.height)) return false;
-    const editor::ProjectAsset* doc = nullptr;
+    UiDocRef doc;  // by value: the cook inside render_ticks rescans the project and frees its records
     if (!ui_document_arg(c, doc)) return false;
-    rq.ui_preview = cook::String(asset::to_string(doc->guid).view());
-    // The cook inside render_ticks rescans the project and frees `doc`: keep what the reply echoes.
-    const cook::String doc_path(doc->path.view());
-    const asset::Guid doc_guid = doc->guid;
-    doc = nullptr;
+    rq.ui_preview = cook::String(asset::to_string(doc.guid).view());
+    bool only = false;
+    if (!arg_bool(c, "document_only", only)) return false;
+    const char* why = only ? "document_only was set" : nullptr;
+    if (!only && !c.server.session().cook(false).ok()) why = "the project does not cook (cook_errors lists why)";
     const Server::SceneFile& file = c.server.scene_file();
-    if (!file.rel.empty() && !scene(c).dirty()) {
+    if (why) {
+        // Nothing of the project's scenes is needed.
+    } else if (!file.rel.empty() && !scene(c).dirty()) {
         rq.scene_rel = cook::String(file.rel.view());
         rq.scene_guid = scene(c).doc().guid();
     } else {
@@ -470,8 +598,9 @@ bool ui_preview(ToolCall& c) {
                 rq.scene_rel = cook::String(a.path.view());
                 rq.scene_guid = a.guid;
             }
-        if (rq.scene_rel.empty()) return fail(c, "the project has no saved scene for the player to start (scene_save one)");
+        if (rq.scene_rel.empty()) why = "the project has no saved scene to start";
     }
+    if (why && !cook_ui_only(c, doc, rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
@@ -504,7 +633,8 @@ bool ui_preview(ToolCall& c) {
     draw_safe_area(img, rq);
     c.out.begin_object();
     if (!save.empty()) c.out.key("saved").str(save);
-    c.out.key("document").str(doc_path.view()).key("guid").str(asset_guid_ref(doc_guid).view());
+    c.out.key("document").str(doc.path.view()).key("guid").str(asset_guid_ref(doc.guid).view());
+    if (why) c.out.key("document_only").str(why);
     write_result_head(c, rq, software);
     c.out.end_object();
     return attach_image(c, img);

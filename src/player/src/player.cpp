@@ -454,7 +454,9 @@ public:
         MCE_TRY(parse_capture_and_view());
         mount_mods();
         const StringView roots[1] = {pack.view()};
-        MCE_TRY(assets_.mount(Span<const StringView>(roots, 1)));
+        asset::MountOptions game_opt;
+        game_opt.allow_code = true;  // the game's own pack is the one place bytecode is trusted
+        MCE_TRY(assets_.mount(Span<const StringView>(roots, 1), game_opt));
         MCE_LOG_INFO("{}: pack mounted from {}", desc_.app_name, pack.view());  // the phone smoke runs look for it
         const StringView want_scene = !cv_scene.get_string().empty() ? cv_scene.get_string()
                                       : desc_.start_scene                ? StringView(desc_.start_scene)
@@ -962,7 +964,8 @@ private:
         for (usize i = found.mods.size(); i-- > 0;) {
             const asset::ModEntry& m = found.mods[i];
             const StringView root[1] = {m.path.view()};
-            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1)); !r) {
+            asset::MountOptions mod_opt;  // allow_code stays false: a mod is data (M-SCRIPT2 0)
+            if (Result<void> r = assets_.mount(Span<const StringView>(root, 1), mod_opt); !r) {
                 FixedString<512> msg;
                 format_error(r.error(), msg);
                 MCE_LOG_WARN("{}: mod skipped: {} (cannot mount: {})", desc_.app_name, m.path.view(), msg.view());

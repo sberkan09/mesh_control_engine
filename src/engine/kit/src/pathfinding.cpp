@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "mce/ecs/transform.h"
+#include "mce/hash.h"
 #include "mce/physics/components.h"
 #include "mce/physics/world2d.h"
 
@@ -165,6 +166,20 @@ math::aabb2 static_collider_bounds(World& world) {
             grow(all, box.max);
         });
     return all;
+}
+
+u64 static_colliders_hash(World& world) {
+    Hasher64 h;
+    world.query<const physics::RigidBody2D, const physics::Collider2D, const LocalTransform>().each(
+        [&](const physics::RigidBody2D& rb, const physics::Collider2D& c, const LocalTransform& t) {
+            if (rb.type != physics::BodyType::Static || c.is_sensor || c.one_way) return;
+            const math::aabb2 box = shape_aabb(c.shape, t.position.xy(), angle_z(t.rotation));
+            h.f32v(box.min.x);
+            h.f32v(box.min.y);
+            h.f32v(box.max.x);
+            h.f32v(box.max.y);
+        });
+    return h.value();
 }
 
 // ------------------------------------------------------------------ search

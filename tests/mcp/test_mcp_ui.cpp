@@ -209,6 +209,35 @@ TEST_CASE("UI Document panel: a document edited in the editor round-trips throug
     CHECK(read_file(file) == std::string(ed.text().view().data(), ed.text().view().size()));
 }
 
+TEST_CASE("ui edits echo their own document and GUID after the write rescans the project") {
+    const std::string root = ui_project("mcp_ui_echo");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("ui_create", std::string(R"({"path":"ui/zz_other.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("asset_create", R"({"path":"ui/warm.mcuitheme","content":{"palette":{"button":[0.8,0.3,0.1,1]}}})");
+    const std::string menu = str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("guid"));
+    const std::string other = str(c.ok("ui_list", R"({"document":"ui/zz_other.mcui"})").v().get("guid"));
+    REQUIRE(menu != other);
+    // Each edit saves (and rescans); the reply must still name the document it edited, whichever came last.
+    for (int i = 0; i < 2; ++i) {
+        auto a = c.ok("ui_widget_set", R"({"document":"ui/menu.mcui","widget":"menu/play","fields":{"text":"GO"}})");
+        CHECK(str(a.v().get("document")) == "ui/menu.mcui");
+        CHECK(str(a.v().get("guid")) == menu);
+        auto b = c.ok("ui_widget_set", R"({"document":"ui/zz_other.mcui","widget":"menu/play","fields":{"text":"GO"}})");
+        CHECK(str(b.v().get("document")) == "ui/zz_other.mcui");
+        CHECK(str(b.v().get("guid")) == other);
+    }
+    auto t = c.ok("ui_theme_set", R"({"document":"ui/zz_other.mcui","theme":"ui/warm.mcuitheme"})");
+    CHECK(str(t.v().get("document")) == "ui/zz_other.mcui");
+    CHECK(str(t.v().get("guid")) == other);
+    CHECK(str(t.v().get("theme_path")) == "ui/warm.mcuitheme");
+    auto t2 = c.ok("ui_theme_set", std::string(R"({"document":"guid:)") + other.substr(5) + R"(","theme":null})");
+    CHECK(str(t2.v().get("document")) == "ui/zz_other.mcui");
+    CHECK(str(t2.v().get("guid")) == other);
+}
+
 TEST_SUITE("gpu") {
 
 TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, checked against a golden") {
@@ -261,6 +290,72 @@ TEST_CASE("ui_preview: a document alone at a viewport, safe area and scale, chec
     std::filesystem::copy_file(golden, root + "/goldens/ui_preview_menu.png", std::filesystem::copy_options::overwrite_existing);
     auto d = c.ok("image_diff", R"({"golden":"goldens/ui_preview_menu.png","image":"shots/menu.png","max_score":0.005})");
     CHECK_MESSAGE(d.v().get("pass").as_bool(), "ui_preview drifted from tests/mcp/goldens/ui_preview_menu.png: " << d.text);
+}
+
+// ui_preview twice over two documents, back to back: the cook inside each call rescans the project, so a record
+// looked up before it is gone after it. The reply's document and GUID come from copies and must be the right
+// ones every time, by path and by GUID, with another asset created (a rescan) between the calls.
+TEST_CASE("ui_preview: two documents back to back each echo their own document and GUID") {
+    const std::string root = ui_project("mcp_ui_preview_pair");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("ui_create", std::string(R"({"path":"ui/zz_other.mcui","widgets":)") + kMenuWidgets + "}");
+    const std::string menu = str(c.ok("ui_list", R"({"document":"ui/menu.mcui"})").v().get("guid"));
+    const std::string other = str(c.ok("ui_list", R"({"document":"ui/zz_other.mcui"})").v().get("guid"));
+    REQUIRE(menu != other);
+    for (int i = 0; i < 3; ++i) {
+        auto a = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":160,"height":120,"software":true})");
+        CHECK(str(a.v().get("document")) == "ui/menu.mcui");
+        CHECK(str(a.v().get("guid")) == menu);
+        // A write between the calls rescans the catalog again.
+        c.ok("ui_widget_set", R"({"document":"ui/zz_other.mcui","widget":"menu/play","fields":{"text":"GO"}})");
+        auto b = c.ok("ui_preview", std::string(R"({"document":"guid:)") + other.substr(5) + R"(","width":160,"height":120,"software":true})");
+        CHECK(str(b.v().get("document")) == "ui/zz_other.mcui");
+        CHECK(str(b.v().get("guid")) == other);
+    }
+}
+
+TEST_CASE("ui_preview: a project that does not cook still previews a document, from the document alone") {
+    const std::string root = ui_project("mcp_ui_preview_alone");
+    Client c([] {
+        mcp::ServerOptions opt;
+        opt.player = MCE_PLAYER_EXE;
+        return opt;
+    }());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    c.ok("ui_create", std::string(R"({"path":"ui/menu.mcui","widgets":)") + kMenuWidgets + "}");
+    c.ok("asset_create", R"({"path":"ui/warm.mcuitheme","content":{"palette":{"button":[0.85,0.35,0.1,1],"text":[1,0.95,0.8,1]}}})");
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    const char* const shot = R"({"document":"ui/menu.mcui","width":320,"height":240})";
+    auto whole = c.ok("ui_preview", shot);
+    CHECK_FALSE(whole.v().get("document_only").valid());  // the project cooks: its scene starts, bindings read it
+
+    // A scene the cook rejects used to block every UI preview.
+    write_file(root + "/assets/scenes/broken.mcscene", "{ this is not a scene");
+    auto alone = c.ok("ui_preview", shot);
+    REQUIRE(alone.images.size() == 1);
+    CHECK(str(alone.v().get("document_only")).find("does not cook") != std::string::npos);
+    CHECK(alone.images[0].width == 320);
+    // The theme travelled with the document: the frame has the warm buttons, not the default look.
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":null})");
+    auto plain = c.ok("ui_preview", shot);
+    const auto same = [](const auto& a, const auto& b) {
+        return a.rgba.size() == b.rgba.size() && std::equal(a.rgba.begin(), a.rgba.end(), b.rgba.begin());
+    };
+    CHECK_FALSE(same(alone.images[0], plain.images[0]));
+    // Asked for, it skips the project cook even when the project is fine.
+    std::filesystem::remove(root + "/assets/scenes/broken.mcscene");
+    c.ok("ui_theme_set", R"({"document":"ui/menu.mcui","theme":"ui/warm.mcuitheme"})");
+    auto forced = c.ok("ui_preview", R"({"document":"ui/menu.mcui","width":320,"height":240,"document_only":true})");
+    CHECK(str(forced.v().get("document_only")) == "document_only was set");
+    CHECK(same(forced.images[0], alone.images[0]));
 }
 
 TEST_CASE("ui_preview: one document under two themes draws two different frames") {

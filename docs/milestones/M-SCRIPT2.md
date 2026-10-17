@@ -20,7 +20,7 @@ calls it. A function that would need state between ticks is not added: the answe
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | 2D physics completeness: forces and torque, angular velocity, circle / shape overlap and shape casts, gravity and sleep controls | Sonnet | done |
-| 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | not started |
+| 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | done |
 | 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | not started |
 | 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | not started |
 | 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | not started |
@@ -36,3 +36,35 @@ against the definitions, so one cannot be added without the other); `local_ci.sh
 - The gate the milestone promised: `test_script_api` walks the real `mce` table inside a script and compares it, both ways, with the
   names `mce.d.luau` declares, so a function can no longer be registered without a typed declaration.
 - Not done: gravity scale per body is data (`RigidBody2D.gravity_scale`), so no function; `World2D` joints stay C++ only.
+
+## Step 2 as built
+
+- `mce.find_path(from, to, options?)` in `api_world.cpp`: a `kit::NavGrid` over the bounds of the static colliders plus a free margin,
+  marked with `kit::mark_static_colliders`, searched with `kit::Pathfinder`. Options `cell`, `radius`, `diagonal`, `smooth`; bad values are
+  named errors, and a grid over 4 million cells asks for a bigger `cell`.
+- The grid is a world resource keyed by `kit::static_colliders_hash` (new, in `pathfinding.cpp`) plus cell and radius, so a level that
+  changes (a door destroyed, a ProcLevel reroll) is noticed on the next call and nothing else rebuilds it.
+- Points outside the grid are open ground: the search runs from the nearest edge cell and the real point is added at that end.
+- Line of sight needs no new call: `mce.raycast2d` / `circle_cast2d` already answer it, and `smooth = true` already drops the waypoints
+  a straight walk does not need.
+
+## Step 0: the bytecode trust boundary (SBA-198)
+
+**Finding (M-FUZZ 3):** `luau_load` / `ScriptHost::add_bytecode` do not survive hostile bytecode (debug: `lvmload.cpp:691` assert;
+release: out-of-bounds constant read). The pack CRC only detects corruption.
+
+**Decision (coordinator):** no verifier of our own (upstream Luau treats bytecode as trusted too). Bytecode is trusted only when
+the game's own build cooked it.
+
+**Design.**
+- `asset::MountOptions::allow_code` (default **false**, so a new mount site is safe by default). A root mounted without it has its `Script` manifest entries
+  dropped at mount, with a warning: they neither load nor override the game's script of the same GUID.
+- Trusted (`allow_code = true`): the player's game pack, the editor project's own cook, `run_headless`'s `pack` (every caller
+  passes the project's cooked folder). Data-only: mod packs (ADR-0034), base packs (a mod project's game), liveops fetched config.
+- `add_bytecode` documents that it trusts its input; `compile()` / `add_source` is the path for anything else.
+- Not done on purpose: compiling user or mod *source* at load time. The shipped player has no compiler by design
+  (`player_no_luau_compiler`), so a mod that wants scripts needs that decision first (a separate milestone).
+
+**Test:** `tests/asset/test_mods.cpp` "a mod pack cannot carry script bytecode": a mod's new and overriding Script entries never
+enter the table. The `MCE_FUZZ_BYTECODE=1` case calls `add_bytecode` directly (a trusted caller) and stays opt-in; the
+mutated-bytecode route that matters in the product is now closed before it reaches `luau_load`.

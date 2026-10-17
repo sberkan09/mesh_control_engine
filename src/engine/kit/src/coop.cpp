@@ -86,18 +86,17 @@ void spawn_player(Frame& f, const CoopGame& game, asset::AssetSystem* assets, u3
         MCE_LOG_WARN("kit: CoopGame player prefab {} cannot be loaded; player {} does not join", asset::to_string(game.player.guid).view(), slot + 1);
         return;
     }
-    const ecs::PrefabOverride overrides[2] = {ecs::PrefabOverride::of("LocalPlayer.player", slot + 1),
-                                              ecs::PrefabOverride::of("LocalTransform.position", at)};
+    // In a system phase the spawn is deferred (the handles are not components yet), so the tint is an override too.
+    ecs::PrefabOverride overrides[3] = {ecs::PrefabOverride::of("LocalPlayer.player", slot + 1),
+                                        ecs::PrefabOverride::of("LocalTransform.position", at),
+                                        ecs::PrefabOverride::of("Sprite.tint", player_color(slot))};
     ecs::SpawnParams p;
-    p.overrides = Span<const ecs::PrefabOverride>(overrides, 2);
-    Array<Entity> made;
-    if (Result<u32> r = ecs::instantiate(f.world(), assets->resolve(h.value()), p, &made); !r) {
+    p.overrides = Span<const ecs::PrefabOverride>(overrides, game.tint_players ? 3 : 2);
+    if (Result<u32> r = ecs::instantiate(f.world(), assets->resolve(h.value()), p); !r) {
         FixedString<512> why;
         format_error(r.error(), why);
-        MCE_LOG_WARN("kit: CoopGame player prefab {} failed: {} (it needs a LocalPlayer and a LocalTransform)",
+        MCE_LOG_WARN("kit: CoopGame player prefab {} failed: {} (it needs a LocalPlayer and a LocalTransform; a tint needs a Sprite, or turn tint_players off)",
                      asset::to_string(game.player.guid).view(), why.view());
-    } else if (game.tint_players && !made.empty()) {
-        if (Sprite* s = f.world().try_get_mut<Sprite>(made[0])) s->tint = player_color(slot);
     }
     assets->release(asset::AnyHandle(h.value()));
 }

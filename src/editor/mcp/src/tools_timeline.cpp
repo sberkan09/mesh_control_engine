@@ -174,14 +174,17 @@ void edited(cook::JsonValue root, cook::JsonValue track, u32 insert_at, u32 key_
 
 // Reads the edit back, writes it canonically and saves it; the result names the timeline.
 bool save_edit(ToolCall& c, const editor::ProjectAsset& a, StringView text) {
+    // asset_validate_and_write rescans the project and frees `a`: work from copies.
+    const cook::String path(a.path.view());
+    const asset::Guid guid = a.guid;
     cook::JsonDoc doc;
     cook::TimelineDocument d;
-    if (!read_doc(c, a.path.view(), text, doc, d, "the edit does not make a valid timeline (nothing was written)")) return false;
+    if (!read_doc(c, path.view(), text, doc, d, "the edit does not make a valid timeline (nothing was written)")) return false;
     cook::String out;
-    cook::write_timeline_document(d, a.guid, out);
-    if (!asset_validate_and_write(c, a.path.view(), a.guid, out.view())) return false;
+    cook::write_timeline_document(d, guid, out);
+    if (!asset_validate_and_write(c, path.view(), guid, out.view())) return false;
     c.out.begin_object();
-    c.out.key("timeline").str(a.path.view()).key("guid").str(asset_guid_ref(a.guid).view());
+    c.out.key("timeline").str(path.view()).key("guid").str(asset_guid_ref(guid).view());
     c.out.key("tracks").num_u(d.tracks.size()).key("length").num_f(d.length());
     c.out.end_object();
     return true;

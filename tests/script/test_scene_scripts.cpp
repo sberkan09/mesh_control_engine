@@ -74,7 +74,9 @@ void cook_scripts(Cooked& c) {
     REQUIRE(r.ok());
     c.dir = root + "/cooked";
     const StringView roots[] = {StringView(c.dir.c_str())};
-    REQUIRE(c.assets.mount(Span<const StringView>(roots, 1)));
+    asset::MountOptions own;
+    own.allow_code = true;
+    REQUIRE(c.assets.mount(Span<const StringView>(roots, 1), own));
 }
 
 asset::Guid guid(const char* s) { return asset::parse_guid(StringView(s)).value(); }

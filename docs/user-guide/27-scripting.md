@@ -121,6 +121,7 @@ map does not define reads as not pressed and zero.
 | `mce.overlap_point2d(p, skip?)` | is there a shape at the point |
 | `mce.raycast_all2d(origin, dir, max, skip?)` | every hit along the ray, nearest first, each `{entity, point, normal, distance}` |
 | `mce.circle_cast2d(from, to, radius, skip?)`, `mce.box_cast2d(from, to, half, skip?)` | the first thing a circle or box hits on its way, `{entity, point, normal, fraction}` (0 to 1 along the move), or `nil` |
+| `mce.find_path(from, to, options?)` | a walk from `from` to `to` around the static colliders: an array of vectors (the last one is `to`), or `nil` when `to` is blocked or unreachable. Options: `cell` (grid cell, metres, default 0.5), `radius` (how wide the walker is, default 0.25), `diagonal` and `smooth` (both default true). The grid is built from the static colliders and rebuilt when they change; with none, the answer is `{to}` |
 
 The 2D body functions raise "the entity has no 2D body" for an entity without one (a body exists from the first physics step).
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |

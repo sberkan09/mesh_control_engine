@@ -19,7 +19,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
-| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | not started |
+| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a: player data, net, Luau done) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
@@ -87,6 +87,32 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   stop with a message. `test_fuzz` re-hashes half of the nav mutants (4,000 per chunk) and loads and queries
   them; with the layer checks removed that run crashes with SIGFPE, with them it is clean (also at 40,000).
 
+## Step 3a — Player data, net, Luau (SBA-187)
+
+- **`test_fuzz_player_data`.** Saves and replays are mutated and *re-sealed* (the xxh64 body hash and the stream
+  hash are written again) so the parsers behind the hash are reached; the raw input recording goes through
+  `InputReplayer` and the input script text through `parse` and evaluate. No finding at 60,000 mutants (plain) and
+  8,000 (ASan).
+- **`test_fuzz_net`.** Full and delta replication snapshots (with hooks), acks, two rollback sessions fed mutated
+  packets, and the relay (room create, join, data, kick, quick play, list) through the simulated network with raw
+  endpoints. No finding; the run checks that the relay forwarded and dropped messages, so it is not idle.
+- **`test_fuzz_script`.** Mutated Luau source through `check` and `compile`: no finding.
+- **Finding: Luau bytecode is trusted by the loader.** A mutated chunk reaches `luau_load` and trips
+  `LUAU_ASSERT(instruction[1] < sizek)` (`lvmload.cpp:691`) in debug builds; in release the assert is compiled out
+  and the loader indexes the constant table out of bounds. The pack CRC does not help (anyone who edits a mod
+  recomputes it). The case is `fuzz: Luau bytecode survives mutation in the host`, skipped unless
+  `MCE_FUZZ_BYTECODE=1`. Options for the owner of M-SCRIPT: (a) mods ship source and the host compiles it at load
+  (breaks the "runtime parses no text" rule, but only for mods); (b) a bytecode verifier of our own in front of
+  `luau_load`; (c) a signed or hashed script chunk that only the cook can produce; (d) accept the risk for
+  first-party packs and refuse bytecode from mods. Not decided here.
+
+### Planned: Detour defense in depth (separate item)
+
+`simplifyContour` in Detour divides by `nverts`/`npoly`; step 2b stops bad layers before them, but a guard that
+does not depend on our validation (`nverts < 2`, `npoly == 0`) should exist too, by a method that survives a
+cache-cleaned FetchContent (vendored copy of the file or a wrapper pre-check). After it: a fuzz long run with the
+validation switched on.
+
 ### Survey: parsers of untrusted bytes
 
 | Entry point | Where | Input comes from | Mutation coverage today | Step |
@@ -100,10 +126,11 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
 | PNG, glTF, Ogg Vorbis, MPEG-1 | `cook/image.h` `decode_png`; cook glTF; `asset/vorbis.h` `decode_vorbis`; video | importing source files | Vorbis stream inside a sound chunk only | 3 |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`) | cook JSON reader and per-type validators | project sources, agents | none | 3 |
-| Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | none | 3 |
-| Input recordings | `input/script.h` `parse` | tests, bug reports | none | 3 |
+| Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | mutated and re-sealed (`test_fuzz_player_data`) | done |
+| Input recordings | `input/script.h` `parse` | tests, bug reports | raw stream and script text (`test_fuzz_player_data`) | done |
 | `.mcperf` captures | `editor/core/perf_file.h` | tools | none | 3 |
-| Replication and relay packets | `net/replication.h` `read_ack`, `apply`; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | none | 3 |
-| Luau source and bytecode | `script/` compile and load | project scripts, mods | none | 3 |
+| Replication, rollback and relay packets | `net/replication.h` `read_ack`, `apply`; rollback; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | mutated snapshots, acks, rollback and relay messages (`test_fuzz_net`) | done |
+| Luau source | `script/` `check`, `compile` | project scripts | mutated (`test_fuzz_script`) | done |
+| Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default | open |
 | MCP requests | `mcp/server.h` | agents | mutated and random requests (`test_mcp`) | done |
 | Console and command line | `core/convar.cpp` | the player | none | 3 |
