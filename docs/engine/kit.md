@@ -303,6 +303,11 @@ together:
   whose `SceneChunkStatus` is not `Loaded` (the `impostor` beyond `impostor_distance`, nothing beyond
   `max_distance`), at the chunk entity's transform, counted in `Kit3DStats::chunk_proxies` / `chunk_impostors`.
   The distance is from the camera to the chunk box: a render decision, while loading stays focus-based.
+  `bake_chunk_hlod` (`chunk_lod3d.cpp`) loads an area scene into a scratch world and merges its visible rigid
+  `MeshRef`s with opaque or masked materials through `render::build_merged_mesh` (one submesh per material, each
+  source's LOD levels kept), positions relative to the chunk entity; hidden, unloadable, skinned and non-opaque
+  meshes count as `skipped`, those under `min_size` as `small`. `EditorSession::bake_hlod` writes the result as
+  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step.
 - Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
   `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
   static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
@@ -322,6 +327,8 @@ ctest `test_kit` (no GPU), `tests/kit/`:
 
 - `test_chunk_lod3d.cpp`: "chunk lod: the proxy near, the impostor far, nothing past max_distance, hidden while
   loaded" (and kept while loading) and "chunk lod: a world without ChunkLod3D draws exactly as before".
+  The bake is tested in `tests/editor/test_hlod_bake.cpp` (`test_editor`, "editor hlod bake*": counts, undo,
+  byte-identical re-bake, `min_size`).
 - `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
   stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
   more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".

@@ -250,7 +250,10 @@ fixed world frame.
 An area that is not loaded draws nothing by default, so far areas leave holes on the skyline. Give the area's
 `SceneChunk` entity a `ChunkLod3D` whose `proxy` is a cheap mesh of the area (an HLOD bake: a `.mchlod` file,
 the area's static meshes merged into one) and that mesh stands in while the area is out, at the chunk entity's
-position (section 8, the `ChunkLod3D` row).
+position (section 8, the `ChunkLod3D` row). MCP's `hlod_bake` (chapter 14) makes the proxies: for every
+`SceneChunk` it merges the area scene's visible static meshes into `assets/hlod/<scene>/chunk_<id>.mchlod` and points
+the chunk's `ChunkLod3D.proxy` at it (adding the component); save the scene to keep that. Meshes smaller than
+`min_size` metres (default 1) are left out, and the same scene bakes byte-identical.
 
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
 player reads area files on a background thread and instantiates at most one area per tick; headless

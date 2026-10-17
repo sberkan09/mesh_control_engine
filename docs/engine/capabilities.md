@@ -220,6 +220,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `scene_open` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_save` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
+| `hlod_bake` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `cook_run` | `tools.cpp` | docs/user-guide/05-assets.md |
