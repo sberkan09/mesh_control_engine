@@ -1,5 +1,6 @@
 #include "mce/render/scene3d.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -699,6 +700,8 @@ void Scene3D::build_runs() {
     Array<u8> cause(*alloc_);
     Array<u64> key(*alloc_);
     Array<u16> segment(*alloc_);
+    Array<u64> mesh_key(*alloc_);  // eligible draws: the mesh, submesh and level alone (M-CONTENT 2)
+    mesh_key.resize(n);
     cause.resize(n);
     key.resize(n);
     segment.resize(n);
@@ -713,9 +716,11 @@ void Scene3D::build_runs() {
                    : !same_bits(&d.prev_model, &d.model, sizeof(mat4)) ? kMoving
                                                                        : kEligible;
         u64 h = kFnv64Offset;
+        mesh_key[i] = 0;
         if (cause[i] == kEligible) {
             h = hash_combine(h, ptr_bits(d.mesh));
             h = hash_combine(h, (u64(d.submesh) << 32) | d.lod);
+            mesh_key[i] = h;
             h = hash_combine(h, ptr_bits(inst.material));
             h = fnv1a64(&inst.tint, sizeof(inst.tint), h);
             h = fnv1a64(&inst.emissive_tint, sizeof(inst.emissive_tint), h);
@@ -736,6 +741,8 @@ void Scene3D::build_runs() {
     order.clear();
     order.reserve(n);
     u32 grouped = 0;
+    Array<u32> group_size(*alloc_);  // per draw: the size of its group of identical draws (collect_draw_causes_ only)
+    if (collect_draw_causes_) group_size.resize(n);
     for (u32 s = 0; s < n;) {
         u32 e = s + 1;
         while (e < n && segment[e] == segment[s]) ++e;
@@ -751,12 +758,49 @@ void Scene3D::build_runs() {
         };
         group_runs(e - s, s, instancing_.min_count, instancing_.max_count, hash, equal, run_scratch_, order, runs_,
                    &stats_.runs_instanced, &grouped);
+        if (collect_draw_causes_)
+            for (u32 i = 0; i < e - s; ++i)
+                group_size[s + i] = run_scratch_.group[i] == ~0u ? 0u : run_scratch_.size[run_scratch_.group[i]];
         s = e;
     }
     stats_.draws_instanced = grouped;
     u32 eligible = 0;
     for (u32 i = 0; i < n; ++i) eligible += cause[i] == kEligible ? 1u : 0u;
     stats_.not_instanced_single = eligible - grouped;
+    if (collect_draw_causes_ && eligible > grouped) {  // why the singles are single (M-CONTENT 2; off: both stay 0)
+        // O(n): a draw whose group has two or more members stayed single only for the run limits; otherwise it
+        // is the mesh's only eligible draw, or it shares the mesh with draws of another material.
+        RunScratch& sc = run_scratch_;  // the grouping is done: reuse its table as the mesh counter
+        u32 cap = 16;
+        while (cap < eligible * 2) cap *= 2;
+        sc.table.resize(cap);
+        for (u32& t : sc.table) t = ~0u;
+        sc.hashes.clear();
+        sc.size.clear();
+        const auto slot_of = [&](u64 k) {
+            u32 sl = static_cast<u32>(k) & (cap - 1);
+            while (sc.table[sl] != ~0u && sc.hashes[sc.table[sl]] != k) sl = (sl + 1) & (cap - 1);
+            return sl;
+        };
+        for (u32 i = 0; i < n; ++i) {
+            if (cause[i] != kEligible) continue;
+            const u32 sl = slot_of(mesh_key[i]);
+            if (sc.table[sl] == ~0u) {
+                sc.table[sl] = static_cast<u32>(sc.hashes.size());
+                sc.hashes.push_back(mesh_key[i]);
+                sc.size.push_back(0);
+            }
+            ++sc.size[sc.table[sl]];
+        }
+        for (const DrawRun& r : runs_) {
+            if (r.count != 1 || cause[order[r.first]] != kEligible) continue;
+            const u32 i = order[r.first];
+            if (group_size[i] >= 2)
+                ++stats_.not_instanced_short;
+            else if (sc.size[sc.table[slot_of(mesh_key[i])]] == 1)
+                ++stats_.not_instanced_unique_mesh;
+        }
+    }
     bool moved = false;
     for (u32 i = 0; i < n && !moved; ++i) moved = order[i] != i;
     if (!moved) return;

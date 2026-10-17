@@ -633,6 +633,10 @@ public:
         u32 not_instanced_moving = 0;    // moved since last frame (prev_model != model)
         u32 not_instanced_single = 0;    // eligible, but no copy shares the run (or the run is under min_count)
         u32 not_instanced_disabled = 0;  // InstancingSettings::enabled is off: every draw
+        // M-CONTENT 2: the parts of not_instanced_single (the rest differ from every other copy of their mesh by
+        // material, tint or emissive tint).
+        u32 not_instanced_unique_mesh = 0;  // no other eligible draw uses this mesh, submesh and level
+        u32 not_instanced_short = 0;        // identical copies exist, but fewer than min_count (or a split's tail)
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
@@ -655,6 +659,10 @@ public:
     void set_lod(const LodSettings& lod) { lod_ = lod; }
     void set_instancing(const InstancingSettings& s) { instancing_ = s; }
     const InstancingSettings& instancing() const { return instancing_; }
+    // Classify why single draws stayed single (Stats::not_instanced_short / _unique_mesh, and the player's
+    // Forward3DStats::draw_causes). Off by default: a normal frame pays nothing and those counters stay 0.
+    void set_collect_draw_causes(bool on) { collect_draw_causes_ = on; }
+    bool collect_draw_causes() const { return collect_draw_causes_; }
     // The physically based sky (M-VISUAL 7): with Atmosphere::enabled, build() tints the light and
     // sets its ambient from it (see Atmosphere) and Forward3D draws its sky in place of Sky's.
     void set_atmosphere(const Atmosphere& atmosphere) { atmosphere_ = atmosphere; }
@@ -796,6 +804,7 @@ private:
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
     InstancingSettings instancing_;
+    bool collect_draw_causes_ = false;
     GiVolume gi_;
     Atmosphere atmosphere_;
     math::vec3 atmosphere_sun_{0.0f, 1.0f, 0.0f};

@@ -282,6 +282,8 @@ TEST_CASE("perf_run headless and perf_compare: the sim alone, judged and compare
     CHECK(str(r.v().get("target")) == "mobile");
     CHECK(r.v().get("gpu_ms").get("measured").as_bool() == false);  // no GPU headless
     CHECK(r.v().get("counters_max").get("draws").as_number() == 0);
+    CHECK(r.v().get("draw_causes").get("scene_draws_avg").as_number() == 0);  // M-CONTENT 2: no 3D, no causes
+    CHECK(r.v().get("draw_causes").get("causes").size() == 0);
     const cook::JsonValue lines = r.v().get("verdict").get("lines");
     REQUIRE(lines.size() >= 1);
     bool sim_line = false;
