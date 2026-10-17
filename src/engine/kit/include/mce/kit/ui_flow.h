@@ -47,14 +47,17 @@ inline constexpr u32 kMaxUiFlowRules = 8;
 // On the same entity as a UiScreen (and its UiFlow, which keeps working: its actions are evaluated
 // first, then these rules in order). Signals act the tick after they were emitted, like every event.
 // A Field rule fires when its condition turns true, not on every tick it holds: `armed` remembers
-// which rules held last tick.
+// which rules held last tick (not saved: a loaded game's screens are back at their authored state, so a
+// condition that still holds fires again). A field rule whose condition already holds on the first tick fires then.
+static_assert(kMaxUiFlowRules <= 8, "UiFlowRules::armed has one bit per rule");
+
 struct UiFlowRules {
     UiFlowRule rules[kMaxUiFlowRules];
     u8 armed = 0;
     u8 pad_[7] = {};
 };
 MCE_COMPONENT(UiFlowRules, (rules, Help{"up to 8 rules, evaluated in order each tick, even while the world is held"}),
-              (armed, Save, ReadOnly, Help{"bit i: the Field rule i held last tick"}))
+              (armed, ReadOnly, Help{"bit i: the Field rule i held last tick"}))
 
 // Evaluates every UiFlowRules this tick (kit_ui_flow calls it after the UiFlow actions); a Load rule
 // leaves its scene in `load` when none is set yet.

@@ -227,7 +227,8 @@ also on held ticks (a paused game can still open a screen).
 ```json
 "UiFlowRules": { "rules": [
     { "when": "Signal", "name": "ending", "act": "Show" },
-    { "when": "FieldEquals", "field": "Score/lives", "value": 0, "act": "Show", "act2": "Quit" } ] }
+    { "when": "FieldEquals", "field": "Score/lives", "value": 0, "act": "Show", "act2": "Quit" },
+    {}, {}, {}, {}, {}, {} ] }
 ```
 
 - `when` is `Action` (an input action pressed), `Signal` (a sequence `emit`, a timeline event key, a behavior-tree
@@ -236,6 +237,8 @@ also on held ticks (a paused game can still open a screen).
   entity that has the component, so use a singleton).
 - A field rule fires when its condition turns true, not on every tick it holds; it fires again after the
   condition has been false once. A path that does not resolve never fires.
+- A scene lists all eight rules of the array (`{}` for an unused one: no action, nothing happens); the editor and
+  `write_scene_component` do this for you. A typo in a field path never fires and is not reported.
 - `act` and `act2` run in that order: `Show`, `Hide`, `Toggle` act on this entity's `UiScreen`; `Load` loads
   `scene`; `Quit` ends the game. Rules and `UiFlow` can sit on the same screen.
 

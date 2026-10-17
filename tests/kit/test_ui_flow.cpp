@@ -7,6 +7,7 @@
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
 #include "mce/kit/components.h"
+#include "mce/kit/ai.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/ui_flow.h"
@@ -235,4 +236,37 @@ TEST_CASE("ui flow rules: they run on held ticks, can load a scene") {
     REQUIRE(change);
     CHECK(change->next.view() == "guid:00000000-0000-0003-0000-000000000004");
     CHECK_FALSE(w.held());
+}
+
+namespace {
+// What Luau mce.signal does from a post-phase script: both queues, which swap in different phases.
+void both_emitter(Frame& f) {
+    if (g_emit) {
+        f.events().push(kit::SeqSignal{StringId("ending"), Entity{}});
+        f.events().push(kit::BtSignal{StringId("ending"), Entity{}});
+    }
+    g_emit = false;
+}
+}  // namespace
+
+TEST_CASE("ui flow rules: one emit that reaches two signal queues toggles a screen once") {
+    World w;
+    input::install(w);
+    kit::install_ui_flow(w);
+    w.register_event<kit::SeqSignal>(Phase::FixedUpdate_Post);
+    w.register_event<kit::BtSignal>(Phase::FixedUpdate_Pre);
+    w.add_system(Phase::FixedUpdate_Post, "both_emitter", &both_emitter);
+    kit::UiFlowRule toggle;
+    toggle.name = "ending";
+    toggle.act = kit::UiFlowDo::Toggle;
+    kit::UiScreen hidden;
+    hidden.visible = false;
+    const Entity e = w.spawn();
+    w.add(e, hidden);
+    w.add(e, rules_with(toggle));
+    u64 t = 0;
+    tick(w, t);
+    g_emit = true;
+    for (u32 i = 0; i < 5; ++i) tick(w, t);
+    CHECK(screen(w, e).visible);  // shown once, not toggled back by the second queue
 }

@@ -79,7 +79,11 @@ bool signal_of(Frame& f, StringId id) {
 }
 
 bool signalled(Frame& f, StringId id) {
-    return signal_of<SeqSignal>(f, id) || signal_of<TimelineSignal>(f, id) || signal_of<BtSignal>(f, id);
+    // Every producer of a BtSignal (a BT emit node, Luau mce.signal) also pushes a SeqSignal, but the two queues
+    // swap in different phases, so reading both could see one emit on two ticks: BtSignal only stands in
+    // for a world without sequences.
+    return signal_of<SeqSignal>(f, id) || signal_of<TimelineSignal>(f, id) ||
+           (!f.world().event_queue<SeqSignal>() && signal_of<BtSignal>(f, id));
 }
 
 }  // namespace
@@ -89,6 +93,9 @@ void apply_ui_flow_rules(Frame& f, const input::InputState* in, asset::Guid& loa
         u8 armed = rules.armed;
         for (u32 i = 0; i < kMaxUiFlowRules; ++i) {
             const UiFlowRule& r = rules.rules[i];
+            const u8 bit = static_cast<u8>(1u << i);
+            const bool field_rule = r.when >= UiFlowWhen::FieldEquals;
+            if ((r.act == UiFlowDo::None && r.act2 == UiFlowDo::None) || !field_rule) armed = static_cast<u8>(armed & ~bit);
             if (r.act == UiFlowDo::None && r.act2 == UiFlowDo::None) continue;
             bool fire = false;
             switch (r.when) {
@@ -101,7 +108,6 @@ void apply_ui_flow_rules(Frame& f, const input::InputState* in, asset::Guid& loa
                 case UiFlowWhen::Signal: fire = !r.name.empty() && signalled(f, StringId(r.name.view())); break;
                 default: {
                     const bool holds = condition_holds(f.world(), r);
-                    const u8 bit = static_cast<u8>(1u << i);
                     fire = holds && !(armed & bit);
                     armed = holds ? static_cast<u8>(armed | bit) : static_cast<u8>(armed & ~bit);
                     break;
