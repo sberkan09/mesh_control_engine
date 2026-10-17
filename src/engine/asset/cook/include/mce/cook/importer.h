@@ -34,7 +34,9 @@ public:
     // formats that reference siblings by URI (glTF images) name their dependencies.
     virtual bool guid_for_path(StringView rel_path, Guid& out) const = 0;
     // The parsed document of a native asset and its path relative to assets/: how prefab
-    // instances are flattened at cook (FR-ENT-070). False when unknown or not a native asset.
+    // instances are flattened at cook (FR-ENT-070). For an interchange asset (a texture, a sound) the
+    // sidecar "settings" instead (how a material reads a height map's "srgb"). False when unknown or
+    // when there is no document or settings.
     virtual bool native_document(Guid g, JsonValue& out, StringView& source_path) const {
         (void)g;
         (void)out;
