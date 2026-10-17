@@ -247,6 +247,11 @@ in a resource, for example) either marks the field `WorldPoint` in its `MCE_COMP
 `ecs::on_origin_shift`; `ecs::to_absolute` / `to_local` (`mce/ecs/origin.h`) convert to and from the
 fixed world frame.
 
+An area that is not loaded draws nothing by default, so far areas leave holes on the skyline. Give the area's
+`SceneChunk` entity a `ChunkLod3D` whose `proxy` is a cheap mesh of the area (an HLOD bake: a `.mchlod` file,
+the area's static meshes merged into one) and that mesh stands in while the area is out, at the chunk entity's
+position (section 8, the `ChunkLod3D` row).
+
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
 player reads area files on a background thread and instantiates at most one area per tick; headless
 runs and play-in-editor load an area in the tick that wants it, so their state hashes stay
