@@ -1,6 +1,10 @@
 #include "importer_common.h"
+#include "obj_importer.h"
 
 namespace mce::cook {
+
+// .mcroads -> CHNK_ROADS (M-OPENWORLD B1), declared here rather than in importer.h, which 170 TUs include.
+mem::UniquePtr<IImporter> make_roads_importer();
 
 void ImporterRegistry::add(mem::UniquePtr<IImporter> importer) {
     MCE_ASSERT_MSG(importer && !find(importer->id()), "importer missing or registered twice");
@@ -29,6 +33,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_material_importer());
     reg.add(make_scene_importer());
     reg.add(make_gltf_importer());
+    reg.add(make_obj_importer());
+    reg.add(make_mtl_importer());
     reg.add(make_prefab_importer());
     reg.add(make_tilemap_importer());
     reg.add(make_spritesheet_importer());
@@ -49,6 +55,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_envmap_importer());
     reg.add(make_terrain_importer());
     reg.add(make_navmesh_importer());
+    reg.add(make_roads_importer());
 #if MCE_HAS_SCRIPT
     reg.add(make_script_importer());
 #endif

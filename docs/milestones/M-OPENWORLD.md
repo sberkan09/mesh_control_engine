@@ -24,9 +24,11 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | design done | | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
+| A2 | in progress: seam (`WorldPoint` field flag) | #495 design, seam PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); next: core rebase, then module listeners |
 | A3 | design done | | same design |
 | A4 | design done | | same design |
+
+Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
 
 ## Gates
 - Every step: `local_ci.sh --task` green, headless test with numbers, replay hash stable, existing scenes unchanged (opt-in per component).
@@ -40,3 +42,74 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 3. **C1–C4** (enter/exit, weapons and damage, wanted and police, missions and map UI): C1+C2 first, C3/C4 after.
 4. **D2–D3** (content ledger and cook scripts, retarget) after D1 lands in the M-IMPORT3D thread.
 5. **E1** integration sample last.
+
+## Track B progress (roads, traffic, crowds)
+
+Design: [ADR-0046](../adr/0046-road-network.md). Guide: [chapter 29](../user-guide/29-roads-and-traffic.md).
+Linear: the Linear connector was unreachable when B1 started; the steps are tracked here until it is back.
+
+| Step | Status | PR | Notes |
+|---|---|---|---|
+| B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
+| B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
+| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
+| B3 crowds | planned (own thread once B1 lands) | | uses `RoadRoad::sidewalk` beside each kerb |
+
+Open items and risks:
+- Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
+- Junction radii come from widths and angles; very acute junctions may need a hand-set `radius`.
+- The nearest-lane grid is rebuilt on every hot reload of a network; fine for a city, slow for a country.
+
+## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)
+
+Linear is at its free issue limit (creating SBA issues for D2/D3 failed with "exceeded the free issue limit"), so this
+section is the tracker. State: D2 and D3 merged in #504; the follow-up below (ORM packing, real-pack cook test, node-rig retarget) is the second PR.
+
+**D2: ledger and cook scripts.** `content/ledger.json` (13 packs, all CC0-1.0): Kenney City Kit commercial / suburban / roads,
+Car Kit, Blocky Characters, Impact Sounds; ambientCG Asphalt031, Road007, Concrete034, PavingStones070, Grass004 (1K PBR);
+Poly Haven `kloppenheim_06_puresky` 1K HDRI; Quaternius Universal Animation Library (manual download: itch.io needs a
+browser session, no hash pinned yet). Every http pack pins its archive SHA-256 and size (read 2026-10-17); a changed upstream
+file fails the fetch. `tools/mce_cli/mce_content.py` (`mce content list|info|check|fetch|add|verify|credits`) validates the
+ledger (only CC0-1.0, CC-BY-3.0, CC-BY-4.0; CC-BY needs an attribution line; https URLs, sha256, safe paths), downloads into a
+cache, extracts by rule into `assets/third_party/<pack>/`, writes sidecars with GUIDs derived from pack id + path, `.mcmat`
+materials for PBR sets (colour + normal, roughness as a factor), `third_party_content.json` and the generated block of
+`CREDITS.md`; `verify` is the ship gate. Tests: `tests/import/test_content.py` (offline: fake opener, synthetic zips; cooks with
+`mce_cook` when given). Docs: guide 5.3, 16.7.
+Follow-up (second PR): the ambientCG entries pin the 1K-PNG archives and an `orm` block packs roughness (+ occlusion) into
+the `metallic_roughness` texture (pure-Python 8-bit PNG codec, deterministic); `tests/import/test_content_real.py`
+(`import_content_real`, label `slow`, skips offline) fetches road, car, character, sound and PBR packs by their ledger
+hash and cooks them with `mce_cook`: 0 failed, run once here against the live downloads.
+Open items: pin the Quaternius hash once someone downloads it; `--online` check is not run in CI; ledger entries for Quaternius city/vehicle packs, OpenGameArt and
+Poly Haven models/textures; hooking the ledger into MCP `library_search` / `library_add`; 
+
+**D3: humanoid retarget.** `tools/mce_cli/mce_retarget.py` (`mce retarget <src>... --onto <character.glb>`): name-based humanoid
+map (Mixamo, Unreal, Rigify, VRM, Biped, engine names; `--map` overrides), world-space delta retarget (A-pose to T-pose,
+facing correction, spine chain resampling), hips translation scaled by hip height, `--in-place-motion`, `--no-translation`,
+`--prefix`, `--clips`, `--replace`, `--strict`; output is the character `.glb` plus clips (the importer puts clips in the mesh
+chunk), deterministic. Tests: `tests/import/test_retarget.py` (rigs built in code; cooks the output with `mce_cook` when
+given). Docs: guide 8.9, 16.7. Follow-up: `--map-only` pairs exactly the nodes a `--map` file names, for skinless node rigs (Kenney Blocky Characters:
+retargeting `walk` from character-a onto character-b cooks with `mce_cook`); a skinless rig without it is refused with that
+explanation; the tool warns when the output is not beside the character's relative textures.
+Open items: no IK/foot-slide fix, Y-up only, fingers matched by name only, retarget not exposed as an MCP tool, not run on a
+real Mixamo/Quaternius skinned file (Quaternius needs a manual download).
+
+### E1 content set (ready from the ledger)
+
+Everything below is CC0 and comes from `mce content add <id> <project>`; `mce content verify` is the ship gate.
+Counts are the GLB models in each archive (read 2026-10-17).
+
+| Need | Pack id | What it gives | Gap |
+|---|---|---|---|
+| Roads, junctions, signals | `kenney-city-kit-roads` | 95 models: 62 road pieces (straight, bends, crossings, junctions, ramps, bridges), traffic lights (5), street lights (6), signs (3), electricity (8), construction props | no lane/graph data: the B1 `.mcroads` is authored from these piece sizes |
+| Downtown | `kenney-city-kit-commercial` | 41 models: 19 buildings, 16 low-detail blocks, 6 details | one colormap, low-poly style; no interiors |
+| Residential | `kenney-city-kit-suburban` | 40 models: 21 houses, fences, paths, driveways, trees | same |
+| Traffic and player cars | `kenney-car-kit` | 50 models: sedan, suv, truck, delivery, ambulance, race cars, karts, 8 wheel pieces, debris | wheels are separate nodes; collision shapes need authoring (`MeshCollider3D`/convex) |
+| Pedestrians | `kenney-blocky-characters` | 18 characters with idle, walk, sprint, sit, drive, die, pick-up, emotes, holding poses (node-animated) | blocky style; no weapon-fire clips; no skin, so no IK/ragdoll from the mesh |
+| Skinned humanoid animation | `quaternius-universal-animation-library` | locomotion, combat and vehicle clips for `mce retarget` | manual download (itch.io), hash not pinned yet; needs a skinned CC0 character (none in the ledger) |
+| Ground and walls | `ambientcg-asphalt031`, `-road007`, `-concrete034`, `-pavingstones070`, `-grass004` | 1K PBR sets with generated `.mcmat` (colour, normal, packed ORM) | 1K only; no displacement use yet |
+| Sky | `polyhaven-kloppenheim-06-puresky` | 1K day HDRI for `Environment3D` | day only; a dusk/night HDRI should be added for the day-night cycle |
+| Footsteps and impacts | `kenney-impact-sounds` | 130 `.ogg`: footsteps on surfaces, impacts | no engine, gun, siren, radio or ambience audio: needs new ledger entries (OpenGameArt/Kenney audio packs) |
+
+Not covered by any pack yet (add ledger entries before E1): engine/gun/siren/ambience audio, a skinned civilian and police
+character, weapons, a night HDRI, signage textures, a city skyline backdrop. The E1 slice can start with the table above and
+treat these as placeholders.

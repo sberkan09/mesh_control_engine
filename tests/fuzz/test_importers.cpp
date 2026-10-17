@@ -132,11 +132,7 @@ TEST_CASE("fuzz: importers survive mutated source files of every committed sampl
             if (!e.is_regular_file()) continue;
             const std::string ext = e.path().extension().string();
             if (reg.for_extension(StringView(ext.c_str(), ext.size())) == nullptr) continue;
-            // KNOWN GAP (M-FUZZ 3 finding): the glTF importer asserts on a wrongly typed JSON value (an accessor
-            // index that is not a number, gltf_importer.cpp read_indices). Off until M-IMPORT3D fixes it;
-            // MCE_FUZZ_GLTF=1 runs it.
-            if ((ext == ".glb" || ext == ".gltf") && std::getenv("MCE_FUZZ_GLTF") == nullptr) continue;
-            // Likewise stb_truetype (documented as unsafe for untrusted fonts): a mutated .ttf crashes
+            // KNOWN GAP: stb_truetype (documented as unsafe for untrusted fonts): a mutated .ttf crashes
             // stbrp_pack_rects in the font importer's atlas bake. MCE_FUZZ_FONT=1 runs it.
             if ((ext == ".ttf" || ext == ".otf") && std::getenv("MCE_FUZZ_FONT") == nullptr) continue;
             if (e.file_size() > 1024 * 1024) continue;

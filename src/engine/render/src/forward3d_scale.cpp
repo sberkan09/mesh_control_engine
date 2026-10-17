@@ -29,7 +29,7 @@ struct InstDrawU {
     vec4 info;  // x: first visible slot, y: time, z: previous time, w: alpha cutoff
     vec4 wind;
     vec4 uv_rect;
-    vec4 base;  // x: base color alpha
+    vec4 base;  // x: base color alpha, yzw: wind height, gust, flutter
 };
 struct OccU {
     mat4 mvp;
@@ -548,7 +548,7 @@ void Forward3D::draw_batches_depth(rhi::CommandBuffer& cmd, const Scene3D& scene
             u.local = mesh.rest_pose[sm.node] * sm.dequant;
             u.wind = batch_wind(b);
             u.uv_rect = tiled_uv_rect(sm.uv_rect, mat);
-            u.base = {mat.base_color[3] * b.tint.w, 0.0f, 0.0f, 0.0f};
+            u.base = {mat.base_color[3] * b.tint.w, b.wind_ext.x, b.wind_ext.y, b.wind_ext.z};
             for (u32 l = 0; l < levels; ++l) {
                 u.info = {f32(bv.slot[l]), scene.time(), scene.time() - scene.dt(), masked ? mat.alpha_cutoff : 0.0f};
                 cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(u));
