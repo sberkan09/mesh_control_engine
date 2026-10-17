@@ -686,3 +686,20 @@ TEST_CASE("golden: instanced_props: a grid of identical crates under three casca
     CHECK(st.shadow_runs_instanced >= 2);
     check_golden("instanced_props", f);
 }
+
+// ---- M-VISUAL3 5b: static merge ------------------------------------------------------------------------------------
+
+TEST_CASE("golden: static_merge_kit: a modular kit of 32 pieces merged into two cells, one draw per material and cell") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    MergeKit kit;
+    upload_merge_kit(f, kit);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_merge_kit(s, kit, true);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.main_draws == 2 + kit.materials * kit.cells);  // the fixture's ground and box, then the kit
+    check_golden("static_merge_kit", f);
+}

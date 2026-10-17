@@ -186,6 +186,7 @@ bool record_view(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> vi
             render::Scene3D scene(renderer.meshes(), mem::frame());
             scene.begin(cam3, size);
             scene.set_lod(ctx.lod);
+            scene.set_collect_draw_causes(ctx.collect_draw_causes);
             const bool first = st.views_3d == 0;
             if (first) {
                 ctx.extract3d->set_frame_dt(ctx.frame_dt);
@@ -203,7 +204,13 @@ bool record_view(rhi::CommandBuffer& cmd, World& world, Span<const ViewEntry> vi
             out.first = first;
             out.linear_output = linear;
             renderer.record_3d(cmd, scene, target, out);
-            if (!linear && st.window_3d++ == 0) st.first_3d = scene.stats();
+            if (!linear && st.window_3d++ == 0) {
+                st.first_3d = scene.stats();
+                const render::Forward3DStats& fs = renderer.forward_3d().last_stats();  // this view's: the next record resets it
+                st.first_3d_runs_instanced = fs.runs_instanced;
+                st.first_3d_draws_instanced = fs.draws_instanced;
+                for (u32 k = 0; k < kDrawCauseCount; ++k) st.first_3d_draw_causes[k] = fs.draw_causes[k];
+            }
             ++st.views_3d;
             return true;
         }

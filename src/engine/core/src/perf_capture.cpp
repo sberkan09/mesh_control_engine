@@ -97,7 +97,9 @@ void write_counters(Out& o, const Counters& c) {
           c.draws, c.passes, c.dispatches, c.triangles, c.meshes, c.sprites, c.sprite_batches);
     o.fmt("\"ring_overflows\": %u, \"upload_bytes\": %llu, \"heap_allocations\": %llu, ", c.ring_overflows,
           static_cast<unsigned long long>(c.upload_bytes), static_cast<unsigned long long>(c.heap_allocations));
-    o.fmt("\"runs_instanced\": %u, \"draws_instanced\": %u}", c.runs_instanced, c.draws_instanced);
+    o.fmt("\"runs_instanced\": %u, \"draws_instanced\": %u, \"draw_causes\": [", c.runs_instanced, c.draws_instanced);
+    for (u32 k = 0; k < kDrawCauseCount; ++k) o.fmt(k ? ", %u" : "%u", c.draw_causes[k]);
+    o.raw("]}");
 }
 
 void write_names(Out& o, const Array<FixedString<32>>& names) {
@@ -163,6 +165,10 @@ Summary summarize(const Capture& c) {
         m.heap_allocations = std::max(m.heap_allocations, k.heap_allocations);
         m.runs_instanced = std::max(m.runs_instanced, k.runs_instanced);
         m.draws_instanced = std::max(m.draws_instanced, k.draws_instanced);
+        for (u32 d = 0; d < kDrawCauseCount; ++d) {
+            m.draw_causes[d] = std::max(m.draw_causes[d], k.draw_causes[d]);
+            sum.draw_causes[d] += k.draw_causes[d];
+        }
         sum.draws += k.draws;
         sum.passes += k.passes;
         sum.dispatches += k.dispatches;
@@ -177,12 +183,20 @@ Summary summarize(const Capture& c) {
         sum.draws_instanced += k.draws_instanced;
     }
     const u64 n = c.frames.size();
-    s.counters_avg = {static_cast<u32>(sum.draws / n),       static_cast<u32>(sum.passes / n),
-                      static_cast<u32>(sum.dispatches / n),  static_cast<u32>(sum.triangles / n),
-                      static_cast<u32>(sum.meshes / n),      static_cast<u32>(sum.sprites / n),
-                      static_cast<u32>(sum.sprite_batches / n), static_cast<u32>(sum.ring_overflows / n),
-                      sum.upload_bytes / n,                  sum.heap_allocations / n,
-                      static_cast<u32>(sum.runs_instanced / n), static_cast<u32>(sum.draws_instanced / n)};
+    Counters& avg = s.counters_avg;
+    avg.draws = static_cast<u32>(sum.draws / n);
+    avg.passes = static_cast<u32>(sum.passes / n);
+    avg.dispatches = static_cast<u32>(sum.dispatches / n);
+    avg.triangles = static_cast<u32>(sum.triangles / n);
+    avg.meshes = static_cast<u32>(sum.meshes / n);
+    avg.sprites = static_cast<u32>(sum.sprites / n);
+    avg.sprite_batches = static_cast<u32>(sum.sprite_batches / n);
+    avg.ring_overflows = static_cast<u32>(sum.ring_overflows / n);
+    avg.upload_bytes = sum.upload_bytes / n;
+    avg.heap_allocations = sum.heap_allocations / n;
+    avg.runs_instanced = static_cast<u32>(sum.runs_instanced / n);
+    avg.draws_instanced = static_cast<u32>(sum.draws_instanced / n);
+    for (u32 k = 0; k < kDrawCauseCount; ++k) avg.draw_causes[k] = static_cast<u32>(sum.draw_causes[k] / n);
 
     // Spikes: frames at least twice the median frame time and 1 ms over it.
     if (s.frame.count == 0) return s;
@@ -269,6 +283,18 @@ void write_mcperf(const Capture& c, const Summary& s, Array<char>& out) {
     o.raw("]");
     o.raw(",\n  \"gpu_stages\": ");
     write_names(o, c.gpu_stages);
+    o.raw(",\n  \"draw_causes\": [");  // the names of Counters::draw_causes, in order
+    for (u32 k = 0; k < kDrawCauseCount; ++k) {
+        if (k) o.raw(", ");
+        o.str(StringView(draw_cause_name(static_cast<DrawCause>(k))));
+    }
+    o.raw("]");
+    o.raw(",\n  \"draw_cause_hints\": [");  // what to change for each, so a reader needs no table of its own
+    for (u32 k = 0; k < kDrawCauseCount; ++k) {
+        if (k) o.raw(", ");
+        o.str(StringView(draw_cause_hint(static_cast<DrawCause>(k))));
+    }
+    o.raw("]");
 
     o.fmt(",\n  \"summary\": {\n    \"frames\": %u,\n    ", s.frames);
     write_stat(o, "frame_ms", s.frame);

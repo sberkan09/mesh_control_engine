@@ -161,3 +161,158 @@ TEST_CASE("instancing gl: r.instancing's desc switch off draws the runs singly")
     CHECK(on.stats.instancing_bytes == 0);
     CHECK(differing(on.pixels, reference.pixels) == 0);
 }
+
+// ---- the draw-call report (M-CONTENT 2) ---------------------------------------------------------------
+
+namespace {
+
+u32 cause(const Forward3DStats& st, DrawCause c) { return st.draw_causes[static_cast<u32>(c)]; }
+
+u32 causes_total(const Forward3DStats& st) {
+    u32 n = 0;
+    for (u32 c : st.draw_causes) n += c;
+    return n;
+}
+
+// The fixture draws the ground and the box (two meshes drawn once each) plus whatever `extra` adds.
+Forward3DStats render_causes(Fixture3D& f, bool instancing, const std::function<void(Scene3D&)>& extra) {
+    f.render(0.0f, false, [&](Scene3D& s) {
+        s.set_instancing({instancing, 2});
+        s.set_collect_draw_causes(true);
+        add_crate_grid(s, kCrate);
+        if (extra) extra(s);
+    });
+    return f.renderer.forward_3d().last_stats();
+}
+
+}  // namespace
+
+TEST_CASE("draw causes gl: repeated meshes instance; a unique material and a unique mesh are named") {
+    Fixture3D f;
+    upload_crate(f, kCrate);
+    const Forward3DStats base = render_causes(f, true, {});
+    CHECK(f.device->validation_error_count() == 0);
+    REQUIRE(base.runs_instanced == 2);  // the crates' bodies and lids
+    CHECK(base.draws_instanced % 2 == 0);
+    CHECK(cause(base, DrawCause::UniqueMesh) == 2);  // the ground and the box
+    CHECK(causes_total(base) == 2);
+    CHECK(base.main_draws == 4);  // two runs and two single draws
+
+    // One more crate in another tint: it shares its mesh with the grid but not a run.
+    const Forward3DStats tinted = render_causes(f, true, [](Scene3D& s) {
+        MeshInstance m;
+        m.mesh = kCrate;
+        m.world = math::trs({0.0f, 0.0f, 0.0f}, math::quat_from_axis_angle({0, 1, 0}, 0.0f), {1, 1, 1});
+        m.tint = {1.0f, 0.2f, 0.2f, 1.0f};
+        s.add(m);
+    });
+    CHECK(tinted.runs_instanced == 2);
+    CHECK(tinted.draws_instanced == base.draws_instanced);
+    CHECK(cause(tinted, DrawCause::Material) == 2);  // its body and its lid
+    CHECK(cause(tinted, DrawCause::UniqueMesh) == 2);
+    CHECK(causes_total(tinted) == 4);
+
+    // A material override is another material: the same two draws break away from the runs.
+    MaterialOverride other;
+    other.params.base_color[0] = 0.1f;
+    const Forward3DStats overridden = render_causes(f, true, [&](Scene3D& s) {
+        MeshInstance m;
+        m.mesh = kCrate;
+        m.world = math::trs({0.0f, 0.0f, 0.0f}, math::quat_from_axis_angle({0, 1, 0}, 0.0f), {1, 1, 1});
+        m.material = &other;
+        s.add(m);
+    });
+    CHECK(overridden.runs_instanced == 2);
+    CHECK(cause(overridden, DrawCause::Material) == 2);
+}
+
+TEST_CASE("draw causes gl: instancing off, no instanced pipelines and a spent budget are told apart") {
+    u32 grid_draws = 0;
+    {
+        Fixture3D f;
+        upload_crate(f, kCrate);
+        const Forward3DStats on = render_causes(f, true, {});
+        grid_draws = on.draws_instanced;
+        REQUIRE(grid_draws >= 4);
+        CHECK(cause(on, DrawCause::Disabled) == 0);
+        CHECK(cause(on, DrawCause::Budget) == 0);
+
+        const Forward3DStats off = render_causes(f, false, {});  // the scene forms no runs
+        CHECK(off.runs_instanced == 0);
+        CHECK(cause(off, DrawCause::Disabled) == grid_draws + 2);
+        CHECK(causes_total(off) == off.main_draws);
+        CHECK(cause(off, DrawCause::UniqueMesh) == 0);
+    }
+    {
+        Forward3DDesc fd;
+        fd.instancing = false;  // -r.instancing 0: the scene's runs exist, the renderer draws none of them
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.runs_instanced == 0);
+        CHECK(cause(st, DrawCause::Disabled) == grid_draws);
+        CHECK(cause(st, DrawCause::UniqueMesh) == 2);
+        CHECK(causes_total(st) == st.main_draws);
+    }
+    {
+        Forward3DDesc fd;
+        fd.instancing_budget = 0;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.runs_instanced == 0);
+        CHECK(st.draws_instanced == 0);
+        CHECK(cause(st, DrawCause::Budget) == grid_draws);
+        CHECK(cause(st, DrawCause::UniqueMesh) == 2);
+        CHECK(causes_total(st) == st.main_draws);
+    }
+}
+
+TEST_CASE("draw causes gl: the causes plus the drawn instanced draws add up to the scene's draws in every setup") {
+    u32 scene_draws = 0;  // the scene's main-view draws: instancing off in the scene counts every one as Disabled
+    {
+        Fixture3D f;
+        upload_crate(f, kCrate);
+        const Forward3DStats off = render_causes(f, false, {});
+        scene_draws = causes_total(off);
+        REQUIRE(scene_draws > 4);
+        CHECK(off.draws_instanced == 0);
+        const Forward3DStats on = render_causes(f, true, {});
+        CHECK(on.draws_instanced > 0);
+        CHECK(causes_total(on) + on.draws_instanced == scene_draws);
+        // Asked not to classify, a frame reports no causes at all but the same drawn instanced numbers.
+        f.render(0.0f, false, [&](Scene3D& s) {
+            s.set_instancing({true, 2});
+            add_crate_grid(s, kCrate);
+        });
+        const Forward3DStats quiet = f.renderer.forward_3d().last_stats();
+        CHECK(causes_total(quiet) == 0);
+        CHECK(quiet.draws_instanced == on.draws_instanced);
+    }
+    {  // the frame's budget is spent: Scene3D still plans runs, the renderer draws none; the player reads the renderer's
+        Forward3DDesc fd;
+        fd.instancing_budget = 0;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.draws_instanced == 0);
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
+    }
+    {  // a budget that holds some runs only
+        Forward3DDesc fd;
+        fd.instancing_budget = 3000;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
+    }
+    {  // no instanced pipelines
+        Forward3DDesc fd;
+        fd.instancing = false;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.draws_instanced == 0);
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
+    }
+}
