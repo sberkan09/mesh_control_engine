@@ -170,6 +170,32 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `mce.quit()` | ends the run after this tick, like the window's close button |
 | `mce.log(msg)` | an info line in the engine log, `script: <msg>` |
 
+**Missions and map markers.** Two more global tables, `mission` and `marker`, are thin over the mission kit (section 9.13) and the map markers (9.15). They keep nothing: the state is the `Mission` and `MapMarker` components and the `MissionSignal` event, so saves, replays and the editor see it. A world without the kit pieces gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
+
+| Call | Does |
+|---|---|
+| `mission.start(e)` | an idle mission starts on the next tick (sets `Mission.start`); `true`, or `false` when it is already active, complete or failed |
+| `mission.fail(e)` | fails an active mission now and sends `MissionFailed` with `reason` 3 (a script; 0 is the time limit, 1 `fail_on_death`, 2 a vanished objective); `true`, or `false` in any other state |
+| `mission.status(e)` | `state, objective, elapsed, done`: `"idle"`, `"active"`, `"complete"` or `"failed"`; the active objective entity (`nil` unless active); seconds since it started; how many objectives are done |
+| `mission.signal(name, amount?)` | a `MissionSignal` for the active `signal` objectives (`amount` a whole number from 1, default 1; `name` up to 31 characters). The script runs after the kit's mission system in a tick, so the signal counts two ticks later |
+| `marker.add(e, {icon?, color?, layer?, label?, always_visible?, follow?})` | puts a `MapMarker` on the entity at the next sync point. `color` is `{r, g, b}`, `{r, g, b, a}` or a vector (`colour` works too); `layer` 0 to 31; `label` up to 31 characters; `follow` an `Objective` or `Mission` entity. Fields left out keep the current marker's, or the defaults; an unknown field is an error |
+| `marker.remove(e)` | takes the `MapMarker` off at the next sync point (nothing happens without one) |
+
+```lua
+-- Start the mission when the player presses Interact, and mark the depot on the map.
+function update()
+    mce.each("Mission", function(m)
+        local state, objective, elapsed = mission.status(m)
+        if state == "idle" and mce.pressed("Interact") then
+            mission.start(m)
+            marker.add(m, { icon = 2, color = { 1, 0.8, 0.1 } })   -- a bare marker on a mission follows its active objective
+        elseif state == "active" and elapsed > 120 then
+            mission.fail(m)
+        end
+    end)
+end
+```
+
 ## 27.4 The rules
 
 - **No state between ticks.** Everything a script remembers lives in components, so the state hash,
