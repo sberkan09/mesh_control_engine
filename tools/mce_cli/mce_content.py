@@ -235,6 +235,12 @@ def validate_ledger(doc):
                 err(mw, "'path' must be a relative .mcmat path under the pack's folder")
             elif not isinstance(m.get("textures", {}), dict):
                 err(mw, "'textures' must map a material slot to a file")
+            orm = m.get("orm")
+            if orm is not None:
+                if not isinstance(orm, dict) or not isinstance(orm.get("roughness"), str) or not safe_rel(orm.get("out", "")):
+                    err(mw, "'orm' needs 'roughness' (a file the cook rules extract) and 'out' (the packed texture's path)")
+                elif "metallic_roughness" in m.get("textures", {}):
+                    err(mw, "'orm' and textures.metallic_roughness both set the same slot")
     return errs
 
 
@@ -291,6 +297,97 @@ def fetch_pack(pack, cache, local_file=None, opener=None):
         print(f"mce content: '{pack['id']}' has no pinned sha256 yet; this file is {got} (add it to the ledger)", file=sys.stderr)
     os.replace(tmp, dest)
     return dest
+
+
+# ---- PNG (just enough to pack an ORM texture: 8-bit, not interlaced) -----------------------------------
+
+def decode_png(data):
+    """(width, height, channels, bytearray of rows) of an 8-bit non-interlaced greyscale / RGB / RGBA PNG."""
+    import struct
+    import zlib
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ContentError("not a PNG file")
+    pos, idat, hdr = 8, [], None
+    while pos + 8 <= len(data):
+        n, kind = struct.unpack(">I4s", data[pos:pos + 8])
+        body = data[pos + 8:pos + 8 + n]
+        pos += 12 + n
+        if kind == b"IHDR":
+            hdr = struct.unpack(">IIBBBBB", body)
+        elif kind == b"IDAT":
+            idat.append(body)
+        elif kind == b"IEND":
+            break
+    if hdr is None:
+        raise ContentError("PNG without IHDR")
+    w, h, depth, ctype, _, _, interlace = hdr
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(ctype)
+    if depth != 8 or channels is None or interlace:
+        raise ContentError(f"cannot pack this PNG (bit depth {depth}, colour type {ctype}, interlace {interlace}): "
+                           "8-bit greyscale, RGB or RGBA without interlacing only")
+    raw = zlib.decompress(b"".join(idat))
+    stride = w * channels
+    if len(raw) != h * (stride + 1):
+        raise ContentError("PNG data has the wrong size")
+    out = bytearray(h * stride)
+    prev = bytearray(stride)
+    for y in range(h):
+        f = raw[y * (stride + 1)]
+        row = bytearray(raw[y * (stride + 1) + 1:(y + 1) * (stride + 1)])
+        if f == 1:
+            for i in range(channels, stride):
+                row[i] = (row[i] + row[i - channels]) & 255
+        elif f == 2:
+            row = bytearray((a + b) & 255 for a, b in zip(row, prev))
+        elif f == 3:
+            for i in range(stride):
+                left = row[i - channels] if i >= channels else 0
+                row[i] = (row[i] + ((left + prev[i]) >> 1)) & 255
+        elif f == 4:
+            for i in range(stride):
+                a = row[i - channels] if i >= channels else 0
+                b = prev[i]
+                c = prev[i - channels] if i >= channels else 0
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pred = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                row[i] = (row[i] + pred) & 255
+        elif f != 0:
+            raise ContentError(f"PNG row filter {f} is not valid")
+        out[y * stride:(y + 1) * stride] = row
+        prev = row
+    return w, h, channels, out
+
+
+def encode_png_rgb(w, h, rgb):
+    """A deterministic 8-bit RGB PNG (no filtering, zlib level 9, no metadata)."""
+    import struct
+    import zlib
+
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+    rows = b"".join(b"\x00" + bytes(rgb[y * w * 3:(y + 1) * w * 3]) for y in range(h))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + \
+        chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b"")
+
+
+def pack_orm(rough_png, ao_png=None, metallic=0):
+    """The engine's metallic-roughness texture from a roughness map and an optional occlusion map:
+    R occlusion (255 when absent), G roughness, B metallic (a constant). Returns PNG bytes."""
+    w, h, ch, rough = decode_png(rough_png)
+    n = w * h
+    g = rough[0::ch][:n] if ch in (1, 3, 4) else rough[0::2][:n]  # greyscale: the sample; RGB(A): the red channel
+    if ao_png is not None:
+        aw, ah, ach, ao = decode_png(ao_png)
+        if (aw, ah) != (w, h):
+            raise ContentError(f"the occlusion map is {aw}x{ah}, the roughness map {w}x{h}")
+        r = ao[0::ach][:n] if ach in (1, 3, 4) else ao[0::2][:n]
+    else:
+        r = bytes([255]) * n
+    rgb = bytearray(n * 3)
+    rgb[0::3] = r
+    rgb[1::3] = g
+    rgb[2::3] = bytes([max(0, min(255, round(metallic * 255)))]) * n
+    return encode_png_rgb(w, h, rgb)
 
 
 # ---- cooking ---------------------------------------------------------------------------------------------
@@ -361,7 +458,7 @@ def sidecar_for(pack, dest, rule):
     return {"guid": guid_for(pack["id"], dest), "importer": importer, "importer_version": 1, "settings": settings}
 
 
-def material_doc(pack, mat, dests):
+def material_doc(pack, mat, dests, extra=None):
     base = mat["path"][: -len(".mcmat")]
     doc = {"format": "mce-material", "version": 1, "guid": guid_for(pack["id"], mat["path"]),
            "name": os.path.basename(base),
@@ -371,7 +468,11 @@ def material_doc(pack, mat, dests):
     if "uv_scale" in mat:
         doc["uv_scale"] = mat["uv_scale"]
     textures = {}
-    for slot, rel in sorted(mat.get("textures", {}).items()):
+    slots = dict(mat.get("textures", {}))
+    slots.update(extra or {})
+    if extra:  # a packed ORM texture carries roughness and metallic: the factors scale it, so they are 1
+        doc["roughness"], doc["metallic"] = 1, 1
+    for slot, rel in sorted(slots.items()):
         if rel not in dests:
             raise ContentError(f"'{pack['id']}': material {mat['path']} uses {rel}, which no cook rule extracts")
         textures[slot] = "guid:" + guid_for(pack["id"], rel)
@@ -393,6 +494,7 @@ def add_pack(pack, project, archive, only=None, dry_run=False):
         if not plan:
             raise ContentError(f"'{pack['id']}': the cook rules{' and --only' if only else ''} select no archive member")
         dests = {d for _, d, _ in plan}
+        member_of = {d: n for n, d, _ in plan}
         files = {}
         for name, dest, rule in plan:
             data = z.read(name)
@@ -418,14 +520,40 @@ def add_pack(pack, project, archive, only=None, dry_run=False):
     finally:
         z.close()
     materials = []
+    orm_files = {}
     for mat in pack.get("materials", []):
-        if only and not any(fnmatch.fnmatchcase(mat["path"], pat) for pat in only):
-            if not all(t in dests for t in mat.get("textures", {}).values()):
-                continue
-        doc = material_doc(pack, mat, dests)
+        orm = mat.get("orm")
+        needed = list(mat.get("textures", {}).values()) + ([orm["roughness"]] + ([orm["ao"]] if orm.get("ao") else []) if orm else [])
+        if only and not any(fnmatch.fnmatchcase(mat["path"], pat) for pat in only) and not all(t in dests for t in needed):
+            continue
+        for rel in needed:
+            if rel not in dests:
+                raise ContentError(f"'{pack['id']}': material {mat['path']} uses {rel}, which no cook rule extracts")
+        extra = {}
+        if orm:
+            z = Archive(pack, archive)
+            try:
+                data = pack_orm(z.read(member_of[orm["roughness"]]), z.read(member_of[orm["ao"]]) if orm.get("ao") else None,
+                                orm.get("metallic", 0))
+            finally:
+                z.close()
+            out = orm["out"]
+            orm_files[out] = data
+            extra = {"metallic_roughness": out}
+            dests = dests | {out}
+        doc = material_doc(pack, mat, dests, extra)
         materials.append(mat["path"])
         if not dry_run:
             write_json(root / mat["path"], doc)
+            for out, data in orm_files.items():
+                target = root / out
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+                write_json(target.parent / (target.name + ".mceasset"),
+                           {"guid": guid_for(pack["id"], out), "importer": "texture", "importer_version": 1,
+                            "settings": {"srgb": False}})
+    for out, data in orm_files.items():
+        files[out] = hashlib.sha256(data).hexdigest()
     return {"id": pack["id"], "title": pack["title"], "author": pack["author"], "license": pack["license"],
             "license_url": pack["license_url"], "homepage": pack["homepage"], "attribution": pack.get("attribution", ""),
             "archive_sha256": pack["source"].get("sha256") or sha256_file(archive),

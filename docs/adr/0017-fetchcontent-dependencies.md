@@ -41,3 +41,8 @@ bc7enc_rdo (richgel999, MIT or Unlicense) joins the cook-time dependencies for b
 repo's ISPC encoder, `ispc.exe` and RDO files are never built. The "bc7enc wall" and "bc7enc link wall" in
 `scripts/ci/check_walls.py` confine it to the cook's `texture_bc.cpp` (and its test). Cook golden hashes of BC output are
 guaranteed on x86_64 only until `tests/asset/test_cook_bc_arch.cpp` has run on arm64.
+
+ufbx (MIT or Unlicense, Samuli Raivio) joins the cook-time dependencies for FBX import (M-IMPORT3D step 3, ADR-0047): release v0.23.1 pinned by
+its commit `26a482ae66871d7de36eb722aa060bce95bce274` (no `GIT_SHALLOW`), built from `ufbx.c` through the cook's
+`ufbx_impl.c` as `mce_ufbx` with `-ffp-contract=off` / `/fp:precise`, OBJ and geometry-cache readers compiled out. The
+"ufbx wall" and "ufbx link wall" confine it to the cook's FBX importer and `tests/asset/`.
