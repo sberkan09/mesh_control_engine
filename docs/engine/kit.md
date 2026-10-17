@@ -170,6 +170,17 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
+`crowd.h` (M-OPENWORLD B3, ADR-0047): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
+a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
+crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
+along, direction, hop target, own random stream), no behaviour tree: edges are the road centreline offset by half the
+carriageway plus half `sidewalk`, trimmed at the junction; at a junction it hops to another edge end there, round
+the corner or across a road, and a crossing waits until every road it crosses has no straight-on traffic with green or
+amber and enough red left (`road_light`). Level of detail: step every tick within `near_radius`, every 4th within
+`far_radius`, else every 16th, staggered by entity index. Spawn candidates are a function of the focus's 32 m cell and
+`CrowdSpawner3D::serial` counts attempts, so replays and saves resume exactly. `"kit_crowd"` runs in FixedUpdate_Pre
+after `"roads_clock"`; `crowd_stats` is the per-tick budget counters. Tests: `tests/kit/test_crowd.cpp`.
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
