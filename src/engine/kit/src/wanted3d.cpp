@@ -1,0 +1,276 @@
+#include "mce/kit/wanted3d.h"
+
+#include <cmath>
+
+#include "kit3d_internal.h"
+#include "mce/containers/array.h"
+#include "mce/ecs/hierarchy.h"
+#include "mce/ecs/transform.h"
+#include "mce/ecs/world.h"
+#include "mce/kit/ai.h"
+#include "mce/kit/combat3d.h"
+#include "mce/kit/nav3d.h"
+#include "mce/kit/perception.h"
+
+namespace mce::kit {
+
+// Padding-free: World::state_hash hashes component bytes.
+static_assert(sizeof(Wanted3D) == 68);
+static_assert(sizeof(Police3D) == 48);
+
+namespace {
+
+struct Wanted3DState {
+    u8 installed = 1;
+};
+
+// e and the entities it hangs under: the first that has a Wanted3D.
+Entity wanted_holder(World& w, Entity e) {
+    for (u32 i = 0; i < 8 && !e.is_null() && w.alive(e); ++i) {
+        if (w.has<Wanted3D>(e)) return e;
+        const ChildOf* c = w.try_get<ChildOf>(e);
+        e = c ? c->parent : Entity{};
+    }
+    return Entity{};
+}
+
+Entity health_holder(World& w, Entity e) {
+    for (u32 i = 0; i < 8 && !e.is_null() && w.alive(e); ++i) {
+        if (w.has<Health3D>(e)) return e;
+        const ChildOf* c = w.try_get<ChildOf>(e);
+        e = c ? c->parent : Entity{};
+    }
+    return Entity{};
+}
+
+math::vec3 position_of(World& w, Entity e) {
+    const LocalTransform* t = w.try_get<LocalTransform>(e);
+    if (!t) return {};
+    math::vec3 pos, scale;
+    math::quat rot;
+    world_pose(w, e, *t, pos, rot, scale);
+    return pos;
+}
+
+u8 level_of(const Wanted3D& wd) {
+    if (wd.heat <= 0.0f) return 0;
+    const f32 raw = std::ceil(wd.heat / math::max(wd.heat_per_level, 1.0e-3f));
+    return static_cast<u8>(math::clamp(raw, 0.0f, static_cast<f32>(wd.max_level)));
+}
+
+void settle(World& w, Entity e, Wanted3D& wd) {
+    const f32 cap = static_cast<f32>(wd.max_level) * wd.heat_per_level;
+    wd.heat = math::clamp(wd.heat, 0.0f, cap);
+    const u8 now = level_of(wd);
+    if (now != wd.level) {
+        EventAccess(w).push(WantedChanged3D{e, wd.level, now});
+        wd.level = now;
+    }
+}
+
+struct Unit {
+    Entity entity;
+    math::vec3 eye;
+    bool alive;
+};
+
+struct Offender {
+    Entity entity;
+    math::vec3 pos;
+};
+
+bool witnessed_by_police(Frame& f, const Array<Unit>& units, math::vec3 at, f32 range) {
+    for (const Unit& u : units) {
+        if (!u.alive || math::length(u.eye - at) > range) continue;
+        if (line_of_sight(f, PerceptionSpace::Space3D, u.eye, at + math::vec3{0.0f, 1.0f, 0.0f}, 0xFFFF, u.entity)) return true;
+    }
+    return false;
+}
+
+void add_heat(World& w, Entity e, f32 heat, math::vec3 at, Entity victim) {
+    Wanted3D* wd = w.try_get_mut<Wanted3D>(e);
+    if (!wd || heat <= 0.0f) return;
+    wd->heat += heat;
+    wd->unseen_time = 0.0f;
+    ++wd->crimes;
+    EventAccess(w).push(Crime3D{e, victim, heat, at});
+    settle(w, e, *wd);
+}
+
+void set_state(Police3D& p, PoliceState s) {
+    if (p.state != s) {
+        p.state = s;
+        p.state_time = 0.0f;
+    }
+}
+
+// FixedUpdate_Pre, after "kit3d_health": crimes, then what the units see and do, then the cool-down.
+void kit3d_wanted(Frame& f) {
+    World& w = f.world();
+    Array<Unit> units;
+    f.query<const Police3D, const LocalTransform>().each([&](Entity e, const Police3D& p, const LocalTransform&) {
+        const Health3D* h = w.try_get<Health3D>(e);
+        units.push_back(Unit{e, position_of(w, e) + math::vec3{0.0f, p.eye_height, 0.0f}, !(h && h->dead)});
+    });
+
+    // Crimes from this tick's combat events.
+    auto ev = f.events();
+    for (const Damage3D& d : ev.read<Damage3D>()) {
+        const Entity off = wanted_holder(w, d.instigator);
+        const Entity vic = health_holder(w, d.target);
+        if (off.is_null() || vic.is_null() || off == vic) continue;
+        const Wanted3D* wd = w.try_get<Wanted3D>(off);
+        const u8 team = w.try_get<Health3D>(vic)->team;
+        if (team == 0) continue;
+        const math::vec3 at = position_of(w, vic);
+        if (team == wd->police_team) {
+            add_heat(w, off, wd->hit_police, at, vic);
+        } else if (team == wd->civilian_team) {
+            if (!wd->require_witness || witnessed_by_police(f, units, at, wd->witness_range)) add_heat(w, off, wd->hit_civilian, at, vic);
+        }
+    }
+    for (const Died3D& d : ev.read<Died3D>()) {
+        const Entity off = wanted_holder(w, d.killer);
+        const Entity vic = health_holder(w, d.entity);
+        if (off.is_null() || vic.is_null() || off == vic) continue;
+        const Wanted3D* wd = w.try_get<Wanted3D>(off);
+        const u8 team = w.try_get<Health3D>(vic)->team;
+        if (team == 0) continue;
+        const math::vec3 at = position_of(w, vic);
+        if (team == wd->police_team) {
+            add_heat(w, off, wd->kill_police, at, vic);
+        } else if (team == wd->civilian_team) {
+            if (!wd->require_witness || witnessed_by_police(f, units, at, wd->witness_range)) add_heat(w, off, wd->kill_civilian, at, vic);
+        }
+    }
+
+    Array<Offender> offenders;
+    f.query<Wanted3D>().each([&](Entity e, Wanted3D& wd) {
+        wd.seen_by = 0;
+        offenders.push_back(Offender{e, position_of(w, e)});
+    });
+
+    // The units.
+    f.query<Police3D, LocalTransform>().each([&](Entity e, Police3D& p, LocalTransform& t) {
+        const Health3D* h = w.try_get<Health3D>(e);
+        if (h && h->dead) {
+            set_state(p, PoliceState::Idle);
+            p.target = {};
+            return;
+        }
+        p.state_time += f.dt;
+        const math::vec3 eye = position_of(w, e) + math::vec3{0.0f, p.eye_height, 0.0f};
+
+        // The nearest offender it answers to and sees.
+        const Offender* seen = nullptr;
+        f32 best = p.sight_range;
+        for (const Offender& o : offenders) {
+            const Wanted3D& wd = *w.try_get<Wanted3D>(o.entity);
+            if (wd.level < p.min_level) continue;
+            const f32 d = math::length(o.pos - position_of(w, e));
+            if (d > best) continue;
+            if (!line_of_sight(f, PerceptionSpace::Space3D, eye, o.pos + math::vec3{0.0f, 1.0f, 0.0f}, 0xFFFF, e, o.entity)) continue;
+            best = d;
+            seen = &o;
+        }
+
+        const PoliceState before = p.state;
+        const Wanted3D* tw = p.target.is_null() || !w.alive(p.target) ? nullptr : w.try_get<Wanted3D>(p.target);
+        if (seen) {
+            Wanted3D& wd = *w.try_get_mut<Wanted3D>(seen->entity);
+            ++wd.seen_by;
+            wd.last_known = seen->pos;
+            p.target = seen->entity;
+            p.last_known = seen->pos;
+            set_state(p, best <= p.attack_range && wd.level >= p.attack_level ? PoliceState::Attack : PoliceState::Pursue);
+        } else if (!tw || tw->level < p.min_level) {
+            p.target = {};
+            set_state(p, PoliceState::Idle);
+        } else if (p.state == PoliceState::Pursue || p.state == PoliceState::Attack) {
+            set_state(p, PoliceState::Search);
+        } else if (p.state == PoliceState::Search && p.state_time >= p.search_time) {
+            p.target = {};
+            set_state(p, PoliceState::Idle);
+        }
+
+        if (p.state == PoliceState::Attack && p.aim) {
+            const math::vec3 d = p.last_known - position_of(w, e);
+            if (std::abs(d.x) + std::abs(d.z) > 1.0e-4f)
+                t.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, std::atan2(-d.x, -d.z));
+        }
+        if (Weapon3D* wp = w.try_get_mut<Weapon3D>(e); wp && p.aim && p.state == PoliceState::Attack) wp->fire = 1;
+
+        if (p.drive_nav) {
+            if (NavAgent3D* a = w.try_get_mut<NavAgent3D>(e)) {
+                switch (p.state) {
+                    case PoliceState::Pursue:
+                        a->follow = p.target;
+                        a->move_to = 1;
+                        break;
+                    case PoliceState::Search:
+                        a->follow = {};
+                        a->target = p.last_known;
+                        a->move_to = 1;
+                        break;
+                    case PoliceState::Attack:
+                    case PoliceState::Idle:
+                        if (before != p.state) {
+                            a->follow = {};
+                            a->move_to = 0;
+                        }
+                        break;
+                }
+            }
+        }
+        if (w.has<AiBrain>(e)) {
+            const Wanted3D* now = p.target.is_null() ? nullptr : w.try_get<Wanted3D>(p.target);
+            bb_set_number(w, e, "wanted", now ? static_cast<f32>(now->level) : 0.0f);
+            bb_set_number(w, e, "police_state", static_cast<f32>(static_cast<u8>(p.state)));
+            if (p.target.is_null())
+                bb_clear(w, e, "target");
+            else
+                bb_set_entity(w, e, "target", p.target);
+            bb_set_vector(w, e, "last_known", p.last_known);
+        }
+    });
+
+    // The cool-down.
+    for (const Offender& o : offenders) {
+        Wanted3D& wd = *w.try_get_mut<Wanted3D>(o.entity);
+        if (wd.seen_by > 0) {
+            wd.unseen_time = 0.0f;
+        } else if (wd.heat > 0.0f) {
+            wd.unseen_time += f.dt;
+            if (wd.unseen_time >= wd.cooldown_delay) wd.heat -= wd.decay * f.dt;
+        }
+        settle(w, o.entity, wd);
+    }
+}
+
+}  // namespace
+
+bool report_crime(World& w, Entity offender, f32 heat, math::vec3 position, Entity victim, bool witnessed) {
+    if (!witnessed || offender.is_null() || !w.alive(offender) || !w.has<Wanted3D>(offender) || heat <= 0.0f) return false;
+    add_heat(w, offender, heat, position, victim);
+    return true;
+}
+
+void clear_wanted(World& w, Entity offender) {
+    Wanted3D* wd = offender.is_null() || !w.alive(offender) ? nullptr : w.try_get_mut<Wanted3D>(offender);
+    if (!wd) return;
+    wd->heat = 0.0f;
+    wd->unseen_time = 0.0f;
+    settle(w, offender, *wd);
+}
+
+void install_wanted3d(World& world) {
+    install_combat3d(world, nullptr);
+    if (world.try_resource<Wanted3DState>()) return;
+    world.set_resource(Wanted3DState{});
+    world.register_components<Wanted3D, Police3D>();
+    world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
+    world.register_event<WantedChanged3D>(Phase::FixedUpdate_Pre);
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_wanted", &kit3d_wanted, "kit3d_health");
+}
+
+}  // namespace mce::kit

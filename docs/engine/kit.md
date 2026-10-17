@@ -176,6 +176,13 @@ tick with gravity and splash), `apply_damage` for any other source; events `Weap
 (`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
 `"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
 
+`wanted3d.h` (M-OPENWORLD C3): `Wanted3D` (on the offender: `heat`, `level`, per-crime heat, witness rule,
+cool-down) and `Police3D` (on a unit: `min_level`, `attack_level`, `PoliceState` Idle / Pursue / Attack / Search,
+sight, `drive_nav` for its `NavAgent3D`, `aim` for its `Weapon3D`; blackboard keys `wanted`, `police_state`,
+`target`, `last_known` on an `AiBrain`). Crimes come from `Damage3D` / `Died3D` against `civilian_team` /
+`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`. System `"kit3d_wanted"`
+(`FixedUpdate_Pre`, after `"kit3d_health"`). Tests: `tests/kit/test_wanted3d.cpp`.
+
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
 entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
 paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot

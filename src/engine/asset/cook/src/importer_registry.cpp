@@ -1,3 +1,4 @@
+#include "fbx_importer.h"
 #include "importer_common.h"
 #include "obj_importer.h"
 
@@ -37,6 +38,9 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_gltf_importer());
     reg.add(make_obj_importer());
     reg.add(make_mtl_importer());
+#if MCE_HAS_FBX
+    reg.add(make_fbx_importer());
+#endif
     reg.add(make_prefab_importer());
     reg.add(make_tilemap_importer());
     reg.add(make_spritesheet_importer());

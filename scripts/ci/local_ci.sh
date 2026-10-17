@@ -627,6 +627,26 @@ tidy_targets() {
     done < <(changed_tus)
 }
 
+# CMake 3.28 puts `@<unit>.o.modmap` on every compile command (C++20 module scanning). The file exists only once that
+# unit's object was built in this tree, so clang-tidy on a unit that was not built (a unit another tree built, a tree
+# restored or copied, a header-only change that resolved to no object) fails with "no such file or directory:
+# '@...modmap'" without any finding in the sources. The sources use no C++20 modules, so tidy gets a copy of the
+# compile database without those response files; the real database and the build are untouched.
+tidy_db() {
+    local dir="build/linux-clang-debug/tidy-db"
+    mkdir -p "$dir" &&
+        python3 - "build/linux-clang-debug/compile_commands.json" "$dir/compile_commands.json" << 'PY'
+import json, re, sys
+db = json.load(open(sys.argv[1]))
+for e in db:
+    if "command" in e:
+        e["command"] = re.sub(r" @\S+\.modmap", "", e["command"])
+    if "arguments" in e:
+        e["arguments"] = [a for a in e["arguments"] if not (a.startswith("@") and a.endswith(".modmap"))]
+json.dump(db, open(sys.argv[2], "w"))
+PY
+}
+
 stage_tidy() {
     local targets objs
     mapfile -t targets < <(tidy_targets)
@@ -648,7 +668,8 @@ stage_tidy() {
             ninja -C build/linux-clang-debug "${objs[@]}" || return 1
         fi
     fi
-    run-clang-tidy-18 -p build/linux-clang-debug -quiet "${targets[@]}"
+    tidy_db || return 1
+    run-clang-tidy-18 -p build/linux-clang-debug/tidy-db -quiet "${targets[@]}"
 }
 
 # Every target of the gcc Release tree, tests included, compiled but not run: a -Werror that fires in the
