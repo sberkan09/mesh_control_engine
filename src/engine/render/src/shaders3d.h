@@ -676,12 +676,30 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 #endif
 
 // A material map at the surface's uv. Where parallax moved it, the uv steps from march layer to march layer, so
-// its own screen derivatives (what texture() takes) are noise and differ by driver (coarse or fine dFdx): the
-// maps there take the mesh uv's gradients. Elsewhere (no parallax, or faded out) texture() as ever; both are
-// read so the implicit-derivative one stays in uniform control flow.
+// its own screen derivatives (what texture() takes) are noise: the maps there take the mesh uv's footprint, and
+// filter it anisotropically here rather than in the sampler. The sampler's anisotropic filter (max_aniso 4) is
+// implementation-defined: on the grazing, high-contrast surfaces parallax is for, llvmpipe and an RTX 3070 differed
+// by 1.8% of full scale (a 4x vs 16x setting moves llvmpipe as far). Up to 4 trilinear taps along the footprint's
+// major axis, at the level of its width over the tap count: the same shape, the same result on every GPU.
+// Elsewhere (no parallax, or faded out) texture() as ever; both are read so the implicit-derivative one stays in
+// uniform control flow.
 vec2 g_uv_dx, g_uv_dy;
 bool g_pom_moved = false;
-#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), textureGrad(s, vec3(at, 0.0), g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
+vec4 map_aniso(sampler2DArray s, vec2 at, vec2 dx, vec2 dy) {  // dx, dy: the uv's screen gradients
+    vec2 size = vec2(textureSize(s, 0).xy);
+    float lx = length(dx * size), ly = length(dy * size);
+    vec2 major = lx > ly ? dx : dy;
+    float lmaj = max(lx, ly), lmin = max(min(lx, ly), 1e-6);
+    float taps = clamp(ceil(lmaj / lmin), 1.0, 4.0);
+    float lod = max(0.0, log2(lmaj / taps));
+    vec4 sum = vec4(0.0);
+    for (int i = 0; i < 4; ++i) {
+        if (float(i) >= taps) break;
+        sum += textureLod(s, vec3(at + major * ((float(i) + 0.5) / taps - 0.5), 0.0), lod);
+    }
+    return sum / taps;
+}
+#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), map_aniso(s, at, g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
 
 #ifndef MCE_TERRAIN
 // Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
@@ -711,10 +729,13 @@ vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
     float layers = floor(mix(o_pom.z, o_pom.y, vn) + 0.5);
     vec2 step_uv = total / layers;
     float step_d = 1.0 / layers;
-    vec2 gx = duv1, gy = duv2;
+    // The height field at one isotropic level (the footprint's longer axis): textureGrad here took the sampler's
+    // anisotropic filter, which is the driver's own (see map_aniso), and costs taps in a loop of up to 64.
+    vec2 hsize = vec2(textureSize(u_normal_map, 0).xy);
+    float h_lod = max(0.0, log2(max(length(duv1 * hsize), length(duv2 * hsize))));
     vec2 cur = uv, prev = uv;
     float cur_d = 0.0, prev_d = 0.0;
-    float tex_d = 1.0 - textureGrad(u_normal_map, vec3(cur, 1.0), gx, gy).r;
+    float tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
     float prev_tex_d = tex_d;
     for (int i = 0; i < 64; ++i) {
         if (cur_d >= tex_d || float(i) >= layers) break;
@@ -723,7 +744,7 @@ vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
         prev_tex_d = tex_d;
         cur -= step_uv;
         cur_d += step_d;
-        tex_d = 1.0 - textureGrad(u_normal_map, vec3(cur, 1.0), gx, gy).r;
+        tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
     }
     float after = tex_d - cur_d, before = prev_tex_d - prev_d;
     float w = (after - before) != 0.0 ? clamp(after / (after - before), 0.0, 1.0) : 0.0;
