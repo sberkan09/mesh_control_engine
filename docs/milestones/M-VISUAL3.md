@@ -361,6 +361,7 @@ hot spot's reflection by a quarter turn; rotation 0 is byte-identical to today. 
 - **Firefly check (the Risk paragraph).** A single-texel sun 80,000 times the sky (20000 against 0.25) on rough
   spheres (roughness 0.9 and 0.6) shows no sparkles on either backend (largest step between neighbouring pixels under
   24 levels, the shading gradient), so `Sky::ibl_clamp` was not added.
+- **Hardening (4b).** The HDR decode reads the header first (`stbi_info_from_memory`, tinyexr's header parse) and refuses a source over 64 MP (8192 x 8192, each side 1..16384, 64-bit math) or empty before decoding; the decoder's buffer is processed in place (no second full-size copy) and freed on every path (tinyexr is driven through its header-based API, so the header is freed even when the pixel load fails), and a truncated `.hdr` is refused (stb would otherwise pad it silently).
 
 ### Step 5a — automatic instancing of identical draws
 

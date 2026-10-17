@@ -79,6 +79,9 @@ Three importer rules that the error text alone does not make obvious:
   `.hdr` or `.exr` has no `srgb` key to begin with). Values clamp to the half-float range (0 .. 65504), NaN and Inf become 0, and the
   mips are averaged in float. A float sky costs 8 bytes a texel, so `max_size` (default 2048, a power of two) halves the
   image until its largest side fits; a 2048 × 1024 sky with mips is about 22 MB of GPU memory, four times an 8-bit one.
+  The source itself is capped at 64 megapixels (8192 × 8192; each side at most 16384): a bigger `.hdr` or `.exr` is a cook
+  error (`image is W x H, over the limit of 64 megapixels (8192 x 8192): downscale the source`) raised from the file's header,
+  before any pixel is decoded. Downscale the source in your image tool; a truncated file is an error too.
   `exposure` shifts the whole image by EV at cook (`2` is four times brighter); `sky_texture_intensity` on
   `Environment3D` is the exposure you can still change at run time. The phone cook (`--textures astc`) keeps these
   in RGBA16F. Point `Environment3D.sky_texture` (and `ibl_texture`, with `sky_ibl`) at the asset; chapter 8 has the sky.
