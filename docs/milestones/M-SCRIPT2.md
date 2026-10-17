@@ -78,3 +78,13 @@ mutated-bytecode route that matters in the product is now closed before it reach
 - `mce.set_time_scale` / `time_scale` wrap the `time_scale` cvar, clamped to 0.1..4 (0 would freeze the loop and the script with it).
 - `mce.shake` and `mce.burst` are thin over `CameraShake2D/3D` and `ParticleBurst`.
 - Sound stop and fade: no new call; destroying an `AudioSource` entity already fades its voice out (`fade_s`), documented as a recipe.
+
+## Step 4 as built
+
+- New in `api_world.cpp`, all over `kit::Physics3D`'s `World3D` and `kit::Nav3D`: `overlap_sphere3d`, `overlap_box3d`, `sphere_cast3d`,
+  `velocity3d` / `set_velocity3d`, `angular_velocity3d` / `set_angular_velocity3d`, `impulse3d`, `teleport3d`, `find_path3d`.
+  A missing 3D world, body or navmesh is a named error.
+- Deliberately not done: `move_and_collide` for 3D. The kit's `CharacterController3D` already moves characters from data (and keeps the
+  interpolation poses the render reads), so a direct `move_character` call from Luau would bypass that bookkeeping. Nothing here
+  touches the physics step; the calls are queries and body writes between steps, like the 2D ones, so no Opus review of the step was needed.
+- Not covered: rotation writes (`teleport3d` keeps the rotation) and a quaternion type in Luau.

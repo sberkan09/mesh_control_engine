@@ -28,6 +28,7 @@ type Fields = { [string]: any }
 type RayHit = { entity: Entity, point: vector, normal: vector, distance: number }
 type PathOptions = { cell: number?, radius: number?, diagonal: boolean?, smooth: boolean? }
 type ShapeHit = { entity: Entity, point: vector, normal: vector, fraction: number }
+type SphereHit = { entity: Entity, point: vector, normal: vector, position: vector, fraction: number }
 type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceiling: boolean, wall_left: boolean, wall_right: boolean }
 
 declare mce: {
@@ -93,6 +94,16 @@ declare mce: {
     circle_cast2d: (from: vector, to: vector, radius: number, skip: Entity?) -> ShapeHit?,
     box_cast2d: (from: vector, to: vector, half: vector, skip: Entity?) -> ShapeHit?,
     raycast3d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
+    overlap_sphere3d: (center: vector, radius: number, skip: Entity?) -> { Entity },
+    overlap_box3d: (center: vector, half: vector, skip: Entity?) -> { Entity },
+    sphere_cast3d: (from: vector, to: vector, radius: number, skip: Entity?) -> SphereHit?,
+    velocity3d: (e: Entity) -> vector,
+    set_velocity3d: (e: Entity, v: vector) -> (),
+    angular_velocity3d: (e: Entity) -> vector,
+    set_angular_velocity3d: (e: Entity, w: vector) -> (),
+    impulse3d: (e: Entity, impulse: vector) -> (),
+    teleport3d: (e: Entity, position: vector) -> (),
+    find_path3d: (from: vector, to: vector) -> ({ vector }?, boolean?),
 }
 )";
 
