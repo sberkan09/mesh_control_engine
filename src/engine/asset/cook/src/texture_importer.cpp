@@ -2,11 +2,14 @@
 // cooks (ImportInput::texture_compression, mce_cook --textures astc) store every level as ASTC 4x4
 // blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread).
 //
-// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest" }
+// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest", "max_size": 1024 }
 //   srgb  color data is sRGB-encoded: mips are averaged in linear space and the chunk carries the
 //         Srgb flag so the renderer samples through an sRGB view (never double-corrects)
 //   mips  generate the full chain down to 1x1
 //   filter  "nearest" (pixel art, the default) or "linear": how kit sprites sample it (LinearFilter flag)
+//   max_size  (M-CONTENT 1a) largest side, a power of two 1..16384: a bigger image is box-halved (the same filter as the
+//         mips, sRGB-aware, no renormalizing of normal maps) until it fits, BEFORE the mips. Default: no limit. The
+//         project-wide cap (ImportInput::max_texture_size, mce_cook --max-texture-size) applies as min(sidecar, cap).
 //
 // HDR sources (M-VISUAL3 4): Radiance .hdr (stb) and OpenEXR .exr (tinyexr: uncompressed, ZIP, PIZ, the
 // first RGB(A) layer) cook to TextureFormat::RGBA16F, linear, never Srgb. Settings: { "mips": true,
@@ -423,7 +426,7 @@ public:
         const String ext = lower_extension(in.display_path);
         if (ext.view() == ".hdr" || ext.view() == ".exr") return cook_hdr(in, ext.view() == ".exr", out, diags);
         const JsonValue s = in.settings;
-        if (!detail::check_keys(s, {"srgb", "mips", "filter"}, in.display_path, kStage, diags)) return false;
+        if (!detail::check_keys(s, {"srgb", "mips", "filter", "max_size"}, in.display_path, kStage, diags)) return false;
         bool is_srgb = true, mips = true, linear = false;
         if (!detail::read_bool(s, "srgb", true, is_srgb, in.display_path, kStage, diags)) return false;
         if (!detail::read_bool(s, "mips", true, mips, in.display_path, kStage, diags)) return false;
@@ -434,6 +437,21 @@ public:
                 return false;
             }
             linear = v == "linear";
+        }
+
+        // max_size: no limit unless the sidecar or the project cap says so; the smaller of the two wins.
+        u32 cap = in.max_texture_size;
+        if (const JsonValue mv = s.get("max_size"); mv.valid()) {
+            f64 mv_num = 0.0;
+            if (!detail::read_number(s, "max_size", 0.0, mv_num, in.display_path, kStage, diags)) return false;
+            const u32 side = mv_num >= 1.0 && mv_num <= kMaxHdrSide ? u32(mv_num) : 0u;
+            if (side == 0 || f64(side) != mv_num || (side & (side - 1)) != 0) {
+                detail::error_at(diags, Errc::ParseError, in.display_path, mv, kStage,
+                                 "'max_size' must be a power of two from 1 to 16384 (no limit by default), for example "
+                                 "\"max_size\": 1024: change it in the .mceasset sidecar, or remove the key to use the project-wide cap");
+                return false;
+            }
+            if (cap == 0 || side < cap) cap = side;
         }
 
         if (in.source.size() > 0x7FFFFFFF) {
@@ -455,11 +473,27 @@ public:
             return false;
         }
 
+        // Power-of-two downscale until the largest side fits `cap`, box-filtered like the mips, before the chain.
+        u32 cw = static_cast<u32>(w), ch = static_cast<u32>(h);
+        const u8* base = px;
+        Array<u8> reduced, next;
+        if (cap != 0) {
+            while (cw > cap || ch > cap) {
+                const u32 nw = cw > 1 ? cw / 2 : 1, nh = ch > 1 ? ch / 2 : 1;
+                next.resize_uninitialized(usize(nw) * nh * 4);
+                downsample(base, cw, ch, next.data(), nw, nh, is_srgb);
+                reduced = static_cast<Array<u8>&&>(next);
+                base = reduced.data();
+                cw = nw;
+                ch = nh;
+            }
+        }
+        const u32 bw = cw, bh = ch;  // the base level
+
         // Mip chain storage: level i lives at offsets[i] in `levels`.
         Array<u8> levels;
         Array<asset::TextureMipData> mip_data;
         Array<usize> offsets;
-        u32 cw = static_cast<u32>(w), ch = static_cast<u32>(h);
         usize total = 0;
         for (u32 lw = cw, lh = ch;;) {
             offsets.push_back(total);
@@ -469,16 +503,17 @@ public:
             lh = lh > 1 ? lh / 2 : 1;
         }
         levels.resize_uninitialized(total);
-        std::memcpy(levels.data(), px, static_cast<usize>(cw) * ch * 4);
+        std::memcpy(levels.data(), base, static_cast<usize>(bw) * bh * 4);
         stbi_image_free(px);
+        reduced.clear();
         for (usize i = 1; i < offsets.size(); ++i) {
             const u32 nw = cw > 1 ? cw / 2 : 1, nh = ch > 1 ? ch / 2 : 1;
             downsample(levels.data() + offsets[i - 1], cw, ch, levels.data() + offsets[i], nw, nh, is_srgb);
             cw = nw;
             ch = nh;
         }
-        cw = static_cast<u32>(w);
-        ch = static_cast<u32>(h);
+        cw = bw;
+        ch = bh;
         const bool astc = in.texture_compression == TextureCompression::Astc4x4;
         Array<Array<u8>> blocks;  // per level, when encoding ASTC
         if (astc) {

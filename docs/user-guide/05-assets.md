@@ -55,7 +55,7 @@ Settings per importer (every key is optional; the defaults are shown):
 
 | Importer | Settings |
 |---|---|
-| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1). For `.hdr` and `.exr`: `"mips": true`, `"max_size": 2048` (largest side, a power of two: the image is halved until it fits), `"exposure": 0` (EV applied at cook); `"srgb": true` is an error (see the HDR rule below) |
+| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1), `"max_size"` (PNG and JPEG: the largest side in pixels, a power of two from 1 to 16384; a bigger image is halved until it fits, before its mips; default no limit, see "Keep the pack small" below). For `.hdr` and `.exr`: `"mips": true`, `"max_size": 2048` (largest side, a power of two: the image is halved until it fits), `"exposure": 0` (EV applied at cook); `"srgb": true` is an error (see the HDR rule below) |
 | `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.7), `"quality": 0.4` (Vorbis, -0.1..1) |
 | `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
@@ -85,6 +85,23 @@ Three importer rules that the error text alone does not make obvious:
   `exposure` shifts the whole image by EV at cook (`2` is four times brighter); `sky_texture_intensity` on
   `Environment3D` is the exposure you can still change at run time. The phone cook (`--textures astc`) keeps these
   in RGBA16F. Point `Environment3D.sky_texture` (and `ibl_texture`, with `sky_ibl`) at the asset; chapter 8 has the sky.
+- **Keep the pack small with `max_size`.** Textures cook to uncompressed RGBA8 plus a mip chain, so the cooked size
+  grows with the square of the side: a 1024 × 1024 texture with mips is about 5.3 MB (1024 × 1024 × 4 bytes, and a
+  third more for the chain), and the same image at 512 is about 1.3 MB. Seventy-eight 1024² textures make a
+  pack of about 400 MB; at 512 they make about 100 MB. Set `"max_size": 512` in a texture's sidecar (or
+  `asset_set_import_settings {"settings": {"max_size": 512}}`) and the cook box-halves the image (the filter the mips
+  use, in linear light for colour textures) until its longest side is 512 or less, then builds the mips from that;
+  a 1024 × 512 image becomes 512 × 256, so the shape is kept. The default is no limit, so a project that sets
+  nothing cooks to the same bytes as before. For the whole project at once, pass a cap to the cook:
+  `mce cook MyGame --max-texture-size 512`, `mce ship MyGame --max-texture-size 512`, or `"max_texture_size": 512` in
+  the MCP `cook_run`. The two combine as the smaller of the sidecar value and the project cap: a sidecar with
+  `"max_size": 256` stays at 256 under a project cap of 512, and a sidecar with `"max_size": 2048` is clamped to 512.
+  Changing either re-cooks the textures (and only the textures). A value that is not a power of two from 1 to 16384
+  is a cook error that names the file and says what to change. A normal map is halved with the same plain box filter
+  as its mips and is not re-normalized, which is fine for the usual 2x to 4x cut. `.hdr` and `.exr` keep their own
+  `max_size` (default 2048) and ignore the project cap. After every cook, `mce_cook` prints the cooked bytes by type
+  (textures, meshes, audio, scenes, other), how many textures the cap cut, and the five largest assets, and MCP's
+  `cook_run` returns the same as `sizes`: look there first when a pack is bigger than expected.
 - **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
   brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
   set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
