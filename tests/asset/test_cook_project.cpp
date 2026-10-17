@@ -75,6 +75,14 @@ struct CtSound {
 };
 MCE_COMPONENT(CtSound, clip, loop)
 
+// A default that is computed, not a literal: the test moves it to stand in for editing `u32 frame = 0`.
+inline u32 g_drift_default = 10;
+struct CtDrift {
+    u32 value = g_drift_default;
+    u32 other = 1;
+};
+MCE_COMPONENT(CtDrift, value, other)
+
 }  // namespace cooktest
 
 template <>
@@ -216,6 +224,39 @@ TEST_CASE("cook: full project cooks, then everything is up to date") {
     CHECK(r2.cooked == 0);
     CHECK(r2.up_to_date == 5);
     CHECK(r2.manifest_hash == r1.manifest_hash);
+}
+
+TEST_CASE("cook: a changed C++ component default re-cooks the scenes that omit the field (M-WORKFLOW 6b)") {
+    const std::string root = fresh_dir("cook_default_drift");
+    const std::string scene = std::string(R"({ "format": "mce-scene", "version": 1, "guid": ")") + kSceneGuid +
+                              R"(", "name": "drift", "entities": [
+      { "name": "A", "components": { "CtDrift": { "other": 2 } } } ] })";
+    write_file(root + "/assets/scenes/drift.mcscene", scene);
+    CookService svc;
+    cooktest::g_drift_default = 10;
+    const CookReport r1 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r1));
+    REQUIRE(r1.ok());
+    CHECK(r1.cooked == 1);
+    const auto before = snapshot_cooked(root);
+
+    const CookReport same = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(same.ok());
+    CHECK(same.cooked == 0);
+    CHECK(same.up_to_date == 1);
+
+    cooktest::g_drift_default = 11;
+    const CookReport r2 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r2));
+    REQUIRE(r2.ok());
+    CHECK(r2.cooked == 1);
+    CHECK(r2.up_to_date == 0);
+    CHECK(snapshot_cooked(root) != before);
+
+    const CookReport r3 = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r3.ok());
+    CHECK(r3.up_to_date == 1);
+    cooktest::g_drift_default = 10;
 }
 
 TEST_CASE("cook: determinism — deleting cooked/ and re-cooking is byte-identical (FR-AST-030)") {

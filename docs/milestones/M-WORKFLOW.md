@@ -1,6 +1,6 @@
 # M-WORKFLOW — What blind test 3 found in agent authoring (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 to 5 done, steps 6 to 8 remain). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
+**Status:** active (added 2026-10-16; steps 1 to 6 done, steps 7 and 8 remain). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
 
 **Why:** blind test 3 had three agents build a game (Lantern Keep) over MCP from the SDK and filed GitHub #377 to
 #383. #377 to #381 are bugs and workflow holes in code and documents we own; #382 (Luau, UiFlow) belongs to
@@ -17,7 +17,7 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 | 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
 | 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | done |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | done |
-| 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed (Linear at its free limit; this table is the tracker) | Sonnet | claimed 2026-10-17 by the routine 3 thread |
+| 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed (Linear at its free limit; this table is the tracker) | Sonnet | done 2026-10-17 by the routine 3 thread: 6a #451, 6c #457, 6b (this PR) |
 | 7 | Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, UI scale, Retry not reloading the title (#382, added on Sami's word 2026-10-16) | not filed | Opus | not started |
 | 8 | Animation clips play from a shared library on any skinned mesh with a matching skeleton (no merging into each glTF); a scene whose entities reference assets but render empty says why (#409) | not filed | Opus | not started |
 
