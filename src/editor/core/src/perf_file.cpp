@@ -26,6 +26,8 @@ void read_counters(cook::JsonValue v, perf::Counters& c) {
     c.ring_overflows = static_cast<u32>(num_u(v.get("ring_overflows")));
     c.upload_bytes = num_u(v.get("upload_bytes"));
     c.heap_allocations = num_u(v.get("heap_allocations"));
+    c.runs_instanced = static_cast<u32>(num_u(v.get("runs_instanced")));  // absent before M-VISUAL3 5a: 0
+    c.draws_instanced = static_cast<u32>(num_u(v.get("draws_instanced")));
 }
 
 }  // namespace
