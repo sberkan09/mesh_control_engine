@@ -6,6 +6,7 @@
 
 #include <cmath>
 
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
@@ -341,4 +342,23 @@ TEST_CASE("combat3d: the replay hash holds with spread, pellets and projectiles"
         return s.w.state_hash();
     };
     CHECK(run() == run());
+}
+
+TEST_CASE("combat3d: an explosion hurts a target with several colliders once") {
+    Scene s;
+    const Entity body = s.target(0, -12, 100);
+    BoxCollider3D extra;
+    extra.half = {0.3f, 0.3f, 0.3f};
+    const Entity child = s.w.spawn_with(at(1.0f, 1.0f, -12.0f), extra);
+    s.w.add<ChildOf>(child, ChildOf{body});
+    Weapon3D g;
+    g.kind = WeaponKind3D::Projectile;
+    g.projectile_gravity = 0.0f;
+    g.damage = 40.0f;
+    g.splash_radius = 4.0f;
+    const Entity gun = s.gun(g);
+    s.run(30);
+    s.wep(gun).fire = 1;
+    s.run(60);
+    CHECK(s.hp(body).hits == 1);
 }

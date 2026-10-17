@@ -12,6 +12,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/seats3d.h"
 #include "mce/string_id.h"
 
 namespace mce::kit {
@@ -56,12 +57,24 @@ u8 team_of(World& w, Entity e) {
 }
 
 // e and the entities it hangs under.
+usize with_parents(World& w, Entity e, Entity* out, usize n, usize cap);
+
+// The skip list of a shooter: e and its parents, and the car it sits in.
+usize shooter_skip(World& w, Entity owner, Entity* out, usize cap);
+
 usize with_parents(World& w, Entity e, Entity* out, usize n, usize cap) {
     for (u32 i = 0; i < 8 && !e.is_null() && w.alive(e) && n < cap; ++i) {
         out[n++] = e;
         const ChildOf* c = w.try_get<ChildOf>(e);
         e = c ? c->parent : Entity{};
     }
+    return n;
+}
+
+usize shooter_skip(World& w, Entity owner, Entity* out, usize cap) {
+    usize n = with_parents(w, owner, out, 0, cap);
+    const Rider3D* r = w.alive(owner) ? w.try_get<Rider3D>(owner) : nullptr;
+    if (r && r->seated) n = with_parents(w, r->vehicle, out, n, cap);
     return n;
 }
 
@@ -108,7 +121,7 @@ void shoot(Frame& f, Physics3D& phys, Entity e, Weapon3D& wp, math::vec3 pos, ma
     const math::vec3 origin = pos + math::rotate(rot, wp.muzzle);
     const math::vec3 aim = math::normalize(math::rotate(rot, wp.direction));
     Entity skip[16];
-    const usize n_skip = with_parents(w, owner, skip, with_parents(w, e, skip, 0, 16), 16);
+    const usize n_skip = with_parents(w, e, skip, shooter_skip(w, owner, skip, 16), 16);
     if (wp.seed == 0) wp.seed = (e.index * 2654435761u) | 1u;
     for (u32 i = 0; i < math::max<u32>(wp.pellets, 1u); ++i) {
         const math::vec3 dir = spread(aim, wp.spread_deg * kDeg, wp.seed);
@@ -172,7 +185,7 @@ void kit3d_weapons(Frame& f) {
             wp.primed = 1;
             if (wp.ammo == 0) wp.ammo = wp.magazine;
         }
-        wp.cooldown = math::max(wp.cooldown - f.dt, 0.0f);
+        wp.cooldown = math::max(wp.cooldown - f.dt, -f.dt);  // a little credit carries the fractional tick, none banks shots
         if (wp.reloading) {
             wp.reload_left -= f.dt;
             if (wp.reload_left <= 0.0f) finish_reload(wp);
@@ -194,7 +207,7 @@ void kit3d_weapons(Frame& f) {
             if (wp.ammo == 0) return;
             --wp.ammo;
         }
-        wp.cooldown = 1.0f / wp.rate;
+        wp.cooldown += 1.0f / wp.rate;
         ++wp.shots;
         math::vec3 pos, scale;
         math::quat rot;
@@ -219,7 +232,7 @@ void kit3d_projectiles(Frame& f) {
         }
         const math::vec3 dir = step * (1.0f / len);
         Entity skip[16];
-        const usize n_skip = with_parents(w, p.owner, skip, 0, 16);
+        const usize n_skip = shooter_skip(w, p.owner, skip, 16);
         physics::QueryFilter3D filter;
         filter.layer_mask = p.mask;
         filter.include_characters = true;
@@ -233,14 +246,24 @@ void kit3d_projectiles(Frame& f) {
         land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, h->entity, h->point, h->normal, dir, p.damage, p.impulse);
         if (p.splash_radius > 0.0f) {
             Entity near[32];
-            const u32 n = phys.world.overlap_sphere(h->point, p.splash_radius, Span<Entity>(near, 32), filter);
+            const u32 n = math::min(phys.world.overlap_sphere(h->point, p.splash_radius, Span<Entity>(near, 32), filter), 32u);
+            Entity done[33];  // each Health3D is hurt once per explosion
+            usize n_done = 0;
+            done[n_done++] = health_holder(w, h->entity);
             for (u32 i = 0; i < n; ++i) {
-                if (near[i] == h->entity) continue;
-                const LocalTransform* nt = w.try_get<LocalTransform>(near[i]);
-                const f32 d = nt ? math::length(nt->position - h->point) : 0.0f;
+                const Entity holder = health_holder(w, near[i]);
+                bool seen = false;
+                if (!holder.is_null())
+                    for (usize k = 0; k < n_done; ++k) seen = seen || done[k] == holder;
+                if (seen || near[i] == h->entity) continue;
+                if (!holder.is_null()) done[n_done++] = holder;
+                math::vec3 at = h->point, scale;
+                math::quat rot;
+                if (const LocalTransform* nt = w.try_get<LocalTransform>(near[i])) world_pose(w, near[i], *nt, at, rot, scale);
+                const f32 d = math::length(at - h->point);
                 const f32 falloff = 1.0f - math::clamp(d / p.splash_radius, 0.0f, 1.0f);
                 if (falloff <= 0.0f) continue;
-                const math::vec3 away = nt && d > 1e-4f ? (nt->position - h->point) * (1.0f / d) : dir;
+                const math::vec3 away = d > 1e-4f ? (at - h->point) * (1.0f / d) : dir;
                 land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, near[i], h->point, h->normal, away, p.damage * falloff,
                      p.impulse * falloff);
             }

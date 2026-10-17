@@ -11,6 +11,7 @@
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
@@ -34,6 +35,7 @@ struct Scene {
     Scene() {
         w.register_components<LocalTransform>();
         install_seats3d(w, nullptr);
+        install_combat3d(w, nullptr);
         BoxCollider3D road;
         road.half = {300.0f, 0.5f, 300.0f};
         road.friction = 1.0f;
@@ -231,4 +233,31 @@ TEST_CASE("seats3d: the replay hash holds with boarding and driving") {
         return s.w.state_hash();
     };
     CHECK(run() == run());
+}
+
+TEST_CASE("seats3d: a rider killed in the seat is put out and does not walk on the input; shots do not hit the own car") {
+    Scene s;
+    const Entity car = s.car();
+    s.w.add<Health3D>(car, Health3D{});
+    const Entity me = s.rider(-2.0f);
+    s.w.add<Health3D>(me, Health3D{});
+    Weapon3D g;
+    g.owner = me;
+    g.muzzle = {0.0f, 0.0f, -0.5f};
+    s.w.add<Weapon3D>(me, g);
+    s.run(30);
+    s.rid(me).enter = 1;
+    s.run(2);
+    REQUIRE(s.rid(me).seated);
+    s.w.try_get_mut<Weapon3D>(me)->fire = 1;
+    s.run(3);
+    CHECK(s.w.try_get<Health3D>(car)->hits == 0);
+    DamageInfo d;
+    d.amount = 1000.0f;
+    apply_damage(s.w, me, d);
+    s.run(3);
+    CHECK_FALSE(s.rid(me).seated);
+    CHECK(s.seat(car).driver.is_null());
+    REQUIRE(s.w.has<CharacterController3D>(me));
+    CHECK_FALSE(s.w.try_get<CharacterController3D>(me)->use_input);
 }

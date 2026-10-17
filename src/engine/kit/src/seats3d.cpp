@@ -9,6 +9,7 @@
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/vehicles3d.h"
@@ -46,7 +47,7 @@ void follow(World& w, Entity camera, Entity target) {
 // Gives the car back what boarding took.
 void release_seat(World& w, Entity car, VehicleSeat3D& seat) {
     if (Vehicle3D* v = w.try_get_mut<Vehicle3D>(car)) {
-        if (seat.saved & kSavedInput) v->use_input = 0;
+        v->use_input = 0;
         v->throttle = v->steer = 0.0f;
         v->brake = 0.0f;
         v->handbrake = 1.0f;
@@ -58,7 +59,7 @@ void release_seat(World& w, Entity car, VehicleSeat3D& seat) {
 }
 
 // A rider steps out at `pos` facing `rot`: the controller comes back, the seat is freed.
-void step_out(Frame& f, Entity rider, Rider3D& r, LocalTransform& t, math::vec3 pos, math::quat rot) {
+void step_out(Frame& f, Entity rider, Rider3D& r, LocalTransform& t, math::vec3 pos, math::quat rot, bool dead = false) {
     World& w = f.world();
     Seats3DState& st = f.resource<Seats3DState>();
     const Entity car = r.vehicle;
@@ -70,6 +71,17 @@ void step_out(Frame& f, Entity rider, Rider3D& r, LocalTransform& t, math::vec3 
     CharacterController3D ctl;
     if (const CharacterController3D* kept = st.stash.find(rider)) ctl = *kept;
     st.stash.erase(rider);
+    // What the stash remembers of the ride's start is stale; a dead rider no longer takes the input.
+    ctl.velocity = {};
+    ctl.flags = 0;
+    ctl.jumping = 0;
+    ctl.airborne_ticks = ctl.buffered_ticks = 0;
+    ctl.air_jumps_used = 0;
+    ctl.crouched = false;
+    if (dead) {
+        ctl.use_input = false;
+        ctl.move = {};
+    }
     f.commands().add<CharacterController3D>(rider, ctl);
     follow(w, r.camera, rider);
     f.events().push(VehicleExited3D{rider, car});
@@ -113,6 +125,19 @@ void kit3d_seats(Frame& f) {
             const bool gone = r.vehicle.is_null() || !w.alive(r.vehicle) || !w.try_get<VehicleSeat3D>(r.vehicle);
             if (gone) {
                 step_out(f, e, r, t, t.position, t.rotation);
+                r.enter = 0;
+                return;
+            }
+        }
+        // A rider who died in the seat is put out.
+        if (r.seated) {
+            const Health3D* hp = w.try_get<Health3D>(e);
+            if (hp && hp->dead) {
+                math::vec3 vp;
+                math::quat vr;
+                const VehicleSeat3D* seat = w.try_get<VehicleSeat3D>(r.vehicle);
+                if (seat && pose_of(w, r.vehicle, vp, vr)) step_out(f, e, r, t, exit_point(w, r.vehicle, *seat, 0.3f, vp, vr), vr, true);
+                else step_out(f, e, r, t, t.position, t.rotation, true);
                 r.enter = 0;
                 return;
             }
