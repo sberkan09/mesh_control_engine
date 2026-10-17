@@ -148,7 +148,8 @@ const ui::Document* UiScreens::focus_document() const {
     return top;
 }
 
-void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale) {
+void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale,
+                          f32 reference_height) {
     for (Screen& s : screens_) {
         s.in_view = false;
         const kit::UiScreenView* sv = s.always_visible ? nullptr : world.try_get<kit::UiScreenView>(s.entity);
@@ -157,7 +158,8 @@ void UiScreens::set_views(World& world, Span<const kit::ViewEntry> views, f32 di
             if (v.camera != sv->camera || !v.target.is_null()) continue;
             s.in_view = true;
             s.rect = v.rect;
-            s.view_ui_scale = ui::compute_ui_scale({v.rect.width, v.rect.height}, display_scale, user_scale);
+            s.view_ui_scale = ui::compute_ui_scale({v.rect.width, v.rect.height}, display_scale, user_scale, {360, 640},
+                                                    reference_height);
             break;
         }
     }

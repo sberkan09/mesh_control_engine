@@ -45,7 +45,8 @@ public:
     // Per rendered frame, before update: where each screen with a UiScreenView lays out — its
     // camera's window view in `views` (none: the whole window). `display_scale` and `user_scale`
     // pick a view's UI scale as compute_ui_scale does for the window.
-    void set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale);
+    void set_views(World& world, Span<const kit::ViewEntry> views, f32 display_scale, f32 user_scale,
+                   f32 reference_height = 0.0f);
     // Per rendered frame: visibility from the components, pending bindings, update, events -> actions.
     // A screen in a view lays out in its rect: the pointer is moved into it and reaches it only inside.
     void update(World& world, const ui::UpdateContext& ctx);
