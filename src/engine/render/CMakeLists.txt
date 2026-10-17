@@ -17,6 +17,7 @@ mce_add_library(mce_render
         src/renderer.cpp
         src/scene3d.cpp
         src/sort_key.cpp
+        src/static_merge.cpp
         src/sprite_animation.cpp
         src/sprite_batch.cpp
         src/terrain.cpp
