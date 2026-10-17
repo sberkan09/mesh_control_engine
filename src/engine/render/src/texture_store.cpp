@@ -21,8 +21,8 @@ void remove_ordered(Array<T>& a, usize i) {
 bool format_sampleable(const rhi::DeviceCaps& caps, rhi::TextureFormat f, const char*& family) {
     family = nullptr;
     switch (f) {
+        case rhi::TextureFormat::BC1_SRGB: family = "BC"; return caps.texture_bc && caps.texture_bc_srgb;
         case rhi::TextureFormat::BC1_UNorm:
-        case rhi::TextureFormat::BC1_SRGB:
         case rhi::TextureFormat::BC3_UNorm:
         case rhi::TextureFormat::BC4_UNorm:
         case rhi::TextureFormat::BC5_UNorm:
@@ -34,7 +34,7 @@ bool format_sampleable(const rhi::DeviceCaps& caps, rhi::TextureFormat f, const 
     }
 }
 
-std::atomic<u32> g_refusal_logged{0};  // bit 0: BC, bit 1: ASTC
+std::atomic<u32> g_refusal_logged{0};  // bit 0: BC, bit 1: ASTC, bit 2: BC1 sRGB
 
 }  // namespace
 
@@ -45,11 +45,19 @@ Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const Textu
     {
         const char* family = nullptr;
         if (!format_sampleable(device.caps(), up.format, family)) {
+            const char* dev_name = device.caps().device_name.empty() ? "unknown" : device.caps().device_name.c_str();
+            if (up.format == rhi::TextureFormat::BC1_SRGB && device.caps().texture_bc) {
+                if (!(g_refusal_logged.fetch_or(4u) & 4u))
+                    MCE_LOG_ERROR("render: texture pack has BC1 sRGB but this device ({}) lacks sRGB BC1 support (no GL_EXT_texture_sRGB / "
+                                  "s3tc_srgb); re-cook for this target (--textures bc with compress: bc7, or rgba8). First texture refused: {}",
+                                  dev_name, name);
+                return Error(Errc::Unsupported, "render.texture.format", name);
+            }
             const u32 bit = family[0] == 'B' ? 1u : 2u;
             if (!(g_refusal_logged.fetch_or(bit) & bit)) {
                 MCE_LOG_ERROR("render: texture pack is {} but this device ({}) cannot sample {}; re-cook for this target "
                               "(--textures {}). First texture refused: {}",
-                              family, device.caps().device_name.empty() ? "unknown" : device.caps().device_name.c_str(), family, family[0] == 'B' ? "rgba8|astc" : "rgba8|bc", name);
+                              family, dev_name, family, family[0] == 'B' ? "rgba8|astc" : "rgba8|bc", name);
             }
             return Error(Errc::Unsupported, "render.texture.format", name);
         }

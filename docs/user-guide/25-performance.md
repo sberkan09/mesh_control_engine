@@ -22,7 +22,9 @@ Each frame records:
 - the wall time, the sim's CPU time, the render's CPU time and, with timestamp queries, the GPU time;
 - the time per ECS phase, and the GPU time per stage of the 3D renderer (shadows, the main pass, post);
 - the counters: draws, passes, compute dispatches, triangles, meshes, sprites, sprite batches,
-  upload bytes and live heap allocations.
+  upload bytes and live heap allocations, and for 3D `runs_instanced` and `draws_instanced` (copies of one
+  mesh drawn as one instanced draw in the main view, and the submesh draws inside them; chapter 8.6). An
+  instanced draw counts once in `draws`.
 
 The run as a whole records each system's total time and its worst frame.
 
