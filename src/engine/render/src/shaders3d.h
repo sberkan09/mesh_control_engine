@@ -59,6 +59,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
     vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
+    vec4 p_sky_rot;        // M-VISUAL3 4: x cos, y sin of the sky texture's yaw about +Y (y = 0: no rotation)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -71,7 +72,9 @@ vec3 sky_gradient(vec3 d) {
 // Sky radiance along d; `lod` blurs the texture path (roughness), the gradient is smooth already.
 vec3 sky_radiance(vec3 d, float lod) {
     if (p_sky_ground.w < 0.0) return sky_gradient(d);
-    vec3 tex = textureLod(u_sky, vec3(equirect_uv(d), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
+    vec3 dt = d;  // the direction in the texture's frame: yaw by -rotation, once, here (the gradient ignores it)
+    if (p_sky_rot.y != 0.0) dt = vec3(p_sky_rot.x * d.x - p_sky_rot.y * d.z, d.y, p_sky_rot.y * d.x + p_sky_rot.x * d.z);
+    vec3 tex = textureLod(u_sky, vec3(equirect_uv(dt), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
     return p_sun.w > 0.5 ? sky_gradient(d) + tex : tex;  // additive: a star field over a gradient
 }
 )"

@@ -582,6 +582,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sky.ibl = env.sky_ibl != 0;
     sky.ibl_texture = texture_key(env.ibl_texture.guid);
     sky.ibl_texture_intensity = env.ibl_texture_intensity;
+    sky.rotation = env.sky_rotation_deg * (3.14159265358979f / 180.0f);
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;

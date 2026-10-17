@@ -77,6 +77,9 @@ struct Sky {
     // environment for the lighting while the dome shows something else); ~0u = the sky itself.
     u32 ibl_texture = ~0u;
     f32 ibl_texture_intensity = 1.0f;
+    // M-VISUAL3 4: yaw of the sky and IBL textures about +Y, radians (an HDRI aligned by hand). 0 takes the
+    // shader's no-rotation branch, so frames without it are bit-identical. The gradient and the atmosphere ignore it.
+    f32 rotation = 0.0f;
 };
 
 // Volumetric fog (M-VISUAL 7): a froxel grid over the view (screen tiles × depth slices to

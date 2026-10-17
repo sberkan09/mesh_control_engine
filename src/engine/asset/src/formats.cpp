@@ -145,8 +145,9 @@ Result<TextureView> TextureView::read(Span<const byte> payload) {
     constexpr const char* kStage = "asset.texture.read";
     const auto* h = header_of<TextureHeader>(payload);
     if (!h) return Error(Errc::Truncated, kStage);
-    if (h->format != TextureFormat::RGBA8 && h->format != TextureFormat::ASTC_4x4)
+    if (h->format != TextureFormat::RGBA8 && h->format != TextureFormat::ASTC_4x4 && h->format != TextureFormat::RGBA16F)
         return Error(Errc::Unsupported, kStage, {}, static_cast<u32>(h->format));
+    if (h->format == TextureFormat::RGBA16F && (h->flags & TextureFlags::Srgb) != 0) return bad(kStage);  // float data is linear
     if (h->width == 0 || h->height == 0 || h->layers == 0 || h->mip_count == 0 || h->mip_count > 32) return bad(kStage);
     TextureView v;
     v.header = h;

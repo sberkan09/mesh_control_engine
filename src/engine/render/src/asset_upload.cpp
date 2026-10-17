@@ -26,6 +26,8 @@ Result<rhi::TextureHandle> upload_cooked_texture(TextureStore& store, u32 key, u
     const bool srgb = (h.flags & asset::TextureFlags::Srgb) != 0;
     if (h.format == asset::TextureFormat::ASTC_4x4)
         up.format = srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
+    else if (h.format == asset::TextureFormat::RGBA16F)  // HDR skies and environment maps: linear half floats (M-VISUAL3 4)
+        up.format = rhi::TextureFormat::RGBA16F;
     else
         up.format = srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
     up.layers = h.layers;

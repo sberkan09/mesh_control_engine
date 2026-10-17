@@ -381,6 +381,8 @@ bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArra
     const bool is_srgb = srgb(*ref);
     if (ref->header->format == asset::TextureFormat::ASTC_4x4)
         out.upload.format = is_srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
+    else if (ref->header->format == asset::TextureFormat::RGBA16F)
+        out.upload.format = rhi::TextureFormat::RGBA16F;
     else
         out.upload.format = is_srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
     out.upload.layers = count;

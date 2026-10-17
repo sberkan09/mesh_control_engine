@@ -7,8 +7,17 @@
 //         Srgb flag so the renderer samples through an sRGB view (never double-corrects)
 //   mips  generate the full chain down to 1x1
 //   filter  "nearest" (pixel art, the default) or "linear": how kit sprites sample it (LinearFilter flag)
+//
+// HDR sources (M-VISUAL3 4): Radiance .hdr (stb) and OpenEXR .exr (tinyexr: uncompressed, ZIP, PIZ, the
+// first RGB(A) layer) cook to TextureFormat::RGBA16F, linear, never Srgb. Settings: { "mips": true,
+// "max_size": 2048, "exposure": 0, "filter": ... }
+//   max_size  largest side, a power of two: the image is box-halved until it fits (a float sky is 8 bytes a texel)
+//   exposure  EV applied at cook (x 2^EV)
+// Values are clamped to [0, 65504] (the half range), NaN and Inf become 0, mips are box-filtered in float.
+// "srgb": true is an error. Phone cooks (--textures astc) keep RGBA16F for these.
 
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 
 #include <astcenc.h>
@@ -16,6 +25,7 @@
 #include "importer_common.h"
 #include "mce/asset/formats.h"
 #include "stb_image.h"
+#include "tinyexr.h"
 
 namespace mce::cook {
 
@@ -83,15 +93,211 @@ bool encode_astc(astcenc_context* ctx, const u8* rgba, u32 w, u32 h, Array<u8>& 
     return e == ASTCENC_SUCCESS;
 }
 
+// ------------------------------------------------------------------ HDR (RGBA16F)
+
+constexpr int kMaxHdrSide = 16384;
+
+// IEEE half from a finite float already inside [0, 65504], round to nearest even.
+u16 to_half(f32 f) {
+    u32 x;
+    std::memcpy(&x, &f, 4);
+    const i32 e = i32((x >> 23) & 0xFFu) - 127 + 15;
+    u32 m = x & 0x7FFFFFu;
+    if (e <= 0) {
+        if (e < -10) return 0;
+        m |= 0x800000u;
+        const u32 shift = u32(14 - e);
+        return u16((m + (1u << (shift - 1)) - 1 + ((m >> shift) & 1u)) >> shift);
+    }
+    const u32 h = (u32(e) << 10) | (m >> 13);
+    const u32 round = (m & 0x1FFFu) > 0x1000u || ((m & 0x1FFFu) == 0x1000u && (h & 1u)) ? 1u : 0u;
+    return u16(h + round);  // a carry into the exponent is still correct
+}
+
+// One level of 2x2 box filtering in float (odd sizes drop the last row / column, as the 8-bit chain does).
+void downsample_f(const f32* src, u32 sw, u32 sh, f32* dst, u32 dw, u32 dh) {
+    for (u32 y = 0; y < dh; ++y) {
+        const u32 y0 = y * 2 < sh ? y * 2 : sh - 1;
+        const u32 y1 = y * 2 + 1 < sh ? y * 2 + 1 : sh - 1;
+        for (u32 x = 0; x < dw; ++x) {
+            const u32 x0 = x * 2 < sw ? x * 2 : sw - 1;
+            const u32 x1 = x * 2 + 1 < sw ? x * 2 + 1 : sw - 1;
+            const f32* p[4] = {src + (usize(y0) * sw + x0) * 4, src + (usize(y0) * sw + x1) * 4, src + (usize(y1) * sw + x0) * 4,
+                               src + (usize(y1) * sw + x1) * 4};
+            f32* out = dst + (usize(y) * dw + x) * 4;
+            for (int c = 0; c < 4; ++c) out[c] = (p[0][c] + p[1][c] + p[2][c] + p[3][c]) * 0.25f;
+        }
+    }
+}
+
+// Decodes a Radiance .hdr or an OpenEXR file to linear float RGBA (alpha 1 when the file has none).
+// False with a diagnostic on a decode error or an out-of-range size.
+bool decode_hdr(const ImportInput& in, bool exr, Array<f32>& rgba, u32& w, u32& h, DiagList& diags) {
+    const auto* bytes = reinterpret_cast<const unsigned char*>(in.source.data());
+    const usize size = in.source.size();
+    auto fail = [&](const char* what, const char* detail) {
+        String msg(what);
+        if (detail && *detail) {
+            msg += ": ";
+            msg += detail;
+        }
+        diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, msg);
+        return false;
+    };
+    int iw = 0, ih = 0;
+    f32* px = nullptr;
+    if (exr) {
+        const char* err = nullptr;
+        {  // the size first: a hostile header must not allocate gigabytes of floats
+            EXRVersion ver;
+            EXRHeader hdr;
+            InitEXRHeader(&hdr);
+            if (ParseEXRVersionFromMemory(&ver, bytes, size) != TINYEXR_SUCCESS) return fail("EXR decode failed", "not an OpenEXR file");
+            if (ParseEXRHeaderFromMemory(&hdr, &ver, bytes, size, &err) != TINYEXR_SUCCESS) {
+                const bool ok = fail("EXR decode failed", err);
+                if (err) FreeEXRErrorMessage(err);
+                return ok;
+            }
+            const i64 dw = i64(hdr.data_window.max_x) - hdr.data_window.min_x + 1, dh = i64(hdr.data_window.max_y) - hdr.data_window.min_y + 1;
+            FreeEXRHeader(&hdr);
+            if (dw <= 0 || dh <= 0 || dw > kMaxHdrSide || dh > kMaxHdrSide)
+                return fail("image dimensions out of range (1..16384)", nullptr);
+        }
+        if (LoadEXRFromMemory(&px, &iw, &ih, bytes, size, &err) != TINYEXR_SUCCESS) {
+            const bool ok = fail("EXR decode failed", err);
+            if (err) FreeEXRErrorMessage(err);
+            return ok;
+        }
+    } else {
+        int comp = 0;
+        if (!stbi_info_from_memory(bytes, int(size), &iw, &ih, &comp)) return fail("image decode failed", stbi_failure_reason());
+        if (iw <= 0 || ih <= 0 || iw > kMaxHdrSide || ih > kMaxHdrSide) return fail("image dimensions out of range (1..16384)", nullptr);
+        px = stbi_loadf_from_memory(bytes, int(size), &iw, &ih, &comp, 4);
+        if (!px) return fail("image decode failed", stbi_failure_reason());
+    }
+    if (iw <= 0 || ih <= 0 || iw > kMaxHdrSide || ih > kMaxHdrSide) {
+        std::free(px);  // stb and tinyexr both allocate with malloc
+        return fail("image dimensions out of range (1..16384)", nullptr);
+    }
+    w = u32(iw);
+    h = u32(ih);
+    rgba.resize_uninitialized(usize(w) * h * 4);
+    std::memcpy(rgba.data(), px, rgba.size() * sizeof(f32));
+    std::free(px);
+    return true;
+}
+
+bool cook_hdr(const ImportInput& in, bool exr, asset::ContainerWriter& out, DiagList& diags) {
+    const JsonValue s = in.settings;
+    if (!detail::check_keys(s, {"srgb", "mips", "filter", "max_size", "exposure"}, in.display_path, kStage, diags)) return false;
+    bool mips = true;
+    if (const JsonValue sv = s.get("srgb"); sv.valid()) {
+        bool is_srgb = false;
+        if (!detail::read_bool(s, "srgb", false, is_srgb, in.display_path, kStage, diags)) return false;
+        if (is_srgb) {
+            detail::error_at(diags, Errc::ParseError, in.display_path, sv, kStage,
+                             "'srgb': true is not valid for an HDR image (.hdr / .exr hold linear float values, "
+                             "never sRGB-encoded colors): remove \"srgb\" from the sidecar or set it to false");
+            return false;
+        }
+    }
+    if (!detail::read_bool(s, "mips", true, mips, in.display_path, kStage, diags)) return false;
+    bool linear = true;
+    if (const JsonValue f = s.get("filter"); f.valid()) {
+        const StringView v = f.is_string() ? f.as_string() : StringView();
+        if (v != "nearest" && v != "linear") {
+            detail::error_at(diags, Errc::ParseError, in.display_path, f, kStage, "'filter' must be \"nearest\" or \"linear\"");
+            return false;
+        }
+        linear = v == "linear";
+    }
+    f64 max_size_v = 2048.0, exposure_ev = 0.0;
+    if (!detail::read_number(s, "max_size", 2048.0, max_size_v, in.display_path, kStage, diags)) return false;
+    if (!detail::read_number(s, "exposure", 0.0, exposure_ev, in.display_path, kStage, diags)) return false;
+    const u32 max_size = max_size_v >= 1.0 && max_size_v <= kMaxHdrSide ? u32(max_size_v) : 0u;
+    if (max_size == 0 || f64(max_size) != max_size_v || (max_size & (max_size - 1)) != 0) {
+        detail::error_at(diags, Errc::ParseError, in.display_path, s.get("max_size"), kStage,
+                         "'max_size' must be a power of two from 1 to 16384 (2048 by default)");
+        return false;
+    }
+    if (!(exposure_ev >= -32.0 && exposure_ev <= 32.0)) {
+        detail::error_at(diags, Errc::ParseError, in.display_path, s.get("exposure"), kStage, "'exposure' is in EV and must be within -32..32");
+        return false;
+    }
+    if (in.source.size() > 0x7FFFFFFF) {
+        diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "image file too large");
+        return false;
+    }
+
+    Array<f32> cur;
+    u32 w = 0, h = 0;
+    if (!decode_hdr(in, exr, cur, w, h, diags)) return false;
+
+    // Exposure, then the half range: negatives and NaN/Inf become 0, the rest clamps to 65504.
+    const f32 gain = static_cast<f32>(std::exp2(exposure_ev));
+    for (usize i = 0; i < cur.size(); ++i) {
+        f32 v = cur[i];
+        if (i % 4 != 3) v *= gain;
+        cur[i] = std::isfinite(v) ? (v < 0.0f ? 0.0f : (v > 65504.0f ? 65504.0f : v)) : 0.0f;
+    }
+
+    // Power-of-two downscale until the largest side fits, then the mip chain, both box-filtered in float.
+    Array<f32> next;
+    while (w > max_size || h > max_size) {
+        const u32 nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
+        next.resize_uninitialized(usize(nw) * nh * 4);
+        downsample_f(cur.data(), w, h, next.data(), nw, nh);
+        cur = static_cast<Array<f32>&&>(next);
+        w = nw;
+        h = nh;
+    }
+
+    Array<Array<u16>> levels;
+    Array<asset::TextureMipData> mip_data;
+    for (u32 lw = w, lh = h;;) {
+        Array<u16>& half = levels.emplace_back();
+        half.resize_uninitialized(usize(lw) * lh * 4);
+        for (usize i = 0; i < half.size(); ++i) half[i] = to_half(cur[i]);
+        if (!mips || (lw == 1 && lh == 1)) break;
+        const u32 nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
+        next.resize_uninitialized(usize(nw) * nh * 4);
+        downsample_f(cur.data(), lw, lh, next.data(), nw, nh);
+        cur = static_cast<Array<f32>&&>(next);
+        lw = nw;
+        lh = nh;
+    }
+    u32 lw = w, lh = h;
+    for (const Array<u16>& half : levels) {
+        mip_data.push_back(asset::TextureMipData{lw, lh, Span<const byte>(reinterpret_cast<const byte*>(half.data()), half.size() * sizeof(u16))});
+        lw = lw > 1 ? lw / 2 : 1;
+        lh = lh > 1 ? lh / 2 : 1;
+    }
+
+    Array<byte> payload;
+    const asset::TextureFormat format = asset::TextureFormat::RGBA16F;
+    asset::write_texture(format, 1, linear ? asset::TextureFlags::LinearFilter : 0u, mip_data.span(), payload);
+    asset::ContainerWriter::ChunkDesc d;
+    d.type = ChunkType::Texture;
+    d.version = asset::chunk_version(asset::TEXTURE_VERSION, 0);
+    d.user_flags = static_cast<u32>(format);
+    d.guid = in.guid;
+    out.add(d, payload.span());
+    return true;
+}
+
 class TextureImporter final : public IImporter {
 public:
     StringView id() const override { return "texture"; }
     u32 version() const override { return 1; }
     ChunkType type() const override { return ChunkType::Texture; }
     bool native() const override { return false; }
-    bool handles_extension(StringView ext) const override { return ext == ".png" || ext == ".jpg" || ext == ".jpeg"; }
+    bool handles_extension(StringView ext) const override {
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".exr";
+    }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
+        const String ext = lower_extension(in.display_path);
+        if (ext.view() == ".hdr" || ext.view() == ".exr") return cook_hdr(in, ext.view() == ".exr", out, diags);
         const JsonValue s = in.settings;
         if (!detail::check_keys(s, {"srgb", "mips", "filter"}, in.display_path, kStage, diags)) return false;
         bool is_srgb = true, mips = true, linear = false;
