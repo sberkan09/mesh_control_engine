@@ -63,7 +63,7 @@ struct MountOptions {
 class AssetSystem {
 public:
     // Placeholder payloads, one per ChunkType value (room for the appended types).
-    static constexpr usize kPlaceholderSlots = 32;
+    static constexpr usize kPlaceholderSlots = 48;
 
     explicit AssetSystem(mem::IAllocator& a = mem::heap());
     ~AssetSystem();
