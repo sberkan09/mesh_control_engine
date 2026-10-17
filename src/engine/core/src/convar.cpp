@@ -245,6 +245,22 @@ void ConVar::reset() {
     changed();
 }
 
+bool ConVar::set_default(StringView text) {
+    if (type_ == CVarType::String && text.size() > default_str_.capacity()) return false;
+    const bool was_default = is_default();
+    const auto kept = value_;
+    const FixedString<1024> kept_str = str_;
+    if (!set_from_string(text, true)) return false;
+    default_ = value_;
+    default_str_.assign(str_.view());
+    if (!was_default) {
+        value_ = kept;
+        str_ = kept_str;
+        changed();
+    }
+    return true;
+}
+
 ConVar* ConVar::find(StringId id) {
     for (ConVar* v = g_cvar_head; v; v = v->next_)
         if (v->id_ == id) return v;
@@ -552,6 +568,27 @@ SettingLine* find_line(StringView name) {
 }
 
 }  // namespace
+
+Result<void> set_defaults(StringView path) {
+    const FixedString<512> p(path);
+    std::FILE* f = std::fopen(p.c_str(), "rb");
+    if (!f) return ok();
+    char line[1200];
+    while (std::fgets(line, sizeof(line), f)) {
+        StringView t(line);
+        while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
+        usize sp = 0;
+        while (sp < t.size() && !is_space(t[sp])) ++sp;
+        if (sp == 0 || t[0] == '#') continue;
+        const StringView name = t.substr(0, sp);
+        const StringView value = sp < t.size() ? t.substr(sp + 1) : StringView();
+        ConVar* v = ConVar::find(StringId(name));
+        if (!v) MCE_LOG_WARN("defaults: unknown convar '{}'", name);
+        else if (!v->set_default(value)) MCE_LOG_WARN("defaults: '{}' rejects '{}'", name, value);
+    }
+    std::fclose(f);
+    return ok();
+}
 
 Result<void> load_settings(StringView path) {
     const FixedString<512> p(path);

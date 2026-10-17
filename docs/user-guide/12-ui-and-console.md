@@ -334,6 +334,12 @@ the player and the editor define. Flags you will meet:
 | `RequiresRestart` | read at start-up only (`headless`, `r.gl_debug`) |
 | `ReadOnly` | reported, never set |
 
+A project can ship its own defaults: the player reads `defaults.cfg` from the folder of the pack (or the file
+named by `-defaults <path>`), lines of `name value` like `settings.cfg`, and makes each the convar's default, before
+the saved options load. A saved option and a command-line value still win; `reset` and `-help` show the project's
+default, and a default is never written to `settings.cfg`. A missing file is no error, an unknown name or a value the
+convar rejects is warned about and skipped.
+
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and
 only then warns about names nobody declared). Game state still belongs in the World (chapter 6.7).

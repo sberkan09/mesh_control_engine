@@ -146,6 +146,10 @@ using namespace mce::math;
 
 MCE_CVAR(cv_pack, "pack", "", "Cooked pack (assets.mce) or cooked/ directory to mount (a host's default: assets.mce beside it)",
          CVarFlags::None);
+MCE_CVAR(cv_defaults, "defaults", "",
+         "A file of 'name value' lines that become the convars' defaults (a project's own; a saved option and the command line "
+         "still win). Default: defaults.cfg in the folder of the pack, when there is one",
+         CVarFlags::None);
 MCE_CVAR(cv_module, "module", "", "Game module to install on top of the engine systems (a host's default: its own module)",
          CVarFlags::None);
 MCE_CVAR(cv_mods, "mods", true, "Load the mods in the game's mods folder (only for games that take mods)",
@@ -521,6 +525,14 @@ public:
         // (goldens, render_frame) stay on the defaults.
         settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
                        cv_capture_ticks.get_string().empty();
+        {   // the project's own defaults, under the player's saved choices and the command line
+            FixedString<1024> defaults(cv_defaults.get_string());
+            if (defaults.empty() && !pack.empty()) {
+                defaults.assign(std::filesystem::path(pack.c_str()).parent_path().generic_string().c_str());
+                defaults.append(defaults.empty() ? "defaults.cfg" : "/defaults.cfg");
+            }
+            if (!defaults.empty()) (void)console::set_defaults(defaults.view());  // a missing file is no error
+        }
         if (settings_on_) {
             if (Result<void> r = console::load_settings(settings_path().view()); !r) {
                 FixedString<512> why;

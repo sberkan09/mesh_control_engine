@@ -248,3 +248,60 @@ TEST_CASE("saved convars round-trip through the settings file") {
 TEST_CASE("a missing settings file is no error") {
     CHECK(console::load_settings("/nonexistent-dir/settings.cfg"));
 }
+
+TEST_CASE("project defaults: a defaults file moves the default, a settings value and the command line still win (M-WORKFLOW 7)") {
+    const std::string dir = std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp";
+    const std::string defaults = dir + "/mce_test_defaults.cfg";
+    const std::string settings = dir + "/mce_test_defaults_settings.cfg";
+    cv_test_saved_db.reset();  // earlier cases may leave a value
+    cv_test_saved_tier.reset();
+    cv_test_saved_flag.reset();
+    std::remove(settings.c_str());
+    {
+        std::FILE* f = std::fopen(defaults.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("# a project's own defaults\ntest.saved_db -9\ntest.saved_tier medium\ntest.saved_flag false\ntest.nope 1\ntest.int oops\n", f);
+        std::fclose(f);
+    }
+    {  // a player's saved choice, from an earlier run
+        std::FILE* f = std::fopen(settings.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("test.saved_db -3\n", f);
+        std::fclose(f);
+    }
+    REQUIRE(cv_test_saved_tier.set_string("high"));  // the command line said -test.saved_tier high
+    REQUIRE(console::set_defaults(StringView(defaults.c_str())));  // unknown names and a bad value only warn
+    CHECK(cv_test_int.get_int() == 3);
+    CHECK(cv_test_saved_flag.get_bool() == false);  // untouched: takes the project's default
+    CHECK(cv_test_saved_flag.is_default());
+    CHECK(cv_test_saved_tier.get_string() == "high");  // the command line wins
+    CHECK_FALSE(cv_test_saved_tier.is_default());
+
+    REQUIRE(console::load_settings(StringView(settings.c_str())));
+    CHECK(cv_test_saved_db.get_float() == -3.0f);  // the saved choice beats the project's -9
+    cv_test_saved_db.reset();
+    CHECK(cv_test_saved_db.get_float() == -9.0f);  // reset goes back to the project's default
+
+    // Nothing the file set is written back as a player's choice.
+    REQUIRE(console::save_settings(StringView(settings.c_str())));
+    std::string text;
+    {
+        std::FILE* f = std::fopen(settings.c_str(), "rb");
+        REQUIRE(f);
+        char buf[512];
+        while (std::fgets(buf, sizeof(buf), f)) text += buf;
+        std::fclose(f);
+    }
+    CHECK(text.find("test.saved_flag") == std::string::npos);
+    CHECK(text.find("test.saved_tier") == std::string::npos);
+
+    std::remove(defaults.c_str());
+    std::remove(settings.c_str());
+    cv_test_saved_tier.set_default("auto");
+    cv_test_saved_flag.set_default("true");
+    cv_test_saved_db.set_default("0");
+    cv_test_saved_tier.reset();
+    cv_test_saved_flag.reset();
+    cv_test_saved_db.reset();
+    CHECK(console::set_defaults("/nonexistent-dir/defaults.cfg"));  // a missing file is no error
+}

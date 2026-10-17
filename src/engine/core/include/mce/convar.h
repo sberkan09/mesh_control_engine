@@ -57,6 +57,9 @@ public:
     bool set_from_string(StringView text, bool force = false);
     void to_string(FixedString<128>& out) const;
     void reset();
+    // Makes `text` the default (what reset() and -help show, and what the settings file measures "changed" against). A
+    // value already moved off the old default (a command-line value) stays. False when `text` does not parse.
+    bool set_default(StringView text);
     bool is_default() const;
 
     const char* name() const { return name_; }
@@ -148,6 +151,11 @@ bool cheats_allowed();
 // it then stands; save_settings writes the file's lines back with the Saved convars changed since
 // then, so a command-line value is never written. Lines naming a convar not registered yet (a game
 // module's) are kept and applied by a later load_settings. A missing file is no error.
+// set_defaults reads a file of the same "name value" lines and makes each a convar's default (a project's own
+// defaults, shipped beside its pack), before load_settings: a command-line value still wins, a player's saved value
+// still wins, and a default is never written to the settings file. Unknown names and rejected values are warned about;
+// a missing file is no error.
+Result<void> set_defaults(StringView path);
 Result<void> load_settings(StringView path);
 Result<void> save_settings(StringView path);
 // Bumped whenever a Saved convar changes: a host writes the settings file when it moves.
