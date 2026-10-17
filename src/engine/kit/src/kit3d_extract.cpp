@@ -142,6 +142,9 @@ void Kit3DExtract::build_terrain_shading(TerrainEntry& t, const asset::TerrainVi
 }
 
 void Kit3DExtract::release_handles() {
+    if (textures_)
+        for (const MaterialEntry& m : material_entries_)
+            if (m.parallax_key != ~0u) textures_->release(m.parallax_key);
     if (assets_) {
         for (const MeshEntry& m : mesh_entries_)
             if (m.handle.generation != 0) assets_->release(m.handle);
@@ -223,6 +226,55 @@ u32 Kit3DExtract::texture_key(asset::Guid guid) {
     return e.key;
 }
 
+// M-VISUAL3 2: the normal map (layer 0) and the height map (layer 1) as one 2-layer array under a new
+// texture key, which replaces the material's normal_key (the shader reads layer 1 for the march). Without a
+// texture store, or when the two textures do not match (size, mips, format, color space) or the height does
+// not load, the material draws without parallax: `ext`'s height is cleared so the renderer sees none.
+// The array is built once, when the material first resolves, and lives until reset()/shutdown(): a texture hot
+// reload or a texture store swap does not rebuild it (follow-up if the editor needs it).
+u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid) {
+    const asset::Guid layer_guid[2] = {m.params.texture(asset::MaterialSlot::Normal), m.ext.height()};
+    asset::TextureView views[2] = {};
+    const asset::TextureView* ptrs[2] = {};
+    if (textures_) {
+        for (u32 i = 0; i < 2; ++i) {
+            if (layer_guid[i] == asset::Guid{} || texture_key(layer_guid[i]) == ~0u) continue;
+            for (const TextureEntry& te : texture_entries_) {
+                if (!(te.guid == layer_guid[i]) || te.handle.generation == 0) continue;
+                const Result<asset::TextureView> tv =
+                    asset::TextureView::read(assets_->resolve(asset::AssetHandle<asset::Texture>{te.handle.index, te.handle.generation}));
+                if (tv) {
+                    views[i] = tv.value();
+                    ptrs[i] = &views[i];
+                }
+                break;
+            }
+        }
+        // Height is linear data: an sRGB one (and, with no normal map, the array's format) would bend the depth.
+        if (ptrs[1] && (views[1].header->flags & asset::TextureFlags::Srgb)) ptrs[1] = nullptr;
+    }
+    render::LayerArray arr;
+    u32 key = ~0u;
+    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax");
+    // Layer 1 (the height) must have made it in; a normal map that did not match leaves layer 0 flat instead.
+    if (composed && (arr.present & 2u)) {
+        key = textures_->allocate_key();
+        if (!textures_->upload(key, 1, arr.upload)) key = ~0u;
+    }
+    if (key == ~0u) {
+        MCE_LOG_WARN("kit3d: material {} draws without parallax: its height map {} is missing, not resident, imported as sRGB, or does "
+                     "not match the normal map {} (same size, mips and format, both linear)",
+                     asset::to_string(material_guid).view(), asset::to_string(layer_guid[1]).view(),
+                     asset::to_string(layer_guid[0]).view());
+        m.ext.height_scale = 0.0f;
+        return ~0u;
+    }
+    m.normal_key = key;
+    m.parallax = true;
+    m.parallax_normal = (arr.present & 1u) != 0;
+    return key;
+}
+
 const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
     if (guid == asset::Guid{} || !assets_) return nullptr;
     for (const MaterialEntry& m : material_entries_)
@@ -240,6 +292,7 @@ const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
             m.normal_key = texture_key(m.params.texture(asset::MaterialSlot::Normal));
             m.orm_key = texture_key(m.params.texture(asset::MaterialSlot::MetallicRoughness));
             m.emissive_key = texture_key(m.params.texture(asset::MaterialSlot::Emissive));
+            if (m.ext.parallax()) e.parallax_key = build_parallax_array(m, e.guid);
         } else {
             MCE_LOG_WARN("kit3d: material {} does not read", asset::to_string(guid).view());
         }
@@ -529,6 +582,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sky.ibl = env.sky_ibl != 0;
     sky.ibl_texture = texture_key(env.ibl_texture.guid);
     sky.ibl_texture_intensity = env.ibl_texture_intensity;
+    sky.rotation = env.sky_rotation_deg * (3.14159265358979f / 180.0f);
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;

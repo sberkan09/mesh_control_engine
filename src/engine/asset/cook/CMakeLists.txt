@@ -58,6 +58,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce::mce_ui
         mce_stb
         mce_meshopt
+        mce_tinyexr
         mce_astcenc
         mce_vorbisenc
         glslang::glslang

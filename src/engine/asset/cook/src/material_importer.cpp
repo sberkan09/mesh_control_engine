@@ -11,7 +11,10 @@
 //   (M-VISUAL2 4, all optional, 0 = off) "clearcoat": 0..1, "clearcoat_roughness": 0..1,
 //   "sheen_color": [r, g, b], "sheen_roughness": 0..1, "anisotropy": -1..1, "anisotropy_rotation": radians,
 //   "transmission": 0..1, "ior": 1..3 (default 1.5),
-//   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ... }
+//   (M-VISUAL3 2, parallax occlusion mapping, 0 = off) "height_scale": 0..0.5 (depth in texture repeats),
+//   "parallax_steps": [min, max] (4..64, march steps looking straight on and at a grazing angle),
+//   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ...,
+//                 "height": ... (linear, white is high) }
 // }
 
 #include <cstring>
@@ -26,6 +29,7 @@ namespace {
 constexpr const char* kStage = "cook.material";
 constexpr u32 kMaterialFormatVersion = 1;
 constexpr StringView kSlotNames[] = {"base_color", "normal", "metallic_roughness", "emissive"};
+constexpr StringView kHeightSlot = "height";  // not a MaterialChunk slot: its GUID lives in MaterialExt
 
 bool read_vec(JsonValue doc, StringView key, f32* out, u32 n, StringView file, DiagList& diags) {
     const JsonValue v = doc.get(key);
@@ -49,7 +53,7 @@ bool read_vec(JsonValue doc, StringView key, f32* out, u32 n, StringView file, D
 class MaterialImporter final : public IImporter {
 public:
     StringView id() const override { return "material"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }
     ChunkType type() const override { return ChunkType::Material; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcmat"; }
@@ -87,7 +91,7 @@ public:
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
                                       "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures", "clearcoat",
                                       "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy", "anisotropy_rotation",
-                                      "transmission", "ior"},
+                                      "transmission", "ior", "height_scale", "parallax_steps"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -135,17 +139,23 @@ public:
             else if (s != "opaque") detail::error_at(diags, Errc::ParseError, file, mode, kStage, "'alpha_mode' must be opaque, mask or blend");
         }
 
+        Guid height;
         if (const JsonValue tex = doc.get("textures"); tex.is_object()) {
             for (u32 i = 0; i < tex.size(); ++i) {
+                Guid g;
+                const bool have = tex.at(i).is_string() && parse_guid_ref(tex.at(i).as_string(), g);
+                if (tex.key_at(i) == kHeightSlot) {
+                    if (have) height = g;
+                    continue;
+                }
                 u32 slot = 0;
                 while (slot < 4 && kSlotNames[slot] != tex.key_at(i)) ++slot;
                 if (slot == 4) {
                     detail::error_at(diags, Errc::ParseError, file, tex.at(i), kStage,
-                                     "unknown texture slot (base_color, normal, metallic_roughness, emissive)");
+                                     "unknown texture slot (base_color, normal, metallic_roughness, emissive, height)");
                     continue;
                 }
-                Guid g;
-                if (tex.at(i).is_string() && parse_guid_ref(tex.at(i).as_string(), g)) {
+                if (have) {
                     m.textures[slot][0] = g.hi;
                     m.textures[slot][1] = g.lo;
                 }
@@ -173,12 +183,46 @@ public:
         ranged("anisotropy_rotation", -6.2832, 6.2832, e.anisotropy_rotation);
         ranged("transmission", 0, 1, e.transmission);
         ranged("ior", 1, 3, e.ior);
+        ranged("height_scale", 0, 0.5, e.height_scale);
+        e.set_height(height);
+        // Height is data, not color: an sRGB import (the texture default) would be uploaded as sRGB and bend the depth.
+        if (ChunkType ht = ChunkType::Manifest; !height.is_null() && in.lookup && in.lookup->type_of(height, ht) && ht == ChunkType::Texture) {
+            JsonValue ts;
+            StringView tpath;
+            bool srgb = true;
+            DiagList unused;
+            if (in.lookup->native_document(height, ts, tpath)) detail::read_bool(ts, "srgb", true, srgb, tpath, kStage, unused);
+            if (tpath.empty()) {  // no settings in the sidecar: the path still names the file
+                Span<const byte> bytes;
+                in.lookup->source_bytes(height, bytes, tpath);
+            }
+            if (srgb) {
+                String msg("the height map ");
+                if (!tpath.empty()) {
+                    msg += "assets/";
+                    msg += tpath;
+                }
+                msg += " is imported as sRGB (its \"srgb\" setting defaults to true): set \"srgb\": false in its .mceasset so the depth is not bent";
+                const JsonValue at = doc.get("textures").get(kHeightSlot);
+                diags.warning(file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, kStage, msg);
+            }
+        }
+        if (e.height_scale > 0.0f && height.is_null())
+            detail::error_at(diags, Errc::ParseError, file, doc.get("height_scale"), kStage,
+                             "'height_scale' needs a height map: set textures.height");
+        if (const JsonValue st = doc.get("parallax_steps"); st.valid()) {
+            const bool shaped = st.is_array() && st.size() == 2 && st.at(0).is_integer() && st.at(1).is_integer();
+            const f64 lo = shaped ? st.at(0).as_number() : 0, hi = shaped ? st.at(1).as_number() : 0;
+            if (!shaped || lo < 4 || hi > 64 || lo > hi)
+                detail::error_at(diags, Errc::ParseError, file, st, kStage, "'parallax_steps' must be [min, max] integers with 4 <= min <= max <= 64");
+            else e.parallax_steps = static_cast<u32>(lo) | static_cast<u32>(hi) << 16;
+        }
         if (diags.error_count() != errors_before) return false;
 
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::Material;
         d.guid = in.guid;
-        if (e.any()) {
+        if (e.any() || e.parallax() || !height.is_null()) {
             byte payload[sizeof(m) + sizeof(e)];
             std::memcpy(payload, &m, sizeof(m));
             std::memcpy(payload + sizeof(m), &e, sizeof(e));

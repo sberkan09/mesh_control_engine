@@ -77,6 +77,9 @@ struct Sky {
     // environment for the lighting while the dome shows something else); ~0u = the sky itself.
     u32 ibl_texture = ~0u;
     f32 ibl_texture_intensity = 1.0f;
+    // M-VISUAL3 4: yaw of the sky and IBL textures about +Y, radians (an HDRI aligned by hand). 0 takes the
+    // shader's no-rotation branch, so frames without it are bit-identical. The gradient and the atmosphere ignore it.
+    f32 rotation = 0.0f;
 };
 
 // Volumetric fog (M-VISUAL 7): a froxel grid over the view (screen tiles × depth slices to
@@ -318,6 +321,10 @@ struct MaterialOverride {
     u32 normal_key = ~0u;
     u32 orm_key = ~0u;
     u32 emissive_key = ~0u;
+    // M-VISUAL3 2: normal_key is a 2-layer array, layer 0 the normal map (parallax_normal; else zero-filled
+    // and not a normal map) and layer 1 the height map, and ext holds the scale and steps.
+    bool parallax = false;
+    bool parallax_normal = false;
 };
 
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
