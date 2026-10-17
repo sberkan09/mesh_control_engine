@@ -135,6 +135,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `SplitScreen` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
+| `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C3: tested in tests/kit/test_wanted3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it |
+| `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C3: tested in tests/kit/test_wanted3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md | projects/Undelivered/assets/scenes/main.mcscene |
