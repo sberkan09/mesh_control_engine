@@ -21,6 +21,7 @@
 #include "mce/kit/cinematic.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/kit/pathfinding.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
@@ -781,6 +782,163 @@ int l_raycast3d(lua_State* L) {
     return 1;
 }
 
+// ---- 3D bodies (M-SCRIPT2 4) -------------------------------------------------------------------
+// Reads and body writes over the kit's physics::World3D, as the 2D calls are over World2D. Character walking is not
+// here on purpose: the kit's CharacterController3D (move, jump) is data a script sets, and the kit's own system moves it.
+
+physics::World3D& physics3d(lua_State* L) {
+    kit::Physics3D* p3 = world_of(L).try_resource<kit::Physics3D>();
+    if (!p3) luaL_error(L, "this world has no 3D physics");
+    return p3->world;
+}
+
+physics::World3D& body3d(lua_State* L, Entity e, const char* fn) {
+    physics::World3D& pw = physics3d(L);
+    if (!pw.has_body(e)) luaL_error(L, "mce.%s: the entity has no 3D body", fn);
+    return pw;
+}
+
+constexpr usize kMaxOverlaps3d = 256;
+
+int push_overlaps3d(lua_State* L, Array<Entity>& out, u32 n) {
+    const usize count = n < out.size() ? n : out.size();
+    lua_createtable(L, static_cast<int>(count), 0);
+    for (usize i = 0; i < count; ++i) {
+        push_entity(L, out[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
+// mce.overlap_sphere3d(center, radius, skip?) -> the entities whose shapes touch the sphere (at most 256)
+int l_overlap_sphere3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 center = check_vec3(L, 1);
+    const f32 radius = static_cast<f32>(luaL_checknumber(L, 2));
+    if (!(radius > 0.0f)) luaL_error(L, "mce.overlap_sphere3d: the radius must be above 0");
+    const Entity skip = opt_entity(L, 3);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    Array<Entity>& out = HostAccess::entities(HostAccess::host(L));
+    out.resize(kMaxOverlaps3d);
+    return push_overlaps3d(L, out, pw.overlap_sphere(center, radius, Span<Entity>(out.data(), out.size()), filter));
+}
+
+// mce.overlap_box3d(center, half, skip?) -> the same for an axis-aligned box
+int l_overlap_box3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 center = check_vec3(L, 1);
+    const math::vec3 half = check_vec3(L, 2);
+    if (!(half.x > 0.0f && half.y > 0.0f && half.z > 0.0f)) luaL_error(L, "mce.overlap_box3d: the half extents must be above 0");
+    const Entity skip = opt_entity(L, 3);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    Array<Entity>& out = HostAccess::entities(HostAccess::host(L));
+    out.resize(kMaxOverlaps3d);
+    return push_overlaps3d(L, out, pw.overlap_box(center, half, math::quat::identity(), Span<Entity>(out.data(), out.size()), filter));
+}
+
+// mce.sphere_cast3d(from, to, radius, skip?) -> {entity, point, normal, position, fraction} or nil
+int l_sphere_cast3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 from = check_vec3(L, 1);
+    const math::vec3 to = check_vec3(L, 2);
+    const f32 radius = static_cast<f32>(luaL_checknumber(L, 3));
+    if (!(radius > 0.0f)) luaL_error(L, "mce.sphere_cast3d: the radius must be above 0");
+    const Entity skip = opt_entity(L, 4);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    const std::optional<physics::ShapeHit3D> hit = pw.shape_cast(radius, from, to, filter);
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 5);
+    push_entity(L, hit->entity);
+    lua_setfield(L, -2, "entity");
+    push_vec3(L, hit->point);
+    lua_setfield(L, -2, "point");
+    push_vec3(L, hit->normal);
+    lua_setfield(L, -2, "normal");
+    push_vec3(L, hit->position);
+    lua_setfield(L, -2, "position");
+    lua_pushnumber(L, hit->t);
+    lua_setfield(L, -2, "fraction");
+    return 1;
+}
+
+int l_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "velocity3d").body_state(e, s)) luaL_error(L, "mce.velocity3d: the entity has no 3D body");
+    push_vec3(L, s.linear_velocity);
+    return 1;
+}
+
+int l_set_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "set_velocity3d").set_linear_velocity(e, check_vec3(L, 2));
+    return 0;
+}
+
+int l_angular_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "angular_velocity3d").body_state(e, s)) luaL_error(L, "mce.angular_velocity3d: the entity has no 3D body");
+    push_vec3(L, s.angular_velocity);
+    return 1;
+}
+
+int l_set_angular_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "set_angular_velocity3d").set_angular_velocity(e, check_vec3(L, 2));
+    return 0;
+}
+
+// mce.impulse3d(e, impulse): at the centre of mass (dynamic bodies)
+int l_impulse3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "impulse3d").apply_impulse(e, check_vec3(L, 2));
+    return 0;
+}
+
+// mce.teleport3d(e, position): puts a 3D body or character at `position`, keeping its rotation, with no sweep.
+// As teleport2d: the physics step writes LocalTransform back from the body, so writing LocalTransform alone moves nothing.
+int l_teleport3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    const math::vec3 at = check_vec3(L, 2);
+    physics::World3D& pw = body3d(L, e, "teleport3d");
+    physics::BodyState3D s;
+    math::quat rot = math::quat::identity();
+    if (pw.body_state(e, s)) rot = s.rotation;
+    if (LocalTransform* t = world_of(L).try_get_mut<LocalTransform>(e)) t->position = at;
+    pw.teleport(e, at, rot);
+    return 0;
+}
+
+// mce.find_path3d(from, to) -> array of corner points (from first, to last), and true when the path is partial
+// (the target cannot be reached: it ends at the closest reachable point); nil when there is no navmesh path.
+int l_find_path3d(lua_State* L) {
+    World& w = world_of(L);
+    const math::vec3 from = check_vec3(L, 1);
+    const math::vec3 to = check_vec3(L, 2);
+    kit::Nav3D* nav = w.try_resource<kit::Nav3D>();
+    if (!nav || !nav->mesh.loaded()) luaL_error(L, "this world has no navmesh (a NavMeshSurface3D bakes one)");
+    Array<math::vec3> path;
+    const physics::NavPath3D r = nav->mesh.find_path(from, to, path);
+    if (r == physics::NavPath3D::None || path.empty()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, static_cast<int>(path.size()), 0);
+    for (usize i = 0; i < path.size(); ++i) {
+        push_vec3(L, path[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    lua_pushboolean(L, r == physics::NavPath3D::Partial);
+    return 2;
+}
+
 const luaL_Reg kWorldLib[] = {
     {"has", l_has},
     {"alive", l_alive},
@@ -827,6 +985,16 @@ const luaL_Reg kWorldLib[] = {
     {"circle_cast2d", l_circle_cast2d},
     {"box_cast2d", l_box_cast2d},
     {"raycast3d", l_raycast3d},
+    {"overlap_sphere3d", l_overlap_sphere3d},
+    {"overlap_box3d", l_overlap_box3d},
+    {"sphere_cast3d", l_sphere_cast3d},
+    {"velocity3d", l_velocity3d},
+    {"set_velocity3d", l_set_velocity3d},
+    {"angular_velocity3d", l_angular_velocity3d},
+    {"set_angular_velocity3d", l_set_angular_velocity3d},
+    {"impulse3d", l_impulse3d},
+    {"teleport3d", l_teleport3d},
+    {"find_path3d", l_find_path3d},
     {nullptr, nullptr},
 };
 
