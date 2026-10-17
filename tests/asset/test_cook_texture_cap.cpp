@@ -68,7 +68,7 @@ struct Info {
 };
 
 // Cooks `root` with `opt` and reads the base level of the texture `guid`.
-Info cook_info(const std::string& root, CookOptions opt = {}, const char* guid = kTex) {
+Info cook_info(const std::string& root, const CookOptions& opt = {}, const char* guid = kTex) {
     Info i;
     CookService svc;
     const CookReport r = svc.cook(root.c_str(), opt);
