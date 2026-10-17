@@ -208,6 +208,64 @@ TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     CHECK_FALSE(contact.enabled);
 }
 
+TEST_CASE("kit3d: the camera's look reaches PostFx, and a camera's focus_distance wins over the environment's (M-VISUAL3 3)") {
+    Fixture f;
+    auto frame = [&](render::Scene3D& scene) {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+    };
+    kit::Environment3D& env = f.world.resource<kit::Environment3D>();
+    const Entity cam_entity = f.camera();
+    {  // defaults: all off, today's tonemapper, the environment's focus
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.post().lens.vignette == 0.0f);
+        CHECK(scene.post().lens.grain == 0.0f);
+        CHECK(scene.post().lens.chromatic_aberration == 0.0f);
+        CHECK(scene.post().lens.dirt_key == 0);
+        CHECK(scene.post().lens.dirt_intensity == 0.0f);
+        CHECK(scene.post().tonemapper == render::Tonemapper::AcesFit);
+        CHECK(scene.post().dof.focus_distance == doctest::Approx(env.dof_focus_distance));
+    }
+    env.vignette = 0.6f;
+    env.vignette_smoothness = 0.3f;
+    env.film_grain = 0.2f;
+    env.grain_size = 2.5f;
+    env.chromatic_aberration = 0.4f;
+    env.lens_dirt_intensity = 1.5f;
+    env.tonemapper = 1;
+    env.dof_focus_distance = 12.0f;
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.post().lens.vignette == doctest::Approx(0.6f));
+        CHECK(scene.post().lens.vignette_smoothness == doctest::Approx(0.3f));
+        CHECK(scene.post().lens.grain == doctest::Approx(0.2f));
+        CHECK(scene.post().lens.grain_size == doctest::Approx(2.5f));
+        CHECK(scene.post().lens.chromatic_aberration == doctest::Approx(0.4f));
+        CHECK(scene.post().lens.dirt_intensity == doctest::Approx(1.5f));
+        CHECK(scene.post().lens.dirt_key == 0);  // no dirt texture named
+        CHECK(scene.post().tonemapper == render::Tonemapper::AgX);
+        CHECK(scene.post().dof.focus_distance == doctest::Approx(12.0f));
+    }
+    env.tonemapper = 2;
+    f.world.try_get_mut<kit::Camera3DComponent>(cam_entity)->focus_distance = 3.5f;
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.post().tonemapper == render::Tonemapper::PbrNeutral);
+        CHECK(scene.post().dof.focus_distance == doctest::Approx(3.5f));  // the camera's own focus
+    }
+    env.tonemapper = 9;  // out of range: the long-standing curve
+    {
+        render::Scene3D scene(f.store, mem::heap());
+        frame(scene);
+        CHECK(scene.post().tonemapper == render::Tonemapper::AcesFit);
+    }
+}
+
 TEST_CASE("kit3d: MeshRefs, lights and visibility fill the scene") {
     Fixture f;
     f.camera();

@@ -17,7 +17,7 @@ any change to the shaders or the draw path.
 | 1 | Plan and interfaces: #428 checked against the code, fields, keys, arguments, cost | SBA-199 | Opus | done: the plan section below (PR #430) |
 | 1b | Seam: `asset/formats.h` (`MaterialExt` height fields, `TextureFormat::RGBA16F`) | not filed | Sonnet | not started |
 | 2 | Parallax occlusion mapping from a height map on `.mcmat` | not filed | Sonnet (Opus review) | not started |
-| 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | not started |
+| 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | 3a data (fields, `PostFx::lens`, `Camera3DComponent.focus_distance`, kit extract): in review; 3b tonemap shader and goldens, 3c MCP per-shot control and `r.env_override`: not started |
 | 4 | `.hdr` / `.exr` sky and image-based light (#409), sky rotation | not filed | Sonnet (Opus glance at the sky shader) | done: see "Step 4 as built" |
 | 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus | not started |
 | 5b | `StaticMerge3D`: merged static props per material and cell | not filed | Sonnet (Opus review) | not started |

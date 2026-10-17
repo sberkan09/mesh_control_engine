@@ -104,6 +104,8 @@ struct Volumetrics {
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.
 enum class Upscaler : u8 { Bilinear, Spatial };
+// The curve from scene-linear light to display (M-VISUAL3 3): AcesFit is the engine's long-standing one.
+enum class Tonemapper : u8 { AcesFit, AgX, PbrNeutral };
 
 struct PostFx {
     bool bloom = true;
@@ -123,6 +125,18 @@ struct PostFx {
     // override both per player.
     Upscaler upscaler = Upscaler::Bilinear;
     f32 sharpen = 0.0f;
+    // M-VISUAL3 3. Camera look in the tonemap pass: all off by default (the frame is byte-identical).
+    // vignette darkens the corners in linear light; grain is animated, luminance-weighted noise in
+    // display space; chromatic_aberration fringes the channels toward the edges (1 = 0.5 % of the view
+    // width); the dirt texture (a TextureStore key; 0 = none) lights up where bloom is bright.
+    struct Lens {
+        f32 vignette = 0.0f, vignette_smoothness = 0.5f;
+        f32 grain = 0.0f, grain_size = 1.5f;
+        f32 chromatic_aberration = 0.0f;
+        u32 dirt_key = 0;
+        f32 dirt_intensity = 0.0f;
+    } lens;
+    Tonemapper tonemapper = Tonemapper::AcesFit;
 
     // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest
     // `low_percent` and brightest 1 - `high_percent`, averages the rest and moves the exposure toward
