@@ -17,7 +17,7 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 | 3 | Cook errors name the fix; `cook_run` `paths` and `skip_errors`; stale pack warning (#379) | SBA-182 | Sonnet | done |
 | 4 | Headless `-capture` falls back to offscreen; `-capture_tick`; save folder documented (#380) | SBA-183 | Sonnet | done |
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | done |
-| 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed | Sonnet | not started |
+| 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed (Linear at its free limit; this table is the tracker) | Sonnet | claimed 2026-10-17 by the routine 3 thread |
 | 7 | Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, UI scale, Retry not reloading the title (#382, added on Sami's word 2026-10-16) | not filed | Opus | not started |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
