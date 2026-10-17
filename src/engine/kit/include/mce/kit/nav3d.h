@@ -130,11 +130,11 @@ struct NavAgent3D {
     u32 arrivals = 0;          // engine-written: times the agent arrived
 };
 MCE_COMPONENT(NavAgent3D, (follow, Help{"an entity to chase: its position becomes the target every tick"}),
-              (follow_repath, Range{0.01f, 100}, Help{"metres the followed entity moves before a re-plan"}), target, (speed, Range{0, 100}, Help{"m/s"}), (acceleration, Range{0, 1000}), (radius, Range{0.05f, 10}),
+              (follow_repath, Range{0.01f, 100}, Help{"metres the followed entity moves before a re-plan"}), (target, WorldPoint), (speed, Range{0, 100}, Help{"m/s"}), (acceleration, Range{0, 1000}), (radius, Range{0.05f, 10}),
               (height, Range{0.1f, 20}), (separation, Range{0, 20}), (arrive_distance, Range{0.01f, 10}),
               (avoidance, Range{0, 3}, Help{"0 cheapest .. 3 best"}), (move_to, Help{"1: walk to target"}), avoid_agents,
               (face_motion, Help{"1: face the walking direction"}), (state, ReadOnly, Transient), (velocity, ReadOnly, Transient),
-              (distance, ReadOnly, Transient), (next_corner, ReadOnly, Transient), (arrivals, ReadOnly, Transient))
+              (distance, ReadOnly, Transient), (next_corner, ReadOnly, Transient, WorldPoint), (arrivals, ReadOnly, Transient))
 
 // World resource: the loaded navmesh (one per world: the first NavMeshSurface3D in ECS order).
 // Games may query it (find_path, raycast, nearest_point) any time after `ready`.

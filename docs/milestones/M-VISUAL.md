@@ -212,6 +212,9 @@ mismatch leaves `<name>.actual.png` and `<name>.diff.png` under the build's `gol
 it three times per backend (0 flakes over 3 runs). PNG in and out is `mce/cook/image.h` (stb stays behind the
 cook wall). Step 2's goldens: `ibl_off`, `ibl_sky`, `ibl_roughness` (four metal boxes, roughness 0.05 to 0.95),
 `ibl_texture` and `probe_room`, baselined on Mesa llvmpipe (GL) and lavapipe (SDL GPU); later steps add theirs.
+A golden in `<os>-<backend>-nvidia/` wins over the plain one when the device name says NVIDIA: today only
+`ibl_roughness`, whose box edges NVIDIA's 4x MSAA rasterizes one block 0.97% away from llvmpipe, identically on the
+RTX 3070, 4090 and a Blackwell card on both backends (`M-GPU-VERIFY.md`).
 
 **Open in step 2:** real-GPU numbers (the budgets above are llvmpipe, relative cost only); they need a device and
 go with the Mac session.

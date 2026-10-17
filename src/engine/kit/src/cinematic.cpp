@@ -4,6 +4,7 @@
 #include <cstddef>
 
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
@@ -174,9 +175,26 @@ bool cutscene_view(World& world, CutsceneView& out) {
     return found;
 }
 
+namespace {
+
+// Floating origin: a root rail's points are world space (a parented rail's are its parent's and move with it).
+void cinematic_origin_shift(World& w, const math::vec3& d, void*) {
+    const ecs::ComponentId id = w.find_component(kTypeHash<CameraRail3D>);
+    if (id == ecs::kInvalidComponent) return;
+    Array<Entity> roots;
+    w.query<const CameraRail3D>().without<ChildOf>().each([&](Entity e, const CameraRail3D&) { roots.push_back(e); });
+    for (Entity e : roots) {
+        CameraRail3D* r = static_cast<CameraRail3D*>(w.get_raw_mut(e, id));
+        for (math::vec3& p : r->points) p = p - d;
+    }
+}
+
+}  // namespace
+
 void install_cinematic(World& world) {
     if (world.try_resource<CinematicInstalled>()) return;
     world.set_resource(CinematicInstalled{});
+    on_origin_shift(world, &cinematic_origin_shift);
     world.register_components<CameraRail3D, CameraLookAt3D, CameraShake3D, CameraBlend3D, Cutscene>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_cutscene", &kit_cutscene);
     world.run_during_cutscenes(Phase::FixedUpdate_Pre, "kit_cutscene");

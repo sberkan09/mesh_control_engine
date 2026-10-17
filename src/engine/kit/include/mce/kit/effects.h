@@ -159,14 +159,14 @@ struct CameraFollow3D {
 MCE_COMPONENT(CameraFollow3D, (target, Help{"the entity to orbit"}), (offset, Help{"pivot above the target"}),
               (distance, Range{0.1f, 1000}), (yaw, Help{"radians about +Y"}), (pitch, Help{"radians above the horizon"}),
               min_pitch, max_pitch, (smoothing, Range{0, 60}, Help{"1/s; 0 = snap"}),
-              (orbit_speed, Range{0, 20}, Help{"radians/s at full Look input; 0 = fixed"}), (pivot, ReadOnly, Transient),
+              (orbit_speed, Range{0, 20}, Help{"radians/s at full Look input; 0 = fixed"}), (pivot, ReadOnly, Transient, WorldPoint),
               (primed, ReadOnly, Transient), (collide, Help{"spring arm: walls pull the camera in, it eases back out"}),
               (first_person, Help{"the camera at the pivot, looking along yaw and pitch"}),
               (collision_radius, Range{0.01f, 5}), (return_speed, Range{0, 100}, Help{"m/s the arm grows back; 0 = at once"}),
               (look_ahead, Range{0, 2}, Help{"seconds of target ground velocity to lead the pivot by"}),
               (lock_on_rate, Range{0, 50}, Help{"rad/s the yaw turns to the lock-on framing; 0 = at once"}),
               (lock_on, Help{"keep this entity framed beyond the target; empty = free orbit"}), (arm, ReadOnly, Transient),
-              (last_goal, ReadOnly, Transient))
+              (last_goal, ReadOnly, Transient, WorldPoint))
 
 // Engine-written record of the 2D physics events naming this entity (add the component to
 // see them; readable by data, sequences and run_headless inspect).
