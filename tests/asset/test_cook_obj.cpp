@@ -415,7 +415,7 @@ TEST_CASE("obj: MTL materials and textures resolve to the mesh's inline material
     CHECK(red.base_color[2] == doctest::Approx(0.25f));
     CHECK(red.base_color[3] == doctest::Approx(0.5f));
     CHECK((red.flags & MaterialFlags::AlphaBlend) != 0);
-    CHECK(red.roughness == doctest::Approx(std::sqrt(2.0f / 100.0f)));
+    CHECK(red.roughness == doctest::Approx(std::pow(2.0f / 100.0f, 0.25f)));  // perceptual: the shader squares it
     CHECK(red.emissive[2] == doctest::Approx(0.3f));
     CHECK(red.texture(MaterialSlot::BaseColor) == G(kTexGuid));
     const MaterialChunk& plain = m.submeshes[1].material;
@@ -437,6 +437,75 @@ TEST_CASE("obj: MTL materials and textures resolve to the mesh's inline material
     const MeshView m2 = view_of(cooked_mesh(root, kObjGuid));
     CHECK(m2.submeshes[1].material.base_color[2] == doctest::Approx(0.9f));
     CHECK(m2.submeshes[0].material.texture(MaterialSlot::BaseColor) == G(kTexGuid));
+}
+
+TEST_CASE("obj: packed ORM, map_Ke, d over Tr and absolute texture paths") {
+    const std::string root = fresh_dir("obj_mtl_rules");
+    const std::string a = root + "/assets";
+    write_file(a + "/models/rm.png", make_gradient_png(4, 4));
+    write_file(a + "/models/rm.png.mceasset", sidecar(kTexGuid, "texture"));
+    write_file(a + "/models/box.mtl",
+               "newmtl packed\nNs 98\nmap_Pr rm.png\nmap_Pm rm.png\n"
+               "newmtl explicit\nPr 0.3\nPm 0.5\nmap_Pr rm.png\nmap_Pm rm.png\n"
+               "newmtl glow\nmap_Ke rm.png\n"
+               "newmtl glow2\nKe 0.2 0 0\nmap_Ke rm.png\n"
+               "newmtl dfirst\nd 0.5\nTr 0\n"
+               "newmtl trfirst\nTr 0.9\nd 1\n"
+               "newmtl abs1\nmap_Kd C:\\Users\\me\\tex\\rm.png\n"
+               "newmtl abs2\nmap_Kd /home/me/rm.png\n");
+    write_file(a + "/models/box.mtl.mceasset", sidecar(kMtlGuid, "mtl"));
+    write_file(a + "/models/box.obj", std::string("mtllib box.mtl\n") + kTri +
+                                          "usemtl packed\nf 1 2 3\nusemtl explicit\nf 1 2 3\nusemtl glow\nf 1 2 3\nusemtl glow2\nf 1 2 3\n"
+                                          "usemtl dfirst\nf 1 2 3\nusemtl trfirst\nf 1 2 3\nusemtl abs1\nf 1 2 3\nusemtl abs2\nf 1 2 3\n");
+    write_file(a + "/models/box.obj.mceasset", sidecar(kObjGuid, "obj"));
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    const std::string text = diag_text(r);
+    INFO(text);
+    REQUIRE(r.ok());
+    CHECK(has(text, "absolute texture paths"));
+    CHECK(has(text, "first: line 22, 2 statements"));
+    const MeshView m = view_of(cooked_mesh(root, kObjGuid));
+    REQUIRE(m.submeshes.size() == 8);
+    const MaterialChunk& packed = m.submeshes[0].material;
+    CHECK(packed.texture(MaterialSlot::MetallicRoughness) == G(kTexGuid));
+    CHECK(packed.roughness == doctest::Approx(1.0f));  // Ns does not apply under the packed texture
+    CHECK(packed.metallic == doctest::Approx(1.0f));
+    const MaterialChunk& expl = m.submeshes[1].material;
+    CHECK(expl.roughness == doctest::Approx(0.3f));
+    CHECK(expl.metallic == doctest::Approx(0.5f));
+    CHECK(m.submeshes[2].material.emissive[0] == doctest::Approx(1.0f));
+    CHECK(m.submeshes[2].material.emissive[2] == doctest::Approx(1.0f));
+    CHECK(m.submeshes[3].material.emissive[0] == doctest::Approx(0.2f));
+    CHECK(m.submeshes[3].material.emissive[1] == doctest::Approx(0.0f));
+    CHECK(m.submeshes[4].material.base_color[3] == doctest::Approx(0.5f));
+    CHECK(m.submeshes[5].material.base_color[3] == doctest::Approx(1.0f));
+    CHECK(m.submeshes[6].material.texture(MaterialSlot::BaseColor) == G(kTexGuid));
+    CHECK(m.submeshes[7].material.texture(MaterialSlot::BaseColor) == G(kTexGuid));
+}
+
+TEST_CASE("obj: an absolute texture path whose file name is not there is a missing-texture error") {
+    const std::string root = fresh_dir("obj_abs_missing");
+    const std::string a = root + "/assets";
+    write_file(a + "/models/box.mtl", "newmtl red\nKd 1 0 0\nmap_Kd C:\\x\\nope.png\n");
+    write_file(a + "/models/box.mtl.mceasset", sidecar(kMtlGuid, "mtl"));
+    write_file(a + "/models/box.obj", std::string("mtllib box.mtl\n") + kTri + "usemtl red\nf 1 2 3\n");
+    write_file(a + "/models/box.obj.mceasset", sidecar(kObjGuid, "obj"));
+    CookService svc;
+    const std::string text = diag_text(svc.cook(root.c_str(), CookOptions{}));
+    INFO(text);
+    CHECK(has(text, "box.mtl:3"));
+    CHECK(has(text, "models/nope.png' is not a registered asset"));
+    const Direct esc = mtl_direct("newmtl a\nmap_Kd ../../up.png\n");
+    CHECK(!esc.ok);  // an escape from the project is still rejected
+    CHECK(has(esc.diags, "stays inside assets/"));
+}
+
+TEST_CASE("mtl: float underflow parses as zero, overflow stays an error") {
+    const Direct under = mtl_direct("newmtl a\nKd 1e-400 0.5 0.5\nNs 1e-400\nd 1e-9999\n");
+    INFO(under.diags);
+    CHECK(under.ok);
+    CHECK(!mtl_direct("newmtl a\nKd 1e400\n").ok);
 }
 
 TEST_CASE("obj: a missing .mtl is a warning, a missing texture an error naming the line") {

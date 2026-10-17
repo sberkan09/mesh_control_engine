@@ -6,7 +6,7 @@
 // (first line and count): l and p, free-form curves and surfaces, s smoothing groups, other attribute statements,
 // vertex colours. Anything else is an error naming file:line.
 //
-// MTL keys: Kd, d / Tr, Ns (roughness = sqrt(2 / (Ns + 2))), Pr, Pm, Ke, map_Kd, map_Bump / bump / norm (a normal map),
+// MTL keys: Kd, d / Tr, Ns (roughness = (2 / (Ns + 2))^(1/4), perceptual), Pr, Pm, Ke, map_Kd, map_Bump / bump / norm (a normal map),
 // map_Ke, map_Pr + map_Pm (both naming one packed texture: G = roughness, B = metallic). Textures resolve to texture
 // GUIDs relative to the .mtl, like glTF images; a missing one is an error naming the .mtl line. Other keys warn.
 //
@@ -156,6 +156,28 @@ private:
 
 enum class Num { Ok, Bad, NotFinite, TooBig };
 
+// Whether a number from_chars called out of range is below 1 in magnitude (an underflow) rather than a huge one.
+bool underflows(StringView t) {
+    usize i = 0;
+    if (i < t.size() && (t[i] == '-' || t[i] == '+')) ++i;
+    i64 int_digits = 0;
+    bool lead = true;
+    for (; i < t.size() && t[i] >= '0' && t[i] <= '9'; ++i) {
+        if (lead && t[i] == '0') continue;
+        lead = false;
+        ++int_digits;
+    }
+    if (int_digits == 0) return true;  // 0.000...1 or 0e5
+    while (i < t.size() && t[i] != 'e' && t[i] != 'E') ++i;
+    if (i >= t.size()) return false;
+    ++i;
+    bool neg = false;
+    if (i < t.size() && (t[i] == '-' || t[i] == '+')) neg = t[i++] == '-';
+    i64 e = 0;
+    for (; i < t.size() && t[i] >= '0' && t[i] <= '9'; ++i) e = std::min<i64>(e * 10 + (t[i] - '0'), 1000000);
+    return neg && e > int_digits;
+}
+
 Num parse_number(StringView t, f32& out) {
     if (!t.empty() && t[0] == '+') t.remove_prefix(1);
     if (t.empty() || t[0] == '+') return Num::Bad;
@@ -163,7 +185,12 @@ Num parse_number(StringView t, f32& out) {
     const char* const end = t.data() + t.size();
     const auto r = std::from_chars(t.data(), end, v);
     if (r.ec == std::errc::invalid_argument || r.ptr != end) return Num::Bad;
-    if (r.ec == std::errc::result_out_of_range) return Num::TooBig;
+    // Underflow (1e-400) is a zero; only overflow is too big.
+    if (r.ec == std::errc::result_out_of_range) {
+        if (!underflows(t)) return Num::TooBig;
+        out = 0.0f;
+        return Num::Ok;
+    }
     if (!std::isfinite(v)) return Num::NotFinite;
     if (std::fabs(v) > kMaxCoordinate) return Num::TooBig;
     out = static_cast<f32>(v);
@@ -326,6 +353,7 @@ struct MtlMaterial {
     u32 line = 0;
     asset::MaterialChunk m{};
     TexReq kd, bump, ke, pr, pm;
+    bool pr_set = false, pm_set = false, ke_set = false, d_set = false;  // given explicitly in the MTL
 };
 
 struct MtlFile {
@@ -440,6 +468,18 @@ private:
         if (path.size() > kMaxNameBytes) return rep_.failf(line, "texture path is over the importer's limit of %zu bytes", kMaxNameBytes);
         out.path.assign(path);
         out.line = line;
+        if (path[0] == '/' || path[0] == '\\' || path.find(':') != StringView::npos) {
+            // An absolute or drive-letter path from another machine: use the file name next to the .mtl.
+            usize cut = path.size();
+            while (cut > 0 && path[cut - 1] != '/' && path[cut - 1] != '\\') --cut;
+            const StringView base = path.substr(cut);
+            const usize colon = base.find(':');
+            const StringView name = colon == StringView::npos ? base : base.substr(colon + 1);
+            if (!name.empty()) {
+                out.path.assign(name);
+                absolute_.hit(line);
+            }
+        }
         return true;
     }
 
@@ -469,7 +509,6 @@ private:
             file_.mats.push_back(std::move(mat));
             cur_ = static_cast<u32>(file_.mats.size() - 1);
             skip_ = false;
-            have_pr_ = false;
             return true;
         }
         if (skip_ && cur_ == kNone) return true;  // inside a duplicate definition
@@ -494,6 +533,7 @@ private:
             if (n == 1) v[1] = v[2] = v[0];
             f32* dst = key == "Kd" ? mat.m.base_color : mat.m.emissive;
             for (int c = 0; c < 3; ++c) dst[c] = key == "Kd" ? clamp01(v[c]) : std::max(0.0f, v[c]);
+            if (key == "Ke") mat.ke_set = true;
         } else if (key == "d" || key == "Tr") {
             StringView r = rest;
             StringView t = next_token(r);
@@ -502,6 +542,8 @@ private:
             if (t.empty()) return rep_.failf(line, "'%.*s' needs a value", static_cast<int>(key.size()), key.data());
             const Num nr = parse_number(t, a);
             if (nr != Num::Ok) return rep_.number_error(line, t, nr);
+            if (key == "Tr" && mat.d_set) return true;  // d wins over Tr, whichever comes first
+            if (key == "d") mat.d_set = true;
             a = clamp01(a);
             const f32 alpha = key == "d" ? a : 1.0f - a;
             mat.m.base_color[3] = alpha;
@@ -510,16 +552,21 @@ private:
         } else if (key == "Ns") {
             if (!numbers(rest, line, "Ns", v, 1, n)) return false;
             if (n != 1) return rep_.fail(line, "'Ns' needs a value");
-            if (!have_pr_) mat.m.roughness = std::sqrt(2.0f / (std::min(1000.0f, std::max(0.0f, v[0])) + 2.0f));
+            // Shininess to the engine's perceptual roughness (the shader squares it): alpha^2 = 2 / (Ns + 2).
+            if (!mat.pr_set) {
+                const f32 ns = std::min(1000.0f, v[0]);
+                mat.m.roughness = ns <= 0.0f ? 1.0f : clamp01(std::pow(2.0f / (ns + 2.0f), 0.25f));
+            }
         } else if (key == "Pr") {
             if (!numbers(rest, line, "Pr", v, 1, n)) return false;
             if (n != 1) return rep_.fail(line, "'Pr' needs a value");
             mat.m.roughness = clamp01(v[0]);
-            have_pr_ = true;
+            mat.pr_set = true;
         } else if (key == "Pm") {
             if (!numbers(rest, line, "Pm", v, 1, n)) return false;
             if (n != 1) return rep_.fail(line, "'Pm' needs a value");
             mat.m.metallic = clamp01(v[0]);
+            mat.pm_set = true;
         } else if (key == "map_Kd") {
             if (!texture(rest, line, mat.kd)) return false;
         } else if (key == "map_Bump" || key == "map_bump" || key == "bump" || key == "norm") {
@@ -547,15 +594,15 @@ private:
         }
         emit(rep_, other_, "more unsupported MTL keys are not imported");
         emit(rep_, options_, "texture options (-s, -o, -bm, ...) are not applied");
+        emit(rep_, absolute_, "absolute texture paths are read as the file name next to the .mtl");
     }
 
     Reporter& rep_;
     MtlFile& file_;
     u32 cur_ = kNone;
     bool skip_ = false;
-    bool have_pr_ = false;  // Pr wins over Ns, whichever comes first
     Array<UnsupportedKey> unsupported_;
-    Warn other_, options_;
+    Warn other_, options_, absolute_;
 };
 
 // Resolves one texture request to its registered texture asset; reports an error naming the .mtl line when it cannot.
@@ -600,6 +647,7 @@ bool build_material(const IAssetLookup* lookup, const MtlFile& f, const MtlMater
     slot(mat.kd, asset::MaterialSlot::BaseColor);
     slot(mat.bump, asset::MaterialSlot::Normal);
     slot(mat.ke, asset::MaterialSlot::Emissive);
+    if (mat.ke.line != 0 && !mat.ke_set) out.emissive[0] = out.emissive[1] = out.emissive[2] = 1.0f;
     if (mat.pr.line != 0 || mat.pm.line != 0) {
         Guid gr, gm;
         bool has_r = false, has_m = false;
@@ -613,6 +661,9 @@ bool build_material(const IAssetLookup* lookup, const MtlFile& f, const MtlMater
         }
         if (has_r && has_m && gr == gm) {
             set_texture(out, asset::MaterialSlot::MetallicRoughness, gr);
+            // The shader multiplies the packed texture by the factors: default them to 1 unless the MTL gave them.
+            if (!mat.pr_set) out.roughness = 1.0f;
+            if (!mat.pm_set) out.metallic = 1.0f;
         } else if (ok) {
             rep.warn(mat.pr.line != 0 ? mat.pr.line : mat.pm.line,
                      "map_Pr and map_Pm are imported only when both name one packed texture (G = roughness, B = metallic): ignored");

@@ -85,7 +85,7 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   Also built in: Wavefront OBJ (`.obj` → `ChunkType::Mesh`, `src/obj_importer.cpp`; v, vt, vn, f with n-gon fans and
   negative indices, o / g nodes, usemtl submeshes; sidecar `"up"` `"y"|"z"`, `"scale"`, `"max_triangles"`, `"lod_levels"`)
   and its `.mtl` (`mtl` → `ChunkType::Material` of the first material; the `.obj` declares the `.mtl` as a dependency,
-  reads its bytes and cooks every material it names inline, textures resolved to GUIDs). Both share the glTF importer's
+  reads its bytes and cooks every material it names inline, textures resolved to GUIDs; `Ns` maps to perceptual roughness (2 / (Ns + 2))^(1/4), a packed `map_Pr` + `map_Pm` defaults the factors to 1, `map_Ke` without `Ke` defaults emissive to white, `d` beats `Tr`, absolute texture paths fall back to the file name next to the `.mtl`). Both share the glTF importer's
   back end (`mesh_build.h`); their factories are declared in the cook-private `src/obj_importer.h`, not in `importer.h`.
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
