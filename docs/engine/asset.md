@@ -77,8 +77,10 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `ChunkType::AnimGraph`, `AnimGraphView`; a version 2 graph adds the chunk's extension block, minor 1: 2D blend
   points, layers, mask bones, IK chains and the root motion bone), particles (`.mcpart`), sequence (`.mcseq`), input map (`.mcinput` → `ChunkType::InputMap`, the
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
-  also imports skins (`JOINTS_0` / `WEIGHTS_0`, 4 influences, up to 256 joints per skin, inverse bind
-  matrices); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
+  also imports skins (`JOINTS_0..7` / `WEIGHTS_0..7`, the 4 largest influences kept, up to 256 joints per skin,
+  inverse bind matrices), sparse accessors, `KHR_mesh_quantization` and `EXT_meshopt_compression` (decoded with
+  meshoptimizer; `KHR_draco_mesh_compression` is refused when required, its fallback read when only used) and
+  bakes the default morph weights into the rest pose (the targets are dropped with a warning); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
   writes per-bone ragdoll overrides into the joints (`MeshFlags::Ragdoll`, `MeshRagdoll` flags, chunk minor 3).
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
@@ -108,7 +110,8 @@ errors, a module that fails to load among them) or 2 (usage).
 
 - The runtime never parses text. JSON, stb, meshoptimizer and glslang stay in the cook library (FR-AST-010).
   Walls in `scripts/ci/check_walls.py`: the stb and meshopt walls allow those symbols only under
-  `src/engine/asset/cook/`; the shader-cross wall allows glslang only in
+  `src/engine/asset/cook/` (the meshopt wall also allows `tests/asset/test_cook_gltf_ext.cpp`, which encodes its
+  compressed fixtures); the shader-cross wall allows glslang only in
   `src/engine/asset/cook/src/shader_importer.cpp` (and `mce_rhi_metal`); the cook wall allows `#include
   "mce/cook/..."` only in `src/engine/asset/cook/`, `src/editor/` and `tools/cook/`; the cook link wall allows
   `mce_asset_cook` only in CMake files under `src/engine/asset/`, `src/editor/`, `tools/` and `tests/`.
@@ -160,7 +163,10 @@ errors, a module that fails to load among them) or 2 (usage).
   succeeds", "author -> cook -> mount -> load the scene (M2 pipeline)", missing sidecar and `--adopt`,
   duplicate GUIDs. `test_cook_gltf.cpp`: `.gltf`/`.glb` equivalence, `--force` byte identity, triangle budget,
   `MeshView` rejecting corrupt payloads, "skins import joints, inverse binds, 4 unorm8 influences and per-joint
-  bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_json_audio.cpp`: JSON positions and nesting limits,
+  bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_gltf_ext.cpp`
+  (M-IMPORT3D step 1): sparse, quantized and meshopt-compressed (with filters) cubes equal the dense cook, Draco,
+  8 influences, baked morph weights, dropped-feature warnings, and corrupt-input cases (truncated / flipped
+  streams, bad sparse indices, absurd counts) that must be errors. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
   `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement. `test_cook_input.cpp`:
   ".mcinput cooks to CHNK_INPUT and loads into the input system", "authoring mistakes are cook errors".
