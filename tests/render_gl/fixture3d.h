@@ -272,7 +272,7 @@ inline u32 upload_grey_sky(Fixture3D& f, const Array<f32>& grey, bool hdr) {
                     b.push_back(u8(c >> 8));
                 }
             } else {
-                const u8 q = u8(math::min(v, 1.0f) * 255.0f + 0.5f);
+                const u8 q = u8(std::lround(math::min(v, 1.0f) * 255.0f));
                 for (u8 c : {q, q, q, u8(255)}) b.push_back(c);
             }
         }
