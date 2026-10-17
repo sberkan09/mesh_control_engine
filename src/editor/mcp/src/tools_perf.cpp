@@ -21,7 +21,45 @@ namespace mce::mcp {
 namespace {
 
 constexpr u64 kMaxFrames = 3600;
+// Below this many captured frames the percentiles are noisy; the report says so (the run still works from 1).
+constexpr u64 kNoisyFrames = 30;
 constexpr u64 kMaxSide = 3840;
+
+// "notifications/progress" with a phase message, when the client sent a progressToken. `done` of `total` counts
+// the warmup and captured frames of the run (0 while launching, total while the capture is read).
+void phase_progress(ToolCall& c, u64 done, u64 total, StringView message) {
+    if (!c.progress_token.valid()) return;
+    cook::String params;
+    JsonWriter w(params);
+    w.begin_object().key("progressToken").copy(c.progress_token).key("progress").num_u(done).key("total").num_u(total);
+    w.key("message").str(message).end_object();
+    c.server.notify("notifications/progress", params.view());
+}
+
+struct PerfProgress {
+    ToolCall* call;
+    u64 total;   // warmup + frames
+    u64 warmup;
+};
+
+// The player prints "<app>: perf warmup N/M" and "<app>: perf capturing N/M" (a few per phase).
+void on_player_line(StringView line, void* user) {
+    auto* p = static_cast<PerfProgress*>(user);
+    const usize at = line.find(": perf ");
+    if (at == StringView::npos) return;
+    const StringView rest = line.substr(at + 7);
+    const bool warm = rest.substr(0, 7) == "warmup ";
+    if (!warm && rest.substr(0, 10) != "capturing ") return;
+    const StringView counts = rest.substr(warm ? 7 : 10);
+    u64 n = 0, m = 0;
+    usize i = 0;
+    for (; i < counts.size() && counts[i] >= '0' && counts[i] <= '9'; ++i) n = n * 10 + static_cast<u64>(counts[i] - '0');
+    if (i >= counts.size() || counts[i] != '/') return;
+    for (++i; i < counts.size() && counts[i] >= '0' && counts[i] <= '9'; ++i) m = m * 10 + static_cast<u64>(counts[i] - '0');
+    cook::String msg(warm ? "warmup " : "capturing ");
+    cook::appendf(msg, "%llu/%llu", static_cast<unsigned long long>(n), static_cast<unsigned long long>(m));
+    phase_progress(*p->call, warm ? n : p->warmup + n, p->total, msg.view());
+}
 
 f64 round3(f64 v) { return std::round(v * 1000.0) / 1000.0; }
 
@@ -196,7 +234,7 @@ bool perf_run(ToolCall& c) {
     perf::Target target = perf::Target::Desktop;
     input::InputScript script;
     ConvarArgs convars;
-    if (!arg_uint(c, "frames", frames, 10, kMaxFrames, false) || !arg_uint(c, "warmup", warmup, 0, kMaxFrames, false) ||
+    if (!arg_uint(c, "frames", frames, 1, kMaxFrames, false) || !arg_uint(c, "warmup", warmup, 0, kMaxFrames, false) ||
         !arg_uint(c, "width", width, 64, kMaxSide, false) || !arg_uint(c, "height", height, 64, kMaxSide, false) ||
         !arg_uint(c, "top", top, 1, 64, false) || !arg_bool(c, "headless", headless) || !arg_bool(c, "software", software) ||
         !arg_target(c, target) || !arg_input(c, script) || !arg_convars(c, convars))
@@ -288,7 +326,10 @@ bool perf_run(ToolCall& c) {
     }
     Array<char> output;
     i32 code = 0;
-    if (!spawn_player(c, player.view(), args.span(), use_software, output, code)) return false;
+    PerfProgress pp{&c, total_frames, warmup};
+    phase_progress(c, 0, total_frames, "launching the player");
+    if (!spawn_player(c, player.view(), args.span(), use_software, output, code, on_player_line, &pp)) return false;
+    phase_progress(c, total_frames, total_frames, "reading the capture");
 
     perf::Capture cap;
     cook::String err;
@@ -306,6 +347,8 @@ bool perf_run(ToolCall& c) {
     JsonWriter& w = c.out;
     w.begin_object().key("file").str(out_rel.view()).key("scene_path").str(scene_rel).key("target").str(perf::target_name(target));
     w.key("headless").boolean(headless).key("software").boolean(use_software).key("exit_code").num_i(code);
+    if (s.frames < kNoisyFrames)
+        w.key("note").str("fewer than 30 frames were captured: the percentiles (p95, p99) are noisy; use frames of 30 or more for a verdict to trust");
     write_verdict(w, v);
     write_report(w, cap, s, top);
     w.end_object();
