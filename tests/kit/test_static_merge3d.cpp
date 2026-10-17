@@ -388,7 +388,8 @@ TEST_CASE("static merge: a 4096-piece city block reaches the scene as its cells 
     Entity last;
     for (u32 i = 0; i < side * side; ++i) {
         const asset::Guid g = i % 3 == 0 ? kRedA : i % 3 == 1 ? kRedB : kGreen;
-        last = f.child(g, {f32(i % side) * 6.0f - 192.0f, 0.0f, -f32(i / side) * 6.0f - 10.0f});
+        const u32 row = i / side, column = i % side;
+        last = f.child(g, {f32(column) * 6.0f - 192.0f, 0.0f, -f32(row) * 6.0f - 10.0f});
     }
     usize instances = 0;
     f.frame([&](const render::Scene3D& scene) { instances = scene.instances().size(); });
