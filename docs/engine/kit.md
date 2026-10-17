@@ -192,6 +192,13 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
+`traffic.h` (M-OPENWORLD B2, ADR-0046): `TrafficDriver3D` drives a `Vehicle3D` along a placed network's lanes
+(`"traffic_drivers"`, FixedUpdate_Pre ahead of `"kit3d_vehicles"`): projection onto its lane, hashed turn
+choice two lanes ahead, IDM speed against the car ahead, stop lines (red, amber, stop signs, conflicting
+connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawner3D` (`"traffic_spawners"`,
+before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
+removes far, lost or flipped ones. All driver state is in the component (saved, hashed).
+
 `crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
 crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
