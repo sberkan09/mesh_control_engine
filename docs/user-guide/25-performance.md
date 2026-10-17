@@ -51,7 +51,7 @@ draw calls by cause (3D scene draws per frame, mean over the capture)
   cause            draws    max  what to change
   instanced           96         folded into 11 instanced draw(s): nothing to do
   material            41     41  copies of one mesh differ in material, tint or emissive tint: ...
-  unique_mesh         23     23  meshes drawn once cannot instance: reuse one mesh ... or merge static meshes ...
+  unique_mesh         23     23  a mesh drawn once cannot instance (...): reuse one mesh ... or merge static meshes ...
   total              160
 ```
 
@@ -62,7 +62,7 @@ runs nothing. The numbers are counts, not times, so they repeat run to run like 
 | Cause | The draw is single because | What to change |
 |---|---|---|
 | `material` | another draw uses its mesh, but with a different material, tint or emissive tint | one material and tint for the copies; an atlas texture in place of many materials |
-| `unique_mesh` | the mesh (submesh and LOD) is drawn once | reuse one mesh for repeated props, or merge static meshes into one in the importer |
+| `unique_mesh` | among the draws that could instance (not skinned, terrain or moving), the mesh (submesh and LOD) is drawn once | reuse one mesh for repeated props, or merge static meshes into one in the importer |
 | `skinned` | skinned meshes always draw singly | rigid meshes for props and distant crowds |
 | `terrain` | a terrain node | fewer, larger nodes |
 | `moving` | it moved since last frame while TAA or motion blur reads the previous transform | keep background props still, or turn the effect off |
@@ -71,7 +71,8 @@ runs nothing. The numbers are counts, not times, so they repeat run to run like 
 | `budget` | the frame's per-copy upload budget (`Forward3DDesc::instancing_budget`) ran out | raise the budget and `geometry_ring_bytes`, or draw fewer copies |
 | `other` | identical copies exist but fewer than `InstancingSettings::min_count` (or a split run's tail) | lower `min_count` or add copies |
 
-The causes and the instanced draws add up to the scene's draws in the main view (`Forward3DStats::draw_causes`;
+The causes are counted only while a capture runs (`-perf_capture`, `perf_run`): `Scene3D::set_collect_draw_causes`
+is off in a normal frame, which pays nothing and reports zeros. The causes and the instanced draws add up to the scene's draws in the main view (`Forward3DStats::draw_causes`;
 `draws_instanced` counts the draws inside instanced runs, which `draws` counts once per run). Batches
 (`InstanceBatch`, the GPU-culled path) and the shadow, prepass and probe passes are not in it. Which mesh or
 material is behind a count is not reported: the renderer knows meshes by store key, not by name.

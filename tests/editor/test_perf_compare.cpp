@@ -161,6 +161,18 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
         CHECK(old.frames[0].counters.draws == 5);
         CHECK(old.frames[0].counters.draw_causes[0] == 0);
     }
+    // An old capture against a new one: the causes and instanced counts are not compared (no counter row, no verdict).
+    {
+        perf::Capture old = capture(12.0f, 7);
+        Comparison oc;
+        compare_captures(old, a, oc);
+        for (const auto& k : oc.counters) {
+            CHECK(StringView(k.metric) != StringView("draw_causes"));
+            CHECK(StringView(k.metric) != StringView("draws_instanced"));
+        }
+        CHECK(oc.better.empty());
+        CHECK(oc.worse.empty());
+    }
     Comparison c;
     compare_captures(a, b, c);
     CHECK(c.better.empty());

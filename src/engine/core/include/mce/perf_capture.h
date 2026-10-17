@@ -37,7 +37,8 @@ struct Counters {
     u32 runs_instanced = 0;    // 3D: instanced draws of identical meshes, main view (M-VISUAL3 5a)
     u32 draws_instanced = 0;   // 3D: the submesh draws folded into them
     // 3D, main view (M-CONTENT 2): submesh draws that were not in an instanced run, by DrawCause. With
-    // draws_instanced they add up to the scene's draws; zero where the frame drew no 3D.
+    // draws_instanced (the renderer's drawn instanced draws, taken from the same view) they add up to that
+    // view's scene draws; zero where the frame drew no 3D. A capture from before M-CONTENT 2 has no causes.
     u32 draw_causes[kDrawCauseCount] = {};
 };
 

@@ -178,6 +178,7 @@ u32 causes_total(const Forward3DStats& st) {
 Forward3DStats render_causes(Fixture3D& f, bool instancing, const std::function<void(Scene3D&)>& extra) {
     f.render(0.0f, false, [&](Scene3D& s) {
         s.set_instancing({instancing, 2});
+        s.set_collect_draw_causes(true);
         add_crate_grid(s, kCrate);
         if (extra) extra(s);
     });
@@ -264,5 +265,54 @@ TEST_CASE("draw causes gl: instancing off, no instanced pipelines and a spent bu
         CHECK(cause(st, DrawCause::Budget) == grid_draws);
         CHECK(cause(st, DrawCause::UniqueMesh) == 2);
         CHECK(causes_total(st) == st.main_draws);
+    }
+}
+
+TEST_CASE("draw causes gl: the causes plus the drawn instanced draws add up to the scene's draws in every setup") {
+    u32 scene_draws = 0;  // the scene's main-view draws: instancing off in the scene counts every one as Disabled
+    {
+        Fixture3D f;
+        upload_crate(f, kCrate);
+        const Forward3DStats off = render_causes(f, false, {});
+        scene_draws = causes_total(off);
+        REQUIRE(scene_draws > 4);
+        CHECK(off.draws_instanced == 0);
+        const Forward3DStats on = render_causes(f, true, {});
+        CHECK(on.draws_instanced > 0);
+        CHECK(causes_total(on) + on.draws_instanced == scene_draws);
+        // Asked not to classify, a frame reports no causes at all but the same drawn instanced numbers.
+        f.render(0.0f, false, [&](Scene3D& s) {
+            s.set_instancing({true, 2});
+            add_crate_grid(s, kCrate);
+        });
+        const Forward3DStats quiet = f.renderer.forward_3d().last_stats();
+        CHECK(causes_total(quiet) == 0);
+        CHECK(quiet.draws_instanced == on.draws_instanced);
+    }
+    {  // the frame's budget is spent: Scene3D still plans runs, the renderer draws none; the player reads the renderer's
+        Forward3DDesc fd;
+        fd.instancing_budget = 0;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.draws_instanced == 0);
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
+    }
+    {  // a budget that holds some runs only
+        Forward3DDesc fd;
+        fd.instancing_budget = 3000;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
+    }
+    {  // no instanced pipelines
+        Forward3DDesc fd;
+        fd.instancing = false;
+        Fixture3D f(4, true, true, 1.0f, &fd);
+        upload_crate(f, kCrate);
+        const Forward3DStats st = render_causes(f, true, {});
+        CHECK(st.draws_instanced == 0);
+        CHECK(causes_total(st) + st.draws_instanced == scene_draws);
     }
 }

@@ -42,13 +42,14 @@ text is unchanged; `cook_run` returns it as `sizes`. Tests: `tests/asset/test_co
 **Step 2 as built.** `mce/draw_cause.h` (core) names nine causes with a one-line hint each: `material`, `unique_mesh`,
 `skinned`, `terrain`, `moving`, `blended`, `instancing_off`, `budget`, `other`. `Scene3D::Stats` splits
 `not_instanced_single` with two new subsets (`not_instanced_unique_mesh`: no other eligible draw has the mesh, submesh and
-level; `not_instanced_short`: identical copies exist but fewer than `min_count`; the rest is `material`). The split costs
-two sorts of the eligible keys, only in frames with singles. `Forward3DStats::draw_causes[kDrawCauseCount]` (the only change
+level; `not_instanced_short`: identical copies exist but fewer than `min_count`; the rest is `material`). The split is one O(n) pass
+(the grouping's own group sizes, and a hash count of the meshes), run only when `Scene3D::set_collect_draw_causes(true)`: the
+player sets it under `-perf_capture`, and with it off the causes stay zero. `Forward3DStats::draw_causes[kDrawCauseCount]` (the only change
 to `forward3d.h`, which 86 of 640 TUs include; `scene3d.h` 99) is filled from those stats at the start of `record_view`
 and gains two causes only the renderer knows: `instancing_off` also when the instanced pipelines are missing
 (`-r.instancing 0`: the scene's runs exist, none is drawn) and `budget` for each main-pass run `upload_runs` could not fit
 (counted in scene draws). With `draws_instanced` they add up to the main view's scene draws. The player copies them
-into `perf::Counters::draw_causes` for every captured frame (the last 3D view recorded); the `.mcperf` header names them
+into `perf::Counters::draw_causes` for every captured frame (the window's first 3D view: its scene counters, instanced counts and causes all come from it); the `.mcperf` header names them
 (`draw_causes`, `draw_cause_hints`) and each frame's `counters.draw_causes` holds the counts in that order, so a reader
 maps by name; version stays 1, older files read as zero. `perf_run` returns `draw_causes`
 `{scene_draws_avg, instanced_draws_avg, instanced_runs_avg, not_instanced_avg, causes: [{cause, avg, max, hint}]}`, the

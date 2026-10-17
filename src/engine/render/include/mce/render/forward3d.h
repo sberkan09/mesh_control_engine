@@ -152,7 +152,8 @@ struct Forward3DStats {
     u32 instancing_overflow = 0;     // runs of any pass drawn singly because the frame's instancing budget ran out
     u32 instancing_bytes = 0;        // per-copy data uploaded this record()
     // M-CONTENT 2: the scene draws of the main pass that did not take part in an instanced run, by DrawCause
-    // (core/draw_cause.h); with draws_instanced they add up to scene.draws().size(). Deterministic.
+    // (core/draw_cause.h); with draws_instanced they add up to scene.draws().size(). Deterministic. Zero unless
+    // the scene asked: Scene3D::set_collect_draw_causes(true) (the player does under -perf_capture and perf_run).
     u32 draw_causes[kDrawCauseCount] = {};
 };
 

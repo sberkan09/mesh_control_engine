@@ -556,6 +556,79 @@ TEST_CASE("M-VIEWS 3: a camera draws into a RenderTexture that a sprite elsewher
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("M-CONTENT 2: with two 3D views the draw causes are the window's first view's, not the last one recorded") {
+    Fixture f;
+    REQUIRE(f.renderer.init_3d().has_value());
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    REQUIRE(f.renderer.meshes().upload(1, 1, box.build().span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+    kit::install_kit3d(f.world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), nullptr);
+    ex3.bind_mesh(kBox, 1);
+    // Two cameras side by side. The first (order 0) looks down -z at six boxes; the second is turned about
+    // and sees none of them.
+    kit::CameraView left, right;
+    left.viewport = {0.0f, 0.0f, 0.5f, 1.0f};
+    right.viewport = {0.5f, 0.0f, 0.5f, 1.0f};
+    left.order = 0;
+    right.order = 1;
+    f.world.spawn_with(LocalTransform{}, kit::Camera3DComponent{}, left);
+    kit::Camera3DComponent second;
+    second.primary = 0;
+    f.world.spawn_with(LocalTransform{{0, 0, 0}, math::quat_from_axis_angle({0, 1, 0}, 3.14159265f), {1, 1, 1}}, second,
+                       right);
+    for (int i = 0; i < 6; ++i) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        f.world.spawn_with(LocalTransform{{f32(i) - 2.5f, 0, -6}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    f.world.tick(1.0f / 60.0f, 0);
+
+    mem::FrameSlots slots{mem::heap()};
+    Array<kit::ViewEntry> views;
+    const auto frame = [&](bool collect) {
+        slots.begin_frame(f.frame);
+        f.device->begin_frame(f.frame++);
+        REQUIRE(kit::collect_views(f.world, {kW, kH}, views, nullptr, nullptr));
+        kit::ViewRecordContext vc;
+        vc.renderer = &f.renderer;
+        vc.extract3d = &ex3;
+        vc.extract2d = &f.extract;
+        vc.target = f.target;
+        vc.target_size = {kW, kH};
+        vc.collect_draw_causes = collect;
+        rhi::CommandBuffer cmd;
+        const kit::ViewRecordStats st = kit::record_views(cmd, f.world, views.span(), vc);
+        f.device->submit(cmd);
+        f.device->end_frame();
+        slots.end_frame(nullptr);
+        return st;
+    };
+    const kit::ViewRecordStats st = frame(true);
+    REQUIRE(st.views_3d == 2);
+    CHECK(st.window_3d == 2);
+    u32 total = 0;
+    for (u32 c : st.first_3d_draw_causes) total += c;
+    CHECK(st.first_3d.visible == 6);
+    CHECK(total + st.first_3d_draws_instanced == 6);  // the first view's draws, though the last recorded drew none
+    CHECK(st.first_3d_draws_instanced == 6);          // six identical boxes, one instanced run
+    CHECK(st.first_3d_runs_instanced == 1);
+    CHECK(f.renderer.forward_3d().last_stats().main_draws == 0);  // the renderer's last view: nothing visible
+    // Switched off, no causes are reported (the instanced numbers still are).
+    const kit::ViewRecordStats quiet = frame(false);
+    total = 0;
+    for (u32 c : quiet.first_3d_draw_causes) total += c;
+    CHECK(total == 0);
+    CHECK(quiet.first_3d_draws_instanced == 6);
+    CHECK(f.device->validation_error_count() == 0);
+    ex3.shutdown();
+}
+
 TEST_CASE("M-VIEWS 5: two 2D cameras in a split screen each keep their own cell and clear color") {
     Fixture f;
     ViewFrame vf(f);

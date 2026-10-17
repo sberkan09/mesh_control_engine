@@ -342,6 +342,7 @@ TEST_CASE("instancing: the singles say whether the mesh is unique, differs by ti
     REQUIRE(store.upload(3, 1, box_mesh(0, 0.2f).span()).has_value());
     const auto build = [&](u32 min_count, Scene3D& scene) {
         scene.set_instancing({true, min_count});
+        scene.set_collect_draw_causes(true);
         scene.begin(camera(), {256, 256});
         for (int i = 0; i < 4; ++i) scene.add(at(1, {f32(i) - 1.5f, 0.0f, -5.0f}));  // four copies of mesh 1
         MeshInstance red = at(1, {0.0f, 2.0f, -5.0f});  // the same mesh, another tint
@@ -370,4 +371,15 @@ TEST_CASE("instancing: the singles say whether the mesh is unique, differs by ti
     CHECK(wide.stats().not_instanced_single == 4);
     CHECK(wide.stats().not_instanced_unique_mesh == 1);
     CHECK(wide.stats().not_instanced_short == 2);
+
+    // Not asked to classify (the default), the split stays zero and nothing else changes.
+    Scene3D quiet(store, mem::heap());
+    quiet.set_instancing({true, 3});
+    quiet.begin(camera(), {256, 256});
+    for (int i = 0; i < 4; ++i) quiet.add(at(1, {f32(i) - 1.5f, 0.0f, -5.0f}));
+    quiet.add(at(2, {0.0f, -2.0f, -5.0f}));
+    quiet.build();
+    CHECK(quiet.stats().not_instanced_single == 1);
+    CHECK(quiet.stats().not_instanced_unique_mesh == 0);
+    CHECK(quiet.stats().not_instanced_short == 0);
 }

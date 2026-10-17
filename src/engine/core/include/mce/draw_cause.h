@@ -10,7 +10,7 @@ namespace mce {
 
 enum class DrawCause : u8 {
     Material,    // another draw uses the same mesh, but with a different material, tint or emissive tint
-    UniqueMesh,  // the mesh is drawn once: nothing to share a run with
+    UniqueMesh,  // among the draws that could instance (not skinned, terrain or moving), the mesh is drawn once
     Skinned,     // a skinned mesh (its joints go through a palette)
     Terrain,     // a terrain node
     Moving,      // moved since last frame while TAA or motion blur reads the previous transform
@@ -46,7 +46,7 @@ constexpr const char* draw_cause_hint(DrawCause c) {
             return "copies of one mesh differ in material, tint or emissive tint: give them one material and one tint "
                    "(an atlas texture instead of many materials) so they share a run";
         case DrawCause::UniqueMesh:
-            return "meshes drawn once cannot instance: reuse one mesh for repeated props, or merge static meshes "
+            return "a mesh drawn once cannot instance (skinned, terrain and moving draws are counted under their own cause): reuse one mesh for repeated props, or merge static meshes "
                    "into one mesh in the importer (a static batch)";
         case DrawCause::Skinned:
             return "skinned meshes always draw singly: use a rigid mesh for props and crowds in the distance";

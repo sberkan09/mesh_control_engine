@@ -2382,6 +2382,7 @@ u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 
 // M-CONTENT 2: Scene3D's reasons, plus the two this renderer adds: no instanced pipelines (the whole run list
 // then draws singly) and, in upload_runs, a main-pass run past the frame's budget.
 void Forward3D::count_draw_causes(const Scene3D& scene) {
+    if (!scene.collect_draw_causes()) return;  // Scene3D::set_collect_draw_causes: off, the causes stay zero
     const Scene3D::Stats& ss = scene.stats();
     u32* c = stats_.draw_causes;
     const auto at = [&](DrawCause k) -> u32& { return c[static_cast<u32>(k)]; };
@@ -2430,7 +2431,7 @@ bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstP
         const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
         if (ring_bytes(used + r.count * per_copy * u32(sizeof(mat4)), align) > inst_budget_[pass]) {
             ++stats_.instancing_overflow;
-            if (pass == kInstMain) stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count;
+            if (pass == kInstMain && scene.collect_draw_causes()) stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count;
             continue;
         }
         inst_slots_[r.first] = {r.count, static_cast<u32>(inst_data_.size() / per_copy)};
