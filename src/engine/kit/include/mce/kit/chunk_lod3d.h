@@ -17,7 +17,13 @@
 // Layout: padding-free (World::state_hash hashes component bytes).
 
 #include "mce/asset/handle.h"
+#include "mce/containers/array.h"
+#include "mce/math/math.h"
 #include "mce/refl/macros.h"
+
+namespace mce::asset {
+class AssetSystem;
+}
 
 namespace mce::kit {
 
@@ -35,5 +41,31 @@ MCE_COMPONENT(ChunkLod3D,
     (impostor_distance, Range{0, 100000}, Help{"camera to chunk box, metres"}),
     (max_distance, Range{0, 100000}, Help{"0 = no limit"}),
     cast_shadows, enabled)
+
+// ---- the HLOD bake (M-OPENWORLD A3; the editor's EditorSession::bake_hlod and MCP's hlod_bake call it) ----------
+
+struct HlodBakeSettings3D {
+    f32 min_size = 1.0f;  // metres: meshes whose bounding diameter is smaller are left out (invisible that far away)
+};
+
+struct HlodBakeStats3D {
+    u32 meshes = 0;         // MeshRefs in the area's scene
+    u32 merged = 0;         // ... merged into the proxy
+    u32 small = 0;          // ... left out by min_size
+    u32 skipped = 0;        // ... left out otherwise: hidden, not loadable, skinned, blended, transmissive or parallax
+    u32 submeshes = 0;      // the proxy's submeshes (one per material)
+    u32 vertices = 0;
+    u32 triangles = 0;      // of level 0
+    u32 lod_levels = 1;
+    math::aabb3 bounds{};   // relative to the chunk entity
+};
+
+// Loads the area scene `scene` from `assets` into a scratch world and merges every visible rigid MeshRef with an
+// opaque or masked material (render::build_merged_mesh: one submesh per material, each source's LOD levels kept, so
+// a far proxy draws the coarse union) into `out`, a CHNK_MESH payload with positions relative to `origin` (the chunk
+// entity's position: area scenes are authored in absolute coordinates). False, with `out` empty, when the scene does
+// not load or nothing qualifies. Deterministic: the same scene and settings give the same bytes.
+bool bake_chunk_hlod(asset::AssetSystem& assets, asset::Guid scene, const math::vec3& origin, const HlodBakeSettings3D& settings,
+                     Array<byte>& out, HlodBakeStats3D* stats = nullptr);
 
 }  // namespace mce::kit

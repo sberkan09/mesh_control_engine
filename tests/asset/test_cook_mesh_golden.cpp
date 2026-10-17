@@ -395,6 +395,7 @@ const Golden kGolden[] = {
     {"samples/kit3d_tour/models/cart.glb", 0xc13f4d832988eb19ull},
     {"samples/kit3d_tour/models/grunt.glb", 0x3ddbd5cb30dea27eull},
     {"samples/kit3d_tour/models/platform.glb", 0x9f74288193d02af7ull},
+    {"samples/import_demo/models/lamp.gltf", 0x2c1c7e56b23e617full},  // M-IMPORT3D 4b: the demo's glTF triangle
 };
 
 u64 fnv1a64(const std::vector<byte>& b) {

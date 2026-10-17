@@ -66,7 +66,10 @@ Runtime (`src/engine/asset/include/mce/asset/`)
 
 Cook (`src/engine/asset/cook/include/mce/cook/`)
 - `cook.h`: `CookService::cook(project_root, CookOptions{force, pack, adopt, base_packs})` returning a `CookReport`
-  (per-asset `Cooked`/`UpToDate`/`Failed`/`Blocked`, diagnostics, manifest and pack hashes); `AssetRegistry`
+  (per-asset `Cooked`/`UpToDate`/`Failed`/`Blocked`, diagnostics, manifest and pack hashes, the `sizes` report, and
+  `meshes`: one `MeshSummary` per live mesh asset {triangles, submeshes, materials, joints, clips, lod_levels, warnings}
+  that the cook reads back from the cooked `CHNK_MESH` with `MeshView`, so cached and fresh runs agree; only `warnings`
+  is this run's: `mce_cook` prints it as a `mesh assets/...` line and MCP `cook_run` returns it as `meshes`); `AssetRegistry`
   (scan of `assets/` and `.mceasset` sidecars, `guid_for_path`, GUID-stable `move`); `cook_document` (cooks an
   unsaved native document from memory, used by play-in-editor); `generate_guid`; `kCookToolVersion`.
 - `importer.h`: `IImporter` (`id`, `version`, `schema_hash`, `type`, `native`, `handles_extension`,
