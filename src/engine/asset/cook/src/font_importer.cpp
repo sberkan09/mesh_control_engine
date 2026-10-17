@@ -231,7 +231,7 @@ bool glyph_check(FontBytes& f, const FontTable& glyf, const Array<u32>& loca, u3
             f64 dx, dy;
             if (fl & 1) { dx = f.i16_at(base + p); dy = f.i16_at(base + p + 2); p += 4; }
             else { dx = static_cast<i8>(f.u8_at(base + p)); dy = static_cast<i8>(f.u8_at(base + p + 1)); p += 2; }
-            if (fl & (8 | 0x40 | 0x80)) return false;  // scaled or rotated components: stb_truetype's own math differs from the extent check
+            p += (fl & 8) ? 2u : (fl & 0x40) ? 4u : (fl & 0x80) ? 8u : 0u;  // scale, x/y scale or 2x2 matrix
             if (p > len) return false;
             Extent sub;
             if (!glyph_ok(f, glyf, loca, gi, num_glyphs, depth + 1, sub, memo)) return false;
@@ -247,8 +247,6 @@ bool glyph_check(FontBytes& f, const FontTable& glyf, const Array<u32>& loca, u3
         }
     }
     if (!f.ok) return false;
-    constexpr f64 kSlack = 2.0;  // real fonts (Crimson Pro Bold) round their boxes by a unit or two; the bitmap box is rounded out to whole pixels anyway
-    if (mine.any && (mine.x0 < bx0 - kSlack || mine.x1 > bx1 + kSlack || mine.y0 < by0 - kSlack || mine.y1 > by1 + kSlack)) return false;
     ext = mine;
     return true;
 }
@@ -580,16 +578,51 @@ public:
         }
 
         const f32 scale = stbtt_ScaleForPixelHeight(&info, static_cast<float>(size));
-        const f32 max_side = sdf ? 256.0f : 1024.0f;  // the distance field costs pixels x outline points per glyph
-        // A damaged font can scale one glyph to a bitmap of millions of pixels per side (the bake sizes it from the box).
-        for (const u32 cp : cps) {
-            int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
-            stbtt_GetCodepointBox(&info, static_cast<int>(cp), &x0, &y0, &x1, &y1);
-            if (static_cast<f32>(x1 - x0) * scale > max_side || static_cast<f32>(y1 - y0) * scale > max_side) {
+        const int max_side = sdf ? 256 : 1024;  // the distance field costs pixels x outline points per glyph
+        // The bake sizes each glyph's bitmap from its header box, and its rasterizer assumes the outline lies inside that
+        // bitmap. A glyph whose box is inverted or huge is a damaged font (an error); one whose outline leaves the box
+        // is skipped with a warning, as if the font lacked it.
+        {
+            Array<u32> kept;
+            u32 skipped = 0, first_skipped = 0;
+            for (const u32 cp : cps) {
+                const int gid = stbtt_FindGlyphIndex(&info, static_cast<int>(cp));
+                int ix0 = 0, iy0 = 0, ix1 = 0, iy1 = 0;
+                stbtt_GetGlyphBitmapBox(&info, gid, scale, scale, &ix0, &iy0, &ix1, &iy1);
+                if (ix1 < ix0 || iy1 < iy0 || ix1 - ix0 > max_side || iy1 - iy0 > max_side) {
+                    String msg;
+                    appendf(msg, "the glyph for U+%04X has a box of %d x %d pixels at this size; the font is damaged", cp, ix1 - ix0, iy1 - iy0);
+                    diags.error(Errc::ImportFailed, file, 0, 0, kStage, msg);
+                    return false;
+                }
+                stbtt_vertex* verts = nullptr;
+                const int nv = stbtt_GetGlyphShape(&info, gid, &verts);
+                // The rasterizer clips x and the bottom edge itself; its one precondition is that, when the bitmap's top row is
+                // the glyph's first (iy0 == 0), no edge lies entirely above it. The distance field writes only inside its bitmap.
+                bool inside = true;
+                for (int i = 0; i < nv && inside && !sdf && iy0 == 0; ++i) {
+                    const stbtt_vertex& v = verts[i];
+                    const f32 ys[2] = {-static_cast<f32>(v.y) * scale, -static_cast<f32>(v.cy) * scale};
+                    const int n = v.type == STBTT_vcurve ? 2 : 1;
+                    for (int k = 0; k < n; ++k)
+                        if (ys[k] < 0.0f) inside = false;
+                }
+                if (verts) stbtt_FreeShape(&info, verts);
+                if (inside) {
+                    kept.push_back(cp);
+                } else {
+                    if (skipped++ == 0) first_skipped = cp;
+                }
+            }
+            if (skipped) {
                 String msg;
-                appendf(msg, "the glyph for U+%04X is larger than %d pixels at this size; the font is damaged", cp, static_cast<int>(max_side));
-                diags.error(Errc::ImportFailed, file, 0, 0, kStage, msg);
-                return false;
+                appendf(msg, "%u glyph%s skipped: the outline rises above the box the font gives it (first U+%04X)", skipped, skipped == 1 ? "" : "s", first_skipped);
+                diags.warning(file, 0, 0, kStage, msg);
+                cps = kept;
+                if (cps.empty()) {
+                    diags.error(Errc::ImportFailed, file, 0, 0, kStage, "the font has none of the requested codepoints");
+                    return false;
+                }
             }
         }
         Array<asset::FontGlyph> glyphs;

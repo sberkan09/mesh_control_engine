@@ -123,15 +123,17 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   now walks what it reads before it is called: table directory and bounds, head/maxp/hhea/hmtx, the one cmap subtable
   stb selects (search fields, group and range bounds), loca/glyf (flags and coordinates fit, points inside the header
   box, component nesting and expanded point count capped, no point matching or scaled components) and the kern table
-  it reads. The importer also skips codepoints whose glyph id is outside the font and refuses a glyph that scales past
-  1024 px. Refused on purpose: CFF (`OTTO`) outlines, because stb sizes the CFF buffer at 512 MB, and scaled or
-  rotated composite components. An independent review found the first version's gaps (cmap glyph ids, nesting memo,
+  it reads. The importer also skips codepoints whose glyph id is outside the font, refuses a glyph whose box is inverted
+  or scales past 1024 px (256 for a distance field), and skips with a warning a glyph (coverage bake only) whose outline rises above the box the
+  font gives it (the rasterizer assumes the outline lies inside the bitmap sized from that box). Refused on purpose: CFF
+  (`OTTO`) outlines, because stb sizes the CFF buffer at 512 MB. An independent review found the first version's gaps (cmap glyph ids, nesting memo,
   fan-out, SDF size, CFF, format 4 and 0 header fields); each has a case in `test_cook_font_damage.cpp`, which also
   builds small fonts by hand. A second review round added the cost cap (outline points plus component records,
   because stb_truetype keeps no memo), the kern cap, a 256 px glyph limit for the distance-field bake and a 16-byte
   minimum. Known residual: a distance-field bake of a hostile font with thousands of 256 px glyphs of thousands of points
-  is slow (time, not memory); the cook is a developer-side tool. The box check keeps a 2-unit slack because real fonts
-  (Crimson Pro Bold) round their boxes. `.ttf` fuzz: 11,252 mutants under ASan, clean.
+  is slow (time, not memory); the cook is a developer-side tool. A first version compared the outline with the box inside
+  the validator and refused scaled components; the project font NothingYouCouldDo (outline up to 9 units outside its
+  boxes, scaled components) failed the cook, so the comparison moved to the importer, on the shapes stb itself builds. `.ttf` fuzz: 11,252 mutants under ASan, clean.
 
 ### Open items from step 3
 

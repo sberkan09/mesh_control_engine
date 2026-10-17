@@ -148,7 +148,12 @@ TEST_CASE("fuzz: importers survive mutated source files of every committed sampl
     std::map<std::string, std::pair<u64, u64>> stats;  // extension -> mutants, accepted
     std::vector<std::uint64_t> storage;
     for (auto& [ext, files] : by_ext) {
-        std::sort(files.begin(), files.end());
+        std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
+            const auto sa = fs::file_size(a), sb = fs::file_size(b);
+            return sa != sb ? sa < sb : a < b;
+        });
+        // Copies of the same sample (every project ships Proggy) add nothing: one file per size.
+        files.erase(std::unique(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) { return fs::file_size(a) == fs::file_size(b); }), files.end());
         if (files.size() > 6) files.resize(6);
         const cook::IImporter* imp = reg.for_extension(StringView(ext.c_str(), ext.size()));
         for (const fs::path& f : files) {
