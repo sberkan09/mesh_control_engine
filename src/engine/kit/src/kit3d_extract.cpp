@@ -626,6 +626,23 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.motion_blur.intensity = env.motion_blur_intensity;
     post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
     post.sharpen = env.sharpen;
+    post.lens.vignette = env.vignette;
+    post.lens.vignette_smoothness = env.vignette_smoothness;
+    post.lens.grain = env.film_grain;
+    post.lens.grain_size = env.grain_size;
+    post.lens.chromatic_aberration = env.chromatic_aberration;
+    post.lens.dirt_intensity = env.lens_dirt_intensity;
+    const u32 dirt = texture_key(env.lens_dirt.guid);
+    post.lens.dirt_key = dirt == ~0u ? 0u : dirt;
+    post.tonemapper = env.tonemapper == 1 ? render::Tonemapper::AgX
+                    : env.tonemapper == 2 ? render::Tonemapper::PbrNeutral : render::Tonemapper::AcesFit;
+    // The primary camera's own focus wins over the environment's.
+    bool focused = false;
+    world.query<const Camera3DComponent&>().each([&](const Camera3DComponent& c) {
+        if (focused || !c.primary) return;
+        focused = true;
+        if (c.focus_distance > 0.0f) post.dof.focus_distance = c.focus_distance;
+    });
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
