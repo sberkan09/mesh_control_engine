@@ -1,8 +1,10 @@
 #include "mce/render/scene3d.h"
 
 #include <cmath>
+#include <cstring>
 
 #include "mce/app.h"
+#include "mce/hash.h"
 
 #include "mce/render/sort_key.h"
 
@@ -130,6 +132,7 @@ Scene3D::Scene3D(const MeshStore& meshes, mem::IAllocator& alloc)
       local_casters_(alloc),
       instances_(alloc),
       draws_(alloc),
+      runs_(alloc),
       shadow_draws_(alloc),
       joint_palette_(alloc),
       batches_(alloc),
@@ -141,6 +144,7 @@ void Scene3D::begin(const Camera3D& camera, rhi::Extent2D viewport) {
     view_ = compute_view_3d(camera, viewport);
     instances_.clear();
     draws_.clear();
+    runs_.clear();
     shadow_draws_.clear();
     probe_draws_.clear();
     probes_.clear();
@@ -552,6 +556,7 @@ void Scene3D::build() {
     while (opaque_count_ < draws_.size() &&
            !drawn_after_opaques(instances_[draws_[opaque_count_].instance], draws_[opaque_count_].mesh->submeshes[draws_[opaque_count_].submesh]))
         ++opaque_count_;
+    build_runs();
 
     // Shadow fit (rhi-renderer.md §3.5): an orthographic box around the scene's bounding sphere,
     // seen from the light, with the light-space origin snapped to shadow-map texels so a moving
@@ -588,6 +593,198 @@ const ClusterLights& Scene3D::clusters() const {
         stats_.cluster_ms += static_cast<f32>((app::steady_clock().now_seconds() - t0) * 1000.0);
     }
     return clusters_;
+}
+
+// ---- automatic instancing (M-VISUAL3 5a) -------------------------------------------------------------
+
+namespace {
+
+bool same_bits(const void* a, const void* b, usize n) { return std::memcmp(a, b, n) == 0; }
+
+u64 ptr_bits(const void* p) { return static_cast<u64>(reinterpret_cast<uintptr_t>(p)); }
+
+// Groups items [0, n) by key: `hash(i)` (~0ull = the item takes part in no group) and `equal(a, b)`.
+// Appends to `order` the items in their output order (offset by `base`) and to `runs` (positions in `order`)
+// one run per group of at least `min_count` items, placed where its first item was, and one single run per
+// other item, at its own position. The optional counters count the groups formed and the items in them.
+template <class Hash, class Equal>
+void group_runs(u32 n, u32 base, u32 min_count, Hash hash, Equal equal, mem::IAllocator& alloc, Array<u32>& order,
+                Array<DrawRun>& runs, u32* runs_grouped = nullptr, u32* items_grouped = nullptr) {
+    if (n == 0) return;
+    u32 cap = 16;
+    while (cap < n * 2) cap *= 2;
+    Array<u32> table(alloc);   // group id per slot, ~0u = empty
+    Array<u64> hashes(alloc);  // per group
+    Array<u32> head(alloc), tail(alloc), size(alloc);
+    Array<u32> next(alloc);   // per item: the next item of its group
+    Array<u32> group(alloc);  // per item: its group, ~0u = none
+    table.resize(cap);
+    for (u32& t : table) t = ~0u;
+    next.resize(n);
+    group.resize(n);
+    for (u32 i = 0; i < n; ++i) {
+        next[i] = ~0u;
+        group[i] = ~0u;
+        const u64 h = hash(i);
+        if (h == ~0ull) continue;
+        u32 s = static_cast<u32>(h) & (cap - 1);
+        u32 g = ~0u;
+        while (table[s] != ~0u) {
+            const u32 c = table[s];
+            if (hashes[c] == h && equal(head[c], i)) {
+                g = c;
+                break;
+            }
+            s = (s + 1) & (cap - 1);
+        }
+        if (g == ~0u) {
+            g = static_cast<u32>(head.size());
+            table[s] = g;
+            hashes.push_back(h);
+            head.push_back(i);
+            tail.push_back(i);
+            size.push_back(1);
+        } else {
+            next[tail[g]] = i;
+            tail[g] = i;
+            ++size[g];
+        }
+        group[i] = g;
+    }
+    const u32 lo = math::max(min_count, 2u);
+    for (u32 i = 0; i < n; ++i) {
+        const u32 g = group[i];
+        if (g == ~0u || size[g] < lo) {
+            runs.push_back({static_cast<u32>(order.size()), 1});
+            order.push_back(base + i);
+            continue;
+        }
+        if (head[g] != i) continue;  // emitted with its group's first item
+        runs.push_back({static_cast<u32>(order.size()), size[g]});
+        for (u32 k = i; k != ~0u; k = next[k]) order.push_back(base + k);
+        if (runs_grouped) ++*runs_grouped;
+        if (items_grouped) *items_grouped += size[g];
+    }
+}
+
+}  // namespace
+
+void Scene3D::build_runs() {
+    runs_.clear();
+    const u32 n = opaque_count_;
+    if (!instancing_.enabled) {
+        for (u32 i = 0; i < n; ++i) runs_.push_back({i, 1});
+        stats_.not_instanced_disabled = static_cast<u32>(draws_.size());
+        return;
+    }
+    stats_.not_instanced_blended = static_cast<u32>(draws_.size()) - n;
+    // Why each opaque draw may or may not join a run (0 = eligible).
+    enum : u8 { kEligible, kTerrain, kSkinned, kMoving };
+    Array<u8> cause(*alloc_);
+    Array<u64> key(*alloc_);
+    Array<u16> segment(*alloc_);
+    cause.resize(n);
+    key.resize(n);
+    segment.resize(n);
+    for (u32 i = 0; i < n; ++i) {
+        const Draw& d = draws_[i];
+        const MeshInstance& inst = instances_[d.instance];
+        const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
+        segment[i] = static_cast<u16>(((albedo_key_of(inst, sm) & 0x7FFF) << 1) |
+                                      ((material_of(inst, sm).flags & asset::MaterialFlags::DoubleSided) ? 1u : 0u));
+        cause[i] = inst.terrain                                        ? kTerrain
+                   : (d.mesh->skinned() || d.palette != ~0u)           ? kSkinned
+                   : !same_bits(&d.prev_model, &d.model, sizeof(mat4)) ? kMoving
+                                                                       : kEligible;
+        u64 h = kFnv64Offset;
+        if (cause[i] == kEligible) {
+            h = hash_combine(h, ptr_bits(d.mesh));
+            h = hash_combine(h, (u64(d.submesh) << 32) | d.lod);
+            h = hash_combine(h, ptr_bits(inst.material));
+            h = fnv1a64(&inst.tint, sizeof(inst.tint), h);
+            h = fnv1a64(&inst.emissive_tint, sizeof(inst.emissive_tint), h);
+            if (h == ~0ull) h = 0;
+        }
+        key[i] = cause[i] == kEligible ? h : ~0ull;
+    }
+    for (u32 i = 0; i < n; ++i) {
+        if (cause[i] == kTerrain)
+            ++stats_.not_instanced_terrain;
+        else if (cause[i] == kSkinned)
+            ++stats_.not_instanced_skinned;
+        else if (cause[i] == kMoving)
+            ++stats_.not_instanced_moving;
+    }
+    // Group within each material segment (contiguous: the sort's major key); permute the draws.
+    Array<u32> order(*alloc_);
+    order.reserve(n);
+    u32 grouped = 0;
+    for (u32 s = 0; s < n;) {
+        u32 e = s + 1;
+        while (e < n && segment[e] == segment[s]) ++e;
+        auto hash = [&](u32 i) { return key[s + i]; };
+        auto equal = [&](u32 a, u32 b) {
+            const Draw& x = draws_[s + a];
+            const Draw& y = draws_[s + b];
+            const MeshInstance& xi = instances_[x.instance];
+            const MeshInstance& yi = instances_[y.instance];
+            return x.mesh == y.mesh && x.submesh == y.submesh && x.lod == y.lod && xi.material == yi.material &&
+                   same_bits(&xi.tint, &yi.tint, sizeof(xi.tint)) &&
+                   same_bits(&xi.emissive_tint, &yi.emissive_tint, sizeof(xi.emissive_tint));
+        };
+        group_runs(e - s, s, instancing_.min_count, hash, equal, *alloc_, order, runs_, &stats_.runs_instanced,
+                   &grouped);
+        s = e;
+    }
+    stats_.draws_instanced = grouped;
+    u32 eligible = 0;
+    for (u32 i = 0; i < n; ++i) eligible += cause[i] == kEligible ? 1u : 0u;
+    stats_.not_instanced_single = eligible - grouped;
+    bool moved = false;
+    for (u32 i = 0; i < n && !moved; ++i) moved = order[i] != i;
+    if (!moved) return;
+    Array<Draw> sorted(*alloc_);
+    sorted.reserve(draws_.size());
+    for (u32 i = 0; i < n; ++i) sorted.push_back(draws_[order[i]]);
+    for (u32 i = n; i < draws_.size(); ++i) sorted.push_back(draws_[i]);
+    draws_ = std::move(sorted);
+}
+
+void Scene3D::caster_runs(Span<const u32> casters, Array<u32>& sorted, Array<DrawRun>& runs) const {
+    sorted.clear();
+    runs.clear();
+    const u32 n = static_cast<u32>(casters.size());
+    if (!instancing_.enabled) {
+        for (u32 i = 0; i < n; ++i) {
+            sorted.push_back(casters[i]);
+            runs.push_back({i, 1});
+        }
+        return;
+    }
+    sorted.reserve(n);
+    // The material is part of the key only when it alpha-masks: its override (or none) and a mask bit.
+    auto material_bits = [&](const Draw& d) -> u64 {
+        const MeshInstance& inst = instances_[d.instance];
+        const bool mask = (material_of(inst, d.mesh->submeshes[d.submesh]).flags & asset::MaterialFlags::AlphaMask) != 0;
+        return mask ? ptr_bits(inst.material) | 1u : 0u;
+    };
+    auto hash = [&](u32 i) -> u64 {
+        const Draw& d = shadow_draws_[casters[i]];
+        if (d.mesh->skinned() || d.palette != ~0u) return ~0ull;
+        u64 h = hash_combine(kFnv64Offset, ptr_bits(d.mesh));
+        h = hash_combine(h, (u64(d.submesh) << 32) | d.lod);
+        h = hash_combine(h, material_bits(d));
+        return h == ~0ull ? 0 : h;
+    };
+    auto equal = [&](u32 a, u32 b) {
+        const Draw& x = shadow_draws_[casters[a]];
+        const Draw& y = shadow_draws_[casters[b]];
+        return x.mesh == y.mesh && x.submesh == y.submesh && x.lod == y.lod && material_bits(x) == material_bits(y);
+    };
+    Array<u32> order(*alloc_);
+    order.reserve(n);
+    group_runs(n, 0, instancing_.min_count, hash, equal, *alloc_, order, runs);
+    for (u32 i : order) sorted.push_back(casters[i]);
 }
 
 // Cascade ranges: nominal [n_i, f_i] with f_i = distance * splits[i]. Cascade i+1 is fitted from

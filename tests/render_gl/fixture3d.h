@@ -32,7 +32,9 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f) {
+    // `desc` (optional) replaces the Forward3DDesc the other arguments make, shadow_size aside.
+    explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f,
+                       const Forward3DDesc* desc = nullptr) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -53,6 +55,10 @@ struct Fixture3D {
         fd.gpu_light_clusters = gpu_clusters;
         fd.ibl = ibl;
         fd.render_scale = render_scale;
+        if (desc) {
+            fd = *desc;
+            fd.shadow_size = 1024;
+        }
         REQUIRE(renderer.init_3d(fd).has_value());
         rhi::TextureDesc td;
         td.size = {kW, kH};
@@ -422,6 +428,41 @@ inline void upload_sphere(Fixture3D& f, u32 key, vec3 center, f32 radius, f32 me
     sm.index_count = u32(b.indices.size());
     b.submeshes.push_back(sm);
     REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// M-VISUAL3 5a: mesh `key`, a 0.5 m crate (a body and a darker lid, two submeshes) standing on the origin,
+// and a grid of `cols` x `rows` copies of it 1.1 m apart around the fixture's box (instancing's subject).
+inline void upload_crate(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    mesh_fixture::Box body;
+    body.center = {0, 0.22f, 0};
+    body.half = {0.25f, 0.22f, 0.25f};
+    body.color[0] = 0.6f;
+    body.color[1] = 0.42f;
+    body.color[2] = 0.22f;
+    b.add_box(body);
+    mesh_fixture::Box lid;
+    lid.center = {0, 0.47f, 0};
+    lid.half = {0.27f, 0.03f, 0.27f};
+    lid.color[0] = 0.35f;
+    lid.color[1] = 0.24f;
+    lid.color[2] = 0.12f;
+    b.add_box(lid);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+inline void add_crate_grid(Scene3D& s, u32 key, u32 cols = 5, u32 rows = 4) {
+    for (u32 z = 0; z < rows; ++z)
+        for (u32 x = 0; x < cols; ++x) {
+            const f32 px = (f32(x) - 0.5f * f32(cols - 1)) * 1.1f, pz = (f32(z) - 0.5f * f32(rows - 1)) * 1.1f + 0.8f;
+            if (std::fabs(px) < 0.8f && std::fabs(pz) < 0.8f) continue;  // leave the fixture's box free
+            MeshInstance m;
+            m.mesh = key;
+            m.world =
+                math::trs({px, 0.0f, pz}, math::quat_from_axis_angle({0, 1, 0}, 0.15f * f32((x + z) % 3)), {1, 1, 1});
+            s.add(m);
+        }
 }
 
 }  // namespace mce::render_test

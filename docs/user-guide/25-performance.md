@@ -127,7 +127,7 @@ machine, but another RHI backend can count passes or batches differently.
 
 | What is over | What usually fixes it |
 |---|---|
-| `draws`, `sprite_batches` | Sprites batch by texture: pack small images into one spritesheet (`.mcsheet`) so they share one. Fewer materials; merge static meshes |
+| `draws`, `sprite_batches` | Sprites batch by texture: pack small images into one spritesheet (`.mcsheet`) so they share one. Fewer materials; merge static meshes. In 3D, copies of one mesh with one material and tint already draw as one instanced draw per pass (chapter 8.6, automatic instancing): a tint per copy, or a material override per copy, splits them again |
 | `sim_ms` | `top_systems` names the system. Look for a walk over every entity inside a walk over every entity: bucket into a grid, or keep the answer between ticks. Fewer physics bodies |
 | `render_ms` | The CPU side of drawing: fewer things to extract (cull, hide what is off screen), fewer batches |
 | `gpu_ms` | `gpu_stages` names the pass: lower or turn off the costly effect (`Environment3D`: shadows, SSAO, SSR, bloom) |

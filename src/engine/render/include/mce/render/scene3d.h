@@ -561,6 +561,18 @@ struct View3D {
     rhi::Extent2D viewport;
 };
 
+// Automatic instancing (M-VISUAL3 5a): consecutive draws of the same rigid submesh with the same material
+// and tint, drawn as one instanced draw per pass. Scene3D::build() forms the runs of the main view's opaque
+// list (and Scene3D::caster_runs() those of a shadow caster list); Forward3D draws them.
+struct DrawRun {  // draws()[first, first + count) draw as one instanced draw (count 1: a single draw)
+    u32 first = 0;
+    u32 count = 0;
+};
+struct InstancingSettings {
+    bool enabled = true;  // false: no runs are formed and the draw order is the sort's alone
+    u32 min_count = 2;    // runs shorter than this stay single draws
+};
+
 View3D compute_view_3d(const Camera3D& cam, rhi::Extent2D viewport);
 // Sphere vs the view's frustum planes (conservative).
 bool sphere_visible(const View3D& v, math::vec3 center, f32 radius);
@@ -608,6 +620,16 @@ public:
         u32 decals_culled = 0;          // outside the view
         u32 decals_dropped = 0;         // visible, past kMaxDecals or kMaxDecalTextures
         u32 particle_emitters = 0;
+        // Automatic instancing (M-VISUAL3 5a), main view. Every draw of draws() is counted once:
+        // draws_instanced + the not_instanced_* counters = draws().size().
+        u32 runs_instanced = 0;          // opaque runs of at least InstancingSettings::min_count draws
+        u32 draws_instanced = 0;         // ... the draws inside them
+        u32 not_instanced_blended = 0;   // drawn after the opaques (alpha blended or transmissive)
+        u32 not_instanced_terrain = 0;   // terrain nodes
+        u32 not_instanced_skinned = 0;   // submeshes of skinned meshes (deformed or not)
+        u32 not_instanced_moving = 0;    // moved since last frame (prev_model != model)
+        u32 not_instanced_single = 0;    // eligible, but no copy shares the run (or the run is under min_count)
+        u32 not_instanced_disabled = 0;  // InstancingSettings::enabled is off: every draw
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
@@ -628,6 +650,8 @@ public:
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
     void set_lod(const LodSettings& lod) { lod_ = lod; }
+    void set_instancing(const InstancingSettings& s) { instancing_ = s; }
+    const InstancingSettings& instancing() const { return instancing_; }
     // The physically based sky (M-VISUAL 7): with Atmosphere::enabled, build() tints the light and
     // sets its ambient from it (see Atmosphere) and Forward3D draws its sky in place of Sky's.
     void set_atmosphere(const Atmosphere& atmosphere) { atmosphere_ = atmosphere; }
@@ -700,6 +724,17 @@ public:
     // attempted: the key's material field groups texture binds), then blended back-to-front.
     Span<const Draw> draws() const { return draws_.span(); }
     u32 opaque_count() const { return opaque_count_; }
+    // The opaque list as runs (M-VISUAL3 5a): they cover [0, opaque_count()) exactly, in draw order; a run of
+    // count >= InstancingSettings::min_count is one instanced draw. Within each material segment of the sort
+    // (equal albedo key and sidedness), build() gathers the draws sharing a key (mesh, submesh, LOD level,
+    // MeshInstance::material, bitwise tint and emissive_tint; rigid, not terrain, not moving) at the
+    // position of the first of them, so the list stays front to back between groups.
+    Span<const DrawRun> opaque_runs() const { return runs_.span(); }
+    // The runs of a shadow caster list (indices into shadow_draws(): a cascade's or a local tile's): the
+    // casters reordered into `sorted`, grouped on (mesh, submesh, LOD level, and the material only when it
+    // alpha-masks; rigid meshes only), and `runs` into `sorted`. Depth-only passes do not depend on the
+    // order. With instancing off, `sorted` is `casters` and every run is one draw.
+    void caster_runs(Span<const u32> casters, Array<u32>& sorted, Array<DrawRun>& runs) const;
     // Every submesh of every instance (shadows come from off-screen casters too).
     Span<const Draw> shadow_draws() const { return shadow_draws_.span(); }
     Span<const InstanceBatch> batches() const { return batches_.span(); }
@@ -723,6 +758,7 @@ private:
     mutable Stats stats_;
     void build_cascades();
     void build_local_shadows();
+    void build_runs();
     u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
     const MeshStore* meshes_;
@@ -741,6 +777,7 @@ private:
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
+    InstancingSettings instancing_;
     GiVolume gi_;
     Atmosphere atmosphere_;
     math::vec3 atmosphere_sun_{0.0f, 1.0f, 0.0f};
@@ -755,6 +792,7 @@ private:
     Array<u32> local_casters_;
     Array<MeshInstance> instances_;
     Array<Draw> draws_;
+    Array<DrawRun> runs_;
     Array<Draw> shadow_draws_;
     Array<Draw> probe_draws_;
     Array<ReflectionProbe> probes_;
