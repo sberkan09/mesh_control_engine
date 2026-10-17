@@ -252,6 +252,40 @@ def test_map_and_errors(work):
     check(code == 1, "a missing source is an error")
 
 
+def test_node_rigs(work):
+    # a rig animated through plain nodes (no skin), as in Kenney's Blocky Characters
+    rig = [("root", None, (0, 0, 0), (0, 0, 0, 1)), ("torso", "root", (0, .5, 0), (0, 0, 0, 1)),
+           ("arm-left", "torso", (.3, .3, 0), (0, 0, 0, 1)), ("arm-right", "torso", (-.3, .3, 0), (0, 0, 0, 1)),
+           ("leg-left", "root", (.1, .3, 0), (0, 0, 0, 1)), ("leg-right", "root", (-.1, .3, 0), (0, 0, 0, 1)),
+           ("head", "torso", (0, .6, 0), (0, 0, 0, 1))]
+    clip = {"wave": {"rot": {"arm-left": [(0, (0, 0, 0, 1)), (1, rf.quat_z(60))]}}}
+    src = load_rig(work, "node_src.glb", rig, clip, mesh=False)
+    dst = load_rig(work, "node_dst.glb", rig, mesh=False)
+    out = os.path.join(work, "node_out.glb")
+    code, err = run([src, "--onto", dst, "--out", out])
+    check(code == 1 and "no skin" in err and "--map-only" in err, "a skinless rig is refused with the way out: " + err)
+    mp = os.path.join(work, "node_map.json")
+    with open(mp, "w") as f:
+        json.dump({n: n for n, *_ in rig}, f)
+    code, err = run([src, "--onto", dst, "--out", out, "--map", mp, "--map-only"])
+    check(code == 0, "--map-only retargets a node rig: " + err)
+    c = read_clip(out, "wave")
+    check(c is not None and near(c[("arm-left", "rotation")][1][1], rf.quat_z(60), 1e-4), "the node clip arrives")
+
+
+def test_texture_folder_warning(work, src, dst):
+    w = rt.Writer(rt.Gltf(dst))
+    w.j["images"] = [{"uri": "Textures/skin.png"}]
+    textured = os.path.join(work, "textured.glb")
+    with open(textured, "wb") as f:
+        f.write(w.to_glb())
+    other = os.path.join(work, "elsewhere")
+    code, err = run([src, "--onto", textured, "--out", os.path.join(other, "o.glb")])
+    check(code == 0 and "linked by relative path" in err and "Textures/skin.png" in err, "an output away from the textures warns: " + err)
+    code, err = run([src, "--onto", textured, "--out", os.path.join(work, "beside.glb")])
+    check("relative path" not in err, "an output beside the character does not")
+
+
 def test_cook(work, out):
     if not COOK:
         return
@@ -272,8 +306,10 @@ def main():
     res = test_apose_to_tpose(work)
     if res:
         test_options(work, *res)
+        test_texture_folder_warning(work, *res)
         test_cook(work, os.path.join(work, "opt.glb"))
     test_map_and_errors(work)
+    test_node_rigs(work)
     if failures:
         print(f"{len(failures)} failure(s)")
         return 1

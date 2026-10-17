@@ -161,7 +161,7 @@ mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size
 mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
 mce content list|info|check|fetch|add|verify|credits ...    (open-licence content ledger, chapter 5.3)
 mce retarget <source.glb>... --onto <character.glb> [--out f.glb | --inplace] [--clips a,b] [--prefix p] [--map f.json]
-             [--in-place-motion] [--no-translation] [--scale auto|N] [--strict]    (chapter 8.9)
+             [--in-place-motion] [--no-translation] [--scale auto|N] [--map-only] [--strict]    (chapter 8.9)
 mce ship <project> [--target desktop|web] [--out dir] [--version v] [--max-texture-size N] [--textures rgba8|bc]
 mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]
