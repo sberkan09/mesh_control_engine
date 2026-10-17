@@ -388,6 +388,10 @@ bots play from the actor's position through the game's input actions.
 
 ### 14.3.1 Scenarios (.mctest) and bots
 
+`mce test <project> [path]` plays the same scenarios from a terminal or CI with no agent (it starts the project's MCP server, calls
+`test_run`, prints each scenario as pass or FAIL with the failed checks and any script errors, and exits 1 on a failure or when
+there are none).
+
 A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
 
 ```json
