@@ -15,6 +15,7 @@ namespace mce::script {
 // The C functions reach the host's per-run context through this (a friend of ScriptHost).
 struct HostAccess {
     using FieldHandle = ScriptHost::FieldHandle;
+    using StateWatch = ScriptHost::StateWatch;
     static ScriptHost& host(lua_State* L) { return *static_cast<ScriptHost*>(lua_callbacks(L)->userdata); }
     static Frame* frame(ScriptHost& h) { return h.frame_; }
     static u32 current(ScriptHost& h) { return h.current_; }

@@ -11,6 +11,7 @@
 #include "api.h"
 #include "mce/asset/guid.h"
 #include "mce/asset/handle.h"
+#include "mce/containers/hash_map.h"
 #include "mce/crash.h"
 #include "mce/hash.h"
 #include "mce/log.h"
@@ -657,6 +658,306 @@ void ScriptHost::fail(u32 index, const char* message) {
     MCE_LOG_ERROR("script failed: {}", info.error.c_str());  // the error names the script and line
 }
 
+// ---- the state check (M-SCRIPT3 step 2) ---------------------------------------------------------
+//
+// After a script's top level ran, one walk from its update() and its global table freezes every
+// table it reaches (and every userdata's metatable), and records every upvalue slot of the
+// functions it reaches and every buffer, with its value then. Frozen tables can only change
+// through an upvalue or a buffer, so comparing those after each update() finds any state the
+// script kept between ticks (iteration order over object keys excepted, which no check sees).
+// The walk runs no Lua code (raw iteration, raw metatables) and lives in lua_cpcall, so running
+// out of VM memory fails the load instead of unwinding the host.
+
+namespace {
+
+using StateWatch = HostAccess::StateWatch;
+
+constexpr usize kWatchedBufferBytes = 256u * 1024u;  // per script: buffers are compared byte by byte
+
+struct WalkItem {
+    u32 root;  // where the walk first found it (index into watch_roots_)
+    i32 line;  // line of the nearest function on the way
+};
+
+// What watch_state hands the walk. Plain pointers only: Luau errors longjmp through walk_state.
+struct StateWalk {
+    HashMap<const void*, u8>* visited = nullptr;
+    Array<WalkItem>* items = nullptr;  // parallel to the queue table
+    Array<StateWatch>* watches = nullptr;
+    Array<u8>* bytes = nullptr;
+    Array<FixedString<64>>* roots = nullptr;
+    int update_ref = -1;
+    u32 update_root = 0;  // "update()"; the script's globals are the next one
+    usize buffer_bytes = 0;
+};
+
+constexpr int kWalkQueue = 2;  // stack index of the queue table inside walk_state
+
+// Tables, functions, userdata and buffers can hold or be state; everything else is a value
+// (strings, numbers, vectors, booleans, light userdata) or something scripts cannot make (threads).
+bool walkable(lua_State* L, int idx) {
+    switch (lua_type(L, idx)) {
+        case LUA_TTABLE:
+        case LUA_TFUNCTION:
+        case LUA_TUSERDATA:
+        case LUA_TBUFFER:
+        case LUA_TCLASS:
+        case LUA_TOBJECT: return true;
+        default: return false;
+    }
+}
+
+// Queues the value at `idx` unless it is a value or was seen (cycles end here).
+void walk_push(lua_State* L, StateWalk& s, int idx, u32 root, i32 line) {
+    if (!walkable(L, idx)) return;
+    if (lua_type(L, idx) == LUA_TCLASS || lua_type(L, idx) == LUA_TOBJECT)
+        luaL_error(L, "update() reaches a class object, which the state check cannot see into");
+    if (!s.visited->try_emplace(lua_topointer(L, idx)).second) return;
+    lua_pushvalue(L, idx);
+    lua_rawseti(L, kWalkQueue, static_cast<int>(s.items->size() + 1));
+    s.items->push_back(WalkItem{root, line});
+}
+
+// "'n'" when the bytecode names upvalues (debugLevel 2), "#1" otherwise.
+void upvalue_label(char* out, usize size, const char* name, int n) {
+    if (name && name[0]) std::snprintf(out, size, "'%s'", name);
+    else std::snprintf(out, size, "#%d", n);
+}
+
+u32 add_root(StateWalk& s, const char* text) {
+    s.roots->push_back(FixedString<64>(text));
+    return static_cast<u32>(s.roots->size() - 1);
+}
+
+// The upvalue at the stack top, as a watch of the function at `fn`.
+void watch_upvalue(lua_State* L, StateWalk& s, int fn, int n, u32 root, i32 line, bool of_update) {
+    StateWatch w;
+    w.of_c = lua_iscfunction(L, fn) != 0;
+    w.root = root;
+    w.line = line;
+    w.slot = static_cast<u16>(n);
+    w.of_update = of_update;
+    w.type = static_cast<u8>(lua_type(L, -1));
+    if (w.type == LUA_TNUMBER) {  // by bit pattern: a NaN stays equal to itself
+        const double d = lua_tonumber(L, -1);
+        std::memcpy(w.bits, &d, sizeof(d));
+    } else if (w.type == LUA_TVECTOR) {
+        std::memcpy(w.bits, lua_tovector(L, -1), LUA_VECTOR_SIZE * sizeof(float));
+    } else {
+        w.base_ref = lua_ref(L, -1);  // keeps the baseline alive: no address reuse
+    }
+    w.holder_ref = lua_ref(L, fn);
+    s.watches->push_back(w);
+}
+
+void walk_one(lua_State* L, StateWalk& s, usize i) {
+    const int t = lua_gettop(L);
+    const WalkItem item = (*s.items)[i];
+    switch (lua_type(L, t)) {
+        case LUA_TTABLE: {
+            const bool globals = i == 1;  // the script's own global table: each entry names its root
+            lua_setreadonly(L, t, 1);
+            for (int it = 0; (it = lua_rawiter(L, t, it)) >= 0; lua_pop(L, 2)) {
+                u32 root = item.root;
+                if (globals && lua_type(L, -2) == LUA_TSTRING && walkable(L, -1) && !s.visited->contains(lua_topointer(L, -1))) {
+                    char label[64];
+                    std::snprintf(label, sizeof(label), "global '%s'", lua_tostring(L, -2));
+                    root = add_root(s, label);
+                }
+                walk_push(L, s, -2, root, item.line);
+                walk_push(L, s, -1, root, item.line);
+            }
+            if (lua_getmetatable(L, t)) {
+                walk_push(L, s, -1, item.root, item.line);
+                lua_pop(L, 1);
+            }
+            return;
+        }
+        case LUA_TFUNCTION: {
+            const bool is_lua = !lua_iscfunction(L, t);
+            const bool of_update = i == 0;
+            i32 line = item.line;
+            lua_Debug ar;
+            if (is_lua && lua_getinfo(L, -1, "s", &ar)) line = ar.linedefined;
+            // C closures too: string.gmatch keeps its position in an upvalue.
+            for (int n = 1;; ++n) {
+                const char* name = lua_getupvalue(L, t, n);
+                if (!name) break;
+                u32 root = item.root;
+                if (of_update && walkable(L, -1) && !s.visited->contains(lua_topointer(L, -1))) {
+                    char uv[40];
+                    char label[64];
+                    upvalue_label(uv, sizeof(uv), name, n);
+                    std::snprintf(label, sizeof(label), "upvalue %s of update()", uv);
+                    root = add_root(s, label);
+                }
+                watch_upvalue(L, s, t, n, item.root, line, of_update);
+                walk_push(L, s, -1, root, line);
+                lua_pop(L, 1);
+            }
+            if (is_lua) {
+                lua_getfenv(L, t);
+                walk_push(L, s, -1, item.root, line);
+                lua_pop(L, 1);
+            }
+            return;
+        }
+        case LUA_TUSERDATA:
+            if (lua_getmetatable(L, t)) {  // newproxy(true): a metatable the script owns
+                walk_push(L, s, -1, item.root, item.line);
+                lua_pop(L, 1);
+            }
+            return;
+        case LUA_TBUFFER: {
+            size_t len = 0;
+            const void* data = lua_tobuffer(L, t, &len);
+            s.buffer_bytes += len;
+            if (s.buffer_bytes > kWatchedBufferBytes)
+                luaL_error(L, "the buffers update() reaches hold more than %u KiB, more than the state check watches; create them per call",
+                           static_cast<unsigned>(kWatchedBufferBytes / 1024u));
+            StateWatch w;
+            w.root = item.root;
+            w.line = item.line;
+            w.type = LUA_TBUFFER;
+            w.bits[0] = s.bytes->size();
+            w.bits[1] = len;
+            w.holder_ref = lua_ref(L, t);
+            s.watches->push_back(w);
+            s.bytes->resize(s.bytes->size() + len);
+            if (len) std::memcpy(s.bytes->data() + w.bits[0], data, len);
+            return;
+        }
+        default: return;
+    }
+}
+
+int walk_state(lua_State* L) {
+    StateWalk& s = *static_cast<StateWalk*>(lua_touserdata(L, 1));
+    lua_createtable(L, 0, 0);  // kWalkQueue: every object found, in order (and kept alive)
+    // The shared globals and the library tables in them are read-only already (luaL_sandbox), and
+    // `mce` must stay writable for the host's mce.dt: seen before the walk starts.
+    s.visited->try_emplace(lua_topointer(L, LUA_GLOBALSINDEX));
+    for (int it = 0; (it = lua_rawiter(L, LUA_GLOBALSINDEX, it)) >= 0; lua_pop(L, 2))
+        if (lua_istable(L, -1)) s.visited->try_emplace(lua_topointer(L, -1));
+
+    lua_getref(L, s.update_ref);
+    lua_Debug ar;
+    const i32 update_line = lua_getinfo(L, -1, "s", &ar) ? ar.linedefined : 0;
+    walk_push(L, s, -1, s.update_root, update_line);  // item 0
+    lua_getfenv(L, -1);
+    walk_push(L, s, -1, s.update_root + 1, update_line);  // item 1: the script's global table
+    lua_pop(L, 2);
+    for (usize i = 0; i < s.items->size(); ++i) {
+        lua_rawgeti(L, kWalkQueue, static_cast<int>(i + 1));
+        walk_one(L, s, i);
+        lua_pop(L, 1);
+    }
+    return 0;
+}
+
+// The watched upvalue's value at the stack top against its baseline.
+bool same_value(lua_State* L, const StateWatch& w) {
+    const int type = lua_type(L, -1);
+    if (type != w.type) return false;
+    if (type == LUA_TNUMBER) {
+        const double d = lua_tonumber(L, -1);
+        return std::memcmp(&d, w.bits, sizeof(d)) == 0;
+    }
+    if (type == LUA_TVECTOR) return std::memcmp(lua_tovector(L, -1), w.bits, LUA_VECTOR_SIZE * sizeof(float)) == 0;
+    lua_getref(L, w.base_ref);
+    const bool same = lua_rawequal(L, -1, -2) != 0;
+    lua_pop(L, 1);
+    return same;
+}
+
+}  // namespace
+
+bool ScriptHost::watch_state(u32 index) {
+    HashMap<const void*, u8> visited;
+    Array<WalkItem> items;
+    StateWalk s;
+    s.visited = &visited;
+    s.items = &items;
+    s.watches = &watches_;
+    s.bytes = &watch_bytes_;
+    s.roots = &watch_roots_;
+    s.update_ref = update_refs_[index];
+    s.update_root = static_cast<u32>(watch_roots_.size());
+    watch_roots_.push_back(FixedString<64>("update()"));
+    watch_roots_.push_back(FixedString<64>("the script's globals"));
+    const usize bytes_first = watch_bytes_.size();
+    if (lua_cpcall(L_, &walk_state, &s) == 0) return true;
+    const char* why = lua_tostring(L_, -1);
+    FixedString<256> msg(infos_[index].name.view());
+    msg.append(": state check: ");
+    msg.append(why ? why : "error");
+    lua_pop(L_, 1);
+    for (usize k = watch_first_[index]; k < watches_.size(); ++k) {
+        lua_unref(L_, watches_[k].holder_ref);
+        lua_unref(L_, watches_[k].base_ref);
+    }
+    watches_.resize(watch_first_[index]);
+    watch_bytes_.resize(bytes_first);
+    fail(index, msg.c_str());
+    return false;
+}
+
+bool ScriptHost::state_unchanged(u32 index) {
+    const usize end = index + 1 < watch_first_.size() ? watch_first_[index + 1] : watches_.size();
+    for (usize k = watch_first_[index]; k < end; ++k) {
+        const StateWatch& w = watches_[k];
+        lua_getref(L_, w.holder_ref);
+        bool same = true;
+        if (w.slot == 0) {
+            size_t len = 0;
+            const void* data = lua_tobuffer(L_, -1, &len);
+            same = len == w.bits[1] && (len == 0 || std::memcmp(data, watch_bytes_.data() + w.bits[0], len) == 0);
+            lua_pop(L_, 1);
+        } else {
+            lua_getupvalue(L_, -1, w.slot);
+            same = same_value(L_, w);
+            lua_pop(L_, 2);
+        }
+        if (same) continue;
+        // "<name>:<line>: update() kept state between ticks: <what> changed; keep it in a component"
+        char line[16];
+        std::snprintf(line, sizeof(line), ":%d: ", w.line);
+        FixedString<256> msg(infos_[index].name.view());
+        msg.append(line);
+        msg.append("update() kept state between ticks: ");
+        if (w.slot == 0) {
+            msg.append("a buffer reached from ");
+            msg.append(watch_roots_[w.root].view());
+        } else {
+            lua_getref(L_, w.holder_ref);
+            char uv[40];
+            const char* uv_name = lua_getupvalue(L_, -1, w.slot);
+            upvalue_label(uv, sizeof(uv), uv_name, w.slot);
+            lua_pop(L_, uv_name ? 2 : 1);
+            msg.append("upvalue ");
+            msg.append(uv);
+            if (w.of_update) {
+                msg.append(" of update()");
+            } else {
+                char holder[48];
+                if (w.of_c) std::snprintf(holder, sizeof(holder), " of a library function");
+                else std::snprintf(holder, sizeof(holder), " of the function defined at line %d", w.line);
+                msg.append(holder);
+            }
+        }
+        msg.append(" changed");
+        if (!w.of_update && w.slot != 0) {
+            msg.append(" (reached from ");
+            msg.append(watch_roots_[w.root].view());
+            msg.append(")");
+        }
+        msg.append("; keep it in a component");
+        fail(index, msg.c_str());
+        return false;
+    }
+    return true;
+}
+
 Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode, u8 group) {
     FixedString<64> chunk(name);
     FixedString<66> chunk_name("=");  // '=' : error messages say "name:line:", not [string "name"]
@@ -676,6 +977,7 @@ Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode, u
     infos_.push_back(info);
     update_refs_.push_back(-1);
     groups_.push_back(group);
+    watch_first_.push_back(static_cast<u32>(watches_.size()));
 
     current_ = index;
     steps_ = 0;
@@ -696,6 +998,8 @@ Result<u32> ScriptHost::add_bytecode(StringView name, Span<const u8> bytecode, u
     lua_setreadonly(T, -1, 1);  // no new globals after the top level
     lua_pop(T, 1);
     lua_pop(L_, 1);  // the thread stays reachable through its function's environment
+    if (budget_.check_state && !watch_state(index))
+        return Error(Errc::ParseError, "script.load", infos_[index].error.view());
     return index;
 }
 
@@ -736,8 +1040,18 @@ void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
         in_update_ = false;
         infos_[i].last_steps = steps_;
         if (rc != 0) {
-            fail(i, lua_tostring(L_, -1));
+            // A write into a table the state check froze: say why it is frozen.
+            const char* msg = lua_tostring(L_, -1);
+            if (budget_.check_state && msg && StringView(msg).ends_with("readonly table")) {
+                FixedString<256> hinted(msg);
+                hinted.append(" (tables reachable from update() are frozen after the top level; keep state in a component)");
+                fail(i, hinted.c_str());
+            } else {
+                fail(i, msg);
+            }
             lua_pop(L_, 1);
+        } else if (budget_.check_state) {
+            state_unchanged(i);
         }
     }
     frame_ = nullptr;
