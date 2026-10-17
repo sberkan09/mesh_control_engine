@@ -411,7 +411,7 @@ TEST_CASE("gltf ext: sparse indices accessor, animation output and inverse bind 
         const int aw = d.acc(d.data_view(bytes_of(weights)), kFloat, 3, "VEC4");
         std::vector<float> ibm(32, 0.0f);
         for (int j = 0; j < 2; ++j)
-            for (int k = 0; k < 4; ++k) ibm[static_cast<size_t>(j * 16 + k * 5)] = 1.0f;
+            for (int k = 0; k < 4; ++k) ibm[static_cast<size_t>(j) * 16 + static_cast<size_t>(k) * 5] = 1.0f;
         ibm[16 + 13] = -1.0f;  // joint 1: translate y by -1
         int aibm;
         if (!sparse) {
@@ -468,10 +468,13 @@ TEST_CASE("gltf ext: a KHR_mesh_quantization cube equals the float cube within o
     SUBCASE("normalized SHORT positions, normalized BYTE normals, plain SHORT texcoords") {
         Doc d;
         std::vector<i16> pos;
+        pos.reserve(c.pos.size());
         for (float x : c.pos) pos.push_back(static_cast<i16>(std::lround(x * 2.0f * 32767.0f)));  // +-0.5 -> +-1.0, node scale 0.5
         std::vector<i8> nrm;
+        nrm.reserve(c.nrm.size());
         for (float x : c.nrm) nrm.push_back(static_cast<i8>(std::lround(x * 127.0f)));
         std::vector<i16> uv;
+        uv.reserve(c.uv.size());
         for (float x : c.uv) uv.push_back(static_cast<i16>(x));  // 0 or 1
         const int ap = d.acc(d.data_view(bytes_of(pos)), kShort, Cube::kVerts, "VEC3", "\"normalized\":true");
         const int an = d.acc(d.data_view(bytes_of(nrm)), kByte, Cube::kVerts, "VEC3", "\"normalized\":true");
@@ -502,10 +505,13 @@ TEST_CASE("gltf ext: a KHR_mesh_quantization cube equals the float cube within o
     SUBCASE("plain BYTE positions, normalized SHORT normals, normalized UNSIGNED_SHORT texcoords") {
         Doc d;
         std::vector<i8> pos;
+        pos.reserve(c.pos.size());
         for (float x : c.pos) pos.push_back(static_cast<i8>(x * 200.0f));  // +-100, node scale 0.005
         std::vector<i16> nrm;
+        nrm.reserve(c.nrm.size());
         for (float x : c.nrm) nrm.push_back(static_cast<i16>(std::lround(x * 32767.0f)));
         std::vector<u16> uv;
+        uv.reserve(c.uv.size());
         for (float x : c.uv) uv.push_back(static_cast<u16>(x * 65535.0f));
         const int ap = d.acc(d.data_view(bytes_of(pos)), kByte, Cube::kVerts, "VEC3");
         const int an = d.acc(d.data_view(bytes_of(nrm)), kShort, Cube::kVerts, "VEC3", "\"normalized\":true");
@@ -1251,9 +1257,16 @@ struct MutDoc {
         std::string s = "{";
         bool first = true;
         for (const auto& [key, def] : fields) {
-            const std::string v = val(path + "." + key, def);
+            std::string sub = path;
+            sub += '.';
+            sub += key;
+            const std::string v = val(sub, def);
             if (v.empty()) continue;
-            s += (first ? "" : ",") + ("\"" + key + "\":") + v;
+            if (!first) s += ',';
+            s += '"';
+            s += key;
+            s += "\":";
+            s += v;
             first = false;
         }
         return val(path, s + "}");
