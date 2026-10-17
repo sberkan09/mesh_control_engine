@@ -180,3 +180,178 @@ end
     CHECK(run(17) == straight);
     CHECK(run(2) == straight);
 }
+
+// M-SCRIPT3 step 2: what the compiler cannot see, the host catches at run time. After the top level
+// every table update() reaches is frozen (a write fails at its line), and its upvalues and buffers
+// are compared after each update().
+
+namespace {
+
+struct Hidden {
+    const char* name;
+    const char* source;
+    const char* error;  // the start of the script's error after the first tick
+};
+
+// Loads `source` (which must pass the static check) next to an entity with a Score, ticks once.
+std::string first_tick_error(const char* name, const char* source, const script::ScriptBudget& budget = {}, u32 ticks = 1) {
+    World w;
+    w.register_components<Score>();
+    w.spawn_with(Score{});
+    ScriptHost host(budget);
+    Result<u32> r = script::add_source(host, name, source);
+    REQUIRE_MESSAGE(r, (r ? "" : r.error().path.c_str()));
+    REQUIRE(host.scripts()[0].state == ScriptState::Running);  // loading is fine: the change comes later
+    host.install(w);
+    for (u32 t = 1; t <= ticks; ++t) w.tick(1.0 / 60, t);
+    return host.scripts()[0].state == ScriptState::Failed ? std::string(host.scripts()[0].error.c_str()) : std::string();
+}
+
+const Hidden kHidden[] = {
+    {"alias", R"(local t = { n = 0 }
+function update()
+    local a = t
+    a.n += 1
+end
+)",
+     "alias:4: attempt to modify a readonly table (tables reachable from update() are frozen after the top level; keep state in a "
+     "component)"},
+    {"param", R"(local t = { n = 0 }
+local function fill(x) x.n += 1 end
+function update() fill(t) end
+)",
+     "param:2: attempt to modify a readonly table (tables reachable"},
+    {"factory", R"(local function counter()
+    local n = 0
+    return function() n += 1 return n end
+end
+local inc = counter()
+local P = mce.field("Score", "points")
+function update()
+    local v = inc()
+    mce.each("Score", function(e) mce.set(e, P, v) end)
+end
+)",
+     "factory:3: update() kept state between ticks: upvalue #1 of the function defined at line 3 changed (reached from upvalue #1 of "
+     "update()); keep it in a component"},
+    {"global", R"(STATE = { n = 0 }
+function update() STATE.n += 1 end
+)",
+     "global:2: attempt to modify a readonly table (tables reachable"},
+    {"proxy", R"(local P = newproxy(true)
+function update()
+    local mt = getmetatable(P)
+    mt.n = (mt.n or 0) + 1
+end
+)",
+     "proxy:4: attempt to modify a readonly table (tables reachable"},
+    {"buffer", R"(B = buffer.create(4)
+function update() buffer.writei32(B, 0, mce.tick()) end
+)",
+     "buffer:2: update() kept state between ticks: a buffer reached from global 'B' changed; keep it in a component"},
+    {"gmatch", R"(local words = string.gmatch("a b c d", "%a")
+function update() local w = words() end
+)",
+     "gmatch:2: update() kept state between ticks: upvalue #3 of a library function changed (reached from upvalue #1 of update())"},
+};
+
+}  // namespace
+
+TEST_CASE("script state: hidden state the compiler misses fails the script on the tick it happens") {
+    for (const Hidden& h : kHidden) {
+        INFO(h.name);
+        CHECK(compiles(h.source));  // the static check does not see these
+        const std::string error = first_tick_error(h.name, h.source);
+        CHECK_MESSAGE(error.rfind(h.error, 0) == 0, error);
+    }
+}
+
+TEST_CASE("script state: check_state = false lets the same scripts run") {
+    script::ScriptBudget off;
+    off.check_state = false;
+    for (const Hidden& h : kHidden) {
+        INFO(h.name);
+        CHECK(first_tick_error(h.name, h.source, off, 3).empty());
+    }
+}
+
+TEST_CASE("script state: the run-time check leaves state kept in components alone") {
+    // Constant top-level tables and functions read, locals and closures inside update(), handles,
+    // mce.random, mce.dt changing every tick, a proxy made per call: 100 ticks Running.
+    constexpr const char* kAllowed = R"(
+local LIMITS = { max = 3, names = { "a", "b" } }
+LIMITS.min = 1
+NAMES = { "x", "y" }
+local P = mce.field("Score", "points")
+local C = mce.field("Score", "combo")
+local SPAWN = vector.create(1, 2, 3)
+local NAN = 0 / 0
+local function clamp(x) return math.min(x, LIMITS.max) end
+function update()
+    local total = 0
+    mce.each("Score", function(e) total += mce.get(e, P) end)
+    local scratch = {}
+    table.insert(scratch, total)
+    local mt = getmetatable(newproxy(true))
+    mt.seen = true
+    for i, n in ipairs(NAMES) do scratch[n] = i end
+    assert(NAN ~= NAN and SPAWN.x == 1)
+    mce.each("Score", function(e)
+        local p = mce.get(e, P)
+        local step = clamp(#LIMITS.names + #NAMES) + (mce.random() < 0.5 and 1 or 0)
+        mce.set(e, P, p + step, C, math.floor(mce.dt * 1000 + 0.5))
+    end)
+end
+)";
+    auto run = [&](bool check) {
+        World w;
+        w.register_components<Score>();
+        const Entity e = w.spawn_with(Score{});
+        script::ScriptBudget budget;
+        budget.check_state = check;
+        ScriptHost host(budget);
+        REQUIRE(compiles(kAllowed));
+        REQUIRE(script::add_source(host, "allowed", kAllowed));
+        // A second script loaded after the walk froze the first one's tables still works.
+        REQUIRE(script::add_source(host, "second", "local K = { 2 }\nfunction update() assert(K[1] == 2) end\n"));
+        host.install(w);
+        for (u32 t = 1; t <= 100; ++t) w.tick(t % 2 ? 1.0 / 60 : 1.0 / 30, t);
+        for (const script::ScriptInfo& info : host.scripts()) {
+            INFO(info.error.c_str());
+            CHECK(info.state == ScriptState::Running);
+        }
+        CHECK(w.try_get<Score>(e)->combo == 33);  // mce.dt of the last tick: the host still writes mce
+        return w.state_hash();
+    };
+    CHECK(run(true) == run(false));
+}
+
+TEST_CASE("script state: the state check fails a load it cannot watch") {
+    ScriptHost host;
+    Result<u32> r = script::add_source(host, "big", "B = buffer.create(300000)\nfunction update() end\n");
+    REQUIRE_FALSE(r);
+    REQUIRE(host.scripts()[0].state == ScriptState::Failed);
+    CHECK(std::string(host.scripts()[0].error.c_str()).find("big: state check: the buffers update() reaches hold more than 256 KiB") == 0);
+    // The host carries on: the next script loads and is watched.
+    CHECK(script::add_source(host, "next", "local t = {}\nfunction update() end\n"));
+    CHECK(host.scripts()[1].state == ScriptState::Running);
+}
+
+TEST_CASE("script state: each script is watched on its own (several scripts, one fails)") {
+    ScriptHost host;
+    // 0: stateless; 1: hidden state in an upvalue; 2: stateless again, loaded after the failing one; NaN as a real upvalue.
+    REQUIRE(script::add_source(host, "calm", "local K = { 1 }\nfunction update() assert(K[1] == 1) end\n"));
+    REQUIRE(script::add_source(host, "counter",
+                               "local function make() local n = 0 return function() n += 1 return n end end\n"
+                               "local inc = make()\nfunction update() inc() end\n"));
+    REQUIRE(script::add_source(host, "nan",
+                               "local function make() local x = 0 / 0 return function() return x end end\n"
+                               "local get = make()\nfunction update() assert(get() ~= get()) end\n"));
+    World w;
+    host.install(w);
+    for (u32 t = 1; t <= 5; ++t) w.tick(1.0 / 60, t);
+    CHECK(host.scripts()[0].state == ScriptState::Running);  // another script's watch is not charged to it
+    CHECK(host.scripts()[1].state == ScriptState::Failed);
+    CHECK(std::string(host.scripts()[1].error.c_str()).find("kept state between ticks") != std::string::npos);
+    CHECK(host.scripts()[2].state == ScriptState::Running);  // a NaN upvalue is equal to itself, bit for bit
+}
