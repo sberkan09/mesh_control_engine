@@ -16,7 +16,7 @@ threads fix what a round finds and write down here what the next round must chec
 | r1–r3 (2026-10-17) | before #467 | goldens `filmic_lens`, `parallax_cobble`, `ibl_roughness` over threshold; shadow map bound dead (NVIDIA UB warning); 50k sprites crashed; render-texture test too strict; no 2D `gpu_ms` | #467, #470, #474, #479 |
 | r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #498 (below) |
 | r5 (2026-10-17) | 70113c9 | BC vs RGBA re-measured on 04_diorama / 06_showcase (same numbers as r4) | analysis below, no code change |
-| parallel (2026-10-17) | d221a48, 0ad5735 | r4 checks pass (`parallax_cobble` 0 blocks, BC equal on both backends, sdlgpu `gpu_ms` 539/540); `ibl_roughness` NVIDIA-specific; sdlgpu 2D `gpu_ms` p50 about 0.001 ms; `editor_play_smoke` 0 ticks on the 4090; `player_capture_no_display`; BC `auto` misses most real normal maps | #506, #512, BC-PR (below) |
+| parallel (2026-10-17) | d221a48, 0ad5735 | r4 checks pass (`parallax_cobble` 0 blocks, BC equal on both backends, sdlgpu `gpu_ms` 539/540); `ibl_roughness` NVIDIA-specific; sdlgpu 2D `gpu_ms` p50 about 0.001 ms; `editor_play_smoke` 0 ticks on the 4090; `player_capture_no_display`; BC `auto` misses most real normal maps | #506, #512, #521 (below) |
 
 ## r4 findings
 
@@ -82,7 +82,7 @@ holds only `ibl_roughness`, taken from the 4090's actual images. The llvmpipe/la
 Not an NVIDIA problem: the pod sets `SDL_VIDEO_DRIVER=offscreen` (SDL 3's spelling), which the test did not unset, so
 the first `platform::init` succeeded and the fallback line was never printed. The test unsets both spellings.
 
-### 5. BC `auto` normal-map threshold (BC-PR)
+### 5. BC `auto` normal-map threshold (#521)
 
 Calibration on 14 Poly Haven 1k textures (`70_bc_calibration.csv`): at 99% unit normals only 4 of 14 normal maps
 pick BC5 (pass fractions 0.56–1.00, most 0.89–0.99), while non-grey colour maps pass at most 0.003. The report's
@@ -92,7 +92,7 @@ counts the six textures of `05_ashen_court` only; the report's 0.381 is the whol
 
 ## Next round: what to check
 
-Run on the dev_claude head that has #506, #512 and BC-PR. Do not start pods from a thread; the coordinator does. The r4
+Run on the dev_claude head that has #506, #512 and #521. Do not start pods from a thread; the coordinator does. The r4
 checklist passed in the parallel round (pod F) and is not repeated, except where a fix touched it.
 
 1. **sdlgpu `gpu_ms`:** `mce_player -perf_capture` with `-sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0
