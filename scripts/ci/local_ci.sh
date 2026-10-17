@@ -513,9 +513,35 @@ preconfigure() {
 
 # ctest under Xvfb; extra arguments select tests. A -LE on the command line replaces the preset's
 # `exclude slow` filter, so every exclusion here carries `slow` (mce_mark_slow, cmake/MceTarget.cmake).
+ctest_xvfb() {
+    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest "$@"
+}
+
+# The selection runs in chunks of MCE_CI_TEST_CHUNK tests (default 60), each recorded in passed/ when it passes;
+# `--resume` after a container restart skips the chunks that passed for this exact change, so a kill costs at most
+# one chunk. Every chunk runs even after a failure, as one ctest would, and one failed chunk fails the call.
 run_tests() {
     local preset="$1"; shift
-    xvfb-run -a -s "-screen 0 1280x1024x24 -noreset" ctest --preset "$preset" -j "$JOBS" "$@"
+    local nums=() n chunk=${MCE_CI_TEST_CHUNK:-60} rc=0 i ck
+    mapfile -t nums < <(ctest --preset "$preset" -N "$@" 2> /dev/null | sed -n 's/^ *Test *#\([0-9]*\):.*/\1/p')
+    if [[ ${#nums[@]} -le $chunk || -z "${run_key:-}" ]]; then
+        ctest_xvfb --preset "$preset" -j "$JOBS" "$@"; return
+    fi
+    for ((i = 0; i < ${#nums[@]}; i += chunk)); do
+        local sel
+        sel="$(IFS=,; echo "${nums[*]:i:chunk}")"
+        ck="tests-$(echo "$preset $* $sel" | sha1sum | cut -c1-12)"
+        if [[ $resume -eq 1 && -f "$PASSED_DIR/$ck" && "$(cat "$PASSED_DIR/$ck")" == "$run_key" ]]; then
+            echo "tests: chunk $((i / chunk + 1)) (${#nums[@]} selected) passed in an earlier run, skipped"
+            continue
+        fi
+        if ctest_xvfb --preset "$preset" -j "$JOBS" "$@" -I "0,0,1,$sel"; then
+            echo "$run_key" > "$PASSED_DIR/$ck"
+        else
+            rc=1
+        fi
+    done
+    return $rc
 }
 
 # The tests of a preset: all of them for a named stage or a full run, else scoped (test_scope, needs_sdk_tests).
