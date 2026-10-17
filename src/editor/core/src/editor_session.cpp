@@ -41,9 +41,9 @@ StringView scene_stem(StringView path) {
     return stem;
 }
 
-// Writes a bake's sidecar next to `abs` unless one is there (a re-bake keeps its GUID) and creates
-// the folder. `guid` receives the sidecar's GUID.
-Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::Guid& guid) {
+// Writes a bake's sidecar next to `abs` unless one is there (a re-bake keeps its GUID and its settings) and creates
+// the folder. `guid` receives the sidecar's GUID; `settings` is the new sidecar's settings object.
+Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::Guid& guid, StringView settings = "{}") {
     cook::String sidecar_abs = abs;
     sidecar_abs += ".mceasset";
     guid = {};
@@ -63,7 +63,9 @@ Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::G
         text += asset::to_string(guid).view();
         text += "\", \"importer\": \"";
         text += importer;
-        text += "\", \"importer_version\": 1, \"settings\": {} }\n";
+        text += "\", \"importer_version\": 1, \"settings\": ";
+        text += settings;
+        text += " }\n";
         MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
     }
     return ok();
@@ -256,7 +258,8 @@ Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::Hl
             rel += StringView(num);
             rel += ".mchlod";
             const cook::String abs = project_.asset_path(rel.view());
-            MCE_TRY(bake_sidecar(abs, "hlod", row.proxy));
+            // Two simplified far levels for the parts whose sources had none (the hlod importer's lod_levels).
+            MCE_TRY(bake_sidecar(abs, "hlod", row.proxy, "{ \"lod_levels\": 2 }"));
             cook::write_hlod_file(mesh.span(), file);
             MCE_TRY(cook::fs::write_file_atomic(abs.view(), file.span()));
             row.bytes = static_cast<u32>(file.size());

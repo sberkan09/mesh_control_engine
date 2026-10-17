@@ -46,6 +46,7 @@ const char* asset_type_name(asset::ChunkType type) {
         case asset::GameServicesCatalogChunk::chunk: return asset::GameServicesCatalogChunk::name;
         case asset::RemoteConfigChunk::chunk: return asset::RemoteConfigChunk::name;
         case asset::RoadNetwork::chunk: return asset::RoadNetwork::name;
+        case asset::ConvarDefaultsChunk::chunk: return asset::ConvarDefaultsChunk::name;
         default: return "";
     }
 }
