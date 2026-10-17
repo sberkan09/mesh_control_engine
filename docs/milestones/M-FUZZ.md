@@ -165,7 +165,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   in `tests/fuzz/`. Allow-lists (`FUZZ_CHUNK_EXEMPT`, `FUZZ_IMPORTER_EXEMPT`) carry the reason, and a stale entry fails
   too. First run: `Prefab` (the scene's layout, now read as a `SceneView`) and `RoadNetwork` had no reader in the test.
   Exempt for now, each with a reason: chunk types `Atlas` and `AudioPacket` (reserved, nothing reads them); importers for
-  `.mcenv`, `.mchlod`, `.fbx`, `.obj` and `.glsl` (no committed source; they need an embedded corpus, a follow-up).
+  `.mcenv`, `.mchlod` and `.glsl` (no committed source; they need an embedded corpus, a follow-up).
 - **Roads case** (`tests/fuzz/test_roads.cpp`, part of `test_fuzz_importers`). A crossroads with a signal is cooked
   from mutated source text (raw and value-swapped) and the `RoadNetwork` chunk is mutated byte-wise and read through
   `RoadView` with every lane, successor, conflict and phase range followed (`fuzz::walk`).
@@ -174,6 +174,13 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only; fixed by copying
   the two fields it needs. Owner of the file: M-OPENWORLD; the fix is three lines and the roads cook tests still pass.
   Regression: the roads case under the ASan stage (a plain build does not see it).
+- **Mesh importers (M-IMPORT3D's, added at the coordinator's request).** The ASCII FBX (`quad.fbx`, ufbx), the MTL and the glTF of
+  `samples/import_demo` are picked up by the importers test as seeds with no change (300 mutants each under ASan, clean).
+  The sample `.obj` is git-ignored, so `tests/fuzz/test_mesh_import.cpp` builds its own: a tent OBJ with a material
+  library (byte damage and swapped lines), and two GLB grids whose position and index buffers are `EXT_meshopt_compression`
+  streams (one with the EXPONENTIAL filter) mutated byte-wise, which reaches the damaged streams and the damaged
+  `count` / `byteStride` / `mode` / `filter` fields. 12,000 mutants of each under ASan: no finding. The "meshopt wall"
+  allows this file for the encoder.
 - **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
 - **Milestone state.** Steps 1 to 4 are done. Still open: the Luau bytecode change (M-SCRIPT, above), the Detour guard
   and a long run with validation on (below), and corpora for the five exempt importers.
@@ -201,6 +208,7 @@ validation switched on.
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
+| OBJ, FBX, MTL, glTF with meshopt streams | `obj_importer.cpp`, `fbx_importer.cpp` (ufbx), `gltf_importer.cpp` | importing source files | mutated (`test_fuzz_importers` seeds from `samples/import_demo`, `test_mesh_import.cpp`) | done |
 | Road network | `asset/roads_format.h` `RoadView::read`; `.mcroads` importer | packs, mods, project sources | mutated source and chunk (`test_roads.cpp`); every range followed | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | mutated scene chunks of every cooked pack, spawned (`test_fuzz_scene`) | done |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |

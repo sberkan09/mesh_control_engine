@@ -109,7 +109,7 @@ WALLS = [
     # Cook-time-only third-party code (FR-AST-010): stb lives in the cook library, never in a
     # runtime target; runtime code never includes the cook library.
     ("stb wall", re.compile(r"\bstb(i|tt|rp)_\w*\s*\(|[<\"]stb_\w+\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
-    ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/", "tests/asset/test_cook_gltf_ext.cpp"], ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/", "tests/asset/test_cook_gltf_ext.cpp", "tests/fuzz/test_mesh_import.cpp"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     # Ogg Vorbis (ADR-0044): stb_vorbis decodes, private to mce_asset's VorbisReader (cook and runtime
     # alike); libvorbis encodes, private to the cook's vorbis_encode.cpp. Everything else goes through
     # asset::VorbisReader / cook::encode_vorbis.
@@ -250,9 +250,7 @@ FUZZ_CHUNK_EXEMPT = {
 }
 FUZZ_IMPORTER_EXEMPT = {
     "envmap_importer.cpp": "no committed .mcenv source yet; needs a corpus",
-    "fbx_importer.cpp": "no committed .fbx source; ufbx is the parser (M-IMPORT3D)",
     "hlod_importer.cpp": "no committed .mchlod source yet; needs a corpus",
-    "obj_importer.cpp": "no committed .obj source; text parser, needs an embedded corpus",
     "shader_importer.cpp": "no committed .glsl source; goes through the shader compiler, needs a corpus",
 }
 FUZZ_SOURCE_DIRS = ["samples", "projects", "templates", "games"]

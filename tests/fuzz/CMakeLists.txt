@@ -57,8 +57,10 @@ mce_add_test(test_fuzz_importers UMBRELLA
     SOURCES
         test_importers.cpp
         test_roads.cpp
+        test_mesh_import.cpp
     DEPS
-        mce::mce_asset_cook)
+        mce::mce_asset_cook
+        mce_meshopt)  # test_mesh_import.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
 target_include_directories(test_fuzz_importers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(test_fuzz_importers PRIVATE MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
