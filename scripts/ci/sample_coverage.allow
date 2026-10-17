@@ -14,6 +14,8 @@ Health3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slic
 Weapon3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
 Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp
 RoadNetwork3D | tested in tests/kit/test_roads.cpp; M-OPENWORLD B2 shows it in the traffic sample, E1 in samples/09_openworld
+TrafficDriver3D | tested in tests/kit/test_traffic.cpp; M-OPENWORLD E1 drives it in samples/09_openworld
+TrafficSpawner3D | tested in tests/kit/test_traffic.cpp; M-OPENWORLD E1 spawns city traffic in samples/09_openworld
 Pedestrian3D | tested in tests/kit/test_crowd.cpp; M-OPENWORLD E1 shows crowds in samples/09_openworld
 CrowdSpawner3D | tested in tests/kit/test_crowd.cpp; M-OPENWORLD E1 shows crowds in samples/09_openworld
 UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR
