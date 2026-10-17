@@ -4,6 +4,8 @@
 
 namespace mce::cook {
 
+mem::UniquePtr<IImporter> make_hlod_importer();  // .mchlod -> CHNK_MESH (M-OPENWORLD A3), hlod_importer.cpp
+
 // .mcroads -> CHNK_ROADS (M-OPENWORLD B1), declared here rather than in importer.h, which 170 TUs include.
 mem::UniquePtr<IImporter> make_roads_importer();
 
@@ -59,6 +61,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_envmap_importer());
     reg.add(make_terrain_importer());
     reg.add(make_navmesh_importer());
+    reg.add(make_hlod_importer());
     reg.add(make_roads_importer());
 #if MCE_HAS_SCRIPT
     reg.add(make_script_importer());
