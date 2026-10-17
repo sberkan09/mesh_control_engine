@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/save.h"
 #include "mce/log.h"
 #include "mce/refl/refl.h"
 #include "mce/scene/streaming.h"
@@ -132,9 +133,8 @@ Result<asset::Guid> find_scene(const asset::AssetSystem& assets, StringView want
     return Error(Errc::NotFound, "scene.change", want);
 }
 
-Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
+static Result<bool> change_scene(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
     SceneChange* c = world.try_resource<SceneChange>();
-    if (!c || c->next.empty()) return false;
     const FixedString<256> target = c->next;
     c->next.clear();
     MCE_TRY_ASSIGN(const asset::Guid guid, find_scene(assets, target.view()));
@@ -146,6 +146,29 @@ Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity
     ++world.resource<SceneChange>().changes;
     MCE_LOG_INFO("scene: changed to {}", target.view());
     return true;
+}
+
+
+Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c) return false;
+    bool changed = false;
+    if (!c->next.empty()) {
+        MCE_TRY_ASSIGN(changed, change_scene(world, assets, spawned));
+    }
+    c = world.try_resource<SceneChange>();
+    if (!c->load_slot.empty()) {
+        const FixedString<64> slot = c->load_slot;
+        c->load_slot.clear();
+        if (Result<save::LoadStats> r = save::load_game(world, slot.view()); r) {
+            MCE_LOG_INFO("scene: save '{}' loaded ({} entities)", slot.view(), r.value().entities);
+        } else {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("scene: save '{}' not loaded: {}", slot.view(), why.view());
+        }
+    }
+    return changed;
 }
 
 }  // namespace mce::scene

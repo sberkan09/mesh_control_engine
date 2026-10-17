@@ -11,11 +11,15 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/guid.h"
 #include "mce/audio/components.h"
+#include "mce/convar.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/hash.h"
 #include "mce/ecs/prefab.h"
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/pathfinding.h"
 #include "mce/kit/sequence.h"
@@ -330,6 +334,90 @@ int l_load_scene(lua_State* L) {
 
 int l_quit(lua_State* L) {
     scene::request_quit(world_of(L));
+    return 0;
+}
+
+// ---- game plumbing (M-SCRIPT2 3) ---------------------------------------------------------------
+
+// A save slot is a file name: letters, digits, '_' and '-', 1..64, so a script can never name a path.
+const char* slot_arg(lua_State* L, int idx) {
+    const char* s = luaL_checkstring(L, idx);
+    const StringView sv(s);
+    bool ok = !sv.empty() && sv.size() <= 64;
+    for (char c : sv) ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-');
+    if (!ok) luaL_error(L, "save slot '%s' must be 1 to 64 letters, digits, '_' or '-'", s);
+    return s;
+}
+
+// mce.save(slot) -> true, or false and a reason. Writes the world now (a read of the world, so it is safe
+// mid-tick); the scene recorded is the one the host last loaded or changed to.
+int l_save(lua_State* L) {
+    World& w = world_of(L);
+    const StringView slot(slot_arg(L, 1));
+    save::SaveInfo info;
+    if (const scene::SceneChange* c = w.try_resource<scene::SceneChange>()) info.scene = c->current_guid;
+    info.tick = frame_of(L).tick;
+    info.playtime = static_cast<f64>(info.tick) * static_cast<f64>(frame_of(L).dt);
+    Result<void> r = save::save_game(w, slot, info);
+    lua_pushboolean(L, r.has_value());
+    if (r) return 1;
+    FixedString<512> why;
+    format_error(r.error(), why);
+    lua_pushstring(L, why.c_str());
+    return 2;
+}
+
+// mce.load(slot) -> true when the slot exists and the load is queued (the host applies it after this tick).
+int l_load(lua_State* L) {
+    const StringView slot(slot_arg(L, 1));
+    const bool there = save::exists(slot);
+    if (there) scene::request_load(world_of(L), slot);
+    lua_pushboolean(L, there);
+    return 1;
+}
+
+int l_has_save(lua_State* L) {
+    lua_pushboolean(L, save::exists(StringView(slot_arg(L, 1))));
+    return 1;
+}
+
+// mce.set_time_scale(s): how fast the game clock runs against the wall, 0.1 to 4 (hit-stop, slow motion).
+// It scales the player's accumulator, never dt or the sim, so it has no effect in headless runs.
+int l_set_time_scale(lua_State* L) {
+    const f64 s = luaL_checknumber(L, 1);
+    if (!(s >= 0.1 && s <= 4.0)) luaL_error(L, "mce.set_time_scale: %g is outside 0.1 to 4", s);
+    if (ConVar* cv = ConVar::find(StringId("time_scale"))) cv->set_float(static_cast<f32>(s), true);
+    return 0;
+}
+
+int l_time_scale(lua_State* L) {
+    ConVar* cv = ConVar::find(StringId("time_scale"));
+    lua_pushnumber(L, cv ? static_cast<double>(cv->get_float()) : 1.0);
+    return 1;
+}
+
+// mce.shake(trauma): adds trauma (0..1, clamped to 1 in total) to every CameraShake2D / CameraShake3D.
+int l_shake(lua_State* L) {
+    World& w = world_of(L);
+    const f32 t = static_cast<f32>(luaL_checknumber(L, 1));
+    if (!(t >= 0.0f && t <= 1.0f)) luaL_error(L, "mce.shake: trauma %g is outside 0 to 1", static_cast<double>(t));
+    w.query<kit::CameraShake2D>().each([&](kit::CameraShake2D& s) { s.trauma = s.trauma + t > 1.0f ? 1.0f : s.trauma + t; });
+    w.query<kit::CameraShake3D>().each([&](kit::CameraShake3D& s) { s.trauma = s.trauma + t > 1.0f ? 1.0f : s.trauma + t; });
+    return 0;
+}
+
+// mce.burst(e, count?): fires the entity's ParticleBurst once (count overrides the component's).
+int l_burst(lua_State* L) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    kit::ParticleBurst* b = w.try_get_mut<kit::ParticleBurst>(e);
+    if (!b) luaL_error(L, "mce.burst: the entity has no ParticleBurst");
+    if (!lua_isnoneornil(L, 2)) {
+        const f64 n = luaL_checknumber(L, 2);
+        if (!(n >= 1 && n <= 4096)) luaL_error(L, "mce.burst: count %g is outside 1 to 4096", n);
+        b->count = static_cast<u32>(n);
+    }
+    b->fire = true;
     return 0;
 }
 
@@ -718,6 +806,13 @@ const luaL_Reg kWorldLib[] = {
     {"move_and_collide", l_move_and_collide},
     {"teleport2d", l_teleport2d},
     {"find_path", l_find_path},
+    {"save", l_save},
+    {"load", l_load},
+    {"has_save", l_has_save},
+    {"set_time_scale", l_set_time_scale},
+    {"time_scale", l_time_scale},
+    {"shake", l_shake},
+    {"burst", l_burst},
     {"velocity2d", l_velocity2d},
     {"set_velocity2d", l_set_velocity2d},
     {"impulse2d", l_impulse2d},
