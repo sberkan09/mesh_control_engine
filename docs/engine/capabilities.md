@@ -135,6 +135,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CharacterGround2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
 | `SceneChunk` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/stream_demo/assets/scenes/world.mcscene |
 | `StreamingFocus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/stream_demo/assets/scenes/world.mcscene |
+| `FloatingOrigin3D` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it |
 | `SceneChunkStatus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: state the engine writes and games read; nothing to author |
 
 ## Asset types
