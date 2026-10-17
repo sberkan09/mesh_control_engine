@@ -1403,6 +1403,7 @@ vec3 agx(vec3 c) {
 }
 // Khronos PBR Neutral: leaves in-gamut colors alone up to a knee, then rolls the peak off and desaturates.
 vec3 neutral(vec3 c) {
+    c = max(c, 0.0);
     const float start = 0.8 - 0.04, desat = 0.15;
     float x = min(c.r, min(c.g, c.b));
     c -= x < 0.08 ? x - 6.25 * x * x : 0.04;
@@ -1468,8 +1469,13 @@ void main() {
     }
     float luma = dot(c, vec3(0.299, 0.587, 0.114));  // FXAA reads this: taken before the grain, which it would chase
     if (f_lens.z > 0.0) {  // animated grain in display space, strongest in the mid tones
+        // On an sRGB target (u_params.y < 0.5) the hardware encodes on write and c is still linear: grain there
+        // is added to the encoded value so GL and SDL GPU agree.
+        vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(clamp(c, 0.0, 1.0));
+        float dl = dot(d, vec3(0.299, 0.587, 0.114));
         float n = grain_hash(floor(v_uv * u_viewport.xy / max(f_lens.w, 1.0)), f_lens2.w) - 0.5;
-        c += n * f_lens.z * 0.3 * (4.0 * luma * (1.0 - luma));
+        d += n * f_lens.z * 0.3 * (4.0 * dl * (1.0 - dl));
+        c = u_params.y > 0.5 ? d : srgb_to_linear(clamp(d, 0.0, 1.0));
     }
     o_color = vec4(c, luma);
 }

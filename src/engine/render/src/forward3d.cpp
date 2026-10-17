@@ -2659,7 +2659,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     film.lens = {clamp(lens.vignette, 0.0f, 1.0f), clamp(lens.vignette_smoothness, 0.05f, 1.0f), clamp(lens.grain, 0.0f, 1.0f),
                  clamp(lens.grain_size, 1.0f, 4.0f)};
     film.lens2 = {clamp(lens.chromatic_aberration, 0.0f, 1.0f), dirt_on ? clamp(lens.dirt_intensity, 0.0f, 4.0f) : 0.0f,
-                  f32(static_cast<u32>(post.tonemapper)), f32(static_cast<u32>(std::floor(scene.time() * 24.0f)) % 65536u)};
+                  f32(static_cast<u32>(post.tonemapper)), f32(((static_cast<i64>(std::floor(scene.time() * 24.0f)) % 65536) + 65536) % 65536)};
     fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap", !fxaa && !finish);
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));

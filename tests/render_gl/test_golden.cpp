@@ -657,3 +657,15 @@ TEST_CASE("golden: tonemap_agx: the same scene through the AgX curve") {
     });
     check_golden("tonemap_agx", f);
 }
+
+TEST_CASE("golden: tonemap_neutral: the same scene through Khronos PBR Neutral") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::PbrNeutral;
+        s.set_post(p);
+    });
+    check_golden("tonemap_neutral", f);
+}

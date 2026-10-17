@@ -2702,3 +2702,44 @@ TEST_CASE("render3d_gl: AgX and PBR Neutral differ from ACES on a bright scene a
     CHECK(std::abs(mean(neutral) - mean(aces)) < 60.0);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+TEST_CASE("render3d_gl: lens dirt is lit by bloom: needs the bloom and a texture the store holds, else the frame is the plain one") {
+    Fixture3D f;
+    const u32 dirt = f.renderer.textures().allocate_key();
+    {
+        Array<u8> px;
+        px.resize(4 * 4 * 4, u8{255});
+        const TextureMipUpload mip{4, 4, std::as_bytes(px.span())};
+        TextureUpload up;
+        up.format = rhi::TextureFormat::RGBA8_UNorm;
+        up.mips = Span<const TextureMipUpload>(&mip, 1);
+        REQUIRE(f.renderer.textures().upload(dirt, 1, up).has_value());
+    }
+    const u32 missing = f.renderer.textures().allocate_key();  // allocated, never uploaded
+    const auto frame = [&](bool bloom, u32 key, f32 intensity) {
+        return lens_frame(f, [&](PostFx& p) {
+            p.bloom = bloom;
+            p.bloom_intensity = 0.6f;
+            p.bloom_threshold = 0.0f;
+            p.lens.dirt_key = key;
+            p.lens.dirt_intensity = intensity;
+        });
+    };
+    const Array<u8> plain = frame(true, 0, 0.0f);
+    const Array<u8> lit = frame(true, dirt, 2.0f);
+    const Array<u8> zero = frame(true, dirt, 0.0f);
+    const Array<u8> absent = frame(true, missing, 2.0f);
+    const Array<u8> no_bloom_plain = frame(false, 0, 0.0f);
+    const Array<u8> no_bloom_dirt = frame(false, dirt, 2.0f);
+    CHECK(std::memcmp(plain.data(), lit.data(), plain.size()) != 0);  // the dirt adds light where the bloom is
+    CHECK(std::memcmp(plain.data(), zero.data(), plain.size()) == 0);
+    CHECK(std::memcmp(plain.data(), absent.data(), plain.size()) == 0);  // a texture the store lacks: no dirt
+    CHECK(std::memcmp(no_bloom_plain.data(), no_bloom_dirt.data(), plain.size()) == 0);  // nothing to light it
+    u64 plain_sum = 0, lit_sum = 0;
+    for (usize i = 0; i < plain.size(); ++i) {
+        plain_sum += plain[i];
+        lit_sum += lit[i];
+    }
+    CHECK(lit_sum > plain_sum);
+    CHECK(f.device->validation_error_count() == 0);
+}
