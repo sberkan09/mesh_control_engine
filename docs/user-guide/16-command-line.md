@@ -34,6 +34,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
 | `-save_dir <dir>` | the per-user save folder (2.5) | where slots live; the player logs the folder it uses once at start (`save folder ...`) |
 | `-settings 0` | 1 | neither read nor write `<save folder>/settings.cfg` (the saved options: bus gains, `r.quality`, `fullscreen`, ...) |
+| `-defaults <path>` | `defaults.cfg` beside the pack | a file of `name value` lines that become the convars' defaults (a project's own; 12.4) |
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
 | `-pause_on_focus_loss 0` | 1 | keep simulating when the window loses focus |
@@ -109,6 +110,8 @@ mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--
          [--textures rgba8|bc|astc] [--max-texture-size N]
 ```
 
+`mce_cook --dump-fbx-scene <file.fbx>` prints an FBX's lights, cameras and world transforms (engine frame) as JSON on stdout; `mce import fbx` uses it (chapter 8.4).
+
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
 without `--module` knows engine components only. `--base` names a game pack the project builds
 on (a mod, chapter 19): references may name its assets and same-GUID assets override them.
@@ -158,6 +161,7 @@ mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
 mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size m] [--werror]
+mce import gltf|fbx <model> [--out-dir d] [--name n] [--cook mce_cook] [--werror]    (lights and cameras as a prefab, chapter 8.4)
 mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
 mce content list|info|check|fetch|add|verify|credits ...    (open-licence content ledger, chapter 5.3)
 mce retarget <source.glb>... --onto <character.glb> [--out f.glb | --inplace] [--clips a,b] [--prefix p] [--map f.json]

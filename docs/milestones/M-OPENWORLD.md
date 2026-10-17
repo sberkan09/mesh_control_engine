@@ -25,8 +25,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
 | A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
-| A3 | in progress: instancing past the budget (A1 finding) | instancing PR | same design; next: HLOD proxy bake, impostors, merge budget |
-| A4 | design done | | same design |
+| A3 | in progress: instancing past the budget done; HLOD bake next, then impostors and merge budget | #522 instancing | same design |
+| A4 | in progress: ChunkLod3D and the .mchlod importer | #529 ChunkLod3D | same design; next: city counter gate |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
 
@@ -68,8 +68,9 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
-| B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
-| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
+| B1 authoring: MCP `roads_info`, `roads_generate`; editor View > Roads overlay while playing | in review | #528 | `roads_info` reports one-way dead ends and lanes outside the lane graph's largest strongly connected component |
+| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus (`TrafficDriver3D`, `TrafficSpawner3D`) | done | #510 | drives `Vehicle3D` directly (IDM + pure pursuit), not through `VehicleDriver3D`: lanes and stop lines need their own speed control |
+| B2 pedestrians: cars stop for a `Pedestrian3D` crossing in their lanes ahead | in review | #528 | unsignalled crossings leave the giving way to the cars (B3, ADR-0048) |
 | B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0048](../adr/0048-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:

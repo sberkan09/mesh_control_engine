@@ -192,6 +192,15 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
+`traffic.h` (M-OPENWORLD B2, ADR-0046): `TrafficDriver3D` drives a `Vehicle3D` along a placed network's lanes
+(`"traffic_drivers"`, FixedUpdate_Pre ahead of `"kit3d_vehicles"`): projection onto its lane, hashed turn
+choice two lanes ahead, IDM speed against the car ahead, stop lines (red, amber, stop signs, conflicting
+connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawner3D` (`"traffic_spawners"`,
+before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
+removes far, lost or flipped ones. All driver state is in the component (saved, hashed). A `Pedestrian3D` in `Cross` mode
+within a car's lanes ahead (lane half width + 1.2 m, checked every 1.5 m up to its stopping distance + 15 m) stops it
+3 m short.
+
 `crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
 crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
@@ -290,6 +299,10 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- ChunkLod3D (M-OPENWORLD A4, `mce/kit/chunk_lod3d.h`): `Kit3DExtract` draws the `proxy` of a `SceneChunk` entity
+  whose `SceneChunkStatus` is not `Loaded` (the `impostor` beyond `impostor_distance`, nothing beyond
+  `max_distance`), at the chunk entity's transform, counted in `Kit3DStats::chunk_proxies` / `chunk_impostors`.
+  The distance is from the camera to the chunk box: a render decision, while loading stays focus-based.
 - Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
   `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
   static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
@@ -307,6 +320,8 @@ together:
 
 ctest `test_kit` (no GPU), `tests/kit/`:
 
+- `test_chunk_lod3d.cpp`: "chunk lod: the proxy near, the impostor far, nothing past max_distance, hidden while
+  loaded" (and kept while loading) and "chunk lod: a world without ChunkLod3D draws exactly as before".
 - `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
   stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
   more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".

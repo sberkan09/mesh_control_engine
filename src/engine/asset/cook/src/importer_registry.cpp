@@ -4,6 +4,8 @@
 
 namespace mce::cook {
 
+mem::UniquePtr<IImporter> make_hlod_importer();  // .mchlod -> CHNK_MESH (M-OPENWORLD A3), hlod_importer.cpp
+
 // .mcroads -> CHNK_ROADS (M-OPENWORLD B1), declared here rather than in importer.h, which 170 TUs include.
 mem::UniquePtr<IImporter> make_roads_importer();
 
@@ -23,6 +25,13 @@ const IImporter* ImporterRegistry::for_extension(StringView lower_ext) const {
         if (i->handles_extension(lower_ext)) return i.get();
     return nullptr;
 }
+
+#if !MCE_HAS_FBX
+bool dump_fbx_scene_json(StringView, Span<const byte>, String&, String& error) {
+    error = String("this build has no FBX reader (a cross build); run `mce import fbx` with the host's mce_cook");
+    return false;
+}
+#endif
 
 void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_texture_importer());
@@ -59,6 +68,7 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_envmap_importer());
     reg.add(make_terrain_importer());
     reg.add(make_navmesh_importer());
+    reg.add(make_hlod_importer());
     reg.add(make_roads_importer());
 #if MCE_HAS_SCRIPT
     reg.add(make_script_importer());
