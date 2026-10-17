@@ -170,6 +170,13 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
+`traffic.h` (M-OPENWORLD B2, ADR-0046): `TrafficDriver3D` drives a `Vehicle3D` along a placed network's lanes
+(`"traffic_drivers"`, FixedUpdate_Pre ahead of `"kit3d_vehicles"`): projection onto its lane, hashed turn
+choice two lanes ahead, IDM speed against the car ahead, stop lines (red, amber, stop signs, conflicting
+connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawner3D` (`"traffic_spawners"`,
+before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
+removes far, lost or flipped ones. All driver state is in the component (saved, hashed).
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
