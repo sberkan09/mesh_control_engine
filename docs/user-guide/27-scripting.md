@@ -96,6 +96,7 @@ the new entity is alive at once, its components appear after the phase.
 | `mce.add(e, "Comp", {...})` | adds the component (or updates it, keeping the fields not named) |
 | `mce.remove(e, "Comp")`, `mce.destroy(e)` | removes a component, destroys the entity |
 | `mce.has(e, "Comp")`, `mce.alive(e)` | what the entity has now |
+| `mce.find(name)` | the entity a scene gave that name (`"name"` in the `.mcscene`), or `nil`; the first live one in scene order if several share it. Entities spawned at run time have no name, and a scene change forgets the old names |
 | `mce.instantiate("guid:<prefab>", pos?)` | spawns a prefab, its root at `pos`; the root entity, or `nil` (logged) |
 
 **Events and signals.** Events are readable from the tick after they were pushed.
