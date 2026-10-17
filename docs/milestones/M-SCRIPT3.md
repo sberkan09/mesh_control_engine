@@ -23,7 +23,7 @@ cannot yet say or check:
 | 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a and 2b done; 2c (static check widening) not started |
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | done |
 | 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | not started |
-| 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | not started |
+| 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | name lookup is M-WORKFLOW 7 PR 10 (`mce.find`, Rutin 3); `during_cutscenes` and multi-component `mce.get` / `mce.set` already shipped with M-WORKFLOW 7; `mce.make_noise` in PR #492 (open work: a running perceiver hearing a script noise is not tested end to end) |
 | 6 | Docs the same notes asked for: the Luau limits (no state between ticks, one component per `("Comp", "field")` call, `Perceiver.sees` is a number) in the guide itself, and `mce.d.luau` as a reference page in the SDK docs | Sonnet | not started |
 | 7 | The perf gate's `--seed` self-check catches nothing on Dungeon (so its baseline cannot be trusted yet): find why three textured sprites added to `walk.mcscene` do not change `sprites` / `sprite_batches`, fix it, and make `Dungeon_perf_counters` run the seeded variant too | Sonnet | done |
 
@@ -57,3 +57,13 @@ cannot yet say or check:
   was level 1 in the ship cook if the cost passes 5%; it is kept at level 2 everywhere for now (a ship-only cook switch would be a new cook option), to be decided at review.
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry; `local_ci.sh --task` green on every step.
+
+## Step 5 as built (PR #492)
+
+- `mce.make_noise(position, loudness?, source?, team?)` in `api_world.cpp`: a thin binding that pushes a `kit::Noise` (loudness in
+  metres for a hearing-1 perceiver, default 10; perceivers of `team` ignore it). A negative loudness, or a world without
+  perception, is a named error. Declared in `mce.d.luau`, row in guide chapter 27, case in `test_script_api.cpp`.
+- Already covered, so not built here: name lookup is M-WORKFLOW 7 PR 10 (`mce.find`, merged); `ScriptSystem.during_cutscenes`
+  (M-WORKFLOW 7 PR 8) and multi-component `mce.get` / `mce.set` (`test_script.cpp`, M-WORKFLOW 7) are in `dev_claude`.
+- Open: an end-to-end check of a perceiver hearing a script noise; step 6 should mention `mce.find` and `mce.make_noise`.
+- Linear: this milestone has no cards (the workspace is at its free limit), so this file is the tracker.

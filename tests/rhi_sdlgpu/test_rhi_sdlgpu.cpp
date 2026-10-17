@@ -3,7 +3,9 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cstdlib>
+#include <thread>
 
 #include "mce/core.h"
 #include "mce/platform/platform.h"
@@ -93,7 +95,9 @@ struct Fixture {
     }
 
     // Clear green, then a red triangle hugging the top-left: (-1,1) (-1,-1) (0,1) in NDC.
-    void record_scene(rhi::CommandBuffer& cmd, rhi::TextureHandle target, rhi::PipelineHandle pipe) {
+    // `timestamp_in_pass` < kMaxTimestamps: written inside the pass, after the draw.
+    void record_scene(rhi::CommandBuffer& cmd, rhi::TextureHandle target, rhi::PipelineHandle pipe,
+                      u32 timestamp_in_pass = ~0u) {
         rhi::PassAttachment color;
         color.texture = target;
         color.clear.color[0] = 0.0f;
@@ -116,6 +120,7 @@ struct Fixture {
         cmd.set_vertex_data(rhi::as_bytes(Span<const Vertex>(kVerts)));
         cmd.set_index_data(rhi::as_bytes(Span<const u16>(kIdx)), rhi::IndexFormat::U16);
         cmd.draw(3);
+        if (timestamp_in_pass < rhi::kMaxTimestamps) cmd.write_timestamp(timestamp_in_pass);
         cmd.end_pass();
     }
 
@@ -154,6 +159,7 @@ TEST_CASE("rhi_sdlgpu: device caps") {
     const rhi::DeviceCaps& caps = f.device->caps();
     CHECK(caps.api_major == 1);
     CHECK_FALSE(caps.timestamp_queries);
+    CHECK(caps.fence_timestamps);
     CHECK(caps.max_texture_size >= 4096);
     MESSAGE(caps.api_name.c_str() << " / " << caps.device_name.c_str());
 }
@@ -182,6 +188,50 @@ TEST_CASE("rhi_sdlgpu: clear + triangle to the backbuffer, read back") {
     CHECK(f.device->validation_error_count() == 0);
     f.device->destroy_pipeline(pipe);
     CHECK_FALSE(f.device->is_alive(pipe));
+}
+
+TEST_CASE("rhi_sdlgpu: fence timestamps split the submit, keep the frame intact and arrive frames later") {
+    Fixture f;
+    if (!f.ok) return;
+    const rhi::PipelineHandle pipe = f.make_pipeline();
+    if (pipe.is_null()) return;
+    f.device->begin_frame(0);
+    rhi::CommandBuffer cmd;
+    cmd.write_timestamp(0);
+    cmd.push_debug_scope("outer");  // open across the splits
+    f.record_scene(cmd, {}, pipe, 1);  // 1 inside the pass: stamped at its end
+    cmd.write_timestamp(2);
+    // A second draw after the splits: the uniforms set before them are pushed again into the new command buffer.
+    f.record_scene(cmd, {}, pipe);
+    cmd.pop_debug_scope();
+    cmd.write_timestamp(3);
+    f.device->submit(cmd);
+    const rhi::Extent2D bb = f.device->backbuffer_size();
+    MCE_REQUIRE_OR_RETURN(bb.width >= kW && bb.height >= kH);
+    Array<u8> px;
+    px.resize(usize(bb.width) * bb.height * 4);
+    MCE_REQUIRE_OR_RETURN(f.device->read_pixels({}, rhi::Rect2D{0, 0, bb.width, bb.height}, px.span()).has_value());
+    f.device->end_frame();
+    check_scene(px, bb.width, bb.height);
+    CHECK(f.device->last_frame_stats().draws == 2);
+
+    // The waiter thread stamps the fences; frame 0's set is published by a later begin_frame.
+    rhi::GpuTimestamps ts;
+    for (u64 frame = 1; frame < 200 && ts.frame_index == ~u64(0); ++frame) {
+        f.device->begin_frame(frame);
+        f.device->end_frame();
+        ts = f.device->last_gpu_timestamps();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(ts.frame_index == 0);
+    CHECK(ts.written == 0xFu);
+    // GPU-busy time only grows along the frame.
+    CHECK(ts.ms(0, 1) >= 0.0);
+    CHECK(ts.ms(1, 2) >= 0.0);
+    CHECK(ts.ms(2, 3) >= 0.0);
+    CHECK(ts.ms(0, 3) < 1000.0);
+    CHECK(f.device->validation_error_count() == 0);
+    f.device->destroy_pipeline(pipe);
 }
 
 TEST_CASE("rhi_sdlgpu: offscreen color target + persistent buffers") {

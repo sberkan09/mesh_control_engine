@@ -26,6 +26,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/material_importer.cpp
         src/mesh_build.cpp
         src/mod_project.cpp
+        src/obj_importer.cpp
         src/particle_importer.cpp
         src/sound_set_importer.cpp
         src/spritesheet_importer.cpp

@@ -16,6 +16,7 @@
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/perception.h"
 #include "mce/input/actions.h"
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
@@ -266,6 +267,36 @@ end
     CHECK(r.w.try_get<Probe>(e)->n == 1);
     r.step();
     CHECK(r.w.try_get<Probe>(e)->n == 0);
+}
+
+TEST_CASE("script api: mce.make_noise pushes a kit::Noise and checks its arguments") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        if mce.tick() == 1 then mce.make_noise(vector.create(1, 2, 3), 7.5, e, 2) end
+    end)
+end
+)");
+    r.w.register_event<kit::Noise>(Phase::FixedUpdate_Pre);
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step(2);
+    const auto* q = r.w.event_queue<kit::Noise>();
+    REQUIRE(q != nullptr);
+    CHECK(q->front_size() + q->back_size() == 1);
+
+    Rig bad(R"(
+function update() mce.make_noise(vector.create(0, 0, 0), -1) end
+)", false);
+    bad.w.register_event<kit::Noise>(Phase::FixedUpdate_Pre);
+    bad.step();
+    CHECK(error_of(bad.h()).find("loudness must be 0 or more") != std::string::npos);
+
+    Rig none(R"(
+function update() mce.make_noise(vector.create(0, 0, 0)) end
+)", false);
+    none.step();
+    CHECK(error_of(none.h()).find("no perception") != std::string::npos);
+    (void)e;
 }
 
 TEST_CASE("script api: input actions by name") {
