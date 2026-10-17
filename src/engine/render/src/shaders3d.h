@@ -678,10 +678,10 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 // uniform control flow.
 vec2 g_uv_dx, g_uv_dy;
 bool g_pom_moved = false;
-vec4 map_aniso(sampler2DArray s, vec2 at) {
+vec4 map_aniso(sampler2DArray s, vec2 at, vec2 dx, vec2 dy) {  // dx, dy: the uv's screen gradients
     vec2 size = vec2(textureSize(s, 0).xy);
-    float lx = length(g_uv_dx * size), ly = length(g_uv_dy * size);
-    vec2 major = lx > ly ? g_uv_dx : g_uv_dy;
+    float lx = length(dx * size), ly = length(dy * size);
+    vec2 major = lx > ly ? dx : dy;
     float lmaj = max(lx, ly), lmin = max(min(lx, ly), 1e-6);
     float taps = clamp(ceil(lmaj / lmin), 1.0, 4.0);
     float lod = max(0.0, log2(lmaj / taps));
@@ -692,7 +692,7 @@ vec4 map_aniso(sampler2DArray s, vec2 at) {
     }
     return sum / taps;
 }
-#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), map_aniso(s, at), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
+#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), map_aniso(s, at, g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
 
 #ifndef MCE_TERRAIN
 // Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
