@@ -107,6 +107,7 @@ the new entity is alive at once, its components appear after the phase.
 | `mce.emit("Type", {...})` | pushes an event of any reflected event type the world has |
 | `mce.signal("name", e?)` | a named signal that sequences' and behavior trees' wait nodes hear |
 | `mce.signals("name")` | the emitters of this tick's signals of that name (sequences, timelines, behavior trees) |
+| `mce.make_noise(position, loudness?, source?, team?)` | a noise perceivers hear on the next tick (`loudness` metres for hearing 1, default 10; perceivers of `team` ignore it); needs the AI kit's perception |
 | `mce.play_sound("guid:<sfx>", gain_db?)` | a one-shot sound |
 
 **Input.** `mce.pressed(action)`, `mce.held(action)`, `mce.released(action)`, `mce.axis(action)` (a

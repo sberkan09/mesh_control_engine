@@ -1,0 +1,747 @@
+{
+  "version": 1,
+  "about": "The engine's ledger of open-licence content (ROADMAP M-OPENWORLD D2). Only CC0 and CC-BY packs; a pack is a pinned archive plus rules that turn its members into project assets. Edit it through a PR: `mce content check` validates it. Read docs/user-guide/05-assets.md (third-party content) before adding a pack.",
+  "licenses": {
+    "CC0-1.0": {
+      "name": "Creative Commons Zero 1.0 (public domain dedication)",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution_required": false
+    },
+    "CC-BY-3.0": {
+      "name": "Creative Commons Attribution 3.0",
+      "url": "https://creativecommons.org/licenses/by/3.0/",
+      "attribution_required": true
+    },
+    "CC-BY-4.0": {
+      "name": "Creative Commons Attribution 4.0",
+      "url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution_required": true
+    }
+  },
+  "packs": [
+    {
+      "id": "kenney-city-kit-commercial",
+      "title": "City Kit (Commercial)",
+      "kind": "models",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/city-kit-commercial",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "city",
+        "building",
+        "skyscraper",
+        "3d",
+        "low poly"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/city-kit-commercial/a742d900eb-1753115042/kenney_city-kit-commercial_2.1.zip",
+        "archive": "zip",
+        "sha256": "f8b09b081c2bb88bcc126e2dec1cb40fd0dad7e7e591b6c26aaefe96fb35276b",
+        "size": 4096974,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Models/GLB format/",
+          "include": [
+            "*.glb",
+            "Textures/*.png"
+          ],
+          "to": "models"
+        }
+      ]
+    },
+    {
+      "id": "kenney-city-kit-suburban",
+      "title": "City Kit (Suburban)",
+      "kind": "models",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/city-kit-suburban",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "city",
+        "house",
+        "suburb",
+        "3d",
+        "low poly"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/city-kit-suburban/2c871b7af2-1745479373/kenney_city-kit-suburban_20.zip",
+        "archive": "zip",
+        "sha256": "5869c35cf30b1c87bdb2d197b6d325eebadd2ef08ea27f04797e8e08d77a9a39",
+        "size": 3038740,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Models/GLB format/",
+          "include": [
+            "*.glb",
+            "Textures/*.png"
+          ],
+          "to": "models"
+        }
+      ]
+    },
+    {
+      "id": "kenney-city-kit-roads",
+      "title": "City Kit (Roads)",
+      "kind": "models",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/city-kit-roads",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "city",
+        "road",
+        "street",
+        "junction",
+        "3d",
+        "low poly"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1791628607/kenney_city-kit-roads.zip",
+        "archive": "zip",
+        "sha256": "374a4552115cbd11b4ec5c930ee31a533562dc78a09af249a655d03f7ea3b959",
+        "size": 2852289,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Models/GLB format/",
+          "include": [
+            "*.glb",
+            "Textures/*.png"
+          ],
+          "to": "models"
+        }
+      ]
+    },
+    {
+      "id": "kenney-car-kit",
+      "title": "Car Kit",
+      "kind": "models",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/car-kit",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "car",
+        "vehicle",
+        "traffic",
+        "3d",
+        "low poly"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip",
+        "archive": "zip",
+        "sha256": "fac7dacac5c7874348cf19729af3ef205f3d366493edaf0a827d93f4fdf3d0c4",
+        "size": 4814237,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Models/GLB format/",
+          "include": [
+            "*.glb",
+            "Textures/*.png"
+          ],
+          "to": "models"
+        }
+      ]
+    },
+    {
+      "id": "kenney-blocky-characters",
+      "title": "Blocky Characters",
+      "kind": "models",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/blocky-characters",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "character",
+        "animated",
+        "pedestrian",
+        "3d",
+        "low poly"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/blocky-characters/8369c0cf30-1749547469/kenney_blocky-characters_20.zip",
+        "archive": "zip",
+        "sha256": "5e123859aa0c1598342b600c6db197024a1d63eb9ec531398b310725f589887e",
+        "size": 2148510,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Models/GLB format/",
+          "include": [
+            "*.glb",
+            "Textures/*.png"
+          ],
+          "to": "models"
+        }
+      ]
+    },
+    {
+      "id": "kenney-impact-sounds",
+      "title": "Impact Sounds",
+      "kind": "audio",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/impact-sounds",
+      "retrieved": "2026-10-17",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "tags": [
+        "kenney",
+        "sfx",
+        "footstep",
+        "impact"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+        "archive": "zip",
+        "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8",
+        "size": 800850,
+        "license_member": "License.txt"
+      },
+      "cook": [
+        {
+          "from": "Audio/",
+          "include": [
+            "*.ogg"
+          ],
+          "to": "audio"
+        }
+      ]
+    },
+    {
+      "id": "ambientcg-asphalt031",
+      "title": "Asphalt 031 (1K PBR set)",
+      "kind": "textures",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0-1.0",
+      "license_url": "https://docs.ambientcg.com/license/",
+      "homepage": "https://ambientcg.com/view?id=Asphalt031",
+      "retrieved": "2026-10-17",
+      "attribution": "Textures from ambientCG.com, CC0; crediting is optional",
+      "tags": [
+        "ambientcg",
+        "pbr",
+        "material",
+        "asphalt",
+        "road",
+        "ground"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://ambientcg.com/get?file=Asphalt031_1K-JPG.zip",
+        "archive": "zip",
+        "sha256": "f98114b8fb083fc65925c3b4568b131e37c9a23357d432a16e59676dbc69f964",
+        "size": 8699189
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "Asphalt031_1K-JPG_Color.jpg",
+            "Asphalt031_1K-JPG_NormalGL.jpg",
+            "Asphalt031_1K-JPG_Roughness.jpg",
+            "Asphalt031_1K-JPG_AmbientOcclusion.jpg",
+            "Asphalt031_1K-JPG_Displacement.jpg"
+          ],
+          "to": "textures",
+          "settings": [
+            {
+              "match": "*_Color.jpg",
+              "settings": {
+                "srgb": true
+              }
+            },
+            {
+              "match": "*_NormalGL.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.jpg",
+              "settings": {
+                "srgb": false
+              }
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "path": "asphalt031.mcmat",
+          "textures": {
+            "base_color": "textures/Asphalt031_1K-JPG_Color.jpg",
+            "normal": "textures/Asphalt031_1K-JPG_NormalGL.jpg"
+          },
+          "roughness": 0.85,
+          "metallic": 0,
+          "uv_scale": [
+            8,
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ambientcg-road007",
+      "title": "Road 007 (1K PBR set)",
+      "kind": "textures",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0-1.0",
+      "license_url": "https://docs.ambientcg.com/license/",
+      "homepage": "https://ambientcg.com/view?id=Road007",
+      "retrieved": "2026-10-17",
+      "attribution": "Textures from ambientCG.com, CC0; crediting is optional",
+      "tags": [
+        "ambientcg",
+        "pbr",
+        "material",
+        "road",
+        "asphalt",
+        "markings"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://ambientcg.com/get?file=Road007_1K-JPG.zip",
+        "archive": "zip",
+        "sha256": "0a81951ed6a3fc55e8856d6f6842b36764b7330d4e196389f6f2725efa6f0031",
+        "size": 6520659
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "Road007_1K-JPG_Color.jpg",
+            "Road007_1K-JPG_NormalGL.jpg",
+            "Road007_1K-JPG_Roughness.jpg",
+            "Road007_1K-JPG_AmbientOcclusion.jpg",
+            "Road007_1K-JPG_Displacement.jpg"
+          ],
+          "to": "textures",
+          "settings": [
+            {
+              "match": "*_Color.jpg",
+              "settings": {
+                "srgb": true
+              }
+            },
+            {
+              "match": "*_NormalGL.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.jpg",
+              "settings": {
+                "srgb": false
+              }
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "path": "road007.mcmat",
+          "textures": {
+            "base_color": "textures/Road007_1K-JPG_Color.jpg",
+            "normal": "textures/Road007_1K-JPG_NormalGL.jpg"
+          },
+          "roughness": 0.85,
+          "metallic": 0,
+          "uv_scale": [
+            4,
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ambientcg-concrete034",
+      "title": "Concrete 034 (1K PBR set)",
+      "kind": "textures",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0-1.0",
+      "license_url": "https://docs.ambientcg.com/license/",
+      "homepage": "https://ambientcg.com/view?id=Concrete034",
+      "retrieved": "2026-10-17",
+      "attribution": "Textures from ambientCG.com, CC0; crediting is optional",
+      "tags": [
+        "ambientcg",
+        "pbr",
+        "material",
+        "concrete",
+        "wall",
+        "ground"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://ambientcg.com/get?file=Concrete034_1K-JPG.zip",
+        "archive": "zip",
+        "sha256": "5839d284d94ffb8d2a56df742ec522b13dd311c52dbd42b8fd33f0409ceedb81",
+        "size": 3657575
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "Concrete034_1K-JPG_Color.jpg",
+            "Concrete034_1K-JPG_NormalGL.jpg",
+            "Concrete034_1K-JPG_Roughness.jpg",
+            "Concrete034_1K-JPG_AmbientOcclusion.jpg",
+            "Concrete034_1K-JPG_Displacement.jpg"
+          ],
+          "to": "textures",
+          "settings": [
+            {
+              "match": "*_Color.jpg",
+              "settings": {
+                "srgb": true
+              }
+            },
+            {
+              "match": "*_NormalGL.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.jpg",
+              "settings": {
+                "srgb": false
+              }
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "path": "concrete034.mcmat",
+          "textures": {
+            "base_color": "textures/Concrete034_1K-JPG_Color.jpg",
+            "normal": "textures/Concrete034_1K-JPG_NormalGL.jpg"
+          },
+          "roughness": 0.8,
+          "metallic": 0,
+          "uv_scale": [
+            4,
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ambientcg-pavingstones070",
+      "title": "Paving Stones 070 (1K PBR set)",
+      "kind": "textures",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0-1.0",
+      "license_url": "https://docs.ambientcg.com/license/",
+      "homepage": "https://ambientcg.com/view?id=PavingStones070",
+      "retrieved": "2026-10-17",
+      "attribution": "Textures from ambientCG.com, CC0; crediting is optional",
+      "tags": [
+        "ambientcg",
+        "pbr",
+        "material",
+        "pavement",
+        "sidewalk",
+        "ground"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://ambientcg.com/get?file=PavingStones070_1K-JPG.zip",
+        "archive": "zip",
+        "sha256": "84be05ad935c2a8ea0dd3b82dd18c9e1faf7eeae222b85d96beb14ed16276132",
+        "size": 9046803
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "PavingStones070_1K-JPG_Color.jpg",
+            "PavingStones070_1K-JPG_NormalGL.jpg",
+            "PavingStones070_1K-JPG_Roughness.jpg",
+            "PavingStones070_1K-JPG_AmbientOcclusion.jpg",
+            "PavingStones070_1K-JPG_Displacement.jpg"
+          ],
+          "to": "textures",
+          "settings": [
+            {
+              "match": "*_Color.jpg",
+              "settings": {
+                "srgb": true
+              }
+            },
+            {
+              "match": "*_NormalGL.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.jpg",
+              "settings": {
+                "srgb": false
+              }
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "path": "pavingstones070.mcmat",
+          "textures": {
+            "base_color": "textures/PavingStones070_1K-JPG_Color.jpg",
+            "normal": "textures/PavingStones070_1K-JPG_NormalGL.jpg"
+          },
+          "roughness": 0.75,
+          "metallic": 0,
+          "uv_scale": [
+            4,
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ambientcg-grass004",
+      "title": "Grass 004 (1K PBR set)",
+      "kind": "textures",
+      "author": "ambientCG (Lennart Demes)",
+      "license": "CC0-1.0",
+      "license_url": "https://docs.ambientcg.com/license/",
+      "homepage": "https://ambientcg.com/view?id=Grass004",
+      "retrieved": "2026-10-17",
+      "attribution": "Textures from ambientCG.com, CC0; crediting is optional",
+      "tags": [
+        "ambientcg",
+        "pbr",
+        "material",
+        "grass",
+        "ground",
+        "park"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://ambientcg.com/get?file=Grass004_1K-JPG.zip",
+        "archive": "zip",
+        "sha256": "4b63495f459db8481f4d5144e4e9069345c81cf898cc71f2216f5dd3bb344469",
+        "size": 11003149
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "Grass004_1K-JPG_Color.jpg",
+            "Grass004_1K-JPG_NormalGL.jpg",
+            "Grass004_1K-JPG_Roughness.jpg",
+            "Grass004_1K-JPG_AmbientOcclusion.jpg",
+            "Grass004_1K-JPG_Displacement.jpg"
+          ],
+          "to": "textures",
+          "settings": [
+            {
+              "match": "*_Color.jpg",
+              "settings": {
+                "srgb": true
+              }
+            },
+            {
+              "match": "*_NormalGL.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Roughness.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_AmbientOcclusion.jpg",
+              "settings": {
+                "srgb": false
+              }
+            },
+            {
+              "match": "*_Displacement.jpg",
+              "settings": {
+                "srgb": false
+              }
+            }
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "path": "grass004.mcmat",
+          "textures": {
+            "base_color": "textures/Grass004_1K-JPG_Color.jpg",
+            "normal": "textures/Grass004_1K-JPG_NormalGL.jpg"
+          },
+          "roughness": 0.9,
+          "metallic": 0,
+          "uv_scale": [
+            8,
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "polyhaven-kloppenheim-06-puresky",
+      "title": "Kloppenheim 06 (Pure Sky) 1K HDRI",
+      "kind": "hdri",
+      "author": "Greg Zaal, Jarod Guest (Poly Haven)",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "homepage": "https://polyhaven.com/a/kloppenheim_06_puresky",
+      "retrieved": "2026-10-17",
+      "attribution": "HDRI by Greg Zaal and Jarod Guest, polyhaven.com, CC0; crediting is optional",
+      "tags": [
+        "polyhaven",
+        "hdri",
+        "sky",
+        "day"
+      ],
+      "source": {
+        "kind": "http",
+        "url": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr",
+        "archive": "file",
+        "filename": "kloppenheim_06_puresky_1k.hdr",
+        "sha256": "206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34",
+        "size": 1173154
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "*.hdr"
+          ],
+          "to": "hdri",
+          "settings": [
+            {
+              "match": "*.hdr",
+              "settings": {
+                "mips": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "quaternius-universal-animation-library",
+      "title": "Universal Animation Library",
+      "kind": "animations",
+      "author": "Quaternius",
+      "license": "CC0-1.0",
+      "license_url": "https://quaternius.com/license.html",
+      "homepage": "https://quaternius.com/packs/universalanimationlibrary.html",
+      "retrieved": "2026-10-17",
+      "attribution": "Universal Animation Library by Quaternius (quaternius.com), CC0; crediting is optional",
+      "tags": [
+        "quaternius",
+        "animation",
+        "humanoid",
+        "locomotion"
+      ],
+      "source": {
+        "kind": "manual",
+        "page": "https://quaternius.itch.io/universal-animation-library",
+        "archive": "zip",
+        "instructions": "Download the free (CC0) version from the itch.io page and keep the zip as it is; itch.io downloads need a browser session. Then pin its hash: sha256sum the file and add it as source.sha256."
+      },
+      "cook": [
+        {
+          "from": "",
+          "include": [
+            "*.glb"
+          ],
+          "to": "animations"
+        }
+      ]
+    }
+  ]
+}

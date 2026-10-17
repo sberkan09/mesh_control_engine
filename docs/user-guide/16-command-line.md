@@ -40,7 +40,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-lifecycle_test N,M` | off | rehearse a phone going to the background at app tick N and coming back M ticks later (also headless; the save slot is written on the way out) |
 | `-r.post2d 0` | 1 | start with the camera's 2D post effects off (F7 toggles) |
 | `-r.frame_report N` | 0 | windowed: print the average, p95 and worst frame time every N frames, and the run's average and worst at exit |
-| `-perf_capture <file>` | off | write a `.mcperf` capture of the run at exit: each frame's wall, sim, render and GPU time, sim time per ECS phase, render counters, and per-system totals, with p50/p95/p99/max and the spike frames; prints a one-line summary. Never changes the state hash; works headless (times and systems, no draws) and windowed |
+| `-perf_capture <file>` | off | write a `.mcperf` capture of the run at exit: each frame's wall, sim, render and GPU time, sim time per ECS phase, render counters, and per-system totals, with p50/p95/p99/max and the spike frames; prints a one-line summary. `gpu_ms` is the whole frame's GPU span (GL and Metal: timestamp queries; SDL GPU: fence completion times, an upper bound that includes tens of microseconds of wake-up latency, and without the per-stage 3D columns). Never changes the state hash; works headless (times and systems, no draws) and windowed |
 | `-perf_warmup N` | 0 | `-perf_capture`: leave the first N frames out (loading, first uploads) |
 | `-r.vsync 0` | 1 (saved) | present without vsync |
 | `-r.gl_debug 0` | 1 | disable the GL validation callback (restart-only) |
@@ -159,6 +159,9 @@ mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
 mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
+mce content list|info|check|fetch|add|verify|credits ...    (open-licence content ledger, chapter 5.3)
+mce retarget <source.glb>... --onto <character.glb> [--out f.glb | --inplace] [--clips a,b] [--prefix p] [--map f.json]
+             [--in-place-motion] [--no-translation] [--scale auto|N] [--strict]    (chapter 8.9)
 mce ship <project> [--target desktop|web] [--out dir] [--version v] [--max-texture-size N] [--textures rgba8|bc]
 mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]

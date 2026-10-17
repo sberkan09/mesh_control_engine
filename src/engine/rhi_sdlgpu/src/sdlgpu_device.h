@@ -13,9 +13,17 @@
 //   - the slot's fence is the end_frame command buffer's; begin_frame waits it, which makes the
 //     per-slot rings, transfer buffer and storage pool free to reuse;
 //   - create/update calls with data go into a pending upload command buffer that is submitted
-//     before the next submit, read_pixels or end_frame, which keeps GL's "visible to later draws".
+//     before the next submit, read_pixels or end_frame, which keeps GL's "visible to later draws";
+//   - write_timestamp (caps().fence_timestamps; SDL GPU has no timestamp queries) ends the SDL command
+//     buffer where it stands, with a fence, and goes on in a new one. A waiter thread stamps the CPU time
+//     each fence passes; begin_frame turns those into GpuTimestamps, minus the GPU's idle time between
+//     submits. Inside a pass the split waits for the pass's end.
 
 #include <SDL3/SDL.h>
+
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 #include "mce/containers/array.h"
 #include "mce/memory/handle.h"
@@ -170,13 +178,20 @@ private:
 
     // sdlgpu_translate.cpp
     void prepare_payloads(const CommandBuffer& cb, SDL_GPUCommandBuffer* gcb);
-    void record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* gcb);
+    bool record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer*& gcb);
     void begin_pass(SDL_GPUCommandBuffer* gcb, const cmd::BeginPass& p);
     void end_pass();
     bool flush_draw_state(SDL_GPUCommandBuffer* gcb);
     SDL_GPUGraphicsPipeline* pipeline_variant(GpuPipeline& p);
     void resolve(SDL_GPUCommandBuffer* gcb, const cmd::Resolve& r);
     void dispatch(SDL_GPUCommandBuffer* gcb, const cmd::Dispatch* direct, const cmd::DispatchIndirect* indirect);
+    void push_uniforms(SDL_GPUCommandBuffer* gcb);
+    bool split_for_timestamps(SDL_GPUCommandBuffer*& gcb, u32 indices);
+
+    // Fence timestamps (sdlgpu_device.cpp).
+    void timing_loop();
+    void collect_timestamps();
+    void stop_timing();
 
     platform::Window& window_;
     DeviceDesc desc_;
@@ -226,6 +241,27 @@ private:
     FrameStats last_stats_;
     GpuTimestamps last_timestamps_;
 
+    // Fence timestamps. The waiter owns a fence from its submit until it passed; then the main thread
+    // releases it in collect_timestamps.
+    struct TimedFence {
+        SDL_GPUFence* fence = nullptr;
+        u64 frame = 0;
+        u32 indices = 0;  // the timestamps it stands for (bit i = index i)
+        u64 submitted_ns = 0;
+        u64 passed_ns = 0;
+    };
+    std::mutex timing_mutex_;
+    std::condition_variable timing_cv_;
+    std::thread timing_thread_;
+    Array<TimedFence> timing_waiting_;  // guarded: submitted, in submit order; the waiter takes the front
+    usize timing_head_ = 0;             // guarded: the front of timing_waiting_
+    Array<TimedFence> timing_passed_;   // guarded: passed, in submit order
+    bool timing_stop_ = false;          // guarded
+    u32 timing_in_flight_ = 0;          // main thread: submitted, not collected
+    u64 timing_last_passed_ = 0;        // main thread: when the previous collected fence passed
+    u64 timing_clock_ = 0;              // main thread: GPU-busy time line of the frame being assembled
+    GpuTimestamps timing_frame_;        // main thread: the frame being assembled
+
     // Per-submit state.
     struct Prepared {
         SDL_GPUBuffer* buffer = nullptr;
@@ -255,7 +291,9 @@ private:
         u32 args_offset = 0;
         u32 args_count = 0;
         u32 scopes = 0;
+        const char* scope_names[8] = {};  // the open scopes, re-opened after a timestamp split
         bool pass_scope = false;
+        u32 deferred_timestamps = 0;  // written inside the open pass: split at its end
     } ts_;
 };
 

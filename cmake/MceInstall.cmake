@@ -100,6 +100,9 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAK
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_steam.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce ship --steam
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import_skel.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import spine|dragonbones
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_content.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce content
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_retarget.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce retarget
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/content/" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/content)  # the content ledger
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example projects (`mce example <Name>` copies one out): sources and content, no build outputs.
