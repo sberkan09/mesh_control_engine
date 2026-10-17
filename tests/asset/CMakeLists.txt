@@ -21,6 +21,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_gltf.cpp
         test_cook_hdr.cpp
         test_cook_lod.cpp
+        test_cook_mesh_golden.cpp
         test_cook_input.cpp
         test_cook_navmesh.cpp
         test_cook_json_audio.cpp
