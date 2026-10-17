@@ -34,6 +34,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
 | `-save_dir <dir>` | the per-user save folder (2.5) | where slots live; the player logs the folder it uses once at start (`save folder ...`) |
 | `-settings 0` | 1 | neither read nor write `<save folder>/settings.cfg` (the saved options: bus gains, `r.quality`, `fullscreen`, ...) |
+| `-defaults <path>` | `defaults.cfg` beside the pack | a file of `name value` lines that become the convars' defaults (a project's own; 12.4) |
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
 | `-pause_on_focus_loss 0` | 1 | keep simulating when the window loses focus |
