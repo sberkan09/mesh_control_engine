@@ -443,7 +443,7 @@ TEST_CASE("render_frame: camera.focus, camera.exposure and environment overrides
     const auto mean = [](const cook::Image& img) {
         u64 sum = 0;
         for (usize i = 0; i < img.rgba.size(); i += 4) sum += img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2];
-        return double(sum) / double(img.rgba.size() / 4 * 3);
+        return double(sum) / (double(img.rgba.size() / 4) * 3.0);
     };
     const std::string dof = R"("environment":{"depth_of_field":1,"dof_focus_range":0.5,"dof_blur_range":4,"dof_max_radius":0.02})";
     const std::string base = R"({"tick":3,"width":320,"height":180,"software":true)";
