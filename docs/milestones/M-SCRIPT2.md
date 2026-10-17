@@ -21,8 +21,8 @@ calls it. A function that would need state between ticks is not added: the answe
 |---|---|---|---|
 | 1 | 2D physics completeness: forces and torque, angular velocity, circle / shape overlap and shape casts, gravity and sleep controls | Sonnet | done |
 | 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | done |
-| 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | not started |
-| 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | not started |
+| 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | done |
+| 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | done |
 | 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | not started |
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry (a test lists the registered functions
