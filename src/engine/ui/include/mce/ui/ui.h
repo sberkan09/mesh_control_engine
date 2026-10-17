@@ -109,7 +109,8 @@ struct UpdateContext {
 // its baseline: 96 on desktops, 160 on Android, points on iOS) times the user's setting, lowered
 // when the screen would be smaller than `min_logical` (short side × long side, at scale 1) so a
 // layout authored for that size still fits, and rounded down to 1/8 so pixel snapping stays even.
-f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale = 1.0f, vec2 min_logical = {360, 640});
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale = 1.0f, vec2 min_logical = {360, 640},
+                     f32 reference_height = 0.0f);
 
 // Touch as the pointer (M-MOBILE, FR-INP-070): the oldest touch in the snapshot becomes
 // ctx.pointer (scaled to ctx.viewport) with its press/hold/release, so widgets hit-test by finger
