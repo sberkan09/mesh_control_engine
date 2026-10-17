@@ -19,7 +19,7 @@ namespace {
 
 void check_golden(const char* name, const Fixture3D& f) {
     CHECK(f.device->validation_error_count() == 0);
-    golden::check(name, kW, kH, f.pixels.span());
+    golden::check(name, kW, kH, f.pixels.span(), f.device->caps().device_name.c_str());
 }
 
 Sky gradient_sky() {

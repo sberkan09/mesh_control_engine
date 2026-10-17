@@ -2,8 +2,8 @@
 # with cmake -P.
 #   MODE=save     headless: "save folder <dir>" is logged once at start; $XDG_DATA_HOME moves the default
 #                 (Linux), -save_dir wins over both.
-#   MODE=capture  windowed with DISPLAY, WAYLAND_DISPLAY and SDL_VIDEODRIVER unset: -capture_tick still writes a
-#                 PPM of the window's size on the frame after that tick (the player falls back to the offscreen
+#   MODE=capture  windowed with DISPLAY, WAYLAND_DISPLAY, SDL_VIDEODRIVER and SDL_VIDEO_DRIVER unset: -capture_tick still
+#                 writes a PPM of the window's size on the frame after that tick (the player falls back to the offscreen
 #                 driver and says so), while an explicit -platform.video_driver is not second-guessed.
 
 function(run_env expect_rc)
@@ -25,7 +25,8 @@ if(NOT rc EQUAL 0)
 endif()
 set(PACK "${WORK_DIR}/game/assets.mce")
 set(COMMON -pack "${PACK}" -scene ${SCENE_GUID} -platform.error_box 0)
-set(NOENV ${CMAKE_COMMAND} -E env --unset=DISPLAY --unset=WAYLAND_DISPLAY --unset=SDL_VIDEODRIVER)
+# SDL 3 reads both SDL_VIDEO_DRIVER and SDL_VIDEODRIVER; either one set to "offscreen" skips the fallback.
+set(NOENV ${CMAKE_COMMAND} -E env --unset=DISPLAY --unset=WAYLAND_DISPLAY --unset=SDL_VIDEODRIVER --unset=SDL_VIDEO_DRIVER)
 
 if(MODE STREQUAL "save")
     if(UNIX AND NOT APPLE)

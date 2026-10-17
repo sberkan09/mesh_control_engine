@@ -55,10 +55,11 @@ if(MCE_BUILD_TESTS)
                      COMMAND mce_editor -project "${project_dir}" -scene scenes/demo.mcscene -editor.select Ball -frames 90 -selftest
                              -editor.ini "" -platform.error_box 0 -r.vsync 0)
             set_tests_properties(editor_scene_smoke PROPERTIES LABELS gpu)
-            # Play-in-editor (M5b, FR-EDT-060): the scene runs in the viewport, the document stays.
+            # Play-in-editor (M5b, FR-EDT-060): the scene runs in the viewport, the document stays. One fixed tick a
+            # frame (-sim.fast_forward): on a real GPU without vsync 90 frames take ~13 ms, less than one 60 Hz tick.
             add_test(NAME editor_play_smoke
                      COMMAND mce_editor -project "${project_dir}" -scene scenes/demo.mcscene -editor.play 1 -frames 90 -selftest
-                             -editor.ini "" -platform.error_box 0 -r.vsync 0)
+                             -editor.ini "" -platform.error_box 0 -r.vsync 0 -sim.fast_forward 1 -sim.max_catchup 1)
             set_tests_properties(editor_play_smoke PROPERTIES LABELS gpu)
         endif()
     endif()
