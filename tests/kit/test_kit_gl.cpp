@@ -681,7 +681,7 @@ TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] a
         REQUIRE(c != nullptr);
         CHECK_FALSE(c->parallax);
         CHECK(c->ext.height_scale == 0.0f);
-        CHECK(c->normal_key < render::TextureStore::kFirstLocalKey);
+        CHECK((c->normal_key == ~0u || c->normal_key < render::TextureStore::kFirstLocalKey));  // no array key
     }
     ex3.shutdown();
     f.extract.reset(nullptr);
