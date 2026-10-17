@@ -96,6 +96,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
+| `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |

@@ -414,3 +414,29 @@ a crate. `Weapon3D` fires from its entity. `Projectile3D` is a shot in flight.
   a crash, an explosion, a script); call it from a `FixedUpdate_Pre` system or between ticks.
 
 Add `Health3D` to a `Vehicle3D`'s entity and a crash or a rocket can wreck it: `Died3D` tells the game when.
+
+## 9.13 Missions and objectives (M-MISSION)
+
+`mce/kit/missions.h` makes a mission chain out of data. A `Mission` entity holds the state; each goal is an
+`Objective` entity, and `Objective.next` points at the goal that follows. Scenes without these components are
+unchanged, and everything lives in components, so a save in the middle of a mission resumes there.
+
+- **Mission.** `objective` is the first goal, `actor` is who plays it (the player's character), `state` is
+  `Idle`, `Active`, `Complete` or `Failed`. It starts when `start` is set to 1 (the engine clears it) or, with
+  `start_on_load`, on its first tick. `time_limit` seconds after it started it fails; `fail_on_death` names an
+  entity (the player, a person to protect) whose death fails it. `elapsed` and `ticks` count the time.
+- **Objective kinds.** `ReachZone`: the actor is within `radius` metres of the target. `Kill`: `count` `Died3D`
+  events of the target (with no target or tag, of anything). `Collect`: `count` `TriggerEnter3D` events of the
+  target `Trigger3D`, as pickups. `Interact`: the Interact action is pressed within `radius` of the target.
+  `Signal`: `count` `MissionSignal` events carrying the objective's `signal` name; a game system, a script or
+  the test pushes them. `Timer`: `duration` seconds pass.
+- **Target.** The `target` entity, or, when it is empty, the entity named `tag` in the loaded scene.
+- **One at a time.** A mission has one active objective (`Mission.current`). When it is done the next one
+  goes active and is looked at from the next tick; the last one completes the mission.
+- **Events.** `MissionStarted`, `ObjectiveDone` (with the objective and its index), `MissionCompleted`,
+  `MissionFailed` (`reason` 0 time limit, 1 `fail_on_death`, 2 an objective went missing). Use them to show
+  text, play a sound or give a reward.
+
+Time is counted in ticks, so the same run gives the same state hash. Entity references in a save are the
+handles of the base scene a load rebuilds: give the entities a mission uses a `SaveKey` and spawn them from the
+same scene.
