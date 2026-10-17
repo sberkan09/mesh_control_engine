@@ -50,6 +50,10 @@ One header, `include/mce/physics3d/world3d.h`, namespace `mce::physics`. It name
   the overlaps test their capsules directly; a body wins a tie with a character. `shape_cast` never
   sees characters.
 - `hash_state(seed)` and `stats()` (bodies, active bodies, characters).
+- Floating origin (M-OPENWORLD A2): `World3D::shift_origin(delta)` moves every body and character by
+  `-delta` without waking anything, and the world-held end of every joint to the world; `NavMesh3D`
+  keeps an `origin_offset` added at the Detour boundary, so a rebase moves queries, obstacles and crowd
+  agents without rewriting the mesh. The kit calls both from its `ecs::on_origin_shift` listeners.
 
 `World3D` mirrors `World2D`'s method spelling (`step`, `create_body`, `destroy_body`, `has_body`,
 `set_linear_velocity`, `teleport`, `body_state`, `raycast`, `shape_cast`, `controller_state`,

@@ -272,12 +272,26 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
+  `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
+  static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
+  and root camera rails. Kit fields holding world points (`Locomotion3D::last_position`,
+  `SequencePlayer::anchor`, `CameraFollow3D::pivot` and `last_goal`, `NavAgent3D::target` and
+  `next_corner`, `Perceiver::last_seen` and `heard_at`, `Ragdoll3D::root_position`, `Raycast3D::point`)
+  are flagged `WorldPoint`; `Blackboard` vectors are not. An absolute sequence `MoveTo` is a fixed-world
+  target. `Kit3DExtract` notices a rebase through `WorldOrigin::serial`: it shifts its interpolation
+  history, foliage and merged-mesh caches, re-uploads terrains, starts a camera cut and passes the shift
+  to `Scene3D::set_origin_shift`.
 - The renderer has no particle code; particles are sprite instances in the one sprite batch.
 - Engine container ban applies (`scripts/ci/check_walls.py`).
 
 ## How it is tested
 
 ctest `test_kit` (no GPU), `tests/kit/`:
+
+- `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
+  stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
+  more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
 
 - `test_fsm.cpp`: "fsm: a timed transition fires on its exact tick and resets state time", exit and
   entry order, `StateChanged`, validation, "fsm: state and state time survive a save mid-state".

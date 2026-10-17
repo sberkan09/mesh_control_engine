@@ -72,7 +72,7 @@ MCE_COMPONENT(Perceiver, (sight_range, Range{0, 1000}, Help{"metres"}), (sight_a
               space, (interval, Range{1, 60}, Help{"ticks between sight checks"}),
               (target_key, Help{"entity key: the target"}), (sees_key, Help{"bool key: in sight now"}),
               (last_seen_key, Help{"vec3 key: where it was last seen"}), (heard_key, Help{"vec3 key: the last noise heard"}),
-              (target, Save, ReadOnly), (last_seen, Save, ReadOnly), (heard_at, Save, ReadOnly), (since_seen, Save, ReadOnly),
+              (target, Save, ReadOnly), (last_seen, Save, ReadOnly, WorldPoint), (heard_at, Save, ReadOnly, WorldPoint), (since_seen, Save, ReadOnly),
               (awareness, Save, ReadOnly), (sees, Save, ReadOnly), (heard, ReadOnly, Transient), (sightings, Save, ReadOnly),
               (hearings, Save, ReadOnly))
 

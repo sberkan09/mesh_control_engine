@@ -296,7 +296,7 @@ struct SequencePlayer {
     u32 pad_ = 0;
 };
 MCE_COMPONENT(SequencePlayer, sequence, name, (active, Save), (anchored, Save, ReadOnly), (step, Save, ReadOnly),
-              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly))
+              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly, WorldPoint))
 
 enum class PathStatus : u8 { Idle, Moving, Arrived, NoPath };
 MCE_ENUM(PathStatus, Idle, Moving, Arrived, NoPath)

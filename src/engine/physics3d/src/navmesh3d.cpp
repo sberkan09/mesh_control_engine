@@ -726,6 +726,9 @@ struct NavMesh3D::Impl {
 
     NavBakeSettings3D settings;
     math::aabb3 bounds;
+    vec3 offset;  // floating origin: Detour coordinates = caller coordinates + offset
+    vec3 in(vec3 p) const { return p + offset; }
+    vec3 out(vec3 p) const { return p - offset; }
     i32 tiles_x = 0;
     i32 tiles_z = 0;
     PackBits comp;
@@ -956,7 +959,14 @@ bool NavMesh3D::load(Span<const byte> blob, u32 max_agents) {
 void NavMesh3D::clear() { impl_->release(); }
 bool NavMesh3D::loaded() const { return impl_->nav != nullptr; }
 const NavBakeSettings3D& NavMesh3D::settings() const { return impl_->settings; }
-math::aabb3 NavMesh3D::bounds() const { return impl_->bounds; }
+math::aabb3 NavMesh3D::bounds() const {
+    math::aabb3 b = impl_->bounds;
+    b.min = impl_->out(b.min);
+    b.max = impl_->out(b.max);
+    return b;
+}
+void NavMesh3D::set_origin_offset(vec3 offset) { impl_->offset = offset; }
+vec3 NavMesh3D::origin_offset() const { return impl_->offset; }
 
 void NavMesh3D::set_area_cost(u8 area, f32 cost) {
     Impl& m = *impl_;
@@ -969,12 +979,12 @@ f32 NavMesh3D::area_cost(u8 area) const { return area < kNavAreaCount ? impl_->f
 
 std::optional<vec3> NavMesh3D::nearest_point(vec3 p, vec3 extents) const {
     vec3 out;
-    if (!impl_->nearest(p, extents, &out)) return std::nullopt;
-    return out;
+    if (!impl_->nearest(impl_->in(p), extents, &out)) return std::nullopt;
+    return impl_->out(out);
 }
 
 u8 NavMesh3D::area_at(vec3 p, vec3 extents) const {
-    const dtPolyRef ref = impl_->nearest(p, extents, nullptr);
+    const dtPolyRef ref = impl_->nearest(impl_->in(p), extents, nullptr);
     if (!ref) return kNavAreaBlocked;
     unsigned char area = 0;
     if (dtStatusFailed(impl_->nav->getPolyArea(ref, &area))) return kNavAreaBlocked;
@@ -986,8 +996,8 @@ NavPath3D NavMesh3D::find_path(vec3 from, vec3 to, Array<vec3>& out) const {
     const Impl& m = *impl_;
     const vec3 ext{2.0f, 4.0f, 2.0f};
     vec3 a, b;
-    const dtPolyRef sref = m.nearest(from, ext, &a);
-    const dtPolyRef eref = m.nearest(to, ext, &b);
+    const dtPolyRef sref = m.nearest(m.in(from), ext, &a);
+    const dtPolyRef eref = m.nearest(m.in(to), ext, &b);
     if (!sref || !eref) return NavPath3D::None;
 
     dtPolyRef polys[kMaxPathPolys];
@@ -1006,15 +1016,16 @@ NavPath3D NavMesh3D::find_path(vec3 from, vec3 to, Array<vec3>& out) const {
     if (dtStatusFailed(m.query->findStraightPath(Impl::fp(a), Impl::fp(end), polys, npolys, pts, nullptr, nullptr, &npts,
                                                  kMaxStraight)))
         return NavPath3D::None;
-    for (int i = 0; i < npts; ++i) out.push_back(Impl::v3(&pts[i * 3]));
+    for (int i = 0; i < npts; ++i) out.push_back(m.out(Impl::v3(&pts[i * 3])));
     return partial ? NavPath3D::Partial : NavPath3D::Complete;
 }
 
 std::optional<vec3> NavMesh3D::raycast(vec3 from, vec3 to) const {
     const Impl& m = *impl_;
     vec3 a;
-    const dtPolyRef sref = m.nearest(from, {2.0f, 4.0f, 2.0f}, &a);
+    const dtPolyRef sref = m.nearest(m.in(from), {2.0f, 4.0f, 2.0f}, &a);
     if (!sref) return std::nullopt;
+    to = m.in(to);
     f32 t = 0.0f;
     f32 normal[3];
     dtPolyRef polys[kMaxPathPolys];
@@ -1025,12 +1036,13 @@ std::optional<vec3> NavMesh3D::raycast(vec3 from, vec3 to) const {
     vec3 hit = a + (to - a) * t;
     f32 h = hit.y;
     if (npolys > 0 && dtStatusSucceed(m.query->getPolyHeight(polys[npolys - 1], Impl::fp(hit), &h))) hit.y = h;
-    return hit;
+    return m.out(hit);
 }
 
 u32 NavMesh3D::add_obstacle(vec3 center, vec3 half, f32 yaw) {
     Impl& m = *impl_;
     if (!m.cache) return 0;
+    center = m.in(center);
     dtObstacleRef ref = 0;
     dtStatus st;
     if (yaw == 0.0f) {
@@ -1058,7 +1070,8 @@ i32 NavMesh3D::add_agent(vec3 position, const NavAgentParams3D& params) {
     Impl& m = *impl_;
     if (!m.crowd) return -1;
     const dtCrowdAgentParams cp = m.crowd_params(params);
-    const int idx = m.crowd->addAgent(Impl::fp(position), &cp);
+    const vec3 at = m.in(position);
+    const int idx = m.crowd->addAgent(Impl::fp(at), &cp);
     if (idx < 0) return -1;
     Impl::Agent& a = m.agents[usize(idx)];
     a = Impl::Agent{};
@@ -1088,9 +1101,9 @@ bool NavMesh3D::set_agent_target(i32 agent, vec3 target) {
     Impl::Agent& a = m.agents[usize(agent)];
     a.has_target = true;
     a.arrived = false;
-    a.target = target;
+    a.target = m.in(target);  // Detour coordinates: survives an origin shift
     vec3 p;
-    const dtPolyRef ref = m.nearest(target, m.agent_extents(agent), &p);
+    const dtPolyRef ref = m.nearest(a.target, m.agent_extents(agent), &p);
     if (!ref) {
         a.failed = true;
         m.crowd->resetMoveTarget(agent);
@@ -1114,6 +1127,7 @@ void NavMesh3D::move_agent(i32 agent, vec3 position) {
     Impl& m = *impl_;
     if (!m.valid_agent(agent)) return;
     dtCrowdAgent* ag = m.crowd->getEditableAgent(agent);
+    position = m.in(position);
     const vec3 cur = Impl::v3(ag->npos);
     const vec3 d = position - cur;
     if (d.x * d.x + d.z * d.z < 1e-8f && std::fabs(d.y) < 1e-4f) return;
@@ -1142,7 +1156,7 @@ void NavMesh3D::move_agent(i32 agent, vec3 position) {
     dtVcopy(ag->npos, Impl::fp(p));
     ag->state = DT_CROWDAGENT_STATE_WALKING;
     const Impl::Agent& a = m.agents[usize(agent)];
-    if (a.has_target && !a.arrived) set_agent_target(agent, a.target);
+    if (a.has_target && !a.arrived) set_agent_target(agent, m.out(a.target));
 }
 
 bool NavMesh3D::agent_status(i32 agent, NavAgentStatus3D& out) const {
@@ -1151,10 +1165,10 @@ bool NavMesh3D::agent_status(i32 agent, NavAgentStatus3D& out) const {
     const dtCrowdAgent* ag = m.crowd->getAgent(agent);
     const Impl::Agent& a = m.agents[usize(agent)];
     out = NavAgentStatus3D{};
-    out.position = Impl::v3(ag->npos);
+    out.position = m.out(Impl::v3(ag->npos));
     out.velocity = Impl::v3(ag->vel);
-    out.target = a.has_target ? a.target : out.position;
-    out.next_corner = ag->ncorners > 0 ? Impl::v3(ag->cornerVerts) : out.position;
+    out.target = a.has_target ? m.out(a.target) : out.position;
+    out.next_corner = ag->ncorners > 0 ? m.out(Impl::v3(ag->cornerVerts)) : out.position;
     const vec3 d = out.target - out.position;
     out.distance = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
     out.partial = a.has_target && ag->partial;
@@ -1176,7 +1190,7 @@ void NavMesh3D::agent_corners(i32 agent, Array<vec3>& out) const {
     const Impl& m = *impl_;
     if (!m.valid_agent(agent)) return;
     const dtCrowdAgent* ag = m.crowd->getAgent(agent);
-    for (int i = 0; i < ag->ncorners; ++i) out.push_back(Impl::v3(&ag->cornerVerts[i * 3]));
+    for (int i = 0; i < ag->ncorners; ++i) out.push_back(m.out(Impl::v3(&ag->cornerVerts[i * 3])));
 }
 
 u32 NavMesh3D::agent_count() const {
@@ -1253,8 +1267,8 @@ void NavMesh3D::debug_triangles(Array<vec3>& verts, Array<u8>& areas, f32 lift, 
             const dtPoly& p = tile->polys[ip];
             if (p.getType() == DT_POLYTYPE_OFFMESH_CONNECTION) {
                 if (links) {
-                    links->push_back(Impl::v3(&tile->verts[p.verts[0] * 3]));
-                    links->push_back(Impl::v3(&tile->verts[p.verts[1] * 3]));
+                    links->push_back(impl_->out(Impl::v3(&tile->verts[p.verts[0] * 3])));
+                    links->push_back(impl_->out(Impl::v3(&tile->verts[p.verts[1] * 3])));
                 }
                 continue;
             }
@@ -1264,7 +1278,7 @@ void NavMesh3D::debug_triangles(Array<vec3>& verts, Array<u8>& areas, f32 lift, 
                 for (int k = 0; k < 3; ++k) {
                     const f32* v = t[k] < p.vertCount ? &tile->verts[p.verts[t[k]] * 3]
                                                       : &tile->detailVerts[(pd.vertBase + t[k] - p.vertCount) * 3];
-                    verts.push_back({v[0], v[1] + lift, v[2]});
+                    verts.push_back(impl_->out({v[0], v[1] + lift, v[2]}));
                 }
                 areas.push_back(p.getArea());
             }
