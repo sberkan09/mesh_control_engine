@@ -302,6 +302,10 @@ MCE_CVAR(cv_perf_capture, "perf_capture", "",
          CVarFlags::RequiresRestart);
 MCE_CVAR(cv_perf_warmup, "perf_warmup", 0, "-perf_capture: leave the run's first N frames out (loading, first uploads)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_split_views, "split_views", 0,
+         "3D: draw the primary camera's view N times (2-4) in split-screen cells, to measure what N players' views cost "
+         "(-perf_capture); adds N-1 cameras to the world, so the state hash differs (0 = off)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_mouse_look, "mouse_look", true, "3D games: let a Camera3DComponent with mouse_look capture the mouse", CVarFlags::None);
 MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
 // Analytics events to Firebase (platform/firebase.h): the vendor backend on phones shipped with a
@@ -712,6 +716,7 @@ public:
         // the debug view overrides (-view.*), the UI preview and a fullscreen film keep the single
         // view. The views are known before the UI updates: a UiScreenView lays out in its view.
         if (!ui_preview_) render_textures_.sync(world_, capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
+        if (cv_split_views.get_int() >= 2 && !ui_preview_) apply_split_views();
         const bool have_views = !ui_preview_ && view_entity().is_null() && view_free_.empty() &&
                                 kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
         if (!have_views) views_.clear();
@@ -740,6 +745,10 @@ public:
         if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
         rhi::CommandBuffer cmd(mem::frame());
+        // The frame's GPU span for -perf_capture: what a 2D or split-screen frame has (the 3D stages time
+        // the first 3D view only).
+        const bool frame_timestamps = !cv_perf_capture.get_string().empty() && device_->caps().timestamp_queries;
+        if (frame_timestamps) cmd.write_timestamp(kFrameTimestampBegin);
         const bool multi = have_views && !film_;
         if (!multi && !ui_preview_) render_textures_.clear_new(cmd);
         if (multi) {
@@ -832,6 +841,7 @@ public:
         }
         }  // !multi
         renderer_.end_views();
+        if (frame_timestamps) cmd.write_timestamp(kFrameTimestampEnd);
         device_->submit(cmd);
 
         // The run ends on the Nth frame (-frames) or on the first frame after the last capture tick
@@ -2503,8 +2513,50 @@ private:
         batch_stats_ = {};
     }
 
+    // -split_views N: N-1 cameras that show the primary 3D camera's view (a CameraBlend3D held at its
+    // `from`), each with the primary in a split-screen cell. Once per scene: the primary then has a CameraView.
+    void apply_split_views() {
+        Entity primary;
+        kit::Camera3DComponent pc;
+        world_.query<const kit::Camera3DComponent&>().each([&](Entity e, const kit::Camera3DComponent& c) {
+            if (primary.is_null() && c.primary != 0) {
+                primary = e;
+                pc = c;
+            }
+        });
+        if (primary.is_null() || primary == split_primary_) return;
+        if (world_.try_get<kit::CameraView>(primary)) {
+            if (!split_views_warned_)
+                MCE_LOG_WARN("{}: -split_views: the primary camera already has a CameraView; the scene's views are kept",
+                             desc_.app_name);
+            split_views_warned_ = true;
+            return;
+        }
+        const u32 n = static_cast<u32>(math::clamp<i64>(cv_split_views.get_int(), 2, 4));
+        kit::CameraView view;
+        view.split = 1;
+        world_.add(primary, view);
+        split_primary_ = primary;
+        for (u32 i = 1; i < n; ++i) {
+            const Entity e = world_.spawn();
+            kit::Camera3DComponent c = pc;
+            c.primary = 0;
+            c.mouse_look = 0;
+            world_.add(e, c);
+            world_.add(e, LocalTransform{});
+            kit::CameraBlend3D hold;
+            hold.from = primary;
+            hold.duration = 1e9f;  // weight 0 for the run: the primary's view
+            world_.add(e, hold);
+            view.split = i + 1;
+            world_.add(e, view);
+        }
+        MCE_LOG_INFO("{}: -split_views: the primary camera drawn {} times", desc_.app_name, n);
+    }
+
     // GPU timestamps arrive frames late: the newest completed set goes to the captured frame it was
-    // written in. The 3D path names its stages; a 2D frame has its first-to-last timestamp span.
+    // written in. The 3D path names its stages (of its first view); gpu_ms is the whole frame's span
+    // (2D, split screen and overlays included), else the 3D total, else the first-to-last span.
     void attach_gpu_times() {
         const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
         if (ts.written == 0 || ts.frame_index == ~u64(0)) return;
@@ -2523,8 +2575,12 @@ private:
             for (usize i = 0; i < std::size(stages); ++i)
                 target->gpu_stage_ms[i] = static_cast<f32>(stages[i]);
             if (g.total >= 0) target->gpu_ms = static_cast<f32>(g.total);
-            if (g.total >= 0) return;
         }
+        if (const f64 span = ts.ms(kFrameTimestampBegin, kFrameTimestampEnd); span >= 0.0) {
+            target->gpu_ms = static_cast<f32>(span);
+            return;
+        }
+        if (target->gpu_ms >= 0.0f) return;
         u32 first = ~0u, last = 0;
         for (u32 i = 0; i < rhi::kMaxTimestamps; ++i)
             if (ts.has(i)) {
@@ -2759,6 +2815,10 @@ private:
     render::Scene3D::Stats stats3d_;
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
     bool three_d_failed_ = false;  // init_3d failed once: the game runs 2D-only
+    bool split_views_warned_ = false;
+    Entity split_primary_;  // the camera -split_views last split
+    static constexpr u32 kFrameTimestampBegin = rhi::kMaxTimestamps - 2;  // past Forward3D's [0, kStageCount]
+    static constexpr u32 kFrameTimestampEnd = rhi::kMaxTimestamps - 1;
     bool relative_mouse_ = false;
     render::Font font_;
     ui::BuiltinSkin skin_;

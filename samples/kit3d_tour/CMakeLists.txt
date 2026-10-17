@@ -23,3 +23,10 @@ if(MCE_BUILD_TESTS)
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DTICKS=600 -DENTITIES=21
                      -DTOUR=kit3d_tour -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # -split_views 4: the tour's primary camera drawn in four split-screen cells (GPU ms per view count).
+    add_test(NAME kit3d_tour_split_views
+             COMMAND mce_player -pack ${pack} -frames 5 -split_views 4 -platform.error_box 0 -r.vsync 0)
+    set_tests_properties(kit3d_tour_split_views PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "drawn 4 times")
+endif()
