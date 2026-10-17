@@ -169,8 +169,16 @@ void record_physics_events(Frame& f, Named& n) {
 
 void kit_effects(Frame& f) {
     World& w = f.world();
+    // Registered to run on held ticks for UiFlow::keep_audio: a pause screen that keeps the sound going lets the
+    // Sfx triggers fire (and nothing else); any other pause holds the whole system as before.
+    bool sfx_only = false;
+    if (w.paused()) {
+        const audio::PauseMix* pause = w.try_resource<audio::PauseMix>();
+        if (!pause || !pause->keep) return;
+        sfx_only = true;
+    }
     Named n;
-    record_physics_events(f, n);
+    if (!sfx_only) record_physics_events(f, n);
 
     const bool audio = w.event_queue<audio::PlaySfx>() != nullptr;
     f.query<SfxTrigger>().each([&](Entity e, SfxTrigger& s) {
@@ -185,6 +193,7 @@ void kit_effects(Frame& f) {
         }
         ++s.fired;
     });
+    if (sfx_only) return;
 
     ParticleSystem* particles = w.try_resource<ParticleSystem>();
     f.query<ParticleBurst>().each([&](Entity e, ParticleBurst& b) {
@@ -398,6 +407,7 @@ void install_effects(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Post, "kit_effects", &kit_effects);
     world.add_system(Phase::FixedUpdate_Post, "kit_camera_follow", &kit_camera_follow);
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_effects");
+    world.run_when_held(Phase::FixedUpdate_Post, "kit_effects");
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "kit_camera_follow");
 }
 
