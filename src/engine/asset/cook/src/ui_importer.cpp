@@ -34,6 +34,11 @@
 // buttons, toggles and sliders, Body otherwise). Names are unique among siblings
 // and contain no '/'; "nav" edges and Document::find take paths of names from the root.
 //
+// A Minimap widget ("kind": "Minimap"; M-MISSION step 2) draws a top-down map around a tracked entity from the
+// map markers the host feeds it. Its values are "minimap": { UiMinimap fields: "track", "radius", "zoom",
+// "rotate_with_heading", "clamp_to_rim", "full_map", "background", "world_min", "world_max", "marker_px",
+// "layer_mask" } (mce/ui/types.h, mce/ui/minimap.h).
+//
 // A Tabs widget lists its pages under "tabs" (a bar button and a page each, as Builder::tab), or
 // spells out its two children (a Stack "bar" of buttons and a Panel "pages", one page per button)
 // under "children". Its "value" is the page shown.
@@ -179,7 +184,7 @@ private:
                                     "at",      "style",        "styles",         "text",          "value",   "range",
                                     "visible", "interactable", "blocks_pointer", "default_focus", "stack",   "grid",
                                     "nav",     "convar",       "children",       "tabs",          "action",  "bind",
-                                    "format",  "font_role", "text_align", "own_style"},
+                                    "format",  "font_role", "text_align", "own_style", "minimap"},
                                 file_, kStage, diags_))
             return;
         const JsonValue name = w.get("name");
@@ -195,7 +200,7 @@ private:
                 error(
                     k,
                     "'kind' must be a UiWidgetKind: Panel, Image, Text, Button, Toggle, Slider, Stack, Grid, Console, "
-                    "Scroll or Tabs");
+                    "Scroll, Tabs or Minimap");
                 return;
             }
             kind = static_cast<WidgetKind>(ev->value);
@@ -312,6 +317,18 @@ private:
                 error(a, "'text_align' must be a UiTextAlign: Left, Center or Right");
             else
                 d.text_align = static_cast<ui::TextAlign>(ev->value);
+        }
+        if (const JsonValue mm = w.get("minimap"); mm.valid()) {
+            // A Minimap's values (UiMinimap, mce/ui/types.h), over its defaults.
+            if (kind != WidgetKind::Minimap) {
+                error(mm, "'minimap' goes on a Minimap widget");
+            } else if (read_struct(refl::type_of<ui::UiMinimap>(), mm, &d.minimap, "minimap")) {
+                const ui::Minimap& m = d.minimap;
+                if (!(m.radius > 0.0f) || !(m.zoom > 0.0f) || !(m.marker_px > 0.0f))
+                    error(mm, "a minimap's radius, zoom and marker_px must be above 0");
+                else if (m.full_map && !(m.world_max.x > m.world_min.x && m.world_max.y > m.world_min.y))
+                    error(mm, "a full_map minimap needs world_max above world_min on both axes");
+            }
         }
         if (const JsonValue o = w.get("own_style"); o.valid()) {
             // A widget's style fields a theme must not replace, even where they equal the kind's default.
@@ -586,6 +603,7 @@ void write_widget(const ui::DocumentData& d, u32 i, u32 depth, String& out) {
         field("default_focus");
         out += "true";
     }
+    if (w.kind == WidgetKind::Minimap) reflected("minimap", refl::type_of<ui::UiMinimap>(), &w.minimap);
     reflected("stack", refl::type_of<ui::UiStackLayout>(), &w.stack);
     reflected("grid", refl::type_of<ui::UiGridLayout>(), &w.grid);
     bool any_nav = false;

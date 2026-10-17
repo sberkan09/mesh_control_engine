@@ -99,6 +99,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 2: tested in tests/kit/test_map_markers.cpp; the three-mission demo (step 4) shows it |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
@@ -219,6 +220,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `scene_open` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_save` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `navmesh_bake` | `tools.cpp` | docs/user-guide/08-3d.md |
+| `hlod_bake` | `tools.cpp` | docs/user-guide/04-scenes-and-prefabs.md |
 | `scene_undo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_redo` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `cook_run` | `tools.cpp` | docs/user-guide/05-assets.md |

@@ -19,7 +19,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
-| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau: #424; 3b importers: #501; 3b2 font importer hardening: #520; 3c `.mcperf`, websocket, command line, scene instantiate left) |
+| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | done (3a #424, 3b #501 and #520, 3c #533) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
@@ -135,12 +135,25 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   the validator and refused scaled components; the project font NothingYouCouldDo (outline up to 9 units outside its
   boxes, scaled components) failed the cook, so the comparison moved to the importer, on the shapes stb itself builds. `.ttf` fuzz: 11,252 mutants under ASan, clean.
 
+## Step 3c — Command line, `.mcperf`, WebSocket, scene instantiate (SBA-187)
+
+- **`test_fuzz_misc`.** `parse_command_line`, `apply_deferred_command_line` and `console::execute` over random argv built
+  from every registered convar and function name plus junk values (40,000 lines); `.mcperf` captures (`write_mcperf`
+  output) as mutated text and as valid JSON with one value swapped, read with `read_mcperf` and summarized (40,000
+  mutants). No finding.
+- **`test_fuzz_websocket`.** A raw TCP client sends the host a damaged handshake and damaged frames (half of the mutants keep
+  the handshake sound so the frame reader is what runs), and a raw TCP server answers the host's own client with the
+  right accept key and damaged frames, or a wholly damaged answer. 3,000 connections each way, no finding. POSIX only; the
+  socket wall allows this one file.
+- **`test_fuzz_scene`.** Scene chunks of every cooked pack, mutated and passed to `scene::instantiate` into a fresh world
+  (kit components linked): 48,000 mutants, no finding. Scenes whose columns name a game's own components are refused up
+  front by the registry check, as intended.
+- **Step 3 is complete.** The `.mpg` case runs by default again (the pl_mpeg overflow was fixed in #521). The Luau
+  bytecode loader decision and the Detour guard below remain open.
+
 ### Open items from step 3
 
 - Luau bytecode loader trusts its input (3a); decision with the M-SCRIPT owner.
-- pl_mpeg heap overflow in `the third-party decoder's macroblock step via `VideoDecoder::count_frames` (found at 2,500 mutants of the
-  sample `.mpg`; render/video owner). `.mpg` cases run only with `MCE_FUZZ_VIDEO=1`.
-- 3c not started: `.mcperf`, websocket frames, console/command line, scene instantiate.
 
 ### Planned: Detour defense in depth (separate item)
 
@@ -159,15 +172,15 @@ validation switched on.
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
-| Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
+| Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | mutated scene chunks of every cooked pack, spawned (`test_fuzz_scene`) | done |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
 | glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`, ...) | cook JSON reader and per-type validators | project sources, agents | mutated text and valid JSON with one value swapped (`test_fuzz_importers`) | done |
 | Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | mutated and re-sealed (`test_fuzz_player_data`) | done |
 | Input recordings | `input/script.h` `parse` | tests, bug reports | raw stream and script text (`test_fuzz_player_data`) | done |
-| `.mcperf` captures | `editor/core/perf_file.h` | tools | none | 3 |
+| `.mcperf` captures | `editor/core/perf_file.h` | tools | mutated text and JSON with one value swapped, then summarized (`test_fuzz_misc`) | done |
 | Replication, rollback and relay packets | `net/replication.h` `read_ack`, `apply`; rollback; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | mutated snapshots, acks, rollback and relay messages (`test_fuzz_net`) | done |
 | Luau source | `script/` `check`, `compile` | project scripts | mutated (`test_fuzz_script`) | done |
 | Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default | open |
 | MCP requests | `mcp/server.h` | agents | mutated and random requests (`test_mcp`) | done |
-| Console and command line | `core/convar.cpp` | the player | none | 3 |
+| Console and command line | `core/convar.cpp` | the player | random argv and console lines over every registered name (`test_fuzz_misc`) | done |
