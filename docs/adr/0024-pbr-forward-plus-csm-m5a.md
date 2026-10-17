@@ -72,3 +72,5 @@ tool, and the frame has a measured per-stage budget. Open: no depth prepass (the
 no MDI yet (one draw per submesh, as M4), the cluster build runs on the main thread (the job system can take it
 later without an interface change), and real-GPU numbers plus RenderDoc captures need hardware the CI container
 does not have.
+
+*Amendment (M-IMPORT3D 4a):* the glTF / FBX light converters (`mce import gltf|fbx`) take the usual 683 lm/W: engine intensity = candela / (683 pi) and sun intensity = lux / (683 pi), the reflected-radiance convention above.
