@@ -24,6 +24,9 @@ fixed-tick simulation (replays and state hashes must not depend on decode timing
    (`render/src/video.cpp`) wraps it. The pl_mpeg wall in `scripts/ci/check_walls.py` keeps its header and symbols
    in those two files. `mce_render` is where both callers already link: the player's texture upload and the
    cook (through `mce_ui`).
+   The fetch patches one bound (`cmake/patch_pl_mpeg.cmake`, 2026-10-17): the macroblock copy checked the block's
+   start address but not the extra row or column a half-pel motion vector reads, so a damaged stream read past the
+   picture (M-FUZZ). Upstream's head is still the pinned commit; drop the patch when upstream fixes it.
 2. **The cook keeps the stream and decodes the sound.** An `.mpg` (or `.mpeg`) with an `importer: "video"`
    sidecar cooks to `CHNK_VID`: a 64-byte `VideoHeader`, the MPEG bytes as imported, and the MP2 sound decoded once
    and resampled to 48 kHz f32 stereo. The mixer plays that PCM like any clip, so the run time decodes pictures

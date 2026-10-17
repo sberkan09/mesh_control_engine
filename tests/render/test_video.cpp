@@ -100,3 +100,17 @@ TEST_CASE("video: the decoder decodes the sound and refuses what is not MPEG-1")
     CHECK_FALSE(d.is_open());
     CHECK_FALSE(d.open({}));
 }
+
+// M-FUZZ found a heap-buffer-overflow in pl_mpeg's macroblock copy: a half-pel motion vector read one row past the
+// plane. These zeroed ranges are one such mutant of the clip (cmake/patch_pl_mpeg.cmake is the fix); linux-asan
+// catches a regression, the other builds check that the damaged stream still decodes to an end.
+TEST_CASE("video: a damaged stream with half-pel motion past the picture decodes without reading out of bounds") {
+    std::string bytes = clip_bytes();
+    REQUIRE(bytes.size() == 40960);
+    for (const auto& [at, n] : {std::pair<usize, usize>{9482, 3}, {9487, 10}, {24315, 4}})
+        for (usize i = at; i < at + n; ++i) bytes[i] = '\0';
+    render::VideoDecoder d;
+    REQUIRE(d.open(as_bytes(bytes)));
+    CHECK(d.count_frames() > 0);
+    for (f64 t = 0.0; t < 2.0; t += 0.25) (void)d.show(t);
+}
