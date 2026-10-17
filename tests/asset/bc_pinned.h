@@ -1,11 +1,12 @@
 #pragma once
 // Generated images and the pinned encoder hash shared by test_cook_bc.cpp and test_cook_bc_arch.cpp (M-CONTENT 1b-ii).
 //
-// kPinnedBcHash is FNV-1a 64 over the BC7 (sRGB), BC5, BC4 and BC1 chains of a generated 64x64 image, every level down
+// kPinnedBcHash is FNV-1a 64 over the BC7 (sRGB), BC7 (linear weights), BC5, BC4 and BC1 chains of a generated 64x64 image, every level down
 // to 1x1 (the small ones are padded blocks). It was recorded on x86_64 (gcc, -ffp-contract=off). Changing an encoder
 // setting in texture_bc.cpp, or the pinned bc7enc_rdo commit, changes it: re-record it together with a bump of the texture
 // importer's version(). An arm64 host must produce the same value (test_cook_bc_arch, a slow test); if it does not, cook
-// goldens stay x86_64-only and the cache must not be shared across architectures.
+// goldens stay x86_64-only and the cache must not be shared across architectures. Note the hash covers the encoder only:
+// the cook's sRGB mip LUT uses std::pow, so equal encoder hashes across hosts do not prove whole packs are equal.
 
 #include <algorithm>
 #include <vector>
@@ -59,13 +60,19 @@ inline u64 fnv1a(u64 h, const u8* d, usize n) {
 
 inline u64 chain_hash() {
     u64 h = 1469598103934665603ull;
-    const cook::BcFormat formats[] = {cook::BcFormat::BC7, cook::BcFormat::BC5, cook::BcFormat::BC4, cook::BcFormat::BC1};
-    for (const cook::BcFormat f : formats) {
+    struct Chain {
+        cook::BcFormat f;
+        bool srgb;
+    };
+    const Chain chains[] = {{cook::BcFormat::BC7, true}, {cook::BcFormat::BC7, false}, {cook::BcFormat::BC5, false},
+                            {cook::BcFormat::BC4, false}, {cook::BcFormat::BC1, false}};
+    for (const Chain& c : chains) {
+        const cook::BcFormat f = c.f;
         u32 w = 64, ht = 64;
         std::vector<u8> level = gradient_noise(w, ht);
         for (;;) {
             std::vector<u8> out(usize(cook::bc_level_bytes(f, w, ht)));
-            cook::encode_bc_level(f, f == cook::BcFormat::BC7, level.data(), w, ht, out.data());
+            cook::encode_bc_level(f, c.srgb, level.data(), w, ht, out.data());
             h = fnv1a(h, out.data(), out.size());
             if (w == 1 && ht == 1) break;
             level = halve(level, w, ht);
@@ -76,6 +83,6 @@ inline u64 chain_hash() {
     return h;
 }
 
-constexpr u64 kPinnedBcHash = 814461155597776220ull;
+constexpr u64 kPinnedBcHash = 11015943935995630614ull;
 
 }  // namespace bc_pinned

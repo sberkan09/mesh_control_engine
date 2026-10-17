@@ -102,7 +102,7 @@ Three importer rules that the error text alone does not make obvious:
   `max_size` (default 2048) and ignore the project cap. After every cook, `mce_cook` prints the cooked bytes by type
   (textures, meshes, audio, scenes, other), how many textures the cap cut, and the five largest assets, and MCP's
   `cook_run` returns the same as `sizes`: look there first when a pack is bigger than expected.
-- **Compress the pack with BC.** Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
+- **Compress the pack with BC.** *(Status: BC packs cook now, but runtime sampling support lands in step 1b-iii, which is not merged yet, so a `--textures bc` pack does not draw yet.)* Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
   as block-compressed data (BC7, BC5, BC4 or BC1) instead of RGBA8: the same 1024 × 1024 texture with mips drops from
   5.3 MB to 1.3 MB (BC7, BC5) or 0.67 MB (BC4, BC1), on disk and in GPU memory. The sidecar's `compress` key picks the
   format, and the cook mode decides what a value produces (a missing key means the mode's default, so a project that
@@ -116,8 +116,8 @@ Three importer rules that the error text alone does not make obvious:
   | `bc7`, `bc5`, `bc4`, `bc1` | RGBA8 | that format | ASTC 4x4 |
   | `astc` | RGBA8 | RGBA8 | ASTC 4x4 |
 
-  `auto` picks BC7 for colour (`"srgb": true`), BC5 for a normal map (a linear image where at least 99% of the texels
-  are unit-length normals), BC4 for grey data such as height maps, and BC7 for everything else; it keeps RGBA8 for
+  `auto` picks BC7 for colour (`"srgb": true`), BC4 for opaque grey data such as height maps, BC5 for a normal map (a
+  linear image where at least 99% of the texels are unit-length normals), and BC7 for everything else; it keeps RGBA8 for
   colour-grading LUT strips. (These thresholds are provisional and will be calibrated on real content.) BC1 is never picked
   for you: it is for opaque colour by explicit choice, and it drops alpha. BC5 and BC4 hold linear data, so they need
   `"srgb": false`. BC needs both sides of the texture, after `max_size`, to be multiples of 4: otherwise the texture

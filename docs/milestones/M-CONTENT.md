@@ -143,10 +143,10 @@ PIC. Never compile `bc7e.ispc`, the repo's `ispc.exe` or the RDO files. Walls: a
   An unknown value is a `file:line:col` error that lists the allowed values. HDR files keep RGBA16F, and `compress` on an
   `.hdr` or `.exr` is an unknown-key error (BC6H is out of scope). `envmap_importer.cpp` never compresses (RGBM).
 - **`auto` under `bc`.** The rules are checked in order on the base level, after `max_size`. Each test is integer-only,
-  so the choice is deterministic. (1) `srgb` true → `BC7` with the `Srgb` flag. (2) `srgb` false and at least 99% of
+  so the choice is deterministic. (1) `srgb` true → `BC7` with the `Srgb` flag. (2) `srgb` false, `r == g == b` on every texel and `a == 255` → `BC4` (height and other grey
+  data; tested before the normal rule because bright grey, c about 194..208, also passes the unit-length test). (3) `srgb` false and at least 99% of
   texels decode to a unit normal → `BC5`. A texel passes when `x,y,z = 2c-255`, `x²+y²+z²` is within `[0.81, 1.21]·255²`,
-  `z > 0`, and `a == 255`. (3) `srgb` false, `r == g == b` on every texel and `a == 255` → `BC4` (height and other grey
-  data). (4) Otherwise → `BC7`. *(provisional; will be calibrated with RunPod measurements. guess: the 99% and the length bounds; 1b-iv tunes them on the Lantern Keep and
+  `z > 0`, and `a == 255`. (4) Otherwise → `BC7`. *(provisional; will be calibrated with RunPod measurements. guess: the 99% and the length bounds; 1b-iv tunes them on the Lantern Keep and
   Poly Haven normal maps)*. The rule never picks `bc1`, which is lossy on gradients. `bc1` is for opaque colour by
   explicit choice. `auto` also keeps `none` for LUT-shaped strips (`w == h*h` or `h == w*w`, with `h >= 16`), where
   colour grading cannot take block error *(guess)*.

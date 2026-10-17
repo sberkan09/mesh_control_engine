@@ -431,9 +431,10 @@ enum class CompressKey : u8 { Missing, None, Auto, Bc7, Bc5, Bc4, Bc1, Astc };
 // `auto` under --textures bc, on the base level after max_size. Integer-only, so the choice is deterministic.
 // PROVISIONAL: the 99% and the length bounds are guesses; they will be calibrated with RunPod measurements
 // (M-CONTENT 1b-iv tunes them on the Lantern Keep and Poly Haven normal maps).
-// Order: (0) LUT strips stay RGBA8 (colour grading cannot take block error), (1) srgb -> BC7, (2) at least 99% of
-// texels decode to a unit normal -> BC5, (3) grey opaque data -> BC4, (4) BC7. Never picks BC1.
-// Returns false for "keep RGBA8" (a LUT strip), else sets `fmt`; `normal_map` says rule 2 fired.
+// Order: (0) LUT strips stay RGBA8 (colour grading cannot take block error), (1) srgb -> BC7, (2) grey opaque data
+// (r == g == b, a == 255 on every texel) -> BC4, (3) at least 99% of texels decode to a unit normal -> BC5, (4) BC7.
+// Grey is tested first because bright grey (c about 194..208) also passes the unit-normal length test.
+// Never picks BC1. Returns false for "keep RGBA8" (a LUT strip), else sets `fmt`; `normal_map` says rule 3 fired.
 bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& normal_map) {
     normal_map = false;
     if ((h >= 16 && w == h * h) || (w >= 16 && h == w * w)) return false;
@@ -452,12 +453,16 @@ bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& n
         const i64 len2 = (x * x + y * y + z * z) * 100;  // within [0.81, 1.21] * 255^2, scaled by 100
         if (p[3] == 255 && z > 0 && len2 >= 81 * 255 * 255 && len2 <= 121 * 255 * 255) ++normals;
     }
+    if (grey) {
+        fmt = BcFormat::BC4;
+        return true;
+    }
     if (normals * 100 >= n * 99) {
         normal_map = true;
         fmt = BcFormat::BC5;
         return true;
     }
-    fmt = grey ? BcFormat::BC4 : BcFormat::BC7;
+    fmt = BcFormat::BC7;
     return true;
 }
 
@@ -593,6 +598,7 @@ public:
         if (in.texture_compression == TextureCompression::Astc4x4) {
             target = key == CompressKey::None ? Target::Rgba8 : Target::Astc;
         } else if (in.texture_compression == TextureCompression::Bc) {
+            bool auto_normal_map = false;
             switch (key) {
                 case CompressKey::None:
                 case CompressKey::Astc: break;
@@ -605,10 +611,7 @@ public:
                     bool normal_map = false;
                     if (choose_auto(levels.data(), cw, ch, is_srgb, bcf, normal_map)) {
                         target = Target::Bc;
-                        if (normal_map) {
-                            String msg("'compress' auto chose bc5 (the texture looks like a normal map); set \"compress\" to override");
-                            diags.warning(in.display_path, 0, 0, kStage, msg);
-                        }
+                        auto_normal_map = normal_map;
                     }
                     break;
                 }
@@ -622,6 +625,9 @@ public:
                 const String msg(buf);
                 diags.warning(in.display_path, 0, 0, kStage, msg);
                 target = Target::Rgba8;
+            } else if (target == Target::Bc && auto_normal_map) {
+                String msg("'compress' auto chose bc5 (the texture looks like a normal map); set \"compress\" to override");
+                diags.warning(in.display_path, 0, 0, kStage, msg);
             }
         }
         const bool astc = target == Target::Astc;

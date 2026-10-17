@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "hdr_fixtures.h"
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
+#include "mce/jobs.h"
 
 using namespace mce;
 using namespace mce::asset;
@@ -182,6 +184,15 @@ TEST_CASE("cook bc: the auto picks hold on albedo, normal, grey and ORM images")
     const CookResult n = cook_one("bc_auto_normal", Img::Normal, 64, 64, "{ \"srgb\": false }", TextureCompression::Bc);
     CHECK(n.format == TextureFormat::BC5);
     CHECK(contains(n.diags, "normal map"));  // the choice is named, and the sidecar overrides it
+    // bright opaque grey also passes the unit-normal length test: the grey rule wins
+    {
+        std::vector<u8> g(64 * 64 * 4, 200);
+        for (usize i = 3; i < g.size(); i += 4) g[i] = 255;
+        const CookResult r = cook_project(make_project("bc_auto_grey200", make_png(64, 64, g), "{ \"srgb\": false }"),
+                                          TextureCompression::Bc);
+        CHECK(r.format == TextureFormat::BC4);
+        CHECK(!contains(r.diags, "normal map"));
+    }
     CHECK(cook_one("bc_auto_grey", Img::Grey, 64, 64, "{ \"srgb\": false }", TextureCompression::Bc).format == TextureFormat::BC4);
     CHECK(cook_one("bc_auto_orm", Img::Orm, 64, 64, "{ \"srgb\": false }", TextureCompression::Bc).format == TextureFormat::BC7);
     // a grey image that is colour data (srgb true) is still BC7, and an LUT strip (w == h*h, h >= 16) stays RGBA8
@@ -341,8 +352,39 @@ TEST_CASE("cook bc: the cook is deterministic and the encoder output is pinned")
     CHECK(a.manifest == b.manifest);
     // the same bytes, level by level, across two runs of the encoder in one process
     CHECK(bc_pinned::chain_hash() == bc_pinned::chain_hash());
+#if defined(__x86_64__) || defined(_M_X64)
     // x86_64 value (cook goldens are guaranteed there only; test_cook_bc_arch checks other hosts)
     CHECK(bc_pinned::chain_hash() == bc_pinned::kPinnedBcHash);
+#endif
+}
+
+TEST_CASE("cook bc: several jobs cook the same manifest as one job") {
+    auto build = [](const char* name) {
+        const std::string root = fresh_dir(name);
+        for (int i = 0; i < 8; ++i) {
+            char guid[40], file[40];
+            std::snprintf(guid, sizeof guid, "b1b1b1b1-0000-4000-8000-0000000001%02d", i);
+            std::snprintf(file, sizeof file, "/assets/t%d.png", i);
+            const Img kind = i % 4 == 0 ? Img::Albedo : i % 4 == 1 ? Img::Normal : i % 4 == 2 ? Img::Grey : Img::Orm;
+            write_file(root + file, make_png(64, 64, make_pixels(kind, 64, 64)));
+            write_file(root + file + ".mceasset", sidecar(guid, "texture", i % 4 == 0 ? "{}" : "{ \"srgb\": false }"));
+        }
+        return root;
+    };
+    // CookOptions has no jobs field; the cook runs its stages on the job system, so vary its worker count.
+    const u32 saved = jobs::worker_count();
+    jobs::init(1);
+    const CookReport one = CookService().cook(build("bc_jobs_one").c_str(), [] { CookOptions o; o.textures = TextureCompression::Bc; return o; }());
+    jobs::shutdown();
+    jobs::init(4);
+    const CookReport many = CookService().cook(build("bc_jobs_many").c_str(), [] { CookOptions o; o.textures = TextureCompression::Bc; return o; }());
+    jobs::shutdown();
+    if (saved > 0) jobs::init(saved);
+    REQUIRE(one.ok());
+    REQUIRE(many.ok());
+    CHECK(one.cooked == 8);
+    CHECK(many.cooked == 8);
+    CHECK(one.manifest_hash == many.manifest_hash);
 }
 
 TEST_CASE("cook bc: a missing key under rgba8 cooks the same manifest as before; --textures bc re-cooks") {

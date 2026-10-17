@@ -25,7 +25,7 @@ u64 bc_level_bytes(BcFormat f, u32 width, u32 height);
 void encode_bc_level(BcFormat f, bool srgb, const u8* rgba, u32 width, u32 height, u8* out, bool* alpha_dropped = nullptr);
 
 // Decodes one level back to RGBA8 (width * height * 4 bytes at `rgba`), for tests and image-quality gates. BC4 gives
-// (r, r, r, 255)... as the GPU samples it: (r, 0, 0, 255); BC5 gives (r, g, 0, 255); BC1 and BC7 give all four.
+// (r, 0, 0, 255), as the GPU samples it; BC5 gives (r, g, 0, 255); BC1 and BC7 give all four.
 void decode_bc_level(BcFormat f, const u8* blocks, u32 width, u32 height, u8* rgba);
 
 }  // namespace mce::cook
