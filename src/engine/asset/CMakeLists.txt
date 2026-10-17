@@ -10,6 +10,7 @@ mce_add_library(mce_asset
         src/formats.cpp
         src/guid.cpp
         src/mods.cpp
+        src/roads_format.cpp
         src/vorbis.cpp
         src/xxhash.cpp
     PUBLIC_DEPS

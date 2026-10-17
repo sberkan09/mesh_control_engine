@@ -18,6 +18,7 @@ formats, which is what keeps the shipped game small and safe.
 | Model (OBJ) | `.obj`, `.mtl` | mesh: quantized streams, nodes per `o` / `g`, inline materials from the `.mtl` (adopt both files; section 8.4) | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
+| Road network | `.mcroads` | lanes, junction connectors, right of way and signal phases from nodes and roads | traffic and crowds ([chapter 29](29-roads-and-traffic.md)) |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
 | Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
