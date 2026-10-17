@@ -70,6 +70,8 @@ struct Kit3DStats {
     u32 merged_groups = 0;     // StaticMerge3D components with at least one merged cell (M-VISUAL3 5b)
     u32 merged_children = 0;   // MeshRef children drawn through them instead of on their own
     u32 merged_cells = 0;      // merged meshes submitted (a cell, or a cell and shadow flag), before culling
+    u32 chunk_proxies = 0;     // ChunkLod3D proxies drawn for streamed areas that are not loaded (M-OPENWORLD A4)
+    u32 chunk_impostors = 0;   // ... and impostors, beyond impostor_distance
     u32 decals_dropped = 0;    // visible decals the frame could not draw (set by note_built; M-VISUAL3 6)
 };
 
