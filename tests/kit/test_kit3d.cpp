@@ -141,6 +141,42 @@ TEST_CASE("kit3d: the components are reflected and install is idempotent") {
     CHECK(kit::has_camera_3d(w));
 }
 
+TEST_CASE("kit3d: foliage variation and wind fields are reflected and default to today's data (M-VISUAL3 6)") {
+    const char* both[] = {"tint_variation", "wind_height", "wind_gust", "wind_flutter"};
+    const char* only_foliage[] = {"mesh_1", "mesh_2", "mesh_3", "mesh_weights"};
+    for (const char* type : {"Foliage3D", "TerrainFoliage3D"}) {
+        const refl::TypeRecord* t = refl::find_type(StringId(type));
+        INFO(type);
+        REQUIRE(t != nullptr);
+        for (const char* f : both) {
+            INFO(f);
+            CHECK(t->find_field(StringId(f)) != nullptr);
+        }
+        for (const char* f : only_foliage) {
+            INFO(f);
+            CHECK((t->find_field(StringId(f)) != nullptr) == (std::string(type) == "Foliage3D"));
+        }
+    }
+    const kit::Foliage3D g;
+    CHECK(g.tint_variation.x == 1.0f);
+    CHECK(g.tint_variation.y == 1.0f);
+    CHECK(g.tint_variation.z == 1.0f);
+    CHECK(g.tint_variation.w == 1.0f);
+    CHECK(g.wind_height == 0.0f);
+    CHECK(g.wind_gust == 0.0f);
+    CHECK(g.wind_flutter == 0.0f);
+    CHECK(g.mesh_weights.x == 1.0f);
+    CHECK(g.mesh_weights.y == 0.0f);
+    CHECK(g.mesh_weights.z == 0.0f);
+    CHECK(g.mesh_weights.w == 0.0f);
+    CHECK(g.mesh_1.guid == asset::Guid{});
+    const kit::TerrainFoliage3D tf;
+    CHECK(tf.tint_variation.x == 1.0f);
+    CHECK(tf.wind_height == 0.0f);
+    CHECK(tf.wind_gust == 0.0f);
+    CHECK(tf.wind_flutter == 0.0f);
+}
+
 TEST_CASE("kit3d: the scene's Environment3D becomes the resource at Startup") {
     Fixture f;
     kit::Environment3D authored;
