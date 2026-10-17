@@ -6,6 +6,7 @@ From the SDK, with the path of your project folder (`MyGame` below), build the p
 mce build MyGame                        # cooks the assets, builds the module and the pack
 mce ship MyGame                         # MyGame/dist/MyGame-<version>-<os>.zip
 mce ship MyGame --version 1.0.0 --out release
+mce ship MyGame --max-texture-size 512   # a smaller pack: textures capped at 512 pixels (re-cooks the pack)
 ```
 
 `mce ship` zips the host, the game module, the engine library and the cooked pack, with `VERSION.txt`, `README.txt` and
@@ -30,9 +31,12 @@ Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-
 | `--preset` | the CMake preset to build (default: the platform's release preset) |
 | `--version` | default `<engine version>+<short commit>` |
 | `--out` | output directory (default `dist/`) |
+| `--max-texture-size N` | (`mce ship` too) cap PNG/JPEG textures in the pack at N pixels on the longest side (a power of two, 1 to 16384), so the ship is smaller; a sidecar's smaller `max_size` wins; default no limit (section 5.2) |
 | `--no-build` | package what is already built |
 | `--keep-symbols` | do not strip the binaries (Linux, macOS) |
 | `--smoke`, `--smoke-headless` | run the packaged game once (headless needs no display) |
+
+`mce ship ... --max-texture-size N` cooks the project again with the cap, into `MyGame/assets.mce` and `MyGame/cooked/`, and zips that pack; the build tree's own pack is left as it was. The cook prints the size report (bytes by type and the five largest assets), which is the quickest way to see what a ship weighs.
 
 The samples ship the same way from a checkout: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
 

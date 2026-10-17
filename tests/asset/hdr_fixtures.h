@@ -4,7 +4,10 @@
 //                  are 2, 2 would read as a run-length scanline marker, and a grey pixel never starts so.
 //   make_exr       OpenEXR 2.0, one scanline part, no compression, float A B G R channels (alphabetical, as the
 //                  format wants), rows top first.
+//   make_exr_tiled The same pixels as one-level tiles (uncompressed), tile x tile each, edge tiles clipped.
+//   make_exr_header  Only the header (through its end byte) for a data window of w x h: a hostile-size fixture.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -43,10 +46,8 @@ inline void attr(std::string& s, const char* name, const char* type, const std::
     p32(s, static_cast<std::uint32_t>(data.size()));
     s += data;
 }
-}  // namespace detail
-
-// `rgba` holds w * h * 4 floats (R G B A per pixel), row-major, top row first.
-inline std::string make_exr(unsigned w, unsigned h, const std::vector<float>& rgba) {
+// The header of a w x h file; `tile` > 0 makes it a tiled file (version flag, "tiles" attribute).
+inline std::string exr_header(unsigned w, unsigned h, unsigned tile = 0) {
     using namespace detail;
     std::string out;
     p32(out, 20000630);  // magic 0x762f3101
@@ -54,7 +55,7 @@ inline std::string make_exr(unsigned w, unsigned h, const std::vector<float>& rg
     out[1] = 0x2f;
     out[2] = 0x31;
     out[3] = 0x01;
-    p32(out, 2);  // version 2, no flags: single-part scanline file
+    p32(out, tile ? 2u | 0x200u : 2u);  // version 2; bit 9 = tiled
     std::string ch;
     for (const char* name : {"A", "B", "G", "R"}) {
         ch += name;
@@ -83,7 +84,24 @@ inline std::string make_exr(unsigned w, unsigned h, const std::vector<float>& rg
     p32(c2, 0);
     attr(out, "screenWindowCenter", "v2f", c2);
     attr(out, "screenWindowWidth", "float", f1);
+    if (tile) {
+        std::string t;
+        p32(t, tile);
+        p32(t, tile);
+        t.push_back(0);  // ONE_LEVEL, round down
+        attr(out, "tiles", "tiledesc", t);
+    }
     out.push_back(0);  // end of header
+    return out;
+}
+}  // namespace detail
+
+inline std::string make_exr_header(unsigned w, unsigned h) { return detail::exr_header(w, h); }
+
+// `rgba` holds w * h * 4 floats (R G B A per pixel), row-major, top row first.
+inline std::string make_exr(unsigned w, unsigned h, const std::vector<float>& rgba) {
+    using namespace detail;
+    std::string out = exr_header(w, h);
 
     const std::uint64_t table_at = out.size();
     const std::uint64_t row_bytes = 8 + std::uint64_t(w) * 4 * 4;
@@ -105,6 +123,41 @@ inline std::string make_exr(unsigned w, unsigned h, const std::vector<float>& rg
         }
     }
     return out;
+}
+
+inline std::string make_exr_tiled(unsigned w, unsigned h, unsigned tile, const std::vector<float>& rgba) {
+    using namespace detail;
+    std::string out = exr_header(w, h, tile);
+    const unsigned nx = (w + tile - 1) / tile, ny = (h + tile - 1) / tile;
+    std::string chunks;
+    std::vector<std::uint64_t> offs;
+    const std::uint64_t first = out.size() + std::uint64_t(nx) * ny * 8;
+    for (unsigned ty = 0; ty < ny; ++ty) {
+        for (unsigned tx = 0; tx < nx; ++tx) {
+            offs.push_back(first + chunks.size());
+            const unsigned x0 = tx * tile, y0 = ty * tile;
+            const unsigned tw = std::min(tile, w - x0), th = std::min(tile, h - y0);
+            p32(chunks, tx);
+            p32(chunks, ty);
+            p32(chunks, 0);  // level x
+            p32(chunks, 0);  // level y
+            p32(chunks, tw * th * 16);
+            for (unsigned y = 0; y < th; ++y) {
+                for (int c : {3, 2, 1, 0}) {
+                    for (unsigned x = 0; x < tw; ++x) {
+                        std::uint32_t bits;
+                        std::memcpy(&bits, &rgba[(std::size_t(y0 + y) * w + x0 + x) * 4 + c], 4);
+                        p32(chunks, bits);
+                    }
+                }
+            }
+        }
+    }
+    for (std::uint64_t o : offs) {
+        p32(out, static_cast<std::uint32_t>(o & 0xFFFFFFFFu));
+        p32(out, static_cast<std::uint32_t>(o >> 32));
+    }
+    return out + chunks;
 }
 
 }  // namespace hdr_fixtures

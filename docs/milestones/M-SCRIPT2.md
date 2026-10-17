@@ -21,8 +21,8 @@ calls it. A function that would need state between ticks is not added: the answe
 |---|---|---|---|
 | 1 | 2D physics completeness: forces and torque, angular velocity, circle / shape overlap and shape casts, gravity and sleep controls | Sonnet | done |
 | 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | done |
-| 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | not started |
-| 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | not started |
+| 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | done |
+| 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | done |
 | 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | not started |
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry (a test lists the registered functions
@@ -78,3 +78,13 @@ mutated-bytecode route that matters in the product is now closed before it reach
 - `mce.set_time_scale` / `time_scale` wrap the `time_scale` cvar, clamped to 0.1..4 (0 would freeze the loop and the script with it).
 - `mce.shake` and `mce.burst` are thin over `CameraShake2D/3D` and `ParticleBurst`.
 - Sound stop and fade: no new call; destroying an `AudioSource` entity already fades its voice out (`fade_s`), documented as a recipe.
+
+## Step 4 as built
+
+- New in `api_world.cpp`, all over `kit::Physics3D`'s `World3D` and `kit::Nav3D`: `overlap_sphere3d`, `overlap_box3d`, `sphere_cast3d`,
+  `velocity3d` / `set_velocity3d`, `angular_velocity3d` / `set_angular_velocity3d`, `impulse3d`, `teleport3d`, `find_path3d`.
+  A missing 3D world, body or navmesh is a named error.
+- Deliberately not done: `move_and_collide` for 3D. The kit's `CharacterController3D` already moves characters from data (and keeps the
+  interpolation poses the render reads), so a direct `move_character` call from Luau would bypass that bookkeeping. Nothing here
+  touches the physics step; the calls are queries and body writes between steps, like the 2D ones, so no Opus review of the step was needed.
+- Not covered: rotation writes (`teleport3d` keeps the rotation) and a quaternion type in Luau.

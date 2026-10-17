@@ -29,6 +29,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_store.cpp
         test_cook_config.cpp
         test_cook_terrain.cpp
+        test_cook_texture_cap.cpp
         test_cook_video.cpp
         test_cook_vorbis.cpp
         test_cook_sound.cpp
@@ -46,6 +47,10 @@ mce_add_test(test_cook UMBRELLA
         mce::mce_ui)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})
+# tinyexr's own PIZ / tiled sample files (the FetchContent checkout); read as data at test time, no tinyexr code is linked.
+if(tinyexr_SOURCE_DIR AND EXISTS "${tinyexr_SOURCE_DIR}/test/unit/regression/piz-bug-issue-100.exr")
+    target_compile_definitions(test_cook PRIVATE MCE_TINYEXR_SAMPLES="${tinyexr_SOURCE_DIR}/test/unit/regression")
+endif()
 
 # mce_cook CLI contract (FR-AST-070): exit codes 0 / 1 / 2 and byte-identical re-cooks of the
 # committed sample project (assets.md §10 cook determinism, per PR, every preset).

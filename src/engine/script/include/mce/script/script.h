@@ -35,7 +35,9 @@
 //              mce.force2d, mce.(set_)angular_velocity2d, mce.(set_)awake2d, mce.set_enabled2d,
 //              mce.overlap_point2d, mce.raycast_all2d, mce.circle_cast2d / box_cast2d,
 //              mce.find_path(from, to, options?) -> array of vectors or nil (a grid over the static colliders),
-//              mce.save / load / has_save, mce.(set_)time_scale, mce.shake, mce.burst.
+//              mce.save / load / has_save, mce.(set_)time_scale, mce.shake, mce.burst,
+//              mce.overlap_sphere3d / overlap_box3d / sphere_cast3d, mce.(set_)velocity3d, mce.(set_)angular_velocity3d,
+//              mce.impulse3d, mce.teleport3d, mce.find_path3d (the baked navmesh).
 //
 // Sandbox: base, table, string, math, utf8, bit32, buffer and vector libraries only (no os, io,
 // debug, coroutine, print, collectgarbage, getfenv/setfenv, math.random); every script gets a
