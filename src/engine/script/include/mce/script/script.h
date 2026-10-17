@@ -37,7 +37,8 @@
 //              mce.find_path(from, to, options?) -> array of vectors or nil (a grid over the static colliders),
 //              mce.save / load / has_save, mce.(set_)time_scale, mce.shake, mce.burst,
 //              mce.overlap_sphere3d / overlap_box3d / sphere_cast3d, mce.(set_)velocity3d, mce.(set_)angular_velocity3d,
-//              mce.impulse3d, mce.teleport3d, mce.find_path3d (the baked navmesh).
+//              mce.impulse3d, mce.teleport3d(e, position, rotation?), mce.(set_)rotation3d, mce.look_rotation3d (Euler
+//              degrees), mce.find_path3d (the baked navmesh).
 //
 // Sandbox: base, table, string, math, utf8, bit32, buffer and vector libraries only (no os, io,
 // debug, coroutine, print, collectgarbage, getfenv/setfenv, math.random); every script gets a

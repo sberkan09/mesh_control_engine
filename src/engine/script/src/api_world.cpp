@@ -5,6 +5,7 @@
 // Every function may raise (LUA_USE_LONGJMP): engine calls whose results own memory run in a
 // scope that ends before the next luaL_* call, and lists go through the host's scratch arrays.
 
+#include <cmath>
 #include <cstring>
 
 #include "api.h"
@@ -902,8 +903,63 @@ int l_impulse3d(lua_State* L) {
     return 0;
 }
 
-// mce.teleport3d(e, position): puts a 3D body or character at `position`, keeping its rotation, with no sweep.
-// As teleport2d: the physics step writes LocalTransform back from the body, so writing LocalTransform alone moves nothing.
+// Rotations in Luau are Euler angles in degrees as a vector (x = pitch, y = yaw, z = roll), applied yaw, then pitch,
+// then roll (q = Ry * Rx * Rz). Forward is -Z and up +Y, as the camera and look_at_rh have it; no quaternion type exists
+// in the sandbox and a script never needs one.
+constexpr f32 kDegToRad = 0.017453292519943295f;
+constexpr f32 kRadToDeg = 57.29577951308232f;
+
+math::quat quat_from_euler_deg(math::vec3 d) {
+    const math::quat yaw = math::quat_from_axis_angle({0, 1, 0}, d.y * kDegToRad);
+    const math::quat pitch = math::quat_from_axis_angle({1, 0, 0}, d.x * kDegToRad);
+    const math::quat roll = math::quat_from_axis_angle({0, 0, 1}, d.z * kDegToRad);
+    return math::normalize(yaw * pitch * roll);
+}
+
+math::vec3 euler_deg_from_quat(math::quat q) {
+    q = math::normalize(q);
+    const math::vec3 f = math::rotate(q, {0, 0, -1});
+    const f32 pitch = std::asin(std::fmax(-1.0f, std::fmin(1.0f, f.y)));
+    const f32 yaw = std::atan2(-f.x, -f.z);  // 0 at +-90 degrees of pitch, where yaw and roll are one angle
+    const math::quat yp = math::quat_from_axis_angle({0, 1, 0}, yaw) * math::quat_from_axis_angle({1, 0, 0}, pitch);
+    const math::quat r = math::conjugate(yp) * q;
+    f32 roll = 2.0f * std::atan2(r.z, r.w);
+    if (roll > 3.14159265f) roll -= 6.28318531f;
+    if (roll < -3.14159265f) roll += 6.28318531f;
+    return {pitch * kRadToDeg, yaw * kRadToDeg, roll * kRadToDeg};
+}
+
+// mce.look_rotation3d(from, to) -> the rotation (degrees) that turns -Z from `from` toward `to`, roll 0. Pure: no entity.
+int l_look_rotation3d(lua_State* L) {
+    const math::vec3 d = check_vec3(L, 2) - check_vec3(L, 1);
+    const f32 len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (!(len > 1e-6f)) luaL_error(L, "mce.look_rotation3d: from and to are the same point");
+    const math::vec3 n{d.x / len, d.y / len, d.z / len};
+    push_vec3(L, {std::asin(std::fmax(-1.0f, std::fmin(1.0f, n.y))) * kRadToDeg, std::atan2(-n.x, -n.z) * kRadToDeg, 0.0f});
+    return 1;
+}
+
+// mce.rotation3d(e) -> the body's rotation in degrees.
+int l_rotation3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "rotation3d").body_state(e, s)) luaL_error(L, "mce.rotation3d: the entity has no 3D body");
+    push_vec3(L, euler_deg_from_quat(s.rotation));
+    return 1;
+}
+
+// Moves a 3D body to `at` with `rot`, writing LocalTransform too: the physics step writes it back from the body,
+// so writing LocalTransform alone moves nothing.
+void place3d(lua_State* L, Entity e, math::vec3 at, math::quat rot, physics::World3D& pw) {
+    if (LocalTransform* t = world_of(L).try_get_mut<LocalTransform>(e)) {
+        t->position = at;
+        t->rotation = rot;
+    }
+    pw.teleport(e, at, rot);
+}
+
+// mce.teleport3d(e, position, rotation?): puts a 3D body or character at `position` with no sweep; `rotation` (degrees)
+// defaults to the body's own.
 int l_teleport3d(lua_State* L) {
     const Entity e = check_entity(L, 1);
     const math::vec3 at = check_vec3(L, 2);
@@ -911,13 +967,24 @@ int l_teleport3d(lua_State* L) {
     physics::BodyState3D s;
     math::quat rot = math::quat::identity();
     if (pw.body_state(e, s)) rot = s.rotation;
-    if (LocalTransform* t = world_of(L).try_get_mut<LocalTransform>(e)) t->position = at;
-    pw.teleport(e, at, rot);
+    if (!lua_isnoneornil(L, 3)) rot = quat_from_euler_deg(check_vec3(L, 3));
+    place3d(L, e, at, rot, pw);
     return 0;
 }
 
-// mce.find_path3d(from, to) -> array of corner points (from first, to last), and true when the path is partial
-// (the target cannot be reached: it ends at the closest reachable point); nil when there is no navmesh path.
+// mce.set_rotation3d(e, rotation): turns a 3D body in place (degrees, no sweep).
+int l_set_rotation3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    const math::quat rot = quat_from_euler_deg(check_vec3(L, 2));
+    physics::World3D& pw = body3d(L, e, "set_rotation3d");
+    physics::BodyState3D s;
+    if (!pw.body_state(e, s)) luaL_error(L, "mce.set_rotation3d: the entity has no 3D body");
+    place3d(L, e, s.position, rot, pw);
+    return 0;
+}
+
+// mce.find_path3d(from, to) -> the corner points after leaving `from`, ending at `to` (as mce.find_path), and true when
+// the path is partial (the target cannot be reached: it ends at the closest reachable point); nil when there is no path.
 int l_find_path3d(lua_State* L) {
     World& w = world_of(L);
     const math::vec3 from = check_vec3(L, 1);
@@ -930,10 +997,12 @@ int l_find_path3d(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    lua_createtable(L, static_cast<int>(path.size()), 0);
-    for (usize i = 0; i < path.size(); ++i) {
+    // The navmesh answers with the start (snapped to the mesh) first; mce.find_path does not list it, and neither does this.
+    const usize first = path.size() > 1 ? 1 : 0;
+    lua_createtable(L, static_cast<int>(path.size() - first), 0);
+    for (usize i = first; i < path.size(); ++i) {
         push_vec3(L, path[i]);
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
+        lua_rawseti(L, -2, static_cast<int>(i - first + 1));
     }
     lua_pushboolean(L, r == physics::NavPath3D::Partial);
     return 2;
@@ -994,6 +1063,9 @@ const luaL_Reg kWorldLib[] = {
     {"set_angular_velocity3d", l_set_angular_velocity3d},
     {"impulse3d", l_impulse3d},
     {"teleport3d", l_teleport3d},
+    {"rotation3d", l_rotation3d},
+    {"set_rotation3d", l_set_rotation3d},
+    {"look_rotation3d", l_look_rotation3d},
     {"find_path3d", l_find_path3d},
     {nullptr, nullptr},
 };

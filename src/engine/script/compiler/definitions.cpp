@@ -102,7 +102,10 @@ declare mce: {
     angular_velocity3d: (e: Entity) -> vector,
     set_angular_velocity3d: (e: Entity, w: vector) -> (),
     impulse3d: (e: Entity, impulse: vector) -> (),
-    teleport3d: (e: Entity, position: vector) -> (),
+    teleport3d: (e: Entity, position: vector, rotation: vector?) -> (),
+    rotation3d: (e: Entity) -> vector,
+    set_rotation3d: (e: Entity, rotation: vector) -> (),
+    look_rotation3d: (from: vector, to: vector) -> vector,
     find_path3d: (from: vector, to: vector) -> ({ vector }?, boolean?),
 }
 )";

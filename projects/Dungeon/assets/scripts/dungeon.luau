@@ -72,7 +72,7 @@ local function chase(c, player_pos)
         v[3] = REPLAN
         local path = mce.find_path(pos, player_pos)
         if path and #path > 0 then
-            local way = path[math.min(2, #path)]   -- the first corner after where it stands
+            local way = path[1]   -- the first corner after where it stands (the plan does not list where it starts)
             v[1], v[2] = way.x, way.y
             if v[6] == 0 then
                 v[6] = 1
