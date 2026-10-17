@@ -805,6 +805,57 @@ bool navmesh_bake(ToolCall& c) {
     return true;
 }
 
+// Every SceneChunk's area merged into one HLOD proxy, assets/hlod/<scene>/chunk_<id>.mchlod, and the chunk's
+// ChunkLod3D pointed at it (M-OPENWORLD A3); scene_save keeps that.
+bool hlod_bake(ToolCall& c) {
+    if (!need_project(c)) return false;
+    kit::HlodBakeSettings3D settings;
+    if (const cook::JsonValue v = arg(c, "min_size"); v.valid()) {
+        if (!v.is_number() || v.as_number() < 0.0 || v.as_number() > 10000.0)
+            return arg_missing(c, "min_size", "a number of metres from 0 to 10000");
+        settings.min_size = static_cast<f32>(v.as_number());
+    }
+    editor::EntityId only = editor::kNoEntity;
+    if (arg(c, "entity").valid() && !arg_entity(c, "entity", only)) return false;
+    editor::EditorSession& session = c.server.session();
+    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only);
+    if (!r) {
+        FixedString<512> msg;
+        format_error(r.error(), msg);
+        return fail(c, msg.view());
+    }
+    c.out.begin_object();
+    c.out.key("chunks").begin_array();
+    for (const editor::EditorSession::HlodBakeRow& row : r.value()) {
+        const kit::HlodBakeStats3D& st = row.stats;
+        c.out.begin_object();
+        c.out.key("entity").num_u(row.chunk);
+        if (!row.proxy.is_null()) {
+            c.out.key("proxy").str(asset::to_string(row.proxy).view());
+            if (const editor::ProjectAsset* a = session.project().find(row.proxy)) {
+                cook::String path("assets/");
+                path += a->path.view();
+                c.out.key("path").str(path.view());
+                cook::String hash;
+                cook::appendf(hash, "%016llx", static_cast<unsigned long long>(file_content_hash(session.project().asset_path(a->path.view()).view())));
+                c.out.key("content_hash").str(hash.view());
+            }
+            c.out.key("bytes").num_u(row.bytes);
+        }
+        c.out.key("meshes").num_u(st.meshes);
+        c.out.key("merged").num_u(st.merged);
+        c.out.key("small").num_u(st.small);
+        c.out.key("skipped").num_u(st.skipped);
+        c.out.key("submeshes").num_u(st.submeshes);
+        c.out.key("triangles").num_u(st.triangles);
+        c.out.key("lod_levels").num_u(st.lod_levels);
+        c.out.end_object();
+    }
+    c.out.end_array();
+    c.out.end_object();
+    return true;
+}
+
 // ---------------------------------------------------------------- build
 
 void write_report(JsonWriter& w, const cook::CookReport& r) {
@@ -1591,6 +1642,17 @@ const ToolDef kTools[] = {
      "the asset, its content_hash (the same scene bakes byte-identical), the tile grid, layers, input triangles and "
      "bytes. Without a baked asset the surface is baked when the scene starts.",
      kNoArgs, navmesh_bake},
+    {"hlod_bake",
+     "Bake an HLOD proxy for every SceneChunk of the open scene (or only `entity`): the area scene's visible rigid "
+     "MeshRefs with opaque or masked materials merged into one mesh per material (each source's LOD levels kept), "
+     "positions relative to the chunk entity, written to assets/hlod/<scene>/chunk_<entity id>.mchlod; the chunk's "
+     "ChunkLod3D `proxy` points at it (the component is added when missing; scene_save keeps it). The proxy draws "
+     "while the area is not loaded. Meshes smaller than min_size metres (default 1) are left out. Re-baking keeps the "
+     "file and GUID; the same scene bakes byte-identical (content_hash). Returns per chunk the mesh counts (merged, "
+     "small, skipped), submeshes, triangles and LOD levels.",
+     R"({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)"
+     R"("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"}},"additionalProperties":false})",
+     hlod_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
     {"scene_redo", "Redo the last undone scene edit.", kNoArgs, scene_redo},
