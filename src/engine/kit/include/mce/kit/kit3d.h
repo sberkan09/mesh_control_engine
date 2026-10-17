@@ -140,10 +140,11 @@ struct Camera3DComponent {
     f32 far_z = 1000.0f;
     u32 primary = 1;
     u32 mouse_look = 0;
-    u32 pad_ = 0;
+    f32 focus_distance = 0.0f;  // M-VISUAL3 3: meters to the sharpest plane for this camera; 0 = Environment3D's dof_focus_distance
 };
 MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f, 100}), (far_z, Range{1, 100000}), primary,
-              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}))
+              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}),
+              (focus_distance, Range{0, 1000}, Help{"depth of field: meters to the sharpest plane for this camera; 0 = the environment's dof_focus_distance"}))
 
 // Plays a node / skeleton clip of the entity's MeshRef mesh by name, cross-fading over `fade`
 // seconds when `clip` changes. kit3d advances `time` every tick (deterministic); a game may also
@@ -297,6 +298,16 @@ struct Environment3D {
     f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
     u32 contact_steps = 12;         // march steps per ray (4..64)
     f32 sky_rotation_deg = 0.0f;    // M-VISUAL3 4: yaw of the sky texture about +Y (sky and IBL textures; the gradient and atmosphere ignore it)
+    // M-VISUAL3 3. The camera's look, in the tonemap pass; all off by default.
+    f32 vignette = 0.0f;             // 0..1: darkening at the frame's corners
+    f32 vignette_smoothness = 0.5f;  // 0.05..1: how far in from the corners it reaches
+    f32 film_grain = 0.0f;           // 0..1: animated, luminance-weighted grain
+    f32 grain_size = 1.5f;           // 1..4: grain cell size in output pixels
+    f32 chromatic_aberration = 0.0f; // 0..1: radial colour fringe toward the edges (1 = 0.5 % of the view width)
+    f32 lens_dirt_intensity = 0.0f;  // 0..4: how strongly bloom lights the dirt texture
+    u32 tonemapper = 0;              // 0 ACES fit (the long-standing one), 1 AgX, 2 Khronos PBR Neutral
+    u32 lens_pad_ = 0;
+    asset::AssetRef<asset::Texture> lens_dirt;  // rgb dirt mask over the frame, imported srgb false; empty = none
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -331,7 +342,13 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
               (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}),
               (contact_steps, Range{4, 64}),
-              (sky_rotation_deg, Range{-360, 360}, Help{"yaw of the sky texture about +Y, degrees; 0 = as authored"}))
+              (sky_rotation_deg, Range{-360, 360}, Help{"yaw of the sky texture about +Y, degrees; 0 = as authored"}),
+              (vignette, Range{0, 1}, Help{"darkens the frame's corners (0 = off)"}), (vignette_smoothness, Range{0.05f, 1}),
+              (film_grain, Range{0, 1}, Help{"animated film grain (0 = off)"}), (grain_size, Range{1, 4}),
+              (chromatic_aberration, Range{0, 1}, Help{"colour fringe toward the frame's edges (0 = off)"}),
+              (lens_dirt_intensity, Range{0, 4}, Help{"how strongly bloom lights lens_dirt (needs bloom on)"}),
+              (tonemapper, Range{0, 2}, Help{"0 = ACES fit, 1 = AgX, 2 = Khronos PBR Neutral"}),
+              (lens_dirt, Help{"dirt mask over the frame, imported srgb false; empty = none"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

@@ -128,8 +128,14 @@ The 2D body functions raise "the entity has no 2D body" for an entity without on
 | `mce.overlap_sphere3d(center, radius, skip?)`, `mce.overlap_box3d(center, half, skip?)` | the entities whose shapes touch a sphere or an axis-aligned box (at most 256) |
 | `mce.sphere_cast3d(from, to, radius, skip?)` | the first thing a sphere hits on its way, `{entity, point, normal, position, fraction}`, or `nil` |
 | `mce.velocity3d(e)`, `mce.set_velocity3d(e, v)`, `mce.angular_velocity3d(e)`, `mce.set_angular_velocity3d(e, w)`, `mce.impulse3d(e, impulse)` | a 3D body's velocities and a push at its centre of mass |
-| `mce.teleport3d(e, position)` | puts a 3D body or character at `position` with no sweep (keeps its rotation); writing `LocalTransform.position` alone does not move a body |
-| `mce.find_path3d(from, to)` | corner points along the baked navmesh (`from` first, `to` last) and `true` as a second result when the path is partial (the target cannot be reached; it ends at the closest point); `nil` when there is no path; an error when the world has no navmesh |
+| `mce.teleport3d(e, position, rotation?)` | puts a 3D body or character at `position` with no sweep; `rotation` (see below) defaults to the body's own; writing `LocalTransform.position` alone does not move a body |
+| `mce.rotation3d(e)` / `mce.set_rotation3d(e, rotation)` | a 3D body's rotation, and turning it in place |
+| `mce.look_rotation3d(from, to)` | the rotation that turns forward from `from` toward `to` (roll 0); pure, no entity |
+
+A rotation in Luau is a `vector` of Euler angles in degrees: `x` pitch, `y` yaw, `z` roll, applied yaw, then pitch, then roll.
+Forward is -Z and up is +Y, as for the camera, so a yaw of 0 faces -Z, +90 faces -X and a pitch of +90 looks straight up.
+There is no quaternion type; straight up or down has no yaw of its own (it reads back as 0 and the turn goes into roll).
+| `mce.find_path3d(from, to)` | the corner points along the baked navmesh after leaving `from`, ending at `to` (like `mce.find_path`), and `true` as a second result when the path is partial (the target cannot be reached; it ends at the closest point); `nil` when there is no path; an error when the world has no navmesh |
 
 A walking 3D character needs no call: set `CharacterController3D.move` and `jump` and the kit's own system moves it with the right slope, step and push rules. The 3D body functions raise "the entity has no 3D body" for an entity without one.
 
@@ -344,3 +350,55 @@ end
 ```
 
 **Playing a sound on a press:** `if mce.pressed("Jump") then mce.play_sound("guid:<sfx>", -6) end`.
+
+**A chaser that goes around walls** (2D; `projects/Dungeon/assets/scripts/dungeon.luau` has the whole thing). Plan now and then, not every
+tick, and walk the first corner of the plan:
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+local POS = mce.field("LocalTransform", "position")
+-- v[1], v[2] the waypoint; v[3] ticks to the next plan
+local function chase(e, target)
+    local v = mce.get(e, VARS)
+    local pos = mce.get(e, POS)
+    v[3] = v[3] - 1
+    if v[3] <= 0 then
+        v[3] = 20
+        local path = mce.find_path(pos, target)          -- nil when the target is walled in
+        if path then v[1], v[2] = path[1].x, path[1].y end
+    end
+    local d = vector.create(v[1] - pos.x, v[2] - pos.y, 0)
+    if vector.magnitude(d) > 0.05 then
+        mce.set(e, POS, pos + vector.normalize(d) * math.min(3.5 * mce.dt, vector.magnitude(d)))
+    end
+    mce.set(e, VARS, v)
+end
+```
+
+A body-less chaser like this can move by writing `LocalTransform.position`; one with a 2D body moves with `mce.move_and_collide`
+or `mce.set_velocity2d`.
+
+**Hit-stop and a shake** (the moment a hit lands): `mce.shake(0.4)`, and slow the clock for a beat with `mce.set_time_scale(0.2)`;
+set it back to 1 a few ticks later (count them in a `ScriptVars` slot).
+
+**A save slot** (press F5 to save, F9 to load; only entities with a `SaveKey` and fields marked `Save` are written):
+
+```lua
+function update()
+    if mce.pressed("QuickSave") then mce.save("quick") end
+    if mce.pressed("QuickLoad") and mce.has_save("quick") then mce.load("quick") end   -- applied right after this tick
+end
+```
+
+**3D pickups** (a coin is collected when the player's sphere touches it):
+
+```lua
+function update()
+    mce.each("ScriptVars", function(p)
+        if mce.get(p, "ScriptVars", "v")[16] ~= 1 then return end
+        for _, thing in ipairs(mce.overlap_sphere3d(mce.get(p, "LocalTransform", "position"), 0.6, p)) do
+            if mce.has(thing, "Pickup") then mce.destroy(thing) end
+        end
+    end)
+end
+```

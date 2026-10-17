@@ -23,7 +23,7 @@ calls it. A function that would need state between ticks is not added: the answe
 | 2 | Navigation from Luau: `mce.find_path` over a grid built from the static colliders (cached per scene change), line of sight | Sonnet | done |
 | 3 | Game plumbing: save / load a slot, time scale, stop and fade sounds, camera shake, one-shot particles | Sonnet | done |
 | 4 | 3D bodies: overlap, move_and_collide and velocity for 3D, navmesh path | Sonnet (Opus review of anything that touches the physics step) | done |
-| 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | not started |
+| 5 | Demo and gates: Dungeon gets chasing enemies (find_path), a 3D script-only blind test, guide recipes | Sonnet | done |
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry (a test lists the registered functions
 against the definitions, so one cannot be added without the other); `local_ci.sh --task` green on every step.
@@ -88,3 +88,24 @@ mutated-bytecode route that matters in the product is now closed before it reach
   interpolation poses the render reads), so a direct `move_character` call from Luau would bypass that bookkeeping. Nothing here
   touches the physics step; the calls are queries and body writes between steps, like the 2D ones, so no Opus review of the step was needed.
 - Not covered: rotation writes (`teleport3d` keeps the rotation) and a quaternion type in Luau.
+
+## Step 5a as built
+
+- `projects/Dungeon`: two chasers per level, spawned on Path markers a third and two thirds along the way when a level is ready.
+  They have no body; every 20 ticks each plans a walk to the player with `mce.find_path` and follows the first corner at 3.5 m/s.
+  Being caught sends the chaser back to where it started (no death), so the autopilot clears and `Dungeon_mctests` stay green; a new
+  `tests/chasers.mctest` asserts they spawned, planned a walk and the run logged no errors.
+- Guide recipes added to chapter 27.9: the chaser, hit-stop and shake, a save slot, 3D pickups. A test pins the vector functions the
+  chaser recipe uses.
+
+## Step 5b as built
+
+- `projects/Pursuit`: a 3D script-only project (no C++, `"games": []`): a hero and a grunt on the kit's `CharacterController3D`, five coins,
+  a wall with a gap, a `NavMeshSurface3D` baked at the first tick. The script plans with `mce.find_path3d`, picks coins up with
+  `mce.overlap_sphere3d`, sends the caught grunt back with `mce.teleport3d`, and shakes the camera. `tests/collects.mctest` runs in
+  the engine's ctest (`Pursuit_mctests`), and the script determinism stage plays its autopilot input (Debug = Release hash).
+- What the project found, fixed in the same step: `mce.find_path3d` listed the walker's own (snapped) position first and
+  `mce.find_path` did not, so the autopilot aimed at a corner it was already standing on and the run stalled at the gap. The two now agree
+  (corners after `from`, ending at `to`), and Dungeon's chasers, which had skipped the first corner for the same reason, use `path[1]`.
+- A "blind test" in the strict sense (a fresh agent with only the guide) was not run; the script was written by the author of the API.
+  The stall above is the kind of thing it would have found, and it was found by the mctest on the first run.

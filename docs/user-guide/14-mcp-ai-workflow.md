@@ -88,6 +88,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `bt_add_node` | `tree`, `node`, `parent?` (0, the root), `index?` (last) | adds a node (with its children) under a composite, or under a decorator with no child |
 | | `bt_set` | `tree`, `node?` (outline number), `value?`, `fields?` (`null` removes one), `replace?`, `remove?`, `name?`, `blackboard?` (`null` removes a key) | edits the tree; each edit is cooked first, and one that does not cook fails with the cook's message and writes nothing |
 | | `bt_trace` | `entity`, `ticks?` (300), `every?` (30) | plays the saved scene headless and reports the entity's brain: rows of tick, result, runs, running path and blackboard, and the tick each node `started` |
+| | `perception_debug_lines` | `ticks?` (1) | plays the saved scene headless and reports every `Perceiver`: world `eye`, `forward`, `yaw_deg`, range, angle, `sees`, `target`, `last_seen`, and the debug `lines` (cone edges, range arc, a line to the target); the way to see where a guard looks |
 | 2D skeleton | `skel2d_create` | `path`, `name?`, `root?` ("root") | a new `.mcskel2d` with a fresh GUID and one root bone (user guide 7.13). Every `skel2d_*` edit is cooked by the real importer before it is written, so an error names `file:line` and nothing changes |
 | | `skel2d_add_bone` | `skeleton`, `name`, `parent?`, `x?`, `y?`, `rotation?` (degrees), `scale?` (number or `[sx, sy]`), `length?` | adds a bone, last; the parent must already exist |
 | | `skel2d_add_slot` | `skeleton`, `name`, `bone`, `texture?` (`guid:`), `rect?`, `size?`, `pivot?`, `offset?`, `rotation?`, `tint?`, `attachments?`, `attachment?` | adds a slot (a textured quad on a bone, drawn after the earlier slots); `attachments` makes it a list of quads and meshes in the `.mcskel2d` form |
@@ -437,6 +438,19 @@ them) from the actor's position, so they need no game code:
 | `walk_to` | heads for `target` (a point `[x, y(, z)]` or an entity; done within `reach`, default 0.5 m, or when the target entity is gone), through the `through` waypoints first, in order (points or entities: around a pond, past each pickup; `{"at": ..., "wait": ticks}` stands still there first, on a pressure plate or a lift); when it stops getting closer it jumps (side view) or sidesteps (top-down); `air_jumps` (0-4) presses Jump again in the air for a double jump or a flap. The run goes on half a second after the arrival, so the game can react (a door, a pickup, a scene change) | `actor`, `target`, `through`, `plane`, `reach`, `air_jumps` |
 | `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
 | `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
+
+Every bot also takes three optional keys that make it act, not only move (a stealth test needs no
+custom C++ system):
+
+- `hold`: action names held down the whole run, e.g. `["Crouch"]` for a crouch walk.
+- `hold_when`: `[{"action": "Crouch", "entity": "Sentry", "field": "Perceiver.sees", "value": 1}]` holds the
+  action on the ticks the field check is true (the same `entity` / `field` / `value` or `{">": 5}` wording as a
+  test's checks). Several entries are independent, so a bot can crouch while a sentry sees it.
+- `stop_when`: one field check, `{"entity": ..., "field": ..., "value": ...}`. While it is true the bot stands
+  still (no steering, no jump, a `wait` is paused), e.g. freeze while `Perceiver.sees` is 1.
+
+A `walk_to` waypoint (in `through`, or the `target`) can also be `{"at": ..., "wait": ticks, "press": ["Interact"]}`:
+the `press` actions go out for one tick when the bot arrives, once per waypoint.
 
 `plane` is `xy` (top-down 2D or flying: `Move` is the direction), `x` (side view: `Move.x` and
 `Jump`) or `xz` (3D on the ground: `Move` is `(x, -z)`, forward is -Z). Bots are deterministic:
