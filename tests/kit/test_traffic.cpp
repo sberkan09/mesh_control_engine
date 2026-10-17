@@ -126,7 +126,6 @@ struct Scene {
     f32 speed(Entity e) { return w.try_get<Vehicle3D>(e)->speed; }
 };
 
-constexpr f32 kPi = 3.14159265f;
 
 }  // namespace
 
