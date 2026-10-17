@@ -9,6 +9,8 @@ bool is_depth_format(TextureFormat f) {
 bool is_compressed_format(TextureFormat f) {
     switch (f) {
         case TextureFormat::BC1_UNorm:
+        case TextureFormat::BC1_SRGB:
+        case TextureFormat::BC4_UNorm:
         case TextureFormat::BC3_UNorm:
         case TextureFormat::BC5_UNorm:
         case TextureFormat::BC7_UNorm:
@@ -17,6 +19,26 @@ bool is_compressed_format(TextureFormat f) {
         case TextureFormat::ASTC_4x4_SRGB: return true;
         default: return false;
     }
+}
+
+u32 block_bytes(TextureFormat f) {
+    switch (f) {
+        case TextureFormat::BC1_UNorm:
+        case TextureFormat::BC1_SRGB:
+        case TextureFormat::BC4_UNorm: return 8;
+        case TextureFormat::BC3_UNorm:
+        case TextureFormat::BC5_UNorm:
+        case TextureFormat::BC7_UNorm:
+        case TextureFormat::BC7_SRGB:
+        case TextureFormat::ASTC_4x4_UNorm:
+        case TextureFormat::ASTC_4x4_SRGB: return 16;
+        default: return 0;
+    }
+}
+
+usize level_bytes(TextureFormat f, u32 w, u32 h) {
+    if (is_compressed_format(f)) return usize((w + 3) / 4) * ((h + 3) / 4) * block_bytes(f);
+    return usize(w) * h * bytes_per_pixel(f);
 }
 
 u32 bytes_per_pixel(TextureFormat f) {

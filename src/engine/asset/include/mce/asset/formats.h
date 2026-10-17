@@ -101,9 +101,14 @@ void write_manifest(Span<ManifestItem> items, Array<byte>& out);
 // ------------------------------------------------------------------ texture (CHNK_TEX)
 
 enum class TextureFormat : u32 {
-    RGBA8 = 1,     // MVP; BC1/BC5/BC7 at v0.5
+    RGBA8 = 1,     // MVP
     ASTC_4x4 = 2,  // phones (M-MOBILE step 8, mce_cook --textures astc): 16-byte blocks of 4x4 texels
     RGBA16F = 3,   // M-VISUAL3 4: half-float RGBA, linear (HDR skies and environment maps); never Srgb
+    // Desktop block compression (M-CONTENT 1b): 4x4 blocks, sRGB stays a flag. BC4/BC5 never Srgb.
+    BC1 = 4,       // 8 bytes per block, opaque colour
+    BC4 = 5,       // 8 bytes per block, one channel (R)
+    BC5 = 6,       // 16 bytes per block, two channels (normal maps)
+    BC7 = 7,       // 16 bytes per block, colour with alpha
 };
 
 // Bytes of one layer of a w x h level in `format` (0 for an unknown format).
