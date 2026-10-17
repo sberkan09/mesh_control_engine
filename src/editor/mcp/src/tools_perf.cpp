@@ -89,7 +89,17 @@ void write_draw_causes(JsonWriter& w, const perf::Summary& s) {
         total += avg.draw_causes[k];
         if (max.draw_causes[k] > 0) order[n++] = k;
     }
-    std::sort(order, order + n, [&](u32 a, u32 b) { return avg.draw_causes[a] != avg.draw_causes[b] ? avg.draw_causes[a] > avg.draw_causes[b] : a < b; });
+    // Insertion sort over at most kDrawCauseCount entries (std::sort trips -Warray-bounds on GCC 13 -O2).
+    for (u32 i = 1; i < n; ++i) {
+        const u32 key = order[i];
+        u32 j = i;
+        while (j > 0 && (avg.draw_causes[order[j - 1]] < avg.draw_causes[key] ||
+                         (avg.draw_causes[order[j - 1]] == avg.draw_causes[key] && order[j - 1] > key))) {
+            order[j] = order[j - 1];
+            --j;
+        }
+        order[j] = key;
+    }
     w.key("draw_causes").begin_object();
     w.key("scene_draws_avg").num_u(avg.draws_instanced + total).key("instanced_draws_avg").num_u(avg.draws_instanced);
     w.key("instanced_runs_avg").num_u(avg.runs_instanced).key("not_instanced_avg").num_u(total);
