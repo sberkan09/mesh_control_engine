@@ -297,6 +297,10 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- ChunkLod3D (M-OPENWORLD A4, `mce/kit/chunk_lod3d.h`): `Kit3DExtract` draws the `proxy` of a `SceneChunk` entity
+  whose `SceneChunkStatus` is not `Loaded` (the `impostor` beyond `impostor_distance`, nothing beyond
+  `max_distance`), at the chunk entity's transform, counted in `Kit3DStats::chunk_proxies` / `chunk_impostors`.
+  The distance is from the camera to the chunk box: a render decision, while loading stays focus-based.
 - Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
   `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
   static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
@@ -314,6 +318,8 @@ together:
 
 ctest `test_kit` (no GPU), `tests/kit/`:
 
+- `test_chunk_lod3d.cpp`: "chunk lod: the proxy near, the impostor far, nothing past max_distance, hidden while
+  loaded" (and kept while loading) and "chunk lod: a world without ChunkLod3D draws exactly as before".
 - `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
   stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
   more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
