@@ -19,7 +19,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
-| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau: #424; 3b importers: #501; 3b2 font importer hardening: PR pending; 3c `.mcperf`, websocket, command line, scene instantiate left) |
+| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau: #424; 3b importers: #501; 3b2 font importer hardening: #520; 3c `.mcperf`, websocket, command line, scene instantiate left) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
@@ -106,7 +106,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   `luau_load`; (c) a signed or hashed script chunk that only the cook can produce; (d) accept the risk for
   first-party packs and refuse bytecode from mods. Not decided here.
 
-## Step 3b — Importers (SBA-187, #501)
+## Step 3b — Importers (SBA-187, #501; font hardening #520)
 
 - **`test_fuzz_importers`.** Every built-in importer is called directly (`scan_dependencies`, then `cook`) over mutated
   copies of up to six committed sources per extension (25 extensions: the native text assets, png, wav, mpg, csv,
