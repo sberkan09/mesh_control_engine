@@ -9,6 +9,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/log.h"
@@ -29,6 +30,9 @@ constexpr f32 kDeg = 0.017453292519943295f;
 constexpr f32 kCornerAccel = 4.0f;  // m/s^2 sideways the steering allows
 constexpr f32 kStopLine = 1.0f;     // m short of a connector's start a car stops
 constexpr f32 kStandAtStop = 1.0f;  // s a car stands at a stop line before it may go
+constexpr f32 kWalkerClear = 1.2f;  // m beside its lane a crossing pedestrian still stops a car
+constexpr f32 kWalkerGap = 3.0f;    // m short of a crossing pedestrian a car stops
+constexpr f32 kWalkerStep = 1.5f;   // m between the points of its lanes a car checks
 
 struct TrafficAssets {
     asset::AssetSystem* assets = nullptr;
@@ -197,6 +201,32 @@ struct Drive {
     f32 dt;
     Array<Car>& cars;
     const Occupancy& occ;
+    const Array<math::vec3>& walkers;  // pedestrians crossing a road now (B3), world positions
+
+    // How far down its lanes (`lanes`, starting `start` metres ahead) car `ci` first passes a crossing
+    // pedestrian, within `reach` metres; a negative number when none.
+    f32 walker_ahead(u32 ci, const u32* lanes, const f32* start, f32 reach) const {
+        const Car& c = cars[ci];
+        const RoadRegistry::Def& d = *c.net->def;
+        // Only the pedestrians near enough to matter.
+        u32 near[32];
+        u32 n = 0;
+        for (u32 k = 0; k < walkers.size() && n < 32; ++k)
+            if (math::length(flat(walkers[k] - c.pos)) < reach + 10.0f) near[n++] = k;
+        if (n == 0) return -1.0f;
+        for (u32 i = 0; i < 3 && lanes[i] != kRoadNone; ++i) {
+            const RoadLane& l = d.lanes[lanes[i]];
+            const f32 half = 0.5f * l.width + kWalkerClear;
+            for (f32 s = math::max(-start[i], 0.0f); s <= l.length; s += kWalkerStep) {
+                const f32 ahead = start[i] + s;
+                if (ahead > reach) return -1.0f;
+                const math::vec3 p = road_lane_point(*c.net, lanes[i], s);
+                for (u32 k = 0; k < n; ++k)
+                    if (math::length(flat(walkers[near[k]] - p)) < half) return ahead;
+            }
+        }
+        return -1.0f;
+    }
 
     // When car `ci` would reach the start of connector `conn` from where it is, in seconds.
     f32 eta(u32 ci, u32 conn) const {
@@ -313,6 +343,16 @@ struct Drive {
             }
             if (blocked) break;
         }
+        // A pedestrian crossing in front (unsignalled crossings leave the giving way to the cars).
+        if (!walkers.empty()) {
+            const f32 can_stop = speed * speed / (2.0f * t.decel);
+            const f32 at = walker_ahead(ci, lanes, start, math::max(can_stop + 15.0f, 20.0f));
+            if (at >= 0.0f) {
+                obstacle(at - kWalkerGap, 0.0f);
+                t.state = TrafficState::Yielding;
+                blocked = true;
+            }
+        }
         accel = math::min(accel, idm(t, speed, v0, 1e9f, 0.0f));
         if (!blocked && found_leader && accel < 0.0f) t.state = TrafficState::Following;
         t.target_speed = math::max(0.0f, speed + accel);
@@ -411,7 +451,11 @@ void traffic_drivers(Frame& f) {
         occ.slots.push_back(Slot{c.d->lane, c.d->s, i});
     }
     std::sort(occ.slots.begin(), occ.slots.end(), slot_less);
-    Drive drive{w, f.dt, cars, occ};
+    Array<math::vec3> walkers;
+    f.query<const Pedestrian3D, const LocalTransform>().each([&](Entity, const Pedestrian3D& p, const LocalTransform& lt) {
+        if (p.mode == PedestrianMode::Cross) walkers.push_back(lt.position);
+    });
+    Drive drive{w, f.dt, cars, occ, walkers};
     for (u32 i = 0; i < cars.size(); ++i) {
         Car& c = cars[i];
         if (!c.net || !c.d->drive) continue;

@@ -36,6 +36,11 @@ ldtk:     an LDtk project (.ldtk; external level files are followed) becomes, pe
           --level L imports one level. Padding and spacing, a layer grid that differs from its tileset's
           are errors; flipped tiles, stacked tiles, entity fields and hidden layers are warnings.
 
+gltf, fbx: a 3D model's lights and cameras become <name>.mcprefab (a root with MeshRef to the model, a child per
+          PointLight3D / SpotLight3D / Camera3DComponent at the node's world transform; directional lights are a
+          warning naming Environment3D.sun_direction). Implemented in mce_import_3d.py; see its docstring and the
+          user guide, section 8.4, for the light-unit formulas. fbx needs mce_cook (--cook, MCE_COOK or beside).
+
 Unsupported features are warnings that name the feature (stderr); --werror turns them into a failure and
 nothing is written.
 """
@@ -736,8 +741,13 @@ def cmd_ldtk(args):
     return 0
 
 
+def cmd_3d(args):
+    import mce_import_3d  # lights and cameras of glTF / FBX models (M-IMPORT3D step 4), installed beside this script
+    return mce_import_3d.run(args.tool, args)
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="mce import", description="2D authoring-tool exports into native assets")
+    ap = argparse.ArgumentParser(prog="mce import", description="2D authoring-tool exports and 3D models' lights and cameras into native assets")
     ap.add_argument("--merge-output", action="store_true", help=argparse.SUPPRESS)  # warnings on stdout (the MCP tool)
     sub = ap.add_subparsers(dest="tool", metavar="<tool>", required=True)
     s = sub.add_parser("aseprite", help="Aseprite JSON export + PNG into a .mcsheet")
@@ -761,6 +771,17 @@ def main(argv=None):
     s.add_argument("--tile-size", type=float, default=1.0, help="metres per default grid cell (default 1)")
     s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
     s.set_defaults(fn=cmd_ldtk)
+    for tool, what in (("gltf", "glTF / GLB model"), ("fbx", "FBX model")):
+        s = sub.add_parser(tool, help=f"{what}: its lights and cameras into a .mcprefab")
+        s.add_argument("file", help="the model inside the project's assets/ (its .mceasset sidecar is created when missing)")
+        s.add_argument("--out-dir", help="where to write the prefab (default: beside the model)")
+        s.add_argument("--name", help="the prefab's name (default: the model's file name)")
+        if tool == "fbx":
+            s.add_argument("--cook", help="the mce_cook that reads the FBX (default: MCE_COOK, or beside this script)")
+        else:
+            s.set_defaults(cook=None)
+        s.add_argument("--werror", action="store_true", help="a warning is a failure; nothing is written")
+        s.set_defaults(fn=cmd_3d)
     args = ap.parse_args(argv)
     if args.merge_output:
         sys.stderr = sys.stdout

@@ -440,6 +440,47 @@ unchanged, and everything lives in components, so a save in the middle of a miss
 Time is counted in ticks, so the same run gives the same state hash. Entity references in a save are the
 handles of the base scene a load rebuilds: give the entities a mission uses a `SaveKey` and spawn them from the
 same scene.
+## 9.15 Map markers and the minimap (M-MISSION)
+
+`mce/kit/map_markers.h` puts things on a map, and a `Minimap` widget in a `.mcui` document draws it. Scenes
+without a `MapMarker` are unchanged: nothing runs unless a host asks for the markers.
+
+- **MapMarker** (on any entity): `icon` (a region of the minimap skin's sprite set; 0 draws a flat square),
+  `color`, `layer` (0..31), an optional `label`, `always_visible` and `follow_objective`. With no
+  `follow_objective` the marker sits at its entity's position (x and z; the height is dropped).
+- **Objective markers.** Add a bare `MapMarker` to an `Objective` entity: its target (the `target` entity, or the
+  entity named `tag`) gets a marker while that objective is `Active`, and the marker disappears when the
+  objective is done. Add one to the `Mission` entity: it follows the mission's current objective, one after
+  the other, and goes away when the mission completes or fails, with nothing added per objective.
+  `follow_objective` names an `Objective` or a `Mission` explicitly, so a marker can live anywhere else.
+- **Reading them.** `kit::collect_map_markers(world, out)` lists the shown markers in entity order;
+  `kit::map_tracked_view(world, "Player", pos, heading)` gives the tracked entity's place. A host (the stock
+  player's UI layer, a test) copies them into the widget with `Document::set_minimap_view`.
+
+The widget is `"kind": "Minimap"` with a `"minimap"` object (`UiMinimap`):
+
+```json
+{ "name": "mini", "kind": "Minimap", "at": [1, 0, 200, 200],
+  "minimap": { "track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": false,
+               "clamp_to_rim": false, "background": [0.05, 0.07, 0.06, 0.75], "layer_mask": 4294967295 } },
+{ "name": "map", "kind": "Minimap", "fill": true,
+  "minimap": { "full_map": true, "world_min": [-500, -500], "world_max": [500, 500] } }
+```
+
+- `radius` metres reach the rim at `zoom` 1; the visible radius is `radius / zoom`. The map is the circle
+  inscribed in the widget's rect, so a square widget is the usual choice.
+- North is up (`-z`, east right) unless `rotate_with_heading` is on; then the tracked entity's heading is up. The
+  heading is the yaw about +Y in radians, 0 facing north.
+- A marker beyond the radius is hidden, unless `clamp_to_rim` is on or the marker is `always_visible`: it then
+  sticks to the rim along the line from the centre.
+- `full_map` shows the rectangle `world_min` .. `world_max` (x, z of the north-west and south-east corners),
+  north up, with every marker at its place.
+- `layer_mask` picks the marker layers (bit n = layer n). The tracked entity is an arrow in the style's `accent`
+  colour; `background` is the rect's colour.
+- Drawing uses the ordinary 2D quads, nothing else. `ui::minimap_project` (`mce/ui/minimap.h`) is the pure
+  function behind it, from a world position, the tracked position, the heading, the radius and the widget rect to
+  a widget-space point with `inside` and `on_rim`; `minimap_project_full` is the full-map one.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,

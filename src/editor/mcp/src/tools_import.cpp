@@ -1,4 +1,4 @@
-// asset_import (M-IMPORT step 4): the `mce import aseprite|tiled|ldtk` converters over MCP. The
+// asset_import (M-IMPORT step 4; gltf / fbx: M-IMPORT3D step 4): the `mce import aseprite|tiled|ldtk|gltf|fbx` converters over MCP. The
 // tool runs tools/mce_cli/mce_import.py (installed beside the server binary, or found in a
 // source tree above it) as a child process on a file of the project and returns what it wrote
 // and what it warned about; the converters are the same ones the command line runs, so an agent
@@ -104,13 +104,17 @@ bool asset_import(ToolCall& c) {
     bool werror = false;
     const cook::JsonValue ts = arg(c, "tile_size");
     if (!arg_bool(c, "werror", werror)) return false;
-    if (tool != "aseprite" && tool != "tiled" && tool != "ldtk") return fail(c, "argument 'tool' must be \"aseprite\", \"tiled\" or \"ldtk\"");
+    if (tool != "aseprite" && tool != "tiled" && tool != "ldtk" && tool != "gltf" && tool != "fbx")
+        return fail(c, "argument 'tool' must be \"aseprite\", \"tiled\", \"ldtk\", \"gltf\" or \"fbx\"");
+    const bool model_tool = tool == "gltf" || tool == "fbx";
     if (!asset_rel_valid(file)) return fail(c, "argument 'file' must be a path inside the project like \"art/hero.json\" (forward slashes, no '..')");
     if (!name.empty() && !plain_word(name)) return fail(c, "argument 'name' must be letters, digits, '_' and '-'");
     if (!level.empty() && (level[0] == '-' || level.size() > 128)) return fail(c, "argument 'level' is not a level name");
     if (!level.empty() && tool != "ldtk") return fail(c, "argument 'level' applies to tool \"ldtk\" only");
     if (ts.valid() && (!ts.is_number() || ts.as_number() <= 0 || ts.as_number() > 1000)) return fail(c, "argument 'tile_size' must be a number of metres, above 0");
-    if (ts.valid() && tool == "aseprite") return fail(c, "argument 'tile_size' applies to tools \"tiled\" and \"ldtk\"");
+    if (ts.valid() && (tool == "aseprite" || model_tool)) return fail(c, "argument 'tile_size' applies to tools \"tiled\" and \"ldtk\"");
+    // A model is referenced by its GUID, which lives in the .mceasset sidecar beside it: the model must be under assets/.
+    if (model_tool && file.substr(0, 7) != "assets/") return fail(c, "argument 'file' must be the model inside assets/ for tools \"gltf\" and \"fbx\", like \"assets/models/room.glb\"");
 
     editor::EditorProject& project = c.server.session().project();
     const cook::String abs_file = cook::path_join(project.root(), file);
@@ -163,6 +167,18 @@ bool asset_import(ToolCall& c) {
     } else {
         args.push_back("--out-dir");
         args.push_back(abs_dir.view());
+    }
+    cook::String cook_exe;
+    if (tool == "fbx") {
+        // The FBX is read by mce_cook (--dump-fbx-scene): the one beside this server (an SDK), else the script's own search.
+        cook_exe = cook::path_join(platform::base_path(), "mce_cook");
+#if defined(_WIN32)
+        cook_exe += ".exe";
+#endif
+        if (platform::file_exists(cook_exe.view())) {
+            args.push_back("--cook");
+            args.push_back(cook_exe.view());
+        }
     }
     if (!name.empty()) {
         args.push_back("--name");
@@ -222,11 +238,14 @@ const ToolDef kImportTools[] = {
      "tool \"aseprite\": Aseprite's JSON export (+ its PNG) becomes a .mcsheet (frames as regions, tags as clips). "
      "tool \"tiled\": a .tmj map becomes a .mcscene plus a .mctilemap per tile layer (solid tiles and rectangle "
      "objects become Collider2D boxes). tool \"ldtk\": an .ldtk project becomes a scene per level (IntGrid cells "
-     "become boxes, entities become markers). 'file' is a path inside the project (the export need not be under "
+     "become boxes, entities become markers). tool \"gltf\" / \"fbx\": a model under assets/ (.gltf, .glb, .fbx) gets a "
+     ".mcprefab with a root MeshRef to it and a child per light or camera (PointLight3D, SpotLight3D, Camera3DComponent at the "
+     "node's world transform; a directional light is a warning naming Environment3D.sun_direction); the model's sidecar is "
+     "created when missing. 'file' is a path inside the project (the export need not be under "
      "assets/); the assets are written under 'out_dir' (default: beside the export when it is in assets/, else "
      "assets/imported). Re-importing keeps GUIDs. Features the engine cannot carry are warnings in 'output'; "
      "werror: true turns them into a failure that writes nothing. Needs Python 3.",
-     R"json({"type":"object","properties":{"tool":{"type":"string","enum":["aseprite","tiled","ldtk"]},"file":{"type":"string","description":"Export inside the project, e.g. art/hero.json, assets/levels/cave.tmj, assets/levels/world.ldtk"},"out_dir":{"type":"string","description":"Folder under assets/ to write to, e.g. assets/levels"},"name":{"type":"string","description":"Base name of the written files (default: the export's file name)"},"level":{"type":"string","description":"ldtk only: import just the level with this identifier"},"tile_size":{"type":"number","description":"tiled / ldtk: metres per tile (default 1)"},"werror":{"type":"boolean","default":false}},"required":["tool","file"]})json",
+     R"json({"type":"object","properties":{"tool":{"type":"string","enum":["aseprite","tiled","ldtk","gltf","fbx"]},"file":{"type":"string","description":"Export inside the project, e.g. art/hero.json, assets/levels/cave.tmj, assets/levels/world.ldtk; for gltf / fbx the model, e.g. assets/models/room.glb"},"out_dir":{"type":"string","description":"Folder under assets/ to write to, e.g. assets/levels"},"name":{"type":"string","description":"Base name of the written files (default: the export's file name)"},"level":{"type":"string","description":"ldtk only: import just the level with this identifier"},"tile_size":{"type":"number","description":"tiled / ldtk: metres per tile (default 1)"},"werror":{"type":"boolean","default":false}},"required":["tool","file"]})json",
      asset_import},
 };
 

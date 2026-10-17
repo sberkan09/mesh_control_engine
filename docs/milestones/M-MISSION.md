@@ -25,7 +25,7 @@ Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` ("3-4 missions
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | implemented, awaiting CI | | `src/engine/kit/{include/mce/kit/missions.h,src/missions.cpp}`, `tests/kit/test_missions.cpp`, user guide 9.13. Objectives chain by `Objective.next` from `Mission.objective` (reflected components have no arrays); `Mission.actor` names who reaches / interacts; no pickup or interact event existed, so `collect` counts `TriggerEnter3D` of a `Trigger3D` and `interact` reads the Interact action |
-| 2 | planned | | needs 1 for the objective markers |
+| 1 | done | #524 | `src/engine/kit/{include/mce/kit/missions.h,src/missions.cpp}`, `tests/kit/test_missions.cpp`, user guide 9.13. Objectives chain by `Objective.next` from `Mission.objective` (reflected components have no arrays); `Mission.actor` names who reaches / interacts; no pickup or interact event existed, so `collect` counts `TriggerEnter3D` of a `Trigger3D` and `interact` reads the Interact action |
+| 2 | implemented | | `src/engine/kit/{include/mce/kit/map_markers.h,src/map_markers.cpp}`, `src/engine/ui/{include/mce/ui/minimap.h,src/minimap.cpp}` and the `Minimap` widget kind (`UiMinimap`, one record per Minimap after the string blob of CHNK_UIDOC, older chunks load unchanged), `tests/kit/test_map_markers.cpp`, `tests/ui/test_minimap.cpp`, user guide 9.15. A bare `MapMarker` on an Objective or Mission follows the active objective; the ui reads plain structs the host copies from `kit::collect_map_markers` (the UI never links the kit); feeding it from the stock player screen is not wired yet |
 | 3 | planned | | needs 1 and 2 |
 | 4 | planned | | |
