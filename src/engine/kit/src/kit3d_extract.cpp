@@ -31,7 +31,7 @@ void foliage_look(const F& f, render::InstanceBatch& b) {
 
 // The kind (0..3) a scattered copy belongs to: a hash of its origin and the seed against the cumulative weights.
 // Integer arithmetic only, so the split is the same on every machine and in every run.
-u32 foliage_kind(const math::mat4& m, u32 seed, const f32 cumulative[4]) {
+u32 foliage_kind(const math::mat4& m, u32 seed, const f32 cumulative[4], u32 live_mask) {
     u32 x, y, z;
     std::memcpy(&x, &m.c[3][0], 4);
     std::memcpy(&y, &m.c[3][1], 4);
@@ -47,7 +47,9 @@ u32 foliage_kind(const math::mat4& m, u32 seed, const f32 cumulative[4]) {
     const f32 pick = static_cast<f32>(h >> 8) * (1.0f / 16777216.0f) * cumulative[3];
     for (u32 k = 0; k < 3; ++k)
         if (pick < cumulative[k]) return k;
-    return 3;
+    for (u32 k = 3; k > 0; --k)  // rounding put the pick past the sum: the last kind that has copies
+        if (live_mask >> k & 1u) return k;
+    return 0;
 }
 
 
@@ -1086,8 +1088,9 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         // Up to four kinds (mesh, mesh_1..3) share the scatter; a kind whose mesh is unbound or not resident, or whose weight
         // is 0, gets no copies.
         const asset::Guid kind_guid[4] = {f.mesh.guid, f.mesh_1.guid, f.mesh_2.guid, f.mesh_3.guid};
-        const f32 kind_weight[4] = {max(f.mesh_weights.x, 0.0f), max(f.mesh_weights.y, 0.0f), max(f.mesh_weights.z, 0.0f),
-                                    max(f.mesh_weights.w, 0.0f)};
+        const auto finite_weight = [](f32 w) { return std::isfinite(w) ? clamp(w, 0.0f, 1.0e6f) : 0.0f; };
+        const f32 kind_weight[4] = {finite_weight(f.mesh_weights.x), finite_weight(f.mesh_weights.y), finite_weight(f.mesh_weights.z),
+                                    finite_weight(f.mesh_weights.w)};
         u32 kind_key[4];
         f32 cumulative[4];
         u32 resolved = 0;
@@ -1141,7 +1144,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 entry->transforms.clear();
                 for (Array<math::mat4>& m : entry->more) m.clear();
                 for (const math::mat4& m : all) {
-                    const u32 kind = foliage_kind(m, f.seed, cumulative);
+                    const u32 kind = foliage_kind(m, f.seed, cumulative, resolved);
                     (kind == 0 ? entry->transforms : entry->more[kind - 1]).push_back(m);
                 }
             }
@@ -1154,6 +1157,8 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             const Array<math::mat4>& copies = k == 0 ? entry->transforms : entry->more[k - 1];
             if (copies.empty()) continue;
             render::InstanceBatch b;
+            // Entity indices stay far below 2^29 (a world holds millions at most); a larger one would collide with another kind's id.
+            MCE_ASSERT_MSG(e.index < (1u << 29) - 1, "Foliage3D batch id: entity index needs bit 29");
             b.id = (e.index + 1) | (k << 29);  // disjoint per kind, and from the TerrainFoliage3D ids (bit 31)
             b.version = entry->version;
             b.mesh = kind_key[k];

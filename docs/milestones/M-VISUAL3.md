@@ -504,6 +504,7 @@ is reflected; `08-3d.md` explains when to use 5b against 5a and `Foliage3D`. Cha
 
 ```cpp
 math::vec4 tint_variation{1, 1, 1, 1};  // ✱ each copy's tint = mix(tint, tint_variation, hash(copy origin))
+// As built: tint × mix(white, tint_variation, hash(copy origin)), see "Known limits" under the closing record
 f32 wind_height = 0.0f;   // ✱ metres where the sway reaches wind_amplitude; 0 = today's amplitude × h² (h in m)
 f32 wind_gust = 0.0f;     // ✱ 0..1: slow gusts travelling along wind_direction across the field
 f32 wind_flutter = 0.0f;  // ✱ metres of fast per-vertex leaf jitter at wind_height

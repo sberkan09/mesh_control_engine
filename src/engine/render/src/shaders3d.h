@@ -2093,12 +2093,14 @@ float hash01(vec3 p) {  // [0, 1) from the float bits of p: the same input gives
     return float(pcg_hash(u.x ^ pcg_hash(u.y ^ pcg_hash(u.z))) >> 8) * (1.0 / 16777216.0);
 }
 // ext (M-VISUAL3 6): x wind_height (profile (h / H)^2 when > 0), y gust, z flutter; all 0 = amplitude * h^2 as before.
-vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind, vec3 ext) {
+// `key` is the vertex's own a_pos: the flutter hashes it with the instance origin (bit-exact inputs, not the computed position).
+vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind, vec3 ext, vec3 key) {
     if (wind.x == 0.0) return vec3(0.0);
     float h = max(p.y - w[3].y, 0.0);
     float f = 6.2831853 * wind.y * t + dot(w[3].xz, vec2(0.37, 0.71));
     if (ext == vec3(0.0)) return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
-    float r = ext.x > 0.0 ? h / ext.x : h;
+    float hh = max(ext.x, 1e-2);  // a tiny wind height must not blow the profile up
+    float r = ext.x > 0.0 ? h / hh : h;
     float gust = 1.0;
     if (ext.y > 0.0) {  // slow gusts running along the wind at 3 m/s
         float s = dot(w[3].xz, wind.zw) - 3.0 * t;
@@ -2106,7 +2108,7 @@ vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind, vec3 ext) {
     }
     vec3 o = vec3(wind.z, 0.0, wind.w) * (wind.x * (ext.x > 0.0 ? r * r : h * h) * gust * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
     if (ext.z > 0.0) {  // leaf flutter: 4 to 6 Hz, a phase per vertex
-        float ph = 6.2831853 * (4.0 + 2.0 * hash01(p.yzx)) * t + 6.2831853 * hash01(p);
+        float ph = 6.2831853 * (4.0 + 2.0 * hash01(key.yzx + w[3].xyz)) * t + 6.2831853 * hash01(key + w[3].zxy);
         o += ext.z * r * vec3(sin(ph), 0.5 * sin(1.31 * ph + 0.7), cos(0.93 * ph));
     }
     return o;
@@ -2134,8 +2136,9 @@ void main() {
     vec4 p = w * (o_model * vec4(a_pos.xyz, 1.0));
     // M-VISUAL3 6: a batch draw leaves o_dequant (identity for rigid draws, unread here) to carry the variation (column 0)
     // and the wind extension (column 1: height, gust, flutter), so ObjectU keeps its size.
-    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst, o_dequant[1].xyz);
+    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst, o_dequant[1].xyz, a_pos.xyz);
     vec4 tv = o_dequant[0];
+    if (o_params.x > 0.0) tv.w = 1.0;  // alpha-masked: the depth passes mask by the base alpha alone, so the colour variation leaves alpha out
     v_tint = tv == vec4(1.0) ? vec4(1.0) : mix(vec4(1.0), tv, hash01(w[3].xyz));
     v_world = p.xyz;
     v_normal = cofactor3(w) * (mat3(o_normal) * oct_decode(a_oct));
@@ -2164,7 +2167,7 @@ out gl_PerVertex { vec4 gl_Position; };
 void main() {
     mat4 w = instance_world(s_info.x);
     vec4 p = w * (s_local * vec4(a_pos.xyz, 1.0));
-    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind, s_base.yzw);
+    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = s_view_proj * p;
 }
@@ -2187,8 +2190,8 @@ void main() {
     mat4 w = instance_world(s_info.x);
     vec4 base = w * (s_local * vec4(a_pos.xyz, 1.0));
     vec4 p = base, q = base;
-    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind, s_base.yzw);
-    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind, s_base.yzw);
+    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
+    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = vp_jittered * p;
     v_current = vp_current * p;
