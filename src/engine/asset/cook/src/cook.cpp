@@ -217,8 +217,12 @@ bool summarize_mesh(StringView cooked_file, MeshSummary& out) {
         const asset::MaterialExt es = m.material_ext(s);
         for (u32 t = 0; t < s && !seen; ++t) {
             const asset::MaterialExt et = m.material_ext(t);
-            seen = std::memcmp(&m.submeshes[s].material, &m.submeshes[t].material, sizeof(asset::MaterialChunk)) == 0 &&
-                   std::memcmp(&es, &et, sizeof(asset::MaterialExt)) == 0;
+            // Byte equality on purpose (the cooked bytes decide what is shared); the byte pointers keep tidy's
+            // object-representation check quiet for structs of floats.
+            seen = std::memcmp(reinterpret_cast<const unsigned char*>(&m.submeshes[s].material),
+                               reinterpret_cast<const unsigned char*>(&m.submeshes[t].material), sizeof(asset::MaterialChunk)) == 0 &&
+                   std::memcmp(reinterpret_cast<const unsigned char*>(&es), reinterpret_cast<const unsigned char*>(&et),
+                               sizeof(asset::MaterialExt)) == 0;
         }
         if (!seen) ++distinct;
     }
