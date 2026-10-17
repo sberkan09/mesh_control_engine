@@ -13,7 +13,7 @@ formats, which is what keeps the shipped game small and safe.
 | Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
 | HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
-| Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
+| Font | `.ttf` (TrueType outlines; CFF `.otf` is refused) | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |

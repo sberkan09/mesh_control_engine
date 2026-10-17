@@ -136,9 +136,9 @@ TEST_CASE("fuzz: importers survive mutated source files of every committed sampl
             // index that is not a number, gltf_importer.cpp read_indices). Off until M-IMPORT3D fixes it;
             // MCE_FUZZ_GLTF=1 runs it.
             if ((ext == ".glb" || ext == ".gltf") && std::getenv("MCE_FUZZ_GLTF") == nullptr) continue;
-            // Likewise stb_truetype (documented as unsafe for untrusted fonts): a mutated .ttf crashes
-            // stbrp_pack_rects in the font importer's atlas bake. MCE_FUZZ_FONT=1 runs it.
-            if ((ext == ".ttf" || ext == ".otf") && std::getenv("MCE_FUZZ_FONT") == nullptr) continue;
+            // Likewise the MPEG decoder: a mutated .mpg overflows the heap in its macroblock decoding (found at 2,500 mutants,
+            // reached through VideoDecoder::count_frames in the video importer). MCE_FUZZ_VIDEO=1 runs it.
+            if (ext == ".mpg" && std::getenv("MCE_FUZZ_VIDEO") == nullptr) continue;
             if (e.file_size() > 1024 * 1024) continue;
             by_ext[ext].push_back(e.path());
         }
@@ -155,7 +155,8 @@ TEST_CASE("fuzz: importers survive mutated source files of every committed sampl
             Array<byte> good;
             if (!asset::read_file(f.string(), good)) continue;
             const std::string rel = fs::relative(f, root).generic_string();
-            (void)import_one(*imp, rel, good.span());
+            const bool untouched = import_one(*imp, rel, good.span());
+            if (ext == ".ttf") CHECK_MESSAGE(untouched, rel << " must cook untouched");
             fuzz::Mutator m(fnv(rel));
             const u32 iters = iterations_for(good.size());
             for (u32 it = 0; it < iters; ++it) {

@@ -14,9 +14,11 @@
 //            with their upper- and lower-case forms in each table's locale (Turkish İ and ı), so a
 //            translation never shows a missing glyph; the tables become dependencies of the font
 // Kerning comes from the legacy 'kern' table only (GPOS kerning is not read).
-// stb_truetype trusts its input: fonts are cooked from the project's own tree, never at runtime.
+// stb_truetype trusts its input, so font_structure_ok walks the tables it reads (directory, head/maxp/hhea/hmtx, cmap,
+// loca/glyf with composite depth, kern) before it is called: a font is a file a modder or an agent drops into the tree.
 
 #include <algorithm>
+#include <cstring>
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
@@ -31,6 +33,7 @@ namespace {
 
 constexpr const char* kStage = "cook.font";
 constexpr u32 kMaxCodepoints = 65536;
+constexpr usize kMaxKerns = 1u << 20;  // pairs x codepoints per glyph can multiply out; a font has far fewer
 
 struct Range {
     u32 first;
@@ -87,6 +90,272 @@ void string_table_codepoints(const ImportInput& in, Array<u32>& cps) {
     for (usize i = 0; i < cps.size(); ++i)
         if (i == 0 || cps[i] != cps[i - 1]) cps[uniq++] = cps[i];
     cps.resize(uniq);
+}
+
+
+// ---- font_structure_ok: what stb_truetype reads must lie inside the file -------------------------------------------
+// (M-FUZZ 3b: a damaged glyph box gave stbrp_pack_rects a negative width; the glyf, loca and cmap parsers read with
+// unchecked offsets.) It accepts every well-formed font the importer baked before; anything it refuses is damaged.
+
+struct FontBytes {
+    const u8* d;
+    usize n;
+    bool ok = true;
+    u32 u8_at(usize o) { if (o + 1 > n) { ok = false; return 0; } return d[o]; }
+    u32 u16_at(usize o) { if (o + 2 > n) { ok = false; return 0; } return (u32(d[o]) << 8) | d[o + 1]; }
+    i32 i16_at(usize o) { const u32 v = u16_at(o); return static_cast<i32>(v >= 0x8000 ? v - 0x10000 : v); }
+    u32 u32_at(usize o) { if (o + 4 > n) { ok = false; return 0; } return (u32(d[o]) << 24) | (u32(d[o + 1]) << 16) | (u32(d[o + 2]) << 8) | d[o + 3]; }
+};
+
+struct FontTable {
+    usize off = 0, len = 0;
+    bool present = false;
+};
+
+FontTable find_table(FontBytes& f, usize dir, u32 num, const char* tag) {
+    for (u32 i = 0; i < num; ++i) {
+        const usize r = dir + 12 + 16u * i;
+        if (std::memcmp(f.d + r, tag, 4) == 0) return FontTable{f.u32_at(r + 8), f.u32_at(r + 12), true};
+    }
+    return {};
+}
+
+// The extent of a glyph's points, in font units.
+struct Extent {
+    f64 x0 = 1e30, y0 = 1e30, x1 = -1e30, y1 = -1e30;
+    bool any = false;
+    u64 points = 0;  // outline points once components are expanded (stb_truetype copies them per use)
+    u64 cost = 0;    // outline points plus component records, expanded: the work stb_truetype does for the glyph
+    u32 height = 0;  // component nesting below this glyph
+    void add(f64 x, f64 y) {
+        x0 = std::min(x0, x), x1 = std::max(x1, x), y0 = std::min(y0, y), y1 = std::max(y1, y);
+        any = true;
+    }
+};
+
+// A glyph's bytes: contour counts, flags and coordinates all fit, its points lie inside the box its header names (the
+// rasterizer sizes the bitmap from that box), and a composite only names glyphs that exist, placed by offsets, to a
+// depth stb_truetype's recursion can take. `ext` receives the points' extent.
+constexpr u64 kMaxGlyphPoints = 16384;  // outline points of one glyph, components expanded
+constexpr u64 kMaxGlyphCost = 65536;    // points plus components stb_truetype walks (it keeps no memo)
+
+struct GlyphMemo;
+bool glyph_check(FontBytes& f, const FontTable& glyf, const Array<u32>& loca, u32 g, u32 num_glyphs, u32 depth, Extent& ext, GlyphMemo& memo);
+
+struct GlyphMemo {
+    Array<u8> state;  // 0 not seen, 1 ok, 2 refused
+    Array<Extent> extent;
+};
+
+bool glyph_ok(FontBytes& f, const FontTable& glyf, const Array<u32>& loca, u32 g, u32 num_glyphs, u32 depth, Extent& ext,
+              GlyphMemo& memo) {
+    if (depth > 6) return false;
+    if (memo.state[g] != 0) {
+        ext = memo.extent[g];
+        return memo.state[g] == 1 && depth + ext.height <= 6;  // the nesting stb_truetype recurses through
+    }
+    memo.state[g] = 2;  // a cycle through this glyph is refused
+    if (!glyph_check(f, glyf, loca, g, num_glyphs, depth, ext, memo)) return false;
+    memo.state[g] = 1;
+    memo.extent[g] = ext;
+    return true;
+}
+
+bool glyph_check(FontBytes& f, const FontTable& glyf, const Array<u32>& loca, u32 g, u32 num_glyphs, u32 depth, Extent& ext, GlyphMemo& memo) {
+    const usize a = loca[g], b = loca[g + 1];
+    if (b == a) return true;
+    if (b - a < 10) return false;
+    const usize base = glyf.off + a, len = b - a;
+    const i32 nc = f.i16_at(base);
+    const i32 bx0 = f.i16_at(base + 2), by0 = f.i16_at(base + 4), bx1 = f.i16_at(base + 6), by1 = f.i16_at(base + 8);
+    if (bx0 > bx1 || by0 > by1) return false;  // inverted box
+    Extent mine;
+    if (nc >= 0) {
+        usize p = 10 + 2u * static_cast<u32>(nc);
+        if (p + 2 > len) return false;
+        u32 prev = 0, npts = 0;
+        for (i32 c = 0; c < nc; ++c) {
+            const u32 e = f.u16_at(base + 10 + 2u * static_cast<u32>(c));
+            if (c > 0 && e < prev) return false;
+            prev = e;
+        }
+        if (nc > 0) npts = prev + 1;
+        if (npts > kMaxGlyphPoints) return false;
+        mine.points = npts;
+        mine.cost = npts + 1;
+        p += 2 + f.u16_at(base + p);  // instructions
+        if (p > len) return false;
+        Array<u8> flags;
+        flags.resize(npts);
+        usize xbytes = 0, ybytes = 0;
+        for (u32 i = 0; i < npts;) {
+            if (p + 1 > len) return false;
+            const u32 fl = f.u8_at(base + p++);
+            u32 rep = 1;
+            if (fl & 8) {
+                if (p + 1 > len) return false;
+                rep += f.u8_at(base + p++);
+            }
+            if (i + rep > npts) return false;
+            for (u32 k = 0; k < rep; ++k) flags[i + k] = static_cast<u8>(fl);
+            xbytes += rep * ((fl & 2) ? 1u : ((fl & 16) ? 0u : 2u));
+            ybytes += rep * ((fl & 4) ? 1u : ((fl & 32) ? 0u : 2u));
+            i += rep;
+        }
+        if (p + xbytes + ybytes > len || !f.ok) return false;
+        i32 x = 0, y = 0;
+        usize xp = base + p, yp = base + p + xbytes;
+        Array<i32> xs, ys;
+        xs.resize(npts);
+        ys.resize(npts);
+        for (u32 i = 0; i < npts; ++i) {
+            const u32 fl = flags[i];
+            if (fl & 2) { const i32 d = static_cast<i32>(f.u8_at(xp++)); x += (fl & 16) ? d : -d; }
+            else if (!(fl & 16)) { x += f.i16_at(xp); xp += 2; }
+            xs[i] = x;
+        }
+        for (u32 i = 0; i < npts; ++i) {
+            const u32 fl = flags[i];
+            if (fl & 4) { const i32 d = static_cast<i32>(f.u8_at(yp++)); y += (fl & 32) ? d : -d; }
+            else if (!(fl & 32)) { y += f.i16_at(yp); yp += 2; }
+            ys[i] = y;
+        }
+        for (u32 i = 0; i < npts; ++i) mine.add(xs[i], ys[i]);
+    } else {
+        usize p = 10;
+        for (;;) {
+            if (p + 4 > len) return false;
+            const u32 fl = f.u16_at(base + p), gi = f.u16_at(base + p + 2);
+            p += 4;
+            if (gi >= num_glyphs || gi == g || !(fl & 2)) return false;  // stb_truetype cannot place a component by matching points
+            f64 dx, dy;
+            if (fl & 1) { dx = f.i16_at(base + p); dy = f.i16_at(base + p + 2); p += 4; }
+            else { dx = static_cast<i8>(f.u8_at(base + p)); dy = static_cast<i8>(f.u8_at(base + p + 1)); p += 2; }
+            if (fl & (8 | 0x40 | 0x80)) return false;  // scaled or rotated components: stb_truetype's own math differs from the extent check
+            if (p > len) return false;
+            Extent sub;
+            if (!glyph_ok(f, glyf, loca, gi, num_glyphs, depth + 1, sub, memo)) return false;
+            mine.points += sub.points;
+            mine.cost += sub.cost + 1;
+            mine.height = std::max(mine.height, sub.height + 1);
+            if (mine.points > kMaxGlyphPoints || mine.cost > kMaxGlyphCost) return false;
+            if (sub.any) {
+                mine.add(sub.x0 + dx, sub.y0 + dy);
+                mine.add(sub.x1 + dx, sub.y1 + dy);
+            }
+            if (!(fl & 0x20)) break;
+        }
+    }
+    if (!f.ok) return false;
+    constexpr f64 kSlack = 2.0;  // real fonts (Crimson Pro Bold) round their boxes by a unit or two; the bitmap box is rounded out to whole pixels anyway
+    if (mine.any && (mine.x0 < bx0 - kSlack || mine.x1 > bx1 + kSlack || mine.y0 < by0 - kSlack || mine.y1 > by1 + kSlack)) return false;
+    ext = mine;
+    return true;
+}
+
+// stb_truetype reads one cmap subtable: the last record of the Unicode platform, or Microsoft's BMP / full Unicode
+// encoding. That one is checked against the table; the others are never read.
+bool cmap_ok(FontBytes& f, const FontTable& cmap) {
+    if (cmap.len < 4) return false;
+    const u32 n = f.u16_at(cmap.off + 2);
+    if (cmap.len < 4 + 8u * n) return false;
+    u64 sub = 0;
+    bool chosen = false;
+    for (u32 i = 0; i < n; ++i) {
+        const usize rec = cmap.off + 4 + 8u * i;
+        const u32 platform = f.u16_at(rec), encoding = f.u16_at(rec + 2);
+        if (platform == 0 || (platform == 3 && (encoding == 1 || encoding == 10))) {
+            sub = f.u32_at(rec + 4);
+            chosen = true;
+        }
+    }
+    if (!chosen) return f.ok;  // stb refuses the font itself
+    if (sub == 0 || sub + 6 > cmap.len) return false;
+    const usize at = cmap.off + static_cast<usize>(sub), room = cmap.len - static_cast<usize>(sub);
+    const u32 format = f.u16_at(at);
+    if (format == 0) {
+        const u32 length = f.u16_at(at + 2);
+        if (length < 262 || length > room) return false;
+    } else if (format == 4) {
+        const u32 segx2 = f.u16_at(at + 6);
+        if (segx2 == 0 || (segx2 & 1) || room < 16 + 4u * segx2) return false;  // end, start, delta, range offset arrays
+        // The search fields are what stb_truetype's binary search runs on; every font writes the values the spec derives.
+        u32 pow2 = 1, log2 = 0;
+        while (pow2 * 2 <= segx2 / 2) pow2 *= 2, ++log2;
+        if (f.u16_at(at + 8) != 2 * pow2 || f.u16_at(at + 10) != log2 || f.u16_at(at + 12) != segx2 - 2 * pow2) return false;
+        // idRangeOffset pointers read glyph ids from past the arrays: bound each one.
+        const usize ro = at + 16 + 3u * segx2;
+        const usize starts = at + 16 + segx2;
+        for (u32 sg = 0; sg < segx2 / 2; ++sg) {
+            const u32 off = f.u16_at(ro + 2u * sg);
+            if (off == 0) continue;
+            const u64 span = static_cast<u64>(f.u16_at(at + 14 + 2u * sg)) + 1 - f.u16_at(starts + 2u * sg);
+            if (span > 65536 || ro + 2u * sg + off + 2 * span > cmap.off + cmap.len) return false;
+        }
+    } else if (format == 6) {
+        if (room < 10 + 2u * static_cast<usize>(f.u16_at(at + 8))) return false;
+    } else if (format == 12 || format == 13) {
+        if (room < 16 || f.u32_at(at + 12) > (room - 16) / 12) return false;
+    } else {
+        return false;  // 2, 8, 10, 14: stb_truetype asserts on them
+    }
+    return f.ok;
+}
+
+bool font_structure_ok(const u8* data, usize size, int offset) {
+    if (size < 16) return false;
+    FontBytes f{data, size};
+    const usize o = static_cast<usize>(offset);
+    const u32 num = f.u16_at(o + 4);
+    if (!f.ok || num == 0 || num > 256 || o + 12 + 16u * num > size) return false;
+    for (u32 i = 0; i < num; ++i) {
+        const usize r = o + 12 + 16u * i;
+        if (static_cast<u64>(f.u32_at(r + 8)) + f.u32_at(r + 12) > size) return false;
+    }
+    const FontTable head = find_table(f, o, num, "head"), maxp = find_table(f, o, num, "maxp"), hhea = find_table(f, o, num, "hhea"),
+                    hmtx = find_table(f, o, num, "hmtx"), cmap = find_table(f, o, num, "cmap"), glyf = find_table(f, o, num, "glyf"),
+                    loca = find_table(f, o, num, "loca"), kern = find_table(f, o, num, "kern");
+    if (!head.present || head.len < 54 || !maxp.present || maxp.len < 6 || !hhea.present || hhea.len < 36 || !hmtx.present ||
+        !cmap.present)
+        return false;
+    const u32 units = f.u16_at(head.off + 18), loca_fmt = f.u16_at(head.off + 50);
+    const u32 num_glyphs = f.u16_at(maxp.off + 4), num_hm = f.u16_at(hhea.off + 34);
+    if (units < 16 || units > 16384 || loca_fmt > 1 || num_glyphs == 0 || num_hm == 0 || num_hm > num_glyphs) return false;
+    if (f.i16_at(hhea.off + 4) - f.i16_at(hhea.off + 6) <= 0) return false;  // ascent - descent scales the font
+    if (hmtx.len < 4u * num_hm + 2u * (num_glyphs - num_hm)) return false;
+    if (!cmap_ok(f, cmap)) return false;
+    if (kern.present && f.u16_at(kern.off + 2) >= 1 && f.u16_at(kern.off + 8) == 1) {  // the table stb reads, whatever its length says
+        if (kern.len < 18 || f.u16_at(kern.off + 10) > (kern.len - 18) / 6) return false;
+    }
+    if (glyf.present) {
+        if (!loca.present || loca.len < (loca_fmt ? 4u : 2u) * (num_glyphs + 1)) return false;
+        Array<u32> starts;
+        starts.resize(num_glyphs + 1);
+        u32 prev = 0;
+        for (u32 i = 0; i <= num_glyphs; ++i) {
+            const u32 v = loca_fmt ? f.u32_at(loca.off + 4u * i) : 2u * f.u16_at(loca.off + 2u * i);
+            if (v < prev || v > glyf.len) return false;
+            starts[i] = prev = v;
+        }
+        GlyphMemo memo;
+        memo.state.resize(num_glyphs);
+        memo.extent.resize(num_glyphs);
+        for (u32 g = 0; g < num_glyphs; ++g) {
+            Extent unused;
+            if (!glyph_ok(f, glyf, starts, g, num_glyphs, 0, unused, memo)) return false;
+        }
+    } else {
+        return false;  // CFF outlines (OpenType 'OTTO'): stb_truetype sizes its buffer at 512 MB, so offsets are not bounded
+    }
+    return f.ok;
+}
+
+// The glyph the cmap names for `cp` when stb_truetype can be asked about it (hmtx and loca are indexed by it unchecked);
+// -1 for a codepoint the font lacks (space is baked blank even then).
+int usable_glyph(const stbtt_fontinfo& info, u32 cp) {
+    const int g = stbtt_FindGlyphIndex(&info, static_cast<int>(cp));
+    if (g < 0 || g >= info.numGlyphs) return -1;
+    return (g != 0 || cp == 32) ? g : -1;
 }
 
 // Coverage: stb_truetype's packer bakes antialiased glyphs, growing the atlas until all fit.
@@ -261,8 +530,8 @@ public:
 
         const auto* data = reinterpret_cast<const unsigned char*>(in.source.data());
         stbtt_fontinfo info;
-        const int offset = in.source.size() < 12 ? -1 : stbtt_GetFontOffsetForIndex(data, 0);
-        if (offset < 0 || !stbtt_InitFont(&info, data, offset)) {
+        const int offset = in.source.size() < 16 ? -1 : stbtt_GetFontOffsetForIndex(data, 0);
+        if (offset < 0 || !font_structure_ok(data, in.source.size(), offset) || !stbtt_InitFont(&info, data, offset)) {
             diags.error(Errc::ImportFailed, file, 0, 0, kStage, "not a TrueType/OpenType font");
             return false;
         }
@@ -274,7 +543,7 @@ public:
             String missing;
             u32 missing_count = 0;
             for (const u32 cp : used) {
-                if (stbtt_FindGlyphIndex(&info, static_cast<int>(cp)) != 0 || cp == 32) {
+                if (usable_glyph(info, cp) >= 0) {
                     ranges.push_back(Range{cp, cp});
                 } else if (cp != 0x307) {  // the combining dot of lower("İ") outside Turkish draws on the i anyway
                     if (missing_count < 8) appendf(missing, "%sU+%04X", missing_count ? ", " : "", cp);
@@ -293,7 +562,7 @@ public:
         Array<u32> cps;
         for (const Range& r : ranges) {
             for (u32 cp = r.first; cp <= r.last; ++cp) {
-                if (stbtt_FindGlyphIndex(&info, static_cast<int>(cp)) != 0 || cp == 32) cps.push_back(cp);
+                if (usable_glyph(info, cp) >= 0) cps.push_back(cp);
                 if (cps.size() > kMaxCodepoints) {
                     diags.error(Errc::ImportFailed, file, 0, 0, kStage, "too many codepoints (max 65536)");
                     return false;
@@ -311,6 +580,18 @@ public:
         }
 
         const f32 scale = stbtt_ScaleForPixelHeight(&info, static_cast<float>(size));
+        const f32 max_side = sdf ? 256.0f : 1024.0f;  // the distance field costs pixels x outline points per glyph
+        // A damaged font can scale one glyph to a bitmap of millions of pixels per side (the bake sizes it from the box).
+        for (const u32 cp : cps) {
+            int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            stbtt_GetCodepointBox(&info, static_cast<int>(cp), &x0, &y0, &x1, &y1);
+            if (static_cast<f32>(x1 - x0) * scale > max_side || static_cast<f32>(y1 - y0) * scale > max_side) {
+                String msg;
+                appendf(msg, "the glyph for U+%04X is larger than %d pixels at this size; the font is damaged", cp, static_cast<int>(max_side));
+                diags.error(Errc::ImportFailed, file, 0, 0, kStage, msg);
+                return false;
+            }
+        }
         Array<asset::FontGlyph> glyphs;
         Array<u8> atlas;
         u32 aw = 128, ah = 128;
@@ -345,7 +626,7 @@ public:
             for (const stbtt_kerningentry& k : table) {
                 if (k.advance == 0) continue;
                 cps_for(k.glyph1, [&](u32 left) {
-                    cps_for(k.glyph2, [&](u32 right) { kerns.push_back(asset::FontKern{left, right, static_cast<f32>(k.advance) * scale}); });
+                    cps_for(k.glyph2, [&](u32 right) { if (kerns.size() < kMaxKerns) kerns.push_back(asset::FontKern{left, right, static_cast<f32>(k.advance) * scale}); });
                 });
             }
             std::sort(kerns.begin(), kerns.end(), [](const asset::FontKern& a, const asset::FontKern& b) {
