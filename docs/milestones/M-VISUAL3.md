@@ -509,7 +509,7 @@ is reflected; `08-3d.md` explains when to use 5b against 5a and `Foliage3D`. Cha
 
 ### Step 6 — foliage, decals, the demo and the close
 
-**Step 6 status:** 6a data seam merged (#488); 6b renderer (variation, wind, multiple kinds) in the PR that adds this line; open: decal-drop warning, `decals_dropped` perf counter, showcase demo and the close (6c-6e). Linear: none filed (free issue limit).
+**Step 6 status:** done. 6a data seam (#488), 6b renderer (#499), 6c decal-drop warning and 6d demo profiles and the close (this PR); 6e, the `decals_dropped` perf counter, is the stacked PR right after it. Linear: none filed (free issue limit).
 
 **Foliage3D and TerrainFoliage3D** (kit3d.h; same fields on both where marked ✱):
 
