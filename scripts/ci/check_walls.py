@@ -60,6 +60,12 @@ WALLS = [
     ("bc7enc wall", re.compile(r"[<\"](bc7enc|rgbcx|bc7decomp)\.h|\bbc7enc_\w+\(|\brgbcx::"),
      ["src/engine/asset/cook/src/texture_bc.cpp", "tests/asset/test_cook_bc.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # ufbx (M-IMPORT3D step 3, ADR-0047) is cook-time only: the FBX importer reads .fbx into the mesh back end, runtimes
+    # load the cooked CHNK_MESH. ufbx_impl.c compiles it; the smoke test loads in-test FBX through it.
+    ("ufbx wall", re.compile(r"[<\"]ufbx\.[ch]\b|\bufbx_\w+\s*\("),
+     ["src/engine/asset/cook/src/fbx_importer.cpp", "src/engine/asset/cook/src/ufbx_impl.c",
+      "tests/asset/test_ufbx_smoke.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # tinyexr (M-VISUAL3 step 4) is cook-time only: the texture importer reads .exr into RGBA16F, runtimes upload it.
     ("tinyexr wall", re.compile(r"[<\"]tinyexr\.h|\b(Load|Parse|Free|Init|Is)EXR\w*\s*\("),
      ["src/engine/asset/cook/src/texture_importer.cpp", "src/engine/asset/cook/src/tinyexr_impl.cpp"],
@@ -199,6 +205,7 @@ LINK_WALLS = [
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     ("libdatachannel link wall", re.compile(r"\b(datachannel-static|juice-static|usrsctp)\b"), ["src/engine/net/"]),
     ("bc7enc link wall", re.compile(r"\bmce_bc7enc\b"), ["src/engine/asset/cook/", "tests/asset/"]),
+    ("ufbx link wall", re.compile(r"\bmce_ufbx\b"), ["src/engine/asset/cook/", "tests/asset/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
     # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The

@@ -289,6 +289,15 @@ void Kit3DExtract::shutdown() {
     assets_ = nullptr;
 }
 
+void Kit3DExtract::note_built(const render::Scene3D& built) {
+    stats_.decals_dropped = built.stats().decals_dropped;
+    if (stats_.decals_dropped == 0 || decal_warnings_ > 0) return;
+    ++decal_warnings_;
+    MCE_LOG_WARN("kit3d: {} visible Decal3D(s) dropped: a frame draws at most {} decals from {} distinct textures. Pack the "
+                 "decal textures into one atlas and give each decal its uv_rect, or reduce the visible count",
+                 stats_.decals_dropped, render::kMaxDecals, render::kMaxDecalTextures);
+}
+
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
     release_static_merges();
     release_terrains();
@@ -296,6 +305,7 @@ void Kit3DExtract::reset(asset::AssetSystem* assets) {
     foliage_.clear();
     terrain_foliage_.clear();
     bursts_.clear();
+    decal_warnings_ = 0;
     assets_ = assets;
 }
 

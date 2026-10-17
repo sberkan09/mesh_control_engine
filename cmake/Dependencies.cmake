@@ -274,6 +274,32 @@ if(NOT CMAKE_CROSSCOMPILING)
     endif()
 endif()
 
+# ---- ufbx (cook-time only: Autodesk FBX import, M-IMPORT3D step 3; ADR-0047) ----
+# MIT or Unlicense (Samuli Raivio), one ufbx.c + ufbx.h, no dependencies. Release v0.23.1 pinned by its commit (no
+# GIT_SHALLOW, like tinyexr). Compiled into mce_ufbx through src/ufbx_impl.c (warnings off, -ffp-contract=off /
+# /fp:precise so ufbx's unit, axis and evaluation maths round the same on every compiler). Never set
+# ufbx_load_opts.thread_opts: without a thread pool ufbx runs on the calling thread. UFBX_NO_FORMAT_OBJ (the cook has
+# its own OBJ importer; a .fbx sniffed as OBJ must not reach a second OBJ parser) and UFBX_NO_GEOMETRY_CACHE (external
+# .mc/.pc2 vertex-cache readers the cook never asks for) remove input-reachable parsers; everything else stays on.
+# The define set is the .c's only (none changes ufbx.h's types: ufbx_real stays double). Confined to the cook's
+# fbx_importer.cpp by the "ufbx wall" and "ufbx link wall" in scripts/ci/check_walls.py. Licenses: ARCHITECTURE §7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(ufbx
+        GIT_REPOSITORY https://github.com/ufbx/ufbx.git
+        GIT_TAG        26a482ae66871d7de36eb722aa060bce95bce274  # v0.23.1
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(ufbx)
+    add_library(mce_ufbx STATIC "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/ufbx_impl.c")
+    target_include_directories(mce_ufbx SYSTEM PUBLIC "${ufbx_SOURCE_DIR}")
+    target_compile_definitions(mce_ufbx PRIVATE UFBX_NO_FORMAT_OBJ UFBX_NO_GEOMETRY_CACHE)
+    set_target_properties(mce_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_ufbx PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_ufbx PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
 # ---- libogg + libvorbis (cook-time only: Ogg Vorbis encoding of audio clips — ADR-0044) ----------
 # The encoder half of the Xiph reference codec, built from its sources like astcenc (its own CMake
 # needs find_package(Ogg) and installs). Confined to the cook's audio importer by the "libvorbis wall"
