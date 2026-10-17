@@ -58,6 +58,8 @@ u8* scratch_default(ScriptHost& host, const refl::TypeRecord& type, usize offset
 
 // Adds the entity, events, input, scene and physics functions to the table at the stack top.
 void register_world_api(lua_State* L);
+// The `mission` and `marker` globals (api_missions.cpp).
+void register_mission_api(lua_State* L);
 
 }  // namespace detail
 }  // namespace mce::script

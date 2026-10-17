@@ -1,0 +1,1 @@
+- Luau API for missions and map markers, M-MISSION step 3a: the `mission` global (`start`, `fail`, `status`, `signal`) and the `marker` global (`add`, `remove`) over the kit's `Mission`, `MissionSignal` and `MapMarker`, typed in `mce.d.luau`, with user guide 27.3 and exact-number tests in `tests/script`.
