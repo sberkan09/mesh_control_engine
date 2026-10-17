@@ -696,6 +696,11 @@ public:
     }
     f32 time() const { return time_; }
     f32 dt() const { return dt_; }
+    // Floating origin (M-OPENWORLD A2): the world moved by -delta since the previous frame (the extract sets it
+    // on the frame after a rebase). Forward3D treats the frame as a camera cut for its temporal history and moves
+    // what it keeps in world space (probe and GI-volume placement, so nothing is re-captured); particle rings restart.
+    void set_origin_shift(math::vec3 delta) { origin_shift_ = delta; }
+    math::vec3 origin_shift() const { return origin_shift_; }
     // Culls, builds the shadow fit and sorts. After build() the accessors below are valid.
     void build();
 
@@ -810,6 +815,7 @@ private:
     math::vec3 atmosphere_sun_{0.0f, 1.0f, 0.0f};
     math::vec3 sun_irradiance_;
     Volumetrics volumetrics_;
+    math::vec3 origin_shift_;
     Array<PointLight> point_lights_;
     mutable ClusterLights clusters_;  // assigned lazily by clusters()
     Cascade cascades_[kMaxCascades];

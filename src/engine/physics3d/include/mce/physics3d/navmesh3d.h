@@ -87,6 +87,11 @@ struct NavGeometry3D {
     u32 triangle_count() const { return u32(indices.size() / 3); }
     // Bounds of the vertices (min > max when empty).
     math::aabb3 bounds() const;
+    // Floating origin (M-OPENWORLD A2): the mesh stays where it was baked and every call converts, so
+    // Detour coordinates = the caller's + offset. A rebase by d adds d; a fresh load or bake keeps the
+    // offset it is given here (0 by default).
+    void set_origin_offset(vec3 offset);
+    vec3 origin_offset() const;
 };
 
 struct NavBakeStats3D {

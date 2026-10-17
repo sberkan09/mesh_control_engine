@@ -5,6 +5,7 @@
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
@@ -598,7 +599,37 @@ void Kit3DExtract::interpolated(Entity e, f32 alpha, vec3& pos, quat& rot, vec3&
 
 // ---- camera and environment -----------------------------------------------------------------
 
+void Kit3DExtract::sync_origin(World& world) {
+    const WorldOrigin* o = world_origin(world);
+    if (!o || o->serial == origin_serial_) return;
+    const vec3 d{f32(o->cell[0] - origin_cells_[0]) * o->snap, f32(o->cell[1] - origin_cells_[1]) * o->snap,
+                 f32(o->cell[2] - origin_cells_[2]) * o->snap};
+    origin_serial_ = o->serial;
+    for (int i = 0; i < 3; ++i) origin_cells_[i] = o->cell[i];
+    if (d.x == 0.0f && d.y == 0.0f && d.z == 0.0f) return;
+    for (Tracked& t : tracked_) {
+        t.prev_pos = t.prev_pos - d;
+        t.cur_pos = t.cur_pos - d;
+    }
+    for (Array<FoliageEntry>* list : {&foliage_, &terrain_foliage_})
+        for (FoliageEntry& f : *list) {
+            for (mat4& m : f.transforms) {
+                m.c[3][0] -= d.x;
+                m.c[3][1] -= d.y;
+                m.c[3][2] -= d.z;
+            }
+            f.rebased = true;
+            ++f.version;  // re-upload the moved copies
+        }
+    for (auto& t : terrains_) t->drawn = false;  // no previous world for this frame (a camera cut)
+    shift_static_merges(d);
+    // A camera cut for the temporal history: no draw gets last frame's world.
+    ++frame_stamp_;
+    origin_pending_ = origin_pending_ + d;
+}
+
 bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, Camera3DComponent* component) {
+    sync_origin(world);
     out = render::Camera3D{};
     bool found = false;
     world.query<const Camera3DComponent&>().each([&](Entity e, const Camera3DComponent& c) {
@@ -610,6 +641,7 @@ bool Kit3DExtract::camera(World& world, f32 alpha, render::Camera3D& out, Camera
 }
 
 bool Kit3DExtract::camera_of(World& world, Entity e, f32 alpha, render::Camera3D& out) {
+    sync_origin(world);
     const Camera3DComponent* c = world.alive(e) ? world.try_get<Camera3DComponent>(e) : nullptr;
     return c && view_of(world, e, *c, alpha, out);
 }
@@ -805,6 +837,11 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
 // ---- drawables ----------------------------------------------------------------------------------
 
 void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
+    sync_origin(world);
+    if (!extra_view_) {
+        scene.set_origin_shift(origin_pending_);
+        origin_pending_ = {};
+    }
     stats_ = {};
     probe_entities_.clear();
     gi_entity_ = {};
@@ -986,6 +1023,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!bake_mode_ && !in_view(d.center, d.radius)) continue;
         render::MeshInstance inst;
         inst.mesh = d.key;
+        inst.world = translation(-d.shift);
         inst.cast_shadows = d.cast_shadows;
         inst.lod_state = d.lod_state;
         scene.add(inst);
@@ -1079,6 +1117,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             entry = &foliage_.back();
             entry->entity = e;
         }
+        if (entry->rebased) {  // moved with the world: the inputs changed only by the shift
+            entry->key = h;
+            entry->rebased = false;
+        }
         if (entry->transforms.empty() || entry->key != h) {
             render::FoliageScatter sc;
             sc.origin = pos;
@@ -1158,6 +1200,10 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             entry = &terrain_foliage_.back();
             entry->entity = e;
             entry->key = ~h;
+        }
+        if (entry->rebased) {
+            entry->key = h;
+            entry->rebased = false;
         }
         if (entry->key != h) {
             entry->transforms.clear();

@@ -182,6 +182,10 @@ private:
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
     u32 build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid);
     void release_handles();
+    // Floating origin (M-OPENWORLD A2): after a rebase, moves the caches that hold world positions (interpolation,
+    // foliage scatters, merged meshes, terrain worlds) and tells the next scene (Scene3D::set_origin_shift).
+    void sync_origin(World& world);
+    void shift_static_merges(const math::vec3& delta);
     void release_terrains();
     void extract_terrains(World& world, render::Scene3D& scene);
     struct TerrainEntry;
@@ -228,6 +232,7 @@ private:
         u32 version = 0;
         u32 stamp = 0;     // the extract that last saw it
         Array<math::mat4> transforms;
+        bool rebased = false;  // the transforms were moved by a rebase: the next key is taken as is
     };
     Array<FoliageEntry> foliage_;
     Array<FoliageEntry> terrain_foliage_;  // TerrainFoliage3D scatters (M-TERRAIN 5)
@@ -262,6 +267,7 @@ private:
         u32 key = ~0u;
         math::vec3 center;  // its bounds, as a sphere to cull
         f32 radius = 0.0f;
+        math::vec3 shift;   // floating-origin shifts since it was merged: drawn moved by -shift
         bool cast_shadows = true;
         u8* lod_state = nullptr;
     };
@@ -270,6 +276,9 @@ private:
     Array<u32> merged_stamp_;  // per entity index: == merge_stamp_ while its MeshRef is drawn through a merged mesh
     u32 merge_stamp_ = 0;
     bool static_merge_ = true;
+    u64 origin_serial_ = 0;          // the WorldOrigin serial the caches are in
+    i32 origin_cells_[3] = {0, 0, 0};
+    math::vec3 origin_pending_;      // shift to hand the next extracted scene
 };
 
 }  // namespace mce::kit

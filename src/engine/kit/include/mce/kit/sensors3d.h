@@ -50,7 +50,7 @@ struct Raycast3D {
 MCE_COMPONENT(Raycast3D, (offset, Help{"start, entity space"}), (direction, Help{"entity space; forward is -Z"}),
               (distance, Range{0.01f, 10000}), (radius, Range{0, 100}, Help{"> 0 casts a sphere (bodies only)"}),
               (mask, Help{"physics layers it hits"}), enabled, (dynamic, Help{"hits dynamic bodies"}),
-              (characters, Help{"hits character capsules (a ray only)"}), (hit, ReadOnly, Transient), (point, ReadOnly, Transient),
+              (characters, Help{"hits character capsules (a ray only)"}), (hit, ReadOnly, Transient), (point, ReadOnly, Transient, WorldPoint),
               (normal, ReadOnly, Transient), (hit_distance, ReadOnly, Transient), (hits, ReadOnly, Transient))
 
 struct Overlap3D {
