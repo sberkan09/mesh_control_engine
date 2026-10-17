@@ -8,12 +8,14 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/refl/property_path.h"
 #include "mce/render/accessibility.h"
+#include "mce/scene/streaming.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
 
@@ -1073,6 +1075,35 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         inst.cast_shadows = d.cast_shadows;
         inst.lod_state = d.lod_state;
         scene.add(inst);
+    }
+    // ChunkLod3D (M-OPENWORLD A4): a streamed area that is not loaded draws its proxy, or its impostor far away.
+    if (!bake_mode_ && world.find_component(kTypeHash<ChunkLod3D>) != ecs::kInvalidComponent) {
+        world.query<const ChunkLod3D&, const scene::SceneChunk&>().each(
+            [&](Entity e, const ChunkLod3D& c, const scene::SceneChunk& chunk) {
+                if (!c.enabled) return;
+                const scene::SceneChunkStatus* st = world.try_get<scene::SceneChunkStatus>(e);
+                if (st && st->state == scene::ChunkState::Loaded) return;  // the area's own entities draw
+                vec3 pos, scale;
+                quat rot;
+                if (!pose_of(world, e, pos, rot, scale)) return;
+                const f32 dist = scene::distance_to_box(view.position, pos, chunk.half_extents);
+                if (c.max_distance > 0.0f && dist > c.max_distance) return;
+                const bool far = !c.impostor.guid.is_null() && dist > c.impostor_distance;
+                const asset::Guid guid = far ? c.impostor.guid : c.proxy.guid;
+                if (guid.is_null()) return;
+                if (!in_view(pos, length(chunk.half_extents))) return;
+                const u32 key = mesh_key(guid);
+                if (key == ~0u || !meshes_ || !meshes_->get(key)) {
+                    ++stats_.missing;
+                    return;
+                }
+                render::MeshInstance inst;
+                inst.mesh = key;
+                inst.world = trs(pos, rot, scale);
+                inst.cast_shadows = c.cast_shadows != 0;
+                scene.add(inst);
+                ++(far ? stats_.chunk_impostors : stats_.chunk_proxies);
+            });
     }
     extract_terrains(world, scene);
 

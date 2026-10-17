@@ -28,6 +28,7 @@
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
 #include "mce/kit/ragdolls3d.h"        // Ragdoll3D
 #include "mce/kit/sensors3d.h"         // Raycast3D, Overlap3D
+#include "mce/kit/chunk_lod3d.h"       // ChunkLod3D (M-OPENWORLD A4)
 #include "mce/kit/static_merge3d.h"    // StaticMerge3D (M-VISUAL3 5b)
 #include "mce/kit/skeleton2d.h"        // Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots, Skeleton2DIK, IKTarget2D (M-ANIM2D)
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
@@ -35,6 +36,7 @@
 #include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)
 #include "mce/kit/crowd.h"             // Pedestrian3D, CrowdSpawner3D (M-OPENWORLD B3)
 #include "mce/kit/roads.h"             // RoadNetwork3D (M-OPENWORLD B1)
+#include "mce/kit/traffic.h"           // TrafficDriver3D, TrafficSpawner3D (M-OPENWORLD B2)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
 #include "mce/kit/combat3d.h"          // Health3D, Weapon3D, Projectile3D (M-OPENWORLD C2)
