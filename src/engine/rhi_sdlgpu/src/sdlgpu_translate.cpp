@@ -2,6 +2,7 @@
 // Walk 1 stages every inline payload and uploads it in one copy pass; walk 2 records the passes.
 
 #include <cstring>
+#include <iterator>
 
 #include "mce/log.h"
 #include "mce/math/math.h"
@@ -489,15 +490,8 @@ void SdlGpuDevice::dispatch(SDL_GPUCommandBuffer* gcb, const cmd::Dispatch* dire
     ++stats_.dispatches;
 }
 
-void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* gcb) {
-    ts_.pipeline = nullptr;
-    ts_.bound = nullptr;
-    ts_.pass = nullptr;
-    ts_.vb_valid = ts_.ib_valid = false;
-    ts_.args = nullptr;
-    ts_.args_count = 0;
-    ts_.scopes = 0;
-    // Uniform pushes live in the command buffer; GL keeps bank bindings across submits.
+// Uniform pushes live in the command buffer; GL keeps bank bindings across submits.
+void SdlGpuDevice::push_uniforms(SDL_GPUCommandBuffer* gcb) {
     for (u32 b = 0; b < kMaxUniformBanks; ++b) {
         if (!uniform_set_[b]) continue;
         const auto size = static_cast<Uint32>(uniform_data_[b].size());
@@ -505,6 +499,49 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
         SDL_PushGPUFragmentUniformData(gcb, b, uniform_data_[b].data(), size);
         if (caps_.compute) SDL_PushGPUComputeUniformData(gcb, b, uniform_data_[b].data(), size);
     }
+}
+
+// Timestamps `indices` stand here (outside a pass): the work so far goes with a fence for the waiter thread,
+// the rest of the stream into a new command buffer with the uniforms and debug scopes carried over. False when
+// SDL gives no new command buffer (nothing more can be recorded).
+bool SdlGpuDevice::split_for_timestamps(SDL_GPUCommandBuffer*& gcb, u32 indices) {
+    for (u32 i = 0; i < ts_.scopes; ++i) SDL_PopGPUDebugGroup(gcb);
+    TimedFence t;
+    t.frame = frame_index_;
+    t.indices = indices;
+    t.submitted_ns = SDL_GetTicksNS();
+    t.fence = SDL_SubmitGPUCommandBufferAndAcquireFence(gcb);
+    gcb = SDL_AcquireGPUCommandBuffer(device_);
+    if (t.fence) {
+        {
+            std::lock_guard<std::mutex> lock(timing_mutex_);
+            timing_waiting_.push_back(t);
+        }
+        timing_cv_.notify_one();
+        ++timing_in_flight_;
+        if (!timing_thread_.joinable()) timing_thread_ = std::thread([this] { timing_loop(); });
+    }
+    if (!gcb) {
+        MCE_LOG_ERROR("rhi.sdlgpu: SDL_AcquireGPUCommandBuffer failed: {}", SDL_GetError());
+        ts_.scopes = 0;
+        return false;
+    }
+    push_uniforms(gcb);
+    for (u32 i = 0; i < ts_.scopes; ++i)
+        SDL_PushGPUDebugGroup(gcb, i < std::size(ts_.scope_names) && ts_.scope_names[i] ? ts_.scope_names[i] : "mce.scope");
+    return true;
+}
+
+bool SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer*& gcb) {
+    ts_.pipeline = nullptr;
+    ts_.bound = nullptr;
+    ts_.pass = nullptr;
+    ts_.vb_valid = ts_.ib_valid = false;
+    ts_.args = nullptr;
+    ts_.args_count = 0;
+    ts_.scopes = 0;
+    ts_.deferred_timestamps = 0;
+    push_uniforms(gcb);
 
     usize next_prepared = 0;
     const CmdHeader* h = nullptr;
@@ -519,6 +556,8 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 end_pass();
                 if (ts_.pass_scope) SDL_PopGPUDebugGroup(gcb);
                 ts_.pass_scope = false;
+                if (ts_.deferred_timestamps && !split_for_timestamps(gcb, ts_.deferred_timestamps)) return false;
+                ts_.deferred_timestamps = 0;
                 break;
             case CmdType::BindPipeline: {
                 GpuPipeline* p = pipelines_.try_get(static_cast<const cmd::BindPipeline*>(payload)->pipeline);
@@ -647,10 +686,13 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 ++stats_.indirect_draws;
                 break;
             }
-            case CmdType::PushDebugScope:
-                SDL_PushGPUDebugGroup(gcb, static_cast<const cmd::PushDebugScope*>(payload)->name);
+            case CmdType::PushDebugScope: {
+                const char* name = static_cast<const cmd::PushDebugScope*>(payload)->name;
+                SDL_PushGPUDebugGroup(gcb, name);
+                if (ts_.scopes < std::size(ts_.scope_names)) ts_.scope_names[ts_.scopes] = name;
                 ++ts_.scopes;
                 break;
+            }
             case CmdType::PopDebugScope:
                 if (ts_.scopes > 0) {
                     SDL_PopGPUDebugGroup(gcb);
@@ -658,7 +700,16 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
                 }
                 break;
             case CmdType::Resolve: resolve(gcb, *static_cast<const cmd::Resolve*>(payload)); break;
-            case CmdType::WriteTimestamp: break;  // no timestamp queries in SDL GPU (caps)
+            case CmdType::WriteTimestamp: {  // caps().fence_timestamps: a fence stands in for the query
+                const u32 index = static_cast<const cmd::WriteTimestamp*>(payload)->index;
+                if (index >= kMaxTimestamps) break;
+                if (ts_.pass) {
+                    ts_.deferred_timestamps |= 1u << index;
+                    break;
+                }
+                if (!split_for_timestamps(gcb, 1u << index)) return false;
+                break;
+            }
             case CmdType::BindStorageImage: {
                 const auto* c = static_cast<const cmd::BindStorageImage*>(payload);
                 MCE_ASSERT_MSG(c->unit < kMaxImageUnits, "bind_storage_image: unit out of range");
@@ -673,7 +724,10 @@ void SdlGpuDevice::record_passes(const CommandBuffer& cb, SDL_GPUCommandBuffer* 
         }
     }
     if (ts_.pass) end_pass();
+    if (ts_.deferred_timestamps && !split_for_timestamps(gcb, ts_.deferred_timestamps)) return false;
+    ts_.deferred_timestamps = 0;
     for (; ts_.scopes > 0; --ts_.scopes) SDL_PopGPUDebugGroup(gcb);
+    return true;
 }
 
 }  // namespace mce::rhi::sdlgpu
