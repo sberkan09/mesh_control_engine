@@ -98,14 +98,15 @@ constexpr u64 kMaxAccessorCount = u64(1) << 24;       // elements of one accesso
 constexpr u64 kMaxAccessorFloats = u64(1) << 25;      // elements * components of one accessor (128 MiB of floats)
 constexpr u64 kMaxDecodedViewBytes = u64(256) << 20;  // one EXT_meshopt_compression bufferView after decoding
 constexpr u64 kMaxDecodedTotalBytes = u64(512) << 20;  // all of them together
-constexpr u64 kMaxMeshoptRatio = 256;                  // decoded / compressed bytes a real stream cannot exceed (bound is ~64)
+constexpr u64 kMaxMeshoptRatio = 256;                  // decoded / compressed bytes a real v0 vertex or index stream cannot exceed (bound is ~64)
+constexpr u64 kMaxMorphWork = u64(1) << 27;            // vertices * (1 + weighted targets) baked over the whole scene (instances count)
 constexpr u64 kMaxSceneVertices = u64(1) << 25;        // vertices over every primitive of the scene (instances count)
 constexpr u64 kMaxSceneIndices = u64(1) << 26;
 constexpr u32 kMaxMorphTargets = 512;
 constexpr u32 kMaxInfluenceSets = 8;                   // JOINTS_0..7 / WEIGHTS_0..7
 
 // The warn-once features of Ctx::warn_once.
-enum FeatureWarning : u32 { kWarnColor = 1, kWarnTexcoord = 2, kWarnCamera = 4, kWarnLight = 8 };
+enum FeatureWarning : u32 { kWarnColor = 1, kWarnTexcoord = 2, kWarnCamera = 4, kWarnLight = 8, kWarnMorph = 16 };
 
 bool supported_extension(StringView name) {
     for (StringView s : kSupportedExtensions)
@@ -234,6 +235,14 @@ public:
         error(at, pointer, "the scene is over the importer's limit of 32M vertices or 64M indices (instances count)");
         return false;
     }
+    // Counts the work of baking default morph weights (`units` = vertices * (1 + weighted targets)) before any delta
+    // is read; false (after an error) when the scene is over the budget.
+    bool charge_morph(JsonValue at, StringView pointer, u64 units) {
+        morph_work_ = units > kMaxMorphWork ? kMaxMorphWork + 1 : morph_work_ + units;
+        if (morph_work_ <= kMaxMorphWork) return true;
+        error(at, pointer, "baking the default morph weights is over the importer's budget (vertices x weighted targets, instances count)");
+        return false;
+    }
     u32 errors() const { return diags_.error_count(); }
     const ImportInput& in() const { return in_; }
 
@@ -243,6 +252,7 @@ private:
     u32 warned_ = 0;
     u64 vertices_ = 0;
     u64 indices_ = 0;
+    u64 morph_work_ = 0;
 };
 
 bool parse_container(Ctx& cx, Gltf& g) {
@@ -783,6 +793,21 @@ bool decode_meshopt_views(Ctx& cx, Gltf& g) {
             cx.error(ext, ptr, "filter does not fit the mode or byteStride (OCTAHEDRAL: 4 or 8, QUATERNION: 8, ATTRIBUTES only)");
             return false;
         }
+        // EXT_meshopt_compression allows only the v0 vertex codec (header 0xa0); the index codecs have versions 0 and 1
+        // (headers 0xe0 | v for TRIANGLES, 0xd0 | v for INDICES). A v1 vertex stream compresses constant attributes far
+        // beyond the ratio bound below, so it is refused by name instead of failing as "over the limit".
+        {
+            const unsigned char header = static_cast<unsigned char>(buf[static_cast<usize>(off)]);  // len >= 1 and in range
+            const bool ok = kind == Attributes ? header == 0xa0 : (header & 0xf0) == (kind == Triangles ? 0xe0 : 0xd0) && (header & 0x0f) <= 1;
+            if (!ok) {
+                String m;
+                appendf(m, "unsupported meshopt stream header 0x%02x: %s", header,
+                        kind == Attributes ? "only version 0 vertex streams (header 0xa0) are allowed by EXT_meshopt_compression"
+                                           : "index streams must start with 0xe0 (TRIANGLES) or 0xd0 (INDICES) plus version 0 or 1");
+                cx.error(ext, ptr, m);
+                return false;
+            }
+        }
         // count <= 2^53 and stride <= 256: the product cannot overflow u64.
         const u64 out_size = count * stride;
         if (out_size > kMaxDecodedViewBytes || out_size > len * kMaxMeshoptRatio + 1024) {
@@ -1148,13 +1173,22 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
     }
     if (const JsonValue ext = prim.get("extensions").get("KHR_draco_mesh_compression"); ext.valid()) {
         // Used but not required: the fallback accessors carry the geometry, unless the exporter left them out.
-        AccessorDesc pd;
-        if (describe_accessor(cx, g, attrs.get("POSITION"), ptr, pd) && !pd.a.get("bufferView").valid() && !pd.a.get("sparse").valid()) {
-            cx.error(prim, ptr,
-                     "the primitive is Draco-compressed and has no uncompressed fallback: re-export the model with meshopt "
-                     "compression (gltfpack -c, or gltf-transform meshopt) or without compression");
-            return false;
-        }
+        // Every attribute accessor (and the indices) must carry data; one without a bufferView or sparse part is the
+        // exporter's stripped Draco placeholder.
+        auto has_fallback = [&](JsonValue acc_index) {
+            AccessorDesc pd;
+            if (!describe_accessor(cx, g, acc_index, ptr, pd)) return false;
+            if (!pd.a.get("bufferView").valid() && !pd.a.get("sparse").valid()) {
+                cx.error(prim, ptr,
+                         "the primitive is Draco-compressed and has no uncompressed fallback: re-export the model with meshopt "
+                         "compression (gltfpack -c, or gltf-transform meshopt) or without compression");
+                return false;
+            }
+            return true;
+        };
+        for (u32 i = 0; i < attrs.size(); ++i)
+            if (!has_fallback(attrs.at(i))) return false;
+        if (prim.get("indices").valid() && !has_fallback(prim.get("indices"))) return false;
     }
     warn_dropped_attributes(cx, attrs, ptr);
     JsonValue targets = prim.get("targets");
@@ -1212,11 +1246,21 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
             set_weights.push_back(std::move(sw));
             ++influence_sets;
         }
-        for (u32 s = kMaxInfluenceSets; s < kMaxInfluenceSets + 4; ++s) {
-            String jn;
-            appendf(jn, "JOINTS_%u", s);
-            if (attrs.get(jn.view()).valid()) {
-                cx.error(attrs, ptr, "more than 8 JOINTS_n / WEIGHTS_n sets are not supported");
+        for (u32 i = 0; i < attrs.size(); ++i) {  // any JOINTS_n / WEIGHTS_n with n >= 8, whatever its digits
+            const StringView k = attrs.key_at(i);
+            const usize skip = k.substr(0, 7) == "JOINTS_" ? 7 : k.substr(0, 8) == "WEIGHTS_" ? 8 : 0;
+            if (skip == 0 || k.size() == skip) continue;
+            u64 n = 0;
+            bool digits = true;
+            for (usize c = skip; c < k.size() && digits; ++c) {
+                digits = k[c] >= '0' && k[c] <= '9';
+                if (digits && n < 1000000) n = n * 10 + static_cast<u64>(k[c] - '0');
+            }
+            if (digits && n >= kMaxInfluenceSets) {
+                String m;
+                appendf(m, "%.*s: more than %u JOINTS_n / WEIGHTS_n sets are not supported", static_cast<int>(k.size()), k.data(),
+                        kMaxInfluenceSets);
+                cx.error(attrs, ptr, m);
                 return false;
             }
         }
@@ -1247,6 +1291,10 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
         for (u32 t = 0; t < std::min(targets.size(), morph_weights.is_array() ? morph_weights.size() : 0u); ++t)
             baked = baked || (morph_weights.at(t).is_number() && morph_weights.at(t).as_number() != 0.0);
         if (baked) {
+            u64 weighted = 0;
+            for (u32 t = 0; t < std::min(targets.size(), morph_weights.size()); ++t)
+                weighted += morph_weights.at(t).is_number() && morph_weights.at(t).as_number() != 0.0;
+            if (!cx.charge_morph(targets, ptr, u64(vcount) * (1 + weighted))) return false;  // before any delta is read
             if (!apply_morph_deltas(cx, g, targets, morph_weights, "POSITION", ptr, pos)) return false;
             if (!nrm.empty() && !apply_morph_deltas(cx, g, targets, morph_weights, "NORMAL", ptr, nrm)) return false;
             for (f32 x : pos)
@@ -1263,7 +1311,8 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
         String m;
         appendf(m, "%u morph target%s not imported (static import)%s", targets.size(), targets.size() == 1 ? " is" : "s are",
                 baked ? "; the default weights are baked into POSITION/NORMAL" : "");
-        cx.warning(prim, m);
+        appendf(m, " (first: %.*s)", static_cast<int>(ptr.size()), ptr.data());
+        cx.warn_once(kWarnMorph, prim, m);  // once per file, not per instance
     }
     Array<u32> idx;
     if (prim.get("indices").valid()) {

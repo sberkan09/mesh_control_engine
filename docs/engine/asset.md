@@ -79,7 +79,7 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   `mce/input/input_map.h` chunk, validated with `decode_input_map` at cook), shader (`.vert/.frag/.comp.glsl`, glslang). The glTF importer
   also imports skins (`JOINTS_0..7` / `WEIGHTS_0..7`, the 4 largest influences kept, up to 256 joints per skin,
   inverse bind matrices), sparse accessors, `KHR_mesh_quantization` and `EXT_meshopt_compression` (decoded with
-  meshoptimizer; `KHR_draco_mesh_compression` is refused when required, its fallback read when only used) and
+  meshoptimizer; only version 0 vertex streams, as the extension allows; `KHR_draco_mesh_compression` is refused when required, its fallback read when only used) and
   bakes the default morph weights into the rest pose (the targets are dropped with a warning); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
   writes per-bone ragdoll overrides into the joints (`MeshFlags::Ragdoll`, `MeshRagdoll` flags, chunk minor 3).
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and

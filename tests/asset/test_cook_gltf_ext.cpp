@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -1129,13 +1130,26 @@ TEST_CASE("gltf ext: truncated and flipped meshopt streams are errors or valid m
     }
     INFO("accepted " << accepted << ", rejected " << errors);
     CHECK(errors > 0);
-    // The stream header byte (0xa0 | version) set to an unknown version is always an error.
+    // The vertex stream header byte (0xa0 | version): only version 0 is allowed by EXT_meshopt_compression (a v1 stream
+    // can compress constant attributes ~1000x, past any sane ratio bound), so v1 and unknown versions are named errors.
     {
         const Packed good = meshopt_cube();
-        std::string v = good.vertex_stream;
-        v[0] = static_cast<char>(0xA7);
-        const Cooked res = cook_streams(v, good.index_stream, "TRIANGLES");
-        CHECK(res.has_error("/bufferViews/0/extensions/EXT_meshopt_compression: meshopt stream is corrupt or truncated"));
+        REQUIRE(static_cast<unsigned char>(good.vertex_stream[0]) == 0xA0);
+        for (const int header : {0xA1, 0xA7, 0xB0, 0x00}) {
+            std::string v = good.vertex_stream;
+            v[0] = static_cast<char>(header);
+            const Cooked res = cook_streams(v, good.index_stream, "TRIANGLES");
+            INFO(res.text());
+            CHECK(!res.ok);
+            CHECK(res.has_error("/bufferViews/0/extensions/EXT_meshopt_compression: unsupported meshopt stream header"));
+            CHECK(res.has_error("version 0 vertex streams"));
+        }
+        // An index stream header with a wrong kind or a version above the codec's 1.
+        std::string ix = good.index_stream;
+        ix[0] = static_cast<char>(0xE2);
+        CHECK(cook_streams(good.vertex_stream, ix, "TRIANGLES").has_error("/bufferViews/1/extensions/EXT_meshopt_compression: unsupported meshopt stream header"));
+        ix[0] = static_cast<char>(0xD0);
+        CHECK(cook_streams(good.vertex_stream, ix, "TRIANGLES").has_error("unsupported meshopt stream header"));
     }
     // A 3-byte stream, and the same claiming a 960 MB output.
     {
@@ -1147,5 +1161,176 @@ TEST_CASE("gltf ext: truncated and flipped meshopt streams are errors or valid m
         const int qv = q.meshopt_view("\xa0\x01\x02", 30000000, 32, "ATTRIBUTES");
         const int qp = q.acc(qv, kFloat, Cube::kVerts, "VEC3");
         CHECK(cook_once(q.glb(cube_rest(qp, -1, -1, -1))).has_error("is over the importer's limit"));
+    }
+}
+
+// ---- budgets, hardening and nits (review round) ---------------------------------------------------------------------
+
+TEST_CASE("gltf ext: a morph-bake flood is refused by the work budget before any delta is read") {
+    // Millions of vertices (no bufferView: zeros) and 512 targets of weight 1 would be ~1024 reads of 15M+ floats (11M: 0.6 s to refuse).
+    Doc d;
+    const int ap = d.acc(-1, kFloat, 5000000, "VEC3");
+    std::string targets, weights;
+    for (int i = 0; i < 512; ++i) {
+        targets += (i ? "," : "") + std::string("{\"POSITION\":") + std::to_string(ap) + "}";
+        weights += (i ? "," : "") + std::string("1");
+    }
+    const std::string glb = d.glb(cube_rest(ap, -1, -1, -1, ",\"weights\":[" + weights + "]", "", "", ",\"targets\":[" + targets + "]"));
+    const auto t0 = std::chrono::steady_clock::now();
+    const Cooked res = cook_once(glb);
+    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    INFO(res.text());
+    CHECK(!res.ok);
+    CHECK(res.has_error("/meshes/0/primitives/0: baking the default morph weights is over the importer's budget"));
+    CHECK(secs < 1.0);
+}
+
+TEST_CASE("gltf ext: the morph warning is once per file, not per instance") {
+    Doc d;
+    const std::vector<float> pos = {0, 0, 0, 1, 0, 0, 0, 1, 0}, delta = {0, 1, 0, 0, 1, 0, 0, 1, 0};
+    const int ap = d.acc(d.data_view(bytes_of(pos)), kFloat, 3, "VEC3");
+    const int ad = d.acc(d.data_view(bytes_of(delta)), kFloat, 3, "VEC3");
+    const std::string rest = "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":" + std::to_string(ap) +
+                             "},\"targets\":[{\"POSITION\":" + std::to_string(ad) + "}]}],\"weights\":[0.5]}],"
+                             "\"nodes\":[{\"mesh\":0},{\"mesh\":0},{\"mesh\":0}],\"scenes\":[{\"nodes\":[0,1,2]}]";
+    const Cooked res = cook_glb(d.glb(rest));
+    INFO(res.text());
+    REQUIRE(res.ok);
+    CHECK(res.warning_count("morph target") == 1);
+    CHECK(res.warning_count("(first: /meshes/0/primitives/0)") == 1);
+}
+
+TEST_CASE("gltf ext: JOINTS_n / WEIGHTS_n beyond the 8 supported sets is an error, whatever n") {
+    for (const char* name : {"JOINTS_8", "JOINTS_11", "JOINTS_12", "WEIGHTS_15", "JOINTS_100"}) {
+        Doc d;
+        const std::vector<float> pos = {0, 0, 0, 1, 0, 0, 0, 1, 0};
+        const std::vector<u8> j0(12, 0);
+        const std::vector<float> w0 = {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0};
+        const int ap = d.acc(d.data_view(bytes_of(pos)), kFloat, 3, "VEC3");
+        const int aj = d.acc(d.data_view(bytes_of(j0)), kUByte, 3, "VEC4");
+        const int aw = d.acc(d.data_view(bytes_of(w0)), kFloat, 3, "VEC4");
+        const std::string rest = "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":" + std::to_string(ap) +
+                                 ",\"JOINTS_0\":" + std::to_string(aj) + ",\"WEIGHTS_0\":" + std::to_string(aw) + ",\"" + name + "\":" +
+                                 std::to_string(aj) + "}}]}],\"nodes\":[{\"mesh\":0,\"skin\":0},{}],\"skins\":[{\"joints\":[1]}],"
+                                 "\"scenes\":[{\"nodes\":[0,1]}]";
+        const Cooked res = cook_once(d.glb(rest));
+        INFO(name << "\n" << res.text());
+        CHECK(!res.ok);
+        CHECK(res.has_error((std::string(name) + ": more than 8 JOINTS_n / WEIGHTS_n sets").c_str()));
+    }
+}
+
+TEST_CASE("gltf ext: Draco without a fallback is detected on every attribute accessor, not just POSITION") {
+    Doc d;
+    const Cube c = make_cube();
+    const int ap = d.acc(d.data_view(bytes_of(c.pos)), kFloat, Cube::kVerts, "VEC3");
+    const int an = d.acc(-1, kFloat, Cube::kVerts, "VEC3");  // stripped placeholder
+    const std::string prim_draco = ",\"extensions\":{\"KHR_draco_mesh_compression\":{\"bufferView\":0,\"attributes\":{\"POSITION\":0}}}";
+    const Cooked res = cook_once(d.glb(cube_rest(ap, an, -1, -1, "", ",\"extensionsUsed\":[\"KHR_draco_mesh_compression\"]", "", prim_draco)));
+    INFO(res.text());
+    CHECK(!res.ok);
+    CHECK(res.has_error("/meshes/0/primitives/0: the primitive is Draco-compressed and has no uncompressed fallback"));
+}
+
+// ---- type confusion along the indices chain ---------------------------------------------------------------------------
+
+namespace {
+
+// The indexed cube as JSON text where every value on the indices chain can be swapped for `repl` (the member at JSON
+// path `target`, e.g. "accessors.1.componentType"); `seen` collects every path the document offers. A default of ""
+// means "absent unless mutated".
+struct MutDoc {
+    std::string target, repl;
+    std::vector<std::string> seen;
+
+    std::string val(const std::string& path, const std::string& def) {
+        seen.push_back(path);
+        return path == target ? repl : def;
+    }
+    std::string obj(const std::string& path, const std::vector<std::pair<std::string, std::string>>& fields) {
+        std::string s = "{";
+        bool first = true;
+        for (const auto& [key, def] : fields) {
+            const std::string v = val(path + "." + key, def);
+            if (v.empty()) continue;
+            s += (first ? "" : ",") + ("\"" + key + "\":") + v;
+            first = false;
+        }
+        return val(path, s + "}");
+    }
+};
+
+// ictype: componentType of the indices (5121 / 5123 / 5125). The indices accessor is sparse (one substituted element).
+std::string indices_chain_glb(MutDoc& m, int ictype) {
+    const Cube c = make_cube();
+    const size_t isz = ictype == kUInt ? 4 : ictype == kUShort ? 2 : 1;
+    std::string bin = bytes_of(c.pos);  // view 0: positions
+    const size_t ioff = bin.size();
+    std::vector<u32> wide(c.idx.begin(), c.idx.end());
+    if (ictype == kUByte)  // a cube with 24 vertices does not fit u8 indices: use the first 8 vertices' triangles
+        for (u32& x : wide) x %= 8;
+    const std::string idx_bytes = ictype == kUInt ? pack<u32>(wide) : ictype == kUShort ? pack<u16>(wide) : pack<u8>(wide);
+    bin += idx_bytes;  // view 1: indices
+    while (bin.size() % 4) bin.push_back('\0');
+    const size_t soff = bin.size();
+    bin += std::string(1, '\0');  // view 2: sparse index {0}
+    while (bin.size() % 4) bin.push_back('\0');
+    const size_t voff = bin.size();
+    bin += idx_bytes.substr(0, isz);  // view 3: the sparse value (the same element 0)
+    while (bin.size() % 4) bin.push_back('\0');
+    auto num = [](size_t n) { return std::to_string(n); };
+
+    const std::string sparse =
+        m.obj("accessors.1.sparse",
+              {{"count", "1"},
+               {"indices", m.obj("accessors.1.sparse.indices", {{"bufferView", "2"}, {"byteOffset", "0"}, {"componentType", "5121"}})},
+               {"values", m.obj("accessors.1.sparse.values", {{"bufferView", "3"}, {"byteOffset", "0"}})}});
+    const std::string acc0 = m.obj("accessors.0", {{"bufferView", "0"}, {"byteOffset", "0"}, {"componentType", "5126"},
+                                                   {"count", num(Cube::kVerts)}, {"type", "\"VEC3\""}});
+    const std::string acc1 = m.obj("accessors.1", {{"bufferView", "1"}, {"byteOffset", "0"}, {"componentType", num(static_cast<size_t>(ictype))},
+                                                   {"count", num(wide.size())}, {"type", "\"SCALAR\""}, {"normalized", "false"},
+                                                   {"sparse", sparse}});
+    const std::string bv0 = m.obj("bufferViews.0", {{"buffer", "0"}, {"byteOffset", "0"}, {"byteLength", num(ioff)}, {"byteStride", "12"}});
+    const std::string bv1 = m.obj("bufferViews.1", {{"buffer", "0"}, {"byteOffset", num(ioff)}, {"byteLength", num(idx_bytes.size())}, {"byteStride", ""}});
+    const std::string bv2 = m.obj("bufferViews.2", {{"buffer", "0"}, {"byteOffset", num(soff)}, {"byteLength", "1"}});
+    const std::string bv3 = m.obj("bufferViews.3", {{"buffer", "0"}, {"byteOffset", num(voff)}, {"byteLength", num(isz)}});
+    const std::string buf0 = m.obj("buffers.0", {{"byteLength", num(bin.size())}, {"uri", ""}});
+    const std::string attrs = m.obj("meshes.0.primitives.0.attributes", {{"POSITION", "0"}});
+    const std::string prim = m.obj("meshes.0.primitives.0", {{"attributes", attrs}, {"indices", "1"}});
+    const std::string json =
+        "{\"asset\":{\"version\":\"2.0\"},\"meshes\":[{\"primitives\":[" + prim + "]}],\"nodes\":[{\"mesh\":0}],\"scenes\":[{\"nodes\":[0]}],"
+        "\"scene\":0,\"buffers\":" + m.val("buffers", "[" + buf0 + "]") + ",\"bufferViews\":" +
+        m.val("bufferViews", "[" + bv0 + "," + bv1 + "," + bv2 + "," + bv3 + "]") + ",\"accessors\":" +
+        m.val("accessors", "[" + acc0 + "," + acc1 + "]") + "}";
+    return make_glb(json, bin);
+}
+
+}  // namespace
+
+TEST_CASE("gltf ext: every wrongly typed value along the indices chain is an error or a mesh, never an assert") {
+    const char* const kJunk[] = {"\"str\"", "{}", "[]", "true", "null", "-1", "1.5", "1e300"};
+    for (const int ictype : {kUInt, kUShort, kUByte}) {
+        MutDoc base;
+        const std::string good = indices_chain_glb(base, ictype);
+        const Cooked ref = cook_once(good);
+        INFO("ictype " << ictype << "\n" << ref.text());
+        REQUIRE(ref.ok);
+        // The paths include accessors.1.{bufferView,byteOffset,componentType,count,type,normalized,sparse...}, the
+        // bufferViews and buffers members, primitive.indices and the containers themselves.
+        const std::vector<std::string> paths = base.seen;
+        CHECK(paths.size() > 30);
+        int cooked = 0, rejected = 0;
+        for (const std::string& path : paths)
+            for (const char* junk : kJunk) {
+                MutDoc m;
+                m.target = path;
+                m.repl = junk;
+                const Cooked res = cook_once(indices_chain_glb(m, ictype));
+                INFO("ictype " << ictype << ", " << path << " = " << junk << "\n" << res.text());
+                CHECK((res.ok || !res.errors.empty()));
+                (res.ok ? cooked : rejected)++;
+            }
+        CHECK(rejected > 100);
+        CHECK(cooked > 0);  // e.g. normalized: false -> an absent-equivalent value is still a cube
     }
 }
