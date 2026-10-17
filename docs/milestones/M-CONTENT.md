@@ -1,6 +1,6 @@
 # M-CONTENT — Cooked-pack size and draw-call visibility (milestone record)
 
-**Status:** active (step 1a done; claimed 2026-10-17 by the routine 1 thread). Plan: ROADMAP §M-CONTENT. Source: GitHub #383
+**Status:** active (steps 1a and 1b done; claimed 2026-10-17 by the routine 1 thread). Plan: ROADMAP §M-CONTENT. Source: GitHub #383
 (blind test 3). **Tracker:** this table. Linear is at its free issue limit, so no issues are filed.
 
 **Why:** the Lantern Keep project had 78 textures at 1024² and its cooked `assets.mce` was 614 MB (228 MB zipped, 386 MB in
@@ -15,7 +15,7 @@ texture importer's LDR path, the cook CLI and `mce ship`, the RHI upload mapping
 | # | Step | Model | State |
 |---|---|---|---|
 | 1a | `max_size` for ordinary textures (power-of-two downscale before mips), `mce ship` / `mce cook` size options, a cook size report by asset type | Sonnet | done |
-| 1b | `compress` import setting (`none`, `bc7`, `bc5` for normal maps, `bc4`/`bc1` where cheaper, `astc` on phones), a deterministic encoder, the loader and the RHI upload for the BC formats on every desktop backend, a fallback where a backend lacks BC (GLES, WebGL), a size gate on a sample scene | Sonnet (Opus review of the upload and of determinism) | plan written (§Step 1b plan below), awaiting coordinator review |
+| 1b | `compress` import setting (`none`, `bc7`, `bc5` for normal maps, `bc4`/`bc1` where cheaper, `astc` on phones), a deterministic encoder, the loader and the RHI upload for the BC formats on every desktop backend, a fallback where a backend lacks BC (GLES, WebGL), a size gate on a sample scene | Sonnet (Opus review of the upload and of determinism) | done (§Step 1b plan below; as built after it) |
 | 2 | Draw-call report: `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) | Sonnet | not started |
 | 3 | `perf_run` progress lines while it runs and a `frames` argument for a short run; the close | Sonnet | not started |
 
@@ -277,11 +277,51 @@ packs already give each device its native format.
 
 | PR | Content | Hours | Review |
 |---|---|---|---|
-| 1b-i seam | `formats.h` (306 TUs): the four enum values and comment; `rhi/types.h` (162): `BC4_UNorm`, `BC1_SRGB`, `block_bytes`, `level_bytes`; `cook/importer.h` (167): `TextureCompression::Bc`; `render_device.h` (125, carried here so 1b-ii and 1b-iii can run in parallel): the two caps. The `.cpp` sides: `texture_level_bytes`, `TextureView::read`, the five block-size copies replaced, the caps set per backend. Nothing produces BC yet. The PR description gives CI rule M3's reason: three headers over 150 | 3-4 | anyone (mechanical) |
-| 1b-ii cook | dependency, walls, `texture_bc.cpp`, explicit `compress` values, `--textures bc` in `mce_cook` and CMake, determinism and PSNR tests | 8-12 | **Opus** (determinism) |
-| 1b-iii runtime | `rhi_format_for`, the caps refusal, the new formats mapped on four backends, `unpack_normal`, BC4→BC5 compose, the Kit3D warning, the render tests | 8-12 | **Opus** (upload, per backend) |
-| 1b-iv auto + ship + gate | the `auto` rule and thresholds, `mce ship`/`ship.py --textures`, MCP `cook_run`, the size gate, docs | 6-9 | Sonnet; coordinator checks the thresholds |
+| 1b-i seam | `formats.h` (306 TUs): the four enum values and comment; `rhi/types.h` (162): `BC4_UNorm`, `BC1_SRGB`, `block_bytes`, `level_bytes`; `cook/importer.h` (167): `TextureCompression::Bc`; `render_device.h` (125, carried here so 1b-ii and 1b-iii can run in parallel): the two caps. The `.cpp` sides: `texture_level_bytes`, `TextureView::read`, the five block-size copies replaced, the caps set per backend. Nothing produces BC yet. The PR description gives CI rule M3's reason: three headers over 150 | 3-4 | anyone (mechanical) | **done, #460**
+| 1b-ii cook | dependency, walls, `texture_bc.cpp`, explicit `compress` values, `--textures bc` in `mce_cook` and CMake, determinism and PSNR tests | 8-12 | **Opus** (determinism) | **done, #463**
+| 1b-iii runtime | `rhi_format_for`, the caps refusal, the new formats mapped on four backends, `unpack_normal`, BC4→BC5 compose, the Kit3D warning, the render tests | 8-12 | **Opus** (upload, per backend) | **done, #466**
+| 1b-iv auto + ship + gate | the `auto` rule and thresholds, `mce ship`/`ship.py --textures`, MCP `cook_run`, the size gate, docs | 6-9 | Sonnet; coordinator checks the thresholds | **done, this PR**
 | **Total** | | **25-37** | |
+
+Also merged for 1b: #444 (this plan) and #469 (the `texture_bc_srgb` cap: a BC1 sRGB pack is refused cleanly on a device without it).
 
 1b-ii and 1b-iii run in parallel after the seam: 1b-ii owns `asset/cook`, 1b-iii owns `render` and the `rhi_*`
 backends. 1b-iv follows both.
+
+## Step 1b as built
+
+**Done:** #444 (plan), #460 (1b-i seam), #463 (1b-ii cook), #466 (1b-iii runtime), #469 (BC1 sRGB cap) and 1b-iv (this PR).
+
+- **Cook (#463).** `compress` in the texture sidecar, `--textures bc` in `mce_cook` and CMake (`MCE_COOK_TEXTURES=bc`, fatal
+  on phones and Emscripten), bc7enc_rdo behind the walls, `choose_auto` (srgb to BC7, grey to BC4, unit normals to BC5, else
+  BC7; grey is tested before normals), non-multiple-of-4 bases cook RGBA8 with a warning.
+- **Runtime (#466, #469).** The four asset formats, `rhi::block_bytes` / `level_bytes`, `DeviceCaps::texture_bc`,
+  `texture_astc`, `texture_bc_srgb`, a clean refusal plus the error checker on a device that cannot sample the pack,
+  `unpack_normal` for BC5, the BC4-into-BC5 parallax compose and the Kit3D BC4 warning.
+- **Ship (1b-iv).** `mce cook --textures rgba8|bc|astc` passes through. `mce ship --textures rgba8|bc`: desktop and script
+  projects re-cook into `<project>/assets.mce` (with `--max-texture-size` if given), `--target web` with `bc` exits ("a web
+  pack serves every browser, phones included: ship it rgba8"), `astc` is refused (phones use `scripts/ship.py`).
+  `scripts/ship.py --textures rgba8|bc` sets `MCE_COOK_TEXTURES` on every ship (desktop rgba8 or bc, android and ios always
+  astc, web rgba8) and refuses `bc` for android, ios and web. The desktop default stays `rgba8`. MCP `cook_run` takes
+  `"textures": "rgba8"|"bc"` (`astc` is an argument error: phone packs come from `ship.py`); the plumbing is a trailing
+  `cook::TextureCompression` parameter on `EditorProject::cook` and `EditorSession::cook` (headers with a fanout of 90 and
+  83 TUs, under the 150 warning; no wide header was touched). The `demo_edit` transcript golden and
+  `docs/engine/capabilities.md` follow the changed `cook_run` schema; the `asset_set_import_settings` text names `compress`.
+- **Size gate.** `tests/asset/test_cook_bc.cpp` cooks the six 256² textures of `samples/05_ashen_court` with `rgba8` and `bc`:
+  `sizes.textures` must be at most 0.27 times the RGBA8 cook, and both normal maps must be BC5. The thresholds, and the
+  `auto` thresholds (99% unit normals, length bounds 0.81..1.21), are provisional and will be calibrated with RunPod
+  measurements, including the Lantern Keep and Poly Haven normal maps (the Lantern Keep number is information only: that
+  content is not in the repo).
+- **Tests.** `test_cook_bc` (cook, auto, PSNR, determinism, size gate), `test_cook_bc_arch` (slow), `tests/mcp/test_mcp.cpp`
+  (`cook_run` `textures`), `tests/import/test_cli_textures.py` (`cli_textures`: flag passed through, web plus `bc` exits,
+  `ship.py` refuses `bc` on android, ios and web).
+
+**Follow-ups.**
+- Runtime check of BC upload and sampling on Metal, WebGPU and D3D12 goes on the RunPod GPU list (only GL and SDL GPU
+  on Linux are exercised in CI; the other backends are mapped but not run).
+- Latent ASTC issue: WebGPU and D3D12 want a compressed texture's base size to be a multiple of the block size. The BC
+  cook falls back to RGBA8 for a base that is not a multiple of 4, but the ASTC 4x4 cook (`--textures astc`) does not, so an
+  ASTC pack with such a texture can fail on a WebGPU device. No ship path combines the two today (the web is rgba8);
+  fix it before ASTC reaches a WebGPU target.
+- Calibrate the `auto` thresholds and the size gate with real content (RunPod).
+- Cross-arch encoder byte equality (`test_cook_bc_arch`) still waits for an arm64 host.

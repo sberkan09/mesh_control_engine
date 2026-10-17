@@ -677,6 +677,10 @@ TEST_CASE("mcp tools: cook_run max_texture_size and the sizes report") {
     CHECK_FALSE(bad.v().get("ok").as_bool());
     CHECK(compact(bad.v().get("diagnostics")).find("power of two") != std::string::npos);
     CHECK(c.fails("cook_run", R"({"max_texture_size":"big"})").find("max_texture_size") != std::string::npos);
+    // M-CONTENT 1b-iv: "textures" picks the storage; bc is accepted, anything else is an argument error
+    CHECK(c.ok("cook_run", R"({"textures":"bc"})").v().get("ok").as_bool());
+    CHECK(c.ok("cook_run", R"({"textures":"rgba8"})").v().get("ok").as_bool());
+    CHECK(c.fails("cook_run", R"({"textures":"astc"})").find("textures") != std::string::npos);
 }
 
 TEST_CASE("mcp tools: cook_run paths and skip_errors") {

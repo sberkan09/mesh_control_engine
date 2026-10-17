@@ -668,6 +668,14 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 }
 #endif
 
+// A material map at the surface's uv. Where parallax moved it, the uv steps from march layer to march layer, so
+// its own screen derivatives (what texture() takes) are noise and differ by driver (coarse or fine dFdx): the
+// maps there take the mesh uv's gradients. Elsewhere (no parallax, or faded out) texture() as ever; both are
+// read so the implicit-derivative one stays in uniform control flow.
+vec2 g_uv_dx, g_uv_dy;
+bool g_pom_moved = false;
+#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), textureGrad(s, vec3(at, 0.0), g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
+
 #ifndef MCE_TERRAIN
 // Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
 // view ray is marched through o_pom.y..z layers of the height field in the surface's uv frame, then the last
@@ -712,6 +720,7 @@ vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
     }
     float after = tex_d - cur_d, before = prev_tex_d - prev_d;
     float w = (after - before) != 0.0 ? clamp(after / (after - before), 0.0, 1.0) : 0.0;
+    g_pom_moved = true;
     return mix(cur, prev, w);
 }
 #endif
@@ -720,6 +729,8 @@ void main() {
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
     vec2 uv = v_uv;
+    g_uv_dx = dFdx(v_uv);
+    g_uv_dy = dFdy(v_uv);
 #ifdef MCE_TERRAIN
     vec4 base = vec4(1.0);
     vec3 t_n;
@@ -728,7 +739,7 @@ void main() {
     base *= o_base_color;
 #else
     if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
-    vec4 base = texture(u_albedo, vec3(uv, 0.0)) * o_base_color;
+    vec4 base = MCE_MAP(u_albedo, uv) * o_base_color;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
 #endif
     vec3 color;
@@ -746,7 +757,7 @@ void main() {
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
 #endif
         if (o_maps.y > 0.5) {
-            vec3 orm = texture(u_orm, vec3(uv, 0.0)).rgb;
+            vec3 orm = MCE_MAP(u_orm, uv).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
             if (o_maps.w < 0.5) {
                 rough *= orm.g;
@@ -759,7 +770,7 @@ void main() {
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
-            vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(texture(u_normal_map, vec3(uv, 0.0))));
+            vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(MCE_MAP(u_normal_map, uv)));
             n = normalize(mix(nb, n, fill));
         }
 #endif
@@ -887,7 +898,7 @@ void main() {
         }
     }
     vec3 emissive = o_emissive.rgb;
-    if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(uv, 0.0)).rgb;
+    if (o_emissive.w > 0.5) emissive *= MCE_MAP(u_emissive, uv).rgb;
     color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -1533,7 +1544,11 @@ void main() {
         // is added to the encoded value so GL and SDL GPU agree.
         vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(clamp(c, 0.0, 1.0));
         float dl = dot(d, vec3(0.299, 0.587, 0.114));
-        float n = grain_hash(floor(v_uv * u_viewport.xy / max(f_lens.w, 1.0)), f_lens2.w) - 0.5;
+        // The cell in integers, half-pixel cell sizes: with floats, (x + 0.5) / 1.5 lands on a cell edge every third
+        // pixel and the driver's rounding picked the cell (rows and columns of grain differed between GPUs).
+        uvec2 px = uvec2(v_uv * u_viewport.xy);
+        uint half_cells = uint(max(f_lens.w, 1.0) * 2.0 + 0.5);
+        float n = grain_hash(vec2((px * 2u + 1u) / half_cells), f_lens2.w) - 0.5;
         d += n * f_lens.z * 0.3 * (4.0 * dl * (1.0 - dl));
         c = u_params.y > 0.5 ? d : srgb_to_linear(clamp(d, 0.0, 1.0));
     }

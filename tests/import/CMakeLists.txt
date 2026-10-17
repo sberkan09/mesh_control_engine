@@ -20,3 +20,7 @@ add_test(NAME cli_stale_pack
 # M-CONTENT 1a: `mce cook` / `mce ship` --max-texture-size reaches mce_cook.
 add_test(NAME cli_max_texture_size
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_max_texture_size.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_max_texture_size")
+
+# M-CONTENT 1b-iv: `mce cook` / `mce ship` --textures reaches mce_cook; web + bc exits; ship.py refuses bc on phones and the web.
+add_test(NAME cli_textures
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_textures.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_textures")
