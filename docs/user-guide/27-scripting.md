@@ -64,8 +64,8 @@ numbers, and `nil` is the null entity.
 | `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |
 
-One call may mix components: `mce.get(e, "Counter", "n", "Mover", "velocity")` returns both values and
-`mce.set(e, "Counter", "n", 1, "Mover", "velocity", v)` writes both. A script cannot keep a variable between
+One call may mix components: `mce.get(e, "LocalTransform", "position", "ScriptVars", "v")` returns both values and
+`mce.set(e, "LocalTransform", "position", p, "ScriptVars", "v", t)` writes both. A script cannot keep a variable between
 ticks; the place for a value that must survive is a component field, and for a game with no C++ of its own
 that is `ScriptVars` (27.8).
 
