@@ -11,7 +11,9 @@
 // The rule that keeps determinism, saves and replays intact: scripts hold no state between ticks.
 // Everything a script remembers lives in reflected components it reads and writes through the
 // `mce` table, so World::state_hash covers it. Globals are read-only after the top level ran
-// (writes fail); state in upvalues is not caught yet (ADR-0041, open question 2).
+// (writes fail). With ScriptBudget::check_state, every table reachable from update() and the
+// script's globals is frozen too, and the upvalues and buffers it reaches are compared after each
+// update(): a change fails the script (M-SCRIPT3 step 2).
 //
 // The script API (global `mce`, read-only; docs/user-guide/27-scripting.md has the full table):
 //   fields     mce.field("Comp", "field") -> an opaque handle, resolved once (call it at the top
@@ -36,9 +38,9 @@
 //              mce.overlap_point2d, mce.raycast_all2d, mce.circle_cast2d / box_cast2d,
 //              mce.find_path(from, to, options?) -> array of vectors or nil (a grid over the static colliders),
 //              mce.save / load / has_save, mce.(set_)time_scale, mce.shake, mce.burst,
-//              mce.overlap_sphere3d / overlap_box3d / sphere_cast3d, mce.(set_)velocity3d, mce.(set_)angular_velocity3d,
-//              mce.impulse3d, mce.teleport3d(e, position, rotation?), mce.(set_)rotation3d, mce.look_rotation3d (Euler
-//              degrees), mce.find_path3d (the baked navmesh).
+//              mce.overlap_sphere3d / overlap_box3d / sphere_cast3d, mce.(set_)velocity3d,
+//              mce.(set_)angular_velocity3d, mce.impulse3d, mce.teleport3d(e, position, rotation?),
+//              mce.(set_)rotation3d, mce.look_rotation3d (Euler degrees), mce.find_path3d (the baked navmesh).
 //
 // Sandbox: base, table, string, math, utf8, bit32, buffer and vector libraries only (no os, io,
 // debug, coroutine, print, collectgarbage, getfenv/setfenv, math.random); every script gets a
@@ -62,6 +64,7 @@ struct HostAccess;
 struct ScriptBudget {
     u32 steps_per_tick = 200000;               // per script and tick; exceeding it disables the script
     usize memory_bytes = 32u * 1024u * 1024u;  // the whole VM
+    bool check_state = true;                   // freeze what update() reaches; fail a script whose upvalues change
 };
 
 enum class ScriptState : u8 { Running, Failed };
@@ -107,6 +110,8 @@ private:
     static void interrupt_fn(lua_State* L, int gc);
     void fail(u32 index, const char* message);
     void run_scripts(Frame& f, bool all, u8 group);
+    bool watch_state(u32 index);      // after the top level: freeze and record the watch list
+    bool state_unchanged(u32 index);  // after update(): compare the watch list (fails the script)
     static void crash_context(void* user, void (*put)(void* sink, const char* text), void* sink);
 
     lua_State* L_ = nullptr;
@@ -116,6 +121,24 @@ private:
     Array<ScriptInfo> infos_;
     Array<int> update_refs_;  // lua_ref of each script's update function
     Array<u8> groups_;
+    // The state check's watch list: an upvalue slot or a buffer reachable from a script, with its
+    // value after the top level (script.cpp, watch_state). Script i owns watches_[watch_first_[i]..
+    // watch_first_[i + 1]) (the last one runs to the end).
+    struct StateWatch {
+        int holder_ref = -1;     // lua_ref of the function (upvalue) or the buffer
+        int base_ref = -1;       // lua_ref of the upvalue's value, unless a number or vector (bits)
+        u64 bits[2] = {};        // number / vector bits; a buffer's offset and size in watch_bytes_
+        u32 root = 0;            // index into watch_roots_: where the walk found it
+        i32 line = 0;            // line the holding function is defined at
+        u16 slot = 0;            // upvalue index (1-based); 0 for a buffer
+        u8 type = 0;             // lua type of the baseline value
+        bool of_update = false;  // an upvalue of update() itself
+        bool of_c = false;       // an upvalue of a C closure (string.gmatch's iterator)
+    };
+    Array<StateWatch> watches_;
+    Array<u32> watch_first_;
+    Array<u8> watch_bytes_;               // buffer baselines
+    Array<FixedString<64>> watch_roots_;  // "global 'STATE'", "upvalue #2 of update()"
     asset::AssetSystem* assets_ = nullptr;
     // mce.field handles: index + 1 is the handle a script holds.
     struct FieldHandle {
