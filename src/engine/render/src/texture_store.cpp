@@ -13,14 +13,6 @@ void remove_ordered(Array<T>& a, usize i) {
     a.pop_back();
 }
 
-usize level_bytes(rhi::TextureFormat f, u32 w, u32 h) {
-    if (rhi::is_compressed_format(f)) {
-        const usize block = f == rhi::TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
-    }
-    return usize(w) * h * rhi::bytes_per_pixel(f);
-}
-
 }  // namespace
 
 Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const TextureUpload& up) {
@@ -39,7 +31,7 @@ Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const Textu
         const TextureMipUpload& mip = up.mips[m];
         if (mip.width != ew || mip.height != eh)
             return Error(Errc::InvalidArgument, "render.texture.mip_extent", name, static_cast<u32>(m));
-        if (mip.pixels.size() < level_bytes(up.format, ew, eh) * up.layers)
+        if (mip.pixels.size() < rhi::level_bytes(up.format, ew, eh) * up.layers)
             return Error(Errc::Truncated, "render.texture.mip_bytes", name, static_cast<u32>(m));
     }
 
@@ -53,7 +45,7 @@ Result<rhi::TextureHandle> create_texture(rhi::RenderDevice& device, const Textu
     const rhi::TextureHandle tex = device.create_texture(desc, up.mips[0].pixels);
     for (usize m = 1; m < up.mips.size(); ++m) {
         const TextureMipUpload& mip = up.mips[m];
-        const usize layer_bytes = level_bytes(up.format, mip.width, mip.height);
+        const usize layer_bytes = rhi::level_bytes(up.format, mip.width, mip.height);
         for (u32 l = 0; l < up.layers; ++l) {
             rhi::TextureRegion r;
             r.mip = static_cast<u32>(m);
