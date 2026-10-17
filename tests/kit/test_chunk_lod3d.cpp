@@ -11,7 +11,6 @@
 #include "mesh_fixture.h"
 
 using namespace mce;
-using math::vec3;
 
 namespace {
 
