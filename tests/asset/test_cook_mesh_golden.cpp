@@ -386,6 +386,7 @@ const Golden kGolden[] = {
     {"samples/07_gameplay3d/models/grunt.glb", 0x3ddbd5cb30dea27eull},
     {"samples/07_gameplay3d/models/platform.glb", 0x9f74288193d02af7ull},
     {"samples/07_gameplay3d/models/wall.glb", 0xe2306426c5ca4c54ull},
+    {"samples/09_openworld/models/box.glb", 0xf9aa709a08c4fe96ull},
     {"samples/cinema_demo/models/crate.glb", 0x75071bac877d3561ull},
     {"samples/cinema_demo/models/floor.glb", 0xc1a71f9c9bc7ef7eull},
     {"samples/cinema_demo/models/hero.glb", 0x4af44d6ba68f71b7ull},
