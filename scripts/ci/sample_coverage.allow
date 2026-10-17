@@ -22,3 +22,4 @@ Police3D | M-OPENWORLD C3: tested in tests/kit/test_wanted3d.cpp; the 1 km2 slic
 FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it
 Mission | M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it
 Objective | M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it
+MapMarker | M-MISSION 2: tested in tests/kit/test_map_markers.cpp; the three-mission demo (step 4) shows it
