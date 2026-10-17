@@ -133,6 +133,7 @@
 #include "mce/scene/scene.h"
 #include "mce/scene/streaming.h"
 #include "mce/ui/access.h"
+#include "mce/ui/document_data.h"
 #include "mce/ui/subtitles.h"
 #include "mce/ui/ui.h"
 #include "ship_paths.h"
@@ -250,6 +251,10 @@ MCE_CVAR(cv_ui_reference_height, "ui.reference_height", 0.0f,
          "UI authored for a window this tall (720): the UI grows with the window's short side over it, so it is not tiny "
          "at 1080p (0 = off, the UI scale follows the display only)",
          CVarFlags::Saved);
+MCE_CVAR(cv_ui_overlay_theme, "ui.overlay_theme", "",
+         "GUID of a .mcuitheme whose Body font (else Title font) draws the subtitles, sound captions and the cutscene "
+         "skip prompt; empty or a theme that does not load: the built-in pixel font",
+         CVarFlags::None);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
@@ -1744,7 +1749,38 @@ private:
         }
     }
 
+    // ui.overlay_theme: the font of the text that belongs to no UI document (subtitles, the skip prompt).
+    void load_overlay_font() {
+        overlay_font_ = nullptr;
+        if (!device_) return;
+        subtitles_.set_skin(skin_.skin);
+        const StringView want = cv_ui_overlay_theme.get_string();
+        if (want.empty()) return;
+        const Result<asset::Guid> g = asset::parse_guid(want);
+        const Result<asset::AssetHandle<asset::UiTheme>> th = g ? assets_.load_sync<asset::UiTheme>(g.value())
+                                                                : Result<asset::AssetHandle<asset::UiTheme>>(g.error());
+        ui::ThemeData theme;
+        bool decoded = false;
+        if (th) {
+            decoded = static_cast<bool>(ui::decode_ui_theme(assets_.resolve(th.value()), theme));
+            assets_.release(asset::AnyHandle(th.value()));
+        }
+        const asset::Guid font = decoded ? theme.overlay_font() : asset::Guid{};
+        const render::Font* f = font.is_null() ? nullptr : extract_.font(font);
+        if (!f) {
+            MCE_LOG_WARN("player: ui.overlay_theme {}: {}; the subtitles and the skip prompt use the built-in font", want,
+                         decoded ? "its Body and Title fonts are not set or do not load" : "it is not a theme that loads");
+            return;
+        }
+        overlay_font_ = f;
+        ui::Skin look = skin_.skin;
+        look.font = f;
+        subtitles_.set_skin(look);
+    }
+    const render::Font* overlay_font_ = nullptr;
+
     Result<void> load_ui_screens() {
+        load_overlay_font();
         const ui::Skin* skin = device_ ? &skin_.skin : nullptr;
         kit::SpriteExtract* extract = device_ ? &extract_ : nullptr;
         if (const StringView preview = cv_ui_preview.get_string(); !preview.empty()) {
@@ -1877,7 +1913,8 @@ private:
         render::TextLayout layout(mem::frame());
         render::TextLayoutDesc desc;
         desc.size_px = 14.0f * scale;
-        render::layout_text(skin_.font.face, c->skip_prompt.view(), desc, layout);
+        const render::Font& prompt_font = overlay_font_ ? *overlay_font_ : skin_.font;
+        render::layout_text(prompt_font.face, c->skip_prompt.view(), desc, layout);
         const f32 track = 64.0f * scale, thick = 3.0f * scale;
         const f32 right = w - margin - static_cast<f32>(safe_insets_.right);
         const f32 top = margin + static_cast<f32>(safe_insets_.top);
@@ -1886,7 +1923,7 @@ private:
         p.sort_layer = kLayer;
         p.sort_order = 2;
         p.tint = Color{1.0f, 1.0f, 1.0f, 0.8f};
-        hud.add_text(skin_.font, layout, p);
+        hud.add_text(prompt_font, layout, p);
         const f32 y = top + 0.5f * layout.height;
         for (u32 i = 0; i < 2; ++i) {  // the track, then the fill
             const f32 len = i == 0 ? track : track * cutscene_.skip_progress;

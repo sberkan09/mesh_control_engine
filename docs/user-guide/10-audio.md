@@ -251,6 +251,11 @@ The player chooses what shows (all `Saved`, on the stock options screen's Audio 
 | `access.subtitle_size` | 1 | text size (0.5..3), on top of `ui_scale` and `access.text_scale` |
 | `access.subtitle_background` | 0.6 | the box's opacity; 0 draws outlined text with no box |
 
+Subtitles, captions and the cutscene skip prompt are drawn with the engine's pixel font unless the
+project names a theme: set `ui.overlay_theme` to the GUID of a `.mcuitheme` (12) and its Body font (else its
+Title font) is used for them. A theme with no font, or one that does not load, is logged and the pixel font
+stays. Only the font changes; sizes and colors still follow the `access.*` convars.
+
 The default NPC dialogue box (21) follows `access.subtitle_speaker` and scales its box opacity by
 `access.subtitle_background`. Captions are presentation only: the lines live in a resource, never
 in a component, so a run hashes the same with them on or off. A host with its own UI reads the
