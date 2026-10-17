@@ -381,7 +381,7 @@ TEST_CASE("bc gl: a BC4 height composed into a BC5 normal array samples as (h, 0
     const asset::TextureView vn = asset::TextureView::read(normal.span()).value(), vh = asset::TextureView::read(height.span()).value();
     const asset::TextureView* layers[2] = {&vn, &vh};
     LayerArray arr;
-    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(layers, 2), arr, "test.parallax"));
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(layers, 2), arr, "test.parallax", true));
     REQUIRE(arr.present == 0b11u);
     auto tex = create_texture(*g.device, arr.upload);
     REQUIRE(tex.has_value());

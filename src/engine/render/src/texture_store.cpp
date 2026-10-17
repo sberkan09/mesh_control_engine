@@ -1,6 +1,7 @@
 #include "mce/render/texture_store.h"
 
 #include <atomic>
+#include <cstring>
 
 #include "mce/log.h"
 #include "mce/math/math.h"
@@ -135,8 +136,12 @@ Result<rhi::TextureHandle> TextureStore::upload(u32 key, u32 generation, const T
     if (!device_) return Error(Errc::InvalidArgument, "render.texture.upload", "store not initialized");
     auto tex = create_texture(*device_, up);
     if (!tex) {
-        MCE_LOG_WARN("render: texture upload failed for key {} ({} at {})", key, errc_name(tex.error().code),
-                     tex.error().stage);
+        // The unsupported-format refusal was already logged once by create_texture; no per-texture line for it.
+        const bool refusal = tex.error().code == Errc::Unsupported && tex.error().stage &&
+                             std::strcmp(tex.error().stage, "render.texture.format") == 0;
+        if (!refusal)
+            MCE_LOG_WARN("render: texture upload failed for key {} ({} at {})", key, errc_name(tex.error().code),
+                         tex.error().stage);
         return tex.error();
     }
     // Re-uploading a generation that is still live replaces it.

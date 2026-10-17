@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "mce/asset/formats.h"
+#include "mce/log.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/terrain.h"
 #include "mce/render/texture_store.h"
@@ -187,7 +188,7 @@ TEST_CASE("bc runtime: compose_layer_array widens a BC4 height into a BC5 normal
 
     const asset::TextureView* both[2] = {&vn, &vh};
     LayerArray arr;
-    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(both, 2), arr));
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(both, 2), arr, "t", true));
     CHECK(arr.present == 0b11u);
     CHECK(arr.upload.format == RF::BC5_UNorm);
     REQUIRE(arr.upload.mips.size() == 2);
@@ -204,7 +205,7 @@ TEST_CASE("bc runtime: compose_layer_array widens a BC4 height into a BC5 normal
 
     // The BC4 layer may come first: the array is still BC5.
     const asset::TextureView* swapped[2] = {&vh, &vn};
-    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(swapped, 2), arr));
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(swapped, 2), arr, "t", true));
     CHECK(arr.present == 0b11u);
     CHECK(arr.upload.format == RF::BC5_UNorm);
     CHECK(u8(arr.upload.mips[0].pixels[0]) == 0x55);
@@ -229,4 +230,46 @@ TEST_CASE("bc runtime: compose_layer_array widens a BC4 height into a BC5 normal
     REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(mixed, 2), arr));
     CHECK(arr.present == 0b01u);
     CHECK(arr.upload.format == RF::RGBA8_UNorm);
+}
+
+TEST_CASE("bc runtime: widening is opt-in, and only layers that pass validation make the array BC5") {
+    Array<byte> normal, height, big_normal;
+    bc_blob(AF::BC5, 0, 8, 2, 16, byte{0xA0}, normal);
+    bc_blob(AF::BC4, 0, 8, 2, 8, byte{0x55}, height);
+    bc_blob(AF::BC5, 0, 16, 3, 16, byte{0xB0}, big_normal);  // a different size: fails validation against the first layer
+    const asset::TextureView vn = asset::TextureView::read(normal.span()).value(), vh = asset::TextureView::read(height.span()).value(),
+                             vb = asset::TextureView::read(big_normal.span()).value();
+    LayerArray arr;
+
+    // Default: a BC4 beside a BC5 is the old refusal (the second layer is left out), not a widening.
+    const asset::TextureView* both[2] = {&vn, &vh};
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(both, 2), arr));
+    CHECK(arr.present == 0b01u);
+    CHECK(arr.upload.format == RF::BC5_UNorm);
+    const asset::TextureView* bc4_first[2] = {&vh, &vn};
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(bc4_first, 2), arr));
+    CHECK(arr.present == 0b01u);
+    CHECK(arr.upload.format == RF::BC4_UNorm);
+
+    // Opt-in, but the BC5 layer is a different size than the BC4 first layer: it fails validation, so the array stays BC4.
+    const asset::TextureView* mismatch[2] = {&vh, &vb};
+    REQUIRE(compose_layer_array(Span<const asset::TextureView* const>(mismatch, 2), arr, "t", true));
+    CHECK(arr.present == 0b01u);
+    CHECK(arr.upload.format == RF::BC4_UNorm);
+}
+
+TEST_CASE("bc runtime: the unsupported-format refusal is logged once, with no per-texture upload warning") {
+    StubDevice dev;  // no BC cap
+    TextureStore store;
+    REQUIRE(store.init(dev).has_value());
+    Array<byte> blob;
+    bc_blob(AF::BC7, 0, 8, 1, 16, byte{0}, blob);
+    log::set_level(log::Level::Info);
+    const u64 seq = log::console_last_seq();
+    for (u32 k = 1; k <= 3; ++k) CHECK_FALSE(upload_cooked_texture(store, k, 1, blob.span()).has_value());
+    log::ConsoleLine lines[32];
+    const usize n = log::read_console(seq, Span<log::ConsoleLine>(lines, 32));
+    log::set_level(log::Level::Warn);
+    for (usize i = 0; i < n; ++i)
+        CHECK(StringView(lines[i].text.c_str()).find("texture upload failed") == StringView::npos);
 }

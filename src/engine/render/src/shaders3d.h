@@ -421,7 +421,8 @@ vec3 env_brdf(vec3 f0, float rough, float NoV) {
     return f0 * ab.x + ab.y;
 }
 // Normal-map decode (M-CONTENT 1b). BC5 samples as (x, y, 0, 1): z is rebuilt from x and y. Only a texel with
-// b == 0.0 takes that path; RGBA8 maps (b >= 128 in practice) return t.xyz * 2 - 1 with the same bits as before.
+// b == 0.0 takes that path; RGBA8 maps (b >= 128 in practice) return t.xyz * 2 - 1 with the same bits as before. (That holds for blue > 0; a blue == 0 texel,
+// RGBA8 or BC5, gets its z rebuilt.)
 vec3 unpack_normal(vec4 t) {
     vec3 n = t.xyz * 2.0 - 1.0;
     if (t.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));

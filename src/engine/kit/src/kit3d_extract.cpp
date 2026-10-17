@@ -340,7 +340,7 @@ u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid 
     }
     render::LayerArray arr;
     u32 key = ~0u;
-    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax");
+    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax", true);
     // Layer 1 (the height) must have made it in; a normal map that did not match leaves layer 0 flat instead.
     if (composed && (arr.present & 2u)) {
         key = textures_->allocate_key();

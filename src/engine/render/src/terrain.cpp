@@ -345,17 +345,28 @@ void TerrainLod::build_mesh(u32 index, f32 uv_tile, Array<byte>& out) const {
     asset::write_mesh(d, out);
 }
 
-bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name) {
+bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArray& out, const char* debug_name, bool widen_bc4) {
     out.present = 0;
     out.pixels.clear();
     out.mips.clear();
     const asset::TextureView* ref = nullptr;
     auto srgb = [](const asset::TextureView& v) { return (v.header->flags & asset::TextureFlags::Srgb) != 0; };
-    // M-CONTENT 1b: a BC4 layer (grey height) beside a BC5 layer (normal) joins the array as BC5 blocks [bc4 block, 8 zero
-    // bytes], so G = 0 and the parallax march still reads .r. Lossless; every other format mix stays refused.
+    // M-CONTENT 1b: with widen_bc4, a BC4 layer (grey height) beside a BC5 layer (normal) joins the array as BC5 blocks
+    // [bc4 block, 8 zero bytes], so G = 0 and the parallax march still reads .r. Lossless; opt-in, since a BC4 albedo
+    // or ORM layer beside a BC5 one would be wrong data. Every other format mix stays refused. Only layers that pass
+    // validation (a size and mip count matching the first usable layer) decide whether the array is BC5.
     bool has_bc5 = false;
-    for (const asset::TextureView* v : layers)
-        if (v && v->header && !v->mips.empty() && v->header->format == asset::TextureFormat::BC5) has_bc5 = true;
+    if (widen_bc4) {
+        const asset::TextureView* first = nullptr;
+        for (const asset::TextureView* v : layers) {
+            if (!v || !v->header || v->mips.empty()) continue;
+            if (!first) first = v;
+            if (v->header->format == asset::TextureFormat::BC5 && v->header->width == first->header->width &&
+                v->header->height == first->header->height && v->mips.size() == first->mips.size() &&
+                srgb(*v) == srgb(*first))
+                has_bc5 = true;
+        }
+    }
     auto array_format = [&](const asset::TextureView& v) {
         return has_bc5 && v.header->format == asset::TextureFormat::BC4 ? asset::TextureFormat::BC5 : v.header->format;
     };
