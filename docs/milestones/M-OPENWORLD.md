@@ -70,11 +70,15 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
 | B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
 | B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
-| B3 crowds | planned (own thread once B1 lands) | | uses `RoadRoad::sidewalk` beside each kerb |
+| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0048](../adr/0048-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:
 - Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
 - Junction radii come from widths and angles; very acute junctions may need a hand-set `radius`.
+- B3: pedestrians do not avoid each other or react to the player; unsignalled crossings never wait, so B2 traffic must yield
+  to a walker on a crossing (it needs a crowd query: a cheap "who is crossing near here" lookup is the next seam). Heights
+  follow the network's plane only. The prefab spawn path is exercised by the same code as co-op's player prefab but has no
+  test of its own yet. Linear: not updated (connector unreachable this session); recorded here.
 - The nearest-lane grid is rebuilt on every hot reload of a network; fine for a city, slow for a country.
 
 ## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)
