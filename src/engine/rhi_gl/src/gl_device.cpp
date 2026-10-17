@@ -225,8 +225,11 @@ ResultV GlDevice::init() {
     }
     glGetIntegerv(GL_MAX_IMAGE_UNITS, &v);
     caps_.max_storage_image_units = static_cast<u32>(v);
-    // BC4/BC5/BC7 are core in GL 4.5; BC1 comes with S3TC, which every desktop driver exposes.
-    caps_.texture_bc = has_gl_extension("GL_EXT_texture_compression_s3tc");
+    // BC4/BC5/BC7 are core in GL 4.5; BC1 comes with S3TC, which every desktop driver exposes. BC1_SRGB needs the sRGB
+    // flavour of S3TC (GL_EXT_texture_sRGB, or GL_EXT_texture_compression_s3tc_srgb), so a cooked sRGB BC1 pack is
+    // not claimed on a driver that lacks both.
+    caps_.texture_bc = has_gl_extension("GL_EXT_texture_compression_s3tc") &&
+                       (has_gl_extension("GL_EXT_texture_sRGB") || has_gl_extension("GL_EXT_texture_compression_s3tc_srgb"));
     caps_.texture_astc = has_gl_extension("GL_KHR_texture_compression_astc_ldr");
     MCE_LOG_INFO("rhi.gl: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 

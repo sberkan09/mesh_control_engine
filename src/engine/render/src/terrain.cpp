@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "mce/log.h"
+#include "mce/render/asset_upload.h"
 
 namespace mce::render {
 
@@ -350,12 +351,22 @@ bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArra
     out.mips.clear();
     const asset::TextureView* ref = nullptr;
     auto srgb = [](const asset::TextureView& v) { return (v.header->flags & asset::TextureFlags::Srgb) != 0; };
+    // M-CONTENT 1b: a BC4 layer (grey height) beside a BC5 layer (normal) joins the array as BC5 blocks [bc4 block, 8 zero
+    // bytes], so G = 0 and the parallax march still reads .r. Lossless; every other format mix stays refused.
+    bool has_bc5 = false;
+    for (const asset::TextureView* v : layers)
+        if (v && v->header && !v->mips.empty() && v->header->format == asset::TextureFormat::BC5) has_bc5 = true;
+    auto array_format = [&](const asset::TextureView& v) {
+        return has_bc5 && v.header->format == asset::TextureFormat::BC4 ? asset::TextureFormat::BC5 : v.header->format;
+    };
+    auto expands = [&](const asset::TextureView& v) { return array_format(v) != v.header->format; };
     for (u32 i = 0; i < static_cast<u32>(layers.size()); ++i) {
         const asset::TextureView* v = layers[i];
         if (!v || !v->header || v->mips.empty()) continue;
         if (!ref) ref = v;
         const asset::TextureHeader &a = *ref->header, &b = *v->header;
-        if (b.format != a.format || srgb(*v) != srgb(*ref) || b.width != a.width || b.height != a.height || v->mips.size() != ref->mips.size()) {
+        if (array_format(*v) != array_format(*ref) || srgb(*v) != srgb(*ref) || b.width != a.width || b.height != a.height ||
+            v->mips.size() != ref->mips.size()) {
             MCE_LOG_WARN("{}: layer {} texture is {}x{} with {} mips, layer textures must match the first ({}x{}, {} mips, same format)",
                          debug_name, i, b.width, b.height, v->mips.size(), a.width, a.height, ref->mips.size());
             continue;
@@ -363,28 +374,34 @@ bool compose_layer_array(Span<const asset::TextureView* const> layers, LayerArra
         out.present |= 1u << i;
     }
     if (!ref) return false;
+    const asset::TextureFormat fmt = array_format(*ref);
     const u32 count = static_cast<u32>(layers.size());
+    // The array's own per-layer size (a BC4-led array that took a BC5 layer is sized as BC5).
+    auto layer_bytes = [&](u32 m) {
+        return static_cast<usize>(asset::texture_level_bytes(fmt, ref->mips[m].width, ref->mips[m].height));
+    };
     usize total = 0;
-    for (const asset::TextureMip& m : ref->mips) total += static_cast<usize>(m.layer_size) * count;
+    for (u32 m = 0; m < ref->mips.size(); ++m) total += layer_bytes(m) * count;
     out.pixels.resize(total, byte{0});
     usize at = 0;
     for (u32 m = 0; m < ref->mips.size(); ++m) {
-        const usize layer_size = static_cast<usize>(ref->mips[m].layer_size);
+        const usize layer_size = layer_bytes(m);
         for (u32 i = 0; i < count; ++i) {
             if (!(out.present & (1u << i))) continue;
             const Span<const byte> src = layers[i]->pixels(m, 0);
-            if (src.size() >= layer_size) std::memcpy(out.pixels.data() + at + usize(i) * layer_size, src.data(), layer_size);
+            byte* dst = out.pixels.data() + at + usize(i) * layer_size;
+            if (expands(*layers[i])) {
+                const usize blocks = layer_size / 16;
+                if (src.size() >= blocks * 8)
+                    for (usize k = 0; k < blocks; ++k) std::memcpy(dst + k * 16, src.data() + k * 8, 8);  // the other 8 bytes stay zero
+            } else if (src.size() >= layer_size) {
+                std::memcpy(dst, src.data(), layer_size);
+            }
         }
         out.mips.push_back(TextureMipUpload{ref->mips[m].width, ref->mips[m].height, Span<const byte>(out.pixels.data() + at, layer_size * count)});
         at += layer_size * count;
     }
-    const bool is_srgb = srgb(*ref);
-    if (ref->header->format == asset::TextureFormat::ASTC_4x4)
-        out.upload.format = is_srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
-    else if (ref->header->format == asset::TextureFormat::RGBA16F)
-        out.upload.format = rhi::TextureFormat::RGBA16F;
-    else
-        out.upload.format = is_srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
+    out.upload.format = rhi_format_for(fmt, srgb(*ref));
     out.upload.layers = count;
     out.upload.array = true;
     out.upload.mips = out.mips.span();
