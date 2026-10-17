@@ -18,6 +18,9 @@ StringView dump_dir() { return {}; }
 FixedString<512> user_data_root() { return FixedString<512>("/persistent"); }
 FixedString<512> default_dump_dir(StringView) { return {}; }
 void trigger_test_crash() { std::abort(); }
+// No crash report is written in a browser, so there is nothing for a context writer to add to.
+bool add_context(ContextFn, void*) { return false; }
+void remove_context(void*) {}
 }  // namespace mce::crash
 #else
 
