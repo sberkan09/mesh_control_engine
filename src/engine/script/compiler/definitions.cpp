@@ -47,6 +47,7 @@ declare mce: {
 
     has: (e: Entity, component: string) -> boolean,
     alive: (e: Entity) -> boolean,
+    find: (name: string) -> Entity?,
     spawn: (components: Fields) -> Entity,
     add: (e: Entity, component: string, fields: Fields?) -> (),
     remove: (e: Entity, component: string) -> (),
