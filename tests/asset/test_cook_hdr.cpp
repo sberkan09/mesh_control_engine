@@ -247,9 +247,13 @@ TEST_CASE("cook hdr: bad settings are refused with a message that says what to c
         CHECK_FALSE(c.ok);
     }
     {
-        Cooked c;  // the 8-bit keys do not exist on a PNG: max_size is HDR-only
+        Cooked c;  // since M-CONTENT 1a a PNG takes max_size too (an ordinary texture, no limit by default): it cooks
         cook_hdr(c, "cook_png_max_size", ".png", make_gradient_png(4, 4), "{ \"max_size\": 2 }");
-        CHECK_FALSE(c.ok);
+        CHECK(c.ok);
+        if (c.ok) {
+            CHECK(c.view.header->width == 2);
+            c.as.release(AnyHandle(c.handle));
+        }
     }
 }
 

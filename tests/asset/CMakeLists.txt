@@ -29,6 +29,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_store.cpp
         test_cook_config.cpp
         test_cook_terrain.cpp
+        test_cook_texture_cap.cpp
         test_cook_video.cpp
         test_cook_vorbis.cpp
         test_cook_sound.cpp

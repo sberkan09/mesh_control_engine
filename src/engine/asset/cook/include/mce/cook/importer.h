@@ -75,6 +75,9 @@ struct ImportInput {
                                // native: the parsed document root
     const IAssetLookup* lookup = nullptr;
     TextureCompression texture_compression = TextureCompression::None;
+    // Project-wide cap on an ordinary (PNG/JPG) texture's largest side, a power of two (CookOptions::max_texture_size;
+    // 0 = none). The texture importer applies min(this, the sidecar's "max_size").
+    u32 max_texture_size = 0;
 };
 
 class IImporter {

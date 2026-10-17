@@ -16,3 +16,7 @@ endif()
 # SBA-182: `mce play` / `mce headless` warn about a pack older than the sources.
 add_test(NAME cli_stale_pack
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_stale_pack.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_stale_pack")
+
+# M-CONTENT 1a: `mce cook` / `mce ship` --max-texture-size reaches mce_cook.
+add_test(NAME cli_max_texture_size
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_max_texture_size.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_max_texture_size")
