@@ -25,6 +25,16 @@ using namespace mce::math;
 
 namespace {
 
+// Grows a per-entity array to `n`, by at least half its capacity: resizing to e.index + 1 for each new entity copied
+// the whole array every time (24k entities arriving at once: seconds).
+template <class T>
+void grow_to(Array<T>& a, usize n, const T& fill = T{}) {
+    const usize c = a.capacity() + a.capacity() / 2;
+    if (n > a.capacity()) a.reserve(n > c ? n : c);
+    a.resize(n, fill);
+}
+
+
 // Foliage tint variation and wind shaping on a batch (M-VISUAL3 6): the fields as the renderer reads them.
 template <class F>
 void foliage_look(const F& f, render::InstanceBatch& b) {
@@ -606,7 +616,7 @@ void Kit3DExtract::extract_terrains(World& world, render::Scene3D& scene) {
 // ---- interpolation ----------------------------------------------------------------------------
 
 void Kit3DExtract::track(Entity e, const vec3& pos, const quat& rot, const vec3& scale, u64 tick) {
-    if (e.index >= tracked_.size()) tracked_.resize(e.index + 1);
+    if (e.index >= tracked_.size()) grow_to(tracked_, e.index + 1);
     Tracked& t = tracked_[e.index];
     if (t.generation != e.generation || t.tick == ~u64(0)) {
         t.generation = e.generation;
@@ -984,11 +994,11 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         render::MeshInstance inst;
         inst.mesh = key;
         inst.world = trs(pos, rot, scale);
-        if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) lod_states_.resize(e.index + 1, 0);
+        if (mesh->lod_levels > 1 && lod_states_.size() <= e.index) grow_to(lod_states_, e.index + 1, u8(0));
         if (world_stamp_.size() <= e.index) {
-            world_stamp_.resize(e.index + 1, ~0u);  // never drawn: ~0u + 1 matches no stamp
-            prev_ok_.resize(e.index + 1, 0);
-            for (Array<mat4>& w : worlds_) w.resize(e.index + 1, mat4::identity());
+            grow_to(world_stamp_, e.index + 1, ~0u);  // never drawn: ~0u + 1 matches no stamp
+            grow_to(prev_ok_, e.index + 1, u8(0));
+            for (Array<mat4>& w : worlds_) grow_to(w, e.index + 1, mat4::identity());
         }
         inst.tint = m.tint;
         inst.emissive_tint = m.emissive_tint;

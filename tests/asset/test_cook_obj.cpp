@@ -756,3 +756,50 @@ TEST_CASE("obj: fuzzed input never crashes") {
     run(std::string(kTri) + "vt 1e300 nan\nvn inf 0 0\nf 1/1/1 2/1/1 3/1/1\n", false);
     run(std::string(kTri) + "f 1 1 1\nf 1 2 2\nf 1 2 3 3 3 3\n", false);  // degenerate faces
 }
+
+// M-IMPORT3D step 4b: the import summary (CookReport::meshes) is read from the cooked file, so a cached run reports the
+// same numbers; only the warnings count belongs to the run that cooked.
+TEST_CASE("cook report: the import summary of a mesh, fresh and cached") {
+    const std::string root = fresh_dir("obj_summary");
+    write_file(root + "/assets/models/m.obj", cube_obj("\n", false, false, "o Cube") + "usemtl ghost\nf 1 2 3\n");
+    write_file(root + "/assets/models/m.obj.mceasset", sidecar(kObjGuid, "obj", "{ \"lod_levels\": 2 }"));
+    write_file(root + "/assets/models/p.obj", std::string(kTri) + "f 1 2 3\n");
+    write_file(root + "/assets/models/p.obj.mceasset", sidecar(kGltfGuid, "obj"));
+    CookService svc;
+    const CookReport first = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(first));
+    REQUIRE(first.ok());
+    REQUIRE(first.meshes.size() == 2);
+    const cook::MeshSummary* m = nullptr;
+    for (const cook::MeshSummary& s : first.meshes)
+        if (s.path.view() == "models/m.obj") m = &s;
+    REQUIRE(m);
+    CHECK(m->triangles == 13);  // 6 quads + the extra triangle
+    CHECK(m->submeshes == 2);   // the default material and 'ghost'
+    CHECK(m->materials >= 1);
+    CHECK(m->joints == 0);
+    CHECK(m->clips == 0);
+    CHECK(m->lod_levels >= 1);
+    CHECK(m->warnings >= 1);  // 'ghost' is not defined by any mtllib
+    for (const cook::MeshSummary& s : first.meshes)
+        if (s.path.view() == "models/p.obj") {
+            CHECK(s.triangles == 1);
+            CHECK(s.submeshes == 1);
+            CHECK(s.warnings == 0);
+        }
+    const CookReport again = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(again.ok());
+    CHECK(again.up_to_date == again.assets.size());
+    REQUIRE(again.meshes.size() == first.meshes.size());
+    for (usize i = 0; i < first.meshes.size(); ++i) {
+        const cook::MeshSummary &a = first.meshes[i], &b = again.meshes[i];
+        CHECK(a.path.view() == b.path.view());
+        CHECK(a.triangles == b.triangles);
+        CHECK(a.submeshes == b.submeshes);
+        CHECK(a.materials == b.materials);
+        CHECK(a.joints == b.joints);
+        CHECK(a.clips == b.clips);
+        CHECK(a.lod_levels == b.lod_levels);
+        CHECK(b.warnings == 0);  // cached: the warnings were printed by the cook that made the file
+    }
+}

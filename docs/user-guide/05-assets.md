@@ -164,6 +164,11 @@ the tileset or sheet PNG its sidecar, so no adoption is needed for those. A glTF
 cannot live in its mesh asset: `mce import gltf|fbx` (or `asset_import` with `tool` `gltf` / `fbx`) writes them as a
 `.mcprefab` next to the model and creates the model's sidecar if it has none (section 8.4, "Lights and cameras").
 
+After a cook, `mce_cook` prints one `mesh assets/...: N tris, N submeshes, N materials, N joints, N clips, N LODs` line per
+3D model (and MCP's `cook_run` returns `meshes`), the quickest check that an import came in as expected (section 8.4,
+"The import summary"). `samples/import_demo` carries a small OBJ + MTL, an ASCII FBX and a glTF with a light and a camera
+as examples, all written by its `gen_art.py`.
+
 ### Open-licence content packs (`mce content`)
 
 The engine keeps one list of third-party packs it knows how to bring in: the **ledger**, `content/ledger.json` in the
