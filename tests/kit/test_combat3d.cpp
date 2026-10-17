@@ -19,7 +19,6 @@
 
 using namespace mce;
 using namespace mce::kit;
-using math::vec3;
 
 namespace {
 
