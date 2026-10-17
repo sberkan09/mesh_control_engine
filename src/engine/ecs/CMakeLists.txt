@@ -6,6 +6,7 @@ mce_add_library(mce_ecs
     SOURCES
         src/world.cpp
         src/hierarchy.cpp
+        src/origin.cpp
     PUBLIC_DEPS
         mce::mce_core
         mce::mce_refl)

@@ -1,4 +1,4 @@
-# ADR-0047 — Pedestrian crowds as data on the road network's pavements
+# ADR-0048 — Pedestrian crowds as data on the road network's pavements
 
 **Status:** Accepted (2026-10-17). **Milestone:** M-OPENWORLD track B, step B3. **Builds on:** ADR-0046 (road networks).
 **Reference:** `src/engine/kit/include/mce/kit/crowd.h`, `src/engine/kit/src/crowd.cpp`, `tests/kit/test_crowd.cpp`.

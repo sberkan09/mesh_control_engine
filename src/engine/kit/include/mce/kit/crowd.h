@@ -1,5 +1,5 @@
 #pragma once
-// Pedestrian crowds on a road network's pavements (M-OPENWORLD B3, ADR-0047). A CrowdSpawner3D keeps up
+// Pedestrian crowds on a road network's pavements (M-OPENWORLD B3, ADR-0048). A CrowdSpawner3D keeps up
 // to `max_count` Pedestrian3D walking the sidewalks of a RoadNetwork3D (kit/roads.h) in a ring around a
 // focus (the player, or the camera), and removes the ones that fall behind. kit::install_stock installs it.
 //

@@ -137,6 +137,7 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     a.frames[6].counters.draw_causes[static_cast<u32>(DrawCause::Material)] = 3;
     a.frames[5].counters.merged_groups = 2;  // M-VISUAL3 5b
     a.frames[5].counters.merged_children = 31;
+    a.frames[5].counters.decals_dropped = 4;  // M-VISUAL3 6
     Array<char> text;
     perf::write_mcperf(a, perf::summarize(a), text);
     perf::Capture b;
@@ -148,6 +149,8 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     CHECK(b.frames[5].counters.draws_instanced == 40);
     CHECK(b.frames[5].counters.merged_groups == 2);
     CHECK(b.frames[5].counters.merged_children == 31);
+    CHECK(b.frames[5].counters.decals_dropped == 4);
+    CHECK(perf::summarize(b).counters_max.decals_dropped == 4);
     CHECK(perf::summarize(b).counters_max.draws_instanced == 40);
     CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Material)] == 7);
     CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Budget)] == 2);

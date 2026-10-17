@@ -161,6 +161,21 @@ events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `W
 `VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
 `FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
+`seats3d.h` (M-OPENWORLD C1): `VehicleSeat3D` (on a `Vehicle3D`: `seat`, `exit`, `enter_radius`,
+`max_exit_speed`, `locked`, `driver`) and `Rider3D` (on a character: `use_input` for the Interact action, `enter`,
+`seated`, `vehicle`, `camera`), `VehicleEntered3D` / `VehicleExited3D`. Boarding takes the rider's
+`CharacterController3D` off (the settings are held in a resource and restored on exit), sets
+`Vehicle3D.use_input`, and switches a `VehicleDriver3D` off; `"kit3d_seats"` (`FixedUpdate_Pre`, after
+`"kit3d_vehicles"`) decides, `"kit3d_seat_pose"` (`FixedUpdate_Physics`, after `"kit3d_vehicle_state"`)
+carries the rider. Tests: `tests/kit/test_seats3d.cpp`.
+
+`combat3d.h` (M-OPENWORLD C2): `Health3D`, `Weapon3D` (hitscan rays or projectiles; Fire / Reload actions,
+rate, spread from a component seed, magazine and reload), `Projectile3D` (stepped by the engine as a ray per
+tick with gravity and splash), `apply_damage` for any other source; events `WeaponFired3D`, `WeaponHit3D`,
+`Damage3D`, `Died3D` (producer `FixedUpdate_Pre`). A death sets `Ragdoll3D.active` with the hit's impulse
+(`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
+`"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
+
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
 entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
 paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot
@@ -170,7 +185,7 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
-`crowd.h` (M-OPENWORLD B3, ADR-0047): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
+`crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
 crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
 along, direction, hop target, own random stream), no behaviour tree: edges are the road centreline offset by half the
@@ -268,12 +283,26 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
+  `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
+  static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
+  and root camera rails. Kit fields holding world points (`Locomotion3D::last_position`,
+  `SequencePlayer::anchor`, `CameraFollow3D::pivot` and `last_goal`, `NavAgent3D::target` and
+  `next_corner`, `Perceiver::last_seen` and `heard_at`, `Ragdoll3D::root_position`, `Raycast3D::point`)
+  are flagged `WorldPoint`; `Blackboard` vectors are not. An absolute sequence `MoveTo` is a fixed-world
+  target. `Kit3DExtract` notices a rebase through `WorldOrigin::serial`: it shifts its interpolation
+  history, foliage and merged-mesh caches, re-uploads terrains, starts a camera cut and passes the shift
+  to `Scene3D::set_origin_shift`.
 - The renderer has no particle code; particles are sprite instances in the one sprite batch.
 - Engine container ban applies (`scripts/ci/check_walls.py`).
 
 ## How it is tested
 
 ctest `test_kit` (no GPU), `tests/kit/`:
+
+- `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
+  stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
+  more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
 
 - `test_fsm.cpp`: "fsm: a timed transition fires on its exact tick and resets state time", exit and
   entry order, `StateChanged`, validation, "fsm: state and state time survive a save mid-state".

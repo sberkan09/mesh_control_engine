@@ -606,6 +606,7 @@ private:
     u32 gi_cursor_ = 0;                  // the next probe the rolling update captures
     u32 gi_filled_ = 0;                  // probes the current fill has captured
     u64 gi_key_ = 0;                     // what the volume was filled from; 0 = nothing
+    f64 origin_[3] = {0.0, 0.0, 0.0};    // floating origin: the shifts seen so far (probe and GI keys are absolute)
     bool gi_shadowed_ = false;           // this frame's volume sun fit was rendered
     math::mat4 gi_shadow_vp_ = math::mat4::identity();
     f32 gi_shadow_texel_ = 0.0f;

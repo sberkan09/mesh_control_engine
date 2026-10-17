@@ -928,6 +928,50 @@ TEST_CASE("kit3d: Foliage3D's variation and wind fields reach the batch; mesh_1.
     CHECK(same_matrix(back.batches()[0].transforms[0], first));
 }
 
+TEST_CASE("kit3d: decals past the frame's limit are counted and warned about once per extract (M-VISUAL3 6)") {
+    Fixture f;
+    f.camera();
+    kit::Decal3D decal;
+    decal.size = {0.5f, 1, 0.5f};
+    for (u32 i = 0; i < render::kMaxDecals + 6; ++i) f.world.spawn_with(at({-1.0f + 0.03f * f32(i), 0, -6}), decal);
+    f.step();
+    auto frame = [&] {
+        render::Scene3D scene(f.store, mem::heap());
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+        scene.build();
+        f.extract.note_built(scene);
+        return scene.stats().decals_dropped;
+    };
+    CHECK(frame() == 6);
+    CHECK(f.extract.stats().decals_dropped == 6);
+    CHECK(f.extract.decal_warnings() == 1);
+    CHECK(frame() == 6);  // the next frame drops them again, and says nothing more
+    CHECK(f.extract.decal_warnings() == 1);
+    f.extract.reset(nullptr);  // a new pack re-arms the warning
+    f.extract.bind_mesh(kBox, 1);
+    CHECK(frame() == 6);
+    CHECK(f.extract.decal_warnings() == 1);
+}
+
+TEST_CASE("kit3d: no dropped decals, no warning (M-VISUAL3 6)") {
+    Fixture f;
+    f.camera();
+    f.world.spawn_with(at({0, 0, -6}), kit::Decal3D{});
+    f.step();
+    render::Scene3D scene(f.store, mem::heap());
+    render::Camera3D cam;
+    REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+    scene.begin(cam, {320, 180});
+    f.extract.extract(f.world, scene, 1.0f);
+    scene.build();
+    f.extract.note_built(scene);
+    CHECK(f.extract.stats().decals_dropped == 0);
+    CHECK(f.extract.decal_warnings() == 0);
+}
+
 TEST_CASE("kit3d: Terrain3D draws its LOD nodes, uploads them once and drops them with the entity (M-TERRAIN 1)") {
     const std::string src = cook_test::fresh_dir("kit3d_terrain");
     // A 129-sample, 128 m terrain: a ridge along x (heights from 0 to 32 m) so far nodes coarsen.

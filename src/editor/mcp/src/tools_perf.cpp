@@ -88,7 +88,8 @@ void write_counters(JsonWriter& w, const char* name, const perf::Counters& k) {
     w.key("sprite_batches").num_u(k.sprite_batches).key("upload_bytes").num_u(k.upload_bytes);
     w.key("heap_allocations").num_u(k.heap_allocations);
     w.key("runs_instanced").num_u(k.runs_instanced).key("draws_instanced").num_u(k.draws_instanced);
-    w.key("merged_groups").num_u(k.merged_groups).key("merged_children").num_u(k.merged_children).end_object();
+    w.key("merged_groups").num_u(k.merged_groups).key("merged_children").num_u(k.merged_children);
+    w.key("decals_dropped").num_u(k.decals_dropped).end_object();
 }
 
 // What to try when a limit is over: the next tool or change, in a sentence.

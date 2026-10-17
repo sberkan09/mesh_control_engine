@@ -13,6 +13,7 @@ mce_add_test(test_kit UMBRELLA
         test_ai_budget.cpp
         test_audio_occlusion.cpp
         test_bodies3d.cpp
+        test_origin3d.cpp
         test_coop.cpp
         test_move3d.cpp
         test_captions.cpp
@@ -31,6 +32,8 @@ mce_add_test(test_kit UMBRELLA
         test_roads.cpp
         test_crowd.cpp
         test_vehicles3d.cpp
+        test_seats3d.cpp
+        test_combat3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_procgen.cpp

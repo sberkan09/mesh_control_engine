@@ -1,6 +1,6 @@
 # M-OPENWORLD — Open-world game kit (milestone record)
 
-**Status:** planned, high priority (added 2026-10-17 at Sami's request; no Linear issues yet: check the free limit, otherwise this record is the tracker).
+**Status:** in progress (C1, C2 implemented in the C1-C2 thread, see "Track C progress" below); planned otherwise, high priority (added 2026-10-17 at Sami's request; no Linear issues yet: check the free limit, otherwise this record is the tracker).
 Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md`. Goal: close the gaps between today's engine and a GTA-style small open world (1–2 km², driving, on-foot combat, traffic, pedestrians, police chase, a few missions). A GTA 5 clone project starts after this milestone.
 
 **Why.** Terrain, streaming, vehicles, character, AI, audio and script exist. What is missing is the open-world layer: measured performance at city density, large-world precision, city LOD, road/traffic/pedestrian systems, enter/exit vehicles, weapons and damage, wanted/police, and open-licence content.
@@ -24,7 +24,7 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | in progress: seam (`WorldPoint` field flag) | #495 design, seam PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); next: core rebase, then module listeners |
+| A2 | in progress: seam merged, floating origin (core + module listeners) in review | #495 design, #502 seam, floating-origin PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
 | A3 | design done | | same design |
 | A4 | design done | | same design |
 
@@ -43,6 +43,23 @@ Linear: the SBA workspace is at its free issue limit (save_issue refuses new iss
 4. **D2–D3** (content ledger and cook scripts, retarget) after D1 lands in the M-IMPORT3D thread.
 5. **E1** integration sample last.
 
+
+## Track C progress (C1-C2 thread, 2026-10-17)
+
+| Step | Status | PR | What |
+|---|---|---|---|
+| C1 enter/exit vehicles | implemented, awaiting merge | see the C1-C2 PR | `VehicleSeat3D` + `Rider3D` (`mce/kit/seats3d.h`), Interact or `enter`, `VehicleEntered3D` / `VehicleExited3D`, AI driver hand-off, camera retarget; user guide 9.9 |
+| C2 weapons, health, damage | implemented, awaiting merge | same PR | `Health3D`, `Weapon3D`, `Projectile3D` + `apply_damage` (`mce/kit/combat3d.h`), hitscan and stepped projectiles with splash, teams, armor, regen, stagger, ragdoll on death; user guide 9.12 |
+| C3 wanted + police BT | not started | | needs C2 (`Damage3D` / `Died3D` events, `apply_damage`) and B3 |
+| C4 missions + minimap | moved to its own milestone [M-MISSION](M-MISSION.md) (2026-10-17) | | |
+
+Design notes and open items (C1-C2):
+- Both steps live in new files (`seats3d.*`, `combat3d.*`); `vehicles3d.*` is untouched so the traffic thread (B2) does not conflict.
+- A seated rider's `CharacterController3D` is held in an engine resource, not in the saved scene: a save taken mid-ride restores a default controller on exit. Fix when the save system needs it (store the controller in `Rider3D`).
+- Weapons take the aim from the entity's own transform (camera or eye-height child); there is no recoil, no muzzle-flash or tracer asset yet (the `WeaponFired3D` event carries what an effect needs), and no hit-location damage or per-bone hit reactions (the ragdoll gets one whole-body impulse).
+- Projectiles are stepped rays (no rigid body): a fast projectile cannot tunnel, but it does not push or get pushed by physics bodies beyond the `impulse` on hit. A body hit by a vehicle takes no damage yet (vehicle collision damage is a C-track follow-up: needs a contact event from `World3D`).
+- Linear: the connector failed to connect in this thread (HTTP 404), so no SBA issue was updated; the table above is the tracker until it is back.
+
 ## Track B progress (roads, traffic, crowds)
 
 Design: [ADR-0046](../adr/0046-road-network.md). Guide: [chapter 29](../user-guide/29-roads-and-traffic.md).
@@ -53,7 +70,7 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
 | B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
 | B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
-| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0047](../adr/0047-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
+| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0048](../adr/0048-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:
 - Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").

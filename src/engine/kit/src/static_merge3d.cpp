@@ -72,12 +72,14 @@ struct Kit3DExtract::MergeState {
         f32 radius = 0.0f;
         bool cast = true;
         u8 lod = 0;  // the level drawn last frame (hysteresis)
+        vec3 shift;  // floating-origin shifts since the merge: the mesh draws moved by -shift
         Array<u32> children;  // entity indices of the MeshRefs it replaces
     };
     struct Group {
         Entity entity;
         u64 hash = 0;
         bool built = false;
+        bool rebased = false;  // a rebase moved the children: their next hash is taken as is, no re-merge
         u32 stamp = 0;  // the update that last saw the component
         Array<Cell> cells;
     };
@@ -126,6 +128,17 @@ bool Kit3DExtract::read_mesh_view(asset::Guid guid, asset::MeshView& out) {
         return true;
     }
     return false;
+}
+
+void Kit3DExtract::shift_static_merges(const vec3& delta) {
+    if (!merge_) return;
+    for (auto& g : merge_->groups) {
+        g->rebased = true;
+        for (MergeState::Cell& c : g->cells) {
+            c.center = c.center - delta;
+            c.shift = c.shift + delta;
+        }
+    }
 }
 
 void Kit3DExtract::update_static_merges(World& world) {
@@ -224,6 +237,10 @@ void Kit3DExtract::update_static_merges(World& world) {
 
         // ---- merge, unless the children are the ones merged last time ---------------------------------------------
         const u64 h = hash.h;
+        if (group->rebased) {
+            group->hash = h;
+            group->rebased = false;
+        }
         if (!group->built || group->hash != h) {
             for (const MergeState::Cell& c : group->cells)
                 if (c.key != ~0u) writable_->release(c.key);
@@ -298,6 +315,7 @@ void Kit3DExtract::update_static_merges(World& world) {
             d.key = c.key;
             d.center = c.center;
             d.radius = c.radius;
+            d.shift = c.shift;
             d.cast_shadows = c.cast;
             const render::GpuMesh* mesh = meshes_->get(c.key);
             d.lod_state = mesh && mesh->lod_levels > 1 ? &c.lod : nullptr;

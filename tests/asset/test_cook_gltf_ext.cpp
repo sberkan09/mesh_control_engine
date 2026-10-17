@@ -11,10 +11,10 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -1182,13 +1182,16 @@ TEST_CASE("gltf ext: a morph-bake flood is refused by the work budget before any
         weights += (i ? "," : "") + std::string("1");
     }
     const std::string glb = d.glb(cube_rest(ap, -1, -1, -1, ",\"weights\":[" + weights + "]", "", "", ",\"targets\":[" + targets + "]"));
-    const auto t0 = std::chrono::steady_clock::now();
+    // CPU time, not wall-clock: a loaded CI box stretches the wall time of a 0.6 s refusal past any tight limit, but not the CPU time.
+    // Reading the deltas first would be ~1024 passes over 15M floats (tens of CPU seconds), so the generous limit still catches it.
+    const std::clock_t c0 = std::clock();
     const Cooked res = cook_once(glb);
-    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    const double secs = static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
     INFO(res.text());
+    INFO("cpu seconds: " << secs);
     CHECK(!res.ok);
     CHECK(res.has_error("/meshes/0/primitives/0: baking the default morph weights is over the importer's budget"));
-    CHECK(secs < 1.0);
+    CHECK(secs < 5.0);
 }
 
 TEST_CASE("gltf ext: the morph warning is once per file, not per instance") {

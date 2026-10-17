@@ -5,6 +5,10 @@
 // every golden it meets. The threshold is perceptual, not byte equality: the frame is split into 8x8
 // blocks and every block's mean luminance must stay within 0.5% of full scale of the golden's. A
 // mismatch writes <name>.actual.png and <name>.diff.png (|luma difference| x 8) next to the build.
+// A vendor directory <os>-<backend>-<vendor>/ (vendor "nvidia" today, from the device name) holds the goldens a
+// GPU family renders differently from the software rasterizer the repo goldens come from; a golden there wins
+// over the plain directory's for that vendor. Only goldens measured identical across that vendor's GPUs go there
+// (docs/milestones/M-GPU-VERIFY.md).
 
 #include <doctest/doctest.h>
 
@@ -38,6 +42,13 @@ inline std::string backend_dir() {
     const char* native = "gl";
 #endif
     return std::string(os) + "-" + (platform::gpu_api() == platform::GpuApi::SdlGpu ? "sdlgpu" : native);
+}
+
+// "nvidia" when the device name says so, else empty (no vendor directory).
+inline std::string vendor_of(const char* device_name) {
+    std::string n = device_name ? device_name : "";
+    for (char& ch : n) ch = char(ch >= 'A' && ch <= 'Z' ? ch - 'A' + 'a' : ch);
+    return n.find("nvidia") != std::string::npos ? "nvidia" : "";
 }
 
 inline f64 luma(const u8* p) { return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]; }
@@ -80,9 +91,11 @@ inline Comparison compare(u32 w, u32 h, Span<const u8> a, Span<const u8> b) {
     return c;
 }
 
-// Checks `rgba` (w x h, top row first) against the golden `name`.
-inline void check(const char* name, u32 w, u32 h, Span<const u8> rgba) {
-    const std::string dir = std::string(MCE_GOLDEN_DIR) + "/" + backend_dir();
+// Checks `rgba` (w x h, top row first) against the golden `name`; `device_name` picks a vendor directory.
+inline void check(const char* name, u32 w, u32 h, Span<const u8> rgba, const char* device_name = nullptr) {
+    std::string dir = std::string(MCE_GOLDEN_DIR) + "/" + backend_dir();
+    const std::string vendor = vendor_of(device_name);
+    if (!vendor.empty() && std::filesystem::exists(dir + "-" + vendor + "/" + name + ".png")) dir += "-" + vendor;
     const std::string path = dir + "/" + name + ".png";
     const char* update = std::getenv("MCE_UPDATE_GOLDENS");
     std::ifstream in(path, std::ios::binary);
@@ -100,7 +113,7 @@ inline void check(const char* name, u32 w, u32 h, Span<const u8> rgba) {
     REQUIRE(g.height == h);
     if (g.width != w || g.height != h) return;
     const Comparison c = compare(w, h, rgba, g.rgba.span());
-    INFO(name << ": " << c.failing << " of " << c.blocks << " blocks over 0.5%, worst " << c.worst * 100.0 << "%");
+    INFO(path << ": " << c.failing << " of " << c.blocks << " blocks over 0.5%, worst " << c.worst * 100.0 << "%");
     CHECK(c.failing == 0);
     if (c.failing == 0) return;
     const std::string out = std::string(MCE_GOLDEN_OUT) + "/" + backend_dir() + "/" + name;
