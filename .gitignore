@@ -5,6 +5,7 @@ out/
 bin/
 obj/
 *.obj
+!samples/**/*.obj
 *.pdb
 *.ilk
 *.lib

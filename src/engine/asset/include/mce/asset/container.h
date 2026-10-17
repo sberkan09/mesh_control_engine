@@ -62,6 +62,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     Skeleton2D,      // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1; mce/kit/skeleton2d.h)
     Script,          // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1; mce/script/script.h)
     RoadNetwork,     // CHNK_ROADS: a road network, lanes, junctions and signals (M-OPENWORLD B1; mce/asset/roads_format.h)
+    ConvarDefaults,  // CHNK_CVARS: a project's convar defaults, "name value" lines (M-WORKFLOW 7; console::set_defaults)
 };
 
 const char* chunk_type_name(ChunkType t);

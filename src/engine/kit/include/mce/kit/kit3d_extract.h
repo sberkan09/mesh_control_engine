@@ -71,6 +71,7 @@ struct Kit3DStats {
     u32 merged_children = 0;   // MeshRef children drawn through them instead of on their own
     u32 merged_cells = 0;      // merged meshes submitted (a cell, or a cell and shadow flag), before culling
     u32 merged_rebuilt = 0;    // StaticMerge3D groups merged this frame: on the first frame and after a change only
+    u32 merge_pending = 0;     // cells still waiting for the merge budget (their children draw on their own meanwhile)
     u32 chunk_proxies = 0;     // ChunkLod3D proxies drawn for streamed areas that are not loaded (M-OPENWORLD A4)
     u32 chunk_impostors = 0;   // ... and impostors, beyond impostor_distance
     u32 decals_dropped = 0;    // visible decals the frame could not draw (set by note_built; M-VISUAL3 6)
@@ -149,6 +150,9 @@ public:
     // StaticMerge3D on (the default) or off. Off releases the merged meshes at once and draws the children one by one.
     void set_static_merge(bool on);
     bool static_merge() const { return static_merge_; }
+    // StaticMerge3D cells merged per frame at most (0: the r.merge_budget cvar, whose 0 means no limit). A group that
+    // streams in then merges over several frames, its waiting cells' children drawing on their own meanwhile.
+    void set_merge_budget(u32 cells) { merge_budget_ = cells; }
 
     // Reflection probe and GI volume bakes (M-VISUAL 2 and 6, the editor's bakes): every MeshRef and
     // static instance is submitted whatever the view (no culling, no distance thinning), probes and
@@ -287,6 +291,7 @@ private:
     Array<u32> merged_stamp_;  // per entity index: == merge_stamp_ while its MeshRef is drawn through a merged mesh
     u32 merge_stamp_ = 0;
     bool static_merge_ = true;
+    u32 merge_budget_ = 0;
     u64 origin_serial_ = 0;          // the WorldOrigin serial the caches are in
     i32 origin_cells_[3] = {0, 0, 0};
     math::vec3 origin_pending_;      // shift to hand the next extracted scene

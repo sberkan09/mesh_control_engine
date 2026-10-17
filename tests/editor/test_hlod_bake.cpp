@@ -99,6 +99,7 @@ TEST_CASE("editor hlod bake: .mchlod + sidecar relative to the chunk, ChunkLod3D
     REQUIRE(fs::exists(file));
     REQUIRE(fs::exists(file + ".mceasset"));
     CHECK(fs::file_size(file) == row.bytes);
+    CHECK(read_all(file + ".mceasset").find("\"lod_levels\": 2") != std::string::npos);  // far levels where sources had none
     CHECK(session.project().mounted()->find(row.proxy) != asset::kInvalidAssetKey);
     const kit::ChunkLod3D* lod = s.get<kit::ChunkLod3D>(chunk);
     REQUIRE(lod);

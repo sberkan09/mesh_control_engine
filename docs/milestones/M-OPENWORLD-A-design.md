@@ -136,6 +136,10 @@ per chunk that stands in for everything static in it.
   to the chunk entity), then simplifies each submesh with meshoptimizer to `ratio` (border vertices locked so material
   seams stay closed). Objects smaller than `min_size` metres (bounding diameter) are dropped: they are invisible at
   HLOD distance.
+- **As built (#534 and #540):** the bake keeps each source's own LOD levels instead of taking the coarsest,
+  and the simplification moved to the cook: the `hlod` importer's `lod_levels` setting (written as 2 into new
+  sidecars) adds meshopt levels to the submeshes without any, so level 0 stays the exact merge and far levels are picked
+  by screen error like any mesh's.
 - **Format:** the bake writes `<chunk>.mchlod`, a CHNK_MESH payload (the merged mesh, materials by texture GUID, so the
   source textures are reused, not copied). A new passthrough cook importer validates it with `MeshView::read` and emits
   it as a Mesh asset, the `.mcnav` precedent.
@@ -161,9 +165,12 @@ At a few hundred metres a building is a box with a picture on it. The impostor b
 1. A chunk that streams in merges all its cells in its first extract (a hitch). The merge gets a per-frame budget
    (`Kit3DExtract::set_merge_budget(cells)`, default unlimited so existing scenes are unchanged; the player sets it
    from `r.merge_budget`): cells waiting for their turn draw their children one by one.
+   As built (#545): `r.merge_budget` / `set_merge_budget`, `Kit3DStats::merge_pending`.
 2. Many chunks each with their own `StaticMerge3D` root: the per-group hash walk runs every frame for every group.
    Groups whose children carry no change since the last frame skip the hash (a change counter per group fed by the
    ECS change ticks of the children's columns).
+   As built (#536): no change counter; the per-frame walk hashes the children's raw inputs word-wise and reads no mesh
+   views (24k children: 10 ms to 3 ms), so a counter fed by change ticks was not needed yet.
 
 ## A4. Render LOD per streamed chunk
 
