@@ -57,6 +57,10 @@ target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS} MCE_SAMPLES_
 mce_add_test(test_cook_bc_arch UMBRELLA SOURCES test_cook_bc_arch.cpp DEPS mce::mce_asset_cook)
 target_include_directories(test_cook_bc_arch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src)
 mce_mark_slow(test_cook_bc_arch)
+# The ufbx pin (M-IMPORT3D 3a, ADR-0047): links mce_ufbx alone, no engine library (the "ufbx link wall" allows tests/asset/).
+if(TARGET mce_ufbx)
+    mce_add_test(test_ufbx_smoke SOURCES test_ufbx_smoke.cpp DEPS mce_ufbx)
+endif()
 # tinyexr's own PIZ / tiled sample files (the FetchContent checkout); read as data at test time, no tinyexr code is linked.
 if(tinyexr_SOURCE_DIR AND EXISTS "${tinyexr_SOURCE_DIR}/test/unit/regression/piz-bug-issue-100.exr")
     target_compile_definitions(test_cook PRIVATE MCE_TINYEXR_SAMPLES="${tinyexr_SOURCE_DIR}/test/unit/regression")
