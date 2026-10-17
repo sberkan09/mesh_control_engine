@@ -1,0 +1,1 @@
+- Docs: the M-OPENWORLD track B milestone marks B1 authoring and B2 pedestrian yielding done and lists the traffic's open items.
