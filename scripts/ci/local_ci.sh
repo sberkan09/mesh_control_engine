@@ -673,4 +673,26 @@ if [[ $task_run -eq 1 && "${RESULT[walls]:-}" == PASS* && "${RESULT[linux-gcc-de
     printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
         "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
+# One line per run in a log shared by every thread, so the pre-PR CI time is measurable:
+# <utc> branch=<b> mode=<task|premerge|full|stages> result=<PASS|FAIL> total=<s> boot=<container boot> restarts=<n> <stage>=<s>...
+# `restarts` counts stages skipped as "resumed" (--resume); `boot` lets a reader count the container restarts a
+# branch's runs lived through. MCE_CI_TIMINGS overrides the path; no shared folder, no record.
+record_timing() {
+    local f="${MCE_CI_TIMINGS:-/mnt/project-files/.cache/ci-timings.log}" mode line s secs resumed=0
+    [[ -d "$(dirname "$f")" && -w "$(dirname "$f")" ]] || return 0
+    if [[ $task_run -eq 1 ]]; then mode=task
+    elif [[ " ${stages[*]} " == *" premerge "* ]]; then mode=premerge
+    elif [[ $full_run -eq 1 ]]; then mode=full
+    else mode=stages; fi
+    for s in "${stages[@]}"; do [[ "${RESULT[$s]:-}" == *resumed* ]] && resumed=$((resumed + 1)); done
+    line="$(date -u +%FT%TZ) branch=$(git rev-parse --abbrev-ref HEAD 2> /dev/null) mode=$mode"
+    line+=" result=$([[ $failed -eq 0 ]] && echo PASS || echo FAIL) total=${SECONDS}s boot=$(uptime -s 2> /dev/null | tr ' ' _) restarts=$resumed"
+    for s in "${stages[@]}"; do
+        secs="$(sed -n 's/^[A-Z]* (\(resumed[^)]*\|\([0-9]*\)s\)).*/\2/p' <<< "${RESULT[$s]:-}")"
+        line+=" $s=${secs:-0}"
+    done
+    echo "$line" >> "$f" 2> /dev/null || true
+}
+record_timing
+
 exit $failed
