@@ -408,7 +408,7 @@ struct Foliage3D {
     u32 cast_shadows = 1;
     u32 random_yaw = 1;
     u32 enabled = 1;
-    // M-VISUAL3 6: each copy's tint = mix(tint, tint_variation, hash of its origin); the default (white) keeps `tint`.
+    // M-VISUAL3 6: each copy's colour = tint x mix(white, tint_variation, hash of its origin); the default (white) keeps `tint`.
     math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};
     f32 wind_height = 0.0f;    // metres where the sway reaches wind_amplitude; 0 = amplitude x h^2 (h in metres)
     f32 wind_gust = 0.0f;      // 0..1: slow gusts travelling along wind_direction across the field
@@ -424,10 +424,10 @@ MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's ma
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
               (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
-              (tint_variation, Help{"each copy's tint mixes from tint toward this by a hash of its origin; white = no variation"}),
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
               (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
               (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
-              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}),
               (mesh_1, Help{"a second kind in the same scatter"}), (mesh_2, Help{"a third kind"}), (mesh_3, Help{"a fourth kind"}),
               (mesh_weights, Help{"relative share of mesh, mesh_1, mesh_2, mesh_3"}))
 
@@ -498,10 +498,10 @@ MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the me
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
               (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
-              (tint_variation, Help{"each copy's tint mixes from tint toward this by a hash of its origin; white = no variation"}),
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
               (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
               (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
-              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height"}))
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}))
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)

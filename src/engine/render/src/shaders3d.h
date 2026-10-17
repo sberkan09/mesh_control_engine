@@ -108,6 +108,7 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
 out gl_PerVertex { vec4 gl_Position; };
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -119,6 +120,7 @@ void main() {
     v_world = w.xyz;
     v_normal = mat3(o_normal) * oct_decode(a_oct);
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
     gl_Position = u_view_proj * w;
 }
 )";
@@ -136,6 +138,7 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
 out gl_PerVertex { vec4 gl_Position; };
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -148,6 +151,7 @@ void main() {
     v_world = w.xyz;
     v_normal = mat3(d_inst[k].normal) * oct_decode(a_oct);
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
     gl_Position = u_view_proj * w;
 }
 )";
@@ -176,6 +180,7 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;  // M-VISUAL3 6: per-copy colour variation (vec4(1) except batches)
 out gl_PerVertex { vec4 gl_Position; };
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -188,6 +193,7 @@ void main() {
     v_world = w.xyz;
     v_normal = mat3(o_normal) * (mat3(s) * oct_decode(a_oct));
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    v_tint = vec4(1.0);
     gl_Position = u_view_proj * w;
 }
 )";
@@ -351,6 +357,7 @@ layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflec
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec2 v_uv;
+layout(location = 3) flat in vec4 v_tint;
 layout(location = 0) out vec4 o_color;
 
 // ---- Cook-Torrance GGX (Karis 2013 / Filament): D_GGX, V_SmithGGXCorrelated, F_Schlick
@@ -760,7 +767,7 @@ void main() {
     base *= o_base_color;
 #else
     if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
-    vec4 base = MCE_MAP(u_albedo, uv) * o_base_color;
+    vec4 base = MCE_MAP(u_albedo, uv) * o_base_color * v_tint;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
 #endif
     vec3 color;
@@ -2097,11 +2104,35 @@ layout(std430, binding = 13) readonly buffer Instances { mat4 i_world[]; };
 layout(std430, binding = 14) readonly buffer Visible { uint i_visible[]; };
 mat4 instance_world(float first) { return i_world[i_visible[uint(first) + uint(gl_InstanceID)]]; }
 mat3 cofactor3(mat4 m) { return mat3(cross(m[1].xyz, m[2].xyz), cross(m[2].xyz, m[0].xyz), cross(m[0].xyz, m[1].xyz)); }
-vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind) {
+uint pcg_hash(uint v) {
+    uint s = v * 747796405u + 2891336453u;
+    uint g = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (g >> 22u) ^ g;
+}
+float hash01(vec3 p) {  // [0, 1) from the float bits of p: the same input gives the same value on every device
+    uvec3 u = floatBitsToUint(p);
+    return float(pcg_hash(u.x ^ pcg_hash(u.y ^ pcg_hash(u.z))) >> 8) * (1.0 / 16777216.0);
+}
+// ext (M-VISUAL3 6): x wind_height (profile (h / H)^2 when > 0), y gust, z flutter; all 0 = amplitude * h^2 as before.
+// `key` is the vertex's own a_pos: the flutter hashes it with the instance origin (bit-exact inputs, not the computed position).
+vec3 wind_offset(mat4 w, vec3 p, float t, vec4 wind, vec3 ext, vec3 key) {
     if (wind.x == 0.0) return vec3(0.0);
     float h = max(p.y - w[3].y, 0.0);
     float f = 6.2831853 * wind.y * t + dot(w[3].xz, vec2(0.37, 0.71));
-    return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    if (ext == vec3(0.0)) return vec3(wind.z, 0.0, wind.w) * (wind.x * h * h * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    float hh = max(ext.x, 1e-2);  // a tiny wind height must not blow the profile up
+    float r = ext.x > 0.0 ? h / hh : h;
+    float gust = 1.0;
+    if (ext.y > 0.0) {  // slow gusts running along the wind at 3 m/s
+        float s = dot(w[3].xz, wind.zw) - 3.0 * t;
+        gust = 1.0 + ext.y * (0.6 * sin(0.35 * s) + 0.4 * sin(0.83 * s + 1.3));
+    }
+    vec3 o = vec3(wind.z, 0.0, wind.w) * (wind.x * (ext.x > 0.0 ? r * r : h * h) * gust * (sin(f) + 0.35 * sin(2.3 * f + 1.7)));
+    if (ext.z > 0.0) {  // leaf flutter: 4 to 6 Hz, a phase per vertex
+        float ph = 6.2831853 * (4.0 + 2.0 * hash01(key.yzx + w[3].xyz)) * t + 6.2831853 * hash01(key + w[3].zxy);
+        o += ext.z * r * vec3(sin(ph), 0.5 * sin(1.31 * ph + 0.7), cos(0.93 * ph));
+    }
+    return o;
 }
 vec3 oct_decode(vec2 e) {
     vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
@@ -2119,11 +2150,17 @@ layout(location = 2) in vec2 a_uv;
 layout(location = 0) out vec3 v_world;
 layout(location = 1) out vec3 v_normal;
 layout(location = 2) out vec2 v_uv;
+layout(location = 3) flat out vec4 v_tint;
 out gl_PerVertex { vec4 gl_Position; };
 void main() {
     mat4 w = instance_world(o_skin.y);
     vec4 p = w * (o_model * vec4(a_pos.xyz, 1.0));
-    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst);
+    // M-VISUAL3 6: a batch draw leaves o_dequant (identity for rigid draws, unread here) to carry the variation (column 0)
+    // and the wind extension (column 1: height, gust, flutter), so ObjectU keeps its size.
+    p.xyz += wind_offset(w, p.xyz, o_skin.z, o_inst, o_dequant[1].xyz, a_pos.xyz);
+    vec4 tv = o_dequant[0];
+    if (o_params.x > 0.0) tv.w = 1.0;  // alpha-masked: the depth passes mask by the base alpha alone, so the colour variation leaves alpha out
+    v_tint = tv == vec4(1.0) ? vec4(1.0) : mix(vec4(1.0), tv, hash01(w[3].xyz));
     v_world = p.xyz;
     v_normal = cofactor3(w) * (mat3(o_normal) * oct_decode(a_oct));
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
@@ -2139,7 +2176,7 @@ layout(std140, binding = 3) uniform InstDrawU {
     vec4 s_info;       // x: first visible slot, y: time, z: previous time (velocity), w: alpha cutoff (0 = none)
     vec4 s_wind;       // as ObjectU::o_inst
     vec4 s_uv_rect;
-    vec4 s_base;       // x: base color alpha
+    vec4 s_base;       // x: base color alpha, yzw: wind height, gust, flutter (M-VISUAL3 6)
 };
 layout(binding = 6) uniform sampler2DArray u_albedo;
 )"
@@ -2151,7 +2188,7 @@ out gl_PerVertex { vec4 gl_Position; };
 void main() {
     mat4 w = instance_world(s_info.x);
     vec4 p = w * (s_local * vec4(a_pos.xyz, 1.0));
-    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind);
+    p.xyz += wind_offset(w, p.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = s_view_proj * p;
 }
@@ -2174,8 +2211,8 @@ void main() {
     mat4 w = instance_world(s_info.x);
     vec4 base = w * (s_local * vec4(a_pos.xyz, 1.0));
     vec4 p = base, q = base;
-    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind);
-    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind);
+    p.xyz += wind_offset(w, base.xyz, s_info.y, s_wind, s_base.yzw, a_pos.xyz);
+    q.xyz += wind_offset(w, base.xyz, s_info.z, s_wind, s_base.yzw, a_pos.xyz);
     v_uv = s_uv_rect.xy + a_uv * s_uv_rect.zw;
     gl_Position = vp_jittered * p;
     v_current = vp_current * p;
