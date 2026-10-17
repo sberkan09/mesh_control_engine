@@ -296,7 +296,7 @@ struct Environment3D {
     f32 contact_thickness = 0.1f;   // meters behind a surface a sample may be and still occlude
     f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
     u32 contact_steps = 12;         // march steps per ray (4..64)
-    u32 pad_ = 0;
+    f32 sky_rotation_deg = 0.0f;    // M-VISUAL3 4: yaw of the sky texture about +Y (sky and IBL textures; the gradient and atmosphere ignore it)
 };
 MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
               (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
@@ -330,7 +330,8 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}),
               (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
               (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}),
-              (contact_steps, Range{4, 64}))
+              (contact_steps, Range{4, 64}),
+              (sky_rotation_deg, Range{-360, 360}, Help{"yaw of the sky texture about +Y, degrees; 0 = as authored"}))
 
 // ---- static colliders in the 3D physics world --------------------------------------------------
 

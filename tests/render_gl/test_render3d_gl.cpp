@@ -2437,5 +2437,160 @@ TEST_CASE("render3d_gl: a parallax array's layer 0 is a normal map read at the s
     const Array<u8> without = draw(&no_normal);
     INFO("differing pixels " << differing(with_normal, without));
     CHECK(differing(with_normal, without) > 300);  // the tilted normal map lights the floor differently
+
+// ---- M-VISUAL3 4: HDR sky and image-based light ---------------------------------------------------
+
+namespace {
+
+// A white matte sphere at (0, 2, 0) under a grey equirect sky with a hot patch on the horizon at world +X
+// (before rotation), lit by image-based lighting alone. Samples two points on the camera's side of it.
+struct HdrSkyRig {
+    explicit HdrSkyRig(Fixture3D& fx) : f(fx) {
+        f.pitch_deg = 35.0f;
+        upload_sphere(f, 40, {0, 2.0f, 0}, 1.0f);
+    }
+    // Luma of the sphere at normal n.
+    int sphere_luma(vec3 n) const { return f.at_world(vec3{0, 2.0f, 0} + math::normalize(n)).luma(); }
+    void render(u32 sky_tex, f32 rotation_deg, f32 intensity) {
+        f.render(0.0f, false, [&](Scene3D& s) {
+            no_sun(s);
+            Sky sky = constant_sky(0.0f, true);
+            sky.texture = sky_tex;
+            sky.texture_intensity = intensity;
+            sky.rotation = math::radians(rotation_deg);
+            s.set_sky(sky);
+            MeshInstance m;
+            m.mesh = 40;
+            s.add(m);
+        });
+        right = sphere_luma({0.7f, 0.3f, 0.65f});
+        left = sphere_luma({-0.7f, 0.3f, 0.65f});
+    }
+    Fixture3D& f;
+    int right = 0, left = 0;  // sphere luma on the +X-facing and the -X-facing side
+};
+
+constexpr f32 kHotBase = 0.25f, kHotValue = 50.0f;  // a 200x hot spot
+constexpr f32 kHotIntensity = 0.05f;
+
+}  // namespace
+
+TEST_CASE("render3d_gl: an HDR sky's IBL lights a white sphere brighter on the hot spot's side than an RGBA8 copy") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const Array<f32> grey = hot_sky_texels(kHotBase, kHotValue);
+    const u32 hdr = upload_grey_sky(f, grey, true), ldr = upload_grey_sky(f, grey, false);
+    rig.render(hdr, 0.0f, kHotIntensity);
+    const int hdr_right = rig.right, hdr_left = rig.left;
+    rig.render(ldr, 0.0f, kHotIntensity);
+    const int ldr_right = rig.right, ldr_left = rig.left;
+    INFO("hdr " << hdr_right << "/" << hdr_left << " rgba8 " << ldr_right << "/" << ldr_left);
+    CHECK(hdr_right > ldr_right + 25);        // the hot side: 50 against a clamped 1
+    CHECK(hdr_right > hdr_left + 40);         // and the sphere is lit from the hot spot's side
+    CHECK(std::abs(hdr_left - ldr_left) < 40);  // the far side sees the same grey sky
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: rotating the sky by 90 degrees moves the hot spot's light a quarter turn") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const u32 hdr = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue), true);
+    // The texture's hot spot points along h(t) = (cos t, 0, -sin t) after a rotation by t degrees about +Y:
+    // +X at 0 (lights the right side), +Z at -90 (lights both sides alike), -X at 180 (the left side), -Z at 90
+    // (behind the sphere: neither side).
+    rig.render(hdr, 0.0f, kHotIntensity);
+    const int r0 = rig.right, l0 = rig.left;
+    rig.render(hdr, -90.0f, kHotIntensity);
+    const int r_toward = rig.right, l_toward = rig.left;
+    rig.render(hdr, 180.0f, kHotIntensity);
+    const int r180 = rig.right, l180 = rig.left;
+    rig.render(hdr, 90.0f, kHotIntensity);
+    const int r_away = rig.right, l_away = rig.left;
+    INFO("0: " << r0 << "/" << l0 << "  -90: " << r_toward << "/" << l_toward << "  180: " << r180 << "/" << l180 << "  +90: " << r_away
+                << "/" << l_away);
+    CHECK(r0 > l0 + 40);
+    CHECK(l0 < 20);
+    CHECK(std::abs(r_toward - l_toward) < 30);  // the hot spot has swung from +X to +Z: both sides are lit
+    CHECK(l_toward > l0 + 40);
+    CHECK(r_toward > 40);
+    CHECK(l180 > r180 + 40);                    // half a turn: the other side
+    CHECK(r180 < 20);
+    CHECK(r_away < 20);                         // turned behind the sphere: neither side
+    CHECK(l_away < 20);
+    // The rotation also turns the visible dome (the hot spot at -Z in the texture is the view's center at 0).
+    f.pitch_deg = 5.0f;
+    const u32 dome = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue, 16), true);  // u = 0.25: world -Z
+    const auto sky_at_top = [&](f32 deg) {
+        f.render(0.0f, false, [&](Scene3D& s) {
+            Sky sky = constant_sky(0.0f, false);
+            sky.texture = dome;
+            sky.texture_intensity = 0.02f;
+            sky.rotation = math::radians(deg);
+            s.set_sky(sky);
+        });
+        const usize i = (usize(kH / 2 - 14) * kW + kW / 2) * 4;  // just above the horizon, dead ahead (-Z)
+        return int(f.pixels[i]) + f.pixels[i + 1] + f.pixels[i + 2];
+    };
+    const int ahead = sky_at_top(0.0f), turned = sky_at_top(90.0f);
+    INFO("dome ahead " << ahead << " turned " << turned);
+    CHECK(ahead > turned + 60);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a sky without rotation draws the same frame; the gradient ignores a rotation") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const u32 hdr = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue), true);
+    const auto frame = [&](u32 tex, f32 deg) {
+        rig.render(tex, deg, kHotIntensity);
+        Array<u8> p;
+        p.resize(f.pixels.size());
+        std::memcpy(p.data(), f.pixels.data(), p.size());
+        return p;
+    };
+    const Array<u8> a = frame(hdr, 0.0f), b = frame(hdr, 0.0f);
+    CHECK(std::memcmp(a.data(), b.data(), a.size()) == 0);
+    const Array<u8> turned = frame(hdr, 90.0f);
+    CHECK(std::memcmp(a.data(), turned.data(), a.size()) != 0);
+    // No texture: the gradient (and its IBL) is the same at any rotation.
+    const Array<u8> g0 = frame(~0u, 0.0f), g1 = frame(~0u, 137.0f);
+    CHECK(std::memcmp(g0.data(), g1.data(), g0.size()) == 0);
+}
+
+TEST_CASE("render3d_gl: a one-texel sun 80000 times the sky leaves no sparkles on rough spheres") {
+    Fixture3D f;
+    f.pitch_deg = 20.0f;
+    Array<f32> grey;
+    grey.resize(64 * 32, 0.25f);
+    grey[16 * 64 + 40] = 20000.0f;  // a single texel on the horizon, ahead and to the right of +Z
+    const u32 hdr = upload_grey_sky(f, grey, true);
+    constexpr u32 kSpheres = 2;  // rough ones: a smooth sphere would mirror the sun as a (legitimate) small highlight
+    const f32 roughness[kSpheres] = {0.9f, 0.6f};
+    for (u32 i = 0; i < kSpheres; ++i) upload_sphere(f, 40 + i, {-1.2f + 2.4f * f32(i), 1.0f, 1.0f}, 0.8f, 0.0f, roughness[i]);
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.texture = hdr;
+        sky.texture_intensity = 0.01f;
+        s.set_sky(sky);
+        for (u32 i = 0; i < kSpheres; ++i) {
+            MeshInstance m;
+            m.mesh = 40 + i;
+            s.add(m);
+        }
+    });
+    // Neighbouring pixels inside a sphere differ by its shading gradient, not by sparkles.
+    int worst = 0;
+    for (u32 i = 0; i < kSpheres; ++i) {
+        const vec3 c{-1.2f + 2.4f * f32(i), 1.0f, 1.0f};
+        for (f32 dy = -0.5f; dy <= 0.5f; dy += 0.04f)
+            for (f32 dx = -0.5f; dx <= 0.5f; dx += 0.04f) {
+                const int a = f.at_world(c + math::normalize(vec3{dx, dy, 1.0f}) * 0.8f).luma();
+                const int b = f.at_world(c + math::normalize(vec3{dx + 0.04f, dy, 1.0f}) * 0.8f).luma();
+                worst = std::max(worst, std::abs(a - b));
+            }
+    }
+    INFO("largest neighbour step " << worst);
+    CHECK(worst < 24);
     CHECK(f.device->validation_error_count() == 0);
 }

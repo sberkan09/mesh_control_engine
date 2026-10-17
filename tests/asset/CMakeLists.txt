@@ -18,6 +18,7 @@ target_compile_definitions(test_asset PRIVATE ${MCE_ASSET_TEST_DEFS})
 mce_add_test(test_cook UMBRELLA
     SOURCES
         test_cook_gltf.cpp
+        test_cook_hdr.cpp
         test_cook_lod.cpp
         test_cook_input.cpp
         test_cook_navmesh.cpp

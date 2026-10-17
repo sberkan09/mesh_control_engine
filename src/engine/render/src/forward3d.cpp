@@ -83,6 +83,7 @@ struct Forward3DPassU {
     vec4 vol_scale;   // x: local light scale, y: ambient scale
     vec4 decals;      // x: decals to apply (M-VISUAL 9)
     vec4 ssr;         // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
+    vec4 sky_rot;     // M-VISUAL3 4: x cos, y sin of the sky texture's yaw (y = 0: no rotation)
 };
 
 namespace {
@@ -294,10 +295,14 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
     pu.sky_zenith = vec4(sky.zenith, sky.enabled ? 1.0f : 0.0f);
     pu.sky_horizon = vec4(sky.horizon, sky.specular_ambient);
     pu.sky_ground = vec4(sky.ground, sky_lod);
-    if (atmosphere.is_null())
+    if (atmosphere.is_null()) {
         pu.sun = {sky.sun_size, sky.sun_intensity, sky.texture_intensity, sky.texture_additive ? 1.0f : 0.0f};
-    else
-        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, 0.0f};
+        // Rotation 0 stays (1, 0): the shader takes its no-rotation branch (sin == 0), so the frame is unchanged.
+        pu.sky_rot = sky.rotation != 0.0f ? vec4(std::cos(sky.rotation), std::sin(sky.rotation), 0.0f, 0.0f) : vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    } else {
+        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, 0.0f};  // the atmosphere's baked sky has no yaw
+        pu.sky_rot = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    }
     return sky_tex;
 }
 
@@ -326,8 +331,8 @@ u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
         const auto* b = static_cast<const u8*>(p);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[11] = {sky.zenith.x,  sky.zenith.y,  sky.zenith.z,  sky.horizon.x,         sky.horizon.y, sky.horizon.z,
-                       sky.ground.x,  sky.ground.y,  sky.ground.z,  sky.texture_intensity, sky_lod};
+    const f32 f[12] = {sky.zenith.x,  sky.zenith.y,  sky.zenith.z,  sky.horizon.x,         sky.horizon.y, sky.horizon.z,
+                       sky.ground.x,  sky.ground.y,  sky.ground.z,  sky.texture_intensity, sky_lod,       sky.rotation};
     const u32 u[3] = {sky.texture_additive ? 1u : 0u, sky_tex.index, sky_tex.generation};
     mix(f, sizeof(f));
     mix(u, sizeof(u));

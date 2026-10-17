@@ -4,8 +4,12 @@
 
 #include <doctest/doctest.h>
 
+#include "../asset/hdr_fixtures.h"
 #include "fixture3d.h"
 #include "golden.h"
+#include "mce/asset/container.h"
+#include "mce/cook/importer.h"
+#include "mce/render/asset_upload.h"
 
 using namespace mce;
 using namespace mce::render;
@@ -580,4 +584,46 @@ TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints
         s.add(fl);
     });
     check_golden("parallax_cobble", f);
+
+// ---- M-VISUAL3 4: HDR sky -----------------------------------------------------------------------
+
+TEST_CASE("golden: a cooked .hdr sky with a 200x hot spot lights a white sphere, a box and the ground") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    // A 64x32 Radiance file written here, cooked by the texture importer (RGBA16F, mips), uploaded as the asset
+    // system would: base 0.25, a 50 patch on the horizon toward +Z and +X (equirect u = 0.5625): the light comes from the camera's right and lights the
+    // faces it sees.
+    std::vector<float> grey(64 * 32, 0.25f);
+    for (unsigned y = 14; y < 18; ++y)
+        for (unsigned x = 32; x < 40; ++x) grey[y * 64 + x] = 50.0f;
+    const std::string hdr = hdr_fixtures::make_rgbe_hdr(64, 32, grey);
+    const auto importer = cook::make_texture_importer();
+    cook::ImportInput in;
+    in.guid = asset::Guid{1, 2};
+    in.display_path = "hdr_sky.hdr";
+    in.source_path = "hdr_sky.hdr";
+    in.source = Span<const byte>(reinterpret_cast<const byte*>(hdr.data()), hdr.size());
+    cook::DiagList diags;
+    asset::ContainerWriter writer;
+    REQUIRE(importer->cook(in, writer, diags));
+    Array<byte> packed;
+    writer.finish(packed);
+    auto view = asset::ContainerView::open(packed.span());
+    REQUIRE(view.has_value());
+    const u32 chunk = view.value().find(asset::ChunkType::Texture);
+    REQUIRE(chunk < view.value().chunk_count());
+    const u32 tex = f.renderer.textures().allocate_key();
+    REQUIRE(upload_cooked_texture(f.renderer.textures(), tex, 1, view.value().payload(chunk)).has_value());
+    upload_sphere(f, 40, {-1.8f, 1.0f, 0.6f}, 0.8f);
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.texture = tex;
+        sky.texture_intensity = 0.1f;
+        s.set_sky(sky);
+        MeshInstance m;
+        m.mesh = 40;
+        s.add(m);
+    });
+    check_golden("hdr_sky", f);
 }

@@ -21,6 +21,7 @@ endif()
 mce_add_test(test_golden_gl UMBRELLA NO_CTEST
     SOURCES test_golden.cpp
     DEPS mce::mce_render mce::mce_rhi_default mce::mce_asset_cook)
+target_include_directories(test_golden_gl PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../asset)
 target_compile_definitions(test_golden_gl PRIVATE MCE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
                                                   MCE_GOLDEN_OUT="${CMAKE_CURRENT_BINARY_DIR}/golden_out")
 

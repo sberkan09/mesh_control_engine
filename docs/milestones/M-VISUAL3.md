@@ -18,7 +18,7 @@ any change to the shaders or the draw path.
 | 1b | Seam: `asset/formats.h` (`MaterialExt` height fields, `TextureFormat::RGBA16F`) | not filed | Sonnet | not started |
 | 2 | Parallax occlusion mapping from a height map on `.mcmat` | not filed | Sonnet (Opus review) | not started |
 | 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | not started |
-| 4 | `.hdr` / `.exr` sky and image-based light (#409), sky rotation | not filed | Sonnet (Opus glance at the sky shader) | not started |
+| 4 | `.hdr` / `.exr` sky and image-based light (#409), sky rotation | not filed | Sonnet (Opus glance at the sky shader) | done: see "Step 4 as built" |
 | 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus | not started |
 | 5b | `StaticMerge3D`: merged static props per material and cell | not filed | Sonnet (Opus review) | not started |
 | 6 | Foliage variation and wind, decal warnings, the demo, gates and the close | not filed | Sonnet (Opus review) | not started |
@@ -328,6 +328,39 @@ ratio within half-float precision; `max_size` halves until it fits; `srgb: true`
 IBL lights a white sphere brighter on the hot spot's side than an RGBA8 copy of the same map; rotation by 90° moves the
 hot spot's reflection by a quarter turn; rotation 0 is byte-identical to today. The golden. Docs: `05-assets.md`
 (texture formats, `max_size`, `exposure`), `08-3d.md` (sky). Changelog fragment.
+
+**Step 4 as built.**
+
+- **Cook.** `texture_importer.cpp` handles `.hdr` (stb, `stbi_loadf_from_memory`) and `.exr` (tinyexr v1.0.12 pinned by commit
+  `735ff73c`, with its bundled miniz, through `FetchContent` in `cmake/Dependencies.cmake`; its own `mce_tinyexr` library
+  and a "tinyexr wall" in `check_walls.py`; BSD-3-Clause and MIT, recorded in `ARCHITECTURE.md` §7). Output is `RGBA16F`,
+  linear, `LinearFilter` flag, never `Srgb`: exposure (2^EV) first, then negatives and NaN/Inf to 0 and a clamp to 65504,
+  then the power-of-two `max_size` halving and the mip chain, both 2x2 box-filtered in float, then half conversion per level.
+  The importer's version is unchanged: PNG/JPEG output is byte-identical and no existing asset re-cooks.
+  `"srgb": true` is a cook error that names the fix; `max_size` / `exposure` are keys of HDR files only (a PNG that names
+  them is an unknown-key error). Deviation from the plan: `STBI_NO_LINEAR` could not stay, because stb compiles
+  `stbi_loadf_from_memory` out with it; the build now defines `STBI_ONLY_HDR` beside `STBI_ONLY_PNG` / `STBI_ONLY_JPEG` and
+  PNG/JPEG still go through `stbi_load_from_memory` only. `TextureView::read` (the seam did not touch it) accepts
+  `RGBA16F` and refuses it with the `Srgb` flag. `project_check`'s sRGB audit skips `.hdr` / `.exr`, and its credits check lists `.exr` as media beside `.hdr`.
+- **Runtime.** `upload_cooked_texture` (and the terrain's layer array) map `RGBA16F` to `rhi::RGBA16F`. Every backend's
+  texture upload sizes levels with `rhi::bytes_per_pixel` (8 for `RGBA16F`; checked on GL, SDL GPU, WebGPU and Metal), so
+  no backend changed.
+- **Sky rotation.** `Environment3D.sky_rotation_deg` (took the place of the trailing `pad_`, so the struct stays 440 bytes
+  and a zero reads as before), `render::Sky::rotation` (radians), `PassU::p_sky_rot` (cos, sin; last member). `sky_radiance()`
+  rotates its direction by `-rotation` once, before `equirect_uv`, only when `p_sky_rot.y != 0`, so the main pass, the sky
+  pass, the IBL bake, the probe captures and the GI captures turn together; the baked `u_env` layers are already in world
+  space and are read unrotated. The atmosphere's baked sky forces `(1, 0)`. The IBL cache key includes the rotation.
+  Positive degrees turn the sky counter-clockwise seen from above (+X toward -Z); `ibl_texture` turns with the same angle.
+- **Tests.** `tests/asset/test_cook_hdr.cpp` (generated `.hdr` and `.exr`, `hdr_fixtures.h`): values above 1 and the 200x
+  ratio, NaN/Inf/negatives/overflow, `max_size`, `exposure`, float mip averages, refusals, determinism, the phone cook.
+  `tests/render_gl/test_render3d_gl.cpp` (both backends): the HDR sky lights a white sphere brighter than an RGBA8 copy on the
+  hot spot's side, 90-degree steps move the light a quarter turn (sphere and dome), no rotation is deterministic and the
+  gradient ignores rotation, and a one-texel sun 80,000 times the sky leaves no sparkles. Golden `hdr_sky` on `linux-gl`
+  and `linux-sdlgpu`, from a generated 64x32 `.hdr` cooked by the importer. Frames with no HDR texture and rotation 0 were
+  compared byte for byte against the pre-change shader (8 golden scenes, both backends): identical.
+- **Firefly check (the Risk paragraph).** A single-texel sun 80,000 times the sky (20000 against 0.25) on rough
+  spheres (roughness 0.9 and 0.6) shows no sparkles on either backend (largest step between neighbouring pixels under
+  24 levels, the shading gradient), so `Sky::ibl_clamp` was not added.
 
 ### Step 5a — automatic instancing of identical draws
 
