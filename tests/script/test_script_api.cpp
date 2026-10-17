@@ -3,12 +3,17 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <string>
 
 #include "asset/cook_test_util.h"
 #include "mce/asset/asset_system.h"
+#include "mce/convar.h"
 #include "mce/cook/cook.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/effects.h"
 #include "mce/input/actions.h"
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
@@ -30,6 +35,11 @@ struct Probe {
     u8 pad[3]{};
 };
 MCE_COMPONENT(Probe, value, n, flag)
+
+struct Saved {
+    i32 n = 0;
+};
+MCE_COMPONENT(Saved, (n, Save))
 
 struct Tagged {
     i32 level = 7;
@@ -469,6 +479,76 @@ end
     CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(3.0f));
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
     CHECK(error_of(r.h()).find("cell must be from 0.05 to 100") != std::string::npos);
+}
+
+TEST_CASE("script api: save writes a slot now, load is applied by the host after the tick (M-SCRIPT2 3)") {
+    const std::string dir = std::string(MCE_TEST_TMP_DIR) + "/script_saves";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    save::set_root(dir);
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        if mce.tick() == 1 then
+            mce.set(e, "Saved", "n", 7)
+            mce.set(e, "Probe", "flag", mce.save("slot_a") and not mce.has_save("nope"))
+        elseif mce.tick() == 2 then
+            mce.set(e, "Saved", "n", 99)
+            mce.set(e, "Probe", "value", vector.create(mce.load("slot_a") and 1 or 0, mce.load("nope") and 1 or 0, 0))
+        end
+    end)
+end
+)");
+    r.w.register_components<SaveKey, scapi::Saved>();
+    const Entity e = r.w.spawn_with(Probe{}, scapi::Saved{}, SaveKey{1});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(e)->flag);
+    CHECK(save::exists("slot_a"));
+    r.step(1);
+    CHECK(r.w.try_get<scapi::Saved>(e)->n == 99);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(1.0f));  // slot_a is there
+    CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(0.0f));  // "nope" is not
+    asset::AssetSystem assets;
+    REQUIRE(scene::apply_change(r.w, assets));
+    CHECK(r.w.try_get<scapi::Saved>(e)->n == 7);  // the save at tick 1 is back
+}
+
+TEST_CASE("script api: save slots are names, never paths") {
+    Rig r(R"(
+function update()
+    mce.save("../escape")
+end
+)");
+    r.w.spawn_with(Probe{});
+    r.step(1);
+    CHECK(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("must be 1 to 64 letters") != std::string::npos);
+}
+
+TEST_CASE("script api: shake, burst and set_time_scale (M-SCRIPT2 3)") {
+    Rig r(R"(
+function update()
+    mce.shake(0.75)
+    mce.each("ParticleBurst", function(e) mce.burst(e, 12) end)
+    mce.set_time_scale(0.5)
+end
+)");
+    r.w.register_components<kit::CameraShake2D, kit::CameraShake3D, kit::ParticleBurst>();
+    const Entity cam = r.w.spawn_with(kit::CameraShake2D{});
+    const Entity cam3 = r.w.spawn_with(kit::CameraShake3D{});
+    const Entity fx = r.w.spawn_with(kit::ParticleBurst{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<kit::CameraShake2D>(cam)->trauma == doctest::Approx(0.75f));
+    CHECK(r.w.try_get<kit::CameraShake3D>(cam3)->trauma == doctest::Approx(0.75f));
+    r.step(1);
+    CHECK(r.w.try_get<kit::CameraShake2D>(cam)->trauma == doctest::Approx(1.0f));  // added, clamped
+    CHECK(r.w.try_get<kit::ParticleBurst>(fx)->count == 12);
+    CHECK(ConVar::find(StringId("time_scale"))->get_float() == doctest::Approx(0.5f));
+    ConVar::find(StringId("time_scale"))->set_float(1.0f, true);
 }
 
 TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
