@@ -25,6 +25,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/kit/skeleton2d.h"
 #include "mce/kit/timeline.h"
+#include "mce/kit/ui_flow.h"
 #include "mce/physics/world2d.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/video.h"
@@ -63,15 +64,17 @@ bool pressed(const input::InputState* in, const FixedString<32>& action) {
 // world holds while a pause screen is visible.
 void kit_ui_flow(Frame& f) {
     const input::InputState* in = f.try_resource<input::InputState>();
-    bool hold = false;
     asset::Guid load;
     f.query<const UiFlow&, UiScreen&>().each([&](const UiFlow& flow, UiScreen& screen) {
         if (screen.visible && pressed(in, flow.hide_on)) screen.visible = false;
         else if (!screen.visible && pressed(in, flow.show_on)) screen.visible = true;
         if (!flow.scene.guid.is_null() && pressed(in, flow.load_on) && load.is_null()) load = flow.scene.guid;
         if (pressed(in, flow.quit_on)) scene::request_quit(f.world());
-        hold = hold || (screen.visible && flow.pause);
     });
+    apply_ui_flow_rules(f, in, load);  // after the actions: a rule sees the screens as UiFlow left them
+    bool hold = false;
+    f.query<const UiFlow&, const UiScreen&>().each(
+        [&](const UiFlow& flow, const UiScreen& screen) { hold = hold || (screen.visible && flow.pause); });
     if (!load.is_null()) {
         scene::request_change(f.world(), load);
         hold = false;  // the next scene starts from its own screens
@@ -84,7 +87,7 @@ void kit_ui_flow(Frame& f) {
 void install_ui_flow(World& world) {
     if (world.try_resource<UiFlowInstalled>()) return;
     world.set_resource(UiFlowInstalled{});
-    world.register_components<UiScreen, UiFlow>();
+    world.register_components<UiScreen, UiFlow, UiFlowRules>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_ui_flow", &kit_ui_flow);
     world.run_when_held(Phase::FixedUpdate_Pre, "kit_ui_flow");
 }
