@@ -65,6 +65,14 @@ bool same_pixels(const cook::Image& a, const cook::Image& b) {
            std::equal(a.rgba.begin(), a.rgba.end(), b.rgba.begin());
 }
 
+// Mean absolute channel difference of two same-size images, of full scale (1 when the sizes differ).
+double mean_diff(const cook::Image& a, const cook::Image& b) {
+    if (a.width != b.width || a.height != b.height || a.rgba.size() != b.rgba.size() || a.rgba.empty()) return 1.0;
+    double sum = 0.0;
+    for (usize i = 0; i < a.rgba.size(); ++i) sum += std::abs(int(a.rgba[i]) - int(b.rgba[i]));
+    return sum / (double(a.rgba.size()) * 255.0);
+}
+
 }  // namespace
 
 TEST_CASE("mcp agent tools: listed, and arguments are checked before anything runs") {
@@ -314,10 +322,11 @@ TEST_CASE("render_frame: the player's frame at a tick, repeatable, from other ca
     // The capture frame shows the held tick itself: the same call gives the same pixels.
     auto again = c.ok("render_frame", R"({"tick":30,"width":320,"height":180})");
     CHECK(same_pixels(a.images[0], again.images[0]));
-    // The offscreen software path (what a box without a display uses) draws the same frame.
+    // The offscreen software path (what a box without a display uses) draws the same frame: the same
+    // pixels when the window is Mesa too (Xvfb), within the golden's 0.5 % when it is a real GPU.
     auto soft = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"software":true})");
     CHECK(str(soft.v().get("renderer")).find("software") != std::string::npos);
-    CHECK(same_pixels(a.images[0], soft.images[0]));
+    CHECK(mean_diff(a.images[0], soft.images[0]) < 0.005);
 
     // Later ticks and scripted input change the frame; so does another camera (render only).
     auto later = c.ok("render_frame", R"({"tick":90,"width":320,"height":180})");

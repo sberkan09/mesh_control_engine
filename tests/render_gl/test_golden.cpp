@@ -669,3 +669,20 @@ TEST_CASE("golden: tonemap_neutral: the same scene through Khronos PBR Neutral")
     });
     check_golden("tonemap_neutral", f);
 }
+
+// ---- M-VISUAL3 5a: automatic instancing ----------------------------------------------------------
+
+TEST_CASE("golden: instanced_props: a grid of identical crates under three cascades, drawn as instanced runs") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    upload_crate(f, 60);
+    f.render(0.0f, true, [](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_crate_grid(s, 60);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.runs_instanced >= 2);
+    CHECK(st.shadow_runs_instanced >= 2);
+    check_golden("instanced_props", f);
+}
