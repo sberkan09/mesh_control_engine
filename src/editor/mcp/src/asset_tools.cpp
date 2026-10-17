@@ -250,6 +250,20 @@ constexpr AssetKind kKinds[] = {
 {"name":"white_region","type":"integer","default":0},
 {"name":"styles","type":"object","help":"{\"<UiWidgetKind>\": {\"style\": UiStyle fields over every state, \"styles\": {\"Hover\": {...}}}} over the palette's look"}])json",
      R"json({"palette":{"panel":[0.1,0.12,0.2,0.92],"button":[0.2,0.35,0.6,1],"accent":[1,0.6,0.2,1]}})json"},
+    {"RoadNetwork", ".mcroads", "mce-roads", 1,
+     "A road network (M-OPENWORLD B1): junction 'nodes' and the 'roads' between them. The cook builds every lane, the "
+     "connectors across each junction (straight on from the matching lane, turns towards the kerb from the outermost "
+     "lane, across traffic from the innermost), who yields (control) and the traffic-light phases.",
+     R"json([
+{"name":"name","type":"string"},
+{"name":"drive","type":"string","default":"right","help":"\"right\" or \"left\": the side traffic keeps to"},
+{"name":"lane_width","type":"number","default":3.5,"help":"Metres, the default for every road"},
+{"name":"speed","type":"number","default":13.9,"help":"m/s limit, the default for every road"},
+{"name":"nodes","type":"array","help":"{\"name\", \"at\": [x, y, z], \"control\": \"none\" | \"priority\" | \"stop\" | \"signal\" (default: priority where 3+ roads meet, else none), \"radius\": metres the lanes stop short (default from the roads)}"},
+{"name":"roads","type":"array","help":"{\"name\", \"from\": node, \"to\": node, \"lanes\": n each way | [forward, backward], \"points\": [[x, y, z], ...] shape between the nodes, \"speed\", \"lane_width\", \"sidewalk\": metres per side (0), \"priority\": 0-15 (higher goes first at priority junctions)}"},
+{"name":"signals","type":"array","help":"{\"node\", \"phases\": [{\"green\": [\"road\" | \"road>road\"], \"seconds\"}], \"amber\": 3, \"all_red\": 1, \"offset\": 0}; every turn at the node must be green in some phase"},
+{"name":"no_turns","type":"array","help":"{\"node\", \"from\": road, \"to\": road}: turns the cook leaves out"}])json",
+     R"json({"name":"roads","nodes":[{"name":"a","at":[0,0,0]},{"name":"b","at":[100,0,0]}],"roads":[{"name":"main","from":"a","to":"b","lanes":1}]})json"},
     {"Terrain", ".mcterrain", "mce-terrain", 1,
      "A heightmap terrain (M-TERRAIN): resolution x resolution height samples over size metres, centred on the entity "
      "whose Terrain3D component (terrain: \"guid:...\") draws it, with LOD, shadows and an optional .mcmat. A new "
