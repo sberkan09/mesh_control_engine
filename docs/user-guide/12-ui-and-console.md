@@ -218,6 +218,30 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
   Code reads it with `World::held()`, and a system that must run while held registers with
   `World::run_when_held`.
 
+#### Screens that react to the game (`UiFlowRules`)
+
+`UiFlow` answers input. `UiFlowRules` (on the same entity as the `UiScreen`) answers what the game does: a
+signal, or a number crossing a value. Up to eight rules, evaluated in order after `UiFlow`'s actions, and
+also on held ticks (a paused game can still open a screen).
+
+```json
+"UiFlowRules": { "rules": [
+    { "when": "Signal", "name": "ending", "act": "Show" },
+    { "when": "FieldEquals", "field": "Score/lives", "value": 0, "act": "Show", "act2": "Quit" },
+    {}, {}, {}, {}, {}, {} ] }
+```
+
+- `when` is `Action` (an input action pressed), `Signal` (a sequence `emit`, a timeline event key, a behavior-tree
+  emit node or Luau `mce.signal` with that id; it acts the tick after it was emitted, like every event) or
+  `FieldEquals` / `FieldAbove` / `FieldBelow` (a numeric or bool field, `"Component/field"`, read from the first
+  entity that has the component, so use a singleton).
+- A field rule fires when its condition turns true, not on every tick it holds; it fires again after the
+  condition has been false once. A path that does not resolve never fires.
+- A scene lists all eight rules of the array (`{}` for an unused one: no action, nothing happens); the editor and
+  `write_scene_component` do this for you. A typo in a field path never fires and is not reported.
+- `act` and `act2` run in that order: `Show`, `Hide`, `Toggle` act on this entity's `UiScreen`; `Load` loads
+  `scene`; `Quit` ends the game. Rules and `UiFlow` can sit on the same screen.
+
 `projects/Undertow` uses all of this (`tools/author_ui_mcp.py`): a title, a pause menu, an options
 page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two
 themes on two scenes.

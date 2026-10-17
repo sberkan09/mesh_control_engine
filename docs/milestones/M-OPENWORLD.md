@@ -19,6 +19,17 @@ Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md`. Goal: close t
 
 Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E needs all. D1 first for fastest content flow.
 
+## Step status
+
+| Step | Status | PRs | Notes |
+|---|---|---|---|
+| A1 | in progress (RunPod GPU thread) | | budgets per target |
+| A2 | in progress: seam (`WorldPoint` field flag) | #495 design, seam PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); next: core rebase, then module listeners |
+| A3 | design done | | same design |
+| A4 | design done | | same design |
+
+Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
+
 ## Gates
 - Every step: `local_ci.sh --task` green, headless test with numbers, replay hash stable, existing scenes unchanged (opt-in per component).
 - A1 states a budget per target; later steps stay inside it.
