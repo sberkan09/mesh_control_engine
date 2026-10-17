@@ -976,7 +976,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
             origin_[0] += f64(d.x);
             origin_[1] += f64(d.y);
             origin_[2] += f64(d.z);
-            for (EmitterGpu& e : emitters_gpu_) destroy_buffer(*device_, e.particles);  // world-space rings restart
+            for (EmitterGpu& e : emitters_gpu_) if (!e.particles.is_null()) device_->destroy_buffer(e.particles);  // world-space rings restart
             emitters_gpu_.clear();
         }
     }

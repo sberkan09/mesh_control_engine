@@ -25,7 +25,7 @@ struct Seen {
     vec3 delta;
 };
 
-void on_shift(World&, const vec3& delta, void* user) {
+void count_shift(World&, const vec3& delta, void* user) {
     Seen& s = *static_cast<Seen*>(user);
     ++s.calls;
     s.delta = delta;
@@ -64,8 +64,8 @@ TEST_CASE("origin: a rebase moves roots, world transforms and WorldPoint fields,
     const u32 changed_before = w.change_tick();
 
     Seen seen;
-    on_shift(w, &origin_test::on_shift, &seen);
-    on_shift(w, &origin_test::on_shift, &seen);  // registers once
+    on_origin_shift(w, &origin_test::count_shift, &seen);
+    on_origin_shift(w, &origin_test::count_shift, &seen);  // registers once
     install_world_origin(w, 256.0f);
     const i32 cells[3] = {4, 0, -3};  // 1024 m on x, -768 m on z
     rebase_world(w, cells);
@@ -103,7 +103,7 @@ TEST_CASE("origin: a rebase moves roots, world transforms and WorldPoint fields,
     const WorldPoint64 a = to_absolute(w, w.try_get<LocalTransform>(root)->position);
     CHECK(a.x == 1100.0);
     CHECK(a.z == -700.0);
-    remove_origin_shift(w, &origin_test::on_shift, &seen);
+    remove_origin_shift(w, &origin_test::count_shift, &seen);
     const i32 back[3] = {-4, 0, 3};
     rebase_world(w, back);
     CHECK(seen.calls == 1);

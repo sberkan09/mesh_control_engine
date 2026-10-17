@@ -24,7 +24,7 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | in progress: seam (`WorldPoint` field flag) | #495 design, seam PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); next: core rebase, then module listeners |
+| A2 | in progress: seam merged, floating origin (core + module listeners) in review | #495 design, #502 seam, floating-origin PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
 | A3 | design done | | same design |
 | A4 | design done | | same design |
 

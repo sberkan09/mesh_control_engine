@@ -334,14 +334,16 @@ TEST_CASE("streaming: a floating origin rebases around the focus and chunks land
     REQUIRE(f.base.size() == 4);
     const Entity A = f.base[1], B = f.base[2];
     scene::pump_streaming(f.world, scene::PumpMode::Settle);
-    CHECK(world_origin(f.world) == nullptr);  // the focus is at the origin: nothing to do yet
+    REQUIRE(world_origin(f.world));  // installed with the scene's snap on the first pump
+    CHECK(world_origin(f.world)->serial == 0);  // the focus is at the origin: nothing to do yet
+    CHECK(world_origin(f.world)->snap == 8.0f);
     CHECK(f.state(A) == scene::ChunkState::Loaded);
     const Entity rock = f.streaming().entities(A)[0];
 
     // 15 m out: inside the 16 m threshold, no rebase.
     f.move_focus(15.0f);
     scene::pump_streaming(f.world);
-    CHECK(world_origin(f.world) == nullptr);
+    CHECK(world_origin(f.world)->serial == 0);
 
     // 17 m: the world moves by round(17 / 8) = 2 cells = 16 m, before the chunks are judged.
     f.move_focus(17.0f);
