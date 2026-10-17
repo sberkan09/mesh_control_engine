@@ -24,8 +24,8 @@ SKIP = {"build", "cooked", "dist", ".mce", "assets.mce", ".mcp.json"}
 
 
 class Server:
-    def __init__(self, exe, project):
-        self.p = subprocess.Popen([exe, "--project", str(project)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    def __init__(self, exe, project, extra=()):
+        self.p = subprocess.Popen([exe, "--project", str(project), *extra], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, text=True)
         self.n = 0
         self.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
