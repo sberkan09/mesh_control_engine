@@ -934,9 +934,14 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
     out_ = out;
-    inst_budget_ = desc_.instancing_budget;
+    for (u32& b : inst_budget_) b = 0;
+    if (out.first) {  // the frame's budget, shared by all its views (the device's ring is per frame slot)
+        const usize ring = desc_.geometry_ring_bytes / 4;
+        inst_frame_left_ = static_cast<u32>(min<usize>(desc_.instancing_budget, ring));
+    }
     const rhi::Extent2D view = scene.view().viewport;
     if (view.width == 0 || view.height == 0) return;
+    reserve_instancing(scene);
     // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
     const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
     const rhi::Extent2D size = scale >= 1.0f ? view
@@ -1011,6 +1016,10 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
     ssr_prev_valid_ = true;
+    for (u32& b : inst_budget_) {  // what this view did not use goes back to the frame's later views
+        inst_frame_left_ += b;
+        b = 0;
+    }
 }
 
 // ---- 0. Forward+ light assignment on the GPU (M-VISUAL 1): fills banks 4 and 6 for the main pass
@@ -1436,7 +1445,7 @@ void Forward3D::record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
-    const bool instanced = !ao_prepass_inst_.is_null() && upload_runs(cmd, scene, false);
+    const bool instanced = !ao_prepass_inst_.is_null() && upload_runs(cmd, scene, kInstPrepass);
     stats_.ssao_draws = draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false,
                                     true, false, instanced);
     draw_batches(cmd, scene, cache, true);
@@ -1816,7 +1825,7 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     bind_main_state(cmd, scene, true);
 
     DrawCache cache;
-    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, false);
+    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
     draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
     draw_batches(cmd, scene, cache, false);
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
@@ -2362,21 +2371,47 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
 }
 
 // ---- automatic instancing (M-VISUAL3 5a) -------------------------------------------------------------
-bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, bool velocity) {
+namespace {
+// What one set_storage_data of `bytes` takes from the ring: the device aligns each range.
+u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 1) / align * align; }
+}  // namespace
+
+void Forward3D::reserve_instancing(const Scene3D& scene) {
+    // The opaque runs' copies (the main and prepass blocks carry model and normal, the velocity one the model).
+    u32 copies = 0;
+    for (const DrawRun& r : scene.opaque_runs()) copies += r.count >= 2 ? r.count : 0u;
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    const u32 lit = ring_bytes(copies * 2u * u32(sizeof(mat4)), align);
+    const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
+    const bool prepass =
+        scene.ambient_occlusion().enabled || scene.reflections().enabled || scene.contact_shadows().enabled;
+    const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
+                                   ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
+                                   velocity_inst_.is_null() || !scene.post().needs_velocity() ? 0u : vel};
+    for (u32 p = 0; p < kInstShadow; ++p) {  // main first, then the prepasses
+        inst_budget_[p] = min(want[p], inst_frame_left_);
+        inst_frame_left_ -= inst_budget_[p];
+    }
+    inst_budget_[kInstShadow] = inst_frame_left_;  // the cascades and tiles share the rest
+    inst_frame_left_ = 0;
+}
+
+bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass) {
     const Span<const DrawRun> runs = scene.opaque_runs();
     const Span<const Scene3D::Draw> draws = scene.draws();
     inst_slots_.clear();
     inst_slots_.resize(scene.opaque_count());
     inst_data_.clear();
+    const bool velocity = pass == kInstVelocity;
     const u32 per_copy = velocity ? 1u : 2u;  // mat4s
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
     for (const DrawRun& r : runs) {
         if (r.count < 2) continue;
-        const u32 bytes = r.count * per_copy * u32(sizeof(mat4));
-        if (bytes > inst_budget_) {
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        if (ring_bytes(used + r.count * per_copy * u32(sizeof(mat4)), align) > inst_budget_[pass]) {
             ++stats_.instancing_overflow;
             continue;
         }
-        inst_budget_ -= bytes;
         inst_slots_[r.first] = {r.count, static_cast<u32>(inst_data_.size() / per_copy)};
         for (u32 k = 0; k < r.count; ++k) {
             inst_data_.push_back(draws[r.first + k].model);
@@ -2384,8 +2419,10 @@ bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, bool 
         }
     }
     if (inst_data_.empty()) return false;
+    const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+    inst_budget_[pass] -= ring_bytes(bytes, align);
     cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
-    stats_.instancing_bytes += static_cast<u32>(inst_data_.size() * sizeof(mat4));
+    stats_.instancing_bytes += bytes;
     return true;
 }
 
@@ -2403,21 +2440,23 @@ void Forward3D::draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, cons
     inst_data_.clear();
     inst_slots_.clear();
     inst_slots_.resize(caster_runs_.size());
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
     for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
         const DrawRun& r = caster_runs_[ri];
         if (r.count < 2) continue;
-        const u32 bytes = r.count * u32(sizeof(mat4));
-        if (bytes > inst_budget_) {
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        if (ring_bytes(used + r.count * u32(sizeof(mat4)), align) > inst_budget_[kInstShadow]) {
             ++stats_.instancing_overflow;
             continue;
         }
-        inst_budget_ -= bytes;
         inst_slots_[ri] = {r.count, static_cast<u32>(inst_data_.size())};
         for (u32 k = 0; k < r.count; ++k) inst_data_.push_back(view_proj * casters[caster_sorted_[r.first + k]].model);
     }
     if (!inst_data_.empty()) {
+        const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        inst_budget_[kInstShadow] -= ring_bytes(bytes, align);
         cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
-        stats_.instancing_bytes += static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        stats_.instancing_bytes += bytes;
     }
     for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
         const DrawRun& r = caster_runs_[ri];
@@ -2546,7 +2585,7 @@ void Forward3D::record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     rhi::PipelineHandle bound_pipe;
     const GpuMesh* bound = nullptr;
     const Span<const Scene3D::Draw> draws = scene.draws();
-    const bool instanced = !velocity_inst_.is_null() && upload_runs(cmd, scene, true);
+    const bool instanced = !velocity_inst_.is_null() && upload_runs(cmd, scene, kInstVelocity);
     for (u32 i = 0; i < scene.opaque_count(); ++i) {
         const Scene3D::Draw& d = draws[i];
         const InstSlot run = instanced ? inst_slots_[i] : InstSlot{};

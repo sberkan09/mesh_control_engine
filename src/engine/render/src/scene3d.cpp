@@ -123,7 +123,8 @@ void fit_cascade(const View3D& view, vec3 light_dir, f32 near_depth, f32 far_dep
 }
 
 Scene3D::Scene3D(const MeshStore& meshes, mem::IAllocator& alloc)
-    : meshes_(&meshes),
+    : run_scratch_(alloc),
+      meshes_(&meshes),
       alloc_(&alloc),
       point_lights_(alloc),
       clusters_(alloc),
@@ -605,65 +606,80 @@ u64 ptr_bits(const void* p) { return static_cast<u64>(reinterpret_cast<uintptr_t
 
 // Groups items [0, n) by key: `hash(i)` (~0ull = the item takes part in no group) and `equal(a, b)`.
 // Appends to `order` the items in their output order (offset by `base`) and to `runs` (positions in `order`)
-// one run per group of at least `min_count` items, placed where its first item was, and one single run per
-// other item, at its own position. The optional counters count the groups formed and the items in them.
-template <class Hash, class Equal>
-void group_runs(u32 n, u32 base, u32 min_count, Hash hash, Equal equal, mem::IAllocator& alloc, Array<u32>& order,
+// one run per group of at least `min_count` items, placed where its first item was (a group of more than
+// `max_count` items as consecutive runs of at most `max_count`), and one single run per other item, at its
+// own position. The optional counters count the instanced runs formed and the items in them. `sc` holds the
+// grouping's arrays (Scene3D::RunScratch); its `order` member is not touched.
+template <class Scratch, class Hash, class Equal>
+void group_runs(u32 n, u32 base, u32 min_count, u32 max_count, Hash hash, Equal equal, Scratch& sc, Array<u32>& order,
                 Array<DrawRun>& runs, u32* runs_grouped = nullptr, u32* items_grouped = nullptr) {
     if (n == 0) return;
     u32 cap = 16;
     while (cap < n * 2) cap *= 2;
-    Array<u32> table(alloc);   // group id per slot, ~0u = empty
-    Array<u64> hashes(alloc);  // per group
-    Array<u32> head(alloc), tail(alloc), size(alloc);
-    Array<u32> next(alloc);   // per item: the next item of its group
-    Array<u32> group(alloc);  // per item: its group, ~0u = none
-    table.resize(cap);
-    for (u32& t : table) t = ~0u;
-    next.resize(n);
-    group.resize(n);
+    sc.table.resize(cap);
+    for (u32& t : sc.table) t = ~0u;
+    sc.hashes.clear();
+    sc.head.clear();
+    sc.tail.clear();
+    sc.size.clear();
+    sc.next.resize(n);
+    sc.group.resize(n);
     for (u32 i = 0; i < n; ++i) {
-        next[i] = ~0u;
-        group[i] = ~0u;
+        sc.next[i] = ~0u;
+        sc.group[i] = ~0u;
         const u64 h = hash(i);
         if (h == ~0ull) continue;
         u32 s = static_cast<u32>(h) & (cap - 1);
         u32 g = ~0u;
-        while (table[s] != ~0u) {
-            const u32 c = table[s];
-            if (hashes[c] == h && equal(head[c], i)) {
+        while (sc.table[s] != ~0u) {
+            const u32 c = sc.table[s];
+            if (sc.hashes[c] == h && equal(sc.head[c], i)) {
                 g = c;
                 break;
             }
             s = (s + 1) & (cap - 1);
         }
         if (g == ~0u) {
-            g = static_cast<u32>(head.size());
-            table[s] = g;
-            hashes.push_back(h);
-            head.push_back(i);
-            tail.push_back(i);
-            size.push_back(1);
+            g = static_cast<u32>(sc.head.size());
+            sc.table[s] = g;
+            sc.hashes.push_back(h);
+            sc.head.push_back(i);
+            sc.tail.push_back(i);
+            sc.size.push_back(1);
         } else {
-            next[tail[g]] = i;
-            tail[g] = i;
-            ++size[g];
+            sc.next[sc.tail[g]] = i;
+            sc.tail[g] = i;
+            ++sc.size[g];
         }
-        group[i] = g;
+        sc.group[i] = g;
     }
     const u32 lo = math::max(min_count, 2u);
+    const u32 hi = math::max(max_count, 1u);
     for (u32 i = 0; i < n; ++i) {
-        const u32 g = group[i];
-        if (g == ~0u || size[g] < lo) {
+        const u32 g = sc.group[i];
+        if (g == ~0u || sc.size[g] < lo || hi < lo) {
             runs.push_back({static_cast<u32>(order.size()), 1});
             order.push_back(base + i);
             continue;
         }
-        if (head[g] != i) continue;  // emitted with its group's first item
-        runs.push_back({static_cast<u32>(order.size()), size[g]});
-        for (u32 k = i; k != ~0u; k = next[k]) order.push_back(base + k);
-        if (runs_grouped) ++*runs_grouped;
-        if (items_grouped) *items_grouped += size[g];
+        if (sc.head[g] != i) continue;  // emitted with its group's first item
+        u32 left = sc.size[g];
+        u32 k = i;
+        while (left > 0) {  // split into runs of at most `hi`; a short tail stays single draws
+            const u32 count = math::min(left, hi);
+            if (count < lo) {
+                for (; k != ~0u; k = sc.next[k]) {
+                    runs.push_back({static_cast<u32>(order.size()), 1});
+                    order.push_back(base + k);
+                }
+                break;
+            }
+            runs.push_back({static_cast<u32>(order.size()), count});
+            for (u32 c = 0; c < count; ++c, k = sc.next[k]) order.push_back(base + k);
+            if (runs_grouped) ++*runs_grouped;
+            if (items_grouped) *items_grouped += count;
+            left -= count;
+        }
     }
 }
 
@@ -716,7 +732,8 @@ void Scene3D::build_runs() {
             ++stats_.not_instanced_moving;
     }
     // Group within each material segment (contiguous: the sort's major key); permute the draws.
-    Array<u32> order(*alloc_);
+    Array<u32>& order = run_scratch_.order;
+    order.clear();
     order.reserve(n);
     u32 grouped = 0;
     for (u32 s = 0; s < n;) {
@@ -732,8 +749,8 @@ void Scene3D::build_runs() {
                    same_bits(&xi.tint, &yi.tint, sizeof(xi.tint)) &&
                    same_bits(&xi.emissive_tint, &yi.emissive_tint, sizeof(xi.emissive_tint));
         };
-        group_runs(e - s, s, instancing_.min_count, hash, equal, *alloc_, order, runs_, &stats_.runs_instanced,
-                   &grouped);
+        group_runs(e - s, s, instancing_.min_count, instancing_.max_count, hash, equal, run_scratch_, order, runs_,
+                   &stats_.runs_instanced, &grouped);
         s = e;
     }
     stats_.draws_instanced = grouped;
@@ -762,28 +779,25 @@ void Scene3D::caster_runs(Span<const u32> casters, Array<u32>& sorted, Array<Dra
         return;
     }
     sorted.reserve(n);
-    // The material is part of the key only when it alpha-masks: its override (or none) and a mask bit.
-    auto material_bits = [&](const Draw& d) -> u64 {
-        const MeshInstance& inst = instances_[d.instance];
-        const bool mask = (material_of(inst, d.mesh->submeshes[d.submesh]).flags & asset::MaterialFlags::AlphaMask) != 0;
-        return mask ? ptr_bits(inst.material) | 1u : 0u;
-    };
+    // Rigid and not alpha-masked (see the declaration): the key is the index range alone.
     auto hash = [&](u32 i) -> u64 {
         const Draw& d = shadow_draws_[casters[i]];
         if (d.mesh->skinned() || d.palette != ~0u) return ~0ull;
+        if (material_of(instances_[d.instance], d.mesh->submeshes[d.submesh]).flags & asset::MaterialFlags::AlphaMask)
+            return ~0ull;
         u64 h = hash_combine(kFnv64Offset, ptr_bits(d.mesh));
         h = hash_combine(h, (u64(d.submesh) << 32) | d.lod);
-        h = hash_combine(h, material_bits(d));
         return h == ~0ull ? 0 : h;
     };
     auto equal = [&](u32 a, u32 b) {
         const Draw& x = shadow_draws_[casters[a]];
         const Draw& y = shadow_draws_[casters[b]];
-        return x.mesh == y.mesh && x.submesh == y.submesh && x.lod == y.lod && material_bits(x) == material_bits(y);
+        return x.mesh == y.mesh && x.submesh == y.submesh && x.lod == y.lod;
     };
-    Array<u32> order(*alloc_);
+    Array<u32>& order = run_scratch_.order;
+    order.clear();
     order.reserve(n);
-    group_runs(n, 0, instancing_.min_count, hash, equal, *alloc_, order, runs);
+    group_runs(n, 0, instancing_.min_count, instancing_.max_count, hash, equal, run_scratch_, order, runs);
     for (u32 i : order) sorted.push_back(casters[i]);
 }
 

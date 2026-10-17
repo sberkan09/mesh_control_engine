@@ -568,9 +568,12 @@ struct DrawRun {  // draws()[first, first + count) draw as one instanced draw (c
     u32 first = 0;
     u32 count = 0;
 };
+// The most copies one instanced draw carries; a longer group is split into runs of at most this many.
+inline constexpr u32 kMaxInstancesPerRun = 65536;
 struct InstancingSettings {
     bool enabled = true;  // false: no runs are formed and the draw order is the sort's alone
     u32 min_count = 2;    // runs shorter than this stay single draws
+    u32 max_count = kMaxInstancesPerRun;  // longer groups split into runs of at most this many
 };
 
 View3D compute_view_3d(const Camera3D& cam, rhi::Extent2D viewport);
@@ -731,9 +734,11 @@ public:
     // position of the first of them, so the list stays front to back between groups.
     Span<const DrawRun> opaque_runs() const { return runs_.span(); }
     // The runs of a shadow caster list (indices into shadow_draws(): a cascade's or a local tile's): the
-    // casters reordered into `sorted`, grouped on (mesh, submesh, LOD level, and the material only when it
-    // alpha-masks; rigid meshes only), and `runs` into `sorted`. Depth-only passes do not depend on the
-    // order. With instancing off, `sorted` is `casters` and every run is one draw.
+    // casters reordered into `sorted`, grouped on (mesh, submesh, LOD level), and `runs` into `sorted`.
+    // Rigid, not alpha-masked casters only: the shadow passes do not apply alpha masks today (kShadowFS is
+    // empty), and keeping masked casters single means a mask added there later never meets an instanced
+    // draw without it. Depth-only passes do not depend on the order. With instancing off, `sorted` is
+    // `casters` and every run is one draw. Not thread-safe (it reuses the scene's scratch arrays).
     void caster_runs(Span<const u32> casters, Array<u32>& sorted, Array<DrawRun>& runs) const;
     // Every submesh of every instance (shadows come from off-screen casters too).
     Span<const Draw> shadow_draws() const { return shadow_draws_.span(); }
@@ -759,6 +764,19 @@ private:
     void build_cascades();
     void build_local_shadows();
     void build_runs();
+    // Scratch of the run grouping (build_runs, caster_runs), kept so a frame's segments and caster lists do
+    // not allocate each time.
+    struct RunScratch {
+        explicit RunScratch(mem::IAllocator& a)
+            : table(a), hashes(a), head(a), tail(a), size(a), next(a), group(a), order(a) {}
+        Array<u32> table;   // group id per hash slot, ~0u = empty
+        Array<u64> hashes;  // per group
+        Array<u32> head, tail, size;
+        Array<u32> next;   // per item: the next item of its group
+        Array<u32> group;  // per item: its group, ~0u = none
+        Array<u32> order;  // the output order
+    };
+    mutable RunScratch run_scratch_;
     u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
     const MeshStore* meshes_;

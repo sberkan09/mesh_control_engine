@@ -32,9 +32,10 @@ struct Rgb {
 };
 
 struct Fixture3D {
-    // `desc` (optional) replaces the Forward3DDesc the other arguments make, shadow_size aside.
+    // `desc` (optional) replaces the Forward3DDesc the other arguments make, shadow_size aside; `device_desc`
+    // (optional) replaces the default device's DeviceDesc.
     explicit Fixture3D(u32 msaa = 4, bool gpu_clusters = true, bool ibl = true, f32 render_scale = 1.0f,
-                       const Forward3DDesc* desc = nullptr) {
+                       const Forward3DDesc* desc = nullptr, const rhi::DeviceDesc* device_desc = nullptr) {
         REQUIRE(platform::init().has_value());
         platform::WindowDesc wd;
         wd.title = "test_render3d_gl";
@@ -45,7 +46,7 @@ struct Fixture3D {
         auto w = platform::Window::create(wd);
         REQUIRE(w.has_value());
         window = std::move(w).value();
-        auto d = rhi::create_default_device(*window);
+        auto d = rhi::create_default_device(*window, device_desc ? *device_desc : rhi::DeviceDesc{});
         REQUIRE(d.has_value());
         device = std::move(d).value();
         REQUIRE(renderer.init(*device).has_value());

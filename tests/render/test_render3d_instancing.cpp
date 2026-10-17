@@ -276,3 +276,60 @@ TEST_CASE("instancing: each cascade's casters form their own runs; tint does not
     for (u32 i = 0; i < list.size(); ++i) CHECK(sorted[i] == list[i]);
     CHECK(runs.size() == list.size());
 }
+
+TEST_CASE("instancing: a group longer than max_count splits into runs of at most max_count") {
+    MeshStore store;
+    REQUIRE(store.upload(1, 1, box_mesh().span()).has_value());
+    Scene3D scene(store, mem::heap());
+    InstancingSettings is;
+    is.max_count = 3;
+    scene.set_instancing(is);
+    scene.begin(camera(), {256, 256});
+    for (u32 i = 0; i < 7; ++i) scene.add(at(1, {0.0f, 0.0f, -5.0f - f32(i)}));
+    scene.add(at(1, {2.0f, 0.0f, -20.0f}));  // eight copies: 3 + 3 + 2
+    scene.build();
+    check_cover(scene);
+    CHECK(scene.stats().runs_instanced == 3);
+    CHECK(scene.stats().draws_instanced == 8);
+    for (const DrawRun& r : scene.opaque_runs()) CHECK(r.count <= 3);
+
+    // A tail under min_count draws singly.
+    Scene3D tail(store, mem::heap());
+    tail.set_instancing({true, 2, 3});
+    tail.begin(camera(), {256, 256});
+    for (u32 i = 0; i < 7; ++i) tail.add(at(1, {0.0f, 0.0f, -5.0f - f32(i)}));  // 3 + 3 + 1
+    tail.build();
+    check_cover(tail);
+    CHECK(tail.stats().runs_instanced == 2);
+    CHECK(tail.stats().draws_instanced == 6);
+    CHECK(tail.stats().not_instanced_single == 1);
+
+    // The casters split the same way.
+    Array<u32> list, sorted;
+    Array<DrawRun> runs;
+    for (u32 i = 0; i < tail.shadow_draws().size(); ++i) list.push_back(i);
+    tail.caster_runs(list.span(), sorted, runs);
+    u32 next = 0;
+    for (const DrawRun& r : runs) {
+        CHECK(r.first == next);
+        CHECK(r.count <= 3);
+        next += r.count;
+    }
+    CHECK(next == list.size());
+}
+
+TEST_CASE("instancing: alpha-masked casters stay single") {
+    MeshStore store;
+    REQUIRE(store.upload(5, 1, box_mesh(asset::MaterialFlags::AlphaMask).span()).has_value());
+    Scene3D scene(store, mem::heap());
+    scene.begin(camera(), {256, 256});
+    for (u32 i = 0; i < 4; ++i) scene.add(at(5, {f32(i) - 1.5f, 0.0f, -6.0f}));
+    scene.build();
+    REQUIRE(scene.shadow_draws().size() == 4);
+    Array<u32> list, sorted;
+    Array<DrawRun> runs;
+    for (u32 i = 0; i < 4; ++i) list.push_back(i);
+    scene.caster_runs(list.span(), sorted, runs);
+    CHECK(runs.size() == 4);
+    for (const DrawRun& r : runs) CHECK(r.count == 1);
+}

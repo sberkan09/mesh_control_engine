@@ -76,9 +76,16 @@ struct Forward3DDesc {
     // Automatic instancing (M-VISUAL3 5a): the instanced twins of the mesh, SSAO prepass, shadow and velocity
     // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
     bool instancing = true;
-    // Bytes of per-copy instancing data one record() may upload (128 per main / prepass copy, 64 per shadow
-    // or velocity copy, through set_storage_data); runs past it draw singly (Forward3DStats::instancing_overflow).
+    // Bytes of per-copy instancing data a frame may upload over all its views (128 per main / prepass copy, 64
+    // per shadow or velocity copy, through set_storage_data); runs past it draw singly
+    // (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
+    // geometry_ring_bytes: the storage data shares that ring with the frame's transient vertices, indices and
+    // light lists, and an upload that does not fit is dropped by the device, so the budget must stay under it.
+    // Each view reserves the main pass's copies first, then the SSAO prepass's, then the velocity prepass's;
+    // the shadow passes take what is left.
     u32 instancing_budget = 512 * 1024;
+    // The device's per-frame-slot geometry ring (rhi::DeviceDesc::geometry_ring_bytes): keep them equal.
+    usize geometry_ring_bytes = rhi::DeviceDesc{}.geometry_ring_bytes;
 };
 
 struct Forward3DStats {
@@ -141,7 +148,7 @@ struct Forward3DStats {
     u32 draws_instanced = 0;         // ... the scene draws they replaced (main_draws fell by this - runs_instanced)
     u32 shadow_runs_instanced = 0;   // instanced draws over all cascades and local shadow tiles
     u32 shadow_draws_instanced = 0;  // ... the caster draws they replaced
-    u32 instancing_overflow = 0;     // runs of any pass drawn singly because instancing_budget ran out
+    u32 instancing_overflow = 0;     // runs of any pass drawn singly because the frame's instancing budget ran out
     u32 instancing_bytes = 0;        // per-copy data uploaded this record()
 };
 
@@ -359,7 +366,10 @@ private:
     };
     // Uploads the per-copy data of the scene's opaque runs for one pass (`velocity`: the model only; else
     // model and normal) within the budget and fills inst_slots_; false when nothing is drawn instanced.
-    bool upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, bool velocity);
+    enum InstPass : u32 { kInstMain, kInstPrepass, kInstVelocity, kInstShadow, kInstPassCount };
+    bool upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass);
+    // Splits the frame's remaining instancing budget into this view's per-pass reservations (main first).
+    void reserve_instancing(const Scene3D& scene);
     // The caster list `list` (indices into shadow_draws()) of one depth pass, in caster runs.
     void draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, const math::mat4& view_proj, Span<const u32> list);
     // ---- scale (M-VISUAL 9, forward3d_scale.cpp)
@@ -486,7 +496,8 @@ private:
     rhi::PipelineHandle ao_prepass_inst_;
     rhi::PipelineHandle shadow_inst_;
     rhi::PipelineHandle velocity_inst_;
-    u32 inst_budget_ = 0;          // bytes left this record()
+    u32 inst_frame_left_ = 0;               // bytes of the frame's instancing budget no view has reserved
+    u32 inst_budget_[kInstPassCount] = {};  // this view's reservation per pass, bytes left
     Array<InstSlot> inst_slots_;   // per opaque draw of the pass being drawn
     Array<math::mat4> inst_data_;  // the pass's per-copy block
     Array<u32> caster_sorted_;

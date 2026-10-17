@@ -121,6 +121,30 @@ TEST_CASE("instancing gl: past the upload budget the runs draw singly with equal
     }
 }
 
+TEST_CASE("instancing gl: a small geometry ring caps the budget; main is served first, the rest draws singly") {
+    Frame reference;
+    {
+        Fixture3D f;
+        upload_crate(f, kCrate);
+        reference = render_crates(f, false);
+    }
+    // A 32 KiB ring gives instancing 8 KiB of it for the frame: the main pass's reservation fits, the
+    // passes after it overflow into single draws. Without the cap the uploads would overrun the ring, which
+    // drops them without binding and leaves the instanced draws reading stale matrices.
+    rhi::DeviceDesc dd;
+    dd.geometry_ring_bytes = 32 * KiB;
+    Forward3DDesc fd;
+    fd.geometry_ring_bytes = dd.geometry_ring_bytes;
+    Fixture3D f(4, true, true, 1.0f, &fd, &dd);
+    upload_crate(f, kCrate);
+    const Frame on = render_crates(f, true);
+    CHECK(f.device->validation_error_count() == 0);
+    CHECK(on.stats.instancing_overflow > 0);
+    CHECK(on.stats.instancing_bytes <= dd.geometry_ring_bytes / 4);
+    CHECK(on.stats.runs_instanced >= 2);  // the main pass is reserved first
+    CHECK(differing(on.pixels, reference.pixels) == 0);
+}
+
 TEST_CASE("instancing gl: r.instancing's desc switch off draws the runs singly") {
     Frame reference;
     {
