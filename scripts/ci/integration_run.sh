@@ -115,6 +115,7 @@ for g in "${GROUPS_RUN[@]}"; do
 done
 
 # --- 2b. --task / --premerge timing (opt out with MCE_CI_TASK_TIMING=0) ---------------------------------------
+# Non-gating: a FAIL here is logged in the report and never adds to `failed`.
 # What a thread pays for a 1-line core change, measured here because a thread's own container restarts whenever a
 # message reaches it and kills long runs. The trees are warm from the groups above, so this is the "normal day"
 # number; the first --task is the one that touches the change, the second is the re-run.
@@ -128,7 +129,7 @@ if [[ "${MCE_CI_TASK_TIMING:-1}" != 0 && ${#failed[@]} -eq 0 && -f src/engine/co
         echo "    timing ${TIMING[-1]}"
         [[ -d "$KEEP" ]] && echo "timing ${TIMING[-1]}" >> "$KEEP/$head_sha-progress.txt"
     done
-    git checkout -- src/engine/core/src/log.cpp
+    git checkout -- src/engine/core/src/log.cpp || true
 fi
 
 # --- 3. ccache snapshot -----------------------------------------------------------------------------
