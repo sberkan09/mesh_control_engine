@@ -21,7 +21,7 @@ namespace {
 
 constexpr const char* kStage = "cook.defaults";
 constexpr u32 kDefaultsFormatVersion = 1;
-constexpr usize kMaxValueBytes = 900;
+constexpr usize kMaxValueBytes = 128; // ConVar::default_str_ capacity
 
 void error(DiagList& diags, StringView file, JsonValue at, StringView msg) {
     detail::error_at(diags, Errc::ParseError, file, at, kStage, msg);
@@ -92,15 +92,16 @@ public:
                     error(diags, file, val, "a number must be finite");
                     continue;
                 }
-                if (val.is_integer() && std::fabs(n) < 2147483648.0) std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(n));
+                if (val.is_integer()) std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(n));
                 else std::snprintf(buf, sizeof(buf), "%.9g", n);
                 line += buf;
             } else if (val.is_string()) {
                 const StringView s = val.as_string();
                 bool clean = s.size() <= kMaxValueBytes;
                 for (const char c : s) clean = clean && static_cast<unsigned char>(c) >= 32;
+                clean = clean && !s.empty() && s.front() != ' ' && s.back() != ' ';
                 if (!clean) {
-                    error(diags, file, val, "a text value is at most 900 bytes, on one line");
+                    error(diags, file, val, "a text value is 1-128 bytes on one line, without edge spaces");
                     continue;
                 }
                 line += s;
