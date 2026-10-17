@@ -102,14 +102,47 @@ if (kit::road_net_first(world, net)) {                 // or kit::road_net(world
 }
 ```
 
-`kit::road_debug_lines` returns every lane as lines, connectors coloured by their light, for an overlay.
+`kit::road_debug_lines` returns every lane as lines, connectors coloured by their light, for an overlay. The
+editor draws them while a 3D game plays (View > Roads).
 
-## 29.5 Mistakes the cook catches
+Over MCP, `roads_generate` writes a street grid to start from (junctions `n<i>_<j>`, roads `x<i>_<j>` along +x and
+`z<i>_<j>` along +z, signals with the x roads green first), and `roads_info` cooks a network and reports what the
+cook built and what traffic would trip on: one-way lanes that end with nowhere to go (`no_way_on`) and lanes cut off
+from the rest of the network (`cut_off`).
 
-The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
-itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
-road shorter than its two junctions need, a `signal` node without a signal (or a signal on a node with another
-control), a green entry that matches no turn, and a turn that is green in no phase.
+## 29.5 Traffic
+
+A car joins traffic with a `TrafficDriver3D` next to its `Vehicle3D` (and `RigidBody3D`). Every fixed tick
+`"traffic_drivers"` (ahead of `"kit3d_vehicles"`) writes its throttle, steer and brake:
+
+- **Its lane.** The car is projected onto its lane, and onto the next one once it passes the end. A car more
+  than `lost_distance` off its lanes re-snaps to the nearest lane running its way (`state` Lost until it does).
+- **Its turns.** At the end of a road lane it takes one of the connectors leaving it, picked by a hash of
+  `seed` and the junctions it has passed, so a replay turns the same way. U-turns only when nothing else goes.
+- **Its speed.** The intelligent driver model (`accel`, `decel`, `headway`, `min_gap`) against the nearest
+  thing ahead within its next two lanes: the car in front (`leader`, state Following), a stop line, or a bend
+  (the connector's speed, braked to in time). Lane limits are scaled by `speed_factor` and capped by `max_speed`.
+- **Stop lines.** It does not enter a connector on red, or on amber while it can still stop (state Waiting);
+  at a stop sign until it has stood at the line for a second; or while a conflicting connector is occupied,
+  or a car that goes first (higher rank, or the same rank and sooner) would get there within `yield_time`
+  seconds of it (state Yielding).
+- **Pedestrians.** A `Pedestrian3D` crossing a road (`mode` Cross, chapter 29.6) within a car's lanes ahead
+  stops it 3 m short until the pedestrian is across (state Yielding). Signalled crossings wait for the lights,
+  so in practice this is the unsignalled junctions.
+- **Its wheel.** Pure pursuit at a point `look_ahead` metres (at least 0.6 s) down its lanes.
+
+`TrafficSpawner3D` keeps `max_cars` alive between `min_radius` and `spawn_radius` of `focus` (the player),
+on road lanes, `spacing` metres apart, at most `per_tick` a tick, and removes its cars beyond `despawn_radius`
+or lost or flipped for `stuck_after` seconds. A car is the `prefab` (its root needs `Vehicle3D`), or, with no
+prefab, whatever the game's `TrafficSpawnHook` resource spawns:
+
+```cpp
+world.set_resource(kit::TrafficSpawnHook{[](Frame& f, math::vec3 at, math::quat rot, u32 index) {
+    return f.commands().spawn(LocalTransform{at, rot, {1, 1, 1}}, body_for(index), car_for(index));
+}});
+```
+
+A driver's state lives in its component, so traffic replays to the same `state_hash` and saves.
 
 ## 29.6 Pedestrian crowds
 
@@ -151,3 +184,10 @@ exactly.
 
 Not yet: pedestrians do not avoid each other, react to the player, or follow terrain height (flat networks), and cars
 do not yet slow for them (traffic, B2).
+
+## 29.7 Mistakes the cook catches
+
+The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
+itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
+road shorter than its two junctions need, a `signal` node without a signal (or a signal on a node with another
+control), a green entry that matches no turn, and a turn that is green in no phase.
