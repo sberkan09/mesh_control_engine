@@ -136,6 +136,10 @@ per chunk that stands in for everything static in it.
   to the chunk entity), then simplifies each submesh with meshoptimizer to `ratio` (border vertices locked so material
   seams stay closed). Objects smaller than `min_size` metres (bounding diameter) are dropped: they are invisible at
   HLOD distance.
+- **As built (#534 and the far-levels PR):** the bake keeps each source's own LOD levels instead of taking the coarsest,
+  and the simplification moved to the cook: the `hlod` importer's `lod_levels` setting (written as 2 into new
+  sidecars) adds meshopt levels to the submeshes without any, so level 0 stays the exact merge and far levels are picked
+  by screen error like any mesh's.
 - **Format:** the bake writes `<chunk>.mchlod`, a CHNK_MESH payload (the merged mesh, materials by texture GUID, so the
   source textures are reused, not copied). A new passthrough cook importer validates it with `MeshView::read` and emits
   it as a Mesh asset, the `.mcnav` precedent.

@@ -3,10 +3,16 @@
 // a trailing hash (the .mcnav precedent); the cook checks both, validates the payload with MeshView::read and emits
 // it as an ordinary mesh, so the runtime draws it like any other. The submeshes' texture GUIDs are declared as
 // links: the textures must exist, but the proxy's bytes do not depend on theirs.
+//
+// Sidecar settings: "lod_levels" (0..3, default 0), "lod_ratio" (0.35), "lod_error" (0.05), as for glTF. With
+// lod_levels > 0 the submeshes that carry no levels of their own (their sources had none) get simplified ones
+// (mesh_build.h generate_lods), so a far proxy draws fewer triangles; the hlod_bake tool writes new sidecars with 2.
 
+#include <cmath>
 #include <cstring>
 
 #include "importer_common.h"
+#include "mesh_build.h"
 #include "mce/cook/hlod.h"
 #include "mce/asset/formats.h"
 #include "mce/hash.h"
@@ -43,6 +49,30 @@ Span<const byte> hlod_payload(const ImportInput& in, DiagList& diags) {
     return src.subspan(kHeader, src.size() - kHeader - kTrailer);
 }
 
+// The baked mesh as the model importers' geometry (its quantized vertices and index ranges as they are), simplified
+// levels added to the submeshes without any, written again as a CHNK_MESH.
+void write_with_lods(const asset::MeshView& v, u32 levels, f32 ratio, f32 max_error, const Guid& guid, asset::ContainerWriter& out) {
+    detail::Geometry geo;
+    for (const asset::MeshVertex& x : v.vertices) geo.vertices.push_back(x);
+    geo.skin_vertices.resize(v.vertices.size());
+    for (u32 i = 0; i < v.header->index_count; ++i) geo.indices.push_back(v.index(i));
+    for (u32 s = 0; s < v.submeshes.size(); ++s) {
+        geo.submeshes.push_back(v.submeshes[s]);
+        geo.submesh_ext.push_back(v.material_ext(s));
+        geo.submesh_skin.push_back(-1);
+        Array<asset::MeshLod> own;
+        for (const asset::MeshLod& l : v.submesh_lods(s)) own.push_back(l);
+        geo.lods.push_back(static_cast<Array<asset::MeshLod>&&>(own));
+    }
+    detail::generate_lods(geo, levels, ratio, max_error);
+    detail::SkinTables skins;
+    skins.submesh_skins.resize(geo.submeshes.size(), -1);
+    detail::MeshTables tables;
+    tables.nodes = v.nodes;
+    tables.strings = v.strings;
+    detail::write_mesh_chunk(geo, skins, tables, false, guid, out);
+}
+
 class HlodImporter final : public IImporter {
 public:
     StringView id() const override { return "hlod"; }
@@ -75,13 +105,30 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
-        if (!detail::check_keys(in.settings, {}, in.display_path, kStage, diags)) return false;
+        const StringView file = in.display_path;
+        if (!detail::check_keys(in.settings, {"lod_levels", "lod_ratio", "lod_error"}, file, kStage, diags)) return false;
+        f64 lod_levels = 0.0, lod_ratio = 0.35, lod_error = 0.05;
+        if (!detail::read_number(in.settings, "lod_levels", 0.0, lod_levels, file, kStage, diags)) return false;
+        if (!detail::read_number(in.settings, "lod_ratio", 0.35, lod_ratio, file, kStage, diags)) return false;
+        if (!detail::read_number(in.settings, "lod_error", 0.05, lod_error, file, kStage, diags)) return false;
+        if (lod_levels < 0.0 || lod_levels >= asset::kMaxMeshLods || lod_levels != std::floor(lod_levels)) {
+            diags.error(Errc::InvalidArgument, file, 0, 0, kStage, "'lod_levels' must be a whole number 0..3");
+            return false;
+        }
+        if (!(lod_ratio > 0.0 && lod_ratio < 1.0) || !(lod_error > 0.0 && lod_error <= 1.0)) {
+            diags.error(Errc::InvalidArgument, file, 0, 0, kStage, "'lod_ratio' must be in (0, 1) and 'lod_error' in (0, 1]");
+            return false;
+        }
         const Span<const byte> payload = hlod_payload(in, diags);
         if (payload.empty()) return false;
         const Result<asset::MeshView> view = asset::MeshView::read(payload);
         if (!view) {
             diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "the .mchlod mesh does not validate (re-bake the HLOD)");
             return false;
+        }
+        if (lod_levels > 0.0 && !view.value().skinned()) {
+            write_with_lods(view.value(), static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error), in.guid, out);
+            return true;
         }
         const u32 flags = view.value().header->flags;
         asset::ContainerWriter::ChunkDesc d;
