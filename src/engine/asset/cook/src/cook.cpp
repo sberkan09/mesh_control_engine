@@ -60,9 +60,11 @@ public:
         out = g.value();
         return true;
     }
+    // A native asset's document; for an interchange asset (a texture, a sound) its sidecar "settings", which is
+    // how the material cook reads a texture's "srgb" without a new IAssetLookup method (importer.h is wide).
     bool native_document(Guid g, JsonValue& out, StringView& source_path) const override {
         const AssetRecord* rec = reg_.by_guid(g);
-        if (!rec || !rec->importer->native()) return false;
+        if (!rec) return false;
         out = rec->settings();
         source_path = rec->source_path.view();
         return out.valid();

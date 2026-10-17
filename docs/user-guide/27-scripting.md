@@ -126,6 +126,19 @@ map does not define reads as not pressed and zero.
 The 2D body functions raise "the entity has no 2D body" for an entity without one (a body exists from the first physics step).
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
 
+**Game plumbing.**
+
+| Call | Does |
+|---|---|
+| `mce.save(slot)` | writes the entities that have a `SaveKey` (fields marked `Save`) to the slot now; `true`, or `false` and a reason. A slot is a name: 1 to 64 letters, digits, `_` or `-`, never a path |
+| `mce.load(slot)` | `true` when the slot exists; the host applies it right after this tick, on top of the scene that is loaded. The tick counter is not restored |
+| `mce.has_save(slot)` | does the slot exist |
+| `mce.set_time_scale(s)`, `mce.time_scale()` | game speed against the wall clock, 0.1 to 4 (slow motion, hit-stop); it scales the player's clock, never `dt`, so a headless run ignores it |
+| `mce.shake(trauma)` | adds trauma (0..1, total capped at 1) to every `CameraShake2D` and `CameraShake3D` |
+| `mce.burst(e, count?)` | fires the entity's `ParticleBurst` once, with `count` particles if given |
+
+Stopping or fading a sound has no call of its own: play it from an entity with an `AudioSource` and a `fade_s`, then destroy the entity (or set its `playing` field) and the voice fades out.
+
 **The rest.**
 
 | Call | Does |

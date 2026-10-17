@@ -68,3 +68,13 @@ the game's own build cooked it.
 **Test:** `tests/asset/test_mods.cpp` "a mod pack cannot carry script bytecode": a mod's new and overriding Script entries never
 enter the table. The `MCE_FUZZ_BYTECODE=1` case calls `add_bytecode` directly (a trusted caller) and stays opt-in; the
 mutated-bytecode route that matters in the product is now closed before it reaches `luau_load`.
+
+## Step 3 as built
+
+- `mce.save(slot)` writes now (`save::save_game`, a read of the world, safe mid-tick). `mce.load(slot)` queues: `SceneChange::load_slot` is
+  applied by `scene::apply_change`, the one seam the player, the headless run and the editor's play mode already call after a tick,
+  so no host changed. A bad slot is logged and the world is left alone; the host's tick counter is not restored (only the player
+  does that, at startup). Slot names are validated, so a script cannot reach another path.
+- `mce.set_time_scale` / `time_scale` wrap the `time_scale` cvar, clamped to 0.1..4 (0 would freeze the loop and the script with it).
+- `mce.shake` and `mce.burst` are thin over `CameraShake2D/3D` and `ParticleBurst`.
+- Sound stop and fade: no new call; destroying an `AudioSource` entity already fades its voice out (`fade_s`), documented as a recipe.
