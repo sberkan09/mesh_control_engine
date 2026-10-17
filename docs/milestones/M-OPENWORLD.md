@@ -24,8 +24,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | in progress: seam merged, floating origin (core + module listeners) in review | #495 design, #502 seam, floating-origin PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
-| A3 | design done | | same design |
+| A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
+| A3 | in progress: instancing past the budget (A1 finding) | instancing PR | same design; next: HLOD proxy bake, impostors, merge budget |
 | A4 | design done | | same design |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
