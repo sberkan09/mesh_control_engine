@@ -1294,7 +1294,7 @@ public:
         Array<AuthoredLod> authored;
         if (!import_nodes(cx, g, static_cast<f32>(scale), skinning, out, remap, authored)) return false;
         if (!attach_authored_lods(cx, g, authored, out)) return false;
-        if (lod_levels > 0.0) generate_lods(out.geo, static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error));
+        if (lod_levels > 0.0) detail::generate_lods(out.geo, static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error));
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
         SkinTables skin_out;
         if (!import_skins(cx, g, remap, out.geo, skin_out)) return false;
