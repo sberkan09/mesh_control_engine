@@ -294,7 +294,7 @@ void compare(const std::vector<u8>& a, const std::vector<u8>& b, int channels, d
             se += double(d * d);
             max_err = std::max(max_err, std::abs(d));
         }
-        const double mse = se / double(a.size() / 4);
+        const double mse = se / (double(a.size()) / 4.0);
         min_psnr = std::min(min_psnr, mse == 0 ? 99.0 : 10.0 * std::log10(255.0 * 255.0 / mse));
     }
 }
