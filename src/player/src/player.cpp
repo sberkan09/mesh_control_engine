@@ -2577,6 +2577,7 @@ private:
             for (u32 k = 0; k < kDrawCauseCount; ++k) f.counters.draw_causes[k] = draw_causes3d_[k];
             f.counters.merged_groups = extract3d_.stats().merged_groups;
             f.counters.merged_children = extract3d_.stats().merged_children;
+            f.counters.decals_dropped = stats3d_.decals_dropped;
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;
