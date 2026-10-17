@@ -3,7 +3,7 @@
 
     mce retarget <source.glb|.gltf>... --onto <character.glb> [--out f.glb | --inplace]
                  [--clips a,b] [--prefix p] [--map f.json] [--replace] [--drop-existing]
-                 [--in-place-motion] [--no-translation] [--scale auto|N] [--strict]
+                 [--in-place-motion] [--no-translation] [--scale auto|N] [--map-only] [--strict]
 
 The engine plays a clip on the nodes of the file it was cooked with (the glTF importer puts a mesh's clips in its
 CHNK_MESH), so a character gets motion from an animation library by copying the library's clips into the
@@ -325,6 +325,13 @@ SIDED = {
 SPINE_KEYS = re.compile(r"^(spine\d*|chest|upperchest|torso|abdomen|waist|trunk)$")
 
 
+class _NoBones:
+    """A skeleton seen without its humanoid map: only --map pairs count."""
+
+    def __init__(self, sk):
+        self.name, self.bones, self.spine_chain = sk.name, {}, []
+
+
 def split_name(name):
     """(side or None, normalized key) of a bone name."""
     name = re.split(r"[:|]", name)[-1]
@@ -399,9 +406,11 @@ def spine_roles(chain):
     return (chain[0], chain[len(chain) // 2], chain[-1])
 
 
-def build_pairs(src, dst, explicit):
-    """[(source node, target node)] for the humanoid bones both have, plus the explicit pairs."""
+def build_pairs(src, dst, explicit, auto=True):
+    """[(source node, target node)] for the humanoid bones both have (when `auto`), plus the explicit pairs."""
     pairs = {}
+    if not auto:
+        src, dst = _NoBones(src), _NoBones(dst)
     for canon, dn in dst.bones.items():
         if canon in ("spine", "chest", "upper_chest"):
             continue
@@ -681,8 +690,12 @@ def require_humanoid(sk, role, tool):
     missing = [k for k in need if k not in sk.bones]
     if "hips" in missing or len(sk.bones) < 8:
         names = ", ".join(sk.name[i] for i in sorted(sk.joints or range(sk.count))[:24])
+        why = ""
+        if not sk.joints:
+            why = (" It has no skin: a rig animated through plain nodes (like Kenney's Blocky Characters) has no skeleton "
+                   "to recognise, so pair its nodes yourself and add --map-only.")
         raise RetargetError(f"the {role} ({sk.gltf.name}) does not look like a humanoid: found {len(sk.bones)} known bones"
-                            f"{', no hips' if 'hips' in missing else ''}. Its bones: {names}. "
+                            f"{', no hips' if 'hips' in missing else ''}.{why} Its nodes: {names}. "
                             "Name the pairs in a --map file ({\"SourceBone\": \"TargetBone\"}).")
     if missing:
         tool.warn(f"the {role} has no {', '.join(missing)}; those limbs are not retargeted")
@@ -693,13 +706,21 @@ def retarget(sources, target_path, out_path, opt):
     target = Gltf(target_path)
     dst = Skeleton(target)
     match_humanoid(dst)
-    require_humanoid(dst, "target", tool)
+    if not opt["map_only"]:
+        require_humanoid(dst, "target", tool)
+    if opt["map_only"]:
+        dst.bones = {}  # no humanoid roles: no facing correction, no hips scaling
     explicit = {}
     if opt.get("map"):
         with open(opt["map"], "r", encoding="utf-8-sig") as f:
             explicit = json.load(f)
         if not isinstance(explicit, dict) or not all(isinstance(v, str) for v in explicit.values()):
             raise RetargetError("--map must be an object of source bone name -> target bone name")
+    if os.path.dirname(os.path.abspath(out_path)) != os.path.dirname(os.path.abspath(target_path)) and any(
+            im.get("uri") and not im["uri"].startswith("data:") for im in target.json.get("images", [])):
+        tool.warn("the character's textures are linked by relative path (" +
+                  ", ".join(sorted({im["uri"] for im in target.json["images"] if im.get("uri")})[:3]) +
+                  "), but the output is in another folder: write it beside the character, or copy the textures along")
     writer = Writer(target)
     if opt["drop_existing"]:
         writer.j["animations"] = []
@@ -712,9 +733,11 @@ def retarget(sources, target_path, out_path, opt):
         gltf = Gltf(sp)
         src = Skeleton(gltf)
         match_humanoid(src)
-        if not explicit:
+        if opt["map_only"]:
+            src.bones = {}
+        if not opt["map_only"] and not explicit:
             require_humanoid(src, "source", tool)
-        pairs = build_pairs(src, dst, explicit)
+        pairs = build_pairs(src, dst, explicit, auto=not opt["map_only"])
         if len(pairs) < 4:
             raise RetargetError(f"only {len(pairs)} bones of {gltf.name} match the target: nothing to retarget")
         mapped_src = {s for _, s in pairs}
@@ -800,6 +823,8 @@ def main(argv=None):
     ap.add_argument("--clips", help="only these clip names, comma separated")
     ap.add_argument("--prefix", default="", help="prepended to every clip name")
     ap.add_argument("--map", help="JSON file {\"SourceBone\": \"TargetBone\"} for pairs the names do not find")
+    ap.add_argument("--map-only", action="store_true",
+                    help="pair only what --map names (no humanoid name matching): for rigs animated through plain nodes")
     ap.add_argument("--replace", action="store_true", help="a clip with the name of one already in the character replaces it")
     ap.add_argument("--drop-existing", action="store_true", help="remove the character's own clips")
     ap.add_argument("--in-place-motion", action="store_true", help="drop the hips' horizontal travel (the game moves the character)")
@@ -813,11 +838,13 @@ def main(argv=None):
         scale = None if args.scale == "auto" else float(args.scale)
     except ValueError:
         ap.error("--scale must be 'auto' or a number")
+    if args.map_only and not args.map:
+        ap.error("--map-only needs --map")
     out = args.onto if args.inplace else (args.out or os.path.splitext(args.onto)[0] + "_retargeted.glb")
     if not out.lower().endswith(".glb"):
         ap.error("the output must be a .glb")
     opt = {"clips": [c for c in (args.clips or "").split(",") if c], "prefix": args.prefix, "map": args.map,
-           "replace": args.replace, "drop_existing": args.drop_existing, "in_place_motion": args.in_place_motion,
+           "replace": args.replace, "map_only": args.map_only, "drop_existing": args.drop_existing, "in_place_motion": args.in_place_motion,
            "no_translation": args.no_translation, "scale": scale, "strict": args.strict}
     try:
         added = retarget(args.sources, args.onto, out, opt)
