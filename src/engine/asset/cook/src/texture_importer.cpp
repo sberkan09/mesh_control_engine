@@ -429,10 +429,10 @@ enum class Target : u8 { Rgba8, Astc, Bc };
 enum class CompressKey : u8 { Missing, None, Auto, Bc7, Bc5, Bc4, Bc1, Astc };
 
 // `auto` under --textures bc, on the base level after max_size. Integer-only, so the choice is deterministic.
-// PROVISIONAL: the 99% and the length bounds are guesses; they will be calibrated with RunPod measurements
-// (M-CONTENT 1b-iv tunes them on the Lantern Keep and Poly Haven normal maps).
+// The 85% is calibrated on 14 Poly Haven normal maps (M-GPU-VERIFY, parallel round): they pass 0.89-1.00 but one
+// (0.56), colour maps at most 0.003, colour-grading LUTs 0.14. The length bounds are still the 1b-iv guess.
 // Order: (0) LUT strips stay RGBA8 (colour grading cannot take block error), (1) srgb -> BC7, (2) grey opaque data
-// (r == g == b, a == 255 on every texel) -> BC4, (3) at least 99% of texels decode to a unit normal -> BC5, (4) BC7.
+// (r == g == b, a == 255 on every texel) -> BC4, (3) at least 85% of texels decode to a unit normal -> BC5, (4) BC7.
 // Grey is tested first because bright grey (c about 194..208) also passes the unit-normal length test.
 // Never picks BC1. Returns false for "keep RGBA8" (a LUT strip), else sets `fmt`; `normal_map` says rule 3 fired.
 bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& normal_map) {
@@ -457,7 +457,7 @@ bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& n
         fmt = BcFormat::BC4;
         return true;
     }
-    if (normals * 100 >= n * 99) {
+    if (normals * 100 >= n * 85) {
         normal_map = true;
         fmt = BcFormat::BC5;
         return true;
@@ -469,7 +469,7 @@ bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& n
 class TextureImporter final : public IImporter {
 public:
     StringView id() const override { return "texture"; }
-    u32 version() const override { return 1; }  // bump with any encoder setting in texture_bc.cpp
+    u32 version() const override { return 2; }  // bump with any encoder setting in texture_bc.cpp
     ChunkType type() const override { return ChunkType::Texture; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override {

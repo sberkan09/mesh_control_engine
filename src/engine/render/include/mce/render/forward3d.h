@@ -78,13 +78,15 @@ struct Forward3DDesc {
     // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
     bool instancing = true;
     // Bytes of per-copy instancing data a frame may upload over all its views (128 per main / prepass copy, 64
-    // per shadow or velocity copy, through set_storage_data); runs past it draw singly
-    // (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
+    // per shadow or velocity copy, through set_storage_data); a run past it draws the copies that still fit
+    // instanced and the rest singly (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
     // geometry_ring_bytes: the storage data shares that ring with the frame's transient vertices, indices and
     // light lists, and an upload that does not fit is dropped by the device, so the budget must stay under it.
     // Each view reserves the main pass's copies first, then the SSAO prepass's, then the velocity prepass's;
     // the shadow passes take what is left.
-    u32 instancing_budget = 512 * 1024;
+    // The default is the whole quarter of the default ring (1 MiB: about 8,000 main-pass copies), which costs no
+    // memory: the ring is allocated anyway. A city raises both (M-OPENWORLD A1: 10k visible copies at 60 Hz).
+    u32 instancing_budget = 1024 * 1024;
     // The device's per-frame-slot geometry ring (rhi::DeviceDesc::geometry_ring_bytes): keep them equal.
     usize geometry_ring_bytes = rhi::DeviceDesc{}.geometry_ring_bytes;
 };

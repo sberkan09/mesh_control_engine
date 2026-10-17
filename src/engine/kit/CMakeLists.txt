@@ -37,6 +37,7 @@ mce_add_library(mce_gameplay_kit
         src/ui_flow.cpp
         src/ai.cpp
         src/roads.cpp
+        src/crowd.cpp
         src/ai_tasks.cpp
         src/perception.cpp
         src/cinematic.cpp
