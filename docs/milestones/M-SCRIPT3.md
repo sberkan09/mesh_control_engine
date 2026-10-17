@@ -20,7 +20,7 @@ cannot yet say or check:
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | Rotation from Luau: Euler degrees as a vector (no quaternion type), `mce.rotation3d`, `set_rotation3d`, `look_rotation3d`, `teleport3d` with a rotation | Sonnet | done |
-| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a done (freeze + watch list, `ScriptBudget::check_state`); 2b (convar, headless exit code, debugLevel 2) and 2c (static check widening) not started |
+| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a and 2b done; 2c (static check widening) not started |
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | done |
 | 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | not started |
 | 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | not started |
@@ -46,5 +46,14 @@ cannot yet say or check:
 - Tests (`test_script_state.cpp`): alias, helper, closure factory, global table, `newproxy`, buffer and `gmatch` each compile and then fail at run time; `check_state = false` lets them run; a stateless script with constant tables, NaN and vector upvalues, `mce.random` and field handles runs 100 ticks with the same `state_hash` on or off.
 - Default is on in the field; step 2b makes it off in shipped games and on in editor, `mce run`, headless and CI (coordinator decision), and adds the headless exit code and `debugLevel = 2`.
 - Kept `newproxy` (its metatable is frozen). Watched buffers are capped at 256 KiB per script.
+
+## Step 2b as built
+
+- `script.state_check` (-1 auto, 0, 1), read by `install_scene_scripts`. Auto: on in the editor's play mode, `mce_mcp` runs, `mce_player -headless` and any run with `-pack` or the build tree's pack;
+  off only in a windowed game whose pack sits beside the executable (the shipped layout, `PlayerDesc::pack` found there). Not covered by a test: the shipped-window default needs a window.
+- `mce_player -headless` exits 3 when a script ended `Failed` (the state hash is still printed, the errors go to stderr), so the determinism stage and CI notice; `player_scripts` pins it and the convar.
+- Scripts compile with `debugLevel = 2` (local and upvalue names) and the script importer is version 3, so cooked scripts rebuild; the state error names `upvalue 'n'`.
+  Pack size: +704 B on Dungeon's 12 KB pack (+6.0%) and +512 B on Pursuit's 24 KB pack (+2.2%); about 0.5 to 0.7 KB per script, so the relative cost only shows on toy packs. The coordinator's rule
+  was level 1 in the ship cook if the cost passes 5%; it is kept at level 2 everywhere for now (a ship-only cook switch would be a new cook option), to be decided at review.
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry; `local_ci.sh --task` green on every step.

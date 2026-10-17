@@ -232,7 +232,7 @@ function update()
     mce.each("Score", function(e) mce.set(e, P, v) end)
 end
 )",
-     "factory:3: update() kept state between ticks: upvalue #1 of the function defined at line 3 changed (reached from upvalue #1 of "
+     "factory:3: update() kept state between ticks: upvalue 'n' of the function defined at line 3 changed (reached from upvalue 'inc' of "
      "update()); keep it in a component"},
     {"global", R"(STATE = { n = 0 }
 function update() STATE.n += 1 end
@@ -252,7 +252,7 @@ function update() buffer.writei32(B, 0, mce.tick()) end
     {"gmatch", R"(local words = string.gmatch("a b c d", "%a")
 function update() local w = words() end
 )",
-     "gmatch:2: update() kept state between ticks: upvalue #3 of a library function changed (reached from upvalue #1 of update())"},
+     "gmatch:2: update() kept state between ticks: upvalue #3 of a library function changed (reached from upvalue 'words' of update())"},
 };
 
 }  // namespace

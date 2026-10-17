@@ -5,6 +5,7 @@
 
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
+#include "mce/convar.h"
 #include "mce/hash.h"
 #include "mce/kit/components.h"
 #include "mce/log.h"
@@ -13,6 +14,11 @@
 namespace mce::script {
 
 namespace {
+
+MCE_CVAR(cv_state_check, "script.state_check", -1,
+         "Fail a script that keeps state between ticks (tables it reaches are frozen, upvalues and buffers watched): -1 = the host's default "
+         "(on, except in a shipped game's window), 0 = off, 1 = on",
+         CVarFlags::None);
 
 struct Entry {
     i32 order = 0;
@@ -136,6 +142,7 @@ void install_scene_scripts(World& w, asset::AssetSystem* assets, const ScriptBud
     SceneScripts& s = w.set_resource(SceneScripts{});
     s.assets = assets;
     s.budget = budget;
+    if (cv_state_check.get_int() >= 0) s.budget.check_state = cv_state_check.get_int() != 0;
     w.add_system(Phase::FixedUpdate_Pre, "script.pre", &script_pre);
     w.add_system(Phase::FixedUpdate_Post, "script.post", &script_post);
     // Both run through cutscene holds, but only the scripts that ask (during_cutscenes) do any work then.
