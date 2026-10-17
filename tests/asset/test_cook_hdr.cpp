@@ -281,3 +281,80 @@ TEST_CASE("cook hdr: re-cooking is byte-identical and the phone cook keeps RGBA1
     CHECK(tv.value().header->format == TextureFormat::RGBA16F);
     as.release(AnyHandle(th.value()));
 }
+
+namespace {
+
+// Expects a cook error whose text contains every needle (and no crash, hang or huge allocation getting there).
+void expect_refused(const char* tag, const char* ext, const std::string& source, std::initializer_list<const char*> needles) {
+    Cooked c;
+    cook_hdr(c, tag, ext, source);
+    INFO(std::string(tag), ": ", c.diags);
+    CHECK_FALSE(c.ok);
+    CHECK(c.cooked == 0);
+    for (const char* n : needles) CHECK(c.diags.find(n) != std::string::npos);
+}
+
+std::string hdr_header_only(long long w, long long h) {
+    return "#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y " + std::to_string(h) + " +X " + std::to_string(w) + "\n";
+}
+
+}  // namespace
+
+TEST_CASE("cook hdr: hostile or broken .hdr / .exr files are refused cleanly, before any big allocation") {
+    const std::string hdr = hdr_fixtures::make_rgbe_hdr(8, 4, std::vector<float>(32, 1.0f));
+    const std::string exr = hdr_fixtures::make_exr(8, 4, to_rgba(std::vector<float>(32, 1.0f)));
+    // Over the 64 MP cap with a few dozen bytes of file: the header is checked before decoding.
+    expect_refused("hdr_huge", ".hdr", hdr_header_only(16000, 16000), {"64 megapixels", "downscale the source"});
+    expect_refused("hdr_side", ".hdr", hdr_header_only(100000, 1), {"downscale the source"});
+    expect_refused("exr_huge", ".exr", hdr_fixtures::make_exr_header(12000, 12000), {"64 megapixels", "downscale the source"});
+    expect_refused("exr_side", ".exr", hdr_fixtures::make_exr_header(70000, 1), {"out of range"});
+    expect_refused("exr_zero", ".exr", hdr_fixtures::make_exr_header(0, 0), {"out of range"});
+    expect_refused("hdr_zero", ".hdr", hdr_header_only(0, 0), {"sky.hdr"});
+    expect_refused("hdr_nothing", ".hdr", "", {"decode failed"});
+    expect_refused("exr_nothing", ".exr", "", {"decode failed"});
+    // Truncated at several points: in the header, in the offset table, in the pixels.
+    for (size_t cut : {size_t(10), hdr.size() / 2, hdr.size() - 5}) expect_refused("hdr_trunc", ".hdr", hdr.substr(0, cut), {"decode failed"});
+    for (size_t cut : {size_t(6), size_t(40), exr.size() / 2, exr.size() - 5}) expect_refused("exr_trunc", ".exr", exr.substr(0, cut), {"decode failed"});
+    // A valid header followed by garbage instead of pixels / an offset table.
+    expect_refused("hdr_garbage_body", ".hdr", hdr_header_only(64, 64) + std::string(37, '\x7f'), {"decode failed", "truncated"});
+    expect_refused("exr_garbage_body", ".exr", hdr_fixtures::make_exr_header(64, 64) + std::string(37, '\x7f'), {"decode failed"});
+    expect_refused("exr_garbage_table", ".exr", hdr_fixtures::make_exr_header(4, 4) + std::string(4 * 8, '\xff'), {"decode failed"});
+}
+
+TEST_CASE("cook hdr: a tiled .exr cooks to the same texels as a scanline one") {
+    std::vector<float> px = to_rgba(hot_sky());  // 64x32, tiles of 24 leave clipped edge tiles
+    Cooked a, b;
+    cook_hdr(a, "cook_exr_scan", ".exr", hdr_fixtures::make_exr(64, 32, px), "{ \"mips\": false }");
+    cook_hdr(b, "cook_exr_tiled", ".exr", hdr_fixtures::make_exr_tiled(64, 32, 24, px), "{ \"mips\": false }");
+    INFO(b.diags);
+    REQUIRE(a.ok);
+    REQUIRE(b.ok);
+    CHECK(texel(b, 0, 19, 15, 0) == texel(a, 0, 19, 15, 0));
+    CHECK(texel(b, 0, 63, 31, 1) == 0.25f);
+    CHECK(texel(b, 0, 30, 5, 3) == 1.0f);
+    a.as.release(AnyHandle(a.handle));
+    b.as.release(AnyHandle(b.handle));
+}
+
+#ifdef MCE_TINYEXR_SAMPLES
+// PIZ and ZIP-era files are too big to write by hand (wavelet + Huffman); tinyexr's own regression files, which
+// the build already fetched, stand in. Read at test time only; missing files are skipped, not failed.
+TEST_CASE("cook hdr: real PIZ and tiled .exr files from the tinyexr samples cook") {
+    int ran = 0;
+    for (const char* f : {"piz-bug-issue-100.exr", "issue-160-piz-decode.exr", "tiled_half_1x1_alpha.exr"}) {
+        const std::string src = read_file(std::string(MCE_TINYEXR_SAMPLES) + "/" + f);
+        if (src.empty()) continue;
+        Cooked c;
+        cook_hdr(c, "cook_exr_sample", ".exr", src, "{ \"mips\": false }");
+        INFO(f);
+        INFO(c.diags);
+        CHECK(c.ok);
+        if (c.ok) {
+            CHECK(c.view.header->format == TextureFormat::RGBA16F);
+            c.as.release(AnyHandle(c.handle));
+        }
+        ++ran;
+    }
+    if (ran == 0) MESSAGE("tinyexr sample files not found: PIZ / tiled sample cooks skipped");
+}
+#endif
