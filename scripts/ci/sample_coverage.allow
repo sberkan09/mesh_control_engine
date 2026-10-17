@@ -14,3 +14,4 @@ Rider3D | M-OPENWORLD C1: tested in tests/kit/test_seats3d.cpp; the 1 km2 slice 
 Health3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
 Weapon3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
 Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp
+UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR

@@ -33,6 +33,7 @@ mce_add_library(mce_gameplay_kit
         src/static_merge3d.cpp
         src/stock.cpp
         src/timeline.cpp
+        src/ui_flow.cpp
         src/ai.cpp
         src/ai_tasks.cpp
         src/perception.cpp

@@ -51,8 +51,8 @@ widen one enum, the way `mce_import_skel.py` did for M-ANIM2D.
 
 | # | Step | Size | Model | State |
 |---|---|---|---|---|
-| 0 | Seam: move the mesh back end out of `gltf_importer.cpp` into cook-private `src/mesh_build.h` / `.cpp`; byte-identical output | S (4–6 h) | Sonnet (Opus review: determinism) | planned |
-| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet | planned |
+| 0 | Seam: move the mesh back end out of `gltf_importer.cpp` into cook-private `src/mesh_build.h` / `.cpp`; byte-identical output | S (4–6 h) | Sonnet (Opus review: determinism) | done, #485 |
+| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, PR pending; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
 | 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | planned |
 | 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | planned |
 | 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | planned |
