@@ -159,6 +159,33 @@ TEST_CASE("scene scripts: ScriptSystems run by phase and order, and swap when th
     CHECK(script::scene_script_host(w) == nullptr);
 }
 
+TEST_CASE("scene scripts: during_cutscenes scripts run through a cutscene hold, others do not (M-WORKFLOW 7)") {
+    Cooked c;
+    cook_scripts(c);
+    World w;
+    w.register_components<LocalTransform, kit::ScriptSystem>();
+    const Entity mover = w.spawn_with(LocalTransform{});
+    add_script(w, kPush, 0);
+    const Entity flagged = add_script(w, kDouble, 1);
+    w.try_get_mut<kit::ScriptSystem>(flagged)->during_cutscenes = true;
+    script::install_scene_scripts(w, &c.assets);
+    w.tick(1.0 / 60, 1);  // (0 + 1) * 2
+    CHECK(x_of(w, mover) == doctest::Approx(2.0f));
+
+    w.set_cutscene_held(true);  // only the flagged one runs: 2 * 2
+    w.tick(1.0 / 60, 2);
+    CHECK(x_of(w, mover) == doctest::Approx(4.0f));
+    w.set_cutscene_held(false);
+
+    w.set_held(true);  // a pause hold stops both
+    w.tick(1.0 / 60, 3);
+    CHECK(x_of(w, mover) == doctest::Approx(4.0f));
+    w.set_held(false);
+
+    w.tick(1.0 / 60, 4);  // unflagged first, then flagged: (4 + 1) * 2
+    CHECK(x_of(w, mover) == doctest::Approx(10.0f));
+}
+
 TEST_CASE("scene scripts: a script that is not cooked is skipped, the others run") {
     Cooked c;
     cook_scripts(c);

@@ -46,6 +46,7 @@ struct DeviceCaps {
     u32 max_storage_image_units = 0;         // bind_storage_image units
     // Cooked texture formats the GPU can sample (M-CONTENT 1b): BC1/BC4/BC5/BC7 and ASTC 4x4 (LDR).
     bool texture_bc = false;
+    bool texture_bc_srgb = false;  // BC1_SRGB specifically (BC7_SRGB rides on texture_bc); implies texture_bc
     bool texture_astc = false;
 };
 
