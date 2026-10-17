@@ -86,6 +86,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Skeleton2D: return SKELETON2D_VERSION;
         case ChunkType::Script: return SCRIPT_VERSION;
         case ChunkType::RoadNetwork: return ROAD_NETWORK_VERSION;
+        case ChunkType::ConvarDefaults: return CONVAR_DEFAULTS_VERSION;
         default: return 0;
     }
 }
