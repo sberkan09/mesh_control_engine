@@ -3,15 +3,18 @@
 // box within one quantization step, a 3-bone skin with a rotation clip is sampled and compared with the analytic pose,
 // materials and textures resolve, embedded textures and missing images are errors, unsupported features warn, the sidecar
 // keys work, every fixture cooks to the same bytes twice, and corrupt input (truncations, seeded byte flips, a binary file
-// claiming 2^29 elements, a 1M-corner polygon, 5000-deep node nesting, absurd and non-finite transforms) errors or
+// claiming 2^29 elements, a 64K-corner polygon, 5000-deep node nesting, absurd and non-finite transforms) errors or
 // succeeds but never crashes. This file names no ufbx symbol (the "ufbx wall").
 
 #include <doctest/doctest.h>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -688,8 +691,10 @@ TEST_CASE("fbx: a box in centimetres with Z up equals the glTF box in metres wit
             // The axis turn is the root node's rotation (-90 degrees about X), the unit scale is in the vertices.
             REQUIRE(mv.nodes.size() == 1);
             CHECK(mv.node_name(0) == "Cube");
-            CHECK(std::fabs(std::fabs(mv.nodes[0].rotation[0]) - std::sqrt(0.5)) < 1e-5);
-            CHECK(std::fabs(std::fabs(mv.nodes[0].rotation[3]) - std::sqrt(0.5)) < 1e-5);
+            // -90 degrees about +X (Z up to Y up): x and w differ in sign (q and -q are the same rotation, x * w = -1/2 either way).
+            CHECK(mv.nodes[0].rotation[0] * mv.nodes[0].rotation[3] == doctest::Approx(-0.5f).epsilon(1e-4));
+            CHECK(std::fabs(mv.nodes[0].rotation[1]) < 1e-5);
+            CHECK(std::fabs(mv.nodes[0].rotation[2]) < 1e-5);
             CHECK(mv.nodes[0].scale[0] == doctest::Approx(1.0f));
             CHECK(mv.nodes[0].parent == -1);
         }
@@ -785,9 +790,10 @@ struct SkinSpec {
     std::vector<std::vector<std::pair<int, double>>> weights;  // per vertex: (bone, weight)
 };
 
-V3 to_file(V3 e, int up_axis, double unit_cm) {
-    const double k = 100.0 / unit_cm;
-    return up_axis == 2 ? V3{e.x * k, -e.z * k, e.y * k} : V3{e.x * k, e.y * k, e.z * k};
+V3 to_file(V3 e, int up_axis, double unit_cm, bool left_handed = false) {
+    const double k = 100.0 / unit_cm * (left_handed ? -1.0 : 1.0);  // a left-handed file stores x mirrored
+    const double ky = 100.0 / unit_cm;
+    return up_axis == 2 ? V3{e.x * k, -e.z * ky, e.y * ky} : V3{e.x * k, e.y * ky, e.z * ky};
 }
 
 M4 translation_matrix(V3 t) {
@@ -818,16 +824,20 @@ SkinSpec tube_spec() {
 
 // The skinned file: Armature (null) > bone0 > bone1 > bone2, the mesh node beside the armature. Bone 1 rotates about X
 // from 0 to 90 degrees over `length_s` seconds when `animate`.
-std::string skin_fbx(const SkinSpec& s, int up_axis, double unit_cm, bool animate, int layers = 1, double length_s = 1.0) {
+std::string skin_fbx(const SkinSpec& s, int up_axis, double unit_cm, bool animate, int layers = 1, double length_s = 1.0, bool left_handed = false) {
     FbxDoc doc;
     doc.up_axis = up_axis;
     doc.unit_cm = unit_cm;
+    doc.right_sign = left_handed ? -1 : 1;
     std::vector<double> pos;
     for (const V3& e : s.verts) {
-        const V3 f = to_file(e, up_axis, unit_cm);
+        const V3 f = to_file(e, up_axis, unit_cm, left_handed);
         pos.insert(pos.end(), {f.x, f.y, f.z});
     }
-    const long geom = doc.geometry("Tube", pos, s.faces);
+    std::vector<std::vector<long>> faces = s.faces;
+    if (left_handed)  // the clockwise winding of a left-handed exporter
+        for (auto& f : faces) std::reverse(f.begin(), f.end());
+    const long geom = doc.geometry("Tube", pos, faces);
     const long mesh_node = doc.model("Tube", "Mesh", 0);
     doc.connect(geom, mesh_node);
     const long armature = doc.model("Armature", "Null", 0);
@@ -869,16 +879,17 @@ V3 expected_pose(V3 p, const std::vector<std::pair<int, double>>& w, double thet
 
 }  // namespace
 
-TEST_CASE("fbx: a 3-bone skin with a rotation clip is sampled to the analytic pose, in Y-up metres and in Z-up centimetres") {
+TEST_CASE("fbx: a 3-bone skin with a rotation clip is sampled to the analytic pose, in Y-up metres, Z-up centimetres and a left-handed file") {
     const SkinSpec spec = tube_spec();
     struct Case {
         const char* name;
         int up;
         double unit;
+        bool left = false;
     };
-    for (const Case& cs : {Case{"fbx_skin_y_m", 1, 100.0}, Case{"fbx_skin_z_cm", 2, 1.0}}) {
+    for (const Case& cs : {Case{"fbx_skin_y_m", 1, 100.0}, Case{"fbx_skin_z_cm", 2, 1.0}, Case{"fbx_skin_left", 1, 100.0, true}}) {
         CAPTURE(cs.name);
-        const std::string fbx = skin_fbx(spec, cs.up, cs.unit, true);
+        const std::string fbx = skin_fbx(spec, cs.up, cs.unit, true, 1, 1.0, cs.left);
         const Cooked c = cook_fbx(cs.name, fbx);
         INFO(c.text);
         REQUIRE(c.report.ok());
@@ -1094,9 +1105,10 @@ TEST_CASE("fbx: materials import inline, textures resolve to GUIDs, absolute pat
     const MeshView m = view_of(c.mesh);
     REQUIRE(m.submeshes.size() == 1);
     const MaterialChunk& mc = m.submeshes[0].material;
-    CHECK(mc.base_color[0] == doctest::Approx(0.8f).epsilon(1e-3));
-    CHECK(mc.base_color[1] == doctest::Approx(0.4f).epsilon(1e-3));
-    CHECK(mc.base_color[2] == doctest::Approx(0.2f).epsilon(1e-3));
+    // The base colour map is the colour: DiffuseColor is not multiplied in (the next test covers a material without a map).
+    CHECK(mc.base_color[0] == doctest::Approx(1.0f));
+    CHECK(mc.base_color[1] == doctest::Approx(1.0f));
+    CHECK(mc.base_color[2] == doctest::Approx(1.0f));
     CHECK(mc.base_color[3] == doctest::Approx(0.5f).epsilon(1e-3));
     CHECK((mc.flags & MaterialFlags::AlphaBlend) != 0);
     CHECK(mc.emissive[0] == doctest::Approx(0.2f).epsilon(1e-3));
@@ -1215,6 +1227,11 @@ int cook_and_validate(const std::string& bytes) {
     // The cooked container must read back.
     auto c = ContainerView::open(Span<const byte>(d.bytes.data(), d.bytes.size()));
     CHECK(c.has_value());
+    if (c.has_value()) {
+        const u32 chunk = c.value().find(ChunkType::Mesh);
+        CHECK(chunk < c.value().chunk_count());
+        if (chunk < c.value().chunk_count()) CHECK(MeshView::read(c.value().payload(chunk)).has_value());
+    }
     return 0;
 }
 
@@ -1282,6 +1299,214 @@ std::string binary_huge_vertices(uint32_t encoding) {
     return f.bytes;
 }
 
+// Rewrites the ASCII fixtures this file writes as a valid binary FBX 7.4 (32-bit offsets, raw arrays, no footer): ids and
+// key times are int64, integers int32, other numbers doubles (P-node values by their declared type), arrays by name, and
+// "Type::Name" object names as "Name\x00\x01Type". Handles only the grammar FbxDoc emits (no embedded Content).
+class AsciiToBinary {
+public:
+    explicit AsciiToBinary(const std::string& t) : t_(t) {}
+
+    std::string run() {
+        out_.append("Kaydara FBX Binary  \0", 21);
+        out_.push_back('\x1a');
+        out_.push_back('\0');
+        u32(7400);
+        for (;;) {
+            skip_ws();
+            if (pos_ >= t_.size()) break;
+            node("");
+        }
+        out_.append(13, '\0');
+        return out_;
+    }
+
+private:
+    struct Arg {
+        char kind = 'S';  // S string, N number, A array marker
+        std::string s;
+        bool integer = false;
+    };
+
+    const std::string& t_;
+    size_t pos_ = 0;
+    std::string out_;
+
+    void u32(uint32_t v) {
+        for (int i = 0; i < 4; ++i) out_.push_back(static_cast<char>((v >> (8 * i)) & 0xffu));
+    }
+    void u64v(uint64_t v) {
+        for (int i = 0; i < 8; ++i) out_.push_back(static_cast<char>((v >> (8 * i)) & 0xffu));
+    }
+    void patch(size_t at, uint32_t v) {
+        for (int i = 0; i < 4; ++i) out_[at + static_cast<size_t>(i)] = static_cast<char>((v >> (8 * i)) & 0xffu);
+    }
+    void skip_ws() {
+        while (pos_ < t_.size()) {
+            const char c = t_[pos_];
+            if (c == ';') {
+                while (pos_ < t_.size() && t_[pos_] != '\n') ++pos_;
+            } else if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                ++pos_;
+            } else {
+                break;
+            }
+        }
+    }
+
+    static bool is_obj(const std::string& n) {
+        for (const char* k : {"Model", "Geometry", "NodeAttribute", "Deformer", "AnimationStack", "AnimationLayer", "AnimationCurveNode", "AnimationCurve",
+                              "Material", "Texture", "Video"})
+            if (n == k) return true;
+        return false;
+    }
+
+    void put_number(char kind, const std::string& text) {
+        out_.push_back(kind);
+        if (kind == 'I') u32(static_cast<uint32_t>(static_cast<int32_t>(std::strtol(text.c_str(), nullptr, 10))));
+        else if (kind == 'L') u64v(static_cast<uint64_t>(std::strtoll(text.c_str(), nullptr, 10)));
+        else {
+            const double d = std::strtod(text.c_str(), nullptr);
+            uint64_t b;
+            std::memcpy(&b, &d, 8);
+            u64v(b);
+        }
+    }
+
+    void node(const std::string& parent) {
+        size_t b = pos_;
+        while (pos_ < t_.size() && (std::isalnum(static_cast<unsigned char>(t_[pos_])) || t_[pos_] == '_')) ++pos_;
+        const std::string name = t_.substr(b, pos_ - b);
+        REQUIRE((!name.empty() && pos_ < t_.size() && t_[pos_] == ':'));
+        ++pos_;
+        std::vector<Arg> args;
+        bool block = false;
+        for (;;) {
+            while (pos_ < t_.size() && (t_[pos_] == ' ' || t_[pos_] == '\t' || t_[pos_] == '\r')) ++pos_;
+            if (pos_ >= t_.size() || t_[pos_] == '\n') break;
+            const char c = t_[pos_];
+            if (c == '{') {
+                block = true;
+                ++pos_;
+                break;
+            }
+            if (c == ',') {
+                ++pos_;
+                continue;
+            }
+            Arg a;
+            if (c == '"') {
+                const size_t e = t_.find('"', pos_ + 1);
+                REQUIRE(e != std::string::npos);
+                a.s = t_.substr(pos_ + 1, e - pos_ - 1);
+                pos_ = e + 1;
+            } else if (c == '*') {
+                a.kind = 'A';
+                ++pos_;
+                while (pos_ < t_.size() && std::isdigit(static_cast<unsigned char>(t_[pos_]))) ++pos_;
+            } else {
+                a.kind = 'N';
+                b = pos_;
+                while (pos_ < t_.size() && t_[pos_] != ',' && t_[pos_] != ' ' && t_[pos_] != '\t' && t_[pos_] != '\r' && t_[pos_] != '\n' && t_[pos_] != '{') ++pos_;
+                a.s = t_.substr(b, pos_ - b);
+                a.integer = a.s.find_first_of(".eEn") == std::string::npos;
+            }
+            args.push_back(a);
+        }
+
+        const size_t start = out_.size();
+        u32(0);
+        u32(0);
+        u32(0);
+        out_.push_back(static_cast<char>(name.size()));
+        out_ += name;
+        const size_t props_at = out_.size();
+        uint32_t count = 0;
+        const bool array_node = !args.empty() && args.back().kind == 'A';
+        for (size_t i = 0; i < args.size(); ++i) {
+            const Arg& a = args[i];
+            if (a.kind == 'A') continue;
+            ++count;
+            if (a.kind == 'S') {
+                std::string v = a.s;
+                const size_t sep = v.find("::");
+                if (parent == "Objects" && i == 1 && sep != std::string::npos) v = v.substr(sep + 2) + std::string("\x00\x01", 2) + v.substr(0, sep);
+                out_.push_back('S');
+                u32(static_cast<uint32_t>(v.size()));
+                out_ += v;
+                continue;
+            }
+            char kind = a.integer ? 'I' : 'D';
+            if (parent == "Objects" && i == 0 && is_obj(name)) kind = 'L';
+            else if (parent == "Connections") kind = 'L';
+            else if (name == "P" && i >= 4) {
+                const std::string& type = args[1].s;
+                kind = (type == "int" || type == "enum" || type == "bool") ? 'I' : type == "KTime" ? 'L' : 'D';
+            } else if (name == "Default") kind = 'D';
+            put_number(kind, a.s);
+        }
+        if (array_node) {
+            // "{ a: n, n, ... }" (the brace is already consumed)
+            skip_ws();
+            REQUIRE(t_.compare(pos_, 2, "a:") == 0);
+            pos_ += 2;
+            std::vector<std::string> v;
+            for (;;) {
+                while (pos_ < t_.size() && (t_[pos_] == ' ' || t_[pos_] == '\t' || t_[pos_] == '\r' || t_[pos_] == '\n' || t_[pos_] == ',')) ++pos_;
+                if (pos_ >= t_.size() || t_[pos_] == '}') break;
+                b = pos_;
+                while (pos_ < t_.size() && t_[pos_] != ',' && t_[pos_] != '}' && t_[pos_] != '\n' && t_[pos_] != ' ') ++pos_;
+                v.push_back(t_.substr(b, pos_ - b));
+            }
+            REQUIRE((pos_ < t_.size() && t_[pos_] == '}'));
+            ++pos_;
+            char kind = 'd';
+            for (const char* k : {"PolygonVertexIndex", "UVIndex", "Indexes", "Materials", "KeyAttrFlags", "KeyAttrRefCount"})
+                if (name == k) kind = 'i';
+            if (name == "KeyTime") kind = 'l';
+            if (name == "KeyValueFloat" || name == "KeyAttrDataFloat") kind = 'f';
+            out_.push_back(kind);
+            u32(static_cast<uint32_t>(v.size()));
+            u32(0);
+            u32(static_cast<uint32_t>(v.size() * (kind == 'i' || kind == 'f' ? 4 : 8)));
+            for (const std::string& x : v) {
+                if (kind == 'i') u32(static_cast<uint32_t>(static_cast<int32_t>(std::strtol(x.c_str(), nullptr, 10))));
+                else if (kind == 'l') u64v(static_cast<uint64_t>(std::strtoll(x.c_str(), nullptr, 10)));
+                else if (kind == 'f') {
+                    const float f = std::strtof(x.c_str(), nullptr);
+                    uint32_t bits;
+                    std::memcpy(&bits, &f, 4);
+                    u32(bits);
+                } else {
+                    const double d = std::strtod(x.c_str(), nullptr);
+                    uint64_t bits;
+                    std::memcpy(&bits, &d, 8);
+                    u64v(bits);
+                }
+            }
+            ++count;
+        }
+        patch(start + 4, count);
+        patch(start + 8, static_cast<uint32_t>(out_.size() - props_at));
+        bool children = false;
+        if (block && !array_node) {
+            for (;;) {
+                skip_ws();
+                REQUIRE(pos_ < t_.size());
+                if (t_[pos_] == '}') {
+                    ++pos_;
+                    break;
+                }
+                children = true;
+                node(name);
+            }
+        }
+        if (children) out_.append(13, '\0');
+        patch(start, static_cast<uint32_t>(out_.size()));
+    }
+};
+
+std::string to_binary(const std::string& ascii) { return AsciiToBinary(ascii).run(); }
+
 }  // namespace
 
 TEST_CASE("fbx: truncations of a valid file error or succeed, never crash") {
@@ -1289,9 +1514,11 @@ TEST_CASE("fbx: truncations of a valid file error or succeed, never crash") {
     int errors = 0;
     for (size_t n = 0; n < fbx.size(); n += 1) errors += cook_and_validate(fbx.substr(0, n));
     CHECK(errors > static_cast<int>(fbx.size() / 2));
-    // The skinned and animated file, in coarser steps.
+    // The skinned and animated file, in coarser steps, as ASCII and as binary.
     const std::string skin = skin_fbx(tube_spec(), 2, 1.0, true);
     for (size_t n = 0; n < skin.size(); n += 37) cook_and_validate(skin.substr(0, n));
+    const std::string bin = to_binary(skin);
+    for (size_t n = 0; n < bin.size(); n += 23) cook_and_validate(bin.substr(0, n));
 }
 
 TEST_CASE("fbx: seeded byte flips of valid files error or succeed, never crash") {
@@ -1321,6 +1548,31 @@ TEST_CASE("fbx: seeded byte flips of valid files error or succeed, never crash")
         m[i] = static_cast<char>(m[i] ^ 0x5a);
         cook_and_validate(m);
     }
+    // A valid binary file with a mesh, a skin and an animation: the same cook as the ASCII one, then flips along the whole
+    // file (a bounded number of positions, two patterns each), every result an error or a mesh the reader accepts.
+    const auto t0 = std::chrono::steady_clock::now();
+    const std::string rich_ascii = skin_fbx(tube_spec(), 2, 1.0, true);
+    const std::string rich = to_binary(rich_ascii);
+    const Direct from_ascii = fbx_direct(rich_ascii), from_binary = fbx_direct(rich);
+    INFO(from_binary.diags);
+    REQUIRE(from_ascii.ok);
+    REQUIRE(from_binary.ok);
+    CHECK_SAME_BYTES(from_ascii.bytes, from_binary.bytes);
+    const size_t stride = rich.size() / 1500 + 1;
+    int flips = 0, rejected = 0;
+    for (size_t i = 0; i < rich.size(); i += stride) {
+        for (int pattern = 0; pattern < 2; ++pattern) {
+            std::string m = rich;
+            m[i] = pattern == 0 ? static_cast<char>(m[i] ^ 0x5a) : static_cast<char>(0x7f);
+            rejected += cook_and_validate(m);
+            ++flips;
+        }
+    }
+    CHECK(flips >= 1000);
+    CHECK(rejected > 0);
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    INFO("binary flips took " << seconds << " s");
+    CHECK(seconds < 15.0);
 }
 
 TEST_CASE("fbx: files that claim huge arrays, huge polygons or deep nesting error without allocating the claim") {
@@ -1340,11 +1592,11 @@ TEST_CASE("fbx: files that claim huge arrays, huge polygons or deep nesting erro
         const Direct d = fbx_direct(fbx);
         CHECK((d.ok || !d.diags.empty()));  // ok or an error, never a 16 GB allocation
     }
-    // One polygon with 1M + 8 corners.
+    // One polygon with 64K + 8 corners.
     {
         FbxDoc doc;
         std::vector<long> face;
-        for (long i = 0; i < (1l << 20) + 8; ++i) face.push_back(i % 3);
+        for (long i = 0; i < (1l << 16) + 8; ++i) face.push_back(i % 3);
         const long geom = doc.geometry("Fan", {0, 0, 0, 1, 0, 0, 0, 0, 1}, {face});
         doc.connect(geom, doc.model("Fan", "Mesh", 0));
         const Direct d = fbx_direct(doc.str());
@@ -1420,4 +1672,240 @@ TEST_CASE("fbx: non-finite and absurd transforms and vertices are errors") {
         CHECK_FALSE(d.ok);
         CHECK(has(d.diags, "is not finite or is over the importer's limit"));
     }
+}
+
+// ---- review fixes: opacity, maps, budgets ----
+
+namespace {
+
+struct Quat {
+    double x = 0, y = 0, z = 0, w = 1;
+};
+Quat qmul(Quat a, Quat b) {
+    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+}
+Quat qconj(Quat a) { return {-a.x, -a.y, -a.z, a.w}; }
+
+// The material of a one-box file whose material has `props` and the textures named in `maps` (property name -> texture asset).
+MaterialChunk cook_material(const char* name, const std::string& props, const std::vector<const char*>& maps = {}) {
+    FbxDoc doc;
+    const long geom = box(doc, {0.5, 0.5, 0.5}, false, all_same_material());
+    const long node = doc.model("Cube", "Mesh", 0);
+    doc.connect(geom, node);
+    const long mat = doc.material("M", props);
+    doc.connect(mat, node);
+    for (const char* property : maps) {
+        const long tex = doc.texture(std::string("T") + property, "C:\\art\\tex.png", "tex.png");
+        doc.connect_prop(tex, mat, property);
+    }
+    const std::vector<std::pair<std::string, std::string>> files = {{"models/tex.png", make_gradient_png(4, 4)},
+                                                                    {"models/tex.png.mceasset", sidecar(kTexGuid, "texture")}};
+    const Cooked c = cook_fbx(name, doc.str(), "{}", files);
+    INFO(c.text);
+    REQUIRE(c.report.ok());
+    const MeshView m = view_of(c.mesh);
+    REQUIRE(m.submeshes.size() == 1);
+    return m.submeshes[0].material;
+}
+
+}  // namespace
+
+TEST_CASE("fbx: plain FBX opacity: Maya's TransparencyFactor 1 with a black TransparentColor is opaque") {
+    // Maya / Max: opaque is TransparentColor 0 0 0 whatever the factor.
+    {
+        const MaterialChunk mc = cook_material("fbx_opaque_maya", prop("DiffuseColor", "Color", "0.5,0.5,0.5") + prop("TransparentColor", "Color", "0,0,0") +
+                                                                       prop("TransparencyFactor", "Number", "1"));
+        CHECK(mc.base_color[3] == doctest::Approx(1.0f));
+        CHECK((mc.flags & MaterialFlags::AlphaBlend) == 0);
+    }
+    // Genuinely transparent: the colour scaled by the factor.
+    {
+        const MaterialChunk mc = cook_material("fbx_transparent_half", prop("TransparentColor", "Color", "1,1,1") + prop("TransparencyFactor", "Number", "0.5"));
+        CHECK(mc.base_color[3] == doctest::Approx(0.5f));
+        CHECK((mc.flags & MaterialFlags::AlphaBlend) != 0);
+    }
+    {
+        const MaterialChunk mc = cook_material("fbx_transparent_gray", prop("TransparentColor", "Color", "0.25,0.25,0.25") + prop("TransparencyFactor", "Number", "1"));
+        CHECK(mc.base_color[3] == doctest::Approx(0.75f));
+        CHECK((mc.flags & MaterialFlags::AlphaBlend) != 0);
+    }
+    // The Opacity property wins when the file has one.
+    {
+        const MaterialChunk mc = cook_material("fbx_opacity_prop", prop("Opacity", "Number", "0.5") + prop("TransparentColor", "Color", "0,0,0") +
+                                                                       prop("TransparencyFactor", "Number", "1"));
+        CHECK(mc.base_color[3] == doctest::Approx(0.5f));
+        CHECK((mc.flags & MaterialFlags::AlphaBlend) != 0);
+    }
+    // A factor alone is the transparency.
+    {
+        const MaterialChunk mc = cook_material("fbx_transparency_only", prop("TransparencyFactor", "Number", "0.25"));
+        CHECK(mc.base_color[3] == doctest::Approx(0.75f));
+    }
+    // No transparency at all: opaque.
+    {
+        const MaterialChunk mc = cook_material("fbx_no_transparency", prop("DiffuseColor", "Color", "1,0,0"));
+        CHECK(mc.base_color[3] == doctest::Approx(1.0f));
+        CHECK((mc.flags & MaterialFlags::AlphaBlend) == 0);
+    }
+}
+
+TEST_CASE("fbx: a map on a plain FBX colour is the colour: the colour property is not multiplied in") {
+    // No map: colour times factor.
+    {
+        const MaterialChunk mc = cook_material("fbx_color_factor", prop("DiffuseColor", "Color", "0.5,0.5,0.5") + prop("DiffuseFactor", "Number", "0.8"));
+        CHECK(mc.base_color[0] == doctest::Approx(0.4f));
+    }
+    // A base map: the map is the colour, only the explicit factor scales it.
+    {
+        const MaterialChunk mc = cook_material("fbx_map_factor", prop("DiffuseColor", "Color", "0.5,0.5,0.5") + prop("DiffuseFactor", "Number", "0.8"), {"DiffuseColor"});
+        for (int c = 0; c < 3; ++c) CHECK(mc.base_color[c] == doctest::Approx(0.8f));
+        CHECK(mc.texture(MaterialSlot::BaseColor) == G(kTexGuid));
+    }
+    {
+        const MaterialChunk mc = cook_material("fbx_map_only", prop("DiffuseColor", "Color", "0.5,0.5,0.5"), {"DiffuseColor"});
+        for (int c = 0; c < 3; ++c) CHECK(mc.base_color[c] == doctest::Approx(1.0f));
+    }
+    // Maya writes EmissiveColor 0 next to an emission map: the map must show.
+    {
+        const MaterialChunk mc = cook_material("fbx_emission_map", prop("EmissiveColor", "Color", "0,0,0"), {"EmissiveColor"});
+        for (int c = 0; c < 3; ++c) CHECK(mc.emissive[c] == doctest::Approx(1.0f));
+        CHECK(mc.texture(MaterialSlot::Emissive) == G(kTexGuid));
+    }
+    {
+        const MaterialChunk mc = cook_material("fbx_emission_map_factor", prop("EmissiveColor", "Color", "0,0,0") + prop("EmissiveFactor", "Number", "2.5"), {"EmissiveColor"});
+        for (int c = 0; c < 3; ++c) CHECK(mc.emissive[c] == doctest::Approx(2.5f));
+    }
+    // An absurd emission is capped, never a float overflow.
+    {
+        const MaterialChunk mc = cook_material("fbx_emission_huge", prop("EmissiveColor", "Color", "1e30,1,1") + prop("EmissiveFactor", "Number", "1e30"));
+        CHECK(std::isfinite(mc.emissive[0]));
+        CHECK(mc.emissive[0] <= 1e6f);
+    }
+}
+
+TEST_CASE("fbx: a Z-up centimetre clip on a root node is in metres, turns about the engine's Y, and static roots get no channel") {
+    FbxDoc doc;
+    doc.up_axis = 2;
+    doc.unit_cm = 1;
+    const long geom = box(doc, {50, 50, 50});  // file units: centimetres
+    const long mover = doc.model("Mover", "Mesh", 0);
+    doc.connect(geom, mover);
+    doc.model("Still", "Null", 0, {10, 20, 30});  // cm, file axes
+    const long layer = doc.stack("Move", 1.0);
+    doc.curve(layer, mover, "Lcl Translation", 1, {{0.0, 0.0}, {1.0, 100.0}});  // file +Y, 100 cm
+    doc.curve(layer, mover, "Lcl Rotation", 2, {{0.0, 0.0}, {1.0, 90.0}});      // about the file's Z
+    const Cooked c = cook_fbx("fbx_zup_root_clip", doc.str());
+    INFO(c.text);
+    REQUIRE(c.report.ok());
+    const MeshView m = view_of(c.mesh);
+    u32 mover_node = ~0u, still_node = ~0u;
+    for (u32 i = 0; i < m.nodes.size(); ++i) {
+        if (m.node_name(i) == "Mover") mover_node = i;
+        if (m.node_name(i) == "Still") still_node = i;
+    }
+    REQUIRE(mover_node != ~0u);
+    REQUIRE(still_node != ~0u);
+    // The static root: its translation in metres on the engine's axes (file x, y, z -> x, z, -y), and no channel.
+    CHECK(m.nodes[still_node].translation[0] == doctest::Approx(0.1f).epsilon(1e-4));
+    CHECK(m.nodes[still_node].translation[1] == doctest::Approx(0.3f).epsilon(1e-4));
+    CHECK(m.nodes[still_node].translation[2] == doctest::Approx(-0.2f).epsilon(1e-4));
+    REQUIRE(m.clips.size() == 1);
+    REQUIRE(m.clips[0].channel_count == 2);
+    const MeshChannel* tr = nullptr;
+    const MeshChannel* rot = nullptr;
+    for (u32 i = 0; i < m.clips[0].channel_count; ++i) {
+        const MeshChannel& ch = m.channels[m.clips[0].first_channel + i];
+        CHECK(ch.node == mover_node);
+        (ch.path == AnimPath::Translation ? tr : rot) = &ch;
+    }
+    REQUIRE(tr != nullptr);
+    REQUIRE(rot != nullptr);
+    REQUIRE(rot->path == AnimPath::Rotation);
+    REQUIRE(tr->key_count == 31);
+    REQUIRE(rot->key_count == 31);
+    const Quat rest{m.nodes[mover_node].rotation[0], m.nodes[mover_node].rotation[1], m.nodes[mover_node].rotation[2], m.nodes[mover_node].rotation[3]};
+    for (u32 k : {0u, 10u, 30u}) {
+        CAPTURE(k);
+        const double f = k / 30.0;
+        const float* t = &m.keys[tr->values_offset + k * 3];
+        CHECK(std::fabs(t[0]) < 1e-5);
+        CHECK(std::fabs(t[1]) < 1e-5);
+        CHECK(t[2] == doctest::Approx(static_cast<float>(-f)).epsilon(1e-4).scale(1.0));  // file +Y, metres: engine -Z
+        const float* q = &m.keys[rot->values_offset + k * 4];
+        Quat rel = qmul({q[0], q[1], q[2], q[3]}, qconj(rest));  // the turn the clip adds to the rest pose, in the engine's frame
+        if (rel.w < 0) rel = {-rel.x, -rel.y, -rel.z, -rel.w};
+        const double half = f * 3.14159265358979323846 / 4;  // 90 degrees at f = 1
+        CHECK(std::fabs(rel.x) < 1e-4);
+        CHECK(rel.y == doctest::Approx(std::sin(half)).epsilon(1e-4).scale(1.0));  // about +Y
+        CHECK(std::fabs(rel.z) < 1e-4);
+        CHECK(rel.w == doctest::Approx(std::cos(half)).epsilon(1e-4));
+    }
+}
+
+TEST_CASE("fbx: the animation sampling work of the whole file is budgeted") {
+    // One 4000 s clip at 30 Hz (120001 frames) over 600 animated nodes: 72M evaluations, over the 64M budget. The cook says
+    // so before it evaluates anything.
+    FbxDoc doc;
+    const long layer = doc.stack("Long", 4000.0);
+    for (int i = 0; i < 600; ++i) {
+        const long node = doc.model("n" + std::to_string(i), "Null", 0);
+        doc.curve(layer, node, "Lcl Translation", 0, {{0.0, 0.0}, {4000.0, 1.0}});
+    }
+    const std::string fbx = doc.str();
+    const auto t0 = std::chrono::steady_clock::now();
+    const Direct d = fbx_direct(fbx);
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    INFO(d.diags);
+    CHECK_FALSE(d.ok);
+    CHECK(has(d.diags, "transform evaluations"));
+    CHECK(has(d.diags, "sample_rate"));
+    CHECK(seconds < 10.0);
+}
+
+TEST_CASE("fbx: a vertex with an absurd number of skin weights is an error naming the cap") {
+    auto spec_with = [](int weights_on_vertex0) {
+        SkinSpec s;
+        s.bones = 1;
+        s.verts = {{0, 0, 0}, {1, 0, 0}, {0, 0, 1}};
+        s.faces = {{0, 1, 2}};
+        std::vector<std::pair<int, double>> w;
+        for (int i = 0; i < weights_on_vertex0; ++i) w.push_back({0, 1.0 / weights_on_vertex0});
+        s.weights = {w, {{0, 1.0}}, {{0, 1.0}}};
+        return s;
+    };
+    const Direct bad = fbx_direct(skin_fbx(spec_with(3000), 1, 100.0, false));
+    INFO(bad.diags);
+    CHECK_FALSE(bad.ok);
+    CHECK(has(bad.diags, "weights, over the importer's limit of 1024"));
+    // At the cap the cook still works (and the repeated pairs add up to one influence).
+    const Direct fine = fbx_direct(skin_fbx(spec_with(1000), 1, 100.0, false));
+    INFO(fine.diags);
+    CHECK(fine.ok);
+}
+
+TEST_CASE("fbx: a mesh with millions of non-triangle faces instanced on many nodes errors on the work budget") {
+    // One triangle and 60000 line faces, shared by 1000 nodes: 180M face visits, over the 128M budget.
+    FbxDoc doc;
+    std::vector<std::vector<long>> faces = {{0, 1, 2}};
+    for (int i = 0; i < 60000; ++i) faces.push_back({0, 1});
+    const long geom = doc.geometry("Lines", {0, 0, 0, 1, 0, 0, 0, 0, 1}, faces);
+    for (int i = 0; i < 1000; ++i) doc.connect(geom, doc.model("m" + std::to_string(i), "Mesh", 0));
+    const Direct d = fbx_direct(doc.str());
+    INFO(d.diags);
+    CHECK_FALSE(d.ok);
+    CHECK(has(d.diags, "work limit"));
+}
+
+TEST_CASE("fbx: a read error shows the reader's description on one line, without a stack trace") {
+    std::string fbx = box_fbx({0.5, 0.5, 0.5}, 1, 100.0);
+    fbx.insert(fbx.find("Objects:"), "\x01\x02 garbage {{{ \x7f\xff }\n");
+    const Direct d = fbx_direct(fbx);
+    INFO(d.diags);
+    REQUIRE_FALSE(d.ok);
+    CHECK(has(d.diags, "cannot read the FBX: "));
+    CHECK_FALSE(has(d.diags, "ufbx.c"));
+    CHECK_FALSE(has(d.diags, "Stack"));
+    CHECK_FALSE(has(d.diags, "\x7f"));
+    CHECK(std::count(d.diags.begin(), d.diags.end(), '\n') == 1);
 }

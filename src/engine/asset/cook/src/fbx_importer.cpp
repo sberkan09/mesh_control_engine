@@ -4,7 +4,11 @@
 // Read: mesh nodes (polygons triangulated by ufbx_triangulate_face), normals (smooth ones are generated when absent) and UV
 // set 0 (V flipped: FBX's origin is the bottom left, the engine's the top left, as for OBJ), one submesh per node and
 // material slot; materials inline from ufbx's PBR view (base colour x factor, opacity, roughness, metalness, emission, base
-// colour / normal / emission maps, and a roughness + metalness pair that names one packed image); the node tree (local
+// colour / normal / emission maps, and a roughness + metalness pair that names one packed image). Colours are taken as
+// they are (linear, as for glTF; FBX does not say). Plain FBX (Lambert / Phong) has no opacity mapping in ufbx: the
+// "Opacity" property if present, else 1 - TransparencyFactor x mean(TransparentColor) (a factor alone: 1 - factor), so
+// Maya's factor 1 with a black colour is opaque. With a map on a plain FBX base colour or emission the colour property is
+// not multiplied in (the map is the colour; only an explicit DiffuseFactor / EmissiveFactor scales it). The node tree (local
 // transform = translation, rotation, scale, pivots and pre/post rotations already folded in by ufbx); skins as clusters
 // (the 4 largest influences of a vertex, renormalized; up to 256 joints; inverse binds from the clusters' bind poses);
 // animation stacks as clips, sampled at a fixed rate (sidecar "sample_rate", default 30) with no curve fitting.
@@ -43,7 +47,10 @@
 // The file is untrusted. The file is read from memory with the format forced to FBX (no sniffing, no external files, no
 // thread pool); ufbx runs under a temporary and a result memory budget of 1 GiB each, an allocation-count cap and a node
 // depth cap, and every count the importer allocates from (nodes, materials, submeshes, vertices, indices, joints, clips,
-// samples, keys) is checked against a fixed limit (kMax* below) that fails naming the limit before the allocation.
+// samples, keys) is checked against a fixed limit (kMax* below) that fails naming the limit before the allocation. Work
+// that is not an allocation is budgeted too: transform evaluations of the whole file (frames x animated nodes, checked per
+// clip before it is sampled), and over every mesh instance the faces visited, material slots sorted and skin weights scanned
+// (a vertex over 1024 skin weights is an error; influences are picked once per control point).
 // Non-finite or absurd (|v| > 1e9) numbers are errors. The node tree is walked with an explicit stack.
 
 #include <algorithm>
@@ -79,7 +86,11 @@ constexpr u32 kMaxMaterials = 1u << 16;
 constexpr u32 kMaxSubmeshes = 1u << 18;                // (node, material slot) pairs that hold triangles
 constexpr u64 kMaxSceneVertices = u64(1) << 24;        // welded vertices over every mesh instance
 constexpr u64 kMaxSceneIndices = u64(1) << 25;         // triangle corners over every mesh instance
-constexpr u32 kMaxFaceCorners = 1u << 20;              // one polygon
+constexpr u32 kMaxFaceCorners = 1u << 16;              // one polygon
+constexpr u32 kMaxSkinWeightsPerVertex = 1u << 10;     // skin weights of one control point (duplicates included)
+constexpr u64 kMaxInstanceWork = u64(1) << 27;         // faces visited, material slots sorted and weights scanned, over every mesh instance
+constexpr u64 kMaxEvaluations = u64(1) << 26;          // ufbx_evaluate_transform calls over every clip (frames x animated nodes)
+constexpr f64 kMaxEmission = 1e6;
 constexpr u32 kMaxClips = 1u << 10;
 constexpr u32 kMaxClipSamples = 1u << 17;              // keys per channel
 constexpr u64 kMaxKeyFloats = u64(1) << 25;            // the whole key pool (128 MiB)
@@ -91,14 +102,18 @@ constexpr u32 kNone = ~0u;
 // ---- diagnostics ----
 
 // `t`, shortened and made printable, for a message.
-void quote(String& out, StringView t) {
-    out += '\'';
-    const usize n = std::min<usize>(t.size(), 40);
+void plain(String& out, StringView t, usize max) {
+    const usize n = std::min<usize>(t.size(), max);
     for (usize i = 0; i < n; ++i) {
         const char c = t[i];
         out += (c >= 0x20 && c < 0x7F) ? c : '?';
     }
     if (t.size() > n) out += "...";
+}
+
+void quote(String& out, StringView t) {
+    out += '\'';
+    plain(out, t, 40);
     out += '\'';
 }
 
@@ -276,10 +291,14 @@ bool load_scene(Rep& rep, Span<const byte> src, bool content, Scene& out) {
             m += "not an FBX file (binary or ASCII, version 3000 and up)";
             break;
         default: {
-            char buf[512];
-            ufbx_format_error(buf, sizeof(buf), &err);
+            // The error's own description and info, on one line: no stack trace or source lines, file bytes made printable.
             m += "cannot read the FBX: ";
-            m += buf;
+            plain(m, sv(err.description), 80);
+            if (err.info_length > 0) {
+                m += " (";
+                quote(m, StringView(err.info, std::min<usize>(err.info_length, sizeof(err.info))));
+                m += ')';
+            }
             m += ". If the file is valid, re-export it from Blender as glTF, or as FBX 7.4 binary";
             break;
         }
@@ -481,6 +500,13 @@ bool trs_floats(const ufbx_transform& t, f64 k, f32 tr[3], f32 rot[4], f32 sc[3]
     return true;
 }
 
+// The influences picked for one control point.
+struct Picked {
+    f32 joints[4];
+    f32 weights[4];
+    u32 lossy;
+};
+
 class FbxCook {
 public:
     FbxCook(const ImportInput& in, const Settings& s, Rep& rep, const ufbx_scene& scene)
@@ -499,6 +525,7 @@ private:
     bool build_animations();
     void unsupported_scene_warnings();
     u32 pick_influences(const ufbx_skin_deformer& sd, u32 vertex, f32 joints[4], f32 weights[4]) const;
+    bool charge(u64 work, const char* what);
 
     const ImportInput& in_;
     const Settings& s_;
@@ -530,7 +557,7 @@ private:
     Array<i32> skin_of_;        // deformer typed_id -> importer skin id
 
     // totals and warnings
-    u64 total_vertices_ = 0, total_indices_ = 0;
+    u64 total_vertices_ = 0, total_indices_ = 0, instance_work_ = 0, evaluations_ = 0;
     Warn w_hidden_, w_pointline_, w_color_, w_uvsets_, w_blend_, w_multiskin_, w_dq_, w_bump_, w_opacity_map_, w_layered_tex_, w_packed_;
     Warn w_layers_, w_blendmode_, w_otheranim_, w_emptyclip_;
     u32 lossy_vertices_ = 0;
@@ -597,28 +624,47 @@ bool FbxCook::convert_material(const ufbx_material& mat, asset::MaterialChunk& o
         if (!fin(v)) bad = true;
         return v;
     };
+    // A non-negative emission, finite and capped (a float cast of a double beyond float range is undefined).
+    auto emission = [&](f64 v) { return static_cast<f32>(fin(v) ? std::min(kMaxEmission, std::max(0.0, v)) : 0.0); };
+    // Plain FBX (Lambert / Phong) writes a colour, a factor and a map as three separate things; Maya writes a colour (often
+    // 0.5 or 0) next to the texture that is the real colour. With a map the colour property is not multiplied in: the map
+    // is the colour, and only an explicit factor property scales it.
+    const bool plain_fbx = mat.shader_type == UFBX_SHADER_FBX_LAMBERT || mat.shader_type == UFBX_SHADER_FBX_PHONG;
+    const bool base_map = map_texture(p.base_color) != nullptr;
     const f64 factor = p.base_factor.has_value ? val(p.base_factor.value_real) : 1.0;
-    if (p.base_color.has_value) {
+    if (plain_fbx && base_map) {
+        out.base_color[0] = out.base_color[1] = out.base_color[2] = clamp01(factor);
+    } else if (p.base_color.has_value) {
         out.base_color[0] = clamp01(val(p.base_color.value_vec3.x) * factor);
         out.base_color[1] = clamp01(val(p.base_color.value_vec3.y) * factor);
         out.base_color[2] = clamp01(val(p.base_color.value_vec3.z) * factor);
     }
+    // Opacity. A Blender / PBR material has it. Plain FBX does not map it: the "Opacity" property if the file has one, else
+    // the transparency pair, where TransparentColor (0 = opaque) is scaled by TransparencyFactor; Maya and Max write an
+    // opaque material as TransparencyFactor 1 with TransparentColor black. A factor alone (no colour) is the transparency.
+    f64 alpha = 1.0;
     if (p.opacity.has_value) {
-        out.base_color[3] = clamp01(val(p.opacity.value_real));
-        if (out.base_color[3] < 1.0f) out.flags |= asset::MaterialFlags::AlphaBlend;
+        alpha = val(p.opacity.value_real);
+    } else if (const ufbx_prop* op = ufbx_find_prop(&mat.props, "Opacity"); op && !(op->flags & UFBX_PROP_FLAG_NO_VALUE)) {
+        alpha = val(op->value_real);
+    } else if (p.transmission_color.has_value) {
+        const ufbx_vec3 c = p.transmission_color.value_vec3;
+        const f64 f = p.transmission_factor.has_value ? val(p.transmission_factor.value_real) : 1.0;
+        alpha = 1.0 - clamp01(f) * clamp01((val(c.x) + val(c.y) + val(c.z)) / 3.0);
     } else if (p.transmission_factor.has_value) {
-        // Plain FBX materials name opacity by its complement: TransparencyFactor 0 is opaque, 1 is clear.
-        out.base_color[3] = 1.0f - clamp01(val(p.transmission_factor.value_real));
-        if (out.base_color[3] < 1.0f) out.flags |= asset::MaterialFlags::AlphaBlend;
+        alpha = 1.0 - clamp01(val(p.transmission_factor.value_real));
     }
+    out.base_color[3] = clamp01(alpha);
+    if (out.base_color[3] < 1.0f) out.flags |= asset::MaterialFlags::AlphaBlend;
     if (p.roughness.has_value) out.roughness = clamp01(val(p.roughness.value_real));
     if (p.metalness.has_value) out.metallic = clamp01(val(p.metalness.value_real));
     if (p.emission_color.has_value) {
         const f64 ef = p.emission_factor.has_value ? val(p.emission_factor.value_real) : 1.0;
-        out.emissive[0] = static_cast<f32>(std::max(0.0, val(p.emission_color.value_vec3.x) * ef));
-        out.emissive[1] = static_cast<f32>(std::max(0.0, val(p.emission_color.value_vec3.y) * ef));
-        out.emissive[2] = static_cast<f32>(std::max(0.0, val(p.emission_color.value_vec3.z) * ef));
+        out.emissive[0] = emission(val(p.emission_color.value_vec3.x) * ef);
+        out.emissive[1] = emission(val(p.emission_color.value_vec3.y) * ef);
+        out.emissive[2] = emission(val(p.emission_color.value_vec3.z) * ef);
     }
+    const f64 emission_factor = p.emission_factor.has_value ? val(p.emission_factor.value_real) : 1.0;
     if (bad) {
         String m(what.view());
         m += " has a value that is not a finite number";
@@ -643,10 +689,10 @@ bool FbxCook::convert_material(const ufbx_material& mat, asset::MaterialChunk& o
     };
     slot(kBase, asset::MaterialSlot::BaseColor);
     slot(kNormal, asset::MaterialSlot::Normal);
-    if (slot(kEmission, asset::MaterialSlot::Emissive) && !p.emission_color.has_value) {
-        const f32 ef = p.emission_factor.has_value ? static_cast<f32>(std::max(0.0, p.emission_factor.value_real)) : 1.0f;
-        out.emissive[0] = out.emissive[1] = out.emissive[2] = ef;
-    }
+    // An emission map: with no colour property, or on plain FBX where Maya writes EmissiveColor 0 next to the map, the map is
+    // the colour and the (explicit) factor is the strength.
+    if (slot(kEmission, asset::MaterialSlot::Emissive) && (plain_fbx || !p.emission_color.has_value))
+        out.emissive[0] = out.emissive[1] = out.emissive[2] = emission(emission_factor);
     // Roughness and metalness maps: the engine reads one packed image (G = roughness, B = metallic).
     {
         const ufbx_texture* tr = map_texture(p.roughness);
@@ -689,6 +735,9 @@ bool FbxCook::skin_for(const ufbx_skin_deformer& sd, i32& id) {
     }
     if (sd.clusters.count == 0 || sd.clusters.count > asset::kMaxSkinJoints)
         return rep_.failf("a skin needs 1..%u joints, this one has %zu", asset::kMaxSkinJoints, sd.clusters.count);
+    // ufbx keeps repeated (vertex, cluster) pairs, so one control point can carry as many weights as the file has bytes.
+    if (sd.max_weights_per_vertex > kMaxSkinWeightsPerVertex)
+        return rep_.failf("a skin has a vertex with %zu weights, over the importer's limit of %u", sd.max_weights_per_vertex, kMaxSkinWeightsPerVertex);
     // Geometry space -> world space at the bind pose, from the first cluster (every cluster of a consistent file agrees).
     const ufbx_skin_cluster* c0 = nullptr;
     for (usize i = 0; i < sd.clusters.count && !c0; ++i)
@@ -776,6 +825,15 @@ bool FbxCook::build_skins(detail::SkinTables& out) {
 
 // ---- meshes ----
 
+// Adds `work` to the per-instance budget (faces visited, slots sorted, weights scanned over every mesh instance).
+bool FbxCook::charge(u64 work, const char* what) {
+    if (instance_work_ + work > kMaxInstanceWork || instance_work_ + work < instance_work_)
+        return rep_.failf("the meshes' %s over every node that uses them is over the importer's work limit of %llu (a mesh with many faces on many nodes)", what,
+                          static_cast<unsigned long long>(kMaxInstanceWork));
+    instance_work_ += work;
+    return true;
+}
+
 bool FbxCook::build_meshes() {
     for (u32 oi = 0; oi < order_.size(); ++oi) {
         const ufbx_node& n = *order_[oi];
@@ -815,6 +873,9 @@ bool FbxCook::import_instance(u32 out_node, const ufbx_node& node) {
     }
     if (total_indices_ + static_cast<u64>(m.num_triangles) * 3 > kMaxSceneIndices)
         return rep_.failf("more than %llu triangle corners in the scene is over the importer's limit", static_cast<unsigned long long>(kMaxSceneIndices));
+    // Three passes over the faces (count, place, triangulate) and the slot tables, for every instance of the mesh, including
+    // faces that are not triangles (points and lines are visited and skipped).
+    if (!charge(static_cast<u64>(m.num_faces) * 3 + std::max<u64>(1, m.materials.count) * 2, "faces and material slots")) return false;
 
     // The skin, if any, decides the space the vertices are written in.
     const ufbx_skin_deformer* sd = (m.skin_deformers.count > 0 && m.skin_deformers.data[0]->clusters.count > 0) ? m.skin_deformers.data[0] : nullptr;
@@ -855,6 +916,8 @@ bool FbxCook::import_instance(u32 out_node, const ufbx_node& node) {
         order[start[s] + fill[s]++] = static_cast<u32>(f);
     }
 
+    HashMap<u32, u32> picked;  // control point -> index into picks
+    Array<Picked> picks;
     Array<u32> tri;
     tri.resize(std::max<usize>(1, m.max_face_triangles) * 3, 0u);
     for (usize s = 0; s < slots; ++s) {
@@ -916,11 +979,21 @@ bool FbxCook::import_instance(u32 out_node, const ufbx_node& node) {
                 uv.push_back(static_cast<f32>(1.0 - t.y));  // FBX's origin is the bottom left
             }
             if (sd) {
-                f32 j[4], w[4];
-                lossy_vertices_ += pick_influences(*sd, m.vertex_indices.data[ix], j, w);
+                // Once per control point: welded duplicates (other normals or UVs) share the picked influences.
+                const u32 cp = m.vertex_indices.data[ix];
+                auto [pslot, fresh] = picked.try_emplace(cp, static_cast<u32>(picks.size()));
+                if (fresh) {
+                    const u64 nw = cp < sd->vertices.count ? sd->vertices.data[cp].num_weights : 0;
+                    if (!charge(nw * 5 + 1, "skin weights")) return false;
+                    Picked pk;
+                    pk.lossy = pick_influences(*sd, cp, pk.joints, pk.weights);
+                    picks.push_back(pk);
+                }
+                const Picked& pk = picks[*pslot];
+                lossy_vertices_ += pk.lossy;
                 for (int k = 0; k < 4; ++k) {
-                    joints.push_back(j[k]);
-                    weights.push_back(w[k]);
+                    joints.push_back(pk.joints[k]);
+                    weights.push_back(pk.weights[k]);
                 }
             }
             return true;
@@ -1046,6 +1119,18 @@ bool FbxCook::build_animations() {
         }
         if (other) w_otheranim_.hit(name.view());
 
+        // The evaluations this clip costs, whether or not a node ends up with a channel.
+        u64 animated_count = 0;
+        for (u8 a : animated) animated_count += a;
+        if (animated_count > 0 && (static_cast<u64>(frames) > (kMaxEvaluations - evaluations_) / animated_count)) {
+            String e("animation stack ");
+            quote(e, name.view());
+            appendf(e, " needs %u samples of %llu animated nodes: over the importer's limit of %llu transform evaluations for the file (lower 'sample_rate' or shorten the stacks)",
+                    frames, static_cast<unsigned long long>(animated_count), static_cast<unsigned long long>(kMaxEvaluations));
+            return rep_.fail(e.view());
+        }
+        evaluations_ += static_cast<u64>(frames) * animated_count;
+
         u32 times_off = kNone;
         u32 emitted = 0;
         for (u32 oi = 0; oi < order_.size(); ++oi) {
@@ -1121,8 +1206,7 @@ void FbxCook::unsupported_scene_warnings() {
     const usize other = scene_.lights.count + scene_.cameras.count + scene_.nurbs_curves.count + scene_.nurbs_surfaces.count +
                         scene_.line_curves.count;
     if (other > 0)
-        rep_.warnf("%zu light%s, camera%s, curve or surface node%s are not imported", other, other == 1 ? "" : "s", other == 1 ? "" : "s",
-                   other == 1 ? "" : "s");
+        rep_.warnf("%zu light, camera, curve or surface node%s not imported", other, other == 1 ? " is" : "s are");
     usize ufbx_warnings = 0;
     for (usize i = 0; i < scene_.metadata.warnings.count; ++i) ufbx_warnings += scene_.metadata.warnings.data[i].count;
     if (ufbx_warnings > 0) {
