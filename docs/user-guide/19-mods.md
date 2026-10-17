@@ -118,6 +118,8 @@ game's pack.
 
 - No code: mods cannot add systems, components or C++ of any kind. Behaviour they can change is
   what data already drives (sequences, prefabs, particle presets, tilemaps, materials, shaders).
+  A Luau script inside a mod pack is dropped at load with a warning, whether it is new or tries to
+  replace one of the game's: script bytecode is trusted only from the game's own pack.
 - A mod pack is read twice at start (its identity, then the mount), so very large mods add boot
   time.
 - Saves do not record which mods were loaded.

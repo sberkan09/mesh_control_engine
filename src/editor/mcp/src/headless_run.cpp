@@ -200,7 +200,11 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
     if (ticks == 0) return Error(Errc::InvalidArgument, "mcp.run_headless", "ticks must be > 0");
     asset::AssetSystem assets;
     const StringView roots[1] = {pack};
-    MCE_TRY(assets.mount(Span<const StringView>(roots, 1)));
+    // `pack` is the project's own cook output (every caller passes it), the one place bytecode is trusted; `base` packs
+    // (a mod project's game) are not ours and stay data-only.
+    asset::MountOptions own;
+    own.allow_code = true;
+    MCE_TRY(assets.mount(Span<const StringView>(roots, 1), own));
     MCE_TRY(assets.mount(base));
     audio::AudioDesc ad;
     ad.backend = audio::Backend::Silent;

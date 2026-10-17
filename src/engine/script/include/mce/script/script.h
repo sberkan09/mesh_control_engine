@@ -78,6 +78,8 @@ public:
 
     // Adds a script from bytecode; its top level runs now (with the step budget). Returns its
     // index. `group` picks which run(f, group) calls it (scene scripts: one group per phase).
+    // Bytecode is trusted: Luau's loader does not validate it. Callers pass only bytecode the game's own build
+    // cooked (AssetSystem drops Script entries from mod packs); anything else goes through compile().
     Result<u32> add_bytecode(StringView name, Span<const u8> bytecode, u8 group = 0);
 
     // Registers the "script.update" system in `phase` and points the World at this host. The host
