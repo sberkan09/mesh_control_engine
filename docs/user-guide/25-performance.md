@@ -24,7 +24,7 @@ Each frame records:
 - the counters: draws, passes, compute dispatches, triangles, meshes, sprites, sprite batches,
   upload bytes and live heap allocations, and for 3D `runs_instanced` and `draws_instanced` (copies of one
   mesh drawn as one instanced draw in the main view, and the submesh draws inside them; chapter 8.6). An
-  instanced draw counts once in `draws`; `merged_groups` and `merged_children` count the `StaticMerge3D` components drawing merged meshes and the `MeshRef` children they replace (chapter 8.6);
+  instanced draw counts once in `draws`; `merged_groups` and `merged_children` count the `StaticMerge3D` components drawing merged meshes and the `MeshRef` children they replace (chapter 8.6); `decals_dropped` counts the visible decals past the frame's 64-decal or 3-texture limit (a warning names the workaround);
 - for 3D, `draw_causes`: the scene draws that were not part of an instanced run, counted by cause (see
   "Draw calls by cause" below). The cause names are stored in the file's header, and the counts of a frame in its
   `counters.draw_causes`, in that order. Older files have none and read as zero.

@@ -3,10 +3,12 @@
 
 #include <doctest/doctest.h>
 
+#include "mce/audio/components.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
 #include "mce/kit/components.h"
+#include "mce/kit/effects.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/stock.h"
@@ -269,4 +271,39 @@ TEST_CASE("ui flow rules: one emit that reaches two signal queues toggles a scre
     g_emit = true;
     for (u32 i = 0; i < 5; ++i) tick(w, t);
     CHECK(screen(w, e).visible);  // shown once, not toggled back by the second queue
+}
+
+TEST_CASE("ui flow: keep_audio lets a Sfx trigger fire under a pause screen; without it the hold is total") {
+    for (const bool keep : {false, true}) {
+        CAPTURE(keep);
+        World w;
+        input::install(w);
+        w.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
+        kit::install_effects(w, nullptr);
+        kit::install_ui_flow(w);
+        w.add_system(Phase::FixedUpdate_Pre, "gameplay", &gameplay);
+        g_gameplay_runs = 0;
+        kit::UiFlow menu;
+        menu.pause = true;
+        menu.keep_audio = keep;
+        menu.hide_on = "Play";
+        const Entity screen_e = w.spawn();
+        w.add(screen_e, kit::UiScreen{});
+        w.add(screen_e, menu);
+        kit::SfxTrigger click;
+        click.clip.guid = asset::Guid{1, 2};
+        click.fire = true;
+        const Entity sfx = w.spawn_with(click);
+
+        u64 t = 0;
+        tick(w, t);
+        tick(w, t);
+        CHECK(w.held());
+        CHECK(g_gameplay_runs == 0);  // the game itself is held either way
+        CHECK(w.try_get<kit::SfxTrigger>(sfx)->fired == (keep ? 1u : 0u));
+        CHECK(w.event_queue<audio::PlaySfx>()->total_pushed == (keep ? 1u : 0u));
+        tick(w, t, "Play");  // the screen hides: the trigger that waited fires now
+        CHECK(w.try_get<kit::SfxTrigger>(sfx)->fired == 1);
+        CHECK_FALSE(w.held());
+    }
 }

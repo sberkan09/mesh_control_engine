@@ -51,7 +51,7 @@ Linear: the SBA workspace is at its free issue limit (save_issue refuses new iss
 | C1 enter/exit vehicles | implemented, awaiting merge | see the C1-C2 PR | `VehicleSeat3D` + `Rider3D` (`mce/kit/seats3d.h`), Interact or `enter`, `VehicleEntered3D` / `VehicleExited3D`, AI driver hand-off, camera retarget; user guide 9.9 |
 | C2 weapons, health, damage | implemented, awaiting merge | same PR | `Health3D`, `Weapon3D`, `Projectile3D` + `apply_damage` (`mce/kit/combat3d.h`), hitscan and stepped projectiles with splash, teams, armor, regen, stagger, ragdoll on death; user guide 9.12 |
 | C3 wanted + police BT | not started | | needs C2 (`Damage3D` / `Died3D` events, `apply_damage`) and B3 |
-| C4 missions + minimap | not started | | |
+| C4 missions + minimap | moved to its own milestone [M-MISSION](M-MISSION.md) (2026-10-17) | | |
 
 Design notes and open items (C1-C2):
 - Both steps live in new files (`seats3d.*`, `combat3d.*`); `vehicles3d.*` is untouched so the traffic thread (B2) does not conflict.
