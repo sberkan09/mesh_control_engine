@@ -32,6 +32,7 @@ mce_add_library(mce_gameplay_kit
         src/stock.cpp
         src/timeline.cpp
         src/ai.cpp
+        src/roads.cpp
         src/ai_tasks.cpp
         src/perception.cpp
         src/cinematic.cpp
