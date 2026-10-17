@@ -11,6 +11,7 @@ formats, which is what keeps the shipped game small and safe.
 | You author | Extension | Cooked into | Used by |
 |---|---|---|---|
 | Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
+| HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
 | Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
@@ -54,7 +55,7 @@ Settings per importer (every key is optional; the defaults are shown):
 
 | Importer | Settings |
 |---|---|
-| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1) |
+| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1), `"max_size"` (PNG and JPEG: the largest side in pixels, a power of two from 1 to 16384; a bigger image is halved until it fits, before its mips; default no limit, see "Keep the pack small" below), `"compress"` (PNG and JPEG: `"none"`, `"auto"`, `"bc7"`, `"bc5"`, `"bc4"`, `"bc1"` or `"astc"`; what each does depends on the cook mode, see "Compress the pack with BC" below; default: the mode's own default). For `.hdr` and `.exr`: `"mips": true`, `"max_size": 2048` (largest side, a power of two: the image is halved until it fits), `"exposure": 0` (EV applied at cook); `"srgb": true` is an error (see the HDR rule below) |
 | `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.7), `"quality": 0.4` (Vorbis, -0.1..1) |
 | `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
@@ -63,6 +64,77 @@ Settings per importer (every key is optional; the defaults are shown):
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
 re-cooks the asset.
+
+Three importer rules that the error text alone does not make obvious:
+
+- **glTF is one file.** A `.gltf` whose buffers are separate `.bin` files cooks with `external buffers are not supported`.
+  Export a `.glb` (the buffer is inside it), or a `.gltf` with the buffers embedded as base64 `data:` URIs. Textures
+  are different: they stay separate PNG or JPEG files, adopted like any other texture and referenced by the material.
+- **`asset_write` never writes `format`, `version` or `guid`.** The tool sets them and keeps the file's own GUID, in
+  `merge` and in `replace` mode alike, so leave them out of `content`; passing them is refused
+  (`format, version and guid are set by the tool`). `replace` makes the document exactly `content` plus those three.
+- **HDR skies are linear floats.** A `.hdr` (Radiance) or `.exr` (OpenEXR: uncompressed, ZIP or PIZ, the first RGB(A)
+  layer) cooks to a linear RGBA16F texture that keeps values far above 1 (a sun can be 5000 times the sky), so it is
+  never sRGB: `"srgb": true` on one is a cook error (`remove "srgb" from the sidecar or set it to false`; an adopted
+  `.hdr` or `.exr` has no `srgb` key to begin with). Values clamp to the half-float range (0 .. 65504), NaN and Inf become 0, and the
+  mips are averaged in float. A float sky costs 8 bytes a texel, so `max_size` (default 2048, a power of two) halves the
+  image until its largest side fits; a 2048 × 1024 sky with mips is about 22 MB of GPU memory, four times an 8-bit one.
+  The source itself is capped at 64 megapixels (8192 × 8192; each side at most 16384): a bigger `.hdr` or `.exr` is a cook
+  error (`image is W x H, over the limit of 64 megapixels (8192 x 8192): downscale the source`) raised from the file's header,
+  before any pixel is decoded. Downscale the source in your image tool; a truncated file is an error too.
+  `exposure` shifts the whole image by EV at cook (`2` is four times brighter); `sky_texture_intensity` on
+  `Environment3D` is the exposure you can still change at run time. The phone cook (`--textures astc`) keeps these
+  in RGBA16F. Point `Environment3D.sky_texture` (and `ibl_texture`, with `sky_ibl`) at the asset; chapter 8 has the sky.
+- **Keep the pack small with `max_size`.** Textures cook to uncompressed RGBA8 plus a mip chain, so the cooked size
+  grows with the square of the side: a 1024 × 1024 texture with mips is about 5.3 MB (1024 × 1024 × 4 bytes, and a
+  third more for the chain), and the same image at 512 is about 1.3 MB. Seventy-eight 1024² textures make a
+  pack of about 400 MB; at 512 they make about 100 MB. Set `"max_size": 512` in a texture's sidecar (or
+  `asset_set_import_settings {"settings": {"max_size": 512}}`) and the cook box-halves the image (the filter the mips
+  use, in linear light for colour textures) until its longest side is 512 or less, then builds the mips from that;
+  a 1024 × 512 image becomes 512 × 256, so the shape is kept. The default is no limit, so a project that sets
+  nothing cooks to the same bytes as before. For the whole project at once, pass a cap to the cook:
+  `mce cook MyGame --max-texture-size 512`, `mce ship MyGame --max-texture-size 512`, or `"max_texture_size": 512` in
+  the MCP `cook_run`. The two combine as the smaller of the sidecar value and the project cap: a sidecar with
+  `"max_size": 256` stays at 256 under a project cap of 512, and a sidecar with `"max_size": 2048` is clamped to 512.
+  Changing either re-cooks the textures (and only the textures). A value that is not a power of two from 1 to 16384
+  is a cook error that names the file and says what to change. A normal map is halved with the same plain box filter
+  as its mips and is not re-normalized, which is fine for the usual 2x to 4x cut. `.hdr` and `.exr` keep their own
+  `max_size` (default 2048) and ignore the project cap. After every cook, `mce_cook` prints the cooked bytes by type
+  (textures, meshes, audio, scenes, other), how many textures the cap cut, and the five largest assets, and MCP's
+  `cook_run` returns the same as `sizes`: look there first when a pack is bigger than expected.
+- **Compress the pack with BC.** Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
+  as block-compressed data (BC7, BC5, BC4 or BC1) instead of RGBA8: the same 1024 × 1024 texture with mips drops from
+  5.3 MB to 1.3 MB (BC7, BC5) or 0.67 MB (BC4, BC1), on disk and in GPU memory. The sidecar's `compress` key picks the
+  format, and the cook mode decides what a value produces (a missing key means the mode's default, so a project that
+  sets nothing cooks to the same bytes as before):
+
+  | `compress` | `--textures rgba8` (default) | `--textures bc` | `--textures astc` |
+  |---|---|---|---|
+  | missing | RGBA8 | as `auto` | ASTC 4x4 |
+  | `none` | RGBA8 | RGBA8 | RGBA8 |
+  | `auto` | RGBA8 | picked from the image (below) | ASTC 4x4 |
+  | `bc7`, `bc5`, `bc4`, `bc1` | RGBA8 | that format | ASTC 4x4 |
+  | `astc` | RGBA8 | RGBA8 | ASTC 4x4 |
+
+  `auto` picks BC7 for colour (`"srgb": true`), BC4 for opaque grey data such as height maps, BC5 for a normal map (a
+  linear image where at least 99% of the texels are unit-length normals), and BC7 for everything else; it keeps RGBA8 for
+  colour-grading LUT strips. (These thresholds are provisional and will be calibrated on real content.) BC1 is never picked
+  for you: it is for opaque colour by explicit choice, and it drops alpha. BC5 and BC4 hold linear data, so they need
+  `"srgb": false`. BC needs both sides of the texture, after `max_size`, to be multiples of 4: otherwise the texture
+  cooks to RGBA8 and the cook warns with the file name (resize the image or pick a `max_size`). **Pixel art and UI:**
+  block compression blurs hard edges, so keep 2D projects on the default `rgba8` cook or set `"compress": "none"`;
+  the same goes for colour palettes (such as a kit's `colormap.png`) and LUTs. A BC pack runs only on a GPU that samples
+  BC textures (every desktop GPU; not phones or web): cook phones with `--textures astc` and web with `rgba8`. `.hdr`
+  and `.exr` skies are never compressed, and `compress` on them is an error. The encoder is deterministic, so a BC pack
+  cooks to the same bytes twice on x86_64. To ship one, run `mce ship MyGame --textures bc` (it re-cooks the pack
+  with BC into `MyGame/assets.mce` and zips that; combine it with `--max-texture-size`), `python3 scripts/ship.py --project
+  projects/MyGame --textures bc` from a checkout, or `cook_run {"textures": "bc"}` over MCP. `--target web` with `bc`
+  exits (a web pack serves every browser, phones included), and `ship.py --target android|ios` always cooks ASTC and
+  refuses `bc`. The size report after the cook shows the saving. The Ashen Court sample (six 256² textures) drops to
+  about a quarter of its RGBA8 texture bytes.
+- **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
+  brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
+  set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
 
 ## 5.3 Adding files
 
@@ -79,6 +151,11 @@ re-cooks the asset.
 
 Adopted textures default to `srgb: true`; fix the sidecar for a normal map or a LUT before using it.
 
+Art and levels drawn in Aseprite, Tiled or LDtk are not copied in as they are: their exports are
+converted into the engine's own assets (`.mcsheet`, `.mcscene`, `.mctilemap`) by `mce import`, or by the
+MCP tool `asset_import`; section 7.3 describes each tool's settings and limits. The converter also gives
+the tileset or sheet PNG its sidecar, so no adoption is needed for those.
+
 ## 5.4 The cook
 
 ```sh
@@ -86,6 +163,8 @@ build/<preset>/projects/MyGame/my_game_cook projects/MyGame            # cook in
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --pack     # also write projects/MyGame/assets.mce
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --force    # ignore the cook DB, redo everything
 build/<preset>/projects/MyGame/my_game_cook projects/MyGame --adopt    # write missing sidecars first
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --only scenes/level_02.mcscene --only textures
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --skip-errors   # cook what can be cooked, list the rest
 ```
 
 Exit codes: 0 clean, 1 cook errors, 2 usage. Errors are printed as `file:line:col: error: message
@@ -113,6 +192,25 @@ What the cook does, so its behaviour makes sense:
 The build cooks for you: building `my_game` runs `my_game_cook` over a copy of `assets/` into
 `build/<preset>/projects/MyGame/project/assets.mce`, which is the pack the host loads from the
 build tree. The editor's F7 cooks into `<Project>/cooked/` for the editor's own use.
+
+### When a cook fails
+
+A failed cook still cooks everything that does not depend on the failed file (and the failed file's
+previous output keeps serving), but it writes no pack. Read the first error; these are the usual ones.
+
+| Error | Cause | Fix |
+|---|---|---|
+| `unregistered asset (no .mceasset sidecar)` | a new source file (a `.luau` script, texture, model, sound) with no sidecar | adopt it: over MCP `cook_run {"adopt": true}`, on the command line `mce cook <project> --adopt`. The same error stops `mce build`; adopt, then build again |
+| `unknown component type 'X'` or `unknown field 'x' on X` | the process that cooks has an older game module than your source (the component or field is new) | `mce build` (or MCP `module_build`), then restart the MCP server (`mce mcp <project>`); `mce cook` loads the module fresh each time |
+| `missing reference <guid>` | a scene or material names an asset that was deleted or never adopted | adopt the file, or fix the reference |
+| a pack that plays an old scene | the cook writes `cooked/`; `mce play` and `mce headless` run `build/project/assets.mce`, which only `mce build` refreshes (they print a warning when it is older than `assets/`) | `mce build`, or cook with `--pack` and run the player with `-pack` |
+
+To work around a file you are not ready to fix, cook around it. `--only <path>` (MCP `cook_run`
+`paths`) cooks just those assets and what they depend on, leaves the rest as it was, and does not
+look at the other files, so an unrelated unadopted file is not its error; it writes `cooked/` but
+never the pack, which must hold the whole project. `--skip-errors` (MCP `skip_errors`) keeps
+cooking past failures as a cook always does, and prints every failing file with its first error at
+the end; the pack is still written only by a run with no errors.
 
 ## 5.5 Development mount versus the pack
 
@@ -157,6 +255,14 @@ Optional extension keys add lobes on top of the base (all 0 by default, which is
 `sheen_roughness` (cloth and velvet), `anisotropy` (-1..1) and `anisotropy_rotation` (radians; brushed
 metal), `transmission` (0..1, see-through like glass; the frame behind shows through, tinted by the base
 color) and `ior` (1..3, 0 = 1.5; sets a dielectric's reflectance). A value out of range is a cook error.
+
+**Height map (parallax, M-VISUAL3 2).** `textures.height` names a grey image (white is high; import it with
+`"srgb": false`) and `height_scale` (0..0.5, in texture repeats; 0.02..0.1 is typical) turns it on, with
+`parallax_steps` (`[min, max]`, 4..64, default `[8, 32]`) as the march budget looking straight on and at a
+grazing angle. `height_scale` without `textures.height` is a cook error. The height map has to match the normal
+map in size, mip count and format (the player packs the two into one array): when it does not, or no texture
+store exists, the engine logs one warning naming the material and draws it without parallax. Only `.mcmat`
+materials carry a height map.
 
 **Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
 per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample

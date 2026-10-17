@@ -26,6 +26,7 @@
 namespace mce::kit {
 
 class VideoTextures;
+class RenderTextures;
 
 class SpriteExtract {
 public:
@@ -40,6 +41,9 @@ public:
     void reset(asset::AssetSystem* assets);
 
     void extract(World& world, render::SpriteBatch& batch);
+    // A solid quad of `tint` (linear color) under everything the batch's view sees: the background of a
+    // view that does not own its whole target (a split-screen cell), where a clear would wipe the others.
+    void add_fill(render::SpriteBatch& batch, const math::Color& tint);
 
     // Sprite set for a texture GUID (solid white for a null GUID, magenta for a missing one). With
     // a normal map GUID the set is lit (FR-R2D-090); a normal map that cannot load leaves it unlit.
@@ -57,9 +61,12 @@ public:
     render::SpriteSetId ui_sheet_set(asset::Guid sheet, u32* region_count = nullptr);
     // Draws a VideoPlayer's Sprite with its film (video.h); null (the default) draws the texture.
     void set_videos(const VideoTextures* videos) { videos_ = videos; }
+    // M-VIEWS 3: a Sprite with ShowRenderTexture draws the render texture instead of its texture.
+    void set_render_textures(const RenderTextures* rts) { render_textures_ = rts; }
 
 private:
     const VideoTextures* videos_ = nullptr;
+    const RenderTextures* render_textures_ = nullptr;
     struct TextureEntry {
         asset::Guid guid;
         asset::Guid normal;

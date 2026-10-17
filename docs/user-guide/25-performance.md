@@ -22,7 +22,12 @@ Each frame records:
 - the wall time, the sim's CPU time, the render's CPU time and, with timestamp queries, the GPU time;
 - the time per ECS phase, and the GPU time per stage of the 3D renderer (shadows, the main pass, post);
 - the counters: draws, passes, compute dispatches, triangles, meshes, sprites, sprite batches,
-  upload bytes and live heap allocations.
+  upload bytes and live heap allocations, and for 3D `runs_instanced` and `draws_instanced` (copies of one
+  mesh drawn as one instanced draw in the main view, and the submesh draws inside them; chapter 8.6). An
+  instanced draw counts once in `draws`; `merged_groups` and `merged_children` count the `StaticMerge3D` components drawing merged meshes and the `MeshRef` children they replace (chapter 8.6);
+- for 3D, `draw_causes`: the scene draws that were not part of an instanced run, counted by cause (see
+  "Draw calls by cause" below). The cause names are stored in the file's header, and the counts of a frame in its
+  `counters.draw_causes`, in that order. Older files have none and read as zero.
 
 The run as a whole records each system's total time and its worst frame.
 
@@ -33,6 +38,44 @@ run (`-headless 1 -ticks N`) records the sim alone, which is the quickest way to
 The file is JSON (`"format": "mce-perf"`, version 1). It holds the header, a summary (p50, p95, p99
 and max of each time, the counters' max and mean, and the spike frames with their cause) and one
 line per frame.
+
+### Draw calls by cause
+
+A budget miss on `draws` names a number, not a fix. `perf_run` (MCP) returns `draw_causes`, and `mce perf` prints the
+same as a table, for the 3D scene draws of the main view that were *not* folded into an instanced run (chapter 8.6):
+
+```
+$ mce perf MyGame
+...
+draw calls by cause (3D scene draws per frame, mean over the capture)
+  cause            draws    max  what to change
+  instanced           96         folded into 11 instanced draw(s): nothing to do
+  material            41     41  copies of one mesh differ in material, tint or emissive tint: ...
+  unique_mesh         23     23  a mesh drawn once cannot instance (...): reuse one mesh ... or merge static meshes ...
+  total              160
+```
+
+`mce perf <project>` reads the project's last `perf_run` capture (`cooked/.perf/last.mcperf`); `mce perf <file>` reads
+any `.mcperf`, such as the player's `-perf_capture` file; `--json` prints the causes as JSON. It reads a capture and
+runs nothing. The numbers are counts, not times, so they repeat run to run like `draws`.
+
+| Cause | The draw is single because | What to change |
+|---|---|---|
+| `material` | another draw uses its mesh, but with a different material, tint or emissive tint | one material and tint for the copies; an atlas texture in place of many materials |
+| `unique_mesh` | among the draws that could instance (not skinned, terrain or moving), the mesh (submesh and LOD) is drawn once | reuse one mesh for repeated props, or merge static meshes into one in the importer |
+| `skinned` | skinned meshes always draw singly | rigid meshes for props and distant crowds |
+| `terrain` | a terrain node | fewer, larger nodes |
+| `moving` | it moved since last frame while TAA or motion blur reads the previous transform | keep background props still, or turn the effect off |
+| `blended` | alpha blended or transmissive: sorted back to front after the opaques | alpha mask or opaque materials where you can |
+| `instancing_off` | `InstancingSettings::enabled` is off, `-r.instancing 0`, or the instanced pipelines failed | turn it back on |
+| `budget` | the frame's per-copy upload budget (`Forward3DDesc::instancing_budget`) ran out | raise the budget and `geometry_ring_bytes`, or draw fewer copies |
+| `other` | identical copies exist but fewer than `InstancingSettings::min_count` (or a split run's tail) | lower `min_count` or add copies |
+
+The causes are counted only while a capture runs (`-perf_capture`, `perf_run`): `Scene3D::set_collect_draw_causes`
+is off in a normal frame, which pays nothing and reports zeros. The causes and the instanced draws add up to the scene's draws in the main view (`Forward3DStats::draw_causes`;
+`draws_instanced` counts the draws inside instanced runs, which `draws` counts once per run). Batches
+(`InstanceBatch`, the GPU-culled path) and the shadow, prepass and probe passes are not in it. Which mesh or
+material is behind a count is not reported: the renderer knows meshes by store key, not by name.
 
 ## 25.2 Budgets per target
 
@@ -70,6 +113,15 @@ Its capture goes to `cooked/.perf/last.mcperf`, and the previous one moves to `p
 `perf_compare` with no arguments compares those two. It lists what got better or worse: a time
 counts when it moved at least 10% and 0.1 ms, and a counter on any change. Chapter 14 ("Is it fast
 enough?") has the arguments.
+
+`frames` (default 300, 1 to 3600) is the number of frames captured after the `warmup` (default 30). A short run is
+useful to see the counters or to check a change quickly: with fewer than 30 frames the report adds a `note` that the
+percentiles are noisy, because p95 and p99 of a handful of frames mean little. The counters (draws, triangles, sprites)
+do not depend on the machine's speed, so a short run still compares exactly; use 30 frames or more for a time verdict.
+
+A run takes a while. When the client sends a `progressToken`, `perf_run` sends `notifications/progress` while the
+player works: the phase (`launching the player`, `warmup 10/30`, `capturing 120/300`, `reading the capture`) in
+`message`, and `progress` of `total` frames. The player prints about ten of these lines per phase, never one per frame.
 
 The loop for an agent or a person: `perf_run` with the target, read what is over and what the
 advice and `top_systems` name, change one thing, `perf_run` again, `perf_compare`.
@@ -127,7 +179,7 @@ machine, but another RHI backend can count passes or batches differently.
 
 | What is over | What usually fixes it |
 |---|---|
-| `draws`, `sprite_batches` | Sprites batch by texture: pack small images into one spritesheet (`.mcsheet`) so they share one. Fewer materials; merge static meshes |
+| `draws`, `sprite_batches` | Sprites batch by texture: pack small images into one spritesheet (`.mcsheet`) so they share one. Fewer materials; merge static meshes. In 3D, copies of one mesh with one material and tint already draw as one instanced draw per pass (chapter 8.6, automatic instancing): a tint per copy, or a material override per copy, splits them again. A run draws at its nearest copy's place, so the far copies in it break the front-to-back order slightly |
 | `sim_ms` | `top_systems` names the system. Look for a walk over every entity inside a walk over every entity: bucket into a grid, or keep the answer between ticks. Fewer physics bodies |
 | `render_ms` | The CPU side of drawing: fewer things to extract (cull, hide what is off screen), fewer batches |
 | `gpu_ms` | `gpu_stages` names the pass: lower or turn off the costly effect (`Environment3D`: shadows, SSAO, SSR, bloom) |

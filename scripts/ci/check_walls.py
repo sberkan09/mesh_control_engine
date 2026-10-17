@@ -7,6 +7,7 @@ Each wall: a regex that may only appear under the allowed path prefixes. A line 
 
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -53,6 +54,15 @@ WALLS = [
     ),
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
     ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # bc7enc_rdo (M-CONTENT 1b-ii) is cook-time only: texture_bc.cpp writes BC blocks, runtimes upload them. The test
+    # reads them back through the same headers (bc7decomp for the reference decode).
+    ("bc7enc wall", re.compile(r"[<\"](bc7enc|rgbcx|bc7decomp)\.h|\bbc7enc_\w+\(|\brgbcx::"),
+     ["src/engine/asset/cook/src/texture_bc.cpp", "tests/asset/test_cook_bc.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # tinyexr (M-VISUAL3 step 4) is cook-time only: the texture importer reads .exr into RGBA16F, runtimes upload it.
+    ("tinyexr wall", re.compile(r"[<\"]tinyexr\.h|\b(Load|Parse|Free|Init|Is)EXR\w*\s*\("),
+     ["src/engine/asset/cook/src/texture_importer.cpp", "src/engine/asset/cook/src/tinyexr_impl.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
     # The store wall (M-MONETIZE steps 3-4, M-MOBILE 11c): StoreKit, Play Billing, Play In-App Review,
     # Google Mobile Ads, UMP, ATT, Firebase (M-LIVEOPS step 1), GameKit and Play Games (step 2) and JNI only
@@ -188,6 +198,7 @@ LINK_WALLS = [
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     ("libdatachannel link wall", re.compile(r"\b(datachannel-static|juice-static|usrsctp)\b"), ["src/engine/net/"]),
+    ("bc7enc link wall", re.compile(r"\bmce_bc7enc\b"), ["src/engine/asset/cook/", "tests/asset/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
     # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The
@@ -195,9 +206,9 @@ LINK_WALLS = [
     # bytecode mce_cook writes; tests/script's player_no_luau_compiler checks the binary too).
     # Luau's targets are linked by mce_script and mce_script_compiler alone.
     ("script opt-in wall", re.compile(r"\bmce_script\b"),
-     ["src/engine/script/", "src/player/", "src/editor/", "samples/script_headless/", "tests/script/"]),
+     ["src/engine/script/", "src/player/", "src/editor/", "samples/script_headless/", "tests/script/", "tests/fuzz/"]),
     ("script compiler wall", re.compile(r"\bmce_script_compiler\b"),
-     ["src/engine/script/", "src/engine/asset/cook/", "src/editor/", "tools/", "samples/script_headless/", "tests/script/"]),
+     ["src/engine/script/", "src/engine/asset/cook/", "src/editor/", "tools/", "samples/script_headless/", "tests/script/", "tests/fuzz/"]),
     ("Luau link wall", re.compile(r"\bLuau\.\w+"), ["src/engine/script/"]),
     # The visual-novel kit is opt-in the same way (M-NOVEL): games, samples and tests link it (its
     # dialogue box, mce_kit_novel_ui, a game's host). The authoring tools (editor, mce_mcp, mce_cook)
@@ -267,6 +278,8 @@ def main() -> int:
                         continue
                     if pattern.search(line):
                         violations.append(f"{rel}:{no}: {name}: {line.strip()}")
+    # M3: a changed header that reaches many translation units is a warning, never a failure.
+    subprocess.run([sys.executable, str(ROOT / "scripts/ci/include_fanout.py")], check=False)
     if violations:
         print("Wall violations:")
         for v in violations:

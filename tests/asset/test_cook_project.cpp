@@ -75,6 +75,14 @@ struct CtSound {
 };
 MCE_COMPONENT(CtSound, clip, loop)
 
+// A default that is computed, not a literal: the test moves it to stand in for editing `u32 frame = 0`.
+inline u32 g_drift_default = 10;
+struct CtDrift {
+    u32 value = g_drift_default;
+    u32 other = 1;
+};
+MCE_COMPONENT(CtDrift, value, other)
+
 }  // namespace cooktest
 
 template <>
@@ -216,6 +224,39 @@ TEST_CASE("cook: full project cooks, then everything is up to date") {
     CHECK(r2.cooked == 0);
     CHECK(r2.up_to_date == 5);
     CHECK(r2.manifest_hash == r1.manifest_hash);
+}
+
+TEST_CASE("cook: a changed C++ component default re-cooks the scenes that omit the field (M-WORKFLOW 6b)") {
+    const std::string root = fresh_dir("cook_default_drift");
+    const std::string scene = std::string(R"({ "format": "mce-scene", "version": 1, "guid": ")") + kSceneGuid +
+                              R"(", "name": "drift", "entities": [
+      { "name": "A", "components": { "CtDrift": { "other": 2 } } } ] })";
+    write_file(root + "/assets/scenes/drift.mcscene", scene);
+    CookService svc;
+    cooktest::g_drift_default = 10;
+    const CookReport r1 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r1));
+    REQUIRE(r1.ok());
+    CHECK(r1.cooked == 1);
+    const auto before = snapshot_cooked(root);
+
+    const CookReport same = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(same.ok());
+    CHECK(same.cooked == 0);
+    CHECK(same.up_to_date == 1);
+
+    cooktest::g_drift_default = 11;
+    const CookReport r2 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r2));
+    REQUIRE(r2.ok());
+    CHECK(r2.cooked == 1);
+    CHECK(r2.up_to_date == 0);
+    CHECK(snapshot_cooked(root) != before);
+
+    const CookReport r3 = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r3.ok());
+    CHECK(r3.up_to_date == 1);
+    cooktest::g_drift_default = 10;
 }
 
 TEST_CASE("cook: determinism — deleting cooked/ and re-cooking is byte-identical (FR-AST-030)") {
@@ -556,6 +597,116 @@ TEST_CASE("cook: missing sidecar is an error; --adopt writes one") {
     CHECK(svc.cook(root.c_str(), CookOptions{}).ok());
 }
 
+TEST_CASE("cook: the missing-sidecar error names the fix, over MCP and on the command line") {
+    const std::string root = make_project("cook_adopt_hint");
+    write_file(root + "/assets/scripts/new_thing.luau", "return 1\n");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    CHECK(!r.ok());
+    const std::string text = diag_text(r);
+    CHECK(has_diag(r, Errc::MissingSidecar, "scripts/new_thing.luau"));
+    CHECK(text.find("cook_run {\"adopt\": true}") != std::string::npos);
+    CHECK(text.find("mce cook <project> --adopt") != std::string::npos);
+    // The report's failed-file list carries it too, once per file.
+    u32 named = 0;
+    for (const auto& f : r.failed_files)
+        if (std::string(f.file.c_str()).find("new_thing.luau") != std::string::npos && f.code == Errc::MissingSidecar) ++named;
+    CHECK(named == 1);
+}
+
+TEST_CASE("cook: skip_errors cooks the good files and lists the bad ones; no pack from a broken run") {
+    const std::string root = make_project("cook_skip_errors");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));                    // no sidecar
+    write_file(root + "/assets/textures/broken.png", "this is not a png");                      // importer fails
+    write_file(root + "/assets/textures/broken.png.mceasset", sidecar("a1a1a1a1-0000-4000-8000-0000000000b1", "texture"));
+    CookOptions opt;
+    opt.skip_errors = true;
+    opt.pack = true;
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), opt);
+    INFO(diag_text(r));
+    CHECK(!r.ok());
+    CHECK(r.cooked == 5);  // the five good assets of the fixture
+    CHECK(r.failed == 1);
+    bool extra = false, broken = false;
+    for (const auto& f : r.failed_files) {
+        const std::string name = f.file.c_str();
+        extra = extra || (name == "assets/textures/extra.png" && f.code == Errc::MissingSidecar);
+        broken = broken || name == "assets/textures/broken.png";
+    }
+    CHECK(extra);
+    CHECK(broken);
+    CHECK(!r.pack_written);
+    CHECK(!fs::exists(root + "/assets.mce"));
+    CHECK(fs::exists(root + "/cooked/manifest.mce"));
+    CHECK(report_for(r, kSceneGuid)->status == AssetStatus::Cooked);
+}
+
+TEST_CASE("cook: paths cooks only the named subtree and what it depends on, and never the pack") {
+    const std::string root = make_project("cook_paths");
+    write_file(root + "/assets/textures/extra.png", make_gradient_png(2, 2));  // unregistered: not part of this run
+    CookOptions opt;
+    opt.paths.push_back(cook::String("materials"));  // a folder: the material and the texture it needs
+    opt.pack = true;
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), opt);
+    INFO(diag_text(r));
+    CHECK(r.ok());  // extra.png is outside the paths, so its missing sidecar is not this run's error
+    CHECK(r.subset);
+    CHECK(r.cooked == 2);
+    CHECK(r.skipped == 3);
+    CHECK(report_for(r, kMatGuid)->status == AssetStatus::Cooked);
+    CHECK(report_for(r, kTexGuid)->status == AssetStatus::Cooked);  // a dependency of the material
+    CHECK(report_for(r, kWavGuid)->status == AssetStatus::Skipped);
+    CHECK(report_for(r, kSceneGuid)->status == AssetStatus::Skipped);
+    CHECK(!r.pack_written);
+    CHECK(!fs::exists(root + "/assets.mce"));
+    CHECK(diag_text(r).find("pack not rewritten") != std::string::npos);
+
+    // The rest is untouched: a later full cook cooks exactly what the subset left.
+    const CookReport full = svc.cook(root.c_str(), CookOptions{});
+    CHECK(report_for(full, kMatGuid)->status == AssetStatus::UpToDate);
+    CHECK(report_for(full, kTexGuid)->status == AssetStatus::UpToDate);
+    CHECK(report_for(full, kWavGuid)->status == AssetStatus::Cooked);
+    CHECK(report_for(full, kSceneGuid)->status == AssetStatus::Cooked);
+
+    // A subset after a full cook keeps the manifest whole: same manifest hash, skipped assets still listed.
+    CookOptions one;
+    one.paths.push_back(cook::String("assets/audio/jump.wav.mceasset"));  // the prefix and the sidecar spelling are accepted
+    const CookReport r2 = svc.cook(root.c_str(), one);
+    CHECK(r2.up_to_date == 1);
+    CHECK(r2.skipped == 4);
+    CHECK(r2.manifest_hash == full.manifest_hash);
+
+    CookOptions none;
+    none.paths.push_back(cook::String("nope/missing.png"));
+    const CookReport r3 = svc.cook(root.c_str(), none);
+    CHECK(!r3.ok());
+    CHECK(has_diag(r3, Errc::NotFound, "nope/missing.png"));
+}
+
+TEST_CASE("cook: an unknown component or field says the module is stale and how to refresh it") {
+    const std::string root = make_project("cook_stale_module");
+    std::string s = scene_text();
+    s.insert(s.find("\"CtTransform\": { \"position\": [1, 2, 3]"), "\"BrandNewThing\": { \"hp\": 3 },\n        ");
+    write_file(root + "/assets/scenes/level_01.mcscene", s);
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    const std::string text = diag_text(r);
+    CHECK(!r.ok());
+    CHECK(text.find("unknown component type 'BrandNewThing'") != std::string::npos);
+    CHECK(text.find("module_build") != std::string::npos);
+    CHECK(text.find("restart the MCP server") != std::string::npos);
+
+    std::string t = scene_text();
+    t.insert(t.find("\"frame\": 4"), "\"stamina\": 9, ");
+    write_file(root + "/assets/scenes/level_01.mcscene", t);
+    const std::string field = diag_text(svc.cook(root.c_str(), CookOptions{}));
+    CHECK(field.find("unknown field 'stamina' on CtSprite") != std::string::npos);
+    CHECK(field.find("restart the MCP server") != std::string::npos);
+}
+
 TEST_CASE("cook: duplicate GUIDs are reported with both files") {
     const std::string root = make_project("cook_dup");
     write_file(root + "/assets/textures/copy.png", make_gradient_png(2, 2));
@@ -724,6 +875,79 @@ TEST_CASE("material uv_scale packs into two halves; unset means [1, 1]") {
     m.uv_scale(uv);
     CHECK(uv[0] == doctest::Approx(3.3f).epsilon(0.001));
     CHECK(uv[1] == doctest::Approx(120.0f).epsilon(0.001));
+}
+
+TEST_CASE("material: a height map, height_scale and parallax_steps cook into MaterialExt (M-VISUAL3 2); bad keys fail") {
+    const std::string root = make_project("cook_material_height");
+    auto write = [&](const std::string& extra) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", )" + extra + " }");
+    };
+    write(std::string(R"("height_scale": 0.04, "parallax_steps": [6, 40], "textures": { "base_color": "guid:)") + kTexGuid +
+          R"(", "height": "guid:)" + kTexGuid + R"(" })");
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r.ok());
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+    auto mh = as.load_sync<Material>(G(kMatGuid));
+    REQUIRE(mh);
+    const Span<const byte> payload = as.resolve(mh.value());
+    const MaterialExt e = MaterialExt::of_material(payload);
+    CHECK(e.parallax());
+    CHECK(e.height() == G(kTexGuid));
+    CHECK(e.height_scale == doctest::Approx(0.04f));
+    CHECK(e.parallax_steps == (6u | 40u << 16));
+    CHECK_FALSE(e.any());  // parallax is not a lobe
+    CHECK(MaterialChunk::read(payload).value()->texture(MaterialSlot::BaseColor) == G(kTexGuid));  // 'height' is not a chunk slot
+    as.release(AnyHandle(mh.value()));
+
+    const char* bad[] = {
+        R"("height_scale": 0.04)",                                                        // no height map to scale
+        R"("height_scale": 0.9, "textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000001" })",  // out of range
+        R"("parallax_steps": [2, 40])", R"("parallax_steps": [40, 8])", R"("parallax_steps": 8)", R"("parallax_steps": [8, 65])",
+        R"("parallax_steps": [8.5, 32])", R"("height_scale": 0.04, "textures": { "height": null })",
+        R"("textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000004" })",     // a material, not a texture
+    };
+    for (const char* extra : bad) {
+        write(extra);
+        const CookReport b = svc.cook(root.c_str(), CookOptions{});
+        CHECK_MESSAGE(!b.ok(), extra);
+        CHECK(report_for(b, kMatGuid)->status != AssetStatus::Cooked);
+    }
+
+    // A height map without a scale cooks and is off.
+    write(std::string(R"("textures": { "height": "guid:)") + kTexGuid + R"(" })");
+    REQUIRE(svc.cook(root.c_str(), CookOptions{}).ok());
+}
+
+TEST_CASE("material: a height map imported as sRGB warns, naming the texture; srgb false is silent (M-VISUAL3 2)") {
+    const std::string root = make_project("cook_material_height_srgb");
+    const char* linear_guid = "a1a1a1a1-0000-4000-8000-0000000000a5";
+    write_file(root + "/assets/textures/disp.png", make_gradient_png(5, 3));
+    write_file(root + "/assets/textures/disp.png.mceasset", sidecar(linear_guid, "texture", R"({ "srgb": false })"));
+    auto material = [&](const char* tex) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", "height_scale": 0.04, "textures": { "height": "guid:)" +
+                       tex + R"(" } })");
+    };
+    auto height_warnings = [](const CookReport& r) {
+        u32 n = 0;
+        for (const auto& d : r.diags.all())
+            n += d.severity == cook::Severity::Warning && std::string(d.message.c_str()).find("height map assets/textures/hero.png") != std::string::npos;
+        return n;
+    };
+    CookService svc;
+    material(kTexGuid);  // hero.png: no "srgb" setting, which defaults to true
+    const CookReport warned = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(warned.ok());
+    CHECK(height_warnings(warned) == 1);
+    material(linear_guid);
+    const CookReport quiet = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(quiet.ok());
+    CHECK(height_warnings(quiet) == 0);
 }
 
 TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {

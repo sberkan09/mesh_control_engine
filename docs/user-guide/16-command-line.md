@@ -15,12 +15,12 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-scene <guid or path>` | the `.mceproj` start scene, else the first scene by path | which scene to play |
 | `-headless 1` | off | run without a window, renderer or audio device; prints the state hash at the end |
 | `-ticks N` | 600 | headless: fixed ticks to simulate |
-| `-frames N` | 0 | windowed: quit after N rendered frames |
-| `-capture <path.ppm>` | | with `-frames`, `-capture_tick` or `-capture_ticks`: write the last frame as a PPM (the directory is created) |
+| `-frames N` | 0 | windowed: quit after N rendered frames (how many ticks that is depends on the frame rate: use `-capture_tick` for a moment of the game; 16.8) |
+| `-capture <path.ppm>` | | with `-frames`, `-capture_tick` or `-capture_ticks`: write the frame as a PPM (the directory is created); with no display it draws offscreen by itself (16.8) |
 | `-access_log <file>` | | write every screen reader announcement to this text file, one per line (with `-access.screen_reader 2` on a desktop without a reader; 24.4) |
 | `-window WxH` | 1280x720 | windowed: the initial window size in points, e.g. `1080x2400` to check a phone layout |
 | `-fullscreen 1` | 0 (saved) | desktop: borderless full screen; F11, Alt+Enter or Cmd+Ctrl+F toggle it while playing |
-| `-capture_tick N` | 0 | windowed: quit after N simulation ticks of this run (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |
+| `-capture_tick N` | 0 | windowed: stop on the first frame after N simulation ticks of this run, and with `-capture` write that frame (frame-rate independent, unlike `-frames`; with `-save`, the restored slot's tick does not count) |
 | `-capture_ticks a,b,c` | | windowed: capture the first frame after each listed sim tick (ascending) and quit after the last; `-capture`'s path takes `{tick}` (else `_<tick>` goes before the extension) |
 | `-view.entity N` | -1 | render from scene entity N's camera (file order, prefab instances flattened) instead of the primary one; render only, the state hash is unchanged |
 | `-view.free x,y[,zoom]` or `x,y,z,tx,ty,tz[,fov]` | | render from a free 2D or 3D camera (eye, target, vertical degrees); render only |
@@ -32,7 +32,7 @@ flag below is also a console variable you can print or set at run time (`name` a
 | `-save_on_focus_loss 0` | 1 | with `-save`: do not write the slot on focus loss (once per focus loss otherwise) |
 | `-mods 0` | 1 | games that take mods (chapter 19): start without them |
 | `-mods_dir <dir>` | the game's `mods/` | games that take mods: read mods from this folder instead |
-| `-save_dir <dir>` | the per-user save folder | where slots live |
+| `-save_dir <dir>` | the per-user save folder (2.5) | where slots live; the player logs the folder it uses once at start (`save folder ...`) |
 | `-settings 0` | 1 | neither read nor write `<save folder>/settings.cfg` (the saved options: bus gains, `r.quality`, `fullscreen`, ...) |
 | `-console 0` | 1 | disable the developer console |
 | `-console_open 1` | 0 | start with the console open |
@@ -104,19 +104,25 @@ for `my_game_mcp`). `--docs` is the folder served as `mce://docs/...` (default: 
 ## 16.4 The cook
 
 ```
-my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
-mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
+my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
+mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
+         [--textures rgba8|bc|astc] [--max-texture-size N]
 ```
 
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
 without `--module` knows engine components only. `--base` names a game pack the project builds
 on (a mod, chapter 19): references may name its assets and same-GUID assets override them.
+`--only <path>` (repeatable) cooks just that file or folder under `assets/` and what it depends on, into `cooked/` only (never the pack); `--skip-errors` lists every failing file at the end (section 5.4). A source file with no sidecar is a cook error until `--adopt` registers it. `mce play` and `mce headless` run the build's pack and print a warning when it is older than `assets/`: `mce build` refreshes it.
+
+`--max-texture-size N` caps the longest side of PNG and JPEG textures at N pixels (a power of two from 1 to 16384; bigger images are box-halved before their mips; default no limit), applied as the smaller of N and the texture's sidecar `max_size` (section 5.2). Any other value is an error, exit 1, that says what to change. Unless `--quiet`, the cook ends with a size report after the summary line: `mce_cook: size: textures …, meshes …, audio …, scenes …, other …, total … bytes`, `mce_cook: textures: N, D downscaled by max_size / --max-texture-size`, and the five largest assets with their bytes.
+
+`--textures rgba8|bc|astc` picks the texture storage: `rgba8` (default), `bc` (BC7, BC5, BC4 or BC1 blocks by the sidecar's `compress`, for desktop packs) or `astc` (phones); `mce cook` passes it through, and `mce ship --textures rgba8|bc` re-cooks the pack with it (section 5.2). An unknown value is exit 1 with the allowed ones.
 
 ## 16.5 Scripts
 
 ```
 python3 scripts/new_project.py <Name> [--game id] [--title "Title"] [--dest dir] [--seed N] [--force]
-python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--out dir] [--no-build] [--keep-symbols] [--smoke] [--smoke-headless]
+python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--out dir] [--no-build] [--keep-symbols] [--smoke] [--smoke-headless] [--max-texture-size N] [--textures rgba8|bc]
 python3 scripts/ship.py platformer | diorama | all
 python3 scripts/symbolicate.py <report.crash> --symbols <dir>...
 ./install.sh [archive.tar.gz | --release [tag]] [--prefix dir] [--no-path] [--yes]   # install the SDK (section 1.9)
@@ -147,9 +153,13 @@ mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats] [--agent <name>]
 mce mcp-config <project> [--desktop] [--remove]
-mce cook <project> [--pack] [--force] [--adopt] [--quiet]
+mce cook <project> [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet] [--max-texture-size N] [--textures rgba8|bc|astc]
 mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
-mce ship <project> [--out dir] [--version v]
+mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
+mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]
+mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size m] [--werror]
+mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
+mce ship <project> [--target desktop|web] [--out dir] [--version v] [--max-texture-size N] [--textures rgba8|bc]
 mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version
@@ -170,3 +180,54 @@ same entry into Claude Desktop's `claude_desktop_config.json` (chapter 14.1).
 holding the host, the module, `libmce_engine`, `assets.mce`, `CREDITS.md` (when the project has one),
 `VERSION.txt` and `README.txt`. `mce friction` gathers the agents' notes from each project's `friction.jsonl`
 (written by the MCP tool `report_friction`, chapter 14) into one Markdown backlog, or JSON with `--json`.
+
+## 16.8 Screenshots without a display (a container, CI, SSH)
+
+A frame of the real game, without a window on a screen. This was run in a Linux container with no `DISPLAY`
+and no GPU (`mce_player` is the player from the build tree; a project's own host, `my_game`, takes the same
+flags, and so does `mce play <project> ...`):
+
+```
+mce_player -pack assets.mce -capture_tick 120 -capture shots/a.ppm
+mce_player -pack assets.mce -capture_ticks 60,120 -capture "shots/t_{tick}.ppm"
+mce_player -pack assets.mce -input moves.txt -capture_tick 300 -capture shots/play.ppm
+```
+
+When a capture is asked for (`-capture`, `-capture_tick`, `-capture_ticks`) and SDL cannot open a video device
+(no `DISPLAY`, no `WAYLAND_DISPLAY`: "No available video device"), the player switches by itself to SDL's
+offscreen driver with Mesa's software GL (`LIBGL_ALWAYS_SOFTWARE=1`, unless you set it) and prints one line:
+`no display for the capture: drawing offscreen with software GL`. A machine with a display draws in a window as
+before. Naming a driver yourself (`-platform.video_driver x11`) is never replaced: if it fails, the run fails.
+The two ways that need no fallback, and also worked here:
+
+```
+LIBGL_ALWAYS_SOFTWARE=1 mce_player -pack assets.mce -platform.video_driver offscreen -frames 30 -capture shots/c.ppm
+xvfb-run -a -s "-screen 0 1280x720x24" env LIBGL_ALWAYS_SOFTWARE=1 mce_player -pack assets.mce -capture_tick 60 -capture shots/d.ppm
+```
+
+The file is a binary PPM (`P6`) of the window's size (`-window WxH`, 1280x720 by default), 3 bytes a pixel. Convert it
+with any image tool (`convert shots/a.ppm shots/a.png`), or take frames as PNG over MCP (`render_frame`, chapter 14).
+
+**Which frame you get.**
+
+| Flag | What it captures |
+|---|---|
+| `-capture_tick N` | the first frame drawn after simulation tick N of this run; the sim holds on that tick for the frame (no interpolation), so the same pack and input give the same bytes on every run and every machine speed, then the player quits. With `-save`, the restored slot's ticks do not count. |
+| `-capture_ticks a,b,c` | the same, once per listed tick (ascending, at most 64), then quit; `{tick}` in `-capture`'s path, else `_<tick>` before the extension |
+| `-frames N` with `-capture` | the Nth rendered frame, whichever tick the sim is on then. A frame is not a tick: the same `-frames 30` is tick 2 on one machine and tick 40 on another, and drawing offscreen runs many frames per tick. Use it for a smoke test (the renderer draws something), never for a moment of the game |
+
+**A game with a title menu.** A capture shows what is on screen at that tick. A game that starts on its own title
+menu (a menu the game's code or its UI document draws) shows the menu at tick 300 as it did at tick 1 unless
+the input presses it away. Give the capture a script that does what a player does, and pick the tick after it:
+
+```
+# moves.txt: one line per input, <from>[-<to>] Action[=value], by sim tick (chapter 11)
+10 Confirm
+mce_player -pack assets.mce -input moves.txt -capture_tick 120 -capture shots/level1.ppm
+```
+
+Over MCP, `render_frame` and `timeline_preview` take the same `input` (and `convars`). `timeline_preview` plays the
+project's scene with the real player, so a title menu that the game itself draws over its start scene is drawn over
+the cutscene frame as well; the tool cannot tell a title menu from a HUD. Press the menu away with `input`, or set
+the game's own convar that skips it, or preview the cutscene from a scene that does not carry the menu.
+

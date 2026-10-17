@@ -60,12 +60,22 @@ Error parse_error(u32 line, const char* what) {
 
 }  // namespace
 
+namespace {
+// "P2/Move" is local player 2's "Move" (M-VIEWS): P1 is slot 0 and keeps the plain name, P2..P4 are
+// player_action_id(1..3, name). Anything else is the action's own name.
+StringId resolve_action(StringView spelled) {
+    if (spelled.size() > 3 && spelled[0] == 'P' && spelled[1] >= '1' && spelled[1] <= '4' && spelled[2] == '/')
+        return player_action_id(static_cast<u32>(spelled[1] - '1'), StringId(spelled.substr(3)));
+    return StringId(spelled);
+}
+}  // namespace
+
 bool InputScript::add(StringView action, u64 from, u64 to, f32 x, f32 y) {
     if (action.empty() || action.size() > 31 || from == 0 || to < from) return false;
     ScriptSegment s;
     s.from = from;
     s.to = to;
-    s.action = StringId(action);
+    s.action = resolve_action(action);
     s.name.assign(action);
     s.x = x;
     s.y = y;

@@ -127,6 +127,18 @@ public:
     void clear_action_feeds() { feeds_.clear(); }
     Span<const ActionFeed> action_feeds() const { return feeds_.span(); }
 
+    // ---- local players (M-VIEWS step 1) ---------------------------------------------------------------
+    // Up to kMaxLocalPlayers players share one InputSystem. A map flagged for slot N (map_player_flags) is
+    // always active and publishes its actions as player_action_id(N, name); slot 0 is the map stack as
+    // before. A gamepad binding of slot N reads only the pad assigned to it. Player 0 with no pad of its own
+    // reads any pad nobody else holds, so a single-player game behaves exactly as it did.
+    bool assign_pad(u32 slot, u32 pad);  // a pad belongs to one slot; false for a bad slot or pad
+    void release_pad(u32 slot);
+    i32 pad_of(u32 slot) const;  // the physical pad of a slot, or -1
+    // Join by button: while [first, end) is non-empty, a connected unassigned pad that taps South or Start
+    // takes the lowest free slot in it. A pad that disconnects frees its slot. (0, 0) switches joining off.
+    void set_join_slots(u32 first, u32 end);
+
     // ---- clock -----------------------------------------------------------------------
     void set_tick_rate(u32 hz);
     void set_tick_origin_us(u64 origin_us);
@@ -175,7 +187,9 @@ private:
     void set_override(StringId map, StringId action, u32 index, const BindingDef& b);
     void apply_overrides();
     void evaluate(InputState& out, const InputState& prev) const;
-    f32 binding_value(const BindingDef& b) const;
+    f32 binding_value(const BindingDef& b, u32 pads) const;
+    u32 pad_mask_for_slot(u32 slot) const;
+    void poll_joins();
     void end_touch(u32 slot, vec2 pos, u64 timestamp_us, bool canceled);
     vec2 touch_units(vec2 normalized_delta) const;  // to shorter-side units
 
@@ -245,6 +259,9 @@ private:
         bool button_action = true;
         BindingDef result;
     } rebind_;
+
+    i32 slot_pad_[kMaxLocalPlayers] = {-1, -1, -1, -1};
+    u32 join_first_ = 0, join_end_ = 0;
 
     Array<ActionFeed> feeds_;
     f32 look_sensitivity_ = 1.f;

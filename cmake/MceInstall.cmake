@@ -11,7 +11,7 @@
 #   lib/cmake/MCE/   MCEConfig.cmake (find_package(MCE)): imported targets mce::mce_engine,
 #               mce::mce_player_runtime, mce::mce_module_api, the tool paths, and the same
 #               MceTarget / MceProject / MceShip helpers the engine tree uses
-#   share/mce/  the project templates (project, novel), new_project.py, story_compile.py, VERSION and examples/Kindle, examples/Undelivered, examples/Room3D (projects/)
+#   share/mce/  the project templates (project, novel, script), new_project.py, story_compile.py, VERSION and examples/Kindle, examples/Undelivered, examples/Room3D (projects/)
 #   share/doc/mce/   the user guide, the engine and architecture pages, ARCHITECTURE.md, REQUIREMENTS.md
 #
 # A project made from the template builds against it with find_package(MCE) (its CMakeLists.txt),
@@ -90,7 +90,7 @@ install(FILES "${PROJECT_BINARY_DIR}/sdk/MCEConfig.cmake" "${PROJECT_BINARY_DIR}
         DESTINATION ${_mce_cmake_dir})
 
 # The project template, its generator and the mce command.
-install(DIRECTORY "${PROJECT_SOURCE_DIR}/templates/project" "${PROJECT_SOURCE_DIR}/templates/novel"
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/templates/project" "${PROJECT_SOURCE_DIR}/templates/novel" "${PROJECT_SOURCE_DIR}/templates/script"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/templates)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/scripts/new_project.py" "${PROJECT_SOURCE_DIR}/tools/story/story_compile.py"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/mce/scripts)
@@ -98,6 +98,8 @@ file(WRITE "${PROJECT_BINARY_DIR}/sdk/VERSION" "${PROJECT_VERSION}\n${MCE_ENGINE
 install(FILES "${PROJECT_BINARY_DIR}/sdk/VERSION" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce.py" DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME mce)
 install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_steam.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce ship --steam
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import
+install(FILES "${PROJECT_SOURCE_DIR}/tools/mce_cli/mce_import_skel.py" DESTINATION ${CMAKE_INSTALL_BINDIR})  # mce import spine|dragonbones
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/install.sh" DESTINATION ${CMAKE_INSTALL_DATADIR}/mce)  # mce update (release installs)
 
 # The example projects (`mce example <Name>` copies one out): sources and content, no build outputs.

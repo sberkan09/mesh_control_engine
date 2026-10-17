@@ -8,6 +8,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/static_merge3d.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -21,15 +22,15 @@ static_assert(sizeof(SpotLight3D) == 64);
 static_assert(sizeof(ReflectionProbe3D) == 64);
 static_assert(sizeof(GiVolume3D) == 88);
 static_assert(sizeof(Camera3DComponent) == 24);
-static_assert(sizeof(Environment3D) == 440);
+static_assert(sizeof(Environment3D) == 496);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
-static_assert(sizeof(Foliage3D) == 120);
+static_assert(sizeof(Foliage3D) == 240);
 static_assert(sizeof(Decal3D) == 96);
 static_assert(sizeof(ParticleEmitter3D) == 184);
 static_assert(sizeof(Terrain3D) == 80);
 static_assert(sizeof(TerrainCollider3D) == 8);
-static_assert(sizeof(TerrainFoliage3D) == 128);
+static_assert(sizeof(TerrainFoliage3D) == 160);
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
@@ -260,7 +261,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     }
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
-                              TerrainCollider3D, TerrainFoliage3D>();
+                              TerrainCollider3D, TerrainFoliage3D, StaticMerge3D>();
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});

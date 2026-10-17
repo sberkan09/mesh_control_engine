@@ -204,6 +204,8 @@ bool EditorShell::open_project(StringView root) {
     anim_graph_.close();
     if (bt_.dirty()) (void)bt_.save(session_);
     bt_.close();
+    if (skeleton2d_.dirty()) (void)skeleton2d_.save(session_);
+    skeleton2d_.close();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -254,6 +256,16 @@ void EditorShell::open_bt(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("Behavior Tree")) p->open = true;
     focus_panel("Behavior Tree");
+}
+
+void EditorShell::open_skeleton2d(asset::Guid guid) {
+    if (skeleton2d_.dirty() && guid != skeleton2d_.guid()) (void)skeleton2d_.save(session_);
+    if (!skeleton2d_.open(session_, guid)) {
+        MCE_LOG_ERROR("editor: cannot open the 2D skeleton: {}", skeleton2d_.last_error());
+        return;
+    }
+    if (IEditorPanel* p = find_panel("Skeleton")) p->open = true;
+    focus_panel("Skeleton");
 }
 
 bool EditorShell::open_scene(StringView path) {
@@ -776,6 +788,7 @@ void EditorShell::draw_dockspace() {
         ImGui::DockBuilderDockWindow("Timeline", bottom);
         ImGui::DockBuilderDockWindow("Animation", bottom);
         ImGui::DockBuilderDockWindow("Behavior Tree", bottom);
+        ImGui::DockBuilderDockWindow("Skeleton", right);
         ImGui::DockBuilderFinish(id);
         for (auto& p : panels_) p->open = true;
     }

@@ -47,18 +47,35 @@ bool asset_tool_arg(ToolCall& c, const editor::ProjectAsset*& out);
 bool asset_rel_valid(StringView rel);
 cook::String asset_guid_ref(asset::Guid g);
 bool asset_validate_and_write(ToolCall& c, StringView rel, asset::Guid guid, StringView text);
+// tools_import.cpp (M-IMPORT step 4): asset_import.
+Span<const ToolDef> import_tool_table();
+// tools_views.cpp: view_list, view_add, player_list, player_setup (M-VIEWS).
+Span<const ToolDef> views_tool_table();
 // tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
 Span<const ToolDef> terrain_tool_table();
+
+// tools_procgen.cpp (M-PROCGEN 4): procgen_run.
+Span<const ToolDef> procgen_tool_table();
 // tools_ui.cpp (M-UI-DATA step 5): ui_list, ui_create, ui_widget_add / set / remove, ui_preview.
 Span<const ToolDef> ui_tool_table();
+// A UI document handed out by value: a pointer into the project's asset list dies at the next rescan
+// (every cook), so callers keep this copy, never a ProjectAsset*.
+struct UiDocRef {
+    cook::String path;
+    asset::Guid guid;
+};
 // The UI document named by 'document' (a .mcui path or "guid:<uuid>"), read and checked.
-bool ui_document_arg(ToolCall& c, const editor::ProjectAsset*& out);
+bool ui_document_arg(ToolCall& c, UiDocRef& out);
 // tools_render.cpp: ui_preview's capture (a player run with -ui_preview).
 bool ui_preview(ToolCall& c);
 // tools_timeline.cpp (M-CINEMA step 6): timeline_create, timeline_add_track, timeline_add_key.
 Span<const ToolDef> timeline_tool_table();
+// tools_bt.cpp (M-AI step 6): bt_create, bt_add_node, bt_set, bt_trace.
+Span<const ToolDef> bt_tool_table();
 // tools_script.cpp (M-SCRIPT 4): script_check; empty where the build has no scripting.
 Span<const ToolDef> script_tool_table();
+// tools_skeleton2d.cpp (M-ANIM2D step 5): skel2d_create, skel2d_add_bone, skel2d_add_slot, skel2d_add_ik, skel2d_key, skel2d_preview.
+Span<const ToolDef> skeleton2d_tool_table();
 // prefab_tools.cpp: prefab_create_from / prefab_apply / prefab_revert.
 Span<const ToolDef> prefab_tool_table();
 // project_tools.cpp: project_get / project_set / scene_settings_get / scene_settings_set.

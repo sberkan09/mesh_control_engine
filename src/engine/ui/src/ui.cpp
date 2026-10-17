@@ -150,10 +150,14 @@ Result<BuiltinSkin*> create_builtin_skin(render::Renderer& renderer, BuiltinSkin
 
 // ---- UI scale ----------------------------------------------------------------------------------
 
-f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical) {
-    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * (user_scale > 0.0f ? user_scale : 1.0f);
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical, f32 reference_height) {
+    const f32 user = user_scale > 0.0f ? user_scale : 1.0f;
+    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * user;
     const f32 w = static_cast<f32>(viewport.width), h = static_cast<f32>(viewport.height);
     const f32 short_px = w < h ? w : h, long_px = w < h ? h : w;
+    // A game authored for a reference height grows with the window: the short side over it, on top of the
+    // user's setting. A phone whose display scale already asks for more keeps that (no double scaling).
+    if (reference_height > 0.0f && short_px > 0.0f && short_px / reference_height * user > s) s = short_px / reference_height * user;
     const f32 short_min = min_logical.x < min_logical.y ? min_logical.x : min_logical.y;
     const f32 long_min = min_logical.x < min_logical.y ? min_logical.y : min_logical.x;
     if (short_min > 0.0f && short_px > 0.0f && short_px / short_min < s) s = short_px / short_min;
@@ -1338,11 +1342,11 @@ void Document::draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16
 }
 
 void Document::draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
-                           const Slice& slice) const {
+                           const Slice& slice, render::SpriteSetId set) const {
     math::aabb2 clip;
     if (draw_clip_) clip = math::aabb2{draw_clip_->min, draw_clip_->max};
     render::RectQuad q;
-    q.set = skin_.set;
+    q.set = set.valid() ? set : skin_.set;
     q.region = region;
     q.tint = linear(c);
     q.sort_layer = layer;
@@ -1440,8 +1444,11 @@ void Document::submit(render::SpriteBatch& batch, i16 sort_layer) const {
         const StringView label(n.text.data(), n.text.size());
         const Rect& r = n.rect;
         const u32 region = st.sprite_region == ~0u ? skin_.white_region : st.sprite_region;
-        if (st.draw_quad && st.tint.a > 0.0f && r.max.x > r.min.x && r.max.y > r.min.y && n.kind != WidgetKind::Slider)
+        if (n.kind == WidgetKind::Image && n.image_set.valid()) {
+            if (st.tint.a > 0.0f && r.max.x > r.min.x && r.max.y > r.min.y) draw_region(batch, r, st.tint, 0, quad_layer, order, {}, n.image_set);
+        } else if (st.draw_quad && st.tint.a > 0.0f && r.max.x > r.min.x && r.max.y > r.min.y && n.kind != WidgetKind::Slider) {
             draw_region(batch, r, st.tint, region, quad_layer, order, st.slice);
+        }
         const f32 line_h = font ? font->face.line_height() * (px / font->face.metrics().pixel_height) : px;
         switch (n.kind) {
             // One pixel of slack: the rect is snapped to whole pixels, so below UI scale 1 a Text sized to
@@ -1535,6 +1542,16 @@ Builder Builder::child(WidgetKind kind, StringView name) {
 }
 
 Builder Builder::panel(StringView name) { return child(WidgetKind::Panel, name); }
+u32 Document::set_image_texture(StringView name, render::SpriteSetId set) {
+    u32 n = 0;
+    for (Node& node : nodes_) {
+        if (!node.alive || node.kind != WidgetKind::Image || node.name.view() != name) continue;
+        node.image_set = set;
+        ++n;
+    }
+    return n;
+}
+
 Builder Builder::image(StringView name, u32 sprite_region) {
     Builder b = child(WidgetKind::Image, name);
     Style s;

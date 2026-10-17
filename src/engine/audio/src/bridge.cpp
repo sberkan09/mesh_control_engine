@@ -76,7 +76,7 @@ void on_source_removed(World& w, Entity e) {
 
 void install(World& world, AudioDevice& device, ClipBank* clips, const char* after) {
     world.register_components<AudioSource>();
-    world.register_components<AudioSpatial, AudioListener>();
+    world.register_components<AudioSpatial, AudioListener, AudioListenerMix>();
     world.register_components<AudioOcclusion, AudioDoppler>();
     world.register_components<AudioBusEffects, AudioReverb, AudioLimiter>();
     world.register_components<AudioDuck, AudioSnapshot>();
@@ -94,24 +94,37 @@ void audio_bridge(Frame& f) {
     // The mix before this tick's plays, so a sound starts with the bus as the scene has it.
     update_mix(f.world(), static_cast<f32>(f.dt), false);
 
-    // The listener first, so this tick's plays and moves spatialize against this tick's ear.
-    bool have_listener = false;
+    // The listeners first, so this tick's plays and moves spatialize against this tick's ears.
+    ListenerMix mix = ListenerMix::First;
+    f.query<const AudioListenerMix&>().each([&](const AudioListenerMix& m) {
+        if (mix == ListenerMix::First) mix = m.mix == 2 ? ListenerMix::Mixed : m.mix == 1 ? ListenerMix::Nearest : ListenerMix::First;
+    });
+    const u32 wanted = mix == ListenerMix::First ? 1u : kMaxListeners;
+    Listener ears[kMaxListeners];
+    u32 count = 0;
     Entity listener_entity;
     f.query<const AudioListener&>().each([&](Entity e, const AudioListener& al) {
-        if (have_listener) return;
-        have_listener = true;
-        listener_entity = e;
-        Listener l;
+        if (count >= wanted) return;
+        if (count == 0) listener_entity = e;
+        Listener& l = ears[count++];
         l.gain_db = al.gain_db;
         if (const LocalTransform* t = f.world().try_get<LocalTransform>(e)) {
             l.position = t->position;
             l.forward = math::rotate(t->rotation, math::vec3{0.f, 0.f, -1.f});
             l.up = math::rotate(t->rotation, math::vec3{0.f, 1.f, 0.f});
         }
-        const Listener& cur = dev->listener();
-        if (l.position != cur.position || l.forward != cur.forward || l.up != cur.up || l.gain_db != cur.gain_db)
-            dev->set_listener(l);
     });
+    const bool have_listener = count > 0;
+    if (have_listener) {
+        const Span<const Listener> cur = dev->listeners();
+        bool changed = cur.size() != count || dev->listener_mix() != (count > 1 ? mix : ListenerMix::First);
+        for (u32 i = 0; i < count && !changed; ++i) {
+            const Listener& a = ears[i];
+            const Listener& b = cur[i];
+            changed = a.position != b.position || a.forward != b.forward || a.up != b.up || a.gain_db != b.gain_db;
+        }
+        if (changed) dev->set_listeners(Span<const Listener>(ears, count), count > 1 ? mix : ListenerMix::First);
+    }
     // The listener's movement this tick, for Doppler (none on its first tick).
     const f32 dt = static_cast<f32>(f.dt);
     const math::vec3 ear = dev->listener().position;

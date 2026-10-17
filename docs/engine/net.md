@@ -6,7 +6,7 @@ archive (`cmake/Dependencies.cmake`). It is **not** part of the `mce_engine` umb
 wants multiplayer links it, every other game and every engine tool stays free of socket code
 (ADR-0035).
 
-It is linked by `test_net`, `sample_net_headless`, and any project that asks for it:
+It is linked by `test_net`, `sample_net_headless`, `sample_net_arena`, and any project that asks for it:
 
 ```cmake
 mce_add_project(my_game
@@ -194,6 +194,9 @@ loopback, a client-driven player, and the bit-for-bit check.
   restores the newest snapshot's transforms, ids continue, another client mirrors the new server.
 - `sample_net_headless_migration`: the host leaves at tick 300 of 600 over a 40 ms relay with loss;
   a client takes over and both others match it bit for bit.
+- `sample_net_arena_sim`, `_two`: a windowless match over `SimNetwork` through a relay (quick play into a listed
+  room): every mirror and every replicated `ArenaHealth` equals the server's once the match settles; shots rewound
+  hit at least as often as they hit at the present; `local_ci.sh` hashes it across runs and Debug/Release.
 - `sample_net_rollback` (and `_drift`: a fast peer and two spectators), `sample_net_headless_spectators`
   (two watching clients mirror everything over 75 ms with loss).
 - `sample_net_headless_300`: 300 ticks of a server and client; the client's mirror must match the

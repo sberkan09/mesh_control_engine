@@ -8,6 +8,7 @@
 // the run by file order (spawned[i] is scene entity i), so an entity after a prefab instance (the
 // cook expands it into several) is refused.
 
+#include "procgen_check.h"
 #include "mce/editor/scene_document.h"
 #include "mce/input/script.h"
 #include "mce/log.h"
@@ -104,13 +105,14 @@ enum class CompareOp : u8 { Eq, Ne, Lt, Le, Gt, Ge };
 // One check of a test: a component field, whether an entity is alive, how many events of a type
 // were pushed, the log, or a feel metric; at the end of the run or after tick `tick`.
 struct Condition {
-    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel };
+    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel, Reachable };
     What what = What::Field;
     FieldProbe probe;          // Field, Alive (index only)
     CompareOp op = CompareOp::Eq;
     Value expected;
     f64 tolerance = 1e-4;      // numbers compare equal within this
     cook::String text;         // event type, scene path, log text, feel metric
+    ProcgenRun procgen;        // Reachable: the seeded levels whose exit must be reachable
     u64 tick = 0;              // 0: at the end
     // Result.
     bool checked = false;
@@ -118,7 +120,8 @@ struct Condition {
     Value actual;
     cook::String note;  // why the check could not read what it names (an unknown event type)
 };
-// Field, Alive, Event and Scene: read from the world during the run (the rest after it).
+// Field, Alive, Event and Scene: read from the world during the run (the rest after it; Reachable needs
+// neither: it generates its levels when evaluated).
 inline bool is_world_check(Condition::What w) {
     return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene;
 }
@@ -137,13 +140,31 @@ void write_condition(JsonWriter& w, const Condition& c);
 //            a waypoint {at, wait} stands still `wait` ticks there (a pressure plate, a lift).
 //   explore  wanders in seeded random directions, turning when blocked; reports coverage.
 //   masher   presses a seeded random mix of `actions` every `period` ticks (crash and soft-lock hunting).
+// Any kind: `hold` actions held the whole run, `hold_when` [{action, entity, field, value}] held while the check is
+// true, `stop_when` {entity, field, value}: no steering while it is true. A walk_to waypoint {at, wait, press}
+// presses its `press` actions once on arrival.
 // `plane`: "xy" (Move = the direction in the XY plane, 2D top-down or flying), "x" (side view:
 // Move.x only, Jump to climb), "xz" (3D on the ground: Move = (x, -z), forward is -Z).
+// A check the bot makes every tick on a component field ({"entity", "field", "value" or one operator key}):
+// the same wording as a test's checks, read from the running world.
+struct BotWhen {
+    FieldProbe probe;
+    CompareOp op = CompareOp::Eq;
+    Value expected;
+    f64 tolerance = 1e-4;
+};
+
 struct BotTarget {
     bool is_entity = false;
     usize index = 0;  // the entity's index in the scene (is_entity)
     math::vec3 point;
     u32 wait = 0;  // walk_to waypoint: ticks to stand still once reached
+    Array<FixedString<32>> press;  // walk_to waypoint: actions pressed for one tick on arrival
+};
+
+struct BotHold {
+    FixedString<32> action;
+    BotWhen when;  // held on the ticks it is true
 };
 
 struct BotConfig {
@@ -161,6 +182,10 @@ struct BotConfig {
     u32 air_jumps = 0;  // walk_to, side view: extra Jump presses in the air (a double jump, a flap)
     u64 seed = 1;
     u32 period = 8;
+    Array<FixedString<32>> hold;  // actions held down for the whole run (a crouch walk)
+    Array<BotHold> hold_when;     // actions held while a field check is true (crouch while a sentry sees)
+    bool has_stop = false;
+    BotWhen stop_when;            // the bot stands still on the ticks this is true (freeze when seen)
 };
 bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotConfig& out, cook::String& err);
 const char* bot_kind_name(BotConfig::Kind k);
@@ -185,6 +210,8 @@ private:
     void explore(u64 tick, math::vec3 pos);
     void masher(u64 tick);
     void hold_move(u64 tick, math::vec2 dir);
+    bool when_true(const BotWhen& w) const;
+    void press_on_arrival(u64 tick, const BotTarget& t);
 
     BotConfig cfg_;
     u64 rng_;
@@ -194,6 +221,7 @@ private:
     bool reached_ = false;
     bool wants_move_ = false;
     usize leg_ = 0;
+    usize pressed_leg_ = static_cast<usize>(-1);  // the leg whose `press` actions went out
     u64 wait_until_ = 0;  // standing at a waypoint until this tick
     bool waiting_ = false;
     // Steering state.

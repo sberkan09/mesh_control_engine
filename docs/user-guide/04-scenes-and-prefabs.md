@@ -54,7 +54,7 @@ How values are spelled, by field kind:
 | asset reference | `"guid:<uuid>"` or `null` |
 | entity reference | `"$<index>"` into this file's `entities` array, or `null` |
 | nested struct | an object, `{"type": "Circle", "radius": 0.3}` |
-| fixed array | an array of exactly `count` elements |
+| fixed array | an array of exactly `count` elements, all of them: `CameraRail3D.points`, `TimelinePlayer.bindings` and `Blackboard.entities` are 8 long however many are used, and a shorter array is the error "expected an array of 8 elements" |
 
 Omitted fields keep their C++ defaults, which is why `"RigidBody2D": {}` is a valid static body.
 `Transient` fields must not appear. Component names are the unqualified C++ names
@@ -74,7 +74,7 @@ will use most:
 | `ChildOf` | here | parent entity; the engine composes `WorldTransform` |
 | `Sprite`, `TextLabel`, `Camera2DComponent`, `Parallax`, `Light2D`, `Post2DComponent`, `TilemapLayer`, `ParticleEmitter` | 7 | the 2D drawing kit |
 | `RigidBody2D`, `Collider2D`, `CharacterController2D` | 9 | 2D physics |
-| `AudioSource`, `AudioSpatial`, `AudioListener`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter`, `AudioDuck`, `AudioSnapshot`, `AudioOcclusion`, `AudioDoppler` | 10 | sound and its mix |
+| `AudioSource`, `AudioSpatial`, `AudioListener`, `AudioListenerMix`, `AudioBusEffects`, `AudioReverb`, `AudioLimiter`, `AudioDuck`, `AudioSnapshot`, `AudioOcclusion`, `AudioDoppler` | 10 | sound and its mix |
 | `PathAgent` | 7 | walks to a target around walls (grid pathfinding) |
 | `SequencePlayer` | 13 | scripted action lists |
 | `SaveKey` | 13 | stable identity for save games |

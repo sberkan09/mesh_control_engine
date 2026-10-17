@@ -186,6 +186,30 @@ else()
     target_compile_options(mce_meshopt PRIVATE -w)
 endif()
 
+# ---- tinyexr (cook-time only: OpenEXR .exr skies and environment maps -> RGBA16F; M-VISUAL3 4) ----
+# BSD-3-Clause (Syoyo Fujita and contributors); its bundled miniz (deps/miniz, MIT) does the ZIP/PIZ-era
+# inflate. The latest 1.0.x release, v1.0.12, pinned by its commit. Single-header implementation compiled
+# into mce_tinyexr (src/tinyexr_impl.cpp, warnings off, no threads/OpenMP/ZFP); confined to the cook's texture
+# importer by the "tinyexr wall" in scripts/ci/check_walls.py. Licenses: docs/ARCHITECTURE.md §7.
+FetchContent_Declare(tinyexr
+    GIT_REPOSITORY https://github.com/syoyo/tinyexr.git
+    GIT_TAG        735ff73ce5959cf005eb99ce517c9bcecab89dfb
+    SOURCE_SUBDIR  _no_cmake_)
+FetchContent_MakeAvailable(tinyexr)
+
+add_library(mce_tinyexr STATIC
+    "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/tinyexr_impl.cpp"
+    "${tinyexr_SOURCE_DIR}/deps/miniz/miniz.c")
+target_include_directories(mce_tinyexr SYSTEM PUBLIC "${tinyexr_SOURCE_DIR}" "${tinyexr_SOURCE_DIR}/deps/miniz")
+target_compile_definitions(mce_tinyexr PRIVATE TINYEXR_USE_MINIZ=1 TINYEXR_USE_PIZ=1 TINYEXR_USE_ZFP=0 TINYEXR_USE_THREAD=0
+                                               TINYEXR_USE_OPENMP=0)
+set_target_properties(mce_tinyexr PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(mce_tinyexr PRIVATE /W0)
+else()
+    target_compile_options(mce_tinyexr PRIVATE -w -ffp-contract=off)
+endif()
+
 # ---- astc-encoder (cook-time only: ASTC 4x4 textures for phones, mce_cook --textures astc) ----
 # Confined to the cook's texture importer by the "astcenc wall" in scripts/ci/check_walls.py. Built
 # from its sources (its own CMake project pulls in CTest and LTO): the portable no-SIMD path with
@@ -217,6 +241,31 @@ if(NOT CMAKE_CROSSCOMPILING)
         target_compile_options(mce_astcenc PRIVATE /W0 /fp:precise)
     else()
         target_compile_options(mce_astcenc PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
+# ---- bc7enc_rdo (cook-time only: BC7 / BC5 / BC4 / BC1 desktop textures, mce_cook --textures bc; M-CONTENT 1b) ----
+# MIT or Unlicense (Richard Geldreich). The repo has no tags: pinned by commit (master on 2026-10-17), no GIT_SHALLOW,
+# like tinyexr. Built from three sources only (bc7enc.cpp BC7, rgbcx.cpp BC1/BC4/BC5, bc7decomp.cpp for the tests'
+# decode): scalar C++, no SIMD in the encoder, no threads. Never compile bc7e.ispc, ispc.exe or the RDO files.
+# -ffp-contract=off keeps the output bytes identical across compilers and hosts. Confined to the cook's texture_bc.cpp
+# by the "bc7enc wall" and "bc7enc link wall" in scripts/ci/check_walls.py. Licenses: docs/ARCHITECTURE.md §7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(bc7enc_rdo
+        GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
+        GIT_TAG        b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(bc7enc_rdo)
+    add_library(mce_bc7enc STATIC
+        "${bc7enc_rdo_SOURCE_DIR}/bc7enc.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/bc7decomp.cpp")
+    target_include_directories(mce_bc7enc SYSTEM PUBLIC "${bc7enc_rdo_SOURCE_DIR}")
+    set_target_properties(mce_bc7enc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_bc7enc PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_bc7enc PRIVATE -w -ffp-contract=off)
     endif()
 endif()
 

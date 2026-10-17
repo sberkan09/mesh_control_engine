@@ -395,6 +395,27 @@ TEST_CASE("pathfinding: static colliders mark the grid") {
     CHECK(g.walkable({8, 8}));  // dynamic
 }
 
+TEST_CASE("pathfinding: static_colliders_hash follows exactly what blocks the grid") {
+    World w;
+    physics::install_physics2d(w);
+    w.register_components<LocalTransform>();
+    physics::RigidBody2D rb;
+    physics::Collider2D wall;
+    wall.shape = physics::ColliderShape::box({0.5f, 2.0f});
+    const u64 empty = kit::static_colliders_hash(w);
+    const Entity a = w.spawn_with(LocalTransform{{5.0f, 3.0f, 0.0f}, math::quat::identity(), {1, 1, 1}}, rb, wall);
+    const u64 one = kit::static_colliders_hash(w);
+    CHECK(one != empty);
+    CHECK(kit::static_colliders_hash(w) == one);  // a pure function of the colliders
+    // A sensor, a dynamic body and a one-way platform do not block, so they do not change it.
+    physics::Collider2D sensor = wall;
+    sensor.is_sensor = true;
+    w.spawn_with(LocalTransform{{1.0f, 1.0f, 0.0f}, math::quat::identity(), {1, 1, 1}}, rb, sensor);
+    CHECK(kit::static_colliders_hash(w) == one);
+    w.try_get_mut<LocalTransform>(a)->position.x = 6.0f;
+    CHECK(kit::static_colliders_hash(w) != one);
+}
+
 TEST_CASE("pathfinding: PathAgent walks a transform around walls and stops at the target") {
     Sim s;
     // From the bottom-left room to the room above: the path goes through the gap at the right.

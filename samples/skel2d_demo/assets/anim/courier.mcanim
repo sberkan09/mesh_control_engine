@@ -1,0 +1,20 @@
+{
+  "format": "mce-animgraph",
+  "version": 1,
+  "guid": "5d1e0000-0000-4000-8000-000000000003",
+  "name": "courier",
+  "params": ["speed", "jump"],
+  "start": "idle",
+  "states": [
+    { "name": "idle", "clip": "idle" },
+    { "name": "walk", "clip": "walk" },
+    { "name": "jump", "clip": "jump", "loop": false }
+  ],
+  "transitions": [
+    { "from": "idle", "to": "walk", "when": [ { "param": "speed", "op": ">", "value": 0.5 } ], "fade": 0.15 },
+    { "from": "walk", "to": "idle", "when": [ { "param": "speed", "op": "<", "value": 0.5 } ], "fade": 0.2 },
+    { "from": "idle", "to": "jump", "when": [ { "param": "jump", "op": ">", "value": 0.5 } ], "fade": 0.08 },
+    { "from": "walk", "to": "jump", "when": [ { "param": "jump", "op": ">", "value": 0.5 } ], "fade": 0.08 },
+    { "from": "jump", "to": "idle", "on_finish": true, "fade": 0.15 }
+  ]
+}

@@ -651,6 +651,64 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: cook_run max_texture_size and the sizes report") {
+    const std::string root = demo_project("mcp_cap");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto plain = c.ok("cook_run");
+    REQUIRE(plain.v().get("ok").as_bool());
+    const cook::JsonValue sizes = plain.v().get("sizes");
+    REQUIRE(sizes.valid());
+    CHECK(sizes.get("textures").as_number() > 0);
+    CHECK(sizes.get("total").as_number() >= sizes.get("textures").as_number());
+    CHECK(sizes.get("texture_count").as_number() >= 1);
+    CHECK(sizes.get("textures_downscaled").as_number() == 0);
+    CHECK(sizes.get("largest").is_array());
+    CHECK(sizes.get("largest").size() <= 5);
+    CHECK(sizes.get("largest").at(0).get("bytes").as_number() > 0);
+    CHECK(sizes.get("largest").at(0).get("path").is_string());
+    // the demo's textures are 4x4 (or so): a cap of 1 halves them all, and a bad cap is the cook's error
+    auto cut = c.ok("cook_run", R"({"max_texture_size":1})");
+    REQUIRE(cut.v().get("ok").as_bool());
+    CHECK(cut.v().get("sizes").get("textures_downscaled").as_number() >= 1);
+    CHECK(cut.v().get("sizes").get("textures").as_number() < sizes.get("textures").as_number());
+    auto bad = c.ok("cook_run", R"({"max_texture_size":100})");
+    CHECK_FALSE(bad.v().get("ok").as_bool());
+    CHECK(compact(bad.v().get("diagnostics")).find("power of two") != std::string::npos);
+    CHECK(c.fails("cook_run", R"({"max_texture_size":"big"})").find("max_texture_size") != std::string::npos);
+    // M-CONTENT 1b-iv: "textures" picks the storage; bc is accepted, anything else is an argument error
+    CHECK(c.ok("cook_run", R"({"textures":"bc"})").v().get("ok").as_bool());
+    CHECK(c.ok("cook_run", R"({"textures":"rgba8"})").v().get("ok").as_bool());
+    CHECK(c.fails("cook_run", R"({"textures":"astc"})").find("textures") != std::string::npos);
+}
+
+TEST_CASE("mcp tools: cook_run paths and skip_errors") {
+    const std::string root = demo_project("mcp_cook_paths");
+    std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    // The error for a file without a sidecar names the MCP fix.
+    auto plain = c.ok("cook_run");
+    CHECK(compact(plain.v().get("diagnostics")).find("cook_run {\\\"adopt\\\": true}") != std::string::npos);
+    // skip_errors: the rest cooks, and the failing file is listed.
+    auto skip = c.ok("cook_run", R"({"skip_errors":true})");
+    CHECK_FALSE(skip.v().get("ok").as_bool());
+    CHECK(skip.v().get("cooked").as_number() + skip.v().get("up_to_date").as_number() > 0);
+    CHECK(compact(skip.v().get("failed_files")).find("assets/textures/new_ball.png") != std::string::npos);
+    // paths: only the named subtree, so the unadopted file outside it is not this run's error, and the pack is left alone.
+    auto sub = c.ok("cook_run", R"({"paths":["textures/ball.png"],"pack":true})");
+    CHECK(sub.v().get("ok").as_bool());
+    CHECK(sub.v().get("subset").as_bool());
+    CHECK(sub.v().get("skipped").as_number() > 0);
+    CHECK_FALSE(sub.v().get("pack_written").as_bool());
+    CHECK_FALSE(std::filesystem::exists(root + "/assets.mce"));
+    CHECK(c.fails("cook_run", R"({"paths":"textures"})").find("paths") != std::string::npos);
+    auto missing = c.ok("cook_run", R"({"paths":["textures/nope.png"]})");
+    CHECK_FALSE(missing.v().get("ok").as_bool());
+}
+
 TEST_CASE("mcp tools: scene_clear empties the scene in one undo step") {
     const std::string root = demo_project("mcp_clear");
     Client c;
@@ -739,7 +797,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
               .find("missing reference") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
-    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool and kept from the file: leave them out of 'content'") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
@@ -798,6 +856,51 @@ TEST_CASE("mcp tools: tilemap_paint paints cells, rects and flood fills in one c
     CHECK(c.ok("cook_run").v().get("ok").as_bool());
 }
 
+TEST_CASE("mcp tools: procgen_run shows a seeded level, checks a run of seeds and bakes it into a tilemap (M-PROCGEN 4)") {
+    const std::string root = demo_project("mcp_procgen");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto a = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7})");
+    auto b = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7})");
+    CHECK(compact(a.v()) == compact(b.v()));  // deterministic: the same arguments, the same level
+    CHECK(a.v().get("reachable").as_bool());
+    CHECK(a.v().get("rows").size() == 24);
+    CHECK(str(a.v().get("rows").at(0)).size() == 32);
+    CHECK(str(a.v().get("hash")).size() == 16);
+    CHECK(a.v().get("floor_cells").as_number() > 0);
+    CHECK(compact(c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":8})").v().get("hash")) != compact(a.v().get("hash")));
+
+    for (const char* kind : {"caves", "walk", "noise"}) {
+        auto r = c.ok("procgen_run", std::string(R"({"kind":")") + kind + R"(","width":40,"height":30,"seed":3,"ascii":false})");
+        CHECK(r.v().get("reachable").as_bool());
+        CHECK_FALSE(r.v().get("rows").valid());
+    }
+
+    // A run of seeds lists only the failures: none on the shipped defaults.
+    auto run = c.ok("procgen_run", R"({"kind":"rooms","width":48,"height":32,"seed":1,"count":50})");
+    CHECK(run.v().get("ok").as_number() == 50);
+    CHECK(run.v().get("failures").size() == 0);
+
+    // Bake: the grid's top row becomes the map's top row.
+    c.ok("asset_create", std::string(R"({"path":"maps/dungeon.mctilemap","content":{"tileset":")") + kBallGuid +
+                             R"(","columns":2,"rows":2,"width":32,"height":24}})");
+    auto baked = c.ok("procgen_run", R"({"kind":"rooms","width":32,"height":24,"seed":7,"bake":"maps/dungeon.mctilemap","floor_tile":1,"wall_tile":2,"ascii":false})");
+    CHECK(baked.v().get("baked").get("painted").as_number() == 32 * 24);
+    CHECK(baked.v().get("baked").get("outside").as_number() == 0);
+    auto top = c.ok("tilemap_paint", R"({"path":"maps/dungeon.mctilemap","preview":true})");
+    const std::string first_row = str(top.v().get("preview").at(0));
+    const std::string grid_row = str(a.v().get("rows").at(0));
+    REQUIRE(first_row.size() == grid_row.size());
+    for (usize i = 0; i < grid_row.size(); ++i) CHECK(first_row[i] == (grid_row[i] == '#' ? '2' : '1'));
+    CHECK(c.ok("cook_run").v().get("ok").as_bool());
+
+    CHECK(c.fails("procgen_run", R"({"kind":"maze","width":32,"height":24})").find("rooms, caves, walk or noise") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":4,"height":24})").find("width") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":32,"height":24,"bake":"maps/dungeon.mctilemap"})").find("floor_tile") != std::string::npos);
+    CHECK(c.fails("procgen_run", R"({"kind":"rooms","width":32,"height":24,"count":2,"bake":"maps/dungeon.mctilemap","floor_tile":1,"wall_tile":2})").find("count") != std::string::npos);
+}
+
 TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrain_import shape a terrain (M-TERRAIN 6)") {
     const std::string root = demo_project("mcp_terrain");
     Client c;
@@ -814,6 +917,9 @@ TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrai
     CHECK(num(g.v().get("height").get("max")) <= 12.05);
     CHECK(num(g.v().get("height").get("max")) > 8.0);
     CHECK(num(g.v().get("resolution")) == 65);
+    // The write rescans the project: the reply names the terrain from copies, not from a freed record.
+    CHECK(str(g.v().get("path")) == "terrain/valley.mcterrain");
+    CHECK(str(g.v().get("guid")).rfind("guid:", 0) == 0);
 
     // A valley floor levelled at 3 m along x; a strength-0 smooth only probes.
     auto f = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","target":3,"strength":1,"hardness":1,)"

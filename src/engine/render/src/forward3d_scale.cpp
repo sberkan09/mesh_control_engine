@@ -223,7 +223,9 @@ void Forward3D::record_scale(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     batch_gpu_index_.clear();
     batch_view_count_ = 0;
     batches_gpu_ = false;
-    // 1. Matrices: kept per batch id, uploaded when the batch changed; batches gone this frame freed.
+    // 1. Matrices: kept per batch id, uploaded when the batch changed; batches no view drew last
+    // frame freed by the frame's first view (M-VIEWS: a batch another view draws stays resident).
+    if (out_.first) ++batch_frame_;
     for (BatchGpu& g : batch_gpu_) g.seen = false;
     for (const InstanceBatch& b : batches) {
         BatchGpu* g = nullptr;
@@ -235,9 +237,10 @@ void Forward3D::record_scale(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             g->id = b.id;
         }
         g->seen = true;
+        g->frame = batch_frame_;
     }
     for (u32 i = 0; i < batch_gpu_.size();) {
-        if (batch_gpu_[i].seen) {
+        if (batch_gpu_[i].seen || !out_.first || batch_gpu_[i].frame + 1 >= batch_frame_) {
             ++i;
             continue;
         }
@@ -403,7 +406,7 @@ void Forward3D::record_scale(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.set_storage_data(rhi::bank::kInstanceVisible, std::as_bytes(visible.span()));
         }
     }
-    record_particles_sim(cmd, scene);
+    if (out_.first) record_particles_sim(cmd, scene);  // later views of the frame draw the rings as they are
 }
 
 // The occluders' view depth, then the pyramid: each level the farthest depth under its texels.
@@ -567,6 +570,14 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
     for (u32 t = 0; t < kMaxDecalTextures; ++t) tex[t] = white;
     Array<DecalRecord> records(mem::heap());
     if (on) {
+        // Decals past kMaxDecals or the third distinct texture are skipped silently by Scene3D::build: say so once.
+        static bool warned = false;
+        if (scene.stats().decals_dropped > 0 && !warned) {
+            warned = true;
+            MCE_LOG_WARN("render3d: {} visible decal(s) dropped: a frame draws at most {} decals from {} distinct textures "
+                         "(share textures between decals or reduce the visible count)",
+                         scene.stats().decals_dropped, kMaxDecals, kMaxDecalTextures);
+        }
         const Span<const u32> keys = scene.decal_textures();
         for (u32 t = 0; t < keys.size(); ++t) {
             resident[t] = textures_->contains(keys[t]);

@@ -543,7 +543,7 @@ nlohmann/json and GitHub Actions; none of them was adopted.*
 | Audio | `mce_audio` mixer on the SDL3 callback; Ogg Vorbis clips (ADR-0044) | stb_vorbis (stb @2c980bb) decodes, in `mce_asset` only (stb_vorbis wall); libvorbis v1.3.7 + libogg v1.3.5 encode, cook-only (libvorbis wall) | **hand-written** mixer |
 | Video | `render::VideoDecoder` over pl_mpeg (ADR-0043), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
 | Reflection | `mce_refl` | — | **hand-written** |
-| Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images, stb_truetype fonts), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
+| Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images incl. Radiance `.hdr`, stb_truetype fonts), tinyexr v1.0.12 (`.exr` skies; BSD-3-Clause, Syoyo Fujita and contributors, with its bundled miniz, MIT; tinyexr wall), bc7enc_rdo @b943862 (BC7/BC5/BC4/BC1 desktop textures; MIT or Unlicense, Richard Geldreich; scalar C++, `-ffp-contract=off`, pinned by commit; bc7enc wall), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
 | Editor UI | Dear ImGui (docking) | v1.92.9b-docking; editor-only (ImGui wall); the gizmo is hand-rolled (ADR-0025, ADR-0030), no ImGuizmo | editor-only |
 | Logging | spdlog | v1.17.0, `SPDLOG_NO_EXCEPTIONS` | boilerplate |
 | Profiling | Tracy client | v0.14.1, on-demand | tool |

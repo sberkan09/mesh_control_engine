@@ -148,7 +148,8 @@ everything out on one clock. Author it as a `.mctimeline` asset and play it with
 
 A track drives its `target`: `"self"` (the default, the entity with the `TimelinePlayer`) or a
 binding index 0 to 7, which names an entity in the player's `bindings`. So one timeline asset can
-drive the same moves on different entities.
+drive the same moves on different entities. `bindings` is a fixed array of 8: write all 8 entries (`"$<id>"`
+or `null`), as above; fewer is an error, not "the first few".
 
 | Track | Keys | Does |
 |---|---|---|
@@ -250,7 +251,7 @@ between them and property tracks drive their fields.
 
 | Component | Does |
 |---|---|
-| `CameraRail3D` | a dolly: the camera moves along a Catmull-Rom curve through `points` (up to 8, the first `count`). `t` 0..1 is the place on the path (0 the first point, 1 the last); key it with a property track (`CameraRail3D.t`) or give it a `speed` (with `loop` the path closes). `face_path` turns the camera along the path |
+| `CameraRail3D` | a dolly: the camera moves along a Catmull-Rom curve through the first `count` of its 8 `points` (a scene or `component_set` must still write all 8 `[x, y, z]` entries, unused ones `[0, 0, 0]`; a shorter array is an error). `t` 0..1 is the place on the path (0 the first point, 1 the last); key it with a property track (`CameraRail3D.t`) or give it a `speed` (with `loop` the path closes). `face_path` turns the camera along the path |
 | `CameraLookAt3D` | turns the camera to face `target` plus `offset`; `smoothing` (1/s) eases it, 0 snaps |
 | `CameraShake3D` | trauma shake of the view: up to `max_translation` metres and `max_rotation` radians at trauma 1, growing with trauma². Set `trauma` (a property track keys it) or fire a `ShakeTrigger`, which shakes 2D and 3D cameras. The Reduce motion setting (`access.motion_scale`) scales the view's shake |
 | `CameraBlend3D` | eases the view from `from`'s view (position, orientation, field of view) to this camera's over `duration` seconds. A camera cut with `"blend"` writes it; set it yourself to blend outside a timeline |
@@ -414,14 +415,16 @@ How a tree runs:
 - Timing is tick math, as with sequences: `wait` 0.5 s completes on its 30th tick at 60 Hz.
 - `AiBrain.active` off pauses the tree where it is; `restart` starts it again from scratch.
 - A brain whose entity has no `Blackboard` gets one on its first tick and starts on the next. Key
-  defaults are written when the brain starts, unless the key is already set.
+  defaults are written when the brain starts, unless the key is already set. When you write a `Blackboard`
+  yourself, `numbers` (16), `vectors` (8) and `entities` (8) are fixed arrays: pass every entry (`null` for an
+  unset entity); a shorter array is an error.
 
 Everything a tree knows is in `AiBrain` and `Blackboard`. Trees are deterministic, they are in the
 state hash and in replays, and a save (give the entity a `SaveKey`) resumes them on the same node.
 `BtRegistry::validate_tasks()` names a task that a loaded tree uses but your game never registered;
 such a node fails and is logged once. The design is ADR-0045. `samples/ai_demo` is a data-only project
-in which the stock player runs a guard that patrols, spots a thief and catches it. Utility choices and
-the editor's tree panel come in the next steps of M-AI.
+in which the stock player runs guards that patrol, investigate, take turns attacking and flee (the
+demo, at the end of this section).
 
 ### Perception
 
@@ -439,6 +442,13 @@ A `Perceiver` gives an AI eyes and ears, and writes what it notices into its tre
   its `visibility` is tested with a ray. In 3D the ray goes through the kit's physics world, and in
   2D (`space: Plane2D`) through physics2d's. Colliders in the `mask` layers block it. The nearest one
   in sight becomes the target.
+- **Which way it looks.** Forward is the **world** rotation of the entity that holds the `Perceiver`,
+  applied to −Z (3D) or +X (2D plane). The `eye` offset turns with it. So a `Perceiver` on a child
+  (an `Eyes` entity under a guard) looks where the child's world yaw points: the parent's yaw plus
+  the child's own. `NavAgent3D` with `face_motion` already turns the entity it moves toward its
+  velocity, so a second system that also turns the child (a "face the player" script, a `Pivot`)
+  doubles the turn and the cone points off. Put the `Perceiver` on the entity that faces, and let
+  one thing turn it. To see where it points, call the MCP tool `perception_debug_lines` (below).
 - **Memory.** A target out of sight is remembered for `forget` seconds. `awareness` falls from 1 to 0
   over that time, and then the target is dropped.
 - **Hearing.** A `kit::Noise` event (push one from code, or use the `make_noise` task) is heard within
@@ -464,6 +474,12 @@ lower branches:
 Perception runs just before the trees in each tick, and its state is in the `Perceiver`, so it is
 deterministic and saved. `kit::perception_debug_lines` returns each perceiver's cone and a line to its
 target, for a debug overlay.
+
+Over MCP, `perception_debug_lines {"ticks": N}` plays the saved scene headless and returns, for every
+`Perceiver`, its world `eye`, `forward` and `yaw_deg` (0 looks along −Z, 90 along −X), `sight_range`,
+`sight_angle`, whether it `sees`, its `target` and `last_seen`, plus `lines`: the cone edges and range
+arc, and a line to the target it sees or last saw (`from`, `to`, `color` as RGBA). A guard that seems
+to look 90° off shows it at once: compare `forward` with the direction it walks.
 
 ### Choosing by score, sharing tokens, finding a spot
 
@@ -549,3 +565,53 @@ current scores in brackets, and the blackboard shows each key's live value. **Ru
 tree as it is now in the play world (its brains start again) without saving. The viewport draws
 each `Perceiver`'s sight cone and a line to the target it sees (green) or last saw (yellow); turn it
 off with **Perception** in the panel or the View menu.
+
+### Writing and checking trees over MCP
+
+An agent edits trees with four tools (chapter 14). `bt_create` writes a new `.mcbt` from a
+`blackboard` (a key's type, or `{"type", "default"}`) and a `root` in the `.mcbt` node form above.
+`bt_add_node` adds a node under `parent` (by default the root) at `index`. `bt_set` changes a node's
+`value` or `fields` (`null` removes a field), replaces it with another subtree (`replace`) or removes
+it (`remove`), and changes the tree's `name` and its blackboard keys (`null` removes a key). Every
+answer is the tree as an outline, one line per node, numbered in the order the tools use:
+
+```
+0 parallel
+1   sequence  "listen"
+2     task "wait_event"
+...
+5   selector
+6     guard  "chase"
+...
+12    guard  "investigate"
+```
+
+Each edit is cooked before it is written, so a mistake (a key the tree does not have, a second child
+under a decorator, a field a node does not take) fails with the cook's message and the file stays
+as it was. What is written is the canonical form the editor's panel also writes.
+
+`bt_trace` plays the open scene headless (save it first) and reports what one entity's brain did:
+every `every` ticks, the tree's result, how many times it ran, the running path and the blackboard,
+and in `started` the tick each named or leaf node started running. That is how an agent checks a
+tree it wrote:
+
+```
+bt_trace {"entity": "Guard", "ticks": 1200, "every": 200}
+  rows: {"tick": 200, "running": "0 parallel > 5 selector > 12 guard \"investigate\" > 13 sequence > 15 task \"move_to\"",
+         "blackboard": "sees=false heard_at=(8.00, 0.10, 8.00) alert=false ..."}, ...
+  started: ["tick 2: 19 repeat \"patrol\"", "tick 182: 12 guard \"investigate\"",
+            "tick 305: 6 guard \"chase\"", "tick 498: 11 wait 1000"]
+```
+
+The trace is deterministic: the same scene and ticks report the same thing.
+
+### The demo
+
+`samples/ai_demo` is a data-only project the stock player runs. In `scenes/yard.mcscene` a guard
+patrols between two posts on the navmesh, hears a thief's noise, leaves its patrol to look, spots
+the thief and catches it, and a bell's alarm reaches it through `wait_event`. In
+`scenes/yard_squad.mcscene` (`mce_player -scene scenes/yard_squad.mcscene`) two guards run one
+utility tree: a thrown stone makes them investigate; when they see the thief they take turns
+attacking through the thief's `AiTokenPool` of one token while the other waits its turn, and a guard
+the thief strikes back at loses health, so its flee score wins and it falls back to a point far from
+the thief that `find_point` picks, giving the token to the other guard.

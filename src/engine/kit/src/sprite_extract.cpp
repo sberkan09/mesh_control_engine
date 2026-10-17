@@ -1,12 +1,14 @@
 #include "mce/kit/sprite_extract.h"
 
 #include <cmath>
+#include <limits>
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/video.h"
 #include "mce/loc/loc.h"
 #include "mce/log.h"
@@ -331,6 +333,18 @@ void SpriteExtract::collect_lights(World& world, render::SpriteBatch& batch) {
     batch.set_lights(lights);
 }
 
+void SpriteExtract::add_fill(render::SpriteBatch& batch, const math::Color& tint) {
+    if (!white_set_.valid()) return;
+    const math::aabb2& b = batch.view().world_bounds;
+    render::SpriteInstance inst;
+    inst.position = (b.min + b.max) * 0.5f;
+    inst.scale = (b.max - b.min) * 1.02f + math::vec2{0.01f, 0.01f};
+    inst.tint = tint;
+    inst.set = white_set_;
+    inst.sort_layer = std::numeric_limits<i16>::min();
+    batch.add(inst);
+}
+
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
     const math::vec2 cam = batch.view().center;
     collect_lights(world, batch);
@@ -347,6 +361,14 @@ void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {
         if (const render::SpriteSetId film = videos_ ? videos_->sprite_set(ent) : render::SpriteSetId{}; film.valid()) {
             inst.set = film;
             inst.region = 0;
+        }
+        if (render_textures_) {
+            if (const ShowRenderTexture* show = world.try_get<ShowRenderTexture>(ent)) {
+                if (const render::SpriteSetId rt = render_textures_->sprite_set(show->source); rt.valid()) {
+                    inst.set = rt;
+                    inst.region = 0;
+                }
+            }
         }
         inst.sort_layer = s.layer;
         inst.sort_order = s.order;

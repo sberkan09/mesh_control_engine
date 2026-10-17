@@ -10,11 +10,13 @@ namespace {
 // Shared schema pieces (render_frame's arguments, also nested in image_diff's 'render').
 #define MCE_RC0 "\"scene\":{\"type\":\"string\",\"description\":\"Render this saved scene (path under assets/) instead of the open one\"},"
 #define MCE_RC1 "\"input\":{\"description\":\"Scripted input as run_headless takes it: a script string (\\\"10-70 Move=1,0 Jump\\\") or an array of {from, to, actions}\",\"type\":[\"string\",\"array\"]},"
-#define MCE_RC2 "\"camera\":{\"type\":\"object\",\"description\":\"Render from another camera (render only, the sim is unchanged): {\\\"entity\\\": id or name} of a camera entity in the open scene, {\\\"index\\\": n} (scene entity index), {\\\"position\\\": [x,y,z], \\\"target\\\": [x,y,z], \\\"fov\\\": deg} (free 3D) or {\\\"center\\\": [x,y], \\\"zoom\\\": z} (free 2D)\"},"
+#define MCE_RC2 "\"camera\":{\"type\":\"object\",\"description\":\"Render from another camera (render only, the sim is unchanged): {\\\"entity\\\": id or name} of a camera entity in the open scene, {\\\"index\\\": n} (scene entity index), {\\\"position\\\": [x,y,z], \\\"target\\\": [x,y,z], \\\"fov\\\": deg} (free 3D) or {\\\"center\\\": [x,y], \\\"zoom\\\": z} (free 2D). A camera object also takes (alone, it keeps the scene's own camera) \\\"focus\\\" (depth of field: meters to the sharpest plane, or \\\"target\\\" = the distance from position to target) and \\\"exposure\\\" (a multiplier of the scene exposure)\"},"
+#define MCE_RC2B "\"view\":{\"type\":\"object\",\"description\":\"Look at one local player's view or one render texture's camera (M-VIEWS), full size: {\\\"player\\\": 1..4} or {\\\"texture\\\": entity id or name}. Join the players with input (\\\"5 P2/Join\\\") so their cameras follow them. Not with camera\"},"
 #define MCE_RC3 "\"safe_area\":{\"type\":\"object\",\"description\":\"Pretend the screen has these safe-area insets in pixels {left, top, right, bottom}: UI lays out inside them and the image outlines them\"},"
 #define MCE_RC4 "\"software\":{\"type\":\"boolean\",\"description\":\"Force the offscreen software renderer (automatic when there is no display)\"},"
 #define MCE_RC5 "\"convars\":{\"type\":\"object\",\"description\":\"Console variables for this run, name -> value (e.g. {\\\"lc.quality\\\": 0}): preview a setting without changing the project\"}"
-#define MCE_RENDER_COMMON_PROPS MCE_RC0 MCE_RC1 MCE_RC2 MCE_RC3 MCE_RC4 MCE_RC5
+#define MCE_RC2C "\"environment\":{\"type\":\"object\",\"description\":\"Override Environment3D fields for this shot only (the scene is unchanged): numbers, true/false for flags, [x,y,z] / [r,g,b] for vectors and colors, e.g. {\\\"fog_density\\\": 0.04, \\\"sun_color\\\": [1, 0.6, 0.3], \\\"depth_of_field\\\": 1} (refl_describe_component Environment3D lists the fields)\"},"
+#define MCE_RENDER_COMMON_PROPS MCE_RC0 MCE_RC1 MCE_RC2 MCE_RC2B MCE_RC2C MCE_RC3 MCE_RC4 MCE_RC5
 #define MCE_RF0 "\"tick\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":36000,\"default\":1,\"description\":\"Capture the first frame after this sim tick\"},"
 #define MCE_RF1 "\"width\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":960},\"height\":{\"type\":\"integer\",\"minimum\":64,\"maximum\":3840,\"default\":540},"
 #define MCE_RENDER_FRAME_PROPS MCE_RF0 MCE_RF1 MCE_RENDER_COMMON_PROPS
@@ -59,11 +61,12 @@ const ToolDef kAgentTools[] = {
      "Measure a scene with the real player: N frames at one sim tick per frame (counters repeat run to run), "
      "judged against a target's performance budget (project_get budgets_in_force). Returns the verdict with advice "
      "for each limit over, frame/sim/render/GPU ms (p50/p95/p99/max), draws, triangles, sprites and other counters, "
-     "the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
+     "draw_causes (3D scene draws that were not instanced, by cause, each with what to change), the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
      "(cooked/.perf/last.mcperf, or 'save'); perf_compare compares two. Works without a GPU (software rendering; "
-     "times are then the CPU's). headless: true measures the sim alone.",
+     "times are then the CPU's). headless: true measures the sim alone. With a progressToken it sends "
+     "notifications/progress with the phase (launching, warmup N/M, capturing N/M, reading the capture).",
      R"j({"type":"object","properties":{"scene":{"type":"string","description":"Scene path under assets/ (default: the open scene, saved)"},)j"
-     R"j("frames":{"type":"integer","minimum":10,"maximum":3600,"default":300},"warmup":{"type":"integer","minimum":0,"maximum":3600,"default":30,"description":"Frames run first and left out (loading, first uploads)"},)j"
+     R"j("frames":{"type":"integer","minimum":1,"maximum":3600,"default":300,"description":"Frames captured after the warmup; 1-29 is a quick look (counters still repeat, percentiles are noisy and the report says so)"},"warmup":{"type":"integer","minimum":0,"maximum":3600,"default":30,"description":"Frames run first and left out (loading, first uploads)"},)j"
      R"j("target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop"},)j"
      R"j("width":{"type":"integer","minimum":64,"maximum":3840,"default":960},"height":{"type":"integer","minimum":64,"maximum":3840,"default":540},)j"
      R"j("headless":{"type":"boolean","default":false},"software":{"type":"boolean","default":false,"description":"Force the software rasterizer"},)j"
@@ -108,7 +111,7 @@ const ToolDef kAgentTools[] = {
      "when stuck), explore (seeded random wandering, coverage) or masher (random button chords, crash and soft-lock "
      "hunting). Returns the feel report: time to finish, deaths, stuck spots with positions, idle time, distance, cells "
      "visited. Needs no game code: the bot drives the game's input actions (Move, Jump, ...).",
-     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities or {at, wait: ticks to stand there}, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8)}"},)j"
+     R"j({"type":"object","properties":{"bot":{"type":"object","description":"{kind: walk_to|explore|masher, actor: entity, target: [x,y(,z)] or entity (walk_to), through: [waypoints, points or entities or {at, wait: ticks to stand there}, reached in order before target] (walk_to), air_jumps: 0-4 extra Jump presses in the air (walk_to, side view), plane: xy|x|xz (default xy; x = side view with Jump, xz = 3D ground), reach: m (0.5), seed, move: action (Move), jump: action (Jump), actions: [names] (masher), period: ticks (8), hold: [actions held all run, e.g. Crouch], hold_when: [{action, entity, field, value}] (held while the field check is true), stop_when: {entity, field, value} (stands still while true); a walk_to waypoint {at, wait, press: [actions pressed once on arrival]}}"},)j"
      R"j("scene":{"type":"string","description":"A saved scene under assets/ (default: the open scene)"},)j"
      R"j("ticks":{"type":"integer","minimum":1,"maximum":36000,"default":1800},)j"
      R"j("until":{"type":"object","description":"Stop early when this check holds (a field, alive or event check)"},)j"
@@ -126,8 +129,10 @@ const ToolDef kAgentTools[] = {
      docs_search},
     {"engine_capabilities",
      "What a game reaches through what: each engine feature with how it is reached today (data: a component; asset: a "
-     "source file type; mcp: a tool; console; code: needs game C++), plus every component, importable asset type, tool "
-     "and the convar count. Read this before planning a game, to keep game code to the rules.",
+     "source file type; mcp: a tool; console; code: needs game C++ or Luau). Scenes, prefabs, UI documents, timelines, "
+     "skeletons, behaviour trees, terrain and scene changes are data you author through the tools; game rules and "
+     "custom components are the code. Also lists every component, importable asset type, tool and the convar count. "
+     "Read this before planning a game, to keep game code to the rules.",
      R"j({"type":"object","properties":{"area":{"type":"string","description":"Only this area's features (2D, 3D, physics, audio, input, ui, gameplay, scenes, agent, ...)"}}})j",
      engine_capabilities},
     {"gen_palette",

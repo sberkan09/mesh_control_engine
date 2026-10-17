@@ -125,6 +125,43 @@ turns it into an input-map chunk. The player loads the first one in the pack by 
 A custom host can also build a map in code with `InputMapBuilder` (see
 `samples/03_platformer/main.cpp` and `05_ashen_court/main.cpp`).
 
+### Local players (several people on one machine)
+
+Up to four players share one `InputSystem` (M-VIEWS). A map built with `map_player_flags(n)` (code) belongs
+to local player `n` (1..3; the first player is slot 0, the plain map stack, and is unchanged). Player maps
+are always active, never pushed or popped, and publish their actions under per-player names:
+`state.action(1, MCE_SID("Jump"))` is the second player's Jump (`action(0, name)` is the plain one).
+
+- **Pads.** A gamepad binding in a player map reads only the pad assigned to that player
+  (`assign_pad(slot, pad)`). A pad belongs to one player. Player 0, until it holds a pad of its own,
+  keeps reading any pad nobody else has claimed, so a single-player game behaves as before.
+- **Joining.** `set_join_slots(first, end)` lets a connected, unassigned pad that taps South or Start
+  take the lowest free slot in `[first, end)`; a pad that disconnects frees its slot. `(0, 0)` turns
+  joining off. Keyboard players need no assignment: give each player's map different keys.
+- **In a `.mcinput`.** A map with `"player": 1..4` belongs to that player (`"player": 1` is the first
+  player's own map, the others are slots 1..3); give each player's map the same action names and different
+  keys. `samples/09_coop/assets/input/coop.mcinput` is the pattern: Move, Join and Leave for four players.
+- **Headless.** In an `-input` file, `P2/Move=1,0` is the second player's Move; `P1/Move` is the plain
+  `Move`. Recordings carry the per-player names like any other action, so replays and hashes are unchanged.
+
+### The co-op kit (no code)
+
+`kit::install_stock` adds a co-op layer that needs only components:
+
+- `CoopGame` (one per scene): `player` (a prefab spawned for each joining player), `max_players` (4),
+  `auto_join` (how many of the first players join without a button, default 1), action names (`Join`, `Leave`,
+  `Move`, `Jump` unless you rename them) and `tint_players` (red, blue, green, yellow on the player's `Sprite`).
+- `PlayerSpawn {player}` marks where a player appears (0 = any free one, 1..4 = that player's).
+- `LocalPlayer {player, drive, speed}` is on every spawned player. With `drive` on, a `CharacterController3D`
+  entity gets Move (x, -y) and Jump, a dynamic `RigidBody2D` entity gets a velocity of Move times `speed`.
+- `PlayerCamera {player, offset, smoothing}` follows that player and switches its `CameraView` (give it the same
+  number in `split`) on while they are in, off when they leave, so the split screen reflows by itself.
+- `SharedCamera2D {margin, min_width, min_height}` frames all players in one camera, the other co-op style.
+
+A player presses their `Join` (a pad's Start joins too) and appears at a spawn; `Leave` removes them, and they
+can join again. `samples/09_coop` is the whole thing as data. In `-input` scripts, `P2/Join` is the second
+player's button; the entity count and the state hash stay the same from run to run.
+
 ## 11.4 Rebinding
 
 The input system supports capture rebinding (`begin_rebind` swallows the next press and binds it),

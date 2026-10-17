@@ -22,10 +22,20 @@ constexpr u32 kMaxDabs = 1u << 20;
 
 // The terrain named by 'path' or 'guid', read into `d` (the source cooked in memory gives the data the
 // brushes edit).
-bool load_terrain(ToolCall& c, const editor::ProjectAsset*& a, editor::TerrainDocument& d) {
+// The terrain asset by value: save_terrain's write rescans the project and frees its records, so no
+// ProjectAsset* is kept past load_terrain.
+struct TerrainRef {
+    cook::String path;
+    asset::Guid guid;
+};
+
+bool load_terrain(ToolCall& c, TerrainRef& ref, editor::TerrainDocument& d) {
+    const editor::ProjectAsset* a = nullptr;
     if (!need_project(c) || !asset_tool_arg(c, a)) return false;
     if (a->type != asset::ChunkType::Terrain)
         return fail(c, "that asset is not a terrain (asset_create makes one: a .mcterrain path)");
+    ref.path = a->path;
+    ref.guid = a->guid;
     editor::EditorProject& project = c.server.session().project();
     const cook::String abs = project.asset_path(a->path.view());
     cook::String text;
@@ -45,12 +55,10 @@ bool load_terrain(ToolCall& c, const editor::ProjectAsset*& a, editor::TerrainDo
     return true;
 }
 
-bool save_terrain(ToolCall& c, const editor::ProjectAsset* a, const editor::TerrainDocument& d) {
-    const cook::String rel = a->path;
-    const asset::Guid guid = a->guid;
+bool save_terrain(ToolCall& c, const TerrainRef& ref, const editor::TerrainDocument& d) {
     cook::String text;
     d.serialize(text);
-    return asset_validate_and_write(c, rel.view(), guid, text.view());
+    return asset_validate_and_write(c, ref.path.view(), ref.guid, text.view());
 }
 
 bool arg_f32(ToolCall& c, const char* name, f32& out, f32 lo, f32 hi) {
@@ -119,8 +127,8 @@ u32 run_brush(editor::TerrainDocument& d, const editor::TerrainBrush& b, Span<co
     return changed;
 }
 
-void write_head(ToolCall& c, const editor::ProjectAsset* a, const editor::TerrainDocument& d) {
-    c.out.key("path").str(a->path.view()).key("guid").str(asset_guid_ref(a->guid).view());
+void write_head(ToolCall& c, const TerrainRef& a, const editor::TerrainDocument& d) {
+    c.out.key("path").str(a.path.view()).key("guid").str(asset_guid_ref(a.guid).view());
     c.out.key("resolution").num_u(d.resolution).key("size").begin_array().num_f(d.size.x).num_f(d.size.y).end_array();
 }
 
@@ -142,7 +150,7 @@ void write_heights(ToolCall& c, const editor::TerrainDocument& d, Span<const mat
 }
 
 bool terrain_sculpt(ToolCall& c) {
-    const editor::ProjectAsset* a = nullptr;
+    TerrainRef a;
     editor::TerrainDocument d;
     if (!load_terrain(c, a, d)) return false;
     StringView op;
@@ -178,7 +186,7 @@ bool terrain_sculpt(ToolCall& c) {
 }
 
 bool terrain_paint(ToolCall& c) {
-    const editor::ProjectAsset* a = nullptr;
+    TerrainRef a;
     editor::TerrainDocument d;
     if (!load_terrain(c, a, d)) return false;
     editor::TerrainBrush b;
@@ -226,7 +234,7 @@ bool terrain_paint(ToolCall& c) {
 }
 
 bool terrain_import(ToolCall& c) {
-    const editor::ProjectAsset* a = nullptr;
+    TerrainRef a;
     editor::TerrainDocument d;
     if (!load_terrain(c, a, d)) return false;
     StringView file;
@@ -261,7 +269,7 @@ bool terrain_import(ToolCall& c) {
 }
 
 bool terrain_generate(ToolCall& c) {
-    const editor::ProjectAsset* a = nullptr;
+    TerrainRef a;
     editor::TerrainDocument d;
     if (!load_terrain(c, a, d)) return false;
     editor::TerrainGenerate g;

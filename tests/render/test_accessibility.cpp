@@ -121,7 +121,13 @@ TEST_CASE("M-ACCESS: the access.* convars, clamped, and the post chains they cha
     PostFx fx;
     fx.motion_blur.enabled = true;
     fx.motion_blur.intensity = 0.8f;
+    fx.lens.chromatic_aberration = 0.8f;  // M-VISUAL3 3: the fringe and the animated grain are screen effects
+    fx.lens.grain = 0.4f;
+    fx.lens.vignette = 0.5f;              // a static look stays
     apply_accessibility(a, fx);
+    CHECK(fx.lens.chromatic_aberration == doctest::Approx(0.2f));
+    CHECK(fx.lens.grain == doctest::Approx(0.1f));
+    CHECK(fx.lens.vignette == doctest::Approx(0.5f));
     CHECK(fx.color_vision == ColorVision::Tritanopia);
     CHECK(fx.motion_blur.intensity == doctest::Approx(0.2f));
     CHECK(fx.motion_blur.enabled);

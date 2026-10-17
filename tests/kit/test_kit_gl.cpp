@@ -11,14 +11,22 @@
 #include "mce/cook/cook.h"
 #include "mce/core.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/kit3d.h"
+#include "mce/kit/kit3d_extract.h"
 #include "mce/kit/particles.h"
+#include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/views.h"
 #include "mce/loc/loc.h"
+#include "mce/log.h"
+#include "mce/memory/frame_slots.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
 #include "mce/render/renderer.h"
+#include "mce/render/scene3d.h"
 #include "mce/rhi/default_device.h"
+#include "mesh_fixture.h"
 
 using namespace mce;
 using math::vec2;
@@ -437,5 +445,413 @@ TEST_CASE("M-DATA-REACH 8, M-UI-DATA 4: a TextLabel wraps, shows its loc_key's s
     extent(rows_shadow, cols_shadow);
     CHECK(rows_shadow > rows_plain);
     CHECK(cols_shadow > cols_plain);
+    f.extract.reset(nullptr);
+}
+
+namespace {
+
+// M-VIEWS 3: the frame as the player draws it with views: the textures synced, then every view.
+struct ViewFrame {
+    Fixture& f;
+    kit::RenderTextures rts;
+    Array<kit::ViewEntry> views;
+    mem::FrameSlots slots{mem::heap()};  // record_views builds its batches in the frame arena
+    explicit ViewFrame(Fixture& fx) : f(fx) {
+        rts.init(f.renderer);
+        f.extract.set_render_textures(&rts);
+    }
+    ~ViewFrame() {
+        f.extract.set_render_textures(nullptr);
+        rts.shutdown();
+    }
+    void render(f32 dt = 1.0f / 60.0f) {
+        rts.sync(f.world, dt);
+        slots.begin_frame(f.frame);
+        f.device->begin_frame(f.frame++);
+        REQUIRE(kit::collect_views(f.world, {kW, kH}, views, &kit::render_texture_size, &rts));
+        kit::ViewRecordContext vc;
+        vc.renderer = &f.renderer;
+        vc.extract2d = &f.extract;
+        vc.render_textures = &rts;
+        vc.target = f.target;
+        vc.target_size = {kW, kH};
+        rhi::CommandBuffer cmd;
+        stats = kit::record_views(cmd, f.world, views.span(), vc);
+        f.device->submit(cmd);
+        REQUIRE(f.device->read_pixels(f.target, rhi::Rect2D{0, 0, kW, kH}, f.pixels.span()).has_value());
+        f.device->end_frame();
+        slots.end_frame(nullptr);
+    }
+    kit::ViewRecordStats stats;
+};
+
+}  // namespace
+
+TEST_CASE("M-VIEWS 3: a camera draws into a RenderTexture that a sprite elsewhere shows") {
+    Fixture f;
+    ViewFrame vf(f);
+    const math::Color gray{0.5f, 0.5f, 0.5f, 1.0f};
+    // The window's camera at the origin; the texture's camera 20 m away, both clearing to gray.
+    const Entity win = f.camera({0, 0});
+    f.world.try_get_mut<kit::Camera2DComponent>(win)->clear_color = gray;
+    kit::RenderTexture rt;
+    rt.width = rt.height = 32;  // 2 m x 2 m at 16 px per metre
+    const Entity tex = f.world.spawn_with(rt);
+    kit::Camera2DComponent cc;
+    cc.pixels_per_meter = kPpm;
+    cc.primary = false;
+    cc.clear_color = gray;
+    kit::CameraView cv;
+    cv.target = tex;
+    f.world.spawn_with(LocalTransform{{20, 0, 0}, math::quat::identity(), {1, 1, 1}}, cc, cv);
+    f.sprite({20, 0}, kRed);                            // the middle half of the texture
+    const Entity screen = f.sprite({0, 0}, kWhite, {4, 4});  // the texture, twice its size
+    f.world.add(screen, kit::ShowRenderTexture{tex});
+
+    vf.render();
+    CHECK(vf.stats.views_texture == 1);
+    CHECK(vf.rts.live() == 1);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));  // the red sprite, seen through the texture
+    // The texture's clear shows as the window's own clear does (the linear texture's encode).
+    const Rgba in_tex = f.at_view({1.5f, 1.5f}), window = f.at_view({4.0f, 2.5f});
+    INFO("texture clear " << int(in_tex.r) << " window clear " << int(window.r));
+    CHECK(is(in_tex, window.r, window.g, window.b));
+    CHECK_FALSE(is(window, 255, 255, 255));
+    CHECK(f.device->validation_error_count() == 0);
+
+    // A surface inside the texture's own view never samples it: it shows its own (green) look, and
+    // upright (the texture's top-right corner is the screen's top-right).
+    const Entity mirror = f.sprite({20.75f, 0.75f}, kGreen, {0.5f, 0.5f});
+    f.world.add(mirror, kit::ShowRenderTexture{tex});
+    vf.render();
+    vf.render();
+    const Rgba m = f.at_view({1.5f, 1.5f});
+    INFO("mirror " << int(m.r) << " " << int(m.g) << " " << int(m.b));
+    CHECK(is(m, 0, 255, 0));
+
+    // A new size re-makes the texture; the picture stays where it was.
+    const rhi::TextureHandle before = vf.rts.find(tex)->texture;
+    f.world.try_get_mut<kit::RenderTexture>(tex)->width = 64;
+    f.world.try_get_mut<kit::RenderTexture>(tex)->height = 64;
+    vf.render();
+    CHECK(vf.rts.find(tex)->texture != before);
+    CHECK(vf.rts.find(tex)->size.width == 64);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));
+
+    // update_hz: 10 redraws a second at 20 frames a second is every second frame.
+    f.world.try_get_mut<kit::RenderTexture>(tex)->update_hz = 10.0f;
+    u32 drawn = 0;
+    for (int i = 0; i < 10; ++i) {
+        vf.render(0.05f);
+        drawn += vf.stats.views_texture;
+    }
+    CHECK(drawn == 5);
+    CHECK(is(f.at_view({0, 0}), 255, 0, 0));  // a frame that skipped the redraw keeps the picture
+
+    // The RenderTexture gone: its texture freed, the screen shows its own white.
+    f.world.destroy(tex);
+    vf.render();
+    CHECK(vf.rts.live() == 0);
+    CHECK(is(f.at_view({0, 0}), 255, 255, 255));
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("M-CONTENT 2: with two 3D views the draw causes are the window's first view's, not the last one recorded") {
+    Fixture f;
+    REQUIRE(f.renderer.init_3d().has_value());
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    REQUIRE(f.renderer.meshes().upload(1, 1, box.build().span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+    kit::install_kit3d(f.world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), nullptr);
+    ex3.bind_mesh(kBox, 1);
+    // Two cameras side by side. The first (order 0) looks down -z at six boxes; the second is turned about
+    // and sees none of them.
+    kit::CameraView left, right;
+    left.viewport = {0.0f, 0.0f, 0.5f, 1.0f};
+    right.viewport = {0.5f, 0.0f, 0.5f, 1.0f};
+    left.order = 0;
+    right.order = 1;
+    f.world.spawn_with(LocalTransform{}, kit::Camera3DComponent{}, left);
+    kit::Camera3DComponent second;
+    second.primary = 0;
+    f.world.spawn_with(LocalTransform{{0, 0, 0}, math::quat_from_axis_angle({0, 1, 0}, 3.14159265f), {1, 1, 1}}, second,
+                       right);
+    for (int i = 0; i < 6; ++i) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        f.world.spawn_with(LocalTransform{{f32(i) - 2.5f, 0, -6}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    f.world.tick(1.0f / 60.0f, 0);
+
+    mem::FrameSlots slots{mem::heap()};
+    Array<kit::ViewEntry> views;
+    const auto frame = [&](bool collect) {
+        slots.begin_frame(f.frame);
+        f.device->begin_frame(f.frame++);
+        REQUIRE(kit::collect_views(f.world, {kW, kH}, views, nullptr, nullptr));
+        kit::ViewRecordContext vc;
+        vc.renderer = &f.renderer;
+        vc.extract3d = &ex3;
+        vc.extract2d = &f.extract;
+        vc.target = f.target;
+        vc.target_size = {kW, kH};
+        vc.collect_draw_causes = collect;
+        rhi::CommandBuffer cmd;
+        const kit::ViewRecordStats st = kit::record_views(cmd, f.world, views.span(), vc);
+        f.device->submit(cmd);
+        f.device->end_frame();
+        slots.end_frame(nullptr);
+        return st;
+    };
+    const kit::ViewRecordStats st = frame(true);
+    REQUIRE(st.views_3d == 2);
+    CHECK(st.window_3d == 2);
+    u32 total = 0;
+    for (u32 c : st.first_3d_draw_causes) total += c;
+    CHECK(st.first_3d.visible == 6);
+    CHECK(total + st.first_3d_draws_instanced == 6);  // the first view's draws, though the last recorded drew none
+    CHECK(st.first_3d_draws_instanced == 6);          // six identical boxes, one instanced run
+    CHECK(st.first_3d_runs_instanced == 1);
+    CHECK(f.renderer.forward_3d().last_stats().main_draws == 0);  // the renderer's last view: nothing visible
+    // Switched off, no causes are reported (the instanced numbers still are).
+    const kit::ViewRecordStats quiet = frame(false);
+    total = 0;
+    for (u32 c : quiet.first_3d_draw_causes) total += c;
+    CHECK(total == 0);
+    CHECK(quiet.first_3d_draws_instanced == 6);
+    CHECK(f.device->validation_error_count() == 0);
+    ex3.shutdown();
+}
+
+TEST_CASE("M-VIEWS 5: two 2D cameras in a split screen each keep their own cell and clear color") {
+    Fixture f;
+    ViewFrame vf(f);
+    auto cam = [&](f32 x, math::Color clear, u32 split) {
+        kit::Camera2DComponent c;
+        c.pixels_per_meter = kPpm;
+        c.primary = false;
+        c.pixel_snap = false;
+        c.clear_color = clear;
+        kit::CameraView cv;
+        cv.split = split;
+        f.world.spawn_with(LocalTransform{{x, 0, 0}, math::quat::identity(), {1, 1, 1}}, c, cv);
+    };
+    cam(0.0f, math::Color{0.0f, 0.0f, 0.5f, 1.0f}, 1);
+    cam(50.0f, math::Color{0.5f, 0.0f, 0.0f, 1.0f}, 2);
+    f.world.spawn_with(kit::SplitScreen{kit::SplitLayout::Columns, 0});
+    f.sprite({0, 0}, kRed);
+    f.sprite({50, 0}, kGreen);
+    vf.render();
+    auto px = [&](u32 x, u32 y) {
+        const usize i = (usize(y) * kW + x) * 4;
+        return Rgba{f.pixels[i], f.pixels[i + 1], f.pixels[i + 2], f.pixels[i + 3]};
+    };
+    CHECK(is(px(40, 48), 255, 0, 0));   // player 1's cell: the red sprite (a later cell's clear did not wipe it)
+    CHECK(is(px(120, 48), 0, 255, 0));  // player 2's cell: the green sprite
+    const Rgba a = px(2, 2), b = px(157, 2);
+    INFO("cell clears " << int(a.r) << "," << int(a.g) << "," << int(a.b) << " and " << int(b.r) << "," << int(b.g) << "," << int(b.b));
+    CHECK((a.b > a.r && b.r > b.b));  // each cell shows its own camera's background
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("M-VISUAL3 2: a material with a height map gets one [normal, height] array; a mismatch draws without parallax") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_parallax");
+    const std::vector<u8> grey(4 * 4 * 4, 128), small(2 * 2 * 4, 128);
+    for (const char* n : {"n", "h", "s"}) {
+        const std::string name = std::string(root + "/assets/") + n + ".png";
+        write_file(name, make_png(n[0] == 's' ? 2 : 4, n[0] == 's' ? 2 : 4, n[0] == 's' ? small : grey));
+    }
+    const char* guid_n = "7a270000-0000-4000-8000-000000000001";
+    const char* guid_h = "7a270000-0000-4000-8000-000000000002";
+    const char* guid_s = "7a270000-0000-4000-8000-000000000003";
+    const char* opts = R"({ "srgb": false, "mips": false })";
+    write_file(root + "/assets/n.png.mceasset", sidecar(guid_n, "texture", opts));
+    write_file(root + "/assets/h.png.mceasset", sidecar(guid_h, "texture", opts));
+    write_file(root + "/assets/s.png.mceasset", sidecar(guid_s, "texture", opts));
+    const char* guid_c = "7a270000-0000-4000-8000-000000000004";  // an sRGB height map
+    write_file(root + "/assets/c.png", make_png(4, 4, grey));
+    write_file(root + "/assets/c.png.mceasset", sidecar(guid_c, "texture", R"({ "srgb": true, "mips": false })"));
+    auto mat = [&](const char* guid, const std::string& textures) {
+        write_file(std::string(root + "/assets/") + guid + ".mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + guid + R"(", "height_scale": 0.05, "textures": )" + textures + " }");
+    };
+    const char* good = "7a270000-0000-4000-8000-000000000010";
+    const char* no_normal = "7a270000-0000-4000-8000-000000000011";
+    const char* mismatch = "7a270000-0000-4000-8000-000000000012";
+    mat(good, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_h + R"(" })");
+    mat(no_normal, std::string(R"({ "height": "guid:)") + guid_h + R"(" })");
+    mat(mismatch, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_s + R"(" })");
+    const char* srgb_with_normal = "7a270000-0000-4000-8000-000000000013";
+    const char* srgb_alone = "7a270000-0000-4000-8000-000000000014";
+    mat(srgb_with_normal, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_c + R"(" })");
+    mat(srgb_alone, std::string(R"({ "height": "guid:)") + guid_c + R"(" })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+
+    Fixture f;
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    const Array<byte> blob = box.build();
+    REQUIRE(f.renderer.meshes().upload(1, 1, blob.span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+
+    World world;
+    kit::install_kit3d(world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), &assets);
+    ex3.set_texture_store(&f.renderer.textures());
+    ex3.bind_mesh(kBox, 1);
+    REQUIRE(ex3.preload().has_value());
+    world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
+    const char* guids[] = {good, no_normal, mismatch, srgb_with_normal, srgb_alone};
+    for (const char* g : guids) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        m.material.guid = asset::parse_guid(g).value();
+        world.spawn_with(LocalTransform{{0, 0, -5}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    world.tick(1.0f / 60.0f, 0);
+    render::Camera3D cam;
+    REQUIRE(ex3.camera(world, 1.0f, cam));
+    render::Scene3D scene(f.renderer.meshes(), mem::heap());
+    scene.begin(cam, {64, 64});
+    ex3.extract(world, scene, 1.0f);
+    REQUIRE(scene.instances().size() == 5);
+    const render::MaterialOverride *a = scene.instances()[0].material, *n = scene.instances()[1].material, *x = scene.instances()[2].material;
+    REQUIRE((a && n && x));
+    CHECK(a->parallax);
+    CHECK(a->parallax_normal);
+    CHECK(a->ext.parallax());
+    CHECK(a->normal_key >= render::TextureStore::kFirstLocalKey);
+    CHECK(f.renderer.textures().contains(a->normal_key));
+    CHECK(n->parallax);
+    CHECK_FALSE(n->parallax_normal);
+    CHECK(n->normal_key != a->normal_key);
+    // 2x2 height against a 4x4 normal map: no parallax, the plain normal map stays.
+    CHECK_FALSE(x->parallax);
+    CHECK(x->ext.height_scale == 0.0f);
+    CHECK(x->normal_key < render::TextureStore::kFirstLocalKey);
+    // An sRGB height map is refused, with or without a normal map (alone it would set the array's format).
+    for (u32 i : {3u, 4u}) {
+        const render::MaterialOverride* c = scene.instances()[i].material;
+        REQUIRE(c != nullptr);
+        CHECK_FALSE(c->parallax);
+        CHECK(c->ext.height_scale == 0.0f);
+        CHECK((c->normal_key == ~0u || c->normal_key < render::TextureStore::kFirstLocalKey));  // no array key
+    }
+    ex3.shutdown();
+    f.extract.reset(nullptr);
+}
+
+TEST_CASE("M-CONTENT 1b: BC cooks - a BC5 normal + BC4 height make a parallax array; a BC4 base colour warns") {
+    using namespace cook_test;
+    const std::string root = fresh_dir("kit_parallax_bc");
+    const std::vector<u8> grey(8 * 8 * 4, 128);
+    const char* guid_n = "7a270000-0000-4000-8000-000000000101";
+    const char* guid_h = "7a270000-0000-4000-8000-000000000102";
+    const struct {
+        const char* name;
+        const char* guid;
+        const char* compress;
+    } tex[] = {{"n", guid_n, "bc5"}, {"h", guid_h, "bc4"}};
+    for (const auto& t : tex) {
+        write_file(std::string(root + "/assets/") + t.name + ".png", make_png(8, 8, grey));
+        write_file(std::string(root + "/assets/") + t.name + ".png.mceasset",
+                   sidecar(t.guid, "texture", (std::string(R"({ "srgb": false, "mips": false, "compress": ")") + t.compress + R"(" })").c_str()));
+    }
+    auto mat = [&](const char* guid, const std::string& textures, const char* extra = R"("height_scale": 0.05,)") {
+        write_file(std::string(root + "/assets/") + guid + ".mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + guid + R"(", )" + extra + R"( "textures": )" + textures + " }");
+    };
+    const char* parallax = "7a270000-0000-4000-8000-000000000110";
+    const char* bc4_albedo = "7a270000-0000-4000-8000-000000000111";
+    mat(parallax, std::string(R"({ "normal": "guid:)") + guid_n + R"(", "height": "guid:)" + guid_h + R"(" })");
+    mat(bc4_albedo, std::string(R"({ "base_color": "guid:)") + guid_h + R"(" })", "");
+    cook::CookService svc;
+    cook::CookOptions opts;
+    opts.textures = cook::TextureCompression::Bc;
+    REQUIRE(svc.cook(StringView(root.c_str()), opts).ok());
+
+    Fixture f;
+    if (!f.device->caps().texture_bc) {
+        MESSAGE("skipped: this device cannot sample BC (texture_bc false)");
+        return;
+    }
+    asset::AssetSystem assets;
+    render::AssetUploadSink sink(f.renderer, assets);
+    assets.set_upload_sink(&sink);
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    f.extract.reset(&assets);
+
+    mesh_fixture::Builder box;
+    box.add_node(-1);
+    mesh_fixture::Box b;
+    b.half = {0.5f, 0.5f, 0.5f};
+    box.add_box(b);
+    const Array<byte> blob = box.build();
+    REQUIRE(f.renderer.meshes().upload(1, 1, blob.span()).has_value());
+    const asset::Guid kBox{0x3d00000000000011ull, 0x8000000000000011ull};
+
+    World world;
+    kit::install_kit3d(world, nullptr);
+    kit::Kit3DExtract ex3;
+    ex3.init(f.renderer.meshes(), &assets);
+    ex3.set_texture_store(&f.renderer.textures());
+    ex3.bind_mesh(kBox, 1);
+    REQUIRE(ex3.preload().has_value());
+    world.spawn_with(LocalTransform{}, kit::Camera3DComponent{});
+    for (const char* g : {parallax, bc4_albedo}) {
+        kit::MeshRef m;
+        m.mesh.guid = kBox;
+        m.material.guid = asset::parse_guid(g).value();
+        world.spawn_with(LocalTransform{{0, 0, -5}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    world.tick(1.0f / 60.0f, 0);
+    render::Camera3D cam;
+    REQUIRE(ex3.camera(world, 1.0f, cam));
+    render::Scene3D scene(f.renderer.meshes(), mem::heap());
+    scene.begin(cam, {64, 64});
+    log::set_level(log::Level::Info);
+    const u64 seq = log::console_last_seq();
+    ex3.extract(world, scene, 1.0f);
+    log::ConsoleLine lines[64];
+    const usize nlines = log::read_console(seq, Span<log::ConsoleLine>(lines, 64));
+    log::set_level(log::Level::Warn);
+    REQUIRE(scene.instances().size() == 2);
+
+    // BC5 normal + BC4 height: one BC5 array [normal, height], parallax on.
+    const render::MaterialOverride* a = scene.instances()[0].material;
+    REQUIRE(a != nullptr);
+    CHECK(a->parallax);
+    CHECK(a->parallax_normal);
+    CHECK(a->normal_key >= render::TextureStore::kFirstLocalKey);
+    CHECK(f.renderer.textures().contains(a->normal_key));
+
+    // A BC4 texture in the base-colour slot is warned about (once per material), and the BC5-only slot raises nothing.
+    usize bc4_warnings = 0;
+    for (usize i = 0; i < nlines; ++i)
+        if (StringView(lines[i].text.c_str()).find("cooked as BC4") != StringView::npos) ++bc4_warnings;
+    CHECK(bc4_warnings == 1);
+    ex3.shutdown();
     f.extract.reset(nullptr);
 }

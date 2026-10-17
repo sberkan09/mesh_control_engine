@@ -8,7 +8,9 @@ mce_add_library(mce_gameplay_kit
         src/anim3d.cpp
         src/bodies3d.cpp
         src/captions.cpp
+        src/coop.cpp
         src/presence.cpp
+        src/proclevel.cpp
         src/effects.cpp
         src/kit3d.cpp
         src/kit3d_extract.cpp
@@ -19,12 +21,14 @@ mce_add_library(mce_gameplay_kit
         src/sensors3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
+        src/procgen.cpp
         src/sequence.cpp
         src/skeleton2d.cpp
         src/skeleton2d_anim.cpp
         src/skeleton2d_ik.cpp
         src/sprite_anim.cpp
         src/sprite_extract.cpp
+        src/static_merge3d.cpp
         src/stock.cpp
         src/timeline.cpp
         src/ai.cpp
@@ -32,6 +36,8 @@ mce_add_library(mce_gameplay_kit
         src/perception.cpp
         src/cinematic.cpp
         src/video.cpp
+        src/render_textures.cpp
+        src/views.cpp
     PUBLIC_DEPS
         mce::mce_ecs
         mce::mce_refl

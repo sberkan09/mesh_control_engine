@@ -16,8 +16,12 @@
                                       // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
 #include "mce/kit/captions.h"         // SoundCaption (M-ACCESS)
 #include "mce/kit/presence.h"         // RichPresence (M-STEAM 3)
+#include "mce/kit/proclevel.h"         // ProcLevel (M-PROCGEN 3)
 #include "mce/kit/cinematic.h"        // CameraRail3D, CameraLookAt3D, CameraShake3D, CameraBlend3D, Cutscene (M-CINEMA)
 #include "mce/kit/video.h"            // VideoPlayer (M-CINEMA 5)
+#include "mce/kit/render_textures.h"  // RenderTexture, ShowRenderTexture (M-VIEWS 3)
+#include "mce/kit/views.h"            // CameraView (M-VIEWS)
+#include "mce/kit/coop.h"             // CoopGame, PlayerSpawn, LocalPlayer, PlayerCamera, SharedCamera2D (M-VIEWS 5)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
                                       // PhysicsEvents, NavGridSource
 #include "mce/kit/joints3d.h"          // Joint3D
@@ -27,6 +31,7 @@
 #include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
 #include "mce/kit/ragdolls3d.h"        // Ragdoll3D
 #include "mce/kit/sensors3d.h"         // Raycast3D, Overlap3D
+#include "mce/kit/static_merge3d.h"    // StaticMerge3D (M-VISUAL3 5b)
 #include "mce/kit/skeleton2d.h"        // Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots, Skeleton2DIK, IKTarget2D (M-ANIM2D)
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
 #include "mce/kit/ai.h"                // AiBrain, Blackboard (M-AI)

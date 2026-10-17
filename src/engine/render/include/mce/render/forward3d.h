@@ -27,6 +27,7 @@
 // scene's viewport size and are recreated on resize. Each stage boundary writes a GPU timestamp
 // (rhi::CommandBuffer::write_timestamp) for the NFR-F-01 per-stage budget table.
 
+#include "mce/draw_cause.h"
 #include "mce/render/scene3d.h"
 #include "mce/render/texture_store.h"
 #include "mce/rhi/command_buffer.h"
@@ -73,6 +74,19 @@ struct Forward3DDesc {
     // grade needs none); a scene turns each on in PostFx. False (or -r.post_fx 0) draws every scene
     // without them. Auto exposure also needs compute.
     bool post_fx = true;
+    // Automatic instancing (M-VISUAL3 5a): the instanced twins of the mesh, SSAO prepass, shadow and velocity
+    // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
+    bool instancing = true;
+    // Bytes of per-copy instancing data a frame may upload over all its views (128 per main / prepass copy, 64
+    // per shadow or velocity copy, through set_storage_data); runs past it draw singly
+    // (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
+    // geometry_ring_bytes: the storage data shares that ring with the frame's transient vertices, indices and
+    // light lists, and an upload that does not fit is dropped by the device, so the budget must stay under it.
+    // Each view reserves the main pass's copies first, then the SSAO prepass's, then the velocity prepass's;
+    // the shadow passes take what is left.
+    u32 instancing_budget = 512 * 1024;
+    // The device's per-frame-slot geometry ring (rhi::DeviceDesc::geometry_ring_bytes): keep them equal.
+    usize geometry_ring_bytes = rhi::DeviceDesc{}.geometry_ring_bytes;
 };
 
 struct Forward3DStats {
@@ -130,6 +144,17 @@ struct Forward3DStats {
     bool upscaled = false;           // the spatial upsample drew the output (M-VISUAL2 2)
     bool sharpened = false;          // the contrast-adaptive sharpen drew the output
     u32 transmissive = 0;            // draws that refracted the opaque frame (M-VISUAL2 4)
+    // Automatic instancing (M-VISUAL3 5a). main_draws counts an instanced run once.
+    u32 runs_instanced = 0;          // instanced draws of the main pass
+    u32 draws_instanced = 0;         // ... the scene draws they replaced (main_draws fell by this - runs_instanced)
+    u32 shadow_runs_instanced = 0;   // instanced draws over all cascades and local shadow tiles
+    u32 shadow_draws_instanced = 0;  // ... the caster draws they replaced
+    u32 instancing_overflow = 0;     // runs of any pass drawn singly because the frame's instancing budget ran out
+    u32 instancing_bytes = 0;        // per-copy data uploaded this record()
+    // M-CONTENT 2: the scene draws of the main pass that did not take part in an instanced run, by DrawCause
+    // (core/draw_cause.h); with draws_instanced they add up to scene.draws().size(). Deterministic. Zero unless
+    // the scene asked: Scene3D::set_collect_draw_causes(true) (the player does under -perf_capture and perf_run).
+    u32 draw_causes[kDrawCauseCount] = {};
 };
 
 // Milliseconds per stage of one completed frame; -1 = not measured.
@@ -163,9 +188,34 @@ public:
     void shutdown();
     bool initialized() const { return device_ != nullptr; }
 
+    // M-VIEWS: several views a frame. Each view slot keeps its own size-dependent targets and its
+    // temporal state (TAA and SSR history, the velocity prepass's previous view, auto exposure,
+    // the occlusion pyramid); pipelines, meshes, IBL, probes, the GI volume, the shadow atlas and
+    // the particle rings are shared. Slot 0 is the main view (the single-camera path).
+    static constexpr u32 kMaxViews = 8;
+    struct ViewOutput {
+        u32 slot = 0;        // < kMaxViews
+        // Pixels of the target the finished frame goes to (top-left origin); zero size = the whole
+        // target. A sub-rect loads what the target holds (LoadOp::Load) instead of discarding it,
+        // so the caller clears the target once before its first view.
+        rhi::Rect2D rect{};
+        // The frame's first record(): it runs the once-a-frame work (the particle simulation, the
+        // GI volume's rolling update). Later views of the same frame only draw.
+        bool first = true;
+        // The target holds linear color (a float render texture that materials and sprites sample):
+        // the final pass skips the sRGB encode the window and the editor targets need.
+        bool linear_output = false;
+    };
+
     // Records every pass for a built scene. Outside any pass; `target` null = backbuffer.
     // Leaves the target holding the final frame (2D/HUD passes may follow with LoadOp::Load).
-    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {});
+    // The scene's viewport is the output size (out.rect's size when it has one).
+    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target = {}) { record(cmd, scene, target, ViewOutput{}); }
+    void record(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out);
+    // Destroys a view slot's targets and history (the next record() into it starts afresh). The
+    // RHI retires the textures past the frames in flight.
+    void release_view(u32 slot);
+    bool view_alive(u32 slot) const { return slot == 0 || (slot < kMaxViews && views_[slot - 1].alive); }
 
     // Per-stage GPU times from the device's newest completed timestamps.
     Forward3DGpuTimes gpu_times(const rhi::GpuTimestamps& ts) const;
@@ -263,6 +313,10 @@ public:
     rhi::BufferHandle particle_buffer(u32 emitter_id) const;
 
 private:
+    struct ViewState;
+    void record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target, const ViewOutput& out);
+    void swap_view(ViewState& v);
+    void destroy_view_resources();
     ResultV create_pipelines();
     void ensure_targets(rhi::Extent2D size);
     void destroy_targets();
@@ -305,8 +359,25 @@ private:
     // draws[begin, end) of the bound frame/pass state; indices >= opaque_end take the blend
     // pipelines. `main` counts them in the stats; `prepass` draws them all with the SSAO prepass;
     // `frame`: trans_src_ holds the opaque frame, so transmissive draws refract it (bank kAo).
-    void draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
-                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false);
+    // `instanced`: draws[begin, end) are scene.draws() and the runs upload_runs() placed draw instanced.
+    // Returns the draws issued.
+    u32 draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
+                    u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false,
+                    bool instanced = false);
+    // ---- automatic instancing (M-VISUAL3 5a)
+    struct InstSlot {  // per draw: an instanced run starting there (count >= 2) and its first slot
+        u32 count = 0;
+        u32 slot = 0;
+    };
+    // Uploads the per-copy data of the scene's opaque runs for one pass (`velocity`: the model only; else
+    // model and normal) within the budget and fills inst_slots_; false when nothing is drawn instanced.
+    enum InstPass : u32 { kInstMain, kInstPrepass, kInstVelocity, kInstShadow, kInstPassCount };
+    bool upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass);
+    void count_draw_causes(const Scene3D& scene);  // Forward3DStats::draw_causes, before the passes draw
+    // Splits the frame's remaining instancing budget into this view's per-pass reservations (main first).
+    void reserve_instancing(const Scene3D& scene);
+    // The caster list `list` (indices into shadow_draws()) of one depth pass, in caster runs.
+    void draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, const math::mat4& view_proj, Span<const u32> list);
     // ---- scale (M-VISUAL 9, forward3d_scale.cpp)
     ResultV create_scale_pipelines();
     void destroy_scale();
@@ -425,6 +496,18 @@ private:
     // TAA (M-VISUAL 5)
     rhi::PipelineHandle velocity_pipe_;  // null when Forward3DDesc::taa is off
     rhi::PipelineHandle velocity_skinned_;
+    // Automatic instancing (M-VISUAL3 5a): null when Forward3DDesc::instancing is off (or a twin's base is null).
+    rhi::PipelineHandle mesh_cull_inst_;
+    rhi::PipelineHandle mesh_two_sided_inst_;
+    rhi::PipelineHandle ao_prepass_inst_;
+    rhi::PipelineHandle shadow_inst_;
+    rhi::PipelineHandle velocity_inst_;
+    u32 inst_frame_left_ = 0;               // bytes of the frame's instancing budget no view has reserved
+    u32 inst_budget_[kInstPassCount] = {};  // this view's reservation per pass, bytes left
+    Array<InstSlot> inst_slots_;   // per opaque draw of the pass being drawn
+    Array<math::mat4> inst_data_;  // the pass's per-copy block
+    Array<u32> caster_sorted_;
+    Array<DrawRun> caster_runs_;
     rhi::PipelineHandle taa_pipe_;
     rhi::TextureHandle velocity_;        // RGBA16F, 3D size
     rhi::TextureHandle velocity_depth_;  // D32, 3D size
@@ -473,9 +556,11 @@ private:
         u32 count = 0;
         u32 capacity = 0;
         rhi::BufferHandle transforms;
+        u32 frame = 0;                   // batch_frame_ of the last record() that drew it
         bool seen = false;
     };
     Array<BatchGpu> batch_gpu_;
+    u32 batch_frame_ = 0;                // frames recorded (first views)
     struct BatchView {                   // a (view, batch) of this frame
         u32 first_command = ~0u;         // GPU path: the commands of level 0, submesh 0
         u32 slot[asset::kMaxMeshLods] = {};   // first visible slot of each level
@@ -525,6 +610,25 @@ private:
     math::mat4 gi_shadow_vp_ = math::mat4::identity();
     f32 gi_shadow_texel_ = 0.0f;
     Forward3DStats stats_;
+    ViewOutput out_;                     // the record() in progress
+
+    // M-VIEWS: the members above that belong to one view. Slot 0's live in the members themselves;
+    // record() swaps another slot's into them for the duration of its frame (handles and a few
+    // matrices, no allocation), so the passes read one set of names whichever view they draw.
+#define MCE_FORWARD3D_VIEW_STATE(X)                                                                              \
+    X(hdr_msaa_) X(depth_) X(hdr_) X(ldr_) X(fin_src_) X(fin_up_) X(fin_src_size_) X(fin_up_size_) X(bloom_)    \
+    X(bloom_size_) X(bloom_levels_) X(size_) X(ao_gbuf_) X(ao_depth_) X(ao_a_) X(ao_b_) X(ssr_) X(ssr_prev_vp_) \
+    X(ssr_prev_valid_) X(trans_src_) X(vol_media_) X(vol_light_) X(velocity_) X(velocity_depth_) X(history_)    \
+    X(history_size_) X(history_index_) X(history_valid_) X(taa_frame_) X(prev_view_proj_) X(velocity_prev_valid_) \
+    X(velocity_prev_vp_used_) X(exposure_buf_) X(exposure_reset_) X(fx_) X(fx_size_) X(fx_next_) X(occ_color_)  \
+    X(occ_depth_) X(hiz_) X(hiz_size_)
+#define MCE_FORWARD3D_VIEW_FIELD(m) decltype(Forward3D::m) m{};
+    struct ViewState {
+        MCE_FORWARD3D_VIEW_STATE(MCE_FORWARD3D_VIEW_FIELD)
+        bool alive = false;
+    };
+#undef MCE_FORWARD3D_VIEW_FIELD
+    ViewState views_[kMaxViews - 1];     // slots 1 .. kMaxViews - 1
 };
 
 }  // namespace mce::render

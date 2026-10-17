@@ -346,11 +346,17 @@ const Prompt kPrompts[] = {
      "2. Find the closest worked sample or example with docs_search (\"platformer\", \"visual novel\", \"3d kit\") and read "
      "its scene and code under mce://docs/samples/ or mce://docs/examples/.\n"
      "3. Components and systems the game needs that the engine lacks go in the game module: edit it, then module_build "
-     "(errors come back as file:line:col) and module_test.\n"
+     "(errors come back as file:line:col) and module_test. A 2D game of existing components plus rules that fit in a few "
+     "functions needs no module: write Luau scripts instead (mce://docs/guide/27-scripting.md; script_check checks one "
+     "without a build; ScriptVars is a script's memory) and keep the project a script project (empty \"games\" list).\n"
      "4. Author the scenes with entity_create / component_set, save with scene_save, verify with run_headless (inspect, "
      "trace) and look with render_frame after every visible change. Give the game its own look: a new project has "
      "starter themes in assets/ui/themes (pixel, clean, story); name the one that fits the brief as each .mcui "
-     "document's theme with ui_theme_set (or a UiScreen's theme), or copy one and change its palette and fonts.\n"
+     "document's theme with ui_theme_set (or a UiScreen's theme), or copy one and change its palette and fonts. A Text widget takes text_align (Center needs no wrapping Stack), "
+     "own_style keeps a kind's default look over the theme, and ui_preview shows one document even while a scene is "
+     "broken.\n"
+     "   A minimap, mirror, monitor or split-screen co-op game: view_add and player_setup build the components, view_list and "
+     "player_list name what is missing, render_frame (view, input \"5 P2/Join\") looks at one player or one texture.\n"
      "5. Write .mctest scenarios under tests/ (a walk_to bot that must finish each level, no log errors) and run them "
      "with test_run; use playtest's feel report (stuck spots, deaths, idle time) to fix levels.\n"
      "6. Keep goldens of the title and each level with image_diff, so later changes that break a screen show up.\n"
@@ -434,12 +440,18 @@ constexpr Feature kFeatures[] = {
     {"audio", "occlusion through walls, Doppler", "data", "AudioOcclusion, AudioDoppler next to a 3D AudioSource"},
     {"audio", "an offline render of a run", "data", "mce_player -headless 1 -audio_record run.wav"},
     {"input", "actions, bindings, touch controls", "asset", ".mcinput"},
-    {"ui", "HUD and menus", "code", "mce::ui from code; .mcui is M-UI-DATA"},
+    {"ui", "HUD and menus, themes, a screen's navigation", "data",
+     "UiScreen + a .mcui document (ui_create, ui_widget_add/set/remove, ui_theme_set, ui_preview); UiFlow shows, hides, pauses, "
+     "loads a scene and quits on input actions; mce::ui from code only for what a document cannot say"},
     {"3D", "meshes, materials, lights, sky", "data", "the 3D kit's components, glTF, .mcmat, .mcenv"},
     {"store and ads", "purchases, ads", "asset", ".mcstore, .mcservices"},
     {"live services", "remote config, crash reports", "asset", ".mcconfig, .mcservices"},
     {"scenes", "prefabs", "data", "instances in .mcscene (entity_create with a prefab); prefab_create_from, prefab_apply, prefab_revert"},
-    {"scenes", "scene changes (title, levels, win and lose)", "code", "one call from a game system: scene::request_change(world, \"scenes/level2.mcscene\"); a .mctest checks {\"scene\": ...}"},
+    {"scenes", "scene changes (title, levels, win and lose)", "data",
+     "UiFlow load_on on a UiScreen (a Play, Retry or Next button loads its scene); from game rules: scene::request_change(world, \"scenes/level2.mcscene\") "
+     "or mce.load_scene(path) in Luau; a .mctest checks {\"scene\": ...}"},
+    {"scenes", "scenes, UI documents, timelines, 2D skeletons, behaviour trees, terrain", "mcp",
+     "entity_*, component_*, scene_*, ui_*, timeline_*, skel2d_*, bt_*, terrain_*, tilemap_paint, asset_create / asset_write"},
     {"scenes", "streaming", "data", "SceneChunk, StreamingFocus"},
     {"agent", "see a frame, compare to a golden", "mcp", "render_frame, render_sheet, image_diff"},
     {"agent", "rebuild and reload game code", "mcp", "module_build, module_test"},

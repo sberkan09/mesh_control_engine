@@ -431,7 +431,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
                           log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
-                          scene = v.get("scene");
+                          scene = v.get("scene"), reachable = v.get("reachable");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -461,6 +461,14 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.expected = Value{};
         out.expected.kind = Value::Kind::String;
         out.expected.s.assign(want);
+    } else if (reachable.valid()) {
+        // Seeded levels (M-PROCGEN 4): every seed of the run must generate and have its exit reachable
+        // from its start. Independent of the game; "procgen_run" shows one level.
+        out.what = Condition::What::Reachable;
+        if (have_value) return err_out(err, "a reachable check takes no comparison: {\"reachable\": {\"kind\": \"caves\", \"width\": 64, \"height\": 64, \"count\": 100}}");
+        if (!parse_procgen_run(reachable, out.procgen, err)) return false;
+        out.op = CompareOp::Eq;
+        number(out.expected, 0);
     } else if (log_has.valid()) {
         out.what = Condition::What::LogContains;
         if (!log_has.is_string() || log_has.as_string().empty()) return err_out(err, "'log_contains' is the text to find");
@@ -481,7 +489,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel, reachable");
     }
     return true;
 }
@@ -547,7 +555,7 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
 
 void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTracker* feel) {
     if (c.what != Condition::What::LogContains && c.what != Condition::What::LogErrors && c.what != Condition::What::LogWarnings &&
-        c.what != Condition::What::Feel)
+        c.what != Condition::What::Feel && c.what != Condition::What::Reachable)
         return;  // world checks were evaluated in the run
     c.actual = Value{};
     switch (c.what) {
@@ -570,6 +578,20 @@ void eval_after(Condition& c, Span<const log::ConsoleLine> lines, const FeelTrac
         case Condition::What::Feel: {
             f64 m = 0;
             if (feel && feel->metric(c.text.view(), m)) number(c.actual, m);
+            break;
+        }
+        case Condition::What::Reachable: {
+            // The number of seeds that fail; the first few are named in the note.
+            u64 bad = 0;
+            c.note.clear();
+            for (u64 i = 0; i < c.procgen.count; ++i) {
+                const u64 seed = c.procgen.seed + i;
+                Result<kit::procgen::ProcGrid> r = procgen_generate(c.procgen, seed);
+                if (r.has_value() && procgen_exit_reachable(r.value())) continue;
+                if (bad++ < 5) cook::appendf(c.note, "%sseed %llu: %s", bad > 1 ? "; " : "", static_cast<unsigned long long>(seed),
+                                             r.has_value() ? "exit not reachable from start" : r.error().stage);
+            }
+            number(c.actual, static_cast<f64>(bad));
             break;
         }
         default: return;
@@ -606,6 +628,10 @@ void write_condition(JsonWriter& w, const Condition& c) {
         case Condition::What::Feel:
             what += "feel ";
             what += c.text.view();
+            break;
+        case Condition::What::Reachable:
+            cook::appendf(what, "failing %s levels (%llu seeds from %llu)", c.procgen.kind.c_str(), static_cast<unsigned long long>(c.procgen.count),
+                          static_cast<unsigned long long>(c.procgen.seed));
             break;
     }
     w.key("check").str(what.view());
@@ -661,8 +687,17 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         auto one = [&](const cook::JsonValue& in, const char* what) {
             BotTarget bt;
             cook::JsonValue t = in;
-            if (in.is_object()) {  // a waypoint with a dwell: {"at": point or entity, "wait": ticks}
-                const cook::JsonValue wait = in.get("wait");
+            if (in.is_object()) {  // a waypoint: {"at": point or entity, "wait": ticks, "press": [actions]}
+                const cook::JsonValue wait = in.get("wait"), press = in.get("press");
+                if (press.valid()) {
+                    if (!press.is_array() || press.size() == 0 || press.size() > 8)
+                        return err_out(err, "waypoint 'press' is an array of 1-8 action names pressed for one tick on arrival");
+                    for (u32 i = 0; i < press.size(); ++i) {
+                        if (!press.at(i).is_string() || press.at(i).as_string().empty() || press.at(i).as_string().size() > 31)
+                            return err_out(err, "waypoint 'press': action names of 1-31 characters");
+                        bt.press.push_back(FixedString<32>(press.at(i).as_string()));
+                    }
+                }
                 t = in.get("at");
                 if (!t.valid() || (wait.valid() && (!wait.is_integer() || wait.as_number() < 0 || wait.as_number() > 6000))) {
                     err += what;
@@ -718,6 +753,53 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
     } else if (out.kind == BotConfig::Kind::Masher) {
         for (const char* a : {"Move", "Jump", "Fire", "Confirm", "Cancel"}) out.actions.push_back(FixedString<32>(StringView(a)));
     }
+    // Held actions and the checks that gate them or stop the bot (any kind).
+    auto when = [&](const cook::JsonValue& in, const char* what, BotWhen& dst) {
+        Condition cond;
+        if (!parse_condition(doc, in, cond, err)) return false;
+        if (cond.what != Condition::What::Field) {
+            err += what;
+            return err_out(err, " is a check on a component field: {\"entity\": \"Sentry\", \"field\": \"Perceiver.sees\", \"value\": 1}");
+        }
+        dst.probe = static_cast<FieldProbe&&>(cond.probe);
+        dst.op = cond.op;
+        dst.expected = cond.expected;
+        dst.tolerance = cond.tolerance;
+        return true;
+    };
+    auto action_name = [&](const cook::JsonValue& a, const char* what, FixedString<32>& dst) {
+        if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31) {
+            err += what;
+            return err_out(err, " is an action name of 1-31 characters");
+        }
+        dst.assign(a.as_string());
+        return true;
+    };
+    const cook::JsonValue hold = v.get("hold"), hold_when = v.get("hold_when"), stop_when = v.get("stop_when");
+    if (hold.valid()) {
+        if (!hold.is_array() || hold.size() == 0 || hold.size() > 8) return err_out(err, "bot.hold is an array of 1-8 action names held the whole run");
+        for (u32 i = 0; i < hold.size(); ++i) {
+            FixedString<32> a;
+            if (!action_name(hold.at(i), "bot.hold[]", a)) return false;
+            out.hold.push_back(a);
+        }
+    }
+    if (hold_when.valid()) {
+        if (!hold_when.is_array() || hold_when.size() == 0 || hold_when.size() > 8)
+            return err_out(err, "bot.hold_when is an array of 1-8 {\"action\": name, \"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        for (u32 i = 0; i < hold_when.size(); ++i) {
+            BotHold bh;
+            if (!hold_when.at(i).is_object() || !action_name(hold_when.at(i).get("action"), "bot.hold_when[].action", bh.action) ||
+                !when(hold_when.at(i), "bot.hold_when[]", bh.when))
+                return hold_when.at(i).is_object() ? false : err_out(err, "bot.hold_when[] is an object {\"action\", \"entity\", \"field\", \"value\"}");
+            out.hold_when.push_back(bh);
+        }
+    }
+    if (stop_when.valid()) {
+        if (!stop_when.is_object()) return err_out(err, "bot.stop_when is a check: {\"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        if (!when(stop_when, "bot.stop_when", out.stop_when)) return false;
+        out.has_stop = true;
+    }
     const cook::JsonValue air = v.get("air_jumps");
     if (air.valid()) {
         if (!air.is_integer() || air.as_number() < 0 || air.as_number() > 4) return err_out(err, "bot.air_jumps is 0-4 extra Jump presses in the air");
@@ -756,16 +838,37 @@ const input::InputState* Bot::sample_for_tick(u64 tick, u64) {
     wants_move_ = false;
     vec3 pos;
     const bool have = cfg_.has_actor && world_ && cfg_.actor < spawned_.size() && entity_position(*world_, spawned_[cfg_.actor], pos);
-    switch (cfg_.kind) {
-        case BotConfig::Kind::WalkTo:
-            if (have) walk_to(tick, pos);
-            break;
-        case BotConfig::Kind::Explore:
-            if (have) explore(tick, pos);
-            break;
-        case BotConfig::Kind::Masher: masher(tick); break;
+    if (cfg_.has_stop && world_ && when_true(cfg_.stop_when)) {
+        best_tick_ = tick;  // standing still on purpose is not being stuck
+        if (waiting_) ++wait_until_;
+    } else {
+        switch (cfg_.kind) {
+            case BotConfig::Kind::WalkTo:
+                if (have) walk_to(tick, pos);
+                break;
+            case BotConfig::Kind::Explore:
+                if (have) explore(tick, pos);
+                break;
+            case BotConfig::Kind::Masher: masher(tick); break;
+        }
     }
+    for (const FixedString<32>& a : cfg_.hold) script_.add(a.view(), tick, tick);
+    if (world_)
+        for (const BotHold& h : cfg_.hold_when)
+            if (when_true(h.when)) script_.add(h.action.view(), tick, tick);
     return &script_.evaluate(tick);
+}
+
+bool Bot::when_true(const BotWhen& w) const {
+    Value v;
+    if (!read_value(*world_, spawned_, w.probe, v)) return false;
+    return compare(v, w.op, w.expected, w.tolerance);
+}
+
+void Bot::press_on_arrival(u64 tick, const BotTarget& t) {
+    if (pressed_leg_ == leg_) return;
+    pressed_leg_ = leg_;
+    for (const FixedString<32>& a : t.press) script_.add(a.view(), tick, tick);
 }
 
 namespace {
@@ -790,6 +893,7 @@ void Bot::walk_to(u64 tick, vec3 pos) {
         d = flat(cfg_.plane, at) - flat(cfg_.plane, pos);
         dist = math::length(d);
         if (!gone && dist > cfg_.reach) break;
+        if (!gone) press_on_arrival(tick, t);
         if (leg_ + 1 == cfg_.targets.size()) {
             reached_ = true;
             return;

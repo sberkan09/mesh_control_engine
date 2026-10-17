@@ -27,6 +27,11 @@
 // A terrain with splat layers (M-TERRAIN 2) also packs its layers' maps into texture arrays and its
 // weights into a texture, which needs set_texture_store(); without one it draws with Terrain3D.material.
 //
+// StaticMerge3D (M-VISUAL3 5b): the rigid MeshRef children of an entity carrying one are merged into a few meshes
+// per cell and material (render/static_merge.h), uploaded under MeshStore::allocate_key() keys (this needs the
+// store given to init() as non-const, as terrains do) and drawn in place of the children; set_static_merge(false)
+// draws every child on its own again (the editor viewport, for selection and picking).
+//
 // Animator poses live in the extract until its next extract() call, so record the scene first.
 //
 // Interpolation: `alpha` is the app loop's fraction between the last tick and the next. Cameras,
@@ -41,6 +46,8 @@
 #include "mce/render/terrain.h"
 
 namespace mce::kit {
+
+class RenderTextures;
 
 struct Kit3DStats {
     u32 meshes = 0;          // MeshRefs submitted
@@ -60,14 +67,17 @@ struct Kit3DStats {
     u32 terrain_triangles = 0;
     u32 terrain_uploads = 0;   // node meshes built and uploaded this frame
     u32 terrain_resident = 0;  // node meshes held in the store
+    u32 merged_groups = 0;     // StaticMerge3D components with at least one merged cell (M-VISUAL3 5b)
+    u32 merged_children = 0;   // MeshRef children drawn through them instead of on their own
+    u32 merged_cells = 0;      // merged meshes submitted (a cell, or a cell and shadow flag), before culling
 };
 
 class Kit3DExtract {
 public:
-    Kit3DExtract() = default;
+    Kit3DExtract();
     Kit3DExtract(const Kit3DExtract&) = delete;
     Kit3DExtract& operator=(const Kit3DExtract&) = delete;
-    ~Kit3DExtract() { shutdown(); }
+    ~Kit3DExtract();
 
     // `meshes` is the store Scene3D draws from (renderer.meshes(), or a CPU-only store in tests).
     // `assets` may be null: then only meshes bound with bind_mesh() draw.
@@ -76,6 +86,8 @@ public:
     void init(render::MeshStore& meshes, asset::AssetSystem* assets);
     // The store terrains upload their splat-layer arrays into (renderer.textures(); null: none).
     void set_texture_store(render::TextureStore* textures) { textures_ = textures; }
+    // M-VIEWS 3: a MeshRef with ShowRenderTexture draws the texture as its base color or emission.
+    void set_render_textures(const RenderTextures* rts) { render_textures_ = rts; }
     void shutdown();
     // Forgets every cached mesh / texture binding and transform (after remounting a different pack).
     void reset(asset::AssetSystem* assets);
@@ -101,6 +113,15 @@ public:
     bool camera_of(World& world, Entity e, f32 alpha, render::Camera3D& out);
     // The environment, then every kit3d drawable, into a scene begun with scene.begin().
     void extract(World& world, render::Scene3D& scene, f32 alpha);
+    // M-VIEWS: the same frame from another camera, into another scene begun with that camera's
+    // view; after extract() for the frame's first view. The frame's clocks and TAA history stay
+    // as extract() left them (no second time step); culling and LODs follow this scene's view.
+    // Poses move with each call, so record the previous view's scene before extracting the next.
+    void extract_view(World& world, render::Scene3D& scene, f32 alpha) {
+        extra_view_ = true;
+        extract(world, scene, alpha);
+        extra_view_ = false;
+    }
     // The environment alone (Environment3D resource, else the first component, else defaults).
     void apply_environment(World& world, render::Scene3D& scene);
 
@@ -115,6 +136,10 @@ public:
     void set_frame_dt(f32 dt) { frame_dt_ = dt; }
     // The scene clock's seconds so far (advanced by the frame dt every extract()).
     f32 time() const { return time_; }
+
+    // StaticMerge3D on (the default) or off. Off releases the merged meshes at once and draws the children one by one.
+    void set_static_merge(bool on);
+    bool static_merge() const { return static_merge_; }
 
     // Reflection probe and GI volume bakes (M-VISUAL 2 and 6, the editor's bakes): every MeshRef and
     // static instance is submitted whatever the view (no culling, no distance thinning), probes and
@@ -144,6 +169,7 @@ private:
         asset::Guid guid;
         asset::AnyHandle handle;
         mem::UniquePtr<render::MaterialOverride> value;  // null: failed
+        u32 parallax_key = ~0u;                          // the [normal, height] array this material owns (M-VISUAL3 2)
     };
     struct Tracked {  // per entity index: the transforms at the last two ticks seen
         u32 generation = 0;
@@ -154,12 +180,18 @@ private:
     };
     void track(Entity e, const math::vec3& pos, const math::quat& rot, const math::vec3& scale, u64 tick);
     void interpolated(Entity e, f32 alpha, math::vec3& pos, math::quat& rot, math::vec3& scale) const;
+    u32 build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid);
     void release_handles();
     void release_terrains();
     void extract_terrains(World& world, render::Scene3D& scene);
     struct TerrainEntry;
     void release_terrain(TerrainEntry& t);
     void build_terrain_shading(TerrainEntry& t, const asset::TerrainView& view);
+    // static_merge3d.cpp
+    struct MergeState;
+    void update_static_merges(World& world);
+    void release_static_merges();
+    bool read_mesh_view(asset::Guid guid, asset::MeshView& out);
 
     render::QualitySettings quality_{.shadow_cascades = render::kMaxCascades};
     f32 frame_dt_ = 1.0f / 60.0f;
@@ -181,6 +213,10 @@ private:
     Array<u8> static_lods_;  // per StaticInstances3D copy
     Array<math::mat4> worlds_[2];  // per entity index: the world drawn this frame and last (TAA velocity)
     Array<u32> world_stamp_;       // per entity index: the extract that last drew it
+    Array<u8> prev_ok_;            // per entity index: this frame's draw had last frame's world (worlds_)
+    bool extra_view_ = false;      // extract_view(): a later view of the frame
+    const RenderTextures* render_textures_ = nullptr;
+    Array<render::MaterialOverride> screen_materials_;  // this extract's ShowRenderTexture materials (reserved up front: stable)
     u32 world_parity_ = 0;
     u32 frame_stamp_ = 0;
     Kit3DStats stats_;
@@ -221,6 +257,19 @@ private:
     Array<byte> terrain_blob_;  // scratch: a node's mesh payload
     Array<Entity> probe_entities_;
     Entity gi_entity_;
+    // StaticMerge3D (M-VISUAL3 5b)
+    struct MergedDraw {  // a merged mesh to submit this frame
+        u32 key = ~0u;
+        math::vec3 center;  // its bounds, as a sphere to cull
+        f32 radius = 0.0f;
+        bool cast_shadows = true;
+        u8* lod_state = nullptr;
+    };
+    mem::UniquePtr<MergeState> merge_;
+    Array<MergedDraw> merged_draws_;
+    Array<u32> merged_stamp_;  // per entity index: == merge_stamp_ while its MeshRef is drawn through a merged mesh
+    u32 merge_stamp_ = 0;
+    bool static_merge_ = true;
 };
 
 }  // namespace mce::kit

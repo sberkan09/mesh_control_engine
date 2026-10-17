@@ -21,7 +21,7 @@ The server speaks JSON-RPC 2.0 over stdin and stdout, one message per line (the 
 transport); it opens no socket. Stdout carries nothing else: logs go to stderr, and so does the
 command line `mce mcp` prints before it starts the server. Use the **project's** server or the stock one **with the module**:
 without `--module`, `mce_mcp` knows only the engine's components (the visual-novel kit's included) and refuses scenes that use yours.
-After a rebuild that adds components, restart the server.
+After a rebuild that adds components, `module_build` maps them into a server started with `--module`; a server with the game compiled in (`<game>_mcp`) needs a restart. A scene that names a component or field the loaded module does not know fails `cook_run`, `run_headless`, `render_frame`, `ui_preview` and `timeline_preview` for every agent until then; the error says so.
 
 With the SDK, `mce new` and `mce example` register the server for you: they write a `.mcp.json`
 into the project naming the server `mce_<game>` (`mce mcp <project>` with absolute paths, so a
@@ -68,6 +68,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_create` | `path`, `content?` | a new `.mcpart`, `.mcseq`, `.mctilemap`, `.mcsheet`, `.mcanim`, `.mcmat`, `.mcinput`, `.mcstore`, `.mcservices`, `.mcui` or `.mcconfig` (the extension picks the type) with a fresh GUID: the template with `content`'s fields over it. Returns `guid:<uuid>` |
 | | `asset_write` | `path` or `guid`, `content`, `mode?` | `merge` (default) replaces the named fields and keeps the rest, `replace` writes exactly `content`; the GUID stays |
 | | `asset_read` | `path` or `guid` | the parsed document of a JSON source asset (scenes and prefabs too) |
+| | `asset_import` | `tool` (`aseprite`, `tiled`, `ldtk`), `file` (a path inside the project), `out_dir?` (under `assets/`), `name?`, `level?` (ldtk), `tile_size?`, `werror?` | converts an Aseprite, Tiled or LDtk export into `.mcsheet` / `.mcscene` + `.mctilemap` assets with the `mce import` converters (user guide 7.3), keeps GUIDs on a re-import, registers the result at once. Unsupported features are listed as warnings in `output`; `werror` makes them a failure that writes nothing. Needs Python 3 |
 | | `tilemap_paint` | `path` or `guid`, `clear?`, `cells?`, `rects?`, `fills?`, `preview?` | `[x, y, tile]` cells, `[x0, y0, x1, y1, tile]` rectangles and `[x, y, tile]` flood fills, applied in that order; (0, 0) is bottom-left, tile 0 erases, n draws tileset cell n-1. `preview` returns the map as text rows |
 | Terrain | `terrain_sculpt` | `path` or `guid`, `op`, `points`, `radius?`, `strength?`, `hardness?`, `target?`, `seed?`, `stroke?`, `repeat?` | the Terrain panel's brushes on a `.mcterrain`: `raise`, `lower`, `smooth`, `flatten` (to `target` metres) or `noise`, a dab at each `[x, z]` point (metres from the terrain's centre) or along them with `stroke`. Returns the samples changed, the height range and the height under each point after the change (`strength` 0 only measures) |
 | | `terrain_paint` | `path` or `guid`, `points`, `mode?` (`layer`, `hole`, `fill`), `layer?`, `radius?`, `strength?`, `hardness?`, `stroke?`, `repeat?` | paints a splat layer (its `TerrainFoliage3D` grows there), cuts holes or closes them. Returns each layer's share of the paint in percent and the hole samples |
@@ -79,10 +80,21 @@ each result's `content[0].text` is the tool's JSON).
 | | `ui_widget_set` | `document`, `widget` (path), `fields` | `.mcui` keys replace the widget's (`null` removes one); `style` changes the listed fields in every state, `styles` in one, `nav` the listed edges |
 | | `ui_widget_remove` | `document`, `widget` | the widget and its children; refused while a nav edge names it |
 | | `ui_theme_set` | `document`, `theme` (a `.mcuitheme` path or `guid:`; `null`: the default look) | sets the theme the document is drawn with (a `UiScreen`'s theme still wins in the player); `ui_list` with `document` names it |
-| | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff` |
+| | `ui_preview` | `document`, `width?`, `height?` (960 × 540), `safe_area?`, `ui_scale?`, `save?`, `document_only?`, `software?` | the real player draws the document alone and returns the frame as an MCP **image**; `save` writes the PNG for `image_diff`. A project that does not cook (a broken scene) or has no saved scene is previewed from the document and what it references alone (bound fields show nothing), and the result says so in `document_only`; `document_only: true` does that on purpose, skipping the project cook |
 | Timeline | `timeline_create` | `path`, `tracks` (one or more), `name?`, `duration?` | a new `.mctimeline` with a fresh GUID; `tracks` in the `.mctimeline` track format (`asset_schema` type `Timeline`, user guide 13.5). Play it with a `TimelinePlayer` (`component_add` with `{"timeline": "guid:<uuid>"}`), and add a `Cutscene` for the letterbox, hold and skip |
 | | `timeline_add_track` | `timeline`, `track`, `index?` (last) | adds a `.mctimeline` track object (`{"type": "property", "target": 0, "path": "CameraRail3D.t", "keys": [...]}`) |
 | | `timeline_add_key` | `timeline`, `track` (index), `key` or `keys` | adds keys (or ranges, cuts, lines, in the track's own form) merged in by time; returns the play length |
+| AI | `bt_create` | `path`, `name?`, `blackboard?`, `root?` (a selector over a wait) | a new `.mcbt` with a fresh GUID; `blackboard` maps a key to its type or `{"type", "default"}`, `root` is a node in the `.mcbt` form (user guide 13.8). Returns the tree as numbered outline lines |
+| | `bt_add_node` | `tree`, `node`, `parent?` (0, the root), `index?` (last) | adds a node (with its children) under a composite, or under a decorator with no child |
+| | `bt_set` | `tree`, `node?` (outline number), `value?`, `fields?` (`null` removes one), `replace?`, `remove?`, `name?`, `blackboard?` (`null` removes a key) | edits the tree; each edit is cooked first, and one that does not cook fails with the cook's message and writes nothing |
+| | `bt_trace` | `entity`, `ticks?` (300), `every?` (30) | plays the saved scene headless and reports the entity's brain: rows of tick, result, runs, running path and blackboard, and the tick each node `started` |
+| | `perception_debug_lines` | `ticks?` (1) | plays the saved scene headless and reports every `Perceiver`: world `eye`, `forward`, `yaw_deg`, range, angle, `sees`, `target`, `last_seen`, and the debug `lines` (cone edges, range arc, a line to the target); the way to see where a guard looks |
+| 2D skeleton | `skel2d_create` | `path`, `name?`, `root?` ("root") | a new `.mcskel2d` with a fresh GUID and one root bone (user guide 7.13). Every `skel2d_*` edit is cooked by the real importer before it is written, so an error names `file:line` and nothing changes |
+| | `skel2d_add_bone` | `skeleton`, `name`, `parent?`, `x?`, `y?`, `rotation?` (degrees), `scale?` (number or `[sx, sy]`), `length?` | adds a bone, last; the parent must already exist |
+| | `skel2d_add_slot` | `skeleton`, `name`, `bone`, `texture?` (`guid:`), `rect?`, `size?`, `pivot?`, `offset?`, `rotation?`, `tint?`, `attachments?`, `attachment?` | adds a slot (a textured quad on a bone, drawn after the earlier slots); `attachments` makes it a list of quads and meshes in the `.mcskel2d` form |
+| | `skel2d_add_ik` | `skeleton`, `name`, `bones` (parent first), `target?`, `mix?`, `type?`, `bend?`, `iterations?`, `order?` | adds a two-bone or CCD IK constraint |
+| | `skel2d_key` | `skeleton`, `animation`, `channel` (`rotate`, `translate`, `scale`, `color`, `attachment`, `ik_mix`), `target`, `t` and the channel's value, or `keys`; `curve?`, `duration?`, `loop?` | keys a channel at a time, creating the animation when missing; a key at the same time is replaced |
+| | `skel2d_preview` | `skeleton`, `animation?`, `time?`, `ik_targets?`, `render?`, `width?`, `height?` | the bone world transforms of the rest pose or an animation at a time (the runtime's pose functions), and an image: a line drawing of the bones and slot quads |
 | Edit | `entity_create` | `name`, `components?` (object: type name → fields), `transform?` (bool, default true: add a `LocalTransform`), `at?` (int: hierarchy index, default the end) | returns the id; place the entity with `components.LocalTransform`, e.g. `{"name": "Crate", "components": {"LocalTransform": {"position": [0, 1, 0]}}}` |
 | | `entity_create` with `prefab` | `name`, `prefab` (`"guid:<uuid>"` of a `.mcprefab`), `components?` | an instance; `components` override the prefab root's fields, `LocalTransform` places it |
 | | `entity_delete`, `entity_duplicate` | `entity` | |
@@ -100,16 +112,20 @@ each result's `content[0].text` is the tool's JSON).
 | | `scene_open` | `path`, `force?` | path under `assets/`; a `.mcprefab` opens the prefab itself (entity 0 is its root) |
 | | `scene_save` | `path?`, `name?`, `force?`, `resolve?` | atomic; a `.mcprefab` path saves a prefab; `name` renames the scene; a file another agent saved meanwhile is merged by entity (conflicts refuse unless `resolve` is `ours` or `theirs`); refuses to overwrite another existing file unless `force` |
 | | `navmesh_bake` | none | bakes the scene's first `NavMeshSurface3D` into `assets/navmesh/<scene>/nav_<id>.mcnav` and points its `baked` at it (save the scene to keep that); returns the asset, its `content_hash` (the same scene bakes byte-identical), tiles, layers, triangles and bytes |
-| Build | `cook_run` | `pack?`, `adopt?` | incremental; `adopt` writes sidecars for new source files |
+| Build | `cook_run` | `pack?`, `adopt?`, `paths?`, `skip_errors?` | incremental; `adopt` writes sidecars for new source files (the error for one without says so); `paths` (files or folders under `assets/`) cooks only those and what they depend on, into `cooked/` only, never the pack; `skip_errors` also returns `failed_files`, every file that could not be cooked; the pack is written only by a run with no errors (section 5.4) |
 | | `cook_errors` | | last diagnostics with file, line, col |
 | | `script_check` | `path` or `source`, `definitions?` | the cook's checks on one Luau script (syntax, hidden state, names with "did you mean", types against `mce.d.luau`) without cooking; returns every problem with line and col (user guide 27.5) |
 | | `asset_delete` | `path` | deletes a source file under `assets/`, its `.mceasset` sidecar and its `CREDITS.md` row (a font's license text too, once no row names it; not the open scene) |
 | Verify | `run_headless` | `ticks` (default 300), `log_lines`, `scene?`, `input?`, `inspect?`, `trace?`, `convars?` | cooks, plays the **saved** scene (or another saved scene named by `scene`) with the engine systems and the game's `install()`, returns `state_hash`, metrics and the log tail (and `script_errors` when a scene script failed). A pack with a `.mcstore` gets the fake store and ad network, one with a `.mcconfig` its cooked defaults, one with a `.mcservices` game services on this device; nothing is saved or sent |
-| See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
+| See | `render_frame` | `tick?` (default 1), `width?`, `height?` (default 960 × 540), `scene?`, `input?`, `camera?`, `view?`, `safe_area?`, `software?`, `convars?`, `save?` | cooks, draws the **saved** scene with the real player at the first frame after sim tick N and returns the frame as an MCP **image**; `save` also writes the PNG under the project folder. `convars` (`{"lc.quality": 0}`) sets console variables for that run only, so a setting can be previewed without changing the project; `run_headless` takes them too and puts the old values back after |
 | | `timeline_preview` | `time`, and `render_frame`'s other arguments | the frame with every timeline in the scene held at `time` seconds: state tracks applied, cinematic cameras placed, a cutscene's letterbox and subtitle showing. Look at a cutscene at its beats without playing it through |
 | | `render_sheet` | `ticks` (1-16), `cameras?` (1-4), `cell_width?`, `cell_height?`, and `render_frame`'s `scene`, `input`, `safe_area`, `software` | one image: ticks in columns, cameras in rows, each cell labelled |
+| Views | `view_list` | none | the open scene's camera views (window or texture, `viewport`, `order`, split-screen cell, `PlayerCamera`), the `SplitScreen` layout and every `RenderTexture` with its cameras and the surfaces that show it, plus `problems`: a texture nothing draws into, a view into an entity that is no texture, a split camera nothing enables |
+| | `view_add` | `name`, `camera?` (`2d`, `3d`), `width?`, `height?`, `update_hz?`, `position?`, `fit?` (2D), `look_at?` (3D), `show_on?` | a minimap, mirror, monitor or picture-in-picture in one call: the `RenderTexture` entity, the camera that fills it and, with `show_on` (an entity with a `Sprite` or `MeshRef`), the `ShowRenderTexture` that displays it |
+| Players | `player_list` | none | the co-op setup: the `CoopGame` and, per player 1-4, their `PlayerSpawn`s, `PlayerCamera`s and the project's `.mcinput` maps with `"player": n`, plus `problems` (no `CoopGame`, a player without a spawn, camera or input map, a camera whose `split` does not match its player) |
+| | `player_setup` | `players?` (1-4), `prefab?`, `layout?` (`auto`, `columns`, `rows`, `grid`), `mode?` (`2d`, `3d`), `spacing?` | a whole local co-op rig: a `CoopGame`, a `SplitScreen`, and per player a `PlayerSpawn` and a `PlayerCamera` with its split-screen `CameraView`. Add the input maps with `asset_create` (`.mcinput`, `"player"` key), then `player_list` |
 | | `image_diff` | `golden`, `image` or `render`, `threshold?` (8), `max_score?` (0.01), `update?` | compares with a golden PNG in the project: `score` (mean channel difference, 0..1), `changed_fraction`, `pass`, and a heat map image; a missing golden is written |
-| Measure | `perf_run` | `scene?`, `frames?` (300), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`) |
+| Measure | `perf_run` | `scene?`, `frames?` (300, 1 to 3600; under 30 the report notes noisy percentiles), `warmup?` (30), `target?` (desktop), `width?`, `height?`, `headless?`, `software?`, `input?`, `convars?`, `save?`, `top?` (8) | runs the real player for N frames at one sim tick per frame, so counters repeat run to run. Returns the verdict against the target's budget, with advice for each limit it is over; frame, sim, render and GPU ms (p50/p95/p99/max); draws, triangles, sprites and other counters; the slowest systems; the GPU stages; and spike frames with their cause. Keeps the `.mcperf` (`cooked/.perf/last.mcperf`, or `save`). With a `progressToken` it sends `notifications/progress` (launching, warmup N/M, capturing N/M, reading the capture) |
 | | `perf_compare` | `before?`, `after?` (default: `perf_run`'s last two), `target?`, `top?` | two captures side by side: p50/p95 times, the worst frame's counters, the systems that moved most, `better` and `worse`, and the after capture's verdict |
 | Code | `module_build` | `reload?` (true), `warnings?`, `target?` | rebuilds the game module with the project's CMake tree (the one the loaded module came from) and maps the new build into the server: new components and systems are live for the next call, no restart; compiler errors come back as `{severity, file, line, col, message}` |
 | | `module_test` | `filter?` (default `^<game>_`) | `ctest` in the module's build tree: each test's result, the output's end when one failed |
@@ -136,6 +152,9 @@ each result's `content[0].text` is the tool's JSON).
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |
+
+
+For a local-multiplayer game (chapter 11.3), name the second player's actions `P2/<Action>` in `input` (`P3/`, `P4/` likewise); `P1/<Action>` is the plain `<Action>`.
 
 The `ui_*` tools edit a document through the cook's own reader and writer: each edit is read back
 as a whole document (so a duplicate name or a nav path to a removed widget fails with the cook's
@@ -234,6 +253,20 @@ a generator. `library_add` copies an entry into `assets/` (models into `models/`
 `Textures/colormap.png`, fonts into `fonts/` with their license file), writes fresh sidecars and adds a
 `CREDITS.md` row with the author, the source and the license, so `mce ship` carries the credits.
 
+### Views and local players
+
+A minimap, a mirror or a split screen is components (chapter 8.4 and 11.3); the view and player tools build and
+check them in one call:
+
+1. `player_setup {"players": 2, "prefab": "guid:..."}` adds the co-op rig; `asset_create` a `.mcinput` whose
+   maps carry `"player": 1` and `"player": 2` (Move, Join, Leave; `samples/09_coop/assets/input/coop.mcinput`).
+2. `view_add {"name": "Minimap", "fit": [26, 18], "show_on": "Monitor"}` makes a texture, its camera and the
+   surface that shows it.
+3. `view_list` and `player_list` name what is wrong before anything is drawn.
+4. `render_frame` looks at it. `input` joins the players (`"5 P2/Join\n20-60 P2/Move=-1,0"`); `view: {"player": 2}`
+   draws that player's camera alone and full size, `view: {"texture": "Minimap"}` the camera that fills a
+   render texture. Without `view` the frame is the window as the players see it, split cells included.
+
 ### A look for each game
 
 Every game made from the same template should not look the same. `mce new` projects carry three starter
@@ -296,6 +329,22 @@ id, and refuses with the list of conflicts when both changed the same component,
 side. A prefab saved with `scene_save` merges the same way; a material or other file two agents both write is
 last-write-wins, so lock it first.
 
+#### Several agents on one scene
+
+Each server holds its own copy of the scene, so another agent's save does not appear until you look. The
+rules, in the order you will meet them:
+
+- `scene_open` on the scene you already have open re-reads the file from disk, so it shows what the others
+  saved. It refuses to drop your unsaved edits unless you pass `force: true`, which discards them and reloads.
+  Opening a scene also replaces the copy `scene_switch` parked for it.
+- `scene_save` merges a teammate's save in (their new entities stay). If it cannot (no common version, a
+  file it cannot parse), it refuses and lists the entities on disk your copy lacks and the ones only yours
+  has. Then either `scene_open {"path": ..., "force": true}` to reload, or `overwrite: true` to save your copy over
+  theirs and lose their entities.
+- `entity_delete` also deletes the entity's children, and every entity reference to them from entities that
+  stay becomes null. The result lists each as `nulled_links` (the entity that holds it, the component and
+  the field); set them again with `component_set`, or `scene_undo` the delete.
+
 When the engine makes something hard (a tool that is missing, an error that does not say what to do, a doc
 that was wrong), the agent calls `report_friction` before it works around it. The notes collect in the
 project's `friction.jsonl`; `mce friction <project>...` turns the notes of one or many projects into a
@@ -312,7 +361,8 @@ Markdown backlog, blocking notes first and each area by how often it came up, fo
    sidecars, `asset_list` to get their GUIDs, `asset_set_import_settings` for normal maps and LUTs.
    Particle presets, sequences, tilemaps, materials, input maps and the store, services and config
    catalogs are made with `asset_create` (`asset_schema` shows their fields), never written by hand;
-   lay a level out with `asset_create` on a `.mctilemap` and `tilemap_paint`.
+   lay a level out with `asset_create` on a `.mctilemap` and `tilemap_paint`, or take it from Tiled or
+   LDtk with `asset_import` (art from Aseprite the same way).
 4. **Author.** `scene_open`, then `entity_create` with a components object per entity;
    `entity_duplicate` plus `component_set LocalTransform position` to lay out repeated tiles;
    `component_set` to tune. Name entities.
@@ -392,6 +442,19 @@ them) from the actor's position, so they need no game code:
 | `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
 | `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
 
+Every bot also takes three optional keys that make it act, not only move (a stealth test needs no
+custom C++ system):
+
+- `hold`: action names held down the whole run, e.g. `["Crouch"]` for a crouch walk.
+- `hold_when`: `[{"action": "Crouch", "entity": "Sentry", "field": "Perceiver.sees", "value": 1}]` holds the
+  action on the ticks the field check is true (the same `entity` / `field` / `value` or `{">": 5}` wording as a
+  test's checks). Several entries are independent, so a bot can crouch while a sentry sees it.
+- `stop_when`: one field check, `{"entity": ..., "field": ..., "value": ...}`. While it is true the bot stands
+  still (no steering, no jump, a `wait` is paused), e.g. freeze while `Perceiver.sees` is 1.
+
+A `walk_to` waypoint (in `through`, or the `target`) can also be `{"at": ..., "wait": ticks, "press": ["Interact"]}`:
+the `press` actions go out for one tick when the bot arrives, once per waypoint.
+
 `plane` is `xy` (top-down 2D or flying: `Move` is the direction), `x` (side view: `Move.x` and
 `Jump`) or `xz` (3D on the ground: `Move` is `(x, -z)`, forward is -Z). Bots are deterministic:
 the same scenario gives the same `state_hash`.
@@ -403,13 +466,28 @@ The **feel report** (`feel` in each result, when there is an actor): `finished` 
 cells), `alive_at_end` and the `bounds` it reached. A level that a `walk_to` bot cannot finish, or
 that leaves it stuck at the same spot, is the first thing to look at with `render_frame`.
 
+### When a cook fails
+
+`cook_run` returns `ok: false` with diagnostics (file, line, column); `cook_errors` repeats them.
+`run_headless`, `render_frame`, `ui_preview` and `timeline_preview` cook the whole project first, so
+one bad file stops them all. Read the first error:
+
+- *no .mceasset sidecar* (a new `.luau`, texture or model): `cook_run {"adopt": true}`.
+- *unknown component type* or *unknown field*: the loaded module is older than your code. `module_build`
+  (or `mce build`), and restart the server if it was not started with `--module`.
+- A file you cannot fix yet: `cook_run {"paths": ["scenes/level_02.mcscene"]}` cooks only that and its
+  dependencies, or `{"skip_errors": true}` cooks what it can and lists the failing files in
+  `failed_files`. Neither writes a pack; fix the files, then `cook_run {"pack": true}`.
+
+Section 5.4 has the full table.
+
 ## 14.4 Pitfalls
 
 | Pitfall | What happens | Do this |
 |---|---|---|
 | Entity ids are per scene | ids are saved in the file and survive `scene_open`, but a batch written against another scene's ids edits the wrong entities | re-list with `scene_list_entities` after opening a different scene; address entities by unique name; `scene_undo` repairs a bad batch |
 | `run_headless` plays the saved file | unsaved edits are refused | `scene_save` first |
-| The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack | `cook_run {"pack": true}`, or rebuild `my_game` (the build cooks the pack) |
+| The MCP cook writes `cooked/`, not the pack | the game executable still plays the old pack (`mce play` and `mce headless` run `build/project/assets.mce`, which only `mce build` refreshes; they warn when it is older than `assets/`) | `cook_run {"pack": true}`, or `mce build` (the build cooks the pack) |
 | Stock server without the module | "unknown component type" for your components | run `<game>_mcp` or `mce_mcp --module <lib<game>.so>`; `module_build` reloads new and changed components without a restart |
 | `scene_new` makes a new GUID | a `.mceproj` that names the old scene points at nothing if you save over it | to re-author the start scene, `scene_open` it and `scene_clear` it |
 | `scene_save` with `force` over another file | the file keeps its own GUID but its content is replaced by the open scene | save as a new path (a fresh GUID), or `scene_open` and `scene_clear` the existing scene |

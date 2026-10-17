@@ -184,6 +184,18 @@ void install_perception(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "ai_perception", &ai_perception);
 }
 
+void perceiver_views(World& w, Array<PerceiverView>& out) {
+    out.clear();
+    w.query<const Perceiver>().each([&](Entity e, const Perceiver& p) {
+        Pose pose;
+        if (!pose_of(w, e, pose)) return;
+        PerceiverView v;
+        v.entity = e;
+        eye_of(p, pose, v.eye, v.forward);
+        out.push_back(v);
+    });
+}
+
 void perception_debug_lines(World& w, Array<PerceptionLine>& out) {
     out.clear();
     const math::Color cone{0.9f, 0.9f, 0.3f, 0.6f}, seen{0.3f, 1.0f, 0.3f, 1.0f}, lost{1.0f, 0.8f, 0.2f, 1.0f};

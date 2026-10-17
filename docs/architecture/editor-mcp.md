@@ -74,6 +74,7 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 | Terrain | `terrain_sculpt`, `terrain_paint`, `terrain_import`, `terrain_generate` | A `.mcterrain` by path or GUID (M-TERRAIN 6): the editor's brushes (`editor::TerrainDocument`, the Terrain panel's code) dabbed at points or along strokes, a PNG or raw heightmap resampled into the heights, and an fBm generator with an island falloff and erosion-lite. Each reads the source, cooks it in memory for the data the brushes edit, and writes it back through the asset tools' cook-checked write. |
 | UI | `ui_list`, `ui_create`, `ui_widget_add`, `ui_widget_set`, `ui_widget_remove`, `ui_theme_set`, `ui_preview` | `.mcui` documents by widget path (M-UI-DATA 5, `tools_ui.cpp`; `ui_theme_set` sets the document's `"theme"`): each edit is made on the canonical form (`cook::write_ui_document`), read back whole by `cook::read_ui_document` (refused with the cook's message, nothing written) and saved canonically, so a document round-trips unchanged. `ui_preview` runs the player with `-ui_preview <guid>` (the document alone, no world) through `render_frame`'s capture path. |
 | Timeline | `timeline_create`, `timeline_add_track`, `timeline_add_key`, `timeline_preview` | `.mctimeline` documents (M-CINEMA 6, `tools_timeline.cpp`): edited as JSON, read back whole by `cook::read_timeline_document` (refused with the cook's message, nothing written) and saved canonically by `cook::write_timeline_document`. `timeline_preview` runs `render_frame`'s capture with the player's `timeline.scrub` convar: every timeline is scrubbed to the time and held at speed 0. |
+| 2D skeleton | `skel2d_create`, `skel2d_add_bone`, `skel2d_add_slot`, `skel2d_add_ik`, `skel2d_key`, `skel2d_preview` | `.mcskel2d` documents (M-ANIM2D 5, `tools_skeleton2d.cpp`): edited as JSON by `editor::skel2d::*` (the Skeleton panel's code), cooked in memory by the importer before anything is written (refused with its `file:line` message), preview posed by `kit::Skeleton2DBlend` and `skeleton2d_solve_pose`. |
 | Edit | `entity_create`, `entity_delete`, `entity_duplicate`, `scene_clear`, `component_add`, `component_remove`, `component_set` | `component_set` takes a refl property path + value; type errors come back as tool errors with the expected type. |
 | Undo | `scene_undo`, `scene_redo` | The editor's undo history (FR-EDT-040, ADR-0030 §1–§3): each editing `tools/call` is one step, named after the tool. |
 | Persist | `scene_open`, `scene_save` | `.mcscene` text format; save uses the same temp-write-then-rename as autosave. Save As gives a new file a fresh GUID, keeps the GUID of a file overwritten with `force`, and `name` renames the scene. |
@@ -99,6 +100,12 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 1. **Codec:** unit tests + a fuzz target (malformed, deep, huge input never crashes; ASan clean).
 2. **Protocol conformance:** a scripted transcript test (`tests/mcp/`) drives `mce_mcp` over pipes:
    `initialize` → `tools/list` → calls → `shutdown`; golden responses checked in.
+   A `transcripts/<name>.multi.jsonl` drives several real `mce_mcp` processes on one project copy: each line is
+   `{"server":"a","msg":{...}}`, one process per distinct server name, lines sent strictly one at a time (a message with
+   an `id` waits for exactly one reply from that server first), so the order across processes is deterministic. The
+   golden `<name>.multi.golden.jsonl` holds `{"server":..,"response":..}` per request. `two_servers_scene` is the
+   two-agent case: both add entities, both saves land, a same-field edit is refused by entity and component, then
+   `overwrite`.
 3. **Round-trip equivalence (the gate):** the same edit done via MCP tools and via `SceneCommand`s in a C++ test
    saves byte-identical `.mcscene` files and produces the same `run_headless` hash.
 4. **Walls:** no ImGui and no socket symbols in `mce_mcp*`; no JSON codec in any runtime target.

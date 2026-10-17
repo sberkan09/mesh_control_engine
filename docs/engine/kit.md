@@ -123,6 +123,24 @@ game modules are unsupported), `tools/cook` (which registers the engine componen
   `FixedUpdate_Pre`; moves a physics2d body by velocity or the `LocalTransform` directly.
 - `debug_draw_grid`, `debug_draw_agents` into a `physics::DebugDrawSink`.
 
+`procgen.h` (M-PROCGEN 1): pure, integer-only level generators, a function of (parameters, seed) alone.
+
+- `Rng`: a splitmix64 stream; `Rng::child(seed, "name", index)` gives each step of a generator its own
+  stream, so adding a step never shifts another's numbers.
+- `generate_rooms` (BSP rooms and L-shaped corridors, 1 or 2 wide), `generate_caves` (cellular automata;
+  needs about 16 x 16 or more), `generate_walk` (a drunkard's walk), `generate_noise` (thresholded value
+  noise, fixed point). Each returns a `ProcGrid` (`kWall` / `kFloor`, row 0 on top) with a wall border, one
+  4-connected floor region, a `start` and the farthest `exit`; a draw that misses the floor target is
+  retried on the next attempt's stream (at most 16), then the call fails with a stage naming the generator.
+- `WfcRules` + `generate_wfc` (M-PROCGEN 2): wave function collapse on a 64-bit option mask per cell.
+  Rules by `add_pair(a, dir, b)` or learned from an example (`from_example`: neighbouring pairs allowed,
+  weights = how often a tile occurs; at most 64 tiles, ids kept in ascending order). The fewest-options cell
+  is collapsed by weight from the `"wfc"` stream and the neighbours are narrowed; a contradiction restarts on
+  the next attempt's stream (`max_restarts`, default 32), then the call fails with a named stage. `WfcPin`
+  cells are set first; pins that disagree with each other or the rules fail at once.
+- `ProcGrid::hash`, `floor_count`, `to_ascii`. Tests pin one hash per generator: a generator change
+  changes every saved seed, so those lines move only on purpose.
+
 `stock.h` (M-DATA-REACH): `install_stock(world, assets)` installs everything below that the stock
 player runs (particles, sequences, kit3d, `WorldSettings`, effects), one call shared by `mce_player`,
 play-in-editor and MCP `run_headless`; `install_world_settings` applies the first `WorldSettings`
@@ -160,7 +178,7 @@ orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first 
 `install_effects(world, assets)`: `"kit_nav_grid"` (`FixedUpdate_Pre`, before `"path_agents"`,
 which it installs), `"kit_effects"` and `"kit_camera_follow"` (`FixedUpdate_Post`).
 
-`cinematic.h` (M-CINEMA 4): `CameraRail3D` (Catmull-Rom dolly through up to 8 points; `rail_point`),
+`cinematic.h` (M-CINEMA 4): `CameraRail3D` (Catmull-Rom dolly through up to 8 points (a scene writes all 8 entries); `rail_point`),
 `CameraLookAt3D`, `CameraShake3D` (fed by `ShakeTrigger`, advanced in `"kit_effects"`), `CameraBlend3D`
 (the extract's `view_of` blends from `from`'s view; a timeline camera cut with a blend writes it) and
 `Cutscene` (next to a `TimelinePlayer`: the world's cutscene hold, letterbox, hold-to-skip through

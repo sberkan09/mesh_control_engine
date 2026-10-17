@@ -13,6 +13,8 @@ using namespace mce::math;
 ResultV PreviewRenderer::init(rhi::RenderDevice& device) {
     MCE_TRY(renderer_.init(device));
     MCE_TRY(extract_.init(renderer_, nullptr));
+    render_textures_.init(renderer_);
+    extract_.set_render_textures(&render_textures_);
     return ok();
 }
 
@@ -20,6 +22,7 @@ void PreviewRenderer::shutdown() {
     if (!renderer_.initialized()) return;
     set_assets(nullptr);
     extract3d_.shutdown();
+    render_textures_.shutdown();
     three_d_ = three_d_failed_ = false;
     extract_.shutdown();
     renderer_.shutdown();
@@ -125,7 +128,34 @@ bool PreviewRenderer::ensure_3d() {
     }
     extract3d_.init(renderer_.meshes(), assets_);
     extract3d_.set_texture_store(&renderer_.textures());
+    extract3d_.set_render_textures(&render_textures_);
+    extract3d_.set_static_merge(false);  // selection, gizmos and picking keep per-entity draws (StaticMerge3D, M-VISUAL3 5b)
     three_d_ = true;
+    return true;
+}
+
+bool PreviewRenderer::record_views(rhi::CommandBuffer& cmd, World& world, rhi::TextureHandle target, rhi::Extent2D size,
+                                   Color clear) {
+    // The editor draws play at its own pace: update_hz counts a 60 Hz frame.
+    render_textures_.sync(world, 1.0f / 60.0f);
+    if (!kit::collect_views(world, size, views_, &kit::render_texture_size, &render_textures_)) {
+        render_textures_.clear_new(cmd);  // the single-view path still samples them
+        return false;
+    }
+    bool any_3d = false;
+    for (const kit::ViewEntry& v : views_) any_3d = any_3d || v.is_3d;
+    kit::ViewRecordContext vc;
+    vc.renderer = &renderer_;
+    vc.extract3d = any_3d && ensure_3d() ? &extract3d_ : nullptr;
+    vc.extract2d = &extract_;
+    vc.render_textures = &render_textures_;
+    vc.target = target;
+    vc.target_size = size;
+    vc.clear = clear;
+    const kit::ViewRecordStats st = kit::record_views(cmd, world, views_.span(), vc);
+    renderer_.end_views();
+    stats_ = st.first_2d;
+    if (st.views_3d > 0) stats3d_ = st.first_3d;
     return true;
 }
 

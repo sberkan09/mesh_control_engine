@@ -50,6 +50,11 @@ doc.submit(batch, sort_layer);
 - **Anchors** are parent-relative min/max plus pixel offsets at UI scale 1; the host's
   `UpdateContext::ui_scale` multiplies them. The engine has no UI-scale convar: `ui_gallery`
   declares its own `ui.scale` and passes it (times the display scale) in `ui_scale`.
+- **UI size at 1080p.** `mce_player` follows the display's own scale, so a UI authored for a 1280x720
+  window looks small on a 1920x1080 monitor at scale 1. Set the convar `ui.reference_height` to the height you
+  authored for (`720`): the UI then grows with the window's short side over it (1.5 at 1080p, 3 at 4K), on top
+  of the player's `ui_scale` setting, and never shrinks below what the display asks (a phone with its own scale
+  keeps it). The default is 0, which leaves the scale as it was.
 - **Navigation** is geometric when no edges are authored (a grid is navigable from any corner);
   `Confirm` fires once per press.
 - **Modal** documents take focus and block the pointer; a HUD document never takes focus.
@@ -155,6 +160,11 @@ done this way.
 { "name": "Pause", "components": { "UiScreen": { "document": "guid:<pause.mcui>", "order": 10, "visible": false } } }
 ```
 
+In a split screen (M-VIEWS 4) each player gets their own HUD: a `UiScreenView {"camera": "$<n>"}`
+next to the `UiScreen` lays the document out in that camera's view instead of the whole window, at
+a UI scale picked for the view's size, with the safe area only on the window's edges. The pointer
+reaches it only inside the view. While the camera draws no view the screen covers the window.
+
 Gameplay never includes `mce/ui`; it talks to the screens only through data:
 
 - **Showing a screen**: set `UiScreen::visible`. `order` stacks screens (higher on top). While a
@@ -195,7 +205,10 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
 
 - `show_on` / `hide_on` name the actions that show and hide the screen: a button's `"action"`, a
   panel's Cancel action, Esc (`Pause` once screens are in the scene) or an `-input` script line.
-- `load_on` loads `scene` (often the scene itself, which restarts it: "Quit to title").
+- `load_on` loads `scene`. Loading the scene you are in restarts it, with every screen back at its authored
+  `visible`: a title screen that is `visible: true` in that scene shows again. Keep the title in its own scene
+  (`title.mcscene`, its Play button's `load_on` loading the level) so that Retry loads the level and "Quit to
+  title" loads the title; one scene holding both cannot tell a restart from a first start.
 - `quit_on` ends the game, as the window's close button does: `mce_player` quits cleanly (the
   `-save` slot is written), a headless run stops there and play mode in the editor pauses. Game
   code asks the same with `scene::request_quit(world)`.

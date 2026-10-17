@@ -125,6 +125,59 @@ TEST_CASE("scene_save: both agents changing one component conflict; nothing is l
     CHECK(entity(root, "Title").find("HELLO") != std::string::npos);
 }
 
+TEST_CASE("two servers on one scene: each adds entities and both saves land; a clash on one entity is refused by name, then overwrite") {
+    // Blind test 3 (#378): two agents, two servers, one project folder, one scene. This is the transcript of what they
+    // did, with the server a person would start for each of them (separate Server objects: nothing but the folder is shared).
+    const std::string root = demo_project("mcp_wf_two_servers");
+    Agent alice(root, "alice");
+    Agent bob(root, "bob");
+    u32 before = 0;
+    entity(root, "Ball", &before);
+
+    // Each adds different entities, with components, and neither has seen the other's.
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    alice.ok("entity_create", R"({"name":"Door"})");
+    bob.ok("entity_create", R"({"name":"Guard","components":{"LocalTransform":{"position":[-4,0,0]}}})");
+    bob.ok("entity_create", R"({"name":"Key"})");
+
+    alice.ok("scene_save");
+    bob.ok("scene_save");  // alice saved first: the second save merges by entity instead of replacing her file
+    u32 after = 0;
+    for (const char* name : {"Lantern", "Door", "Guard", "Key"}) CHECK_MESSAGE(!entity(root, name, &after).empty(), name << " is in the file");
+    CHECK(after == before + 4);
+    CHECK(entity(root, "Lantern").find("[3,1,0]") != std::string::npos);
+    CHECK(entity(root, "Guard").find("[-4,0,0]") != std::string::npos);
+
+    // Bob's open scene is the merge (he sees alice's work), and alice sees bob's after the reload she is told to do.
+    const std::string bobs = bob.ok("scene_list_entities").text;
+    CHECK(bobs.find("Lantern") != std::string::npos);
+    CHECK(bobs.find("Door") != std::string::npos);
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene"})");
+    const std::string alices = alice.ok("scene_list_entities").text;
+    CHECK(alices.find("Guard") != std::string::npos);
+    CHECK(alices.find("Key") != std::string::npos);
+    CHECK(alices.find("Lantern") != std::string::npos);
+
+    // Both change the same field of the same entity: the second save is refused, names the entity and the ways out, and
+    // writes nothing.
+    alice.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.91})");
+    bob.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.37})");
+    bob.ok("entity_create", R"({"name":"Chest"})");
+    alice.ok("scene_save");
+    const std::string err = bob.fails("scene_save");
+    CHECK(err.find("\"Ball\" components/Collider2D") != std::string::npos);
+    CHECK(err.find("nothing was written") != std::string::npos);
+    CHECK(err.find("overwrite") != std::string::npos);
+    CHECK(entity(root, "Ball").find("0.91") != std::string::npos);
+    CHECK(entity(root, "Chest").empty());
+
+    // overwrite saves bob's whole copy over the file: his Ball and his Chest, and everything he had merged in.
+    bob.ok("scene_save", R"({"overwrite":true})");
+    CHECK(entity(root, "Ball").find("0.37") != std::string::npos);
+    CHECK_FALSE(entity(root, "Chest").empty());
+    for (const char* name : {"Lantern", "Door", "Guard", "Key"}) CHECK_MESSAGE(!entity(root, name).empty(), name << " survived the overwrite");
+}
+
 TEST_CASE("merge_entity_files: references inside renumbered entities follow them") {
     const char* base = R"({"format":"mce-scene","version":1,"name":"s","entities":[{"id":1,"name":"A"}]})";
     const char* ours =
@@ -268,4 +321,111 @@ TEST_CASE("report_friction: notes from several agents append to the project's fr
     CHECK(alice.fails("report_friction", R"({"summary":"x","area":"docs","severity":"blocking"})").find("'actual'") != std::string::npos);
     CHECK(alice.fails("report_friction", R"({"summary":"","area":"docs"})").find("'summary'") != std::string::npos);
     CHECK(alice.fails("report_friction", R"({"summary":"x"})").find("area") != std::string::npos);
+}
+
+// ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
+
+TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {
+    const std::string root = demo_project("mcp_wf_reload");
+    Agent alice(root, "alice");
+    Agent bob(root, "bob");
+    bob.ok("entity_create", R"({"name":"Torch"})");
+    bob.ok("entity_create", R"({"name":"Torch audio","components":{"ChildOf":{"parent":"Torch"}}})");
+    bob.ok("scene_save");
+
+    CHECK(alice.ok("scene_list_entities").text.find("Torch") == std::string::npos);  // stale copy
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene"})");  // already open, clean: re-reads
+    const std::string listed = alice.ok("scene_list_entities").text;
+    CHECK(listed.find("Torch audio") != std::string::npos);
+
+    // Unsaved edits are not dropped silently; force re-reads and drops them.
+    alice.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.25})");
+    CHECK(alice.fails("scene_open", R"({"path":"scenes/demo.mcscene"})").find("unsaved") != std::string::npos);
+    bob.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.75})");
+    bob.ok("scene_save");
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene","force":true})");
+    CHECK(alice.ok("scene_get_entity", R"({"entity":"Ball"})").text.find("0.75") != std::string::npos);
+    alice.ok("component_set", R"({"entity":"Title","component":"TextLabel","path":"text","value":"HI"})");
+    alice.ok("scene_save");
+    u32 count = 0;
+    CHECK_FALSE(entity(root, "Torch audio", &count).empty());  // the stale-then-reloaded save dropped nothing
+    CHECK(count == 8);
+}
+
+TEST_CASE("scene_open replaces a copy parked by scene_switch instead of leaving it stale") {
+    const std::string root = demo_project("mcp_wf_parked");
+    Agent alice(root, "alice");
+    Agent bob(root, "bob");
+    std::filesystem::copy_file(root + "/assets/scenes/demo.mcscene", root + "/assets/scenes/other.mcscene");
+    alice.ok("scene_open", R"({"path":"scenes/other.mcscene"})");
+    alice.ok("scene_switch", R"({"path":"scenes/demo.mcscene"})");  // other is parked, demo current
+    alice.ok("scene_switch", R"({"path":"scenes/other.mcscene"})");  // demo is parked
+    alice.ok("scene_switch", R"({"path":"scenes/other.mcscene"})");  // demo is parked
+    bob.ok("entity_create", R"({"name":"Torch"})");
+    bob.ok("scene_save");
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(alice.ok("scene_list_entities").text.find("Torch") != std::string::npos);
+    const std::string docs = alice.ok("scene_documents").text;
+    CHECK(docs.find("demo.mcscene") == docs.rfind("demo.mcscene"));  // the stale parked demo is gone: listed once, as current
+}
+
+TEST_CASE("scene_save: a file that cannot be merged is refused naming the entities, and overwrite saves anyway") {
+    const std::string root = demo_project("mcp_wf_refuse");
+    Agent alice(root, "alice");
+    Agent bob(root, "bob");
+    bob.ok("entity_create", R"({"name":"Torch"})");
+    bob.ok("scene_save");
+    alice.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.9})");
+    alice.server.scene_file().base.clear();  // no common version to merge against
+
+    const std::string err = alice.fails("scene_save");
+    CHECK(err.find("Torch") != std::string::npos);
+    CHECK(err.find("on disk, not in your copy") != std::string::npos);
+    CHECK(err.find("scene_open") != std::string::npos);
+    CHECK(err.find("overwrite") != std::string::npos);
+    CHECK_FALSE(entity(root, "Torch").empty());  // nothing was written
+    CHECK(entity(root, "Ball").find("0.9") == std::string::npos);
+
+    alice.ok("scene_save", R"({"overwrite":true})");
+    CHECK(entity(root, "Torch").empty());  // yours, as asked
+    CHECK(entity(root, "Ball").find("0.9") != std::string::npos);
+
+    // The other way out: reload (force drops the edit), then save is plain.
+    bob.ok("entity_create", R"({"name":"Lamp"})");
+    bob.ok("scene_save");
+    alice.server.scene_file().base.clear();
+    alice.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.1})");
+    CHECK(alice.fails("scene_save").find("Lamp") != std::string::npos);
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene","force":true})");
+    alice.ok("component_set", R"({"entity":"Title","component":"TextLabel","path":"text","value":"HI"})");
+    alice.ok("scene_save");
+    CHECK_FALSE(entity(root, "Lamp").empty());
+}
+
+TEST_CASE("entity_delete reports the entity references that become null") {
+    const std::string root = demo_project("mcp_wf_links");
+    Agent alice(root, "alice");
+    alice.ok("component_add", R"({"entity":"Camera","component":"CameraFollow2D","value":{"target":"Ball"}})");
+    alice.ok("entity_create", R"({"name":"Lid","components":{"ChildOf":{"parent":"Crate A"}}})");
+    alice.ok("component_add", R"({"entity":"Title","component":"CameraFollow2D","value":{"target":"Lid"}})");
+
+    auto d = alice.ok("entity_delete", R"({"entity":"Ball"})");
+    const cook::JsonValue links = d.v().get("nulled_links");
+    REQUIRE(links.size() == 1);
+    CHECK(str(links.at(0).get("name")) == "Camera");
+    CHECK(str(links.at(0).get("component")) == "CameraFollow2D");
+    CHECK(str(links.at(0).get("field")) == "target");
+    CHECK(links.at(0).get("was").as_number() == 5);
+    CHECK(d.text.find("warning") != std::string::npos);
+    CHECK(alice.ok("scene_get_entity", R"({"entity":"Camera"})").text.find("\"$5\"") == std::string::npos);
+
+    // A subtree goes with its root: the child is named, and a link to it is reported too.
+    auto sub = alice.ok("entity_delete", R"({"entity":"Crate A"})");
+    CHECK(sub.v().get("deleted_children").size() == 1);
+    REQUIRE(sub.v().get("nulled_links").size() == 1);
+    CHECK(str(sub.v().get("nulled_links").at(0).get("name")) == "Title");
+
+    // Nothing references this one: the result stays as it was.
+    auto plain = alice.ok("entity_delete", R"({"entity":"Crate B"})");
+    CHECK_FALSE(plain.v().get("nulled_links").valid());
 }

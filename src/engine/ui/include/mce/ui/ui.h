@@ -109,7 +109,8 @@ struct UpdateContext {
 // its baseline: 96 on desktops, 160 on Android, points on iOS) times the user's setting, lowered
 // when the screen would be smaller than `min_logical` (short side × long side, at scale 1) so a
 // layout authored for that size still fits, and rounded down to 1/8 so pixel snapping stays even.
-f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale = 1.0f, vec2 min_logical = {360, 640});
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale = 1.0f, vec2 min_logical = {360, 640},
+                     f32 reference_height = 0.0f);
 
 // Touch as the pointer (M-MOBILE, FR-INP-070): the oldest touch in the snapshot becomes
 // ctx.pointer (scaled to ctx.viewport) with its press/hold/release, so widgets hit-test by finger
@@ -223,6 +224,10 @@ public:
     WidgetId hovered() const { return hovered_; }
     WidgetId find(StringView path) const;  // "pause/buttons/resume", relative to the root
     WidgetId find_child(WidgetId parent, StringView name) const;
+    // M-VIEWS 3: every Image widget named `name` (at any depth) draws the whole of `set`'s region 0
+    // (a render texture's sprite set) instead of its skin region; an invalid set restores the skin.
+    // Returns how many widgets it set.
+    u32 set_image_texture(StringView name, render::SpriteSetId set);
 
     WidgetKind kind(WidgetId w) const;
     WidgetState state(WidgetId w) const;
@@ -298,6 +303,7 @@ private:
         u8 own_style = 0;
         u32 console = ~0u;  // index into consoles_
         bool pressed = false;
+        render::SpriteSetId image_set;  // set_image_texture: an Image's own set (invalid = the skin's)
     };
 
     Node* node(WidgetId w);
@@ -340,7 +346,7 @@ private:
     void update_console(u32 index, const UpdateContext& ctx);
     void draw_quad(render::SpriteBatch& batch, const Rect& r, Color c, i16 layer, i32 order) const;
     void draw_region(render::SpriteBatch& batch, const Rect& r, Color c, u32 region, i16 layer, i32 order,
-                     const Slice& slice = {}) const;
+                     const Slice& slice = {}, render::SpriteSetId set = {}) const;
     void draw_text(render::SpriteBatch& batch, const render::Font* font, StringView s, vec2 at, f32 size, Color c,
                    const Style& look, i16 layer, i32 order, f32 max_width = 0.0f, TextAlign align = TextAlign::Left) const;
     const render::Font* node_font(const Node& n) const;

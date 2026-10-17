@@ -9,6 +9,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/coop.h"
 #include "mce/kit/components.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/effects.h"
@@ -20,6 +21,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/presence.h"
+#include "mce/kit/proclevel.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/skeleton2d.h"
 #include "mce/kit/timeline.h"
@@ -101,6 +103,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_timelines(world, assets);  // before kit3d: an animation key starts its clip the same tick
     install_ai(world, assets);  // before the path and navmesh agents: a move the tree asks for starts the same tick
     install_kit3d(world, assets);
+    install_coop(world, assets);  // before the 3D controllers: its Move and Jump drive them the same tick
     install_bodies3d(world, assets);
     install_nav3d(world, assets);
     install_joints3d(world, assets);
@@ -113,6 +116,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick
     install_presence(world);
+    install_proclevel(world);
     install_captions(world);  // after kit_effects: this tick's SfxTrigger plays are captioned
     install_cinematic(world);  // last: kit_cinematic runs after the timelines and the follow cameras
     install_audio_occlusion(world);

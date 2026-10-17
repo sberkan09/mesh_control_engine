@@ -33,6 +33,7 @@
       "name": "linux-base",
       "hidden": true,
       "inherits": "base",
+      "cacheVariables": { "CMAKE_C_FLAGS": "-gz", "CMAKE_CXX_FLAGS": "-gz" },
       "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     { "name": "linux-gcc-debug",     "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "g++",     "CMAKE_C_COMPILER": "gcc",   "CMAKE_BUILD_TYPE": "Debug" } },
@@ -76,7 +77,7 @@
       "cacheVariables": {
         "ANDROID_ABI": "arm64-v8a", "ANDROID_PLATFORM": "android-29", "ANDROID_STL": "c++_static",
         "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
-        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
+        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
       }
     },
     { "name": "android-arm64-debug", "displayName": "Android arm64 Debug (NDK, Vulkan)", "inherits": "android-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
@@ -89,7 +90,7 @@
       "cacheVariables": {
         "CMAKE_SYSTEM_NAME": "iOS", "CMAKE_OSX_ARCHITECTURES": "arm64", "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
         "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
-        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
+        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
       },
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
     },
@@ -103,7 +104,7 @@
       "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
-        "MCE_WITH_NET": "ON", "MCE_WITH_SCRIPT": "OFF", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
+        "MCE_WITH_NET": "ON", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
       },
       "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
@@ -131,16 +132,17 @@
     { "name": "web-release",           "configurePreset": "web-release" }
   ],
   "testPresets": [
-    { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true } },
-    { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true } },
-    { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true } },
-    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true } },
-    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true } },
-    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true } },
-    { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true } },
-    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true } },
-    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true } },
-    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true } },
-    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true } }
+    { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug-slow", "configurePreset": "linux-gcc-debug", "output": { "outputOnFailure": true }, "filter": { "include": { "label": "slow" } } },
+    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } }
   ]
 }

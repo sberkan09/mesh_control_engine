@@ -1,6 +1,6 @@
 # M-SCRIPT — Luau scripting for games without a compiler (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–3 and 4 done, 5 next). Plan: ROADMAP §M-SCRIPT; design of record
+**Status:** done (added 2026-10-16; steps 1–6 merged; the phone and web builds with the Luau runtime are unverified in this environment). Plan: ROADMAP §M-SCRIPT; design of record
 ADR-0041; Linear SBA-147 … SBA-152.
 
 **Why:** today every game needs a C++ toolchain and, on phones and the web, its own build. A script game is
@@ -18,7 +18,7 @@ FR-RUN-040 at about 29× the C++ cost.
 | 3 | No hidden state: an AST check for outer-local writes and `pairs` over object keys | SBA-149 | done |
 | 4a | Checks: `mce.d.luau`, names with "did you mean", type checking, MCP `script_check`, script errors in `run_headless` | SBA-150 | done |
 | 4b | The editor: errors that open the script, hot reload in play-in-editor, a Tracy zone per script, script stacks in crash reports | SBA-150 | done |
-| 5 | The compiler-free path: `mce new --script`, `mce ship`, phones and web | SBA-151 | not started |
+| 5 | The compiler-free path: `mce new --template script`, `mce ship`, phones and web | SBA-151 | in progress (desktop built; phones and web built, not run here) |
 | 6 | Docs and the demo: user guide, kit recipes, Ember Step in Luau, script-only blind test | SBA-152 | not started |
 
 ## Step 1 as built
@@ -136,3 +136,50 @@ Step 4 was split: 4a is the checks every host shares, 4b the editor work.
   has no text editor of its own, so there is no jump to the line itself. The UI part is not covered by a test
   beyond the parser (`test_console_model.cpp`).
 
+## Step 5 as built
+
+- `mce new <Name> --template script` (`templates/script`, `scripts/new_project.py`): a project with an empty
+  `"games"` list in its `.mceproj`, a scene using engine components only, `scripts/hero.luau` and a texture. No
+  `CMakeLists.txt`, no `games/`.
+- The `mce` command treats such a project as a script project (`tools/mce_cli/mce.py`, `Project.script`): `build`
+  runs `mce_cook --pack` (so the scripts are checked), `play`/`headless` cook and run the stock `mce_player` with
+  `-pack` and the start scene, `editor`/`mcp`/`cook` run without a module, `ship` zips `mce_player`, the engine
+  library, `assets.mce` and a `<Name>.sh`/`.bat` launcher. Steam depots are not offered for them yet.
+- Engine checkout: `mce_add_script_project` (`cmake/MceProject.cmake`, added by `cmake/ScriptProject` for any
+  `projects/<name>/` whose `.mceproj` has no games and no `CMakeLists.txt`) builds `<game>`, the stock player with
+  the project's pack and start scene, and cooks the pack with `mce_cook` (the host's, `MCE_HOST_COOK`, in a cross
+  build). `scripts/ship.py --project` accepts it. The android, ios and web presets now set `MCE_WITH_SCRIPT=ON`.
+- Tests: the SDK contract test (`tests/sdk/sdk_test.cmake`, section 7) stamps a script project with no compiler
+  involved, builds, plays headless twice (same hash), ships, runs the shipped launcher (same hash) and checks a
+  typo fails the build with a suggestion; `script_probe` is stamped from the template at configure time and
+  `script_probe_runs_scripts` plays it.
+- **Not verified in this environment:** the android, ios and web builds with `MCE_WITH_SCRIPT=ON` (no NDK, Xcode or
+  Emscripten SDK here), so the Luau VM on those targets is untested; `ship.py --project` for a script project was
+  checked for its paths only, not run to a zip.
+
+
+## Step 6a as built (the demo)
+
+- `kit::ScriptVars` (`mce/kit/components.h`): 16 saved numbers per entity, the memory of a script in a game with no
+  C++ (a script keeps nothing between ticks and cannot define components). Arrays come through `mce.get` /
+  `mce.set` as tables; user guide 27.8.
+- `projects/EmberScript`: a script project (no C++) with a side-view level, `player.luau` (run, coyote time, jump
+  buffer, short hop, respawn), `enemy.luau` (patrol / chase / return, stomp or hurt) and `goal.luau`. Scripts that
+  move bodies run in the `Post` phase: the 2D bodies do not exist before the first physics step.
+- Gates: three `.mctest` scenarios (`reach_goal` by the `walk_to` bot, `hurt_by_walker`, `stomp_walker` by an input
+  script) run by ctest `EmberScript_mctests` (the demo gate on the stock `mce_mcp`, `cmake/ScriptProject`); the
+  determinism stage plays `ember_script -input tests/run_right.input` three times, Debug = Release.
+- Not done: the demo is a smaller game than `samples/03_platformer`, not a port, and that sample has no `.mctest`
+  files, so "the same scenarios as the C++ version" does not exist to compare against. The Luau-versus-C++ twin
+  stays the bouncing-box sample.
+
+## Step 6b as built (agents)
+
+- The `start_game` prompt (step 3) offers Luau scripts and a script project when the game needs no module;
+  `docs_search` already indexed chapter 27 (`test_mcp_docs` checks it ranks for "ScriptVars script memory luau").
+- Blind test: a Sonnet agent with only the MCP tools and chapters 14 and 27 built a script-only platformer (three
+  coins, a patrolling enemy; scripts, scene, two passing `.mctest`) in about 20 tool calls with no engine bug found.
+  Friction it hit and what changed: `script_check` rejected `assets/scripts/x.luau` (now accepted); the `walk_to` bot
+  ignores y, `mce.quit()` ends every test, kinematic bodies block each other, scripts that move bodies need `Post`
+  (all in the guide, 27.2 and 27.8). Not changed: `cook_run`'s "cooked 0" right after an edit (the tool cooks on
+  demand), `run_headless` `inspect` verbosity.

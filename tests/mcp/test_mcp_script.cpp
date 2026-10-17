@@ -49,6 +49,9 @@ TEST_CASE("script_check: the cook's checks on one script, every problem with its
     CHECK(str(file.v().get("file")) == "scripts/fail.luau");
     CHECK(str(file.v().get("definitions")).find("declare mce: {") != std::string::npos);
 
+    auto prefixed = c.ok("script_check", R"({"path":"assets/scripts/fail.luau"})");  // as the asset_* tools print it
+    CHECK(str(prefixed.v().get("file")) == "scripts/fail.luau");
+
     CHECK(c.fails("script_check", "{}").find("either 'path'") != std::string::npos);
     CHECK(c.fails("script_check", R"({"path":"scenes/demo.mcscene"})").find("not a .luau") != std::string::npos);
     CHECK(c.fails("script_check", R"({"path":"scripts/nope.luau"})").find("no such file") != std::string::npos);
