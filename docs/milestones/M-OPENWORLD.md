@@ -53,7 +53,7 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
 | B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
 | B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
-| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | PR pending | [ADR-0047](../adr/0047-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
+| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0047](../adr/0047-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:
 - Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
