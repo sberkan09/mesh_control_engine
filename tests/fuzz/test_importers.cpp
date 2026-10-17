@@ -78,7 +78,7 @@ std::string swap_value(fuzz::Mutator& m, Span<const byte> src) {
     static const char* kReplacements[] = {"0",    "-1",    "1",        "2147483648", "4294967296", "1e308", "-1e308", "0.5",
                                           "\"\"", "\"x\"", "\"00000000-0000-0000-0000-000000000000\"", "true", "false", "null",
                                           "[]",   "{}",    "[0]",      "[1,2,3]",    "{\"a\":1}"};
-    const std::string t(reinterpret_cast<const char*>(src.data()), src.size());
+    std::string t(reinterpret_cast<const char*>(src.data()), src.size());
     if (t.empty()) return t;
     for (int attempt = 0; attempt < 32; ++attempt) {
         usize p = static_cast<usize>(m.below(t.size()));
