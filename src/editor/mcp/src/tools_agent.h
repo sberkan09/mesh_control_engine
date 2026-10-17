@@ -18,7 +18,10 @@ bool timeline_preview(ToolCall& c);
 bool find_player(const Server& server, cook::String& out);
 bool headless_display();
 void script_text(const input::InputScript& s, cook::String& out);
-bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code);
+// `on_line` (optional) gets each complete line the player prints, while it runs (perf_run's progress).
+using PlayerLineFn = void (*)(StringView line, void* user);
+bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code,
+                  PlayerLineFn on_line = nullptr, void* user = nullptr);
 
 // tools_perf.cpp (M-PERF step 3): a performance capture of a scene, judged against a target's budget,
 // and two captures compared.

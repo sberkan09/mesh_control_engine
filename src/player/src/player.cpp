@@ -2581,9 +2581,28 @@ private:
         f.counters.heap_allocations = mem::heap_live_allocations();
 
         if (perf_seen_++ >= static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0))) perf_.frames.push_back(f);
+        print_perf_progress();
         perf_frame_ = perf::Frame{};
         drew_3d_ = false;
         batch_stats_ = {};
+    }
+
+    // One line "<app>: perf warmup N/M" or "perf capturing N/M" about ten times per phase (the frame counts decide,
+    // so the lines repeat run to run); perf_run reads them off the player's stdout as its progress.
+    void print_perf_progress() {
+        const u64 warm = static_cast<u64>(math::max<i64>(cv_perf_warmup.get_int(), 0));
+        const i64 want = cv_frames.get_int() > 0 ? cv_frames.get_int() : cv_ticks.get_int();
+        if (want <= 0) return;
+        const u64 total = static_cast<u64>(want);
+        const u64 seen = perf_seen_;  // frames finished, warmup included
+        const bool warming = seen <= warm && warm > 0;
+        const u64 done = warming ? seen : seen - warm;
+        const u64 of = warming ? warm : (total > warm ? total - warm : 1);
+        const u64 step = math::max<u64>(of / 10, 1);
+        if (done % step != 0 && done != of) return;
+        std::printf("%s: perf %s %llu/%llu\n", desc_.app_name, warming ? "warmup" : "capturing", static_cast<unsigned long long>(done),
+                    static_cast<unsigned long long>(of));
+        std::fflush(stdout);
     }
 
     // -split_views N: N-1 cameras that show the primary 3D camera's view (a CameraBlend3D held at its
