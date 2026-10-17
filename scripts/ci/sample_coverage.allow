@@ -8,6 +8,11 @@ ProcLevelOwned | state the engine writes and games read; nothing to author
 UiScreenView | wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none
 AudioListenerMix | tested in tests/audio; M-VIEWS step 5 shows it in samples/09_coop (a listener per player)
 SharedCamera2D | tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style
-StaticMerge3D | M-VISUAL3 step 6 puts it in the demo scene
+VehicleSeat3D | M-OPENWORLD C1: tested in tests/kit/test_seats3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
+Rider3D | M-OPENWORLD C1: tested in tests/kit/test_seats3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
+Health3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
+Weapon3D | M-OPENWORLD C2: tested in tests/kit/test_combat3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it
+Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp
 RoadNetwork3D | tested in tests/kit/test_roads.cpp; M-OPENWORLD B2 shows it in the traffic sample, E1 in samples/09_openworld
 UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR
+FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it

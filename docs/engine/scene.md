@@ -54,8 +54,16 @@ Streaming, `include/mce/scene/streaming.h` (FR-ENT-120, opt-in):
 - Components: `SceneChunk` (an `AssetRef<Scene>`, a box `half_extents` around the entity's position,
   `load_distance`, `unload_distance`, `pinned`, `disabled`), `StreamingFocus` (`enabled`) and the
   pump-written `SceneChunkStatus` (`state`, a `ChunkState`: `Unloaded`, `Loading`, `Loaded`, `Failed`;
-  `entity_count`). All three are registered in the cook,
+  `entity_count`), and `FloatingOrigin3D` (`threshold`, `snap`, `vertical`, `enabled`; M-OPENWORLD A2). All
+  four are registered in the cook,
   the editor and the MCP server (`engine_components.cpp`).
+- Floating origin: with a `FloatingOrigin3D` in the world, `pump_streaming` first calls
+  `update_floating_origin`, which rebases the world (`ecs::rebase_world`, [ecs.md](ecs.md)) when the first
+  enabled focus is farther than `max(threshold, snap)` from the origin, by its position rounded to whole
+  `snap` cells (x and z; y too with `vertical`). Chunk scenes stay authored in absolute coordinates; a chunk
+  that loads after a rebase is moved by `origin_offset` as it spawns, and distances are measured in the
+  rebased frame, so load and unload decisions do not change. Hosts that do not stream can call
+  `update_floating_origin` themselves.
 - `install_streaming(world, assets, StreamingConfig)` adds the `SceneStreaming` resource;
   `pump_streaming(world, PumpMode)` runs it, once per tick, outside phases (it spawns and destroys).
   `Budgeted` follows the config: `async` requests go through `AssetSystem::request_async` and at most
@@ -120,6 +128,9 @@ ctest `test_scene` (no GPU), `tests/scene/test_scene.cpp`. It cooks a temporary 
 - "streaming: a chunk whose scene is missing fails without touching the world".
 - "streaming: async loads read off-thread and land on a later pump", including a cancel in flight.
 - "streaming: synchronous streaming is deterministic" and "a world without chunks is untouched".
+- "streaming: a floating origin rebases around the focus and chunks land relative to it" (a 16 m threshold and
+  8 m snap: the rebase, a chunk loaded after it, a chunk reloaded behind) and "streaming: floating origin runs
+  are deterministic".
 - "scene change: request_change swaps every entity for the target scene and reruns Startup" (by path
   and by GUID text, an unknown target, a run-time entity, a kept resource) and "scenes that name each
   other in a loop cook". `test_mcp_playtest` checks a game's change in an MCP run, with the `.mctest`
