@@ -336,3 +336,22 @@ TEST_CASE("script state: the state check fails a load it cannot watch") {
     CHECK(script::add_source(host, "next", "local t = {}\nfunction update() end\n"));
     CHECK(host.scripts()[1].state == ScriptState::Running);
 }
+
+TEST_CASE("script state: each script is watched on its own (several scripts, one fails)") {
+    ScriptHost host;
+    // 0: stateless; 1: hidden state in an upvalue; 2: stateless again, loaded after the failing one; NaN as a real upvalue.
+    REQUIRE(script::add_source(host, "calm", "local K = { 1 }\nfunction update() assert(K[1] == 1) end\n"));
+    REQUIRE(script::add_source(host, "counter",
+                               "local function make() local n = 0 return function() n += 1 return n end end\n"
+                               "local inc = make()\nfunction update() inc() end\n"));
+    REQUIRE(script::add_source(host, "nan",
+                               "local function make() local x = 0 / 0 return function() return x end end\n"
+                               "local get = make()\nfunction update() assert(get() ~= get()) end\n"));
+    World w;
+    host.install(w);
+    for (u32 t = 1; t <= 5; ++t) w.tick(1.0 / 60, t);
+    CHECK(host.scripts()[0].state == ScriptState::Running);  // another script's watch is not charged to it
+    CHECK(host.scripts()[1].state == ScriptState::Failed);
+    CHECK(std::string(host.scripts()[1].error.c_str()).find("kept state between ticks") != std::string::npos);
+    CHECK(host.scripts()[2].state == ScriptState::Running);  // a NaN upvalue is equal to itself, bit for bit
+}

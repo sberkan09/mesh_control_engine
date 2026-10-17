@@ -746,8 +746,9 @@ void watch_upvalue(lua_State* L, StateWalk& s, int fn, int n, u32 root, i32 line
     } else {
         w.base_ref = lua_ref(L, -1);  // keeps the baseline alive: no address reuse
     }
-    w.holder_ref = lua_ref(L, fn);
+    // Pushed before the second ref: if lua_ref runs out of memory the cleanup still finds (and unrefs) base_ref.
     s.watches->push_back(w);
+    (*s.watches)[s.watches->size() - 1].holder_ref = lua_ref(L, fn);
 }
 
 void walk_one(lua_State* L, StateWalk& s, usize i) {
