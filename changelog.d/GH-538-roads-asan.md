@@ -1,0 +1,1 @@
+- Fix: cooking a `.mcroads` road network no longer reads freed memory while building junction connectors (ASan heap-use-after-free in the roads importer).

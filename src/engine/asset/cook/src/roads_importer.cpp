@@ -671,9 +671,10 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
                 }
             }
             for (u32 i = 0; i < nin; ++i) {
-                RoadLane& src = lanes[in_lanes[i]];
-                src.first_next = static_cast<u32>(lanes.size());
-                src.next_count = static_cast<u32>(per[i].size());
+                // By value: the connectors pushed below grow `lanes`, which moves its elements.
+                lanes[in_lanes[i]].first_next = static_cast<u32>(lanes.size());
+                lanes[in_lanes[i]].next_count = static_cast<u32>(per[i].size());
+                const RoadLane src = lanes[in_lanes[i]];
                 for (const Pending& p : per[i]) {
                     const Array<V3>& li = lane_lines[in_lanes[i]];
                     const Array<V3>& lo = lane_lines[p.to];
@@ -698,7 +699,7 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
                         const f32 area2 = std::fabs(cross_y(q1 - q0, q2 - q0));
                         if (area2 > 1e-6f) tight = std::fmin(tight, l01 * l12 * l20 / (2.0f * area2));
                     }
-                    const RoadLane& dst = lanes[p.to];
+                    const RoadLane dst = lanes[p.to];
                     RoadLane c{};
                     c.first_point = static_cast<u32>(points.size());
                     c.point_count = static_cast<u32>(curve.size());
