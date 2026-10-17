@@ -24,6 +24,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/pathfinding.h"
+#include "mce/kit/perception.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
 #include "mce/log.h"
@@ -271,6 +272,23 @@ int l_signals(lua_State* L) {
         lua_rawseti(L, -2, static_cast<int>(i + 1));
     }
     return 1;
+}
+
+// mce.make_noise(position, loudness?, source?, team?): a kit::Noise that perceivers hear on the next
+// tick (loudness in metres a hearing-1 perceiver hears it from, default 10; perceivers of `team` ignore it).
+int l_make_noise(lua_State* L) {
+    Frame& f = frame_of(L);
+    kit::Noise n;
+    n.position = check_vec3(L, 1);
+    n.loudness = static_cast<f32>(luaL_optnumber(L, 2, 10.0));
+    if (!(n.loudness >= 0.0f)) luaL_error(L, "mce.make_noise: loudness must be 0 or more");
+    n.source = opt_entity(L, 3);
+    const double team = luaL_optnumber(L, 4, 0.0);
+    if (!(team >= 0.0 && team < 4294967296.0)) luaL_error(L, "mce.make_noise: team must be 0 or a positive whole number");
+    n.team = static_cast<u32>(team);
+    if (!f.world().event_queue<kit::Noise>()) luaL_error(L, "mce.make_noise: this world has no perception (install_ai)");
+    f.events().push(n);
+    return 0;
 }
 
 // mce.play_sound("guid:<sfx>", gain_db?)
@@ -1020,6 +1038,7 @@ const luaL_Reg kWorldLib[] = {
     {"emit", l_emit},
     {"signal", l_signal},
     {"signals", l_signals},
+    {"make_noise", l_make_noise},
     {"play_sound", l_play_sound},
     {"pressed", l_pressed},
     {"held", l_held},

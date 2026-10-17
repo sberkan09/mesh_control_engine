@@ -57,6 +57,7 @@ declare mce: {
     emit: (event: string, fields: Fields?) -> (),
     signal: (name: string, e: Entity?) -> (),
     signals: (name: string) -> { Entity | boolean },
+    make_noise: (position: vector, loudness: number?, source: Entity?, team: number?) -> (),
     play_sound: (sfx: string, gain_db: number?) -> (),
 
     pressed: (action: string) -> boolean,
