@@ -291,11 +291,6 @@ void report_cycle(Array<Node>& nodes, u32 start, Array<u8>& reported, DiagList& 
     diags.error(Errc::DependencyCycle, display(*nodes[cur].rec), 0, 0, kStageGraph, msg);
 }
 
-
-// String tables (M-MOBILE step 11a): every locale should carry every key of the base table (the
-// "en" one, else the first by path); a key a locale lacks shows the base text in play, so it is a
-// warning, as is a key the base table does not know (usually a typo). Parse errors are the
-// importer's to report.
 // A project ships one convar-defaults file: with two, which one wins would be a silent rule, so each file after the
 // first is an error naming the first.
 void check_single_defaults(const AssetRegistry& registry, DiagList& diags) {
@@ -313,6 +308,10 @@ void check_single_defaults(const AssetRegistry& registry, DiagList& diags) {
     }
 }
 
+// String tables (M-MOBILE step 11a): every locale should carry every key of the base table (the
+// "en" one, else the first by path); a key a locale lacks shows the base text in play, so it is a
+// warning, as is a key the base table does not know (usually a typo). Parse errors are the
+// importer's to report.
 void check_string_tables(const AssetRegistry& registry, DiagList& diags) {
     struct Table {
         const AssetRecord* rec;

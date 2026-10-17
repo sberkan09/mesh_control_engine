@@ -10,6 +10,8 @@ using namespace mce;
 
 namespace {
 MCE_CVAR(cv_test_int, "test.int", 3, "test int", CVarFlags::None);
+MCE_CVAR(cv_test_pack_int, "test.pack_int", 3, "test int set by a pack chunk", CVarFlags::None);
+MCE_CVAR(cv_test_pack_flag, "test.pack_flag", true, "test flag set by a pack chunk", CVarFlags::None);
 MCE_CVAR(cv_test_float, "test.float", 0.5f, "test float", CVarFlags::None);
 MCE_CVAR(cv_test_bool, "test.bool", false, "test bool", CVarFlags::None);
 MCE_CVAR(cv_test_str, "test.str", "hello", "test string", CVarFlags::None);
@@ -343,15 +345,15 @@ TEST_CASE("project defaults: a command-line value equal to the old or new defaul
 }
 
 TEST_CASE("project defaults: text from a pack applies like the file, line by line") {
-    cv_test_int.reset();
-    cv_test_saved_flag.reset();
-    console::set_defaults_text("# from a pack\r\ntest.int 4\n\n  test.saved_flag   false  \ntest.nope 1\ntest.int");
-    CHECK(cv_test_saved_flag.get_bool() == false);
-    CHECK(cv_test_saved_flag.is_default());
-    CHECK(cv_test_int.get_int() == 4);  // a name with no value is rejected; the earlier line stands
+    cv_test_pack_int.reset();
+    cv_test_pack_flag.reset();
+    console::set_defaults_text("# from a pack\r\ntest.pack_int 4\n\n  test.pack_flag   false  \ntest.nope 1\ntest.pack_int");
+    CHECK(cv_test_pack_flag.get_bool() == false);
+    CHECK(cv_test_pack_flag.is_default());
+    CHECK(cv_test_pack_int.get_int() == 4);  // a name with no value is rejected; the earlier line stands
     console::set_defaults_text("");  // empty chunk: nothing to do
-    cv_test_saved_flag.set_default("true");
-    cv_test_int.set_default("3");
-    cv_test_saved_flag.reset();
-    cv_test_int.reset();
+    cv_test_pack_flag.set_default("true");
+    cv_test_pack_int.set_default("3");
+    cv_test_pack_flag.reset();
+    cv_test_pack_int.reset();
 }

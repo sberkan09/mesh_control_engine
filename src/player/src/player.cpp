@@ -532,10 +532,7 @@ public:
                 if (assets_.info(k).type != asset::ChunkType::ConvarDefaults) continue;
                 const Result<asset::AssetHandle<asset::ConvarDefaultsChunk>> h =
                     assets_.load_sync<asset::ConvarDefaultsChunk>(k);
-                if (!h) {
-                    MCE_LOG_WARN("{}: convar defaults {} unreadable", desc_.app_name, assets_.info(k).path);
-                    continue;
-                }
+                if (!h) continue;  // the asset system already warned
                 const Span<const byte> bytes = assets_.resolve(h.value());
                 console::set_defaults_text(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
                 MCE_LOG_INFO("{}: convar defaults {}", desc_.app_name, assets_.info(k).path);

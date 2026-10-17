@@ -41,7 +41,9 @@ TEST_CASE("convar defaults: .mcdefaults cooks to CHNK_CVARS as name value lines"
     asset::AssetSystem assets;
     const std::string cooked = root + "/cooked";
     const StringView roots[] = {StringView(cooked.c_str())};
-    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    asset::MountOptions game;
+    game.allow_code = true;  // the game's own pack
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1), game));
     const asset::AssetKey key = assets.find(asset::parse_guid("5703e000-0000-4000-8000-0000000000d1").value());
     REQUIRE(key != asset::kInvalidAssetKey);
     CHECK(assets.info(key).type == asset::ChunkType::ConvarDefaults);
@@ -112,4 +114,17 @@ TEST_CASE("convar defaults: a project without one cooks no such chunk (old packs
     const StringView roots[] = {StringView(cooked.c_str())};
     REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
     for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) CHECK(assets.info(k).type != asset::ChunkType::ConvarDefaults);
+}
+
+TEST_CASE("convar defaults: a mod's pack cannot set convar defaults") {
+    const std::string root = fresh_dir("defaults_mod");
+    write_file(root + "/assets/project.mcdefaults", R"({ "format": "mce-defaults", "version": 1,
+        "guid": "5703e000-0000-4000-8000-0000000000d4", "convars": { "access_log": "/tmp/x" } })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));  // default options: data only
+    CHECK(assets.find(asset::parse_guid("5703e000-0000-4000-8000-0000000000d4").value()) == asset::kInvalidAssetKey);
 }
