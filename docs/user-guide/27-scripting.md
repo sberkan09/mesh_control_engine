@@ -182,11 +182,23 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
   The top level itself may build constant tables and field handles (it runs once, when the script
   loads), and the locals of `update()` and the closures inside it are fine, since they live for one call.
   Globals are read-only after the top level runs.
+
+  What the cook cannot see is caught when the game runs. Once the top level has run, every table that
+  `update()` and the script's globals reach is frozen, so writing into it through an alias
+  (`local a = t; a.n += 1`), a helper's parameter (`fill(t)`), a global table (`STATE.n += 1`) or a
+  `newproxy` metatable fails at that line with `attempt to modify a readonly table (tables reachable
+  from update() are frozen after the top level; keep state in a component)`. Upvalues (a closure made
+  by a factory, `local inc = counter()`) and buffers it reaches are compared after each `update()`; a
+  change disables the script on that tick with `update() kept state between ticks: upvalue #1 of the
+  function defined at line 3 changed (reached from upvalue #1 of update()); keep it in a component`.
+  A top-level scratch table or a cache filled lazily is therefore an error too: build it at the top
+  level, or make it per call.
 - **Keys with a stable order.** Iterating a table keyed by tables or functions follows their addresses,
   which differ between runs. The cook rejects such keys where the source shows them (`{[{}] = 1}`,
   `seen[f] = true` with `local function f`), and `pairs` and `next` raise when they meet one at run time.
   Key by entity, number or string. One gap remains: a plain `for k, v in t do` loop over such a table
-  is not caught (Luau runs that loop inside the VM, and the type check does not track key types).
+  is not caught (Luau runs that loop inside the VM, and the type check does not track key types), and
+  the run-time state check above does not see it either, since iteration order is not state.
 - **A sandbox.** Only the `table`, `string`, `math`, `utf8`, `bit32`, `buffer` and `vector` libraries
   are there; `os`, `io`, `debug`, `coroutine`, `print` and `math.random` are not, and the cook says what
   to use instead (`'print' is not available in scripts; use mce.log`).
