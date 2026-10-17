@@ -14,6 +14,7 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/kit/views.h"
+#include "minimap_feed.h"
 #include "mce/ui/options_panel.h"
 #include "mce/ui/screen_link.h"
 #include "mce/ui/ui.h"
@@ -83,6 +84,7 @@ private:
         f32 view_ui_scale = 1.0f;
         ui::Document* doc = nullptr;  // null headless
         ui::OptionsPanel* options = nullptr;  // a document with a remap list (the stock options screen)
+        MinimapFeed minimap;                  // its Minimap widgets (M-MISSION 3b); empty for most documents
     };
     const Screen* view_screen(u32 i) const;  // the i-th visible screen laid out in a view
     Array<Screen> screens_;

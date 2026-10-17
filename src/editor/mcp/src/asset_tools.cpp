@@ -288,6 +288,12 @@ constexpr AssetKind kKinds[] = {
      R"json([
 {"name":"values","type":"object","help":"key -> true/false, a number, text, or {\"type\", \"value\"}"}])json",
      R"json({"values":{}})json"},
+    {"ConvarDefaults", ".mcdefaults", "mce-defaults", 1,
+     "The project's own convar defaults (M-WORKFLOW 7), cooked into the pack for every platform. A value is true/false, "
+     "a number or text; names are 1-63 letters, digits, '_', '-', '.'. A saved option and a command-line value still win.",
+     R"json([
+{"name":"convars","type":"object","help":"convar name -> true/false, a number or text, e.g. {\"ui.reference_height\": 720}"}])json",
+     R"json({"convars":{}})json"},
 };
 
 const AssetKind* kind_for_extension(StringView path) {
@@ -714,7 +720,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcskel2d, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, RoadNetwork, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, ConvarDefaults, Terrain, RoadNetwork, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

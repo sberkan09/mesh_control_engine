@@ -169,27 +169,28 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Roads case** (`tests/fuzz/test_roads.cpp`, part of `test_fuzz_importers`). A crossroads with a signal is cooked
   from mutated source text (raw and value-swapped) and the `RoadNetwork` chunk is mutated byte-wise and read through
   `RoadView` with every lane, successor, conflict and phase range followed (`fuzz::walk`).
-- **Finding, fixed here: heap use-after-free in the road cook on a valid network.** `roads_importer.cpp` kept
+- **Finding: heap use-after-free in the road cook on a valid network (fixed concurrently, GH-538).** `roads_importer.cpp` kept
   `RoadLane& src = lanes[...]` across the loop that `push_back`s the connector lanes, so the second connector read a
-  reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only; fixed by copying
-  the two fields it needs. Owner of the file: M-OPENWORLD; the fix is three lines and the roads cook tests still pass.
-  Regression: the roads case under the ASan stage (a plain build does not see it).
+  reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only. My first
+  fix (copy the two fields it needs) collided with the M-OPENWORLD one for GH-538, and I took theirs. Regression: the roads
+  case under the ASan stage (a plain build does not see it).
 - **Mesh importers (M-IMPORT3D's, added at the coordinator's request).** The ASCII FBX (`quad.fbx`, ufbx), the MTL and the glTF of
   `samples/import_demo` are picked up by the importers test as seeds with no change (300 mutants each under ASan, clean).
-  `samples/import_demo/assets/models/tent.obj` was git-ignored (`*.obj`), so a clean clone lacked it and the sample's `import_demo_reimport` test failed (it regenerates the file and sees a new one); this PR commits it with a `.gitignore` exception, which also makes it an importers seed. `tests/fuzz/test_mesh_import.cpp` builds a corpus of its own as well: a tent OBJ with a material
+  `tent.obj` was git-ignored at first, so a clean clone failed `import_demo_reimport` (fixed concurrently, GH-399, which tracks it); it is an importers seed too. `tests/fuzz/test_mesh_import.cpp` builds a corpus of its own as well: a tent OBJ with a material
   library (byte damage and swapped lines), and two GLB grids whose position and index buffers are `EXT_meshopt_compression`
   streams (one with the EXPONENTIAL filter) mutated byte-wise, which reaches the damaged streams and the damaged
   `count` / `byteStride` / `mode` / `filter` fields. 12,000 mutants of each under ASan: no finding. The "meshopt wall"
   allows this file for the encoder.
 - **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
-- **Milestone state.** Steps 1 to 4 are done. Still open: the Luau bytecode change (M-SCRIPT, above), the Detour guard
+- **Milestone state.** Steps 1 to 4 are done. Still open: the Detour guard
   and a long run with validation on (below), and corpora for the five exempt importers.
 
 ### Open items from step 3
 
-- Luau bytecode loader trusts its input (3a). Decision (coordinator, 2026-10-17): bytecode is never loaded from untrusted
-  input, only what the cook puts in the pack; outside sources compile from source. The M-SCRIPT thread makes the change
-  as a small PR; when it lands, drop the `MCE_FUZZ_BYTECODE` case from `test_fuzz_script`.
+- Luau bytecode loader trusts its input (3a). Decided and pinned (coordinator 2026-10-17; M-SCRIPT3 step 8): bytecode loads
+  only from the game's own cooked pack, `check_walls.py` fails a new mount site that allows code or an `add_bytecode`
+  caller outside the trusted places, and mods, base packs, fetched config and user files stay data-only. The loader itself
+  is not hardened, so the `MCE_FUZZ_BYTECODE` case stays off by default (it calls `add_bytecode` as a trusted caller would).
 
 ### Planned: Detour defense in depth (separate item)
 
@@ -219,6 +220,6 @@ validation switched on.
 | `.mcperf` captures | `editor/core/perf_file.h` | tools | mutated text and JSON with one value swapped, then summarized (`test_fuzz_misc`) | done |
 | Replication, rollback and relay packets | `net/replication.h` `read_ack`, `apply`; rollback; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | mutated snapshots, acks, rollback and relay messages (`test_fuzz_net`) | done |
 | Luau source | `script/` `check`, `compile` | project scripts | mutated (`test_fuzz_script`) | done |
-| Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default | open |
+| Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default; only the game's own pack may carry bytecode (M-SCRIPT3 8, wall) | closed by policy |
 | MCP requests | `mcp/server.h` | agents | mutated and random requests (`test_mcp`) | done |
 | Console and command line | `core/convar.cpp` | the player | random argv and console lines over every registered name (`test_fuzz_misc`) | done |

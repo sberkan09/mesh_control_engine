@@ -430,6 +430,6 @@ runs them with the sanitizers on, a sanitizer report counting as a failure.
 - Adding a chunk type or an importer: `scripts/ci/check_walls.py` fails until the new chunk type has a
   reader in `tests/fuzz/test_chunk_readers.cpp` and the new importer has a source file the fuzz test
   reads (or an entry with a reason in the wall's allow-list).
-- Not covered: Luau bytecode (the loader trusts it, so it is accepted only from the game's own pack and a mod's
-  is dropped, see 19.4; M-SCRIPT is making that rule complete), and the GPU drivers, the OS and third-party
-  libraries beyond the calls the engine makes into them.
+- Not covered: Luau bytecode (the loader trusts it, so only the game's own pack may carry it; a mod's is dropped, see
+  19.4, and `check_walls.py` pins the mount sites), and the GPU drivers, the OS and third-party libraries beyond the
+  calls the engine makes into them.

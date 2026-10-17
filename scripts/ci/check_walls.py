@@ -169,6 +169,22 @@ WALLS = [
         ["src/engine/script/compiler/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
+    # Bytecode trust (M-SCRIPT2 step 0, SBA-198): Luau's loader trusts its input, so only the game's own cooked pack may be
+    # mounted with allow_code (the player's pack, the editor project's cook, the headless run's pack), and raw bytecode
+    # reaches a ScriptHost only through the script module (scene scripts load it from those mounts, compile() makes it
+    # from source). A mod, a base pack, fetched config or any user file is data-only; to add a mount site, name it here.
+    (
+        "bytecode trust wall (allow_code)",
+        re.compile(r"\ballow_code\s*=\s*true\b"),
+        ["src/player/src/player.cpp", "src/editor/core/src/project.cpp", "src/editor/mcp/src/headless_run.cpp", "tests/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    (
+        "bytecode trust wall (add_bytecode)",
+        re.compile(r"\badd_bytecode\s*\("),
+        ["src/engine/script/", "tests/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
     (
         "MCP socket wall",
