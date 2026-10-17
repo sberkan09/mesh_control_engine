@@ -22,6 +22,7 @@ mce_add_test(test_kit UMBRELLA
         test_ui_flow.cpp
         test_fsm.cpp
         test_kit3d.cpp
+        test_static_merge3d.cpp
         test_anim3d.cpp
         test_sensors3d.cpp
         test_nav3d.cpp

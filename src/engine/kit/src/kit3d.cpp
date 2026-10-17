@@ -8,6 +8,7 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/static_merge3d.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -260,7 +261,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     }
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
-                              TerrainCollider3D, TerrainFoliage3D>();
+                              TerrainCollider3D, TerrainFoliage3D, StaticMerge3D>();
     world.set_resource(Environment3D{});
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});

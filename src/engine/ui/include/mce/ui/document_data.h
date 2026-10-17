@@ -118,6 +118,12 @@ struct ThemeData {
     Style styles[kWidgetKindCount][kWidgetStateCount];  // each kind's default look under this theme
 
     asset::Guid font(FontRole role) const { return role == FontRole::Auto ? asset::Guid{} : fonts[static_cast<u32>(role) - 1]; }
+    // The font for text that belongs to no document (subtitles, captions, the cutscene skip prompt): the
+    // theme's Body font, else its Title font; null when the theme sets neither.
+    asset::Guid overlay_font() const {
+        const asset::Guid body = font(FontRole::Body);
+        return body.is_null() ? font(FontRole::Title) : body;
+    }
 };
 
 // Every kind's look made of `palette`'s colors (what a theme with no "styles" overrides gets).

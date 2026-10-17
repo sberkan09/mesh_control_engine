@@ -40,6 +40,8 @@ struct Counters {
     // draws_instanced (the renderer's drawn instanced draws, taken from the same view) they add up to that
     // view's scene draws; zero where the frame drew no 3D. A capture from before M-CONTENT 2 has no causes.
     u32 draw_causes[kDrawCauseCount] = {};
+    u32 merged_groups = 0;     // 3D: StaticMerge3D components drawing merged meshes (M-VISUAL3 5b)
+    u32 merged_children = 0;   // 3D: the MeshRef children they replace
 };
 
 struct Frame {

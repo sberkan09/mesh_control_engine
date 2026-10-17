@@ -21,7 +21,7 @@
 //              several fields in one call; ("Comp", "field") pairs work in place of handles.
 //              Numbers, booleans, enums (by name), Vec2/Vec3 (vectors), Vec4/Quat/Color (four
 //              numbers), entities, strings, asset refs ("guid:...") and nested structs (tables).
-//   entities   mce.each(...), mce.has(e, "Comp"), mce.alive(e), mce.spawn({Comp = {...}}),
+//   entities   mce.each(...), mce.has(e, "Comp"), mce.alive(e), mce.find(name), mce.spawn({Comp = {...}}),
 //              mce.add(e, "Comp", {...}), mce.remove(e, "Comp"), mce.destroy(e),
 //              mce.instantiate("guid:<prefab>", position): structural changes go through Commands
 //              and appear at the next sync point; the handles are valid at once.

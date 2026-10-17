@@ -114,6 +114,24 @@ for g in "${GROUPS_RUN[@]}"; do
     fi
 done
 
+# --- 2b. --task / --premerge timing (opt out with MCE_CI_TASK_TIMING=0) ---------------------------------------
+# Non-gating: a FAIL here is logged in the report and never adds to `failed`.
+# What a thread pays for a 1-line core change, measured here because a thread's own container restarts whenever a
+# message reaches it and kills long runs. The trees are warm from the groups above, so this is the "normal day"
+# number; the first --task is the one that touches the change, the second is the re-run.
+TIMING=()
+if [[ "${MCE_CI_TASK_TIMING:-1}" != 0 && ${#failed[@]} -eq 0 && -f src/engine/core/src/log.cpp ]]; then
+    echo "// ci-timing probe" >> src/engine/core/src/log.cpp
+    for t in "--task" "--task" "--premerge"; do
+        start=$SECONDS
+        if scripts/ci/local_ci.sh $t > "$LOG_DIR/integration-timing-${#TIMING[@]}.log" 2>&1; then r=PASS; else r=FAIL; fi
+        TIMING+=("$t: $r ($((SECONDS - start))s)")
+        echo "    timing ${TIMING[-1]}"
+        [[ -d "$KEEP" ]] && echo "timing ${TIMING[-1]}" >> "$KEEP/$head_sha-progress.txt"
+    done
+    git checkout -- src/engine/core/src/log.cpp || true
+fi
+
 # --- 3. ccache snapshot -----------------------------------------------------------------------------
 scripts/ci/local_ci.sh --save-cache-only > "$LOG_DIR/integration-snapshot.log" 2>&1 || true
 
@@ -136,6 +154,11 @@ fi
         echo "- group $i ($g): ${RESULT[$i]}"
         [[ "${RESULT[$i]}" == FAIL* ]] && grep -E '^  [a-z0-9-]+ +(PASS|FAIL)' "$LOG_DIR/integration-group-$i.log" | sed 's/^/    /'
     done
+    if [[ ${#TIMING[@]} -gt 0 ]]; then
+        echo
+        echo "## Timing of a 1-line core change (warm trees after the groups)"
+        printf -- '- %s\n' "${TIMING[@]}"
+    fi
     if [[ ${#failed[@]} -gt 0 ]]; then
         echo
         echo "## Suspect PRs (first-parent merges on dev_claude since ${last_green:-the last 10 merges})"
