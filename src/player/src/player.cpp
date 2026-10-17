@@ -816,6 +816,7 @@ public:
             extract3d_.set_frame_dt(capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
             extract3d_.extract(world_, scene3, alpha);
             scene3.build();
+            extract3d_.note_built(scene3);  // one warning when decals were dropped
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
             take_draw_causes();

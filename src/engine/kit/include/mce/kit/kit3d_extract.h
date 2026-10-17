@@ -70,6 +70,7 @@ struct Kit3DStats {
     u32 merged_groups = 0;     // StaticMerge3D components with at least one merged cell (M-VISUAL3 5b)
     u32 merged_children = 0;   // MeshRef children drawn through them instead of on their own
     u32 merged_cells = 0;      // merged meshes submitted (a cell, or a cell and shadow flag), before culling
+    u32 decals_dropped = 0;    // visible decals the frame could not draw (set by note_built; M-VISUAL3 6)
 };
 
 class Kit3DExtract {
@@ -126,6 +127,11 @@ public:
     void apply_environment(World& world, render::Scene3D& scene);
 
     const Kit3DStats& stats() const { return stats_; }
+    // Call after scene.build() of a frame this extract filled: records Scene3D's decals_dropped in stats() and, the first
+    // time it is above 0 (once per extract, re-armed by reset()), logs one warning that names the limits (64 decals, 3
+    // distinct textures per frame) and the workaround (an atlas texture plus Decal3D::uv_rect).
+    void note_built(const render::Scene3D& built);
+    u32 decal_warnings() const { return decal_warnings_; }  // warnings logged since init / reset (tests)
 
     // The quality tier's caps on the scene's look (r.quality, render/quality.h): at most its shadow
     // cascades, its shadow-map resolution, bloom and FXAA only when the tier keeps them. Default:
@@ -221,6 +227,7 @@ private:
     u32 frame_stamp_ = 0;
     Kit3DStats stats_;
     bool bake_mode_ = false;
+    u32 decal_warnings_ = 0;
     f32 time_ = 0.0f;
     struct FoliageEntry {  // a Foliage3D's scatter, kept while its inputs stay the same
         Entity entity;
