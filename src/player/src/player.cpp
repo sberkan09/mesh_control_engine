@@ -246,6 +246,10 @@ MCE_CVAR(cv_language, "language", "",
 MCE_CVAR(cv_ui_scale, "ui_scale", 1.0f,
          "UI size on top of the display's own scale (1 = as the display asks; lowered when the screen is too small)",
          CVarFlags::Saved);
+MCE_CVAR(cv_ui_reference_height, "ui.reference_height", 0.0f,
+         "UI authored for a window this tall (720): the UI grows with the window's short side over it, so it is not tiny "
+         "at 1080p (0 = off, the UI scale follows the display only)",
+         CVarFlags::Saved);
 MCE_CVAR(cv_ui_preview, "ui_preview", "",
          "Show only this UI document (GUID) over the camera's clear color, no world: the MCP server's ui_preview",
          CVarFlags::None);
@@ -715,7 +719,8 @@ public:
         const bool have_views = !ui_preview_ && view_entity().is_null() && view_free_.empty() &&
                                 kit::collect_views(world_, bb, views_, &kit::render_texture_size, &render_textures_);
         if (!have_views) views_.clear();
-        screens_.set_views(world_, views_.span(), window_->display_scale(), cv_ui_scale.get_float());
+        screens_.set_views(world_, views_.span(), window_->display_scale(), cv_ui_scale.get_float(),
+                           cv_ui_reference_height.get_float());
         update_ui_screens(bb);
         // Video pictures step to their players' playheads before the extracts draw them.
         if (!ui_preview_) videos_.update(world_);
@@ -1633,7 +1638,8 @@ private:
     // ---- the developer console (FR-UI-045) ----------------------------------------------------
 
     // The UI scale for this framebuffer: the display's scale times -ui_scale, fitted (M-MOBILE 11b).
-    f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float()); }
+    f32 ui_scale(rhi::Extent2D bb) const { return ui::compute_ui_scale(bb, window_->display_scale(), cv_ui_scale.get_float(), {360, 640},
+                                                                       cv_ui_reference_height.get_float()); }
     // The accessibility settings every UI document draws with (M-ACCESS): text scale, high contrast.
     static void apply_access(ui::UpdateContext& ctx) {
         const render::AccessibilitySettings a = render::accessibility_settings();

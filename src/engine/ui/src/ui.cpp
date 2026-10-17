@@ -150,10 +150,14 @@ Result<BuiltinSkin*> create_builtin_skin(render::Renderer& renderer, BuiltinSkin
 
 // ---- UI scale ----------------------------------------------------------------------------------
 
-f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical) {
-    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * (user_scale > 0.0f ? user_scale : 1.0f);
+f32 compute_ui_scale(rhi::Extent2D viewport, f32 display_scale, f32 user_scale, vec2 min_logical, f32 reference_height) {
+    const f32 user = user_scale > 0.0f ? user_scale : 1.0f;
+    f32 s = (display_scale > 0.0f ? display_scale : 1.0f) * user;
     const f32 w = static_cast<f32>(viewport.width), h = static_cast<f32>(viewport.height);
     const f32 short_px = w < h ? w : h, long_px = w < h ? h : w;
+    // A game authored for a reference height grows with the window: the short side over it, on top of the
+    // user's setting. A phone whose display scale already asks for more keeps that (no double scaling).
+    if (reference_height > 0.0f && short_px > 0.0f && short_px / reference_height * user > s) s = short_px / reference_height * user;
     const f32 short_min = min_logical.x < min_logical.y ? min_logical.x : min_logical.y;
     const f32 long_min = min_logical.x < min_logical.y ? min_logical.y : min_logical.x;
     if (short_min > 0.0f && short_px > 0.0f && short_px / short_min < s) s = short_px / short_min;
