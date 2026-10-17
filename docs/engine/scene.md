@@ -43,7 +43,9 @@ Loading, `include/mce/scene/scene.h`, namespace `mce::scene`:
   (`mce/scene/entity_names.h`, sorted name hashes to entities; unnamed scenes create nothing). `find_entity(world,
   name)` returns the first live entity of that name, in scene order, or `Entity::null`. It is a resource, so no
   column is added and the state hash does not change; `apply_change` clears it before the next scene fills it, a
-  destroyed (unloaded) entity stops matching, and entities spawned at run time have no name.
+  destroyed (unloaded) entity stops matching and its row is dropped the next time a scene fills the table, and
+  entities spawned at run time have no name. Names are fixed at load: nothing renames an entity afterwards. The
+  editor's prefab ghosts also go through `instantiate`, so their names are recorded in the editor world.
 
 The input type `asset::SceneView` and the chunk layout live in `mce_asset` (`mce/asset/formats.h`).
 

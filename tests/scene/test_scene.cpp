@@ -153,16 +153,29 @@ TEST_CASE("scene: entities are found by name, names go with a scene change, and 
     CHECK(scene::find_entity(w, "Nobody").is_null());
     CHECK(scene::find_entity(w, "").is_null());  // the unnamed entity is not found by ""
 
-    // The table is a resource, not a component: dropping it leaves the state hash as it was.
+    // A second copy of the scene: the earlier copy wins while it lives, then the next one takes over.
+    Array<Entity> copy;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &copy));
+    CHECK(scene::find_entity(w, "Target") == spawned[0]);
+    w.destroy(spawned[0]);
+    CHECK(scene::find_entity(w, "Target") == copy[0]);
+    w.destroy(copy[0]);
+    CHECK(scene::find_entity(w, "Target").is_null());
+
+    // Dead rows are dropped when the table is rebuilt, so load/unload cycles do not grow it.
+    for (int i = 0; i < 5; ++i) {
+        Array<Entity> again;
+        REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &again));
+        for (Entity e : again) w.destroy(e);
+    }
+    Array<Entity> last;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &last));
+    CHECK(w.resource<scene::EntityNames>().rows.size() == 4);  // two Cameras still alive from earlier + the last copy's two; the 5 destroyed copies are gone
+
+    // The table is a resource, not a component: replacing it with an empty one leaves the state hash as it was.
     const u64 with_names = w.state_hash();
     w.set_resource(scene::EntityNames{});
     CHECK(w.state_hash() == with_names);
-
-    // Instantiated again, the earlier copy keeps winning while it lives; once destroyed, the next does.
-    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &spawned));
-    const Entity second = scene::find_entity(w, "Target");
-    CHECK_FALSE(second.is_null());
-    w.destroy(second);
     CHECK(scene::find_entity(w, "Target").is_null());
 
     // A scene change clears the table, then the new scene fills it.

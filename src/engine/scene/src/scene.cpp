@@ -34,6 +34,12 @@ void record_names(World& world, const asset::SceneView& scene, const Array<Entit
         names->rows.push_back(EntityNames::Row{StringId(name).value, spawned[e]});
     }
     if (names) {
+        // Rows of entities that are gone (a streamed chunk unloaded, a destroyed entity) would pile up
+        // over load/unload cycles: drop them now, while the table is being rebuilt anyway.
+        usize kept = 0;
+        for (usize i = 0; i < names->rows.size(); ++i)
+            if (world.alive(names->rows[i].entity)) names->rows[kept++] = names->rows[i];
+        names->rows.resize(kept);
         std::stable_sort(names->rows.begin(), names->rows.end(),
                          [](const EntityNames::Row& a, const EntityNames::Row& b) { return a.hash < b.hash; });
     }
