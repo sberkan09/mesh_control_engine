@@ -264,11 +264,17 @@ TEST_CASE("perf_run headless and perf_compare: the sim alone, judged and compare
     REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
     c.init();
     CHECK(c.fails("perf_run", R"({"target":"console"})").find("'target'") != std::string::npos);
-    CHECK(c.fails("perf_run", R"({"frames":5})").find("'frames'") != std::string::npos);
+    CHECK(c.fails("perf_run", R"({"frames":0})").find("'frames'") != std::string::npos);
     CHECK(c.fails("perf_run", R"({"save":"../out.mcperf"})").find("'save'") != std::string::npos);
     CHECK(c.fails("perf_compare", "{}").find("cannot read") != std::string::npos);  // nothing measured yet
 
+    // A short run works (the floor is 1 frame) and says its percentiles are noisy; the counts stay deterministic.
+    auto quick = c.ok("perf_run", R"({"headless":true,"frames":5,"warmup":2})");
+    CHECK(quick.v().get("frames").as_number() == 5);
+    CHECK(str(quick.v().get("note")).find("noisy") != std::string::npos);
+
     auto r = c.ok("perf_run", R"({"headless":true,"frames":60,"warmup":10,"target":"mobile"})");
+    CHECK_FALSE(r.v().get("note").valid());
     CHECK(str(r.v().get("file")) == "cooked/.perf/last.mcperf");
     CHECK(std::filesystem::exists(root + "/cooked/.perf/last.mcperf"));
     CHECK(r.v().get("frames").as_number() == 60);
@@ -375,6 +381,37 @@ TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures
     Client c(with_player());
     REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
     c.init();
+    // With a progressToken the run reports its phases as notifications/progress: launching, warmup, capturing,
+    // reading the capture, in order, ending at the total.
+    {
+        c.out.clear();
+        c.server.handle(sv(R"({"jsonrpc":"2.0","id":900,"method":"tools/call","params":{"name":"perf_run","arguments":{"frames":30,"warmup":5,"width":320,"height":180},"_meta":{"progressToken":"p1"}}})"));
+        std::vector<std::string> phases;
+        u64 last = 0;
+        for (const std::string& line : c.out) {
+            auto m = parse(line);
+            if (str(m->root().get("method")) != "notifications/progress") continue;
+            const cook::JsonValue params = m->root().get("params");
+            CHECK(str(params.get("progressToken")) == "p1");
+            CHECK(params.get("total").as_number() == 35);
+            const u64 done = static_cast<u64>(params.get("progress").as_number());
+            CHECK(done >= last);
+            last = done;
+            phases.push_back(str(params.get("message")));
+        }
+        REQUIRE(phases.size() >= 4);
+        CHECK(phases.front() == "launching the player");
+        CHECK(phases.back() == "reading the capture");
+        CHECK(last == 35);
+        bool warm = false, capt = false;
+        for (const std::string& p : phases) {
+            warm = warm || p.rfind("warmup ", 0) == 0;
+            capt = capt || p.rfind("capturing ", 0) == 0;
+        }
+        CHECK(warm);
+        CHECK(capt);
+        CHECK(str(parse(c.out.back())->root().get("result").get("content").at(0).get("type")) == "text");
+    }
     auto a = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/before.mcperf"})");
     const u64 draws = static_cast<u64>(a.v().get("counters_max").get("draws").as_number());
     CHECK(draws > 0);

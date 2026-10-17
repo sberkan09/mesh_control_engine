@@ -114,6 +114,15 @@ Its capture goes to `cooked/.perf/last.mcperf`, and the previous one moves to `p
 counts when it moved at least 10% and 0.1 ms, and a counter on any change. Chapter 14 ("Is it fast
 enough?") has the arguments.
 
+`frames` (default 300, 1 to 3600) is the number of frames captured after the `warmup` (default 30). A short run is
+useful to see the counters or to check a change quickly: with fewer than 30 frames the report adds a `note` that the
+percentiles are noisy, because p95 and p99 of a handful of frames mean little. The counters (draws, triangles, sprites)
+do not depend on the machine's speed, so a short run still compares exactly; use 30 frames or more for a time verdict.
+
+A run takes a while. When the client sends a `progressToken`, `perf_run` sends `notifications/progress` while the
+player works: the phase (`launching the player`, `warmup 10/30`, `capturing 120/300`, `reading the capture`) in
+`message`, and `progress` of `total` frames. The player prints about ten of these lines per phase, never one per frame.
+
 The loop for an agent or a person: `perf_run` with the target, read what is over and what the
 advice and `top_systems` name, change one thing, `perf_run` again, `perf_compare`.
 
