@@ -687,8 +687,17 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
         auto one = [&](const cook::JsonValue& in, const char* what) {
             BotTarget bt;
             cook::JsonValue t = in;
-            if (in.is_object()) {  // a waypoint with a dwell: {"at": point or entity, "wait": ticks}
-                const cook::JsonValue wait = in.get("wait");
+            if (in.is_object()) {  // a waypoint: {"at": point or entity, "wait": ticks, "press": [actions]}
+                const cook::JsonValue wait = in.get("wait"), press = in.get("press");
+                if (press.valid()) {
+                    if (!press.is_array() || press.size() == 0 || press.size() > 8)
+                        return err_out(err, "waypoint 'press' is an array of 1-8 action names pressed for one tick on arrival");
+                    for (u32 i = 0; i < press.size(); ++i) {
+                        if (!press.at(i).is_string() || press.at(i).as_string().empty() || press.at(i).as_string().size() > 31)
+                            return err_out(err, "waypoint 'press': action names of 1-31 characters");
+                        bt.press.push_back(FixedString<32>(press.at(i).as_string()));
+                    }
+                }
                 t = in.get("at");
                 if (!t.valid() || (wait.valid() && (!wait.is_integer() || wait.as_number() < 0 || wait.as_number() > 6000))) {
                     err += what;
@@ -744,6 +753,53 @@ bool parse_bot(const editor::SceneDocument& doc, const cook::JsonValue& v, BotCo
     } else if (out.kind == BotConfig::Kind::Masher) {
         for (const char* a : {"Move", "Jump", "Fire", "Confirm", "Cancel"}) out.actions.push_back(FixedString<32>(StringView(a)));
     }
+    // Held actions and the checks that gate them or stop the bot (any kind).
+    auto when = [&](const cook::JsonValue& in, const char* what, BotWhen& dst) {
+        Condition cond;
+        if (!parse_condition(doc, in, cond, err)) return false;
+        if (cond.what != Condition::What::Field) {
+            err += what;
+            return err_out(err, " is a check on a component field: {\"entity\": \"Sentry\", \"field\": \"Perceiver.sees\", \"value\": 1}");
+        }
+        dst.probe = static_cast<FieldProbe&&>(cond.probe);
+        dst.op = cond.op;
+        dst.expected = cond.expected;
+        dst.tolerance = cond.tolerance;
+        return true;
+    };
+    auto action_name = [&](const cook::JsonValue& a, const char* what, FixedString<32>& dst) {
+        if (!a.is_string() || a.as_string().empty() || a.as_string().size() > 31) {
+            err += what;
+            return err_out(err, " is an action name of 1-31 characters");
+        }
+        dst.assign(a.as_string());
+        return true;
+    };
+    const cook::JsonValue hold = v.get("hold"), hold_when = v.get("hold_when"), stop_when = v.get("stop_when");
+    if (hold.valid()) {
+        if (!hold.is_array() || hold.size() == 0 || hold.size() > 8) return err_out(err, "bot.hold is an array of 1-8 action names held the whole run");
+        for (u32 i = 0; i < hold.size(); ++i) {
+            FixedString<32> a;
+            if (!action_name(hold.at(i), "bot.hold[]", a)) return false;
+            out.hold.push_back(a);
+        }
+    }
+    if (hold_when.valid()) {
+        if (!hold_when.is_array() || hold_when.size() == 0 || hold_when.size() > 8)
+            return err_out(err, "bot.hold_when is an array of 1-8 {\"action\": name, \"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        for (u32 i = 0; i < hold_when.size(); ++i) {
+            BotHold bh;
+            if (!hold_when.at(i).is_object() || !action_name(hold_when.at(i).get("action"), "bot.hold_when[].action", bh.action) ||
+                !when(hold_when.at(i), "bot.hold_when[]", bh.when))
+                return hold_when.at(i).is_object() ? false : err_out(err, "bot.hold_when[] is an object {\"action\", \"entity\", \"field\", \"value\"}");
+            out.hold_when.push_back(bh);
+        }
+    }
+    if (stop_when.valid()) {
+        if (!stop_when.is_object()) return err_out(err, "bot.stop_when is a check: {\"entity\": ..., \"field\": \"Component.path\", \"value\": ...}");
+        if (!when(stop_when, "bot.stop_when", out.stop_when)) return false;
+        out.has_stop = true;
+    }
     const cook::JsonValue air = v.get("air_jumps");
     if (air.valid()) {
         if (!air.is_integer() || air.as_number() < 0 || air.as_number() > 4) return err_out(err, "bot.air_jumps is 0-4 extra Jump presses in the air");
@@ -782,16 +838,37 @@ const input::InputState* Bot::sample_for_tick(u64 tick, u64) {
     wants_move_ = false;
     vec3 pos;
     const bool have = cfg_.has_actor && world_ && cfg_.actor < spawned_.size() && entity_position(*world_, spawned_[cfg_.actor], pos);
-    switch (cfg_.kind) {
-        case BotConfig::Kind::WalkTo:
-            if (have) walk_to(tick, pos);
-            break;
-        case BotConfig::Kind::Explore:
-            if (have) explore(tick, pos);
-            break;
-        case BotConfig::Kind::Masher: masher(tick); break;
+    if (cfg_.has_stop && world_ && when_true(cfg_.stop_when)) {
+        best_tick_ = tick;  // standing still on purpose is not being stuck
+        if (waiting_) ++wait_until_;
+    } else {
+        switch (cfg_.kind) {
+            case BotConfig::Kind::WalkTo:
+                if (have) walk_to(tick, pos);
+                break;
+            case BotConfig::Kind::Explore:
+                if (have) explore(tick, pos);
+                break;
+            case BotConfig::Kind::Masher: masher(tick); break;
+        }
     }
+    for (const FixedString<32>& a : cfg_.hold) script_.add(a.view(), tick, tick);
+    if (world_)
+        for (const BotHold& h : cfg_.hold_when)
+            if (when_true(h.when)) script_.add(h.action.view(), tick, tick);
     return &script_.evaluate(tick);
+}
+
+bool Bot::when_true(const BotWhen& w) const {
+    Value v;
+    if (!read_value(*world_, spawned_, w.probe, v)) return false;
+    return compare(v, w.op, w.expected, w.tolerance);
+}
+
+void Bot::press_on_arrival(u64 tick, const BotTarget& t) {
+    if (pressed_leg_ == leg_) return;
+    pressed_leg_ = leg_;
+    for (const FixedString<32>& a : t.press) script_.add(a.view(), tick, tick);
 }
 
 namespace {
@@ -816,6 +893,7 @@ void Bot::walk_to(u64 tick, vec3 pos) {
         d = flat(cfg_.plane, at) - flat(cfg_.plane, pos);
         dist = math::length(d);
         if (!gone && dist > cfg_.reach) break;
+        if (!gone) press_on_arrival(tick, t);
         if (leg_ + 1 == cfg_.targets.size()) {
             reached_ = true;
             return;
