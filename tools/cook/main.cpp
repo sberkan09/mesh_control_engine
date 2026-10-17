@@ -1,7 +1,7 @@
 // mce_cook — command-line cook (assets.md §5.1, FR-AST-070).
 //
 //   mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
-//            [--only <asset path>]... [--skip-errors] [--textures rgba8|astc]
+//            [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc] [--max-texture-size N]
 //
 // A project with a mod.json is a mod (ADR-0034): its pack carries a ModInfo chunk and drops into a
 // game's mods folder as <id>.mce.
@@ -10,6 +10,7 @@
 // "file:line:col: error: message [stage]"), 2 = usage error.
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "mce/cook/cook.h"
@@ -21,7 +22,8 @@ namespace {
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fputs(
         "usage: mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]\n"
-        "                [--only <asset path>]... [--skip-errors] [--textures rgba8|astc]\n"
+        "                [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc]\n"
+        "                [--max-texture-size N]\n"
         "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --module <path>  load this game module (lib<game>.so / .dll) first, so scenes that use its\n"
         "                   components cook; without it only the engine's components are known\n"
@@ -34,7 +36,10 @@ int usage(std::FILE* out = stderr, int rc = 2) {
         "                 cooks into cooked/ only, never the pack\n"
         "  --skip-errors  cook what can be cooked and list every failing file at the end\n"
         "  --quiet   print errors and the summary only\n"
-        "  --textures rgba8|astc  texture storage: rgba8 (default, desktops) or ASTC 4x4 blocks (phones)\n"
+        "  --textures rgba8|bc|astc  texture storage: rgba8 (default), BC7/BC5/BC4/BC1 blocks (desktop packs), or ASTC 4x4 (phones)\n"
+        "  --max-texture-size N  cap the largest side of PNG/JPG textures at N (a power of two, 1..16384): bigger ones are\n"
+        "                   halved before their mips, so the pack shrinks; a sidecar's \"max_size\" smaller than N wins.\n"
+        "                   Default: no limit. A non-cooked .hdr/.exr keeps its own max_size\n"
         "  --help    this text\n",
         out);
     return rc;
@@ -72,7 +77,24 @@ int main(int argc, char** argv) {
         else if (a == "--textures" && i + 1 < argc) {
             const StringView t(argv[++i]);
             if (t == "astc") opt.textures = cook::TextureCompression::Astc4x4;
+            else if (t == "bc") opt.textures = cook::TextureCompression::Bc;
             else if (t != "rgba8") return usage();
+        }
+        else if (a == "--max-texture-size" && i + 1 < argc) {
+            char* end = nullptr;
+            const long long v = std::strtoll(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0') {
+                std::fprintf(stderr, "mce_cook: --max-texture-size needs a number (a power of two from 1 to 16384), got '%s'\n", argv[i]);
+                return 2;
+            }
+            if (v < 1 || !cook::valid_max_texture_size(static_cast<u32>(v > 0x7FFFFFFF ? 0x7FFFFFFF : v))) {
+                std::fprintf(stderr,
+                             "mce_cook: error: --max-texture-size %s is not valid: use a power of two from 1 to 16384 (for example 1024), "
+                             "or leave the flag out for no limit\n",
+                             argv[i]);
+                return 1;
+            }
+            opt.max_texture_size = static_cast<u32>(v);
         }
         else if (a == "--help" || a == "-h" || a == "-help") return usage(stdout, 0);
         else if (!a.empty() && a[0] == '-') return usage();
@@ -120,6 +142,19 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(report.manifest_hash));
         if (opt.pack && report.pack_hash) std::printf("; pack %016llx", static_cast<unsigned long long>(report.pack_hash));
         std::printf("\n");
+        if (!quiet && report.sizes.total() > 0) {
+            // The size report (M-CONTENT 1a): cooked bytes by asset type, the biggest assets, textures cut by the cap.
+            const cook::SizeReport& s = report.sizes;
+            std::printf("mce_cook: size: textures %llu, meshes %llu, audio %llu, scenes %llu, other %llu, total %llu bytes\n",
+                        static_cast<unsigned long long>(s.textures), static_cast<unsigned long long>(s.meshes),
+                        static_cast<unsigned long long>(s.audio), static_cast<unsigned long long>(s.scenes),
+                        static_cast<unsigned long long>(s.other), static_cast<unsigned long long>(s.total()));
+            std::printf("mce_cook: textures: %u, %u downscaled by max_size / --max-texture-size\n", s.texture_count,
+                        s.textures_downscaled);
+            std::printf("mce_cook: largest %zu asset(s):\n", static_cast<size_t>(s.largest.size()));
+            for (const cook::SizeEntry& e : s.largest)
+                std::printf("  %12llu bytes  assets/%s\n", static_cast<unsigned long long>(e.bytes), e.path.c_str());
+        }
         if (opt.skip_errors && !report.failed_files.empty()) {
             std::printf("mce_cook: %zu file(s) could not be cooked (the rest was):\n", static_cast<size_t>(report.failed_files.size()));
             for (const cook::FailedFile& f : report.failed_files)

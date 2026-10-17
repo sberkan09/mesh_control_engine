@@ -23,6 +23,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/input_map_importer.cpp
         src/json.cpp
         src/material_importer.cpp
+        src/mesh_build.cpp
         src/mod_project.cpp
         src/particle_importer.cpp
         src/sound_set_importer.cpp
@@ -42,6 +43,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/services_importer.cpp
         src/string_importer.cpp
         src/string.cpp
+        src/texture_bc.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
         src/ui_importer.cpp
@@ -58,7 +60,9 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce::mce_ui
         mce_stb
         mce_meshopt
+        mce_tinyexr
         mce_astcenc
+        mce_bc7enc
         mce_vorbisenc
         glslang::glslang
         glslang::glslang-default-resource-limits)

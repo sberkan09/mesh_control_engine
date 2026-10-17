@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -139,4 +140,42 @@ TEST_CASE("bt_trace: the demo's guard hears the noise, spots the thief and chase
     CHECK(again.text == t.text);
 
     CHECK(c.fails("bt_trace", R"({"entity":"Floor"})").find("AiBrain") != std::string::npos);
+}
+
+TEST_CASE("perception_debug_lines: the guard's eye, forward direction, cone lines and what it sees") {
+    const std::string root = bt_project("mcp_perception_lines");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/yard.mcscene"));
+    c.init();
+    auto r = c.ok("perception_debug_lines", R"({"ticks":1})");
+    const cook::JsonValue ps = r.v().get("perceivers");
+    REQUIRE(ps.size() >= 1);
+    bool found = false;
+    for (u32 i = 0; i < ps.size(); ++i) {
+        const cook::JsonValue p = ps.at(i);
+        if (str(p.get("name")) != "Guard") continue;
+        found = true;
+        const cook::JsonValue f = p.get("forward");
+        REQUIRE(f.size() == 3);
+        const double fx = f.at(0).as_number(), fy = f.at(1).as_number(), fz = f.at(2).as_number();
+        CHECK(std::abs(fx * fx + fy * fy + fz * fz - 1.0) < 1e-3);
+        // yaw_deg is the forward direction about +Y: 0 looks along -Z, 90 along -X.
+        const double yaw = p.get("yaw_deg").as_number() * 3.14159265358979 / 180.0;
+        CHECK(std::abs(fx + std::sin(yaw)) < 1e-3);
+        CHECK(std::abs(fz + std::cos(yaw)) < 1e-3);
+        CHECK(p.get("sight_range").as_number() == 7);
+        CHECK(p.get("sight_angle").as_number() == 140);
+        CHECK(str(p.get("space")) == "Space3D");
+        CHECK(p.get("eye").size() == 3);
+    }
+    CHECK(found);
+    const cook::JsonValue lines = r.v().get("lines");
+    REQUIRE(lines.size() >= 3);  // two cone edges and the arc
+    CHECK(lines.at(0).get("from").size() == 3);
+    CHECK(lines.at(0).get("color").size() == 4);
+    // Played long enough the guard has seen the thief: a line to its target appears.
+    auto later = c.ok("perception_debug_lines", R"({"ticks":1200})");
+    CHECK(later.v().get("ticks").as_number() == 1200);
+    // The same run twice reports the same thing.
+    CHECK(c.ok("perception_debug_lines", R"({"ticks":1200})").text == later.text);
 }

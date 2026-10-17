@@ -100,6 +100,12 @@ agent edits exactly as to human ones. Nothing touches disk unless a tool says so
 1. **Codec:** unit tests + a fuzz target (malformed, deep, huge input never crashes; ASan clean).
 2. **Protocol conformance:** a scripted transcript test (`tests/mcp/`) drives `mce_mcp` over pipes:
    `initialize` → `tools/list` → calls → `shutdown`; golden responses checked in.
+   A `transcripts/<name>.multi.jsonl` drives several real `mce_mcp` processes on one project copy: each line is
+   `{"server":"a","msg":{...}}`, one process per distinct server name, lines sent strictly one at a time (a message with
+   an `id` waits for exactly one reply from that server first), so the order across processes is deterministic. The
+   golden `<name>.multi.golden.jsonl` holds `{"server":..,"response":..}` per request. `two_servers_scene` is the
+   two-agent case: both add entities, both saves land, a same-field edit is refused by entity and component, then
+   `overwrite`.
 3. **Round-trip equivalence (the gate):** the same edit done via MCP tools and via `SceneCommand`s in a C++ test
    saves byte-identical `.mcscene` files and produces the same `run_headless` hash.
 4. **Walls:** no ImGui and no socket symbols in `mce_mcp*`; no JSON codec in any runtime target.

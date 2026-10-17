@@ -11,6 +11,7 @@
 // Recording reads clocks and counters only: a capture never changes the simulation or its hash.
 
 #include "mce/containers/array.h"
+#include "mce/draw_cause.h"
 #include "mce/fixed_string.h"
 #include "mce/result.h"
 
@@ -33,6 +34,14 @@ struct Counters {
     u32 ring_overflows = 0;  // RHI upload rings that ran out this frame
     u64 upload_bytes = 0;    // geometry + uniform + indirect ring bytes written this frame
     u64 heap_allocations = 0;  // live heap allocations at the end of the frame
+    u32 runs_instanced = 0;    // 3D: instanced draws of identical meshes, main view (M-VISUAL3 5a)
+    u32 draws_instanced = 0;   // 3D: the submesh draws folded into them
+    // 3D, main view (M-CONTENT 2): submesh draws that were not in an instanced run, by DrawCause. With
+    // draws_instanced (the renderer's drawn instanced draws, taken from the same view) they add up to that
+    // view's scene draws; zero where the frame drew no 3D. A capture from before M-CONTENT 2 has no causes.
+    u32 draw_causes[kDrawCauseCount] = {};
+    u32 merged_groups = 0;     // 3D: StaticMerge3D components drawing merged meshes (M-VISUAL3 5b)
+    u32 merged_children = 0;   // 3D: the MeshRef children they replace
 };
 
 struct Frame {

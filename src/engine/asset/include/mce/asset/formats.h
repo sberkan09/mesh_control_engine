@@ -39,7 +39,7 @@ inline constexpr u8 SPRITESHEET_VERSION = 1;  // CHNK_SHEET: texture regions + f
 inline constexpr u8 UI_DOCUMENT_VERSION = 3;  // CHNK_UIDOC: one UI widget tree (M-UI-DATA 1; v2 actions + bindings; v3 theme + font roles; mce/ui/document_data.h)
 inline constexpr u8 UI_THEME_VERSION = 1;     // CHNK_UITHEME: a UI theme (M-UI-DATA 3; mce/ui/document_data.h)
 inline constexpr u8 TERRAIN_VERSION = 1;      // CHNK_TERRAIN: a heightmap terrain (M-TERRAIN 1)
-inline constexpr u8 NAVMESH_VERSION = 1;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
+inline constexpr u8 NAVMESH_VERSION = 2;     // CHNK_NAV: the .mcnav bytes as baked (M-GAMEPLAY3D 1; mce/physics3d/navmesh3d.h)
 inline constexpr u8 VIDEO_VERSION = 1;       // CHNK_VID: an MPEG-1 program stream + its audio as PCM (M-CINEMA 5)
 inline constexpr u8 BEHAVIOR_TREE_VERSION = 3;  // CHNK_BT: one behavior tree (M-AI 1; mce/kit/ai.h); 2: guard aborts, task arguments (M-AI 2); 3: utility, score, token nodes, 64-byte nodes (M-AI 4)
 inline constexpr u8 SKELETON2D_VERSION = 1;  // CHNK_SKEL2D: a 2D cut-out skeleton, bones + slots (M-ANIM2D 1)
@@ -101,8 +101,14 @@ void write_manifest(Span<ManifestItem> items, Array<byte>& out);
 // ------------------------------------------------------------------ texture (CHNK_TEX)
 
 enum class TextureFormat : u32 {
-    RGBA8 = 1,     // MVP; BC1/BC5/BC7 at v0.5
+    RGBA8 = 1,     // MVP
     ASTC_4x4 = 2,  // phones (M-MOBILE step 8, mce_cook --textures astc): 16-byte blocks of 4x4 texels
+    RGBA16F = 3,   // M-VISUAL3 4: half-float RGBA, linear (HDR skies and environment maps); never Srgb
+    // Desktop block compression (M-CONTENT 1b): 4x4 blocks, sRGB stays a flag. BC4/BC5 never Srgb.
+    BC1 = 4,       // 8 bytes per block, opaque colour
+    BC4 = 5,       // 8 bytes per block, one channel (R)
+    BC5 = 6,       // 16 bytes per block, two channels (normal maps)
+    BC7 = 7,       // 16 bytes per block, colour with alpha
 };
 
 // Bytes of one layer of a w x h level in `format` (0 for an unknown format).
@@ -357,8 +363,16 @@ struct MaterialExt {
     f32 anisotropy_rotation;  // radians around the normal, from the UV tangent
     f32 transmission;         // 0..1: light passes through, bending the opaque frame behind
     f32 ior;                  // index of refraction; 0 = 1.5 (the dielectric F0 of 0.04)
-    u32 reserved[6];
+    // M-VISUAL3 2, parallax occlusion mapping (.mcmat only). The height map's GUID {hi, lo} as u32 halves
+    // (hi.low, hi.high, lo.low, lo.high), which keeps the struct's 4-byte alignment; all zero = none.
+    u32 height_texture[4];
+    f32 height_scale;         // depth of the deepest point, in texture repeats (0.02..0.1 typical); 0 = off
+    u32 parallax_steps;       // low 16 bits: minimum march steps, high 16: maximum; 0 = the defaults (8, 32)
 
+    Guid height() const;
+    void set_height(Guid g);
+    bool parallax() const { return height_scale > 0.0f && !height().is_null(); }
+    // The lobes above only; parallax() is separate.
     bool any() const {
         return clearcoat > 0.0f || sheen_color[0] > 0.0f || sheen_color[1] > 0.0f || sheen_color[2] > 0.0f || anisotropy != 0.0f ||
                transmission > 0.0f || ior > 0.0f;

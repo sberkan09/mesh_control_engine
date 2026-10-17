@@ -3,16 +3,24 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <string>
 
 #include "asset/cook_test_util.h"
 #include "mce/asset/asset_system.h"
+#include "mce/convar.h"
 #include "mce/cook/cook.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/effects.h"
+#include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
 #include "mce/input/actions.h"
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
 #include "mce/refl/macros.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 #include "mce/script/compiler.h"
 
@@ -30,6 +38,11 @@ struct Probe {
     u8 pad[3]{};
 };
 MCE_COMPONENT(Probe, value, n, flag)
+
+struct Saved {
+    i32 n = 0;
+};
+MCE_COMPONENT(Saved, (n, Save))
 
 struct Tagged {
     i32 level = 7;
@@ -103,6 +116,31 @@ end
     CHECK(r.h().scripts()[0].state == ScriptState::Running);
     CHECK(r.w.try_get<Probe>(e)->n == 3);
     CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(6.0f));
+}
+
+TEST_CASE("script api: mce.find returns the entity a scene named, and nil for an unknown or destroyed one (M-WORKFLOW 7)") {
+    Rig r(R"(
+function update()
+    local p = mce.find("Player")
+    if mce.tick() == 3 then
+        assert(p == nil)  -- destroyed after tick 2
+        return
+    end
+    assert(p ~= nil and mce.alive(p))
+    assert(mce.find("Nobody") == nil)
+    mce.set(p, "Probe", "n", mce.get(p, "Probe", "n") + 1)
+end
+)");
+    const Entity player = r.w.spawn_with(Probe{});
+    scene::EntityNames names;
+    names.rows.push_back(scene::EntityNames::Row{StringId("Player").value, player});
+    r.w.set_resource(std::move(names));
+    r.step(2);
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(player)->n == 2);
+    r.w.destroy(player);
+    r.step(1);
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
 }
 
 TEST_CASE("script api: spawn, add, remove and destroy go through Commands") {
@@ -307,6 +345,461 @@ end
     CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(-1.0f));
     CHECK(r.w.try_get<Probe>(e)->value.z == doctest::Approx(1.0f));
     CHECK(r.w.try_get<Probe>(e)->flag);
+}
+
+TEST_CASE("script api: 2D forces, angular velocity, sleep, point overlaps and shape casts (M-SCRIPT2 1)") {
+    Rig r(R"(
+function update()
+    if mce.tick() < 2 then return end
+    mce.each("Probe", function(e)
+        local hits = mce.raycast_all2d(vector.create(0, 0, 0), vector.create(1, 0, 0), 30)
+        assert(#hits == 2 and hits[1].distance < hits[2].distance)
+        local cast = mce.circle_cast2d(vector.create(0, 0, 0), vector.create(20, 0, 0), 0.5)
+        local box = mce.box_cast2d(vector.create(0, 0, 0), vector.create(20, 0, 0), vector.create(0.25, 0.25, 0))
+        assert(cast ~= nil and cast.fraction > 0 and cast.fraction < 1)
+        assert(box ~= nil and box.fraction > cast.fraction)
+        assert(mce.circle_cast2d(vector.create(0, 8, 0), vector.create(20, 8, 0), 0.5) == nil)
+        assert(mce.overlap_point2d(vector.create(5, 0, 0)))
+        assert(not mce.overlap_point2d(vector.create(5, 0, 0), hits[1].entity))
+        assert(not mce.overlap_point2d(vector.create(0, 6, 0)))
+        mce.set_angular_velocity2d(e, 3.5)
+        mce.force2d(e, vector.create(60, 0, 0))
+        mce.impulse2d(e, vector.create(0, 1, 0), vector.create(0.5, 10, 0))   -- off-centre: it spins more
+        mce.set(e, "Probe", "value", vector.create(mce.angular_velocity2d(e), #hits, cast.fraction))
+        mce.set(e, "Probe", "flag", mce.awake2d(e))
+        mce.set_awake2d(e, false)
+        mce.set(e, "Probe", "n", mce.awake2d(e) and 1 or 0)
+    end)
+end
+)");
+    physics::install_physics2d(r.w);
+    physics::RigidBody2D wall_body;
+    physics::Collider2D wall_col;
+    wall_col.shape = physics::ColliderShape::box({1.0f, 1.0f});
+    r.w.spawn_with(LocalTransform{{5, 0, 0}, math::quat::identity(), {1, 1, 1}}, wall_body, wall_col);
+    r.w.spawn_with(LocalTransform{{10, 0, 0}, math::quat::identity(), {1, 1, 1}}, wall_body, wall_col);
+    physics::RigidBody2D dyn;
+    dyn.type = physics::BodyType::Dynamic;
+    dyn.gravity_scale = 0.0f;
+    physics::Collider2D ball;
+    ball.shape = physics::ColliderShape::circle(0.5f);
+    const Entity e = r.w.spawn_with(LocalTransform{{0, 10, 0}, math::quat::identity(), {1, 1, 1}}, dyn, ball, Probe{});
+    r.step(4);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(e);
+    CHECK(p->value.x != doctest::Approx(0.0f));  // angular velocity read back (3.5 plus what the off-centre impulse added)
+    CHECK(p->value.y == doctest::Approx(2.0f));
+    CHECK(p->flag);       // awake when asked
+    CHECK(p->n >= 0);     // set_awake2d ran (a world with sleeping off keeps every body awake)
+    physics::BodyState st;
+    REQUIRE(r.w.resource<physics::World2D>().body_state(e, st));
+    CHECK(st.linear_velocity.x > 0.0f);   // the force pushed it along +x
+}
+
+TEST_CASE("script api: 2D body functions name the missing body") {
+    Rig r(R"(
+function update() mce.each("Probe", function(e) mce.force2d(e, vector.create(1, 0, 0)) end) end
+)");
+    physics::install_physics2d(r.w);
+    r.w.spawn_with(Probe{});
+    r.step(3);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("force2d: the entity has no 2D body") != std::string::npos);
+}
+
+// The gate of M-SCRIPT2: a function cannot be registered without a line in mce.d.luau (so script_check types it)
+// or listed there without being registered. The script walks the real `mce` table and compares it, both ways,
+// with the names the definitions declare.
+TEST_CASE("script api: every registered mce function is declared in mce.d.luau, and the other way round") {
+    Array<char> defs;
+    script::write_definitions(defs);
+    const std::string text(defs.data(), defs.size());
+    const usize begin = text.find("declare mce: {");
+    REQUIRE(begin != std::string::npos);
+    const usize end = text.find("\n}\n", begin);
+    REQUIRE(end != std::string::npos);
+    std::string expected;
+    usize at = begin;
+    while ((at = text.find("\n    ", at)) != std::string::npos && at < end) {
+        at += 5;
+        const usize colon = text.find(':', at);
+        if (colon == std::string::npos || colon > end) break;
+        const std::string name = text.substr(at, colon - at);
+        if (!name.empty() && name.find_first_not_of("abcdefghijklmnopqrstuvwxyz_0123456789") == std::string::npos) expected += "\"" + name + "\",";
+    }
+    REQUIRE_FALSE(expected.empty());
+    const std::string source = "local expected = {" + expected + R"(}
+function update()
+    local want = {}
+    for _, n in ipairs(expected) do want[n] = true end
+    for name in pairs(mce) do
+        assert(want[name], "mce." .. name .. " is registered but not declared in mce.d.luau")
+        want[name] = nil
+    end
+    for name in pairs(want) do
+        error("mce." .. name .. " is declared in mce.d.luau but not registered")
+    end
+end
+)";
+    Rig r(source.c_str());
+    r.step();
+    INFO(error_of(r.h()));
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+}
+
+TEST_CASE("script api: find_path walks around static colliders and follows a level that changes (M-SCRIPT2 2)") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local path = mce.find_path(vector.create(0, 5, 0), vector.create(10, 5, 0), { cell = 0.5, radius = 0.25 })
+        if path == nil then mce.set(e, "Probe", "n", -1) return end
+        local best = 100
+        for _, p in ipairs(path) do
+            if p.x > 3 and p.x < 7 then best = math.min(best, math.abs(p.y)) end   -- how close it came to the gap at y = 0
+        end
+        local last = path[#path]
+        mce.set(e, "Probe", "value", vector.create(best, last.x, last.y))
+        mce.set(e, "Probe", "n", #path)
+        mce.set(e, "Probe", "flag", mce.find_path(vector.create(0, 5, 0), vector.create(5, 5, 0)) == nil)   -- the target is inside a wall
+    end)
+end
+)");
+    physics::RigidBody2D wall_body;
+    wall_body.type = physics::BodyType::Static;
+    physics::Collider2D top, bottom;
+    top.shape = physics::ColliderShape::box({0.5f, 4.5f});     // y from 1 to 10
+    bottom.shape = physics::ColliderShape::box({0.5f, 4.5f});  // y from -10 to -1
+    const auto at = [](f32 x, f32 y) { return LocalTransform{{x, y, 0}, math::quat::identity(), {1, 1, 1}}; };
+    const Entity upper = r.w.spawn_with(at(5, 5.5f), wall_body, top);
+    r.w.spawn_with(at(5, -5.5f), wall_body, bottom);
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step(2);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(e);
+    CHECK(p->n >= 3);                      // around the wall, not straight through it
+    CHECK(p->value.x < 1.5f);              // through the gap
+    CHECK(p->value.y == doctest::Approx(10.0f));
+    CHECK(p->value.z == doctest::Approx(5.0f));
+    CHECK(p->flag);
+    // The wall goes away: the next call plans a straight line (the cached grid noticed).
+    r.w.destroy(upper);
+    r.step(1);
+    CHECK(r.w.try_get<Probe>(e)->n >= 1);
+    CHECK(r.w.try_get<Probe>(e)->n <= 3);
+}
+
+TEST_CASE("script api: find_path with no static colliders is the straight walk, and bad options are named") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local path = mce.find_path(vector.create(0, 0, 0), vector.create(3, 4, 0))
+        mce.set(e, "Probe", "n", #path)
+        mce.set(e, "Probe", "value", path[1])
+        mce.find_path(vector.create(0, 0, 0), vector.create(3, 4, 0), { cell = 0 })
+    end)
+end
+)");
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step();
+    CHECK(r.w.try_get<Probe>(e)->n == 1);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(3.0f));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("cell must be from 0.05 to 100") != std::string::npos);
+}
+
+TEST_CASE("script api: save writes a slot now, load is applied by the host after the tick (M-SCRIPT2 3)") {
+    const std::string dir = std::string(MCE_TEST_TMP_DIR) + "/script_saves";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    save::set_root(dir);
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        if mce.tick() == 1 then
+            mce.set(e, "Saved", "n", 7)
+            mce.set(e, "Probe", "flag", mce.save("slot_a") and not mce.has_save("nope"))
+        elseif mce.tick() == 2 then
+            mce.set(e, "Saved", "n", 99)
+            mce.set(e, "Probe", "value", vector.create(mce.load("slot_a") and 1 or 0, mce.load("nope") and 1 or 0, 0))
+        end
+    end)
+end
+)");
+    r.w.register_components<SaveKey, scapi::Saved>();
+    const Entity e = r.w.spawn_with(Probe{}, scapi::Saved{}, SaveKey{1});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(e)->flag);
+    CHECK(save::exists("slot_a"));
+    r.step(1);
+    CHECK(r.w.try_get<scapi::Saved>(e)->n == 99);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(1.0f));  // slot_a is there
+    CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(0.0f));  // "nope" is not
+    asset::AssetSystem assets;
+    REQUIRE(scene::apply_change(r.w, assets));
+    CHECK(r.w.try_get<scapi::Saved>(e)->n == 7);  // the save at tick 1 is back
+}
+
+TEST_CASE("script api: save slots are names, never paths") {
+    Rig r(R"(
+function update()
+    mce.save("../escape")
+end
+)");
+    r.w.spawn_with(Probe{});
+    r.step(1);
+    CHECK(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("must be 1 to 64 letters") != std::string::npos);
+}
+
+TEST_CASE("script api: shake, burst and set_time_scale (M-SCRIPT2 3)") {
+    Rig r(R"(
+function update()
+    mce.shake(0.75)
+    mce.each("ParticleBurst", function(e) mce.burst(e, 12) end)
+    mce.set_time_scale(0.5)
+end
+)");
+    r.w.register_components<kit::CameraShake2D, kit::CameraShake3D, kit::ParticleBurst>();
+    const Entity cam = r.w.spawn_with(kit::CameraShake2D{});
+    const Entity cam3 = r.w.spawn_with(kit::CameraShake3D{});
+    const Entity fx = r.w.spawn_with(kit::ParticleBurst{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<kit::CameraShake2D>(cam)->trauma == doctest::Approx(0.75f));
+    CHECK(r.w.try_get<kit::CameraShake3D>(cam3)->trauma == doctest::Approx(0.75f));
+    r.step(1);
+    CHECK(r.w.try_get<kit::CameraShake2D>(cam)->trauma == doctest::Approx(1.0f));  // added, clamped
+    CHECK(r.w.try_get<kit::ParticleBurst>(fx)->count == 12);
+    CHECK(ConVar::find(StringId("time_scale"))->get_float() == doctest::Approx(0.5f));
+    ConVar::find(StringId("time_scale"))->set_float(1.0f, true);
+}
+
+namespace {
+
+// A script world with 3D physics: a static floor box and wall, and a dynamic ball.
+struct World3DRig {
+    Entity floor, wall, ball;
+};
+
+World3DRig make_3d(World& w) {
+    w.register_components<LocalTransform>();
+    kit::Physics3D& p3 = w.set_resource(kit::Physics3D{});
+    p3.auto_step = 0;
+    World3DRig r;
+    r.floor = w.spawn_with(LocalTransform{{0, -0.5f, 0}, math::quat::identity(), {1, 1, 1}});
+    r.wall = w.spawn_with(LocalTransform{{5, 1, 0}, math::quat::identity(), {1, 1, 1}});
+    r.ball = w.spawn_with(LocalTransform{{0, 3, 0}, math::quat::identity(), {1, 1, 1}});
+    physics::BodyDesc3D d;
+    d.type = physics::BodyType3D::Static;
+    d.shape = physics::Shape3D::box({20.0f, 0.5f, 20.0f});
+    d.position = {0, -0.5f, 0};
+    REQUIRE(p3.world.create_body(r.floor, d));
+    d.shape = physics::Shape3D::box({0.5f, 1.0f, 5.0f});
+    d.position = {5, 1, 0};
+    REQUIRE(p3.world.create_body(r.wall, d));
+    physics::BodyDesc3D b;
+    b.type = physics::BodyType3D::Dynamic;
+    b.shape = physics::Shape3D::sphere(0.5f);
+    b.position = {0, 3, 0};
+    REQUIRE(p3.world.create_body(r.ball, b));
+    p3.world.step(1.0f / 60.0f);
+    return r;
+}
+
+}  // namespace
+
+TEST_CASE("script api: 3D queries and body writes (M-SCRIPT2 4)") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local near = mce.overlap_sphere3d(vector.create(0, 3, 0), 1)
+        local boxed = mce.overlap_box3d(vector.create(5, 1.5, 0), vector.create(1, 0.4, 1))
+        local cast = mce.sphere_cast3d(vector.create(0, 1, 0), vector.create(10, 1, 0), 0.25)
+        local far = mce.sphere_cast3d(vector.create(0, 1, 5.9), vector.create(10, 1, 5.9), 0.25)
+        mce.set(e, "Probe", "value", vector.create(#near, #boxed, cast and cast.fraction or -1))
+        mce.set(e, "Probe", "flag", far == nil and cast ~= nil and cast.normal.x < -0.9)
+        local b = near[1]
+        mce.set_velocity3d(b, vector.create(2, 0, 0))
+        mce.impulse3d(b, vector.create(0, 0, 3))
+        mce.teleport3d(b, vector.create(0, 8, 0))
+        mce.set(e, "Probe", "n", math.floor(mce.velocity3d(b).x * 10))
+    end)
+end
+)");
+    const World3DRig rig = make_3d(r.w);
+    const Entity probe = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(probe);
+    CHECK(p->value.x == doctest::Approx(1.0f));    // the ball is the one thing at (0,3,0)
+    CHECK(p->value.y == doctest::Approx(1.0f));    // the wall
+    CHECK(p->value.z > 0.3f);                      // the cast stops before x = 10 ...
+    CHECK(p->value.z < 0.6f);                      // ... at the wall (x = 4.5)
+    CHECK(p->flag);                                // a cast beside the wall (z 5.9) hits nothing
+    CHECK(p->n == 20);                             // set_velocity3d read back
+    physics::BodyState3D s;
+    REQUIRE(r.w.resource<kit::Physics3D>().world.body_state(rig.ball, s));
+    CHECK(s.position.y == doctest::Approx(8.0f));  // teleport3d
+    CHECK(s.linear_velocity.z > 0.0f);             // impulse3d
+    CHECK(r.w.try_get<LocalTransform>(rig.ball)->position.y == doctest::Approx(8.0f));
+}
+
+TEST_CASE("script api: rotations are Euler degrees and look_rotation3d faces a point (M-SCRIPT3 1)") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local ball = mce.overlap_sphere3d(vector.create(0, 3, 0), 1)[1]
+        -- facing +X from the origin: -Z turned to +X is a yaw of -90
+        local face = mce.look_rotation3d(vector.create(0, 0, 0), vector.create(5, 0, 0))
+        mce.teleport3d(ball, vector.create(0, 8, 0), face)
+        local back = mce.rotation3d(ball)
+        local up = mce.look_rotation3d(vector.create(0, 0, 0), vector.create(0, 4, 0))
+        mce.set_rotation3d(ball, vector.create(30, 45, 10))
+        local round = mce.rotation3d(ball)
+        mce.set(e, "Probe", "value", vector.create(back.y, up.x, round.y))
+        mce.set(e, "Probe", "n", math.floor(round.x + 0.5) * 100 + math.floor(round.z + 0.5))
+    end)
+end
+)");
+    const World3DRig rig = make_3d(r.w);
+    const Entity probe = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(probe);
+    CHECK(p->value.x == doctest::Approx(-90.0f).epsilon(0.001));  // yaw read back
+    CHECK(p->value.y == doctest::Approx(90.0f).epsilon(0.001));   // straight up is a pitch of +90
+    CHECK(p->value.z == doctest::Approx(45.0f).epsilon(0.001));   // set_rotation3d round-trips ...
+    CHECK(p->n == 3010);                                          // ... pitch 30 and roll 10 too
+    physics::BodyState3D s;
+    REQUIRE(r.w.resource<kit::Physics3D>().world.body_state(rig.ball, s));
+    CHECK(s.position.y == doctest::Approx(8.0f));  // set_rotation3d kept the position
+    const math::vec3 fwd = math::rotate(r.w.try_get<LocalTransform>(rig.ball)->rotation, {0, 0, -1});
+    CHECK(fwd.y > 0.4f);   // LocalTransform got the rotation too: a pitch of 30 looks up (sin 30 = 0.5)
+}
+
+TEST_CASE("script api: 3D calls without physics or a body are named errors") {
+    Rig a(R"(
+function update()
+    mce.overlap_sphere3d(vector.create(0, 0, 0), 1)
+end
+)");
+    a.w.spawn_with(Probe{});
+    a.step(1);
+    CHECK(a.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(a.h()).find("this world has no 3D physics") != std::string::npos);
+
+    Rig b(R"(
+function update()
+    mce.each("Probe", function(e) mce.set_velocity3d(e, vector.create(1, 0, 0)) end)
+end
+)");
+    make_3d(b.w);
+    b.w.spawn_with(Probe{});
+    b.step(1);
+    CHECK(b.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(b.h()).find("mce.set_velocity3d: the entity has no 3D body") != std::string::npos);
+
+    Rig c(R"(
+function update()
+    mce.find_path3d(vector.create(0, 0, 0), vector.create(1, 0, 0))
+end
+)");
+    c.w.spawn_with(Probe{});
+    c.step(1);
+    CHECK(error_of(c.h()).find("no navmesh") != std::string::npos);
+}
+
+TEST_CASE("script api: find_path3d walks the baked navmesh around a wall") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local path, partial = mce.find_path3d(vector.create(-10, 0, 0), vector.create(10, 0, 0))
+        local reach = 0
+        for _, p in ipairs(path) do reach = math.max(reach, p.z) end
+        mce.set(e, "Probe", "n", #path)
+        mce.set(e, "Probe", "value", vector.create(reach, path[#path].x, 0))
+        mce.set(e, "Probe", "flag", partial)
+    end)
+end
+)");
+    physics::NavGeometry3D g;
+    g.add_box(math::translation({0.0f, -0.5f, 0.0f}), {20.0f, 0.5f, 20.0f});
+    g.add_box(math::translation({0.0f, 1.0f, -5.0f}), {0.5f, 1.0f, 15.0f}, physics::kNavAreaBlocked);
+    physics::NavBakeSettings3D st;
+    st.cell_size = 0.25f;
+    st.tile_size = 32;
+    Array<byte> blob;
+    REQUIRE(physics::bake_navmesh(g, st, blob));
+    kit::Nav3D& nav = r.w.set_resource(kit::Nav3D{});
+    REQUIRE(nav.mesh.load(blob.span(), 4));
+    const Entity probe = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(probe);
+    CHECK(p->n >= 2);                          // around the wall's end, not straight through it
+    CHECK(p->value.x > 9.0f);                  // reaches the wall's far end (z = 10)
+    CHECK(p->value.y == doctest::Approx(10.0f).epsilon(0.1));
+    CHECK_FALSE(p->flag);
+}
+
+TEST_CASE("script api: the vector functions the guide's chaser recipe uses exist") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local d = vector.create(3, 4, 0)
+        local moved = vector.create(1, 1, 0) + vector.normalize(d) * math.min(0.5, vector.magnitude(d))
+        mce.set(e, "Probe", "value", moved)
+        mce.set(e, "Probe", "n", math.floor(vector.magnitude(d)))
+    end)
+end
+)");
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(e)->n == 5);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(1.3f));
+    CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(1.4f));
+}
+
+TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
+    Rig r(R"(
+function update()
+    if mce.tick() == 2 then   -- the body exists once the first physics step has synced it
+        mce.each("Probe", function(e) mce.teleport2d(e, vector.create(7, 3, 0)) end)
+    end
+end
+)");
+    physics::install_physics2d(r.w);
+    physics::RigidBody2D rb;
+    rb.type = physics::BodyType::Kinematic;
+    physics::Collider2D col;
+    col.shape = physics::ColliderShape::box({0.5f, 0.5f});
+    const Entity e = r.w.spawn_with(LocalTransform{{1, 1, 0}, math::quat::identity(), {1, 1, 1}}, rb, col, Probe{});
+    r.step(6);
+    INFO(error_of(r.h()));
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<LocalTransform>(e)->position.x == doctest::Approx(7.0f));
+    CHECK(r.w.try_get<LocalTransform>(e)->position.y == doctest::Approx(3.0f));
+}
+
+TEST_CASE("script api: teleport2d on an entity without a 2D body is a clear error") {
+    Rig r(R"(
+function update() mce.each("Probe", function(e) mce.teleport2d(e, vector.create(1, 1, 0)) end) end
+)");
+    physics::install_physics2d(r.w);
+    r.w.spawn_with(Probe{});
+    r.step(3);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(error_of(r.h()).find("no 2D body") != std::string::npos);
 }
 
 TEST_CASE("script api: physics calls fail clearly in a world without physics") {

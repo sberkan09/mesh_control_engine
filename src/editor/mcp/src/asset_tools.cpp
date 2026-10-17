@@ -199,12 +199,14 @@ constexpr AssetKind kKinds[] = {
 {"name":"anisotropy_rotation","type":"number","default":0,"help":"radians: turns the stretch direction"},
 {"name":"transmission","type":"number","default":0,"help":"0..1: see-through like glass; the opaque scene behind shows through, tinted by base_color"},
 {"name":"ior","type":"number","default":0,"help":"1..3 index of refraction (0 = 1.5): a dielectric's reflectance and how much transmission bends"},
-{"name":"textures","type":"object","help":"{\"base_color\", \"normal\", \"metallic_roughness\", \"emissive\"}: \"guid:<Texture>\" each, all optional"}])json",
+{"name":"height_scale","type":"number","default":0,"help":"0..0.5: parallax occlusion mapping depth in texture repeats (0.02..0.1 typical), needs textures.height; surfaces appear to have depth when seen at an angle (bricks, cobbles), faded out with distance by the quality tier, off on Low"},
+{"name":"parallax_steps","type":"[min, max]","default":[8,32],"help":"4..64: march steps looking straight on and at a grazing angle"},
+{"name":"textures","type":"object","help":"{\"base_color\", \"normal\", \"metallic_roughness\", \"emissive\", \"height\"}: \"guid:<Texture>\" each, all optional; height is a grey image (white is high) imported with srgb false, the same size as the normal map"}])json",
      R"json({"name":"material","base_color":[1,1,1,1],"metallic":0,"roughness":1,"emissive":[0,0,0],"alpha_mode":"opaque","alpha_cutoff":0.5,"double_sided":false,"unlit":false,"textures":{}})json"},
     {"InputMap", ".mcinput", "mce-input", 1,
      "The project's input action maps; the first map is the one the stack starts with. run_headless input names these actions.",
      R"json([
-{"name":"maps","type":"array","help":"[{\"name\": \"Gameplay\", \"blocks_below\": false, \"actions\": [{\"name\": \"Move\", \"type\": \"button\" | \"axis1d\" | \"axis2d\", \"bindings\": [...]}]}]"},
+{"name":"maps","type":"array","help":"[{\"name\": \"Gameplay\", \"blocks_below\": false, \"player\": 1 (2..4: a local player's map, always active), \"actions\": [{\"name\": \"Move\", \"type\": \"button\" | \"axis1d\" | \"axis2d\", \"bindings\": [...]}]}]"},
 {"name":"maps[].actions[].bindings[]","type":"object","help":"Exactly one device key: {\"key\": \"Space\"} | {\"gamepad_button\": \"South\"} | {\"gamepad_axis\": \"LeftX\"} | {\"mouse_button\": \"Left\"} | {\"mouse_delta\": \"x\"} | {\"mouse_wheel\": \"y\"} | {\"touch_zone\": [x0, y0, x1, y1]} | {\"touch_tap\": [x0, y0, x1, y1]} | {\"touch_stick\": \"x\", \"zone\": [...]} | {\"touch_swipe\": \"x\"}; options: axis (x|y), scale, deadzone [lo, hi], curve, invert. Zones are 0..1 over the window, y down"}])json",
      R"json({"maps":[{"name":"Gameplay","actions":[{"name":"Jump","type":"button","bindings":[{"key":"Space"},{"gamepad_button":"South"}]}]}]})json"},
     {"StoreCatalog", ".mcstore", "mce-store", 1, "The project's in-app products and ad placements (M-MONETIZE).",
@@ -418,7 +420,7 @@ bool check_content(ToolCall& c, cook::JsonValue content) {
         if (!reserved_key(content.key_at(i))) continue;
         c.error += "content.";
         c.error += content.key_at(i);
-        c.error += ": format, version and guid are set by the tool";
+        c.error += ": format, version and guid are set by the tool and kept from the file: leave them out of 'content'";
         return false;
     }
     return true;

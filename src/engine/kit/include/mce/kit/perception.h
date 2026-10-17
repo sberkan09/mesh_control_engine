@@ -124,4 +124,15 @@ struct PerceptionLine {
 };
 void perception_debug_lines(World& world, Array<PerceptionLine>& out);
 
+// Where one perceiver looks, in world space: its eye and its forward direction, the entity's world
+// rotation applied to -Z (3D) or +X (2D). The entity that holds the Perceiver turns it: a Perceiver on
+// a child follows the child's world yaw, so a parent that already faces its motion (NavAgent3D
+// `face_motion`) and a second system that turns the child add up.
+struct PerceiverView {
+    Entity entity;
+    math::vec3 eye;
+    math::vec3 forward;
+};
+void perceiver_views(World& world, Array<PerceiverView>& out);
+
 }  // namespace mce::kit

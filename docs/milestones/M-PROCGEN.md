@@ -1,6 +1,6 @@
 # M-PROCGEN — Deterministic procedural levels, as data (milestone record)
 
-**Status:** active (added 2026-10-16, not started). Plan: ROADMAP §M-PROCGEN; Linear SBA-171 … SBA-175.
+**Status:** done (added 2026-10-16). Plan: ROADMAP §M-PROCGEN; Linear SBA-171 … SBA-175.
 
 **Why:** a level made from a seed is the cheapest way to a game that stays fresh, and the engine's determinism
 contract (same inputs, same `state_hash`) makes it testable: the seed is the level. Today the engine has
@@ -25,7 +25,7 @@ dungeon editor.
 | 2 | Wave function collapse: adjacency from an example tilemap or rules, pinned cells, bounded restarts | SBA-172 | Sonnet | done |
 | 3 | `ProcLevel`: a kit system builds colliders, sprites and markers from a seed; also from Luau | SBA-173 | Sonnet | done |
 | 4 | MCP `procgen_run`, the `reachable` assertion in `.mctest`, user guide | SBA-174 | Sonnet | done |
-| 5 | `samples/10_dungeon`, a script-only variant, the perf budget and the gates | SBA-175 | Sonnet | not started |
+| 5 | `projects/Dungeon` (script-only), the generation budget and the gates | SBA-175 | Sonnet | done |
 
 **Gates:**
 - Every generator gives the same bytes twice and in Debug and Release.
@@ -122,3 +122,21 @@ corrections that bind step 3:
   run; a destroy hook removes the owned entities; `proclevel_nav_grid` makes the pathfinding grid with the level's cell size
   and origin. The `ProcLevel` entity carries the `SaveKey` (the author adds it); built entities carry none.
 - Not done: tile art (option B stays open), spawn points beyond Start/Exit, a Luau-driven sample (step 5).
+
+## Step 5 as built
+
+- Deviation from the plan: one game, not two. `samples/10_dungeon` (C++) and "a script-only variant" became
+  `projects/Dungeon`, a script-only project (no game module is needed: `ProcLevel` is a data component the stock player
+  installs), which is also the Luau variant. Three scenes (rooms, caves, walk), `dungeon.luau`, README, CREDITS.
+- `ProcLevel.path_markers` (new, off by default) stands `Path` markers on a shortest Start-to-Exit walk; the script's
+  autopilot follows them. Per generator one `.mctest`: the autopilot clears levels for seeds 1 to 10 (reroll between
+  them), `log_errors` 0, and `reachable` over the same ten seeds. The ctest `Dungeon_mctests` runs them.
+- The engine gap this found: a Luau script could not move a 2D body (the physics step writes `LocalTransform` back
+  from the body), so new `mce.teleport2d(e, position)`; `EmberScript`'s respawn uses it now (before, the respawn
+  left the body where it was).
+- Gates: the script determinism stage plays `projects/Dungeon/tests/autopilot.input` 3000 ticks (Debug = Release hash);
+  `test_proclevel` holds 40 levels of 128 x 128 (every kind, ten seeds) under a 20 s bound and under cells / 4 entities
+  (measured 12 ms a level in Debug). The render counter gate (`perf_gate.py`) has no baseline for Dungeon: not added.
+- The coordinator's review note: the system stays in `install_stock`; a test shows a scene with no `ProcLevel` is left
+  untouched tick after tick (the system's query is empty).
+- Not done: a C++ twin of the sample, tile art (option B), an Android/iOS/web run of Dungeon.

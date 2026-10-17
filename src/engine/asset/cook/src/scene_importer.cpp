@@ -545,6 +545,25 @@ bool build_document(const ImportInput& in, const DocKind& kind, DiagList& diags,
     return true;
 }
 
+// A hash of the bytes the field members of `t`'s C++ default hold (padding is not read, so it cannot differ between runs).
+// `buf` is scratch for the constructed object.
+u64 default_bytes_hash(const refl::TypeRecord& t, Array<u8>& buf) {
+    if (!t.construct_default || t.size == 0 || t.align == 0 || t.align > 64) return 0;
+    buf.resize(static_cast<usize>(t.size) + t.align);
+    std::memset(buf.data(), 0, buf.size());
+    usize addr = reinterpret_cast<usize>(buf.data());
+    addr = (addr + t.align - 1) / t.align * t.align;
+    u8* obj = reinterpret_cast<u8*>(addr);
+    t.construct_default(obj);
+    u64 h = kFnv64Offset;
+    for (const refl::FieldRecord& f : t.fields) {
+        const usize bytes = static_cast<usize>(f.size) * f.count;
+        if (bytes == 0 || static_cast<usize>(f.offset) + bytes > t.size) continue;
+        h = hash_combine(h, asset::xxh64(obj + f.offset, bytes, f.name.value));
+    }
+    return h;
+}
+
 class SceneImporter final : public IImporter {
 public:
     SceneImporter(const DocKind& kind, ChunkType type, u8 major, StringView id, StringView ext)
@@ -552,14 +571,17 @@ public:
 
     StringView id() const override { return id_; }
     u32 version() const override { return 2; }  // 2: prefab instances flattened (v0.5)
-    // Scene chunks store component rows in this build's layout: any reflected type change re-cooks.
+    // Scene chunks store component rows in this build's layout and bake the C++ default of every field the
+    // document omits: any reflected type change, and any change of a default value, re-cooks.
     u64 schema_hash() const override {
         u64 h = kFnv64Offset;
+        Array<u8> buf;
         for (const refl::TypeRecord* t : refl::all()) {
             h = hash_combine(h, t->id.value);
             h = hash_combine(h, (u64(t->size) << 32) | t->align);
             for (const refl::FieldRecord& f : t->fields)
                 h = hash_combine(hash_combine(h, f.name.value), (u64(f.offset) << 40) ^ (u64(f.size) << 16) ^ (u64(f.count) << 8) ^ u64(f.kind));
+            h = hash_combine(h, default_bytes_hash(*t, buf));
         }
         return h;
     }

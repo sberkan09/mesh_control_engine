@@ -81,9 +81,12 @@ def cmd_overlap(args):
         return 3
     head_base = BASE_REF
     moved = set((git("diff", "--name-only", f"{since}..{head_base}") or "").split())
-    both = sorted(files & moved)
-    mods = {module_of(f) for f in files} - {None}
-    near = sorted({f for f in moved - files if module_of(f) in mods})
+    # Documents (*.md) never need a --task re-run: nothing built, tested or read by scripts changes with them.
+    code_files = {f for f in files if not f.endswith(".md")}
+    moved = {f for f in moved if not f.endswith(".md")}
+    both = sorted(code_files & moved)
+    mods = {module_of(f) for f in code_files} - {None}
+    near = sorted({f for f in moved - code_files if module_of(f) in mods})
     print(f"premerge: PR changes {len(files)} file(s); {BASE_REF} moved {len(moved)} file(s) since the --task base {since[:10]}")
     if both:
         print("premerge: OVERLAP, both sides changed:")
@@ -92,12 +95,12 @@ def cmd_overlap(args):
         print("premerge: a --task re-run IS needed")
         return 1
     if near:
-        print(f"premerge: dev_claude changed {len(near)} other file(s) in modules the PR touches:")
-        for f in near[:20]:
+        # Only files the PR itself changed trigger a re-run: churn next to them is not an overlap (the integration
+        # run catches a real clash). Printed so the author can still look.
+        print(f"premerge: note: dev_claude changed {len(near)} other file(s) in modules the PR touches (not an overlap):")
+        for f in near[:10]:
             print("  " + f)
-        print("premerge: same-module change, a --task re-run IS needed")
-        return 1
-    print("premerge: no file overlap and no change in the PR's modules, a --task re-run is NOT needed")
+    print("premerge: none of the PR's own files changed on dev_claude, a --task re-run is NOT needed")
     print("premerge: a semantic clash elsewhere (a header the PR includes) is caught by the integration run")
     return 0
 

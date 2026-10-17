@@ -110,6 +110,17 @@ struct List {
 
 }  // namespace
 
+TEST_CASE("layout: ui.reference_height grows the UI with the window and never shrinks it (M-WORKFLOW 7)") {
+    const vec2 min_logical{360, 640};
+    CHECK(compute_ui_scale({1920, 1080}, 1.0f, 1.0f, min_logical, 720.0f) == 1.5f);   // 1080p authored for 720
+    CHECK(compute_ui_scale({1920, 1080}, 1.0f, 1.0f, min_logical, 0.0f) == 1.0f);     // off: as before
+    CHECK(compute_ui_scale({1280, 720}, 1.0f, 1.0f, min_logical, 720.0f) == 1.0f);
+    CHECK(compute_ui_scale({3840, 2160}, 1.0f, 1.0f, min_logical, 720.0f) == 3.0f);
+    CHECK(compute_ui_scale({1920, 1080}, 1.0f, 1.5f, min_logical, 720.0f) == 2.25f);  // the user's setting on top
+    CHECK(compute_ui_scale({800, 450}, 1.0f, 1.0f, min_logical, 720.0f) == 1.0f);     // a small window is not shrunk
+    CHECK(compute_ui_scale({2400, 1080}, 2.625f, 1.0f, min_logical, 720.0f) == 2.625f);  // the phone's own scale wins
+}
+
 TEST_CASE("layout: the UI scale follows the display, fits small screens and rounds to 1/8") {
     CHECK(compute_ui_scale({1280, 720}, 1.0f) == 1.0f);
     CHECK(compute_ui_scale({2400, 1080}, 2.625f) == 2.625f);  // a 420 dpi Android phone

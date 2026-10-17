@@ -38,12 +38,19 @@ enum class TextureFormat : u16 {
     BC1_UNorm, BC3_UNorm, BC5_UNorm, BC7_UNorm, BC7_SRGB,  // cooked formats (FR-AST-050)
     D32_Float, D24_UNorm_S8, D16_UNorm,
     ASTC_4x4_UNorm, ASTC_4x4_SRGB,  // cooked for phones (M-MOBILE step 8); 16-byte 4x4 blocks
+    BC4_UNorm, BC1_SRGB,            // M-CONTENT 1b; appended so the values above stay put
 };
 
 bool is_depth_format(TextureFormat f);
 bool is_compressed_format(TextureFormat f);
 // Bytes per pixel of uncompressed formats (0 for block-compressed ones).
 u32 bytes_per_pixel(TextureFormat f);
+// Bytes of one 4x4 block of a block-compressed format: 8 (BC1, BC4), 16 (BC3, BC5, BC7, ASTC 4x4); 0 for
+// uncompressed formats.
+u32 block_bytes(TextureFormat f);
+// Bytes of one layer of a w x h level, tightly packed: block rows for compressed formats (partial blocks round
+// up), w * h * bytes_per_pixel otherwise.
+usize level_bytes(TextureFormat f, u32 w, u32 h);
 
 // Vertex attribute formats. The architecture sketch reuses TextureFormat for attributes; a separate
 // enum keeps float2/float3 (which have no texture format) expressible.

@@ -27,6 +27,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.terrain_pixel_error = 4.0f;
             q.terrain_triplanar = false;
             q.terrain_height_blend = false;
+            q.parallax_distance = 0.0f;
+            q.parallax_max_steps = 0;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -34,6 +36,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.volumetric_slices = 48;
             q.terrain_pixel_error = 2.0f;
             q.terrain_triplanar = false;
+            q.parallax_distance = 15.0f;
+            q.parallax_max_steps = 16;
             break;
         case QualityTier::High:
             q.fxaa = false;
@@ -84,6 +88,11 @@ void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.upd
 
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr) { ssr.enabled = ssr.enabled && q.ssr; }
 void apply_quality(const QualitySettings& q, ContactShadows& c) { c.enabled = c.enabled && q.contact_shadows; }
+
+void apply_quality(const QualitySettings& q, ParallaxSettings& p) {
+    p.distance = q.parallax_distance > 0.0f ? (p.distance < q.parallax_distance ? p.distance : q.parallax_distance) : 0.0f;
+    p.max_steps = p.max_steps < q.parallax_max_steps ? p.max_steps : q.parallax_max_steps;
+}
 
 void apply_quality(const QualitySettings& q, Volumetrics& v) {
     v.enabled = v.enabled && q.volumetrics;

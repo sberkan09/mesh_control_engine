@@ -5,20 +5,30 @@
 // Every function may raise (LUA_USE_LONGJMP): engine calls whose results own memory run in a
 // scope that ends before the next luaL_* call, and lists go through the host's scratch arrays.
 
+#include <cmath>
 #include <cstring>
 
 #include "api.h"
 #include "mce/asset/asset_system.h"
 #include "mce/asset/guid.h"
 #include "mce/audio/components.h"
+#include "mce/convar.h"
+#include "mce/ecs/save.h"
+#include "mce/ecs/transform.h"
+#include "mce/hash.h"
 #include "mce/ecs/prefab.h"
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
+#include "mce/kit/cinematic.h"
+#include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/nav3d.h"
+#include "mce/kit/pathfinding.h"
 #include "mce/kit/sequence.h"
 #include "mce/kit/timeline.h"
 #include "mce/log.h"
 #include "mce/physics/world2d.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 
 namespace mce::script::detail {
@@ -61,6 +71,19 @@ int l_has(lua_State* L) {
 int l_alive(lua_State* L) {
     World& w = world_of(L);
     lua_pushboolean(L, w.alive(check_entity(L, 1)));
+    return 1;
+}
+
+// mce.find(name) -> entity or nil: the first live entity a loaded scene gave that name (scene::find_entity).
+// Entities made at run time have no name. A read of one resource: it changes nothing.
+int l_find(lua_State* L) {
+    size_t len = 0;
+    const char* name = luaL_checklstring(L, 1, &len);
+    const Entity e = scene::find_entity(world_of(L), StringView(name, len));
+    if (e.is_null())
+        lua_pushnil(L);
+    else
+        push_entity(L, e);
     return 1;
 }
 
@@ -330,6 +353,90 @@ int l_quit(lua_State* L) {
     return 0;
 }
 
+// ---- game plumbing (M-SCRIPT2 3) ---------------------------------------------------------------
+
+// A save slot is a file name: letters, digits, '_' and '-', 1..64, so a script can never name a path.
+const char* slot_arg(lua_State* L, int idx) {
+    const char* s = luaL_checkstring(L, idx);
+    const StringView sv(s);
+    bool ok = !sv.empty() && sv.size() <= 64;
+    for (char c : sv) ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-');
+    if (!ok) luaL_error(L, "save slot '%s' must be 1 to 64 letters, digits, '_' or '-'", s);
+    return s;
+}
+
+// mce.save(slot) -> true, or false and a reason. Writes the world now (a read of the world, so it is safe
+// mid-tick); the scene recorded is the one the host last loaded or changed to.
+int l_save(lua_State* L) {
+    World& w = world_of(L);
+    const StringView slot(slot_arg(L, 1));
+    save::SaveInfo info;
+    if (const scene::SceneChange* c = w.try_resource<scene::SceneChange>()) info.scene = c->current_guid;
+    info.tick = frame_of(L).tick;
+    info.playtime = static_cast<f64>(info.tick) * static_cast<f64>(frame_of(L).dt);
+    Result<void> r = save::save_game(w, slot, info);
+    lua_pushboolean(L, r.has_value());
+    if (r) return 1;
+    FixedString<512> why;
+    format_error(r.error(), why);
+    lua_pushstring(L, why.c_str());
+    return 2;
+}
+
+// mce.load(slot) -> true when the slot exists and the load is queued (the host applies it after this tick).
+int l_load(lua_State* L) {
+    const StringView slot(slot_arg(L, 1));
+    const bool there = save::exists(slot);
+    if (there) scene::request_load(world_of(L), slot);
+    lua_pushboolean(L, there);
+    return 1;
+}
+
+int l_has_save(lua_State* L) {
+    lua_pushboolean(L, save::exists(StringView(slot_arg(L, 1))));
+    return 1;
+}
+
+// mce.set_time_scale(s): how fast the game clock runs against the wall, 0.1 to 4 (hit-stop, slow motion).
+// It scales the player's accumulator, never dt or the sim, so it has no effect in headless runs.
+int l_set_time_scale(lua_State* L) {
+    const f64 s = luaL_checknumber(L, 1);
+    if (!(s >= 0.1 && s <= 4.0)) luaL_error(L, "mce.set_time_scale: %g is outside 0.1 to 4", s);
+    if (ConVar* cv = ConVar::find(StringId("time_scale"))) cv->set_float(static_cast<f32>(s), true);
+    return 0;
+}
+
+int l_time_scale(lua_State* L) {
+    ConVar* cv = ConVar::find(StringId("time_scale"));
+    lua_pushnumber(L, cv ? static_cast<double>(cv->get_float()) : 1.0);
+    return 1;
+}
+
+// mce.shake(trauma): adds trauma (0..1, clamped to 1 in total) to every CameraShake2D / CameraShake3D.
+int l_shake(lua_State* L) {
+    World& w = world_of(L);
+    const f32 t = static_cast<f32>(luaL_checknumber(L, 1));
+    if (!(t >= 0.0f && t <= 1.0f)) luaL_error(L, "mce.shake: trauma %g is outside 0 to 1", static_cast<double>(t));
+    w.query<kit::CameraShake2D>().each([&](kit::CameraShake2D& s) { s.trauma = s.trauma + t > 1.0f ? 1.0f : s.trauma + t; });
+    w.query<kit::CameraShake3D>().each([&](kit::CameraShake3D& s) { s.trauma = s.trauma + t > 1.0f ? 1.0f : s.trauma + t; });
+    return 0;
+}
+
+// mce.burst(e, count?): fires the entity's ParticleBurst once (count overrides the component's).
+int l_burst(lua_State* L) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    kit::ParticleBurst* b = w.try_get_mut<kit::ParticleBurst>(e);
+    if (!b) luaL_error(L, "mce.burst: the entity has no ParticleBurst");
+    if (!lua_isnoneornil(L, 2)) {
+        const f64 n = luaL_checknumber(L, 2);
+        if (!(n >= 1 && n <= 4096)) luaL_error(L, "mce.burst: count %g is outside 1 to 4096", n);
+        b->count = static_cast<u32>(n);
+    }
+    b->fire = true;
+    return 0;
+}
+
 // ---- physics -----------------------------------------------------------------------------------
 
 physics::World2D& physics2d(lua_State* L) {
@@ -348,6 +455,19 @@ struct Exclude {
     }
 };
 
+// A hit as a table: entity, point, normal and `last` (the ray's distance, or a shape cast's swept fraction).
+void push_hit2d(lua_State* L, const physics::RayHit2D& hit, const char* last) {
+    lua_createtable(L, 0, 4);
+    push_entity(L, hit.entity);
+    lua_setfield(L, -2, "entity");
+    push_vec2(L, hit.point);
+    lua_setfield(L, -2, "point");
+    push_vec2(L, hit.normal);
+    lua_setfield(L, -2, "normal");
+    lua_pushnumber(L, hit.t);
+    lua_setfield(L, -2, last);
+}
+
 // mce.raycast2d(origin, dir, max, exclude?) -> {entity, point, normal, distance} or nil
 int l_raycast2d(lua_State* L) {
     physics::World2D& pw = physics2d(L);
@@ -360,15 +480,7 @@ int l_raycast2d(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    lua_createtable(L, 0, 4);
-    push_entity(L, hit->entity);
-    lua_setfield(L, -2, "entity");
-    push_vec2(L, hit->point);
-    lua_setfield(L, -2, "point");
-    push_vec2(L, hit->normal);
-    lua_setfield(L, -2, "normal");
-    lua_pushnumber(L, hit->t);
-    lua_setfield(L, -2, "distance");
+    push_hit2d(L, *hit, "distance");
     return 1;
 }
 
@@ -412,6 +524,112 @@ int l_move_and_collide(lua_State* L) {
     return 1;
 }
 
+// mce.teleport2d(e, position): puts a 2D body at `position` without sweeping (a respawn, a level's start).
+// The physics step writes LocalTransform back from the body, so a plain LocalTransform write does not move a body.
+int l_teleport2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    const math::vec2 at = check_vec2(L, 2);
+    if (!pw.has_body(e)) luaL_error(L, "mce.teleport2d: the entity has no 2D body");
+    f32 angle = 0.0f;
+    if (LocalTransform* t = w.try_get_mut<LocalTransform>(e)) {
+        angle = angle_z(t->rotation);
+        t->position.x = at.x;
+        t->position.y = at.y;
+    }
+    pw.teleport(e, at, angle);
+    return 0;
+}
+
+// mce.find_path(from, to, options?) -> array of waypoints (vectors, z = 0) after `from`, ending at `to`; nil when `to`
+// is blocked or cannot be reached. The grid is made from the world's static colliders (the same ones
+// kit::mark_static_colliders reads), so it follows a level that was rebuilt; the last one is kept in the world and
+// reused while the colliders, `cell` and `radius` stay the same. options: cell (grid size in metres, default 0.5),
+// radius (clearance kept from walls, default 0.25), diagonal (default true), smooth (default true).
+struct ScriptNavCache {
+    u64 key = 0;
+    bool valid = false;
+    kit::NavGrid grid;
+    kit::Pathfinder finder;
+};
+
+int l_find_path(lua_State* L) {
+    World& w = world_of(L);
+    const math::vec2 from = check_vec2(L, 1);
+    const math::vec2 to = check_vec2(L, 2);
+    f32 cell = 0.5f, radius = 0.25f;
+    kit::PathOptions opt;
+    if (!lua_isnoneornil(L, 3)) {
+        luaL_checktype(L, 3, LUA_TTABLE);
+        lua_getfield(L, 3, "cell");
+        if (!lua_isnil(L, -1)) cell = static_cast<f32>(luaL_checknumber(L, -1));
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "radius");
+        if (!lua_isnil(L, -1)) radius = static_cast<f32>(luaL_checknumber(L, -1));
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "diagonal");
+        if (!lua_isnil(L, -1)) opt.diagonal = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+        lua_getfield(L, 3, "smooth");
+        if (!lua_isnil(L, -1)) opt.smooth = lua_toboolean(L, -1) != 0;
+        lua_pop(L, 1);
+    }
+    if (!(cell >= 0.05f && cell <= 100.0f)) luaL_error(L, "mce.find_path: cell must be from 0.05 to 100 metres");
+    if (!(radius >= 0.0f && radius <= 100.0f)) luaL_error(L, "mce.find_path: radius must be from 0 to 100 metres");
+
+    const math::aabb2 bounds = kit::static_collider_bounds(w);
+    Array<math::vec2> path;
+    lua_createtable(L, 0, 0);
+    if (bounds.min.x > bounds.max.x) {  // nothing to walk around
+        push_vec2(L, to);
+        lua_rawseti(L, -2, 1);
+        return 1;
+    }
+    Hasher64 h;
+    h.u64v(kit::static_colliders_hash(w));
+    h.f32v(cell);
+    h.f32v(radius);
+    ScriptNavCache* cache = w.try_resource<ScriptNavCache>();
+    if (!cache) {
+        w.set_resource(ScriptNavCache{});
+        cache = w.try_resource<ScriptNavCache>();
+    }
+    if (!cache->valid || cache->key != h.value()) {
+        const f32 margin = cell * 4.0f + radius;
+        const math::vec2 lo = bounds.min - math::vec2(margin), hi = bounds.max + math::vec2(margin);
+        const f64 cols = std::ceil(static_cast<f64>(hi.x - lo.x) / static_cast<f64>(cell));
+        const f64 rows = std::ceil(static_cast<f64>(hi.y - lo.y) / static_cast<f64>(cell));
+        if (cols * rows > 4.0e6) luaL_error(L, "mce.find_path: the level needs a %.0f x %.0f grid at cell %g; raise 'cell'", cols, rows, static_cast<double>(cell));
+        cache->grid = kit::NavGrid(static_cast<u32>(cols), static_cast<u32>(rows), cell, lo, 1);
+        kit::mark_static_colliders(cache->grid, w, radius);
+        cache->key = h.value();
+        cache->valid = true;
+    }
+    // The grid covers the walls plus a free margin. Anything outside it is open ground: walk to the
+    // nearest edge cell, and tack the real point on at that end.
+    const math::vec2 glo = cache->grid.origin();
+    const math::vec2 ghi = glo + math::vec2(static_cast<f32>(cache->grid.width()), static_cast<f32>(cache->grid.height())) * cache->grid.cell_size();
+    const f32 inset = cache->grid.cell_size() * 0.5f;
+    const auto clamp_in = [&](math::vec2 p) {
+        return math::vec2(std::min(std::max(p.x, glo.x + inset), ghi.x - inset), std::min(std::max(p.y, glo.y + inset), ghi.y - inset));
+    };
+    const math::vec2 cfrom = clamp_in(from), cto = clamp_in(to);
+    const bool from_out = cfrom.x != from.x || cfrom.y != from.y, to_out = cto.x != to.x || cto.y != to.y;
+    if (!cache->finder.find_path(cache->grid, cfrom, cto, opt, path)) {
+        lua_pop(L, 1);
+        lua_pushnil(L);
+        return 1;
+    }
+    if (from_out) path.insert(0, from);
+    if (to_out) path.push_back(to);
+    for (usize i = 0; i < path.size(); ++i) {
+        push_vec2(L, path[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
 int l_velocity2d(lua_State* L) {
     physics::World2D& pw = physics2d(L);
     push_vec2(L, pw.linear_velocity(check_entity(L, 1)));
@@ -432,8 +650,119 @@ int l_impulse2d(lua_State* L) {
     const math::vec2 impulse = check_vec2(L, 2);
     physics::BodyState s;
     if (!pw.body_state(e, s)) return 0;
-    pw.apply_impulse(e, impulse, s.position);
+    // mce.impulse2d(e, impulse, point?): at `point` (world space) to spin the body, default its origin
+    pw.apply_impulse(e, impulse, lua_isnoneornil(L, 3) ? s.position : check_vec2(L, 3));
     return 0;
+}
+
+// A body the call needs: a clear error, not a silent no-op.
+Entity body_arg(lua_State* L, physics::World2D& pw, const char* fn) {
+    const Entity e = check_entity(L, 1);
+    if (!pw.has_body(e)) luaL_error(L, "mce.%s: the entity has no 2D body", fn);
+    return e;
+}
+
+// mce.force2d(e, force): a force on the body's origin, kept until the next physics step
+int l_force2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "force2d");
+    pw.apply_force(e, check_vec2(L, 2));
+    return 0;
+}
+
+// mce.angular_velocity2d(e) -> radians per second
+int l_angular_velocity2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "angular_velocity2d");
+    physics::BodyState s;
+    pw.body_state(e, s);
+    lua_pushnumber(L, s.angular_velocity);
+    return 1;
+}
+
+int l_set_angular_velocity2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_angular_velocity2d");
+    pw.set_angular_velocity(e, static_cast<f32>(luaL_checknumber(L, 2)));
+    return 0;
+}
+
+// mce.awake2d(e) -> boolean; mce.set_awake2d(e, awake): false puts the body's whole island to sleep
+int l_awake2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    lua_pushboolean(L, pw.is_awake(body_arg(L, pw, "awake2d")));
+    return 1;
+}
+
+int l_set_awake2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_awake2d");
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    pw.set_awake(e, lua_toboolean(L, 2) != 0);
+    return 0;
+}
+
+// mce.set_enabled2d(e, enabled): a disabled body neither moves nor collides
+int l_set_enabled2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const Entity e = body_arg(L, pw, "set_enabled2d");
+    luaL_checktype(L, 2, LUA_TBOOLEAN);
+    pw.set_enabled(e, lua_toboolean(L, 2) != 0);
+    return 0;
+}
+
+// mce.overlap_point2d(point, exclude?) -> true when a shape contains the point
+int l_overlap_point2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 p = check_vec2(L, 1);
+    const Exclude ex{opt_entity(L, 2)};
+    lua_pushboolean(L, pw.overlap_point(p, ex.filter2d()));
+    return 1;
+}
+
+// mce.raycast_all2d(origin, dir, max, exclude?) -> every hit along the ray, nearest first
+int l_raycast_all2d(lua_State* L) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 origin = check_vec2(L, 1);
+    const math::vec2 dir = check_vec2(L, 2);
+    const f32 max = static_cast<f32>(luaL_checknumber(L, 3));
+    const Exclude ex{opt_entity(L, 4)};
+    Array<physics::RayHit2D> hits;
+    pw.raycast_all(origin, dir, max, hits, ex.filter2d());
+    lua_createtable(L, static_cast<int>(hits.size()), 0);
+    for (usize i = 0; i < hits.size(); ++i) {
+        push_hit2d(L, hits[i], "distance");
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
+// mce.circle_cast2d(from, to, radius, exclude?) / mce.box_cast2d(from, to, half_extents, exclude?)
+//   -> {entity, point, normal, fraction} for the first thing the shape hits on its way, or nil
+int shape_cast2d(lua_State* L, const physics::ColliderShape& shape) {
+    physics::World2D& pw = physics2d(L);
+    const math::vec2 from = check_vec2(L, 1);
+    const math::vec2 to = check_vec2(L, 2);
+    const Exclude ex{opt_entity(L, 4)};
+    const std::optional<physics::RayHit2D> hit = pw.shape_cast(shape, from, to, ex.filter2d());
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    push_hit2d(L, *hit, "fraction");
+    return 1;
+}
+
+int l_circle_cast2d(lua_State* L) {
+    const f32 r = static_cast<f32>(luaL_checknumber(L, 3));
+    if (!(r > 0.0f)) luaL_error(L, "mce.circle_cast2d: the radius must be above 0");
+    return shape_cast2d(L, physics::ColliderShape::circle(r));
+}
+
+int l_box_cast2d(lua_State* L) {
+    const math::vec2 half = check_vec2(L, 3);
+    if (!(half.x > 0.0f && half.y > 0.0f)) luaL_error(L, "mce.box_cast2d: the half extents must be above 0");
+    return shape_cast2d(L, physics::ColliderShape::box(half));
 }
 
 // mce.raycast3d(origin, dir, max, exclude?) -> {entity, point, normal, distance} or nil
@@ -468,9 +797,235 @@ int l_raycast3d(lua_State* L) {
     return 1;
 }
 
+// ---- 3D bodies (M-SCRIPT2 4) -------------------------------------------------------------------
+// Reads and body writes over the kit's physics::World3D, as the 2D calls are over World2D. Character walking is not
+// here on purpose: the kit's CharacterController3D (move, jump) is data a script sets, and the kit's own system moves it.
+
+physics::World3D& physics3d(lua_State* L) {
+    kit::Physics3D* p3 = world_of(L).try_resource<kit::Physics3D>();
+    if (!p3) luaL_error(L, "this world has no 3D physics");
+    return p3->world;
+}
+
+physics::World3D& body3d(lua_State* L, Entity e, const char* fn) {
+    physics::World3D& pw = physics3d(L);
+    if (!pw.has_body(e)) luaL_error(L, "mce.%s: the entity has no 3D body", fn);
+    return pw;
+}
+
+constexpr usize kMaxOverlaps3d = 256;
+
+int push_overlaps3d(lua_State* L, Array<Entity>& out, u32 n) {
+    const usize count = n < out.size() ? n : out.size();
+    lua_createtable(L, static_cast<int>(count), 0);
+    for (usize i = 0; i < count; ++i) {
+        push_entity(L, out[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
+// mce.overlap_sphere3d(center, radius, skip?) -> the entities whose shapes touch the sphere (at most 256)
+int l_overlap_sphere3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 center = check_vec3(L, 1);
+    const f32 radius = static_cast<f32>(luaL_checknumber(L, 2));
+    if (!(radius > 0.0f)) luaL_error(L, "mce.overlap_sphere3d: the radius must be above 0");
+    const Entity skip = opt_entity(L, 3);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    Array<Entity>& out = HostAccess::entities(HostAccess::host(L));
+    out.resize(kMaxOverlaps3d);
+    return push_overlaps3d(L, out, pw.overlap_sphere(center, radius, Span<Entity>(out.data(), out.size()), filter));
+}
+
+// mce.overlap_box3d(center, half, skip?) -> the same for an axis-aligned box
+int l_overlap_box3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 center = check_vec3(L, 1);
+    const math::vec3 half = check_vec3(L, 2);
+    if (!(half.x > 0.0f && half.y > 0.0f && half.z > 0.0f)) luaL_error(L, "mce.overlap_box3d: the half extents must be above 0");
+    const Entity skip = opt_entity(L, 3);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    Array<Entity>& out = HostAccess::entities(HostAccess::host(L));
+    out.resize(kMaxOverlaps3d);
+    return push_overlaps3d(L, out, pw.overlap_box(center, half, math::quat::identity(), Span<Entity>(out.data(), out.size()), filter));
+}
+
+// mce.sphere_cast3d(from, to, radius, skip?) -> {entity, point, normal, position, fraction} or nil
+int l_sphere_cast3d(lua_State* L) {
+    physics::World3D& pw = physics3d(L);
+    const math::vec3 from = check_vec3(L, 1);
+    const math::vec3 to = check_vec3(L, 2);
+    const f32 radius = static_cast<f32>(luaL_checknumber(L, 3));
+    if (!(radius > 0.0f)) luaL_error(L, "mce.sphere_cast3d: the radius must be above 0");
+    const Entity skip = opt_entity(L, 4);
+    physics::QueryFilter3D filter;
+    if (!skip.is_null()) filter.exclude = Span<const Entity>(&skip, 1);
+    const std::optional<physics::ShapeHit3D> hit = pw.shape_cast(radius, from, to, filter);
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_createtable(L, 0, 5);
+    push_entity(L, hit->entity);
+    lua_setfield(L, -2, "entity");
+    push_vec3(L, hit->point);
+    lua_setfield(L, -2, "point");
+    push_vec3(L, hit->normal);
+    lua_setfield(L, -2, "normal");
+    push_vec3(L, hit->position);
+    lua_setfield(L, -2, "position");
+    lua_pushnumber(L, hit->t);
+    lua_setfield(L, -2, "fraction");
+    return 1;
+}
+
+int l_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "velocity3d").body_state(e, s)) luaL_error(L, "mce.velocity3d: the entity has no 3D body");
+    push_vec3(L, s.linear_velocity);
+    return 1;
+}
+
+int l_set_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "set_velocity3d").set_linear_velocity(e, check_vec3(L, 2));
+    return 0;
+}
+
+int l_angular_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "angular_velocity3d").body_state(e, s)) luaL_error(L, "mce.angular_velocity3d: the entity has no 3D body");
+    push_vec3(L, s.angular_velocity);
+    return 1;
+}
+
+int l_set_angular_velocity3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "set_angular_velocity3d").set_angular_velocity(e, check_vec3(L, 2));
+    return 0;
+}
+
+// mce.impulse3d(e, impulse): at the centre of mass (dynamic bodies)
+int l_impulse3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    body3d(L, e, "impulse3d").apply_impulse(e, check_vec3(L, 2));
+    return 0;
+}
+
+// Rotations in Luau are Euler angles in degrees as a vector (x = pitch, y = yaw, z = roll), applied yaw, then pitch,
+// then roll (q = Ry * Rx * Rz). Forward is -Z and up +Y, as the camera and look_at_rh have it; no quaternion type exists
+// in the sandbox and a script never needs one.
+constexpr f32 kDegToRad = 0.017453292519943295f;
+constexpr f32 kRadToDeg = 57.29577951308232f;
+
+math::quat quat_from_euler_deg(math::vec3 d) {
+    const math::quat yaw = math::quat_from_axis_angle({0, 1, 0}, d.y * kDegToRad);
+    const math::quat pitch = math::quat_from_axis_angle({1, 0, 0}, d.x * kDegToRad);
+    const math::quat roll = math::quat_from_axis_angle({0, 0, 1}, d.z * kDegToRad);
+    return math::normalize(yaw * pitch * roll);
+}
+
+math::vec3 euler_deg_from_quat(math::quat q) {
+    q = math::normalize(q);
+    const math::vec3 f = math::rotate(q, {0, 0, -1});
+    const f32 pitch = std::asin(std::fmax(-1.0f, std::fmin(1.0f, f.y)));
+    const f32 yaw = std::atan2(-f.x, -f.z);  // 0 at +-90 degrees of pitch, where yaw and roll are one angle
+    const math::quat yp = math::quat_from_axis_angle({0, 1, 0}, yaw) * math::quat_from_axis_angle({1, 0, 0}, pitch);
+    const math::quat r = math::conjugate(yp) * q;
+    f32 roll = 2.0f * std::atan2(r.z, r.w);
+    if (roll > 3.14159265f) roll -= 6.28318531f;
+    if (roll < -3.14159265f) roll += 6.28318531f;
+    return {pitch * kRadToDeg, yaw * kRadToDeg, roll * kRadToDeg};
+}
+
+// mce.look_rotation3d(from, to) -> the rotation (degrees) that turns -Z from `from` toward `to`, roll 0. Pure: no entity.
+int l_look_rotation3d(lua_State* L) {
+    const math::vec3 d = check_vec3(L, 2) - check_vec3(L, 1);
+    const f32 len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (!(len > 1e-6f)) luaL_error(L, "mce.look_rotation3d: from and to are the same point");
+    const math::vec3 n{d.x / len, d.y / len, d.z / len};
+    push_vec3(L, {std::asin(std::fmax(-1.0f, std::fmin(1.0f, n.y))) * kRadToDeg, std::atan2(-n.x, -n.z) * kRadToDeg, 0.0f});
+    return 1;
+}
+
+// mce.rotation3d(e) -> the body's rotation in degrees.
+int l_rotation3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    physics::BodyState3D s;
+    if (!body3d(L, e, "rotation3d").body_state(e, s)) luaL_error(L, "mce.rotation3d: the entity has no 3D body");
+    push_vec3(L, euler_deg_from_quat(s.rotation));
+    return 1;
+}
+
+// Moves a 3D body to `at` with `rot`, writing LocalTransform too: the physics step writes it back from the body,
+// so writing LocalTransform alone moves nothing.
+void place3d(lua_State* L, Entity e, math::vec3 at, math::quat rot, physics::World3D& pw) {
+    if (LocalTransform* t = world_of(L).try_get_mut<LocalTransform>(e)) {
+        t->position = at;
+        t->rotation = rot;
+    }
+    pw.teleport(e, at, rot);
+}
+
+// mce.teleport3d(e, position, rotation?): puts a 3D body or character at `position` with no sweep; `rotation` (degrees)
+// defaults to the body's own.
+int l_teleport3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    const math::vec3 at = check_vec3(L, 2);
+    physics::World3D& pw = body3d(L, e, "teleport3d");
+    physics::BodyState3D s;
+    math::quat rot = math::quat::identity();
+    if (pw.body_state(e, s)) rot = s.rotation;
+    if (!lua_isnoneornil(L, 3)) rot = quat_from_euler_deg(check_vec3(L, 3));
+    place3d(L, e, at, rot, pw);
+    return 0;
+}
+
+// mce.set_rotation3d(e, rotation): turns a 3D body in place (degrees, no sweep).
+int l_set_rotation3d(lua_State* L) {
+    const Entity e = check_entity(L, 1);
+    const math::quat rot = quat_from_euler_deg(check_vec3(L, 2));
+    physics::World3D& pw = body3d(L, e, "set_rotation3d");
+    physics::BodyState3D s;
+    if (!pw.body_state(e, s)) luaL_error(L, "mce.set_rotation3d: the entity has no 3D body");
+    place3d(L, e, s.position, rot, pw);
+    return 0;
+}
+
+// mce.find_path3d(from, to) -> the corner points after leaving `from`, ending at `to` (as mce.find_path), and true when
+// the path is partial (the target cannot be reached: it ends at the closest reachable point); nil when there is no path.
+int l_find_path3d(lua_State* L) {
+    World& w = world_of(L);
+    const math::vec3 from = check_vec3(L, 1);
+    const math::vec3 to = check_vec3(L, 2);
+    kit::Nav3D* nav = w.try_resource<kit::Nav3D>();
+    if (!nav || !nav->mesh.loaded()) luaL_error(L, "this world has no navmesh (a NavMeshSurface3D bakes one)");
+    Array<math::vec3> path;
+    const physics::NavPath3D r = nav->mesh.find_path(from, to, path);
+    if (r == physics::NavPath3D::None || path.empty()) {
+        lua_pushnil(L);
+        return 1;
+    }
+    // The navmesh answers with the start (snapped to the mesh) first; mce.find_path does not list it, and neither does this.
+    const usize first = path.size() > 1 ? 1 : 0;
+    lua_createtable(L, static_cast<int>(path.size() - first), 0);
+    for (usize i = first; i < path.size(); ++i) {
+        push_vec3(L, path[i]);
+        lua_rawseti(L, -2, static_cast<int>(i - first + 1));
+    }
+    lua_pushboolean(L, r == physics::NavPath3D::Partial);
+    return 2;
+}
+
 const luaL_Reg kWorldLib[] = {
     {"has", l_has},
     {"alive", l_alive},
+    {"find", l_find},
     {"spawn", l_spawn},
     {"add", l_add},
     {"remove", l_remove},
@@ -491,10 +1046,42 @@ const luaL_Reg kWorldLib[] = {
     {"raycast2d", l_raycast2d},
     {"overlap2d", l_overlap2d},
     {"move_and_collide", l_move_and_collide},
+    {"teleport2d", l_teleport2d},
+    {"find_path", l_find_path},
+    {"save", l_save},
+    {"load", l_load},
+    {"has_save", l_has_save},
+    {"set_time_scale", l_set_time_scale},
+    {"time_scale", l_time_scale},
+    {"shake", l_shake},
+    {"burst", l_burst},
     {"velocity2d", l_velocity2d},
     {"set_velocity2d", l_set_velocity2d},
     {"impulse2d", l_impulse2d},
+    {"force2d", l_force2d},
+    {"angular_velocity2d", l_angular_velocity2d},
+    {"set_angular_velocity2d", l_set_angular_velocity2d},
+    {"awake2d", l_awake2d},
+    {"set_awake2d", l_set_awake2d},
+    {"set_enabled2d", l_set_enabled2d},
+    {"overlap_point2d", l_overlap_point2d},
+    {"raycast_all2d", l_raycast_all2d},
+    {"circle_cast2d", l_circle_cast2d},
+    {"box_cast2d", l_box_cast2d},
     {"raycast3d", l_raycast3d},
+    {"overlap_sphere3d", l_overlap_sphere3d},
+    {"overlap_box3d", l_overlap_box3d},
+    {"sphere_cast3d", l_sphere_cast3d},
+    {"velocity3d", l_velocity3d},
+    {"set_velocity3d", l_set_velocity3d},
+    {"angular_velocity3d", l_angular_velocity3d},
+    {"set_angular_velocity3d", l_set_angular_velocity3d},
+    {"impulse3d", l_impulse3d},
+    {"teleport3d", l_teleport3d},
+    {"rotation3d", l_rotation3d},
+    {"set_rotation3d", l_set_rotation3d},
+    {"look_rotation3d", l_look_rotation3d},
+    {"find_path3d", l_find_path3d},
     {nullptr, nullptr},
 };
 

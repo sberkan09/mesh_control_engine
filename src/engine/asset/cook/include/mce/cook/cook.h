@@ -95,6 +95,20 @@ struct FailedFile {
     String message;
 };
 
+// The cook size report (M-CONTENT 1a): the bytes of every live asset's cooked file (the pack holds the same chunks,
+// plus a small header), summed by kind, with the biggest assets by name. Computed on every cook, cached or not.
+struct SizeEntry {
+    String path;  // relative to assets/
+    u64 bytes = 0;
+};
+struct SizeReport {
+    u64 textures = 0, meshes = 0, audio = 0, scenes = 0, other = 0;  // bytes; audio = sfx + music; scenes = scenes + prefabs
+    u32 texture_count = 0;
+    u32 textures_downscaled = 0;  // ordinary textures cooked smaller than their source by max_size (sidecar or --max-texture-size)
+    u64 total() const { return textures + meshes + audio + scenes + other; }
+    Array<SizeEntry> largest;  // up to 5, biggest first (ties by path)
+};
+
 struct CookReport {
     Array<AssetReport> assets;  // in cook (topological) order
     DiagList diags;
@@ -110,6 +124,7 @@ struct CookReport {
     bool mod = false;       // the project has a mod.json (its pack carries a ModInfo chunk)
     u32 base_assets = 0;    // assets in the base packs references may name (mods, --base)
     u32 overrides = 0;      // project assets that replace a base asset (same GUID, same type)
+    SizeReport sizes;       // what the cooked project weighs, by asset type (computed on every cook)
 
     bool ok() const { return diags.error_count() == 0; }
 };
@@ -133,10 +148,27 @@ struct CookOptions {
     Array<String> base_packs;
     // Texture storage (mce_cook --textures astc): the phone builds cook ASTC 4x4. Part of the re-cook key.
     TextureCompression textures = TextureCompression::None;
+    // Project-wide cap on the largest side of ordinary (PNG/JPG) textures (mce_cook --max-texture-size N): a power of
+    // two from 1 to 16384, 0 = no limit (the default, which cooks exactly as before). Applied as min(sidecar
+    // "max_size", this); a bigger texture is box-halved before its mips. HDR (.hdr/.exr) textures keep their own
+    // "max_size". Part of the re-cook key. Any other value is a cook error.
+    u32 max_texture_size = 0;
 };
 
-// The cook DB's tool version for these options: a different texture compression re-cooks.
-inline u32 cook_tool_version(TextureCompression textures) { return kCookToolVersion | (u32(textures) << 16); }
+// The cook DB's tool version for these options: a different texture compression or texture cap re-cooks (the cap
+// as log2 + 1 in bits 24..31, so 0 = no limit leaves the version as it was).
+inline u32 cook_tool_version(TextureCompression textures, u32 max_texture_size = 0) {
+    u32 v = kCookToolVersion | (u32(textures) << 16);
+    if (max_texture_size) {
+        u32 log2 = 0;
+        while ((1u << log2) < max_texture_size && log2 < 31) ++log2;
+        v |= (log2 + 1u) << 24;
+    }
+    return v;
+}
+
+// True for a valid CookOptions::max_texture_size: 0 (no limit) or a power of two from 1 to 16384.
+inline bool valid_max_texture_size(u32 v) { return v == 0 || (v <= 16384u && (v & (v - 1)) == 0); }
 
 class CookService {
 public:

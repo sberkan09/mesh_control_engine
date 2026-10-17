@@ -699,7 +699,7 @@ det_targets() {  # $1 subject, $2 tree (debug|release); the content packs are co
         cubes) echo sample_04_cubes ;;
         court) echo sample_05_ashen_court ;;
         demo_games) echo glowmoth marble_garden ;;
-        script) echo sample_script_headless ember_script ;;
+        script) echo sample_script_headless ember_script dungeon pursuit ;;
     esac
     return 0
 }
@@ -818,6 +818,8 @@ stage_demo_games_determinism() {
 # its C++ twin (`-mode cpp`), so the VM adds no float drift of its own.
 stage_script_determinism() {
     det_pair projects/EmberScript/ember_script "-headless 1 -ticks 1800 -input projects/EmberScript/tests/run_right.input" &&
+        det_pair projects/Dungeon/dungeon "-headless 1 -ticks 3000 -input projects/Dungeon/tests/autopilot.input" &&
+        det_pair projects/Pursuit/pursuit "-headless 1 -ticks 1500 -input projects/Pursuit/tests/autopilot.input" &&
         det_pair samples/script_headless/sample_script_headless "-ticks 1200" &&
         python3 scripts/ci/determinism.py --runs 1 --args="-ticks 1200 -mode cpp" \
             build/linux-gcc-debug/samples/script_headless/sample_script_headless \
@@ -959,4 +961,26 @@ if [[ $task_run -eq 1 && "${RESULT[walls]:-}" == PASS* && "${RESULT[linux-gcc-de
     printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
         "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
+# One line per run in a log shared by every thread, so the pre-PR CI time is measurable:
+# <utc> branch=<b> mode=<task|premerge|full|stages> result=<PASS|FAIL> total=<s> boot=<container boot> restarts=<n> <stage>=<s>...
+# `restarts` counts stages skipped as "resumed" (--resume); `boot` lets a reader count the container restarts a
+# branch's runs lived through. MCE_CI_TIMINGS overrides the path; no shared folder, no record.
+record_timing() {
+    local f="${MCE_CI_TIMINGS:-/mnt/project-files/.cache/ci-timings.log}" mode line s secs resumed=0
+    [[ -d "$(dirname "$f")" && -w "$(dirname "$f")" ]] || return 0
+    if [[ $task_run -eq 1 ]]; then mode=task
+    elif [[ " ${stages[*]} " == *" premerge "* ]]; then mode=premerge
+    elif [[ $full_run -eq 1 ]]; then mode=full
+    else mode=stages; fi
+    for s in "${stages[@]}"; do [[ "${RESULT[$s]:-}" == *resumed* ]] && resumed=$((resumed + 1)); done
+    line="$(date -u +%FT%TZ) branch=$(git rev-parse --abbrev-ref HEAD 2> /dev/null) mode=$mode"
+    line+=" result=$([[ $failed -eq 0 ]] && echo PASS || echo FAIL) total=${SECONDS}s boot=$(uptime -s 2> /dev/null | tr ' ' _) restarts=$resumed"
+    for s in "${stages[@]}"; do
+        secs="$(sed -n 's/^[A-Z]* (\(resumed[^)]*\|\([0-9]*\)s\)).*/\2/p' <<< "${RESULT[$s]:-}")"
+        line+=" $s=${secs:-0}"
+    done
+    echo "$line" >> "$f" 2> /dev/null || true
+}
+record_timing
+
 exit $failed

@@ -17,6 +17,7 @@ namespace {
 // S3TC enums are not in the 4.5 core headers (EXT_texture_compression_s3tc, universal on desktop).
 constexpr GLenum kCompressedRgbaS3tcDxt1 = 0x83F1;
 constexpr GLenum kCompressedRgbaS3tcDxt5 = 0x83F3;
+constexpr GLenum kCompressedSrgbAlphaS3tcDxt1 = 0x8C4D;  // GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
 // GL_TEXTURE_MAX_ANISOTROPY: core in 4.6, ARB/EXT_texture_filter_anisotropic before (same value).
 constexpr GLenum kTextureMaxAnisotropy = 0x84FE;
 
@@ -38,6 +39,8 @@ GlFormat gl_format(TextureFormat f) {
         case TextureFormat::R11G11B10F: return {GL_R11F_G11F_B10F, GL_RGB, GL_UNSIGNED_INT_10F_11F_11F_REV};
         case TextureFormat::BC1_UNorm: return {kCompressedRgbaS3tcDxt1, 0, 0};
         case TextureFormat::BC3_UNorm: return {kCompressedRgbaS3tcDxt5, 0, 0};
+        case TextureFormat::BC4_UNorm: return {GL_COMPRESSED_RED_RGTC1, 0, 0};
+        case TextureFormat::BC1_SRGB: return {kCompressedSrgbAlphaS3tcDxt1, 0, 0};
         case TextureFormat::BC5_UNorm: return {GL_COMPRESSED_RG_RGTC2, 0, 0};
         case TextureFormat::BC7_UNorm: return {GL_COMPRESSED_RGBA_BPTC_UNORM, 0, 0};
         case TextureFormat::BC7_SRGB: return {GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM, 0, 0};
@@ -51,12 +54,15 @@ GlFormat gl_format(TextureFormat f) {
     return {GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE};
 }
 
-usize level_bytes(TextureFormat f, u32 w, u32 h) {
-    if (is_compressed_format(f)) {
-        const usize block = f == TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
+// True when the driver lists `name` among its extensions (core profile: glGetStringi).
+bool has_gl_extension(const char* name) {
+    GLint n = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+    for (GLint i = 0; i < n; ++i) {
+        const auto* e = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+        if (e && std::strcmp(e, name) == 0) return true;
     }
-    return usize(w) * h * bytes_per_pixel(f);
+    return false;
 }
 
 GLenum gl_compare_func(CompareOp op) {
@@ -219,6 +225,12 @@ ResultV GlDevice::init() {
     }
     glGetIntegerv(GL_MAX_IMAGE_UNITS, &v);
     caps_.max_storage_image_units = static_cast<u32>(v);
+    // GL 4.5 is required, so BC4/BC5 (RGTC) and BC7 (BPTC, sRGB included) are core; BC1 comes with S3TC, which every
+    // desktop driver exposes. BC1_SRGB needs the sRGB flavour of S3TC (GL_EXT_texture_sRGB or
+    // GL_EXT_texture_compression_s3tc_srgb), so it has its own bit; texture_bc_srgb false makes the texture store refuse it.
+    caps_.texture_bc = has_gl_extension("GL_EXT_texture_compression_s3tc");
+    caps_.texture_bc_srgb = caps_.texture_bc && (has_gl_extension("GL_EXT_texture_sRGB") || has_gl_extension("GL_EXT_texture_compression_s3tc_srgb"));
+    caps_.texture_astc = has_gl_extension("GL_KHR_texture_compression_astc_ldr");
     MCE_LOG_INFO("rhi.gl: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     if (desc_.debug_layer) {

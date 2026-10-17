@@ -75,6 +75,14 @@ struct CtSound {
 };
 MCE_COMPONENT(CtSound, clip, loop)
 
+// A default that is computed, not a literal: the test moves it to stand in for editing `u32 frame = 0`.
+inline u32 g_drift_default = 10;
+struct CtDrift {
+    u32 value = g_drift_default;
+    u32 other = 1;
+};
+MCE_COMPONENT(CtDrift, value, other)
+
 }  // namespace cooktest
 
 template <>
@@ -216,6 +224,39 @@ TEST_CASE("cook: full project cooks, then everything is up to date") {
     CHECK(r2.cooked == 0);
     CHECK(r2.up_to_date == 5);
     CHECK(r2.manifest_hash == r1.manifest_hash);
+}
+
+TEST_CASE("cook: a changed C++ component default re-cooks the scenes that omit the field (M-WORKFLOW 6b)") {
+    const std::string root = fresh_dir("cook_default_drift");
+    const std::string scene = std::string(R"({ "format": "mce-scene", "version": 1, "guid": ")") + kSceneGuid +
+                              R"(", "name": "drift", "entities": [
+      { "name": "A", "components": { "CtDrift": { "other": 2 } } } ] })";
+    write_file(root + "/assets/scenes/drift.mcscene", scene);
+    CookService svc;
+    cooktest::g_drift_default = 10;
+    const CookReport r1 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r1));
+    REQUIRE(r1.ok());
+    CHECK(r1.cooked == 1);
+    const auto before = snapshot_cooked(root);
+
+    const CookReport same = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(same.ok());
+    CHECK(same.cooked == 0);
+    CHECK(same.up_to_date == 1);
+
+    cooktest::g_drift_default = 11;
+    const CookReport r2 = svc.cook(root.c_str(), CookOptions{});
+    INFO(diag_text(r2));
+    REQUIRE(r2.ok());
+    CHECK(r2.cooked == 1);
+    CHECK(r2.up_to_date == 0);
+    CHECK(snapshot_cooked(root) != before);
+
+    const CookReport r3 = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r3.ok());
+    CHECK(r3.up_to_date == 1);
+    cooktest::g_drift_default = 10;
 }
 
 TEST_CASE("cook: determinism — deleting cooked/ and re-cooking is byte-identical (FR-AST-030)") {
@@ -834,6 +875,79 @@ TEST_CASE("material uv_scale packs into two halves; unset means [1, 1]") {
     m.uv_scale(uv);
     CHECK(uv[0] == doctest::Approx(3.3f).epsilon(0.001));
     CHECK(uv[1] == doctest::Approx(120.0f).epsilon(0.001));
+}
+
+TEST_CASE("material: a height map, height_scale and parallax_steps cook into MaterialExt (M-VISUAL3 2); bad keys fail") {
+    const std::string root = make_project("cook_material_height");
+    auto write = [&](const std::string& extra) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", )" + extra + " }");
+    };
+    write(std::string(R"("height_scale": 0.04, "parallax_steps": [6, 40], "textures": { "base_color": "guid:)") + kTexGuid +
+          R"(", "height": "guid:)" + kTexGuid + R"(" })");
+    CookService svc;
+    const CookReport r = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(r.ok());
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+    auto mh = as.load_sync<Material>(G(kMatGuid));
+    REQUIRE(mh);
+    const Span<const byte> payload = as.resolve(mh.value());
+    const MaterialExt e = MaterialExt::of_material(payload);
+    CHECK(e.parallax());
+    CHECK(e.height() == G(kTexGuid));
+    CHECK(e.height_scale == doctest::Approx(0.04f));
+    CHECK(e.parallax_steps == (6u | 40u << 16));
+    CHECK_FALSE(e.any());  // parallax is not a lobe
+    CHECK(MaterialChunk::read(payload).value()->texture(MaterialSlot::BaseColor) == G(kTexGuid));  // 'height' is not a chunk slot
+    as.release(AnyHandle(mh.value()));
+
+    const char* bad[] = {
+        R"("height_scale": 0.04)",                                                        // no height map to scale
+        R"("height_scale": 0.9, "textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000001" })",  // out of range
+        R"("parallax_steps": [2, 40])", R"("parallax_steps": [40, 8])", R"("parallax_steps": 8)", R"("parallax_steps": [8, 65])",
+        R"("parallax_steps": [8.5, 32])", R"("height_scale": 0.04, "textures": { "height": null })",
+        R"("textures": { "height": "guid:a1a1a1a1-0000-4000-8000-000000000004" })",     // a material, not a texture
+    };
+    for (const char* extra : bad) {
+        write(extra);
+        const CookReport b = svc.cook(root.c_str(), CookOptions{});
+        CHECK_MESSAGE(!b.ok(), extra);
+        CHECK(report_for(b, kMatGuid)->status != AssetStatus::Cooked);
+    }
+
+    // A height map without a scale cooks and is off.
+    write(std::string(R"("textures": { "height": "guid:)") + kTexGuid + R"(" })");
+    REQUIRE(svc.cook(root.c_str(), CookOptions{}).ok());
+}
+
+TEST_CASE("material: a height map imported as sRGB warns, naming the texture; srgb false is silent (M-VISUAL3 2)") {
+    const std::string root = make_project("cook_material_height_srgb");
+    const char* linear_guid = "a1a1a1a1-0000-4000-8000-0000000000a5";
+    write_file(root + "/assets/textures/disp.png", make_gradient_png(5, 3));
+    write_file(root + "/assets/textures/disp.png.mceasset", sidecar(linear_guid, "texture", R"({ "srgb": false })"));
+    auto material = [&](const char* tex) {
+        write_file(root + "/assets/materials/hero.mcmat",
+                   std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid + R"(", "height_scale": 0.04, "textures": { "height": "guid:)" +
+                       tex + R"(" } })");
+    };
+    auto height_warnings = [](const CookReport& r) {
+        u32 n = 0;
+        for (const auto& d : r.diags.all())
+            n += d.severity == cook::Severity::Warning && std::string(d.message.c_str()).find("height map assets/textures/hero.png") != std::string::npos;
+        return n;
+    };
+    CookService svc;
+    material(kTexGuid);  // hero.png: no "srgb" setting, which defaults to true
+    const CookReport warned = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(warned.ok());
+    CHECK(height_warnings(warned) == 1);
+    material(linear_guid);
+    const CookReport quiet = svc.cook(root.c_str(), CookOptions{});
+    REQUIRE(quiet.ok());
+    CHECK(height_warnings(quiet) == 0);
 }
 
 TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {

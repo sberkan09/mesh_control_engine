@@ -169,7 +169,8 @@ struct Builder {
 
     // A coarser level of submesh `s`: its first `triangles` triangles again (same vertices), with
     // geometric error `error`.
-    void add_lod(u32 s, u32 triangles, f32 error) {
+    // With `own_vertices` the level gets a copy of the submesh's vertices as a window of its own (an authored level).
+    void add_lod(u32 s, u32 triangles, f32 error, bool own_vertices = false) {
         lods.resize(submeshes.size());
         const asset::MeshSubmesh& sm = submeshes[s];
         asset::MeshLod l{};
@@ -177,6 +178,10 @@ struct Builder {
         l.index_count = triangles * 3;
         l.base_vertex = sm.base_vertex;
         l.vertex_count = sm.vertex_count;
+        if (own_vertices) {
+            l.base_vertex = static_cast<u32>(vertices.size());
+            for (u32 i = 0; i < sm.vertex_count; ++i) vertices.push_back(vertices[sm.base_vertex + i]);
+        }
         l.error = error;
         for (u32 i = 0; i < l.index_count; ++i) indices.push_back(indices[sm.first_index + i]);
         lods[s].push_back(l);

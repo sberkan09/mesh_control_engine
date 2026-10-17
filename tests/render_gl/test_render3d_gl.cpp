@@ -2347,3 +2347,399 @@ TEST_CASE("render3d_gl: motion blur smears a moving box along its motion and lea
     CHECK(differing_bytes(f.pixels, blurred_still) == 0);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+// M-VISUAL3 2: parallax occlusion mapping. A tiled floor whose [normal, height] array and albedo carry the
+// same brick pattern: the grooves are low, so a grazing view shifts the albedo under the height field.
+namespace {
+
+// Frames differ in this many pixels (any channel by more than 8).
+u32 differing(const Array<u8>& a, const Array<u8>& b) {
+    u32 n = 0;
+    for (usize i = 0; i < a.size(); i += 4)
+        if (std::abs(int(a[i]) - int(b[i])) > 8 || std::abs(int(a[i + 1]) - int(b[i + 1])) > 8 || std::abs(int(a[i + 2]) - int(b[i + 2])) > 8) ++n;
+    return n;
+}
+
+// Of the floor points just in front of the box (under the camera when it looks down), on a 0.1 m grid, how many show different colors in the two frames.
+u32 differing_floor(const Fixture3D& f, const Array<u8>& a, const Array<u8>& b) {
+    u32 n = 0;
+    for (f32 x = -1.2f; x <= 1.2f; x += 0.1f)
+        for (f32 z = 0.8f; z <= 1.2f; z += 0.1f) {
+            const math::vec4 c = f.view.view_proj * math::vec4(vec3{x, 0, z}, 1.0f);
+            const usize px = usize((c.x / c.w * 0.5f + 0.5f) * kW), py = usize((0.5f - c.y / c.w * 0.5f) * kH);
+            const usize i = (py * kW + px) * 4;
+            if (std::abs(int(a[i]) - int(b[i])) > 8 || std::abs(int(a[i + 1]) - int(b[i + 1])) > 8) ++n;
+        }
+    return n;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: parallax shifts a brick floor at grazing angles, less looking down; far, Low and off draw flat") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f);
+    const auto draw = [&](const MaterialOverride* m, ParallaxSettings ps = {}) {
+        f.render(0.0f, false, [&, m, ps](Scene3D& s) {
+            no_sun(s);
+            s.set_sky(constant_sky(1.0f, false));
+            s.set_parallax(ps);
+            MeshInstance fl;
+            fl.mesh = 20;
+            fl.material = m;
+            s.add(fl);
+        });
+        return f.pixels;
+    };
+    f.pitch_deg = 12.0f;
+    const Array<u8> flat_grazing = draw(&p.off);
+    const Array<u8> pom_grazing = draw(&p.on);
+    const u32 grazing = differing_floor(f, flat_grazing, pom_grazing);
+    f.pitch_deg = 89.0f;
+    const Array<u8> flat_down = draw(&p.off);
+    const Array<u8> pom_down = draw(&p.on);
+    const u32 down = differing_floor(f, flat_down, pom_down);
+    INFO("differing pixels: grazing " << grazing << ", looking down " << down);
+    CHECK(grazing > 20);
+    CHECK(down * 2 < grazing);
+
+    f.pitch_deg = 12.0f;
+    ParallaxSettings near_only;
+    near_only.distance = 1.0f;  // the floor is 7 m away: faded out
+    CHECK(differing(draw(&p.on, near_only), flat_grazing) == 0);
+    ParallaxSettings low;
+    apply_quality(quality_settings(QualityTier::Low), low);
+    CHECK(differing(draw(&p.on, low), flat_grazing) == 0);
+    ParallaxSettings medium;
+    apply_quality(quality_settings(QualityTier::Medium), medium);
+    CHECK(medium.distance == 15.0f);
+    CHECK(medium.max_steps == 16);
+    CHECK(differing(draw(&p.on, medium), flat_grazing) > 0);  // the Medium tier still marches at 7 m, with at most 16 steps
+    CHECK(differing(draw(&p.on), pom_grazing) == 0);  // deterministic
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a parallax array's layer 0 is a normal map read at the shifted uv; without parallax_normal it is ignored") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f, true);
+    MaterialOverride no_normal = p.on;
+    no_normal.parallax_normal = false;
+    f.pitch_deg = 30.0f;
+    const auto draw = [&](const MaterialOverride* m) {
+        f.render(0.0f, true, [&, m](Scene3D& s) {
+            MeshInstance fl;
+            fl.mesh = 20;
+            fl.material = m;
+            s.add(fl);
+        });
+        return f.pixels;
+    };
+    const Array<u8> with_normal = draw(&p.on);
+    const Array<u8> without = draw(&no_normal);
+    INFO("differing pixels " << differing(with_normal, without));
+    CHECK(differing(with_normal, without) > 300);  // the tilted normal map lights the floor differently
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+// ---- M-VISUAL3 4: HDR sky and image-based light ---------------------------------------------------
+
+namespace {
+
+// A white matte sphere at (0, 2, 0) under a grey equirect sky with a hot patch on the horizon at world +X
+// (before rotation), lit by image-based lighting alone. Samples two points on the camera's side of it.
+struct HdrSkyRig {
+    explicit HdrSkyRig(Fixture3D& fx) : f(fx) {
+        f.pitch_deg = 35.0f;
+        upload_sphere(f, 40, {0, 2.0f, 0}, 1.0f);
+    }
+    // Luma of the sphere at normal n.
+    int sphere_luma(vec3 n) const { return f.at_world(vec3{0, 2.0f, 0} + math::normalize(n)).luma(); }
+    void render(u32 sky_tex, f32 rotation_deg, f32 intensity) {
+        f.render(0.0f, false, [&](Scene3D& s) {
+            no_sun(s);
+            Sky sky = constant_sky(0.0f, true);
+            sky.texture = sky_tex;
+            sky.texture_intensity = intensity;
+            sky.rotation = math::radians(rotation_deg);
+            s.set_sky(sky);
+            MeshInstance m;
+            m.mesh = 40;
+            s.add(m);
+        });
+        right = sphere_luma({0.7f, 0.3f, 0.65f});
+        left = sphere_luma({-0.7f, 0.3f, 0.65f});
+    }
+    Fixture3D& f;
+    int right = 0, left = 0;  // sphere luma on the +X-facing and the -X-facing side
+};
+
+constexpr f32 kHotBase = 0.25f, kHotValue = 50.0f;  // a 200x hot spot
+constexpr f32 kHotIntensity = 0.05f;
+
+}  // namespace
+
+TEST_CASE("render3d_gl: an HDR sky's IBL lights a white sphere brighter on the hot spot's side than an RGBA8 copy") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const Array<f32> grey = hot_sky_texels(kHotBase, kHotValue);
+    const u32 hdr = upload_grey_sky(f, grey, true), ldr = upload_grey_sky(f, grey, false);
+    rig.render(hdr, 0.0f, kHotIntensity);
+    const int hdr_right = rig.right, hdr_left = rig.left;
+    rig.render(ldr, 0.0f, kHotIntensity);
+    const int ldr_right = rig.right, ldr_left = rig.left;
+    INFO("hdr " << hdr_right << "/" << hdr_left << " rgba8 " << ldr_right << "/" << ldr_left);
+    CHECK(hdr_right > ldr_right + 25);        // the hot side: 50 against a clamped 1
+    CHECK(hdr_right > hdr_left + 40);         // and the sphere is lit from the hot spot's side
+    CHECK(std::abs(hdr_left - ldr_left) < 40);  // the far side sees the same grey sky
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: rotating the sky by 90 degrees moves the hot spot's light a quarter turn") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const u32 hdr = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue), true);
+    // The texture's hot spot points along h(t) = (cos t, 0, -sin t) after a rotation by t degrees about +Y:
+    // +X at 0 (lights the right side), +Z at -90 (lights both sides alike), -X at 180 (the left side), -Z at 90
+    // (behind the sphere: neither side).
+    rig.render(hdr, 0.0f, kHotIntensity);
+    const int r0 = rig.right, l0 = rig.left;
+    rig.render(hdr, -90.0f, kHotIntensity);
+    const int r_toward = rig.right, l_toward = rig.left;
+    rig.render(hdr, 180.0f, kHotIntensity);
+    const int r180 = rig.right, l180 = rig.left;
+    rig.render(hdr, 90.0f, kHotIntensity);
+    const int r_away = rig.right, l_away = rig.left;
+    INFO("0: " << r0 << "/" << l0 << "  -90: " << r_toward << "/" << l_toward << "  180: " << r180 << "/" << l180 << "  +90: " << r_away
+                << "/" << l_away);
+    CHECK(r0 > l0 + 40);
+    CHECK(l0 < 20);
+    CHECK(std::abs(r_toward - l_toward) < 30);  // the hot spot has swung from +X to +Z: both sides are lit
+    CHECK(l_toward > l0 + 40);
+    CHECK(r_toward > 40);
+    CHECK(l180 > r180 + 40);                    // half a turn: the other side
+    CHECK(r180 < 20);
+    CHECK(r_away < 20);                         // turned behind the sphere: neither side
+    CHECK(l_away < 20);
+    // The rotation also turns the visible dome (the hot spot at -Z in the texture is the view's center at 0).
+    f.pitch_deg = 5.0f;
+    const u32 dome = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue, 16), true);  // u = 0.25: world -Z
+    const auto sky_at_top = [&](f32 deg) {
+        f.render(0.0f, false, [&](Scene3D& s) {
+            Sky sky = constant_sky(0.0f, false);
+            sky.texture = dome;
+            sky.texture_intensity = 0.02f;
+            sky.rotation = math::radians(deg);
+            s.set_sky(sky);
+        });
+        const usize i = (usize(kH / 2 - 14) * kW + kW / 2) * 4;  // just above the horizon, dead ahead (-Z)
+        return int(f.pixels[i]) + f.pixels[i + 1] + f.pixels[i + 2];
+    };
+    const int ahead = sky_at_top(0.0f), turned = sky_at_top(90.0f);
+    INFO("dome ahead " << ahead << " turned " << turned);
+    CHECK(ahead > turned + 60);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a sky without rotation draws the same frame; the gradient ignores a rotation") {
+    Fixture3D f;
+    HdrSkyRig rig(f);
+    const u32 hdr = upload_grey_sky(f, hot_sky_texels(kHotBase, kHotValue), true);
+    const auto frame = [&](u32 tex, f32 deg) {
+        rig.render(tex, deg, kHotIntensity);
+        Array<u8> p;
+        p.resize(f.pixels.size());
+        std::memcpy(p.data(), f.pixels.data(), p.size());
+        return p;
+    };
+    const Array<u8> a = frame(hdr, 0.0f), b = frame(hdr, 0.0f);
+    CHECK(std::memcmp(a.data(), b.data(), a.size()) == 0);
+    const Array<u8> turned = frame(hdr, 90.0f);
+    CHECK(std::memcmp(a.data(), turned.data(), a.size()) != 0);
+    // No texture: the gradient (and its IBL) is the same at any rotation.
+    const Array<u8> g0 = frame(~0u, 0.0f), g1 = frame(~0u, 137.0f);
+    CHECK(std::memcmp(g0.data(), g1.data(), g0.size()) == 0);
+}
+
+TEST_CASE("render3d_gl: a one-texel sun 80000 times the sky leaves no sparkles on rough spheres") {
+    Fixture3D f;
+    f.pitch_deg = 20.0f;
+    Array<f32> grey;
+    grey.resize(64 * 32, 0.25f);
+    grey[16 * 64 + 40] = 20000.0f;  // a single texel on the horizon, ahead and to the right of +Z
+    const u32 hdr = upload_grey_sky(f, grey, true);
+    constexpr u32 kSpheres = 2;  // rough ones: a smooth sphere would mirror the sun as a (legitimate) small highlight
+    const f32 roughness[kSpheres] = {0.9f, 0.6f};
+    for (u32 i = 0; i < kSpheres; ++i) upload_sphere(f, 40 + i, {-1.2f + 2.4f * f32(i), 1.0f, 1.0f}, 0.8f, 0.0f, roughness[i]);
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.texture = hdr;
+        sky.texture_intensity = 0.01f;
+        s.set_sky(sky);
+        for (u32 i = 0; i < kSpheres; ++i) {
+            MeshInstance m;
+            m.mesh = 40 + i;
+            s.add(m);
+        }
+    });
+    // Neighbouring pixels inside a sphere differ by its shading gradient, not by sparkles.
+    int worst = 0;
+    for (u32 i = 0; i < kSpheres; ++i) {
+        const vec3 c{-1.2f + 2.4f * f32(i), 1.0f, 1.0f};
+        for (f32 dy = -0.5f; dy <= 0.5f; dy += 0.04f)
+            for (f32 dx = -0.5f; dx <= 0.5f; dx += 0.04f) {
+                const int a = f.at_world(c + math::normalize(vec3{dx, dy, 1.0f}) * 0.8f).luma();
+                const int b = f.at_world(c + math::normalize(vec3{dx + 0.04f, dy, 1.0f}) * 0.8f).luma();
+                worst = std::max(worst, std::abs(a - b));
+            }
+    }
+    INFO("largest neighbour step " << worst);
+    CHECK(worst < 24);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+namespace {
+
+Array<u8> copy_pixels(const Fixture3D& f) {
+    Array<u8> p;
+    p.resize(f.pixels.size());
+    std::memcpy(p.data(), f.pixels.data(), p.size());
+    return p;
+}
+
+// One frame with the given lens and tonemapper (FXAA and bloom off: the lens is the only variable).
+Array<u8> lens_frame(Fixture3D& f, const std::function<void(PostFx&)>& set, f32 time = 0.0f) {
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.bloom = false;
+        set(p);
+        s.set_post(p);
+        s.set_time(time, 1.0f / 60.0f);
+    });
+    return copy_pixels(f);
+}
+
+int px_luma(const Array<u8>& p, u32 x, u32 y) {
+    const usize i = (usize(y) * kW + x) * 4;
+    return (p[i] * 2 + p[i + 1] * 5 + p[i + 2]) / 8;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: the camera's look is off by default; vignette darkens the corners and not the centre (M-VISUAL3 3)") {
+    Fixture3D f;
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> explicit_off = lens_frame(f, [](PostFx& p) {
+        p.lens = PostFx::Lens{};
+        p.tonemapper = Tonemapper::AcesFit;
+    });
+    CHECK(std::memcmp(plain.data(), explicit_off.data(), plain.size()) == 0);
+    const Array<u8> vig = lens_frame(f, [](PostFx& p) { p.lens.vignette = 0.8f; });
+    CHECK(px_luma(vig, 1, 1) + 10 < px_luma(plain, 1, 1));
+    CHECK(px_luma(vig, kW - 2, kH - 2) + 10 < px_luma(plain, kW - 2, kH - 2));
+    CHECK(px_luma(vig, kW / 2, kH / 2) == px_luma(plain, kW / 2, kH / 2));
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: chromatic aberration separates the channels at the edge and not at the centre") {
+    Fixture3D f;
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> ca = lens_frame(f, [](PostFx& p) { p.lens.chromatic_aberration = 1.0f; });
+    const usize centre = (usize(kH / 2) * kW + kW / 2) * 4;
+    for (u32 c = 0; c < 3; ++c) CHECK(plain[centre + c] == ca[centre + c]);
+    // Some pixel in the left quarter (where the sky meets the ground) differs between red and blue only with the fringe.
+    u32 plain_split = 0, ca_split = 0;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW / 4; ++x) {
+            const usize i = (usize(y) * kW + x) * 4;
+            plain_split += std::abs(int(plain[i]) - int(plain[i + 2])) > 12;
+            ca_split += std::abs(int(ca[i]) - int(ca[i + 2])) > 12;
+        }
+    INFO("red/blue split pixels: plain " << plain_split << ", with the fringe " << ca_split);
+    CHECK(ca_split > plain_split);
+}
+
+TEST_CASE("render3d_gl: grain changes between two seeds, repeats for the same one, and keeps the mean") {
+    Fixture3D f;
+    const auto grain = [](PostFx& p) { p.lens.grain = 0.6f; };
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> a = lens_frame(f, grain, 0.0f), a2 = lens_frame(f, grain, 0.0f), b = lens_frame(f, grain, 1.0f);
+    CHECK(std::memcmp(a.data(), a2.data(), a.size()) == 0);  // deterministic per time
+    CHECK(std::memcmp(a.data(), b.data(), a.size()) != 0);   // animated
+    CHECK(std::memcmp(a.data(), plain.data(), a.size()) != 0);
+    f64 sum_plain = 0.0, sum_grain = 0.0;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            sum_plain += px_luma(plain, x, y);
+            sum_grain += px_luma(a, x, y);
+        }
+    const f64 shift = std::abs(sum_grain - sum_plain) / f64(kW * kH);
+    INFO("mean luma shift " << shift);
+    CHECK(shift < 1.0);
+}
+
+TEST_CASE("render3d_gl: AgX and PBR Neutral differ from ACES on a bright scene and stay close in the mid tones") {
+    Fixture3D f;
+    const Array<u8> aces = lens_frame(f, [](PostFx&) {});
+    const Array<u8> agx = lens_frame(f, [](PostFx& p) { p.tonemapper = Tonemapper::AgX; });
+    const Array<u8> neutral = lens_frame(f, [](PostFx& p) { p.tonemapper = Tonemapper::PbrNeutral; });
+    CHECK(std::memcmp(aces.data(), agx.data(), aces.size()) != 0);
+    CHECK(std::memcmp(aces.data(), neutral.data(), aces.size()) != 0);
+    CHECK(std::memcmp(agx.data(), neutral.data(), agx.size()) != 0);
+    // Mean luma over the frame: three different curves, one scene, no curve black or blown.
+    const auto mean = [](const Array<u8>& p) {
+        f64 sum = 0.0;
+        for (u32 y = 0; y < kH; ++y)
+            for (u32 x = 0; x < kW; ++x) sum += px_luma(p, x, y);
+        return sum / f64(kW * kH);
+    };
+    INFO("mean luma: aces " << mean(aces) << ", agx " << mean(agx) << ", neutral " << mean(neutral));
+    for (const Array<u8>* p : {&aces, &agx, &neutral}) {
+        CHECK(mean(*p) > 25.0);
+        CHECK(mean(*p) < 230.0);
+    }
+    CHECK(std::abs(mean(agx) - mean(aces)) < 60.0);
+    CHECK(std::abs(mean(neutral) - mean(aces)) < 60.0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: lens dirt is lit by bloom: needs the bloom and a texture the store holds, else the frame is the plain one") {
+    Fixture3D f;
+    const u32 dirt = f.renderer.textures().allocate_key();
+    {
+        Array<u8> px;
+        px.resize(4 * 4 * 4, u8{255});
+        const TextureMipUpload mip{4, 4, std::as_bytes(px.span())};
+        TextureUpload up;
+        up.format = rhi::TextureFormat::RGBA8_UNorm;
+        up.mips = Span<const TextureMipUpload>(&mip, 1);
+        REQUIRE(f.renderer.textures().upload(dirt, 1, up).has_value());
+    }
+    const u32 missing = f.renderer.textures().allocate_key();  // allocated, never uploaded
+    const auto frame = [&](bool bloom, u32 key, f32 intensity) {
+        return lens_frame(f, [&](PostFx& p) {
+            p.bloom = bloom;
+            p.bloom_intensity = 0.6f;
+            p.bloom_threshold = 0.0f;
+            p.lens.dirt_key = key;
+            p.lens.dirt_intensity = intensity;
+        });
+    };
+    const Array<u8> plain = frame(true, 0, 0.0f);
+    const Array<u8> lit = frame(true, dirt, 2.0f);
+    const Array<u8> zero = frame(true, dirt, 0.0f);
+    const Array<u8> absent = frame(true, missing, 2.0f);
+    const Array<u8> no_bloom_plain = frame(false, 0, 0.0f);
+    const Array<u8> no_bloom_dirt = frame(false, dirt, 2.0f);
+    CHECK(std::memcmp(plain.data(), lit.data(), plain.size()) != 0);  // the dirt adds light where the bloom is
+    CHECK(std::memcmp(plain.data(), zero.data(), plain.size()) == 0);
+    CHECK(std::memcmp(plain.data(), absent.data(), plain.size()) == 0);  // a texture the store lacks: no dirt
+    CHECK(std::memcmp(no_bloom_plain.data(), no_bloom_dirt.data(), plain.size()) == 0);  // nothing to light it
+    u64 plain_sum = 0, lit_sum = 0;
+    for (usize i = 0; i < plain.size(); ++i) {
+        plain_sum += plain[i];
+        lit_sum += lit[i];
+    }
+    CHECK(lit_sum > plain_sum);
+    CHECK(f.device->validation_error_count() == 0);
+}

@@ -15,6 +15,7 @@
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"
 #include "mce/jobs.h"
+#include "stb_image.h"
 #include "mce/loc/loc.h"
 #include "strings_csv.h"
 #if MCE_HAS_SCRIPT
@@ -60,9 +61,11 @@ public:
         out = g.value();
         return true;
     }
+    // A native asset's document; for an interchange asset (a texture, a sound) its sidecar "settings", which is
+    // how the material cook reads a texture's "srgb" without a new IAssetLookup method (importer.h is wide).
     bool native_document(Guid g, JsonValue& out, StringView& source_path) const override {
         const AssetRecord* rec = reg_.by_guid(g);
-        if (!rec || !rec->importer->native()) return false;
+        if (!rec) return false;
         out = rec->settings();
         source_path = rec->source_path.view();
         return out.valid();
@@ -109,11 +112,14 @@ struct StageJob {
     String cooked_root;
     bool force;
     TextureCompression textures;
+    u32 max_texture_size;
 };
 
-ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLookup* lookup, TextureCompression textures) {
+ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLookup* lookup, TextureCompression textures,
+                      u32 max_texture_size) {
     ImportInput in;
     in.texture_compression = textures;
+    in.max_texture_size = max_texture_size;
     in.guid = rec.guid;
     in.display_path = disp;
     in.source_path = rec.source_path;
@@ -121,6 +127,12 @@ ImportInput input_for(const AssetRecord& rec, const String& disp, const IAssetLo
     in.settings = rec.settings();
     in.lookup = lookup;
     return in;
+}
+
+// The re-cook key's tool version for one asset: the project's texture cap only concerns texture importers (a sound or
+// a scene is not re-cooked when it changes; a material follows its textures through their output hashes).
+u32 tool_version_for(const AssetRecord& rec, TextureCompression textures, u32 max_texture_size) {
+    return cook_tool_version(textures, rec.importer->type() == ChunkType::Texture ? max_texture_size : 0u);
 }
 
 void run_stage(void* ctx) {
@@ -132,7 +144,7 @@ void run_stage(void* ctx) {
     // Cache check: source, settings, importer, tool version and every dependency's output hash.
     if (!job.force && prev && prev->source_hash == rec.source_hash && prev->settings_hash == rec.settings_hash &&
         prev->importer_id == fnv1a64(rec.importer->id()) && prev->importer_version == rec.importer->version() &&
-        prev->tool_version == cook_tool_version(job.textures) && prev->deps.size() == n.deps.size() &&
+        prev->tool_version == tool_version_for(rec, job.textures, job.max_texture_size) && prev->deps.size() == n.deps.size() &&
         fs::exists(path_join(job.cooked_root, output_rel_path(rec.guid, prev->output_hash)))) {
         bool deps_same = true;
         for (usize i = 0; i < n.deps.size() && deps_same; ++i) {
@@ -148,7 +160,7 @@ void run_stage(void* ctx) {
 
     const String disp = display(rec);
     asset::ContainerWriter writer;
-    if (!rec.importer->cook(input_for(rec, disp, job.lookup, job.textures), writer, n.diags)) {
+    if (!rec.importer->cook(input_for(rec, disp, job.lookup, job.textures, job.max_texture_size), writer, n.diags)) {
         if (n.diags.error_count() == 0) n.diags.error(Errc::ImportFailed, disp, 0, 0, "cook.stage", "importer failed");
         n.status = AssetStatus::Failed;
         return;
@@ -156,6 +168,50 @@ void run_stage(void* ctx) {
     writer.finish(n.output);
     n.output_hash = asset::xxh64(n.output.data(), n.output.size());
     n.status = AssetStatus::Cooked;
+}
+
+// ---- the size report (CookReport::sizes) ----
+
+// True when the cooked ordinary texture `file` is smaller than its source image: max_size (sidecar or the project cap)
+// halved it. Reads the cooked file's texture header and the source's header only.
+bool texture_was_downscaled(const AssetRecord& rec, StringView cooked_file) {
+    const String ext = lower_extension(rec.source_path.view());
+    if (ext.view() == ".hdr" || ext.view() == ".exr") return false;
+    int sw = 0, sh = 0, comp = 0;
+    if (rec.source.size() > 0x7FFFFFFF ||
+        !stbi_info_from_memory(reinterpret_cast<const stbi_uc*>(rec.source.data()), int(rec.source.size()), &sw, &sh, &comp))
+        return false;
+    Array<byte> bytes;
+    if (!asset::read_file(cooked_file, bytes)) return false;
+    auto view = asset::ContainerView::open(bytes.span(), cooked_file);
+    if (!view) return false;
+    const u32 c = view.value().find(ChunkType::Texture);
+    if (c >= view.value().chunk_count()) return false;
+    auto tex = asset::TextureView::read(view.value().payload(c));
+    if (!tex || !tex.value().header) return false;
+    return tex.value().header->width < u32(sw) || tex.value().header->height < u32(sh);
+}
+
+void add_to_size_report(SizeReport& s, const AssetRecord& rec, u64 bytes, bool downscaled) {
+    switch (rec.importer->type()) {
+        case ChunkType::Texture: s.textures += bytes; ++s.texture_count; if (downscaled) ++s.textures_downscaled; break;
+        case ChunkType::Mesh: s.meshes += bytes; break;
+        case ChunkType::Sfx:
+        case ChunkType::AudioPacket: s.audio += bytes; break;
+        case ChunkType::Scene:
+        case ChunkType::Prefab: s.scenes += bytes; break;
+        default: s.other += bytes; break;
+    }
+    // The five biggest: a small sorted list (biggest first, ties by path so the report is stable).
+    SizeEntry e;
+    e.path = rec.source_path;
+    e.bytes = bytes;
+    auto before = [](const SizeEntry& a, const SizeEntry& b) { return a.bytes != b.bytes ? a.bytes > b.bytes : a.path.view() < b.path.view(); };
+    usize at = 0;
+    while (at < s.largest.size() && !before(e, s.largest[at])) ++at;
+    if (at >= 5) return;
+    s.largest.insert(at, std::move(e));
+    if (s.largest.size() > 5) s.largest.erase(s.largest.size() - 1);
 }
 
 // Reports one cycle through `start` among not-yet-emitted nodes.
@@ -291,6 +347,13 @@ CookReport CookService::cook(StringView project_root, const CookOptions& opt) {
 
 CookReport CookService::run(StringView project_root, const CookOptions& opt) {
     CookReport report;
+    if (!valid_max_texture_size(opt.max_texture_size)) {
+        String msg;
+        appendf(msg, "max texture size %u is not valid: use a power of two from 1 to 16384 (for example --max-texture-size 1024), or leave it out for no limit",
+                opt.max_texture_size);
+        report.diags.error(Errc::InvalidArgument, "options", 0, 0, "cook.options", msg);
+        return report;
+    }
     report.subset = !opt.paths.empty();
     Array<String> scope;
     for (const String& p : opt.paths) scope.push_back(normalize_scope_path(p.view()));
@@ -346,7 +409,7 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
         AssetRecord& rec = *nodes[i].rec;
         const String disp = display(rec);
         DiagList& gd = gdiags[i];
-        rec.importer->scan_dependencies(input_for(rec, disp, &lookup, opt.textures), rec.deps, gd);
+        rec.importer->scan_dependencies(input_for(rec, disp, &lookup, opt.textures, opt.max_texture_size), rec.deps, gd);
         for (const DepRef& d : rec.deps) {
             const u32* target = node_of.find(d.guid);
             if (const ChunkType* bt = target ? nullptr : base.find(d.guid)) {
@@ -481,7 +544,7 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
                 node.status = AssetStatus::Blocked;
                 continue;
             }
-            jobs_storage.push_back(StageJob{&node, &registry, &lookup, &db, &nodes, cooked_root, opt.force, opt.textures});
+            jobs_storage.push_back(StageJob{&node, &registry, &lookup, &db, &nodes, cooked_root, opt.force, opt.textures, opt.max_texture_size});
         }
         for (usize j = first_job; j < jobs_storage.size(); ++j) jobs::run(&run_stage, &jobs_storage[j], &counter);
         jobs::wait_for(&counter);
@@ -522,7 +585,7 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
                 r.settings_hash = rec.settings_hash;
                 r.importer_id = fnv1a64(rec.importer->id());
                 r.importer_version = rec.importer->version();
-                r.tool_version = cook_tool_version(opt.textures);
+                r.tool_version = tool_version_for(rec, opt.textures, opt.max_texture_size);
                 r.output_hash = node.output_hash;
                 r.type = rec.importer->type();
                 r.source_path = rec.source_path;
@@ -545,6 +608,17 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
             if (prev && fs::exists(path_join(cooked_root, output_rel_path(rec.guid, prev->output_hash)))) manifest_hash = prev->output_hash;
         }
         ar.output_hash = manifest_hash;
+        if (manifest_hash != 0) {
+            const String out_file = path_join(cooked_root, output_rel_path(rec.guid, manifest_hash));
+            u64 bytes = 0;
+            i64 mtime = 0;
+            if (fs::stat(out_file, bytes, mtime)) {
+                // Only when a cap could have applied: an unlimited cook never reads a texture back.
+                const bool capped = opt.max_texture_size != 0 || rec.settings().get("max_size").valid();
+                const bool down = capped && rec.importer->type() == ChunkType::Texture && texture_was_downscaled(rec, out_file.view());
+                add_to_size_report(report.sizes, rec, bytes, down);
+            }
+        }
         if (manifest_hash != 0) items.push_back(asset::ManifestItem{rec.guid, manifest_hash, rec.importer->type(), rec.source_path});
         report.assets.push_back(std::move(ar));
     }

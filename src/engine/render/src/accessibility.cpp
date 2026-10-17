@@ -85,6 +85,9 @@ void apply_accessibility(const AccessibilitySettings& s, PostFx& post) {
     post.color_vision_strength = s.color_vision_strength;
     post.motion_blur.intensity *= s.motion_scale;
     if (s.motion_scale <= 0.0f) post.motion_blur.enabled = false;
+    // The fringe and the animated grain are screen effects too (access.motion_scale).
+    post.lens.chromatic_aberration *= s.motion_scale;
+    post.lens.grain *= s.motion_scale;
 }
 
 }  // namespace mce::render

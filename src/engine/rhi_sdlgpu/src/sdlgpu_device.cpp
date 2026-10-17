@@ -28,6 +28,8 @@ SDL_GPUTextureFormat sdl_format(TextureFormat f) {
         case TextureFormat::R11G11B10F: return SDL_GPU_TEXTUREFORMAT_R11G11B10_UFLOAT;
         case TextureFormat::BC1_UNorm: return SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM;
         case TextureFormat::BC3_UNorm: return SDL_GPU_TEXTUREFORMAT_BC3_RGBA_UNORM;
+        case TextureFormat::BC4_UNorm: return SDL_GPU_TEXTUREFORMAT_BC4_R_UNORM;
+        case TextureFormat::BC1_SRGB: return SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB;
         case TextureFormat::BC5_UNorm: return SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM;
         case TextureFormat::BC7_UNorm: return SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM;
         case TextureFormat::BC7_SRGB: return SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM_SRGB;
@@ -38,14 +40,6 @@ SDL_GPUTextureFormat sdl_format(TextureFormat f) {
         case TextureFormat::ASTC_4x4_SRGB: return SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB;
     }
     return SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-}
-
-usize level_bytes(TextureFormat f, u32 w, u32 h) {
-    if (is_compressed_format(f)) {
-        const usize block = f == TextureFormat::BC1_UNorm ? 8 : 16;
-        return usize((w + 3) / 4) * ((h + 3) / 4) * block;
-    }
-    return usize(w) * h * bytes_per_pixel(f);
 }
 
 SDL_GPUSampleCount sample_count(u32 n) {
@@ -211,6 +205,16 @@ ResultV SdlGpuDevice::init() {
     caps_.max_compute_group_size[2] = 64;
     for (u32& n : caps_.max_compute_group_count) n = 65535;
     caps_.max_storage_image_units = kMaxImageUnits;
+    {
+        const auto sampled = [this](SDL_GPUTextureFormat f) {
+            return SDL_GPUTextureSupportsFormat(device_, f, SDL_GPU_TEXTURETYPE_2D_ARRAY, SDL_GPU_TEXTUREUSAGE_SAMPLER);
+        };
+        caps_.texture_bc = sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC4_R_UNORM) &&
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM) &&
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM_SRGB);
+        caps_.texture_bc_srgb = caps_.texture_bc && sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB);
+        caps_.texture_astc = sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB);
+    }
     MCE_LOG_INFO("rhi.sdlgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 
     default_depth_format_ =

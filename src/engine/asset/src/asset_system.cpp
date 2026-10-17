@@ -272,6 +272,11 @@ Result<void> AssetSystem::mount_one(StringView root, MountOptions opt) {
     const u32 mount_index = static_cast<u32>(mounts_.size());
     for (u32 i = 0; i < manifest.size(); ++i) {
         const ManifestEntry& e = manifest.entry(i);
+        if (e.type == ChunkType::Script && !opt.allow_code) {
+            MCE_LOG_WARN("asset {}: {} carries a script, which only the game's own pack may do; ignored", asset::to_string(e.guid()).view(),
+                         root);
+            continue;
+        }
         if (const AssetKey* k = by_guid_.find(e.guid())) {
             // Earlier roots win (a mod over the game), but only with the same type: an override
             // that changes it would break every reference the later root's content makes, so the
@@ -331,9 +336,14 @@ void AssetSystem::become_resident(Row& row, AssetKey key) {
     row.state = State::Resident;
     row.generation = next_generation(row.generation);
     row.stale_logged = false;
-    if (auto u = upload(row, key); !u)
-        MCE_LOG_WARN("gpu upload failed: {} ({})", StringView(strings_.data() + row.path_offset, row.path_size),
-                     errc_name(u.error().code));
+    if (auto u = upload(row, key); !u) {
+        // An unsupported texture format was already logged once, with the fix; no per-asset line for it.
+        const bool refusal = u.error().code == Errc::Unsupported && u.error().stage &&
+                             std::strcmp(u.error().stage, "render.texture.format") == 0;
+        if (!refusal)
+            MCE_LOG_WARN("gpu upload failed: {} ({})", StringView(strings_.data() + row.path_offset, row.path_size),
+                         errc_name(u.error().code));
+    }
 }
 
 Result<AnyHandle> AssetSystem::load_any(AssetKey key, ChunkType type) {

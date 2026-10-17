@@ -1,6 +1,6 @@
 # M-UI-DATA2 — What the M-UI-DATA blind test found (milestone record)
 
-**Status:** active (steps 1–3 done, 2026-10-16). Plan: ROADMAP §M-UI-DATA2; Linear SBA-153 … SBA-156.
+**Status:** done on the desktop (steps 1–4, 2026-10-16). Plan: ROADMAP §M-UI-DATA2; Linear SBA-153 … SBA-156.
 **Why:** the M-UI-DATA blind test had a fresh agent build a title, HUD and pause menu over MCP from a one-line
 brief. It succeeded, and it left four places where the agent had to work around the data instead of
 saying what it meant. This milestone closes them.
@@ -12,7 +12,7 @@ saying what it meant. This milestone closes them.
 | 1 | A Text widget's own alignment | SBA-153 | done |
 | 2 | A document can set a value back to the kind's default over a theme | SBA-154 | done |
 | 3 | `project_check` reads `.mcui` text for size and contrast | SBA-155 | done |
-| 4 | `ui_preview` without cooking the whole project; guide and prompt | SBA-156 | not started |
+| 4 | `ui_preview` without cooking the whole project; guide and prompt | SBA-156 | done |
 
 ## Step 1 — text alignment
 
@@ -62,3 +62,21 @@ the cook cannot read is skipped (the cook reports it).
 
 **Gates.** `test_mcp_check`: the seeded grey-on-grey and 9 px labels are still flagged (now by path); a
 document whose theme makes buttons pale and 10 px flags a button that states neither.
+
+## Step 4 — `ui_preview` without the whole project
+
+**What.** `ui_preview` used to cook the whole project first, so one broken scene blocked every preview. Now,
+when the project does not cook, or has no saved scene, or `"document_only": true`, it copies the document and
+what its text names by GUID (theme, fonts, sprite sheets, textures, followed through each) with their sidecars
+into `cooked/.render/ui_only/assets`, adds an empty scene for the player to start, cooks that alone and plays
+it. The result carries `"document_only"` with the reason. A project that cooks keeps the old path (the open
+scene starts, bound fields read it).
+
+**Why not always.** A document-only run has no entities, so property bindings show nothing and the clear color
+is the default; the whole-project path stays the default for those.
+
+**Guide and prompt.** User guide 14 lists `document_only`; the `start_game` prompt now names `text_align`,
+`own_style` and the preview that works while a scene is broken.
+
+**Gates.** `test_mcp_ui` (gpu): with a scene the cook rejects, `ui_preview` still returns a frame, flags
+`document_only`, and the document's theme travelled with it; `document_only: true` gives the same frame.
