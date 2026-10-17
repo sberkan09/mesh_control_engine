@@ -20,7 +20,7 @@ cannot yet say or check:
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | Rotation from Luau: Euler degrees as a vector (no quaternion type), `mce.rotation3d`, `set_rotation3d`, `look_rotation3d`, `teleport3d` with a rotation | Sonnet | done |
-| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md), awaiting review) | Opus (touches the VM and the compiler check; design note first) | not started |
+| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a done (freeze + watch list, `ScriptBudget::check_state`); 2b (convar, headless exit code, debugLevel 2) and 2c (static check widening) not started |
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | done |
 | 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | not started |
 | 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | not started |
@@ -38,5 +38,13 @@ cannot yet say or check:
   wherever the camera goes: the seeded run fails on draws, sprites and batches, and `Dungeon_perf_counters_seeded` (gpu label) keeps it so. Not rerun: the
   Glowmoth and MarbleGarden seeded tests (module builds, gpu stage); their scenes only gain larger sprites. `main.mcscene` is not measured: the script leaves it
   within the warmup.
+
+## Step 2a as built
+
+- `ScriptHost::watch_state` (end of `add_bytecode`) walks from `update` and the script's globals under `lua_cpcall`: tables are made read-only, upvalue slots, C-closure upvalues (`string.gmatch` keeps its position in one) and buffers go on a watch list held with `lua_ref`; the shared globals and library tables are skipped (the host writes `mce.dt`).
+  `state_unchanged` compares after each `update()` (`lua_rawequal`, numbers and vectors by bit pattern, buffers by `memcmp`). A change fails the script with `update() kept state between ticks: ...`; a write to a frozen table fails at its line.
+- Tests (`test_script_state.cpp`): alias, helper, closure factory, global table, `newproxy`, buffer and `gmatch` each compile and then fail at run time; `check_state = false` lets them run; a stateless script with constant tables, NaN and vector upvalues, `mce.random` and field handles runs 100 ticks with the same `state_hash` on or off.
+- Default is on in the field; step 2b makes it off in shipped games and on in editor, `mce run`, headless and CI (coordinator decision), and adds the headless exit code and `debugLevel = 2`.
+- Kept `newproxy` (its metatable is frozen). Watched buffers are capped at 256 KiB per script.
 
 **Gates:** every new function has a `tests/script` case and a `mce.d.luau` entry; `local_ci.sh --task` green on every step.
