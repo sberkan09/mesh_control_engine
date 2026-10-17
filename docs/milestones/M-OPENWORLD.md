@@ -43,6 +43,23 @@ Linear: the SBA workspace is at its free issue limit (save_issue refuses new iss
 4. **D2–D3** (content ledger and cook scripts, retarget) after D1 lands in the M-IMPORT3D thread.
 5. **E1** integration sample last.
 
+## Track B progress (roads, traffic, crowds)
+
+Design: [ADR-0046](../adr/0046-road-network.md). Guide: [chapter 29](../user-guide/29-roads-and-traffic.md).
+Linear: the Linear connector was unreachable when B1 started; the steps are tracked here until it is back.
+
+| Step | Status | PR | Notes |
+|---|---|---|---|
+| B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
+| B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
+| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
+| B3 crowds | planned (own thread once B1 lands) | | uses `RoadRoad::sidewalk` beside each kerb |
+
+Open items and risks:
+- Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
+- Junction radii come from widths and angles; very acute junctions may need a hand-set `radius`.
+- The nearest-lane grid is rebuilt on every hot reload of a network; fine for a city, slow for a country.
+
 ## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)
 
 Linear is at its free issue limit (creating SBA issues for D2/D3 failed with "exceeded the free issue limit"), so this

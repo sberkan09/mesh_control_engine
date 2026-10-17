@@ -15,6 +15,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/diagnostics.cpp
         src/envmap_importer.cpp
         src/navmesh_importer.cpp
+        src/roads_importer.cpp
         src/font_importer.cpp
         src/fs_util.cpp
         src/image.cpp

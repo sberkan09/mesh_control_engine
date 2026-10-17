@@ -37,6 +37,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::BehaviorTree: return "BehaviorTree";
         case ChunkType::Skeleton2D: return "Skeleton2D";
         case ChunkType::Script: return "Script";
+        case ChunkType::RoadNetwork: return "RoadNetwork";
     }
     return "ChunkType(?)";
 }
