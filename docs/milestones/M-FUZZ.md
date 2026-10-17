@@ -117,7 +117,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Finding: the glTF importer asserts on a wrongly typed value.** `read_indices` (`gltf_importer.cpp:447`) calls
   `as_number()` on an accessor index it has not type-checked in the `ctype == 5125` branch (`bufferView`, `buffer`);
   in release the same read is out of bounds on the JSON node array. Owner: M-IMPORT3D (asset/cook mesh import).
-  The `.glb`/`.gltf` files are skipped unless `MCE_FUZZ_GLTF=1`.
+  **Fixed in M-IMPORT3D 1:** the accessor reader is type-checked end to end (a systematic type-confusion mutation test covers the whole indices chain) and the `.glb`/`.gltf` files are fuzzed by default again (`MCE_FUZZ_GLTF` is gone).
 - **Finding: a mutated TrueType font crashes the font importer.** `stbrp_pack_rects` in the atlas bake gets a negative
   width from a damaged `.ttf` (`font_importer.cpp:111`); stb_truetype is documented as unsafe for untrusted fonts.
   Options: validate the table directory and glyph metrics before the bake, or bake in a subprocess. The `.ttf` and
