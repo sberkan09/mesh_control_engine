@@ -61,12 +61,13 @@ TEST_CASE("fuzz: the command line and console lines survive hostile text") {
             args.push_back(a);
         }
         std::vector<const char*> argv;
+        argv.reserve(args.size());
         for (const std::string& s : args) argv.push_back(s.c_str());
         applied += console::parse_command_line(static_cast<int>(argv.size()), argv.data(), m.below(2) == 0);
         console::apply_deferred_command_line();
         // A console line: the same pieces joined.
         std::string line;
-        for (size_t i = 1; i < args.size(); ++i) line += (i > 1 ? " " : "") + args[i].substr(args[i].size() && args[i][0] == '-' ? 1 : 0);
+        for (size_t i = 1; i < args.size(); ++i) line += (i > 1 ? " " : "") + args[i].substr(!args[i].empty() && args[i][0] == '-' ? 1 : 0);
         (void)console::execute(StringView(line.c_str(), line.size()));
     }
     std::printf("fuzz: command line: %u lines, %llu unknown entries\n", n, static_cast<unsigned long long>(applied));
