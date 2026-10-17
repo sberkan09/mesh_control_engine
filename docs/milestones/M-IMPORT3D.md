@@ -182,16 +182,17 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   `samples/import_demo` gains a generated `.obj` and an ASCII `.fbx` written by its `gen_art.py` (no binaries), and
   its `import_demo_reimport` check covers the prefab. The record closed with "as built".
 
-## Decisions for the coordinator
+## Decisions (approved by the coordinator)
 
-1. **FBX through ufbx** (step 3a): a new cook-only dependency, MIT or public domain, single file, walled like tinyexr
-   and bc7enc. The alternative is no FBX and a guide page on converting with Blender. Recommended: ufbx.
-2. **Vertex colours, TEXCOORD_1 and runtime morph targets** need `MeshVertex` / `CHNK_MESH` (`formats.h`, 318 TUs)
-   and the render owner. This milestone only warns for them and bakes the morph default weights. Option: a separate
-   render-owned milestone (a `MeshFlags` extra vertex stream, morph deltas as a chunk section, a compute or vertex
-   path); recommended to file it only when a user's content needs it.
-3. **KHR_draco is refused** with a re-export hint; EXT_meshopt_compression is supported through the meshoptimizer the
-   cook already has. Recommended as written; Draco would be a second new dependency for the same result.
+1. **FBX through ufbx**, pinned, cook-only, behind a wall, with an ADR (step 3a). The import guide also carries a
+   short "convert via Blender" fallback note.
+2. **Vertex colours, TEXCOORD_1 and runtime morph targets**: this milestone only warns for them and bakes the default
+   morph weights. A render-owned milestone (a `MeshFlags` extra vertex stream, morph deltas, a vertex or compute path)
+   sits in the ROADMAP backlog and starts only if a user's content needs it.
+3. **KHR_draco is refused** with a re-export hint; EXT_meshopt_compression is supported.
+4. **Review:** the Opus review of steps 3a and 3b also covers malformed-file limits and fuzz-style corrupt-input tests
+   (as in the HDR/EXR follow-up). A step that changes a header ships that header as its own seam PR first.
+5. Stay off `render/`, the script VM and perf files.
 
 Also worth a look: lights and cameras land as a converter-written prefab (step 4), not inside the mesh asset.
 
