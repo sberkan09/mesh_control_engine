@@ -13,6 +13,17 @@ else()
              COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_skel.py" "${CMAKE_CURRENT_BINARY_DIR}/import_skel_test")
 endif()
 
+# M-IMPORT3D 4a: `mce import gltf|fbx` (tools/mce_cli/mce_import_3d.py) writes a model's lights and cameras as a prefab; with
+# mce_cook the FBX route (`mce_cook --dump-fbx-scene`) is checked and the prefab is cooked for real.
+if(TARGET mce_cook)
+    add_test(NAME import_3d
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_3d.py" "${CMAKE_CURRENT_BINARY_DIR}/import_3d_test"
+                     "$<TARGET_FILE:mce_cook>")
+else()
+    add_test(NAME import_3d
+             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_import_3d.py" "${CMAKE_CURRENT_BINARY_DIR}/import_3d_test")
+endif()
+
 # SBA-182: `mce play` / `mce headless` warn about a pack older than the sources.
 add_test(NAME cli_stale_pack
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_stale_pack.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_stale_pack")
