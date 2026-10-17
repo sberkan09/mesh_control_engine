@@ -87,6 +87,15 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   and its `.mtl` (`mtl` → `ChunkType::Material` of the first material; the `.obj` declares the `.mtl` as a dependency,
   reads its bytes and cooks every material it names inline, textures resolved to GUIDs; `Ns` maps to perceptual roughness (2 / (Ns + 2))^(1/4), a packed `map_Pr` + `map_Pm` defaults the factors to 1, `map_Ke` without `Ke` defaults emissive to white, `d` beats `Tr`, absolute texture paths fall back to the file name next to the `.mtl`). Both share the glTF importer's
   back end (`mesh_build.h`); their factories are declared in the cook-private `src/obj_importer.h`, not in `importer.h`.
+  Autodesk FBX (`.fbx` → `ChunkType::Mesh`, `src/fbx_importer.cpp`, factory in the cook-private `src/fbx_importer.h`; host
+  builds only, where `mce_ufbx` exists: `MCE_HAS_FBX`; ADR-0047): ufbx reads the file from memory (format forced to FBX, no
+  external files, no thread pool, 1 GiB temp and result budgets, node depth 4096) into the engine's frame (+Y up, right-handed,
+  metres, so a Z-up centimetre file equals the glTF one); triangulated meshes with normals and UV set 0, inline PBR materials
+  (external textures only: an embedded one is an error), the node tree, skins (4 largest influences, 256 joints, bind poses as
+  inverse binds, skinned geometry in bind space as in glTF) and animation stacks as clips sampled at `sample_rate` (default 30,
+  times `i / rate`, base layer only, no curve fitting); sidecar `"scale"`, `"sample_rate"`, `"max_triangles"`, `"lod_levels"`.
+  Caps (nodes, vertices, triangles, polygon size, clips, keys) are errors that name the cap. FBX bytes are per host: ufbx
+  evaluates Euler angles and slerp with libm.
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
   uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the
@@ -173,7 +182,7 @@ errors, a module that fails to load among them) or 2 (usage).
   8 influences, baked morph weights, dropped-feature warnings, and corrupt-input cases (truncated / flipped
   streams, bad sparse indices, absurd counts) that must be errors. `test_cook_obj.cpp` (M-IMPORT3D step 2): a quad cube equals
   the same cube as glTF byte for byte, fans, negative indices, CRLF / LF / CR, MTL materials and textures, warnings, and
-  corrupt-input cases plus a seeded mutation loop. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
+  corrupt-input cases plus a seeded mutation loop. `test_cook_fbx.cpp` (M-IMPORT3D step 3b): ASCII FBX fixtures written in-test; a cube in cm / Z-up, Blender's 0.01 / 100 pair and a left-handed file equal the glTF cube, a 3-bone skin with a clip matches analytic poses, materials, textures, the embedded-texture error, warnings, `lod_levels` / `max_triangles`, twice-cooked identical bytes, and corrupt-input cases (truncations, seeded byte flips, a binary file claiming 2^29 elements, huge counts, deep nesting, non-finite transforms) that must error or succeed. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
   `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement. `test_cook_input.cpp`:
   ".mcinput cooks to CHNK_INPUT and loads into the input system", "authoring mistakes are cook errors".
