@@ -714,7 +714,7 @@ const ToolDef kAssetTools[] = {
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcskel2d, .mcanim, .mcmat, "
      ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, or the extension"}}})json",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, Terrain, RoadNetwork, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "
