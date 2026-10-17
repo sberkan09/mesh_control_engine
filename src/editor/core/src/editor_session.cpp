@@ -6,11 +6,13 @@
 #include "mce/cook/cook.h"
 #include "mce/cook/envmap.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/hlod.h"
 #include "mce/cook/json.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
+#include "mce/scene/streaming.h"
 #include "mce/editor/preview_renderer.h"
 #include "mce/log.h"
 
@@ -218,6 +220,73 @@ Result<physics::NavBakeStats3D> EditorSession::bake_navmesh() {
     MCE_LOG_INFO("editor: baked the navmesh into assets/{} ({} x {} tiles, {} layers, {} bytes)", rel.view(), stats.tiles_x,
                  stats.tiles_z, stats.layers, stats.bytes);
     return stats;
+}
+
+Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::HlodBakeSettings3D& settings, EntityId only) {
+    constexpr const char* kWhere = "editor.bake_hlod";
+    if (!project_.is_open() || !project_.mounted()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
+    World& world = scene_.world();
+    struct Chunk {
+        EntityId id;
+        asset::Guid scene;
+        math::vec3 origin;
+    };
+    Array<Chunk> chunks;
+    world.query<const scene::SceneChunk&>().each([&](Entity e, const scene::SceneChunk& c) {
+        const EntityId id = scene_.entity_for(e);
+        if (id == kNoEntity || (only != kNoEntity && id != only) || c.scene.guid.is_null()) return;
+        const LocalTransform* t = scene_.get<LocalTransform>(id);
+        chunks.push_back({id, c.scene.guid, t ? t->position : math::vec3{}});
+    });
+    if (chunks.empty()) return Error(Errc::NotFound, kWhere, "the scene has no SceneChunk with an area scene");
+
+    Array<HlodBakeRow> rows;
+    Array<cook::String> written;
+    for (const Chunk& c : chunks) {
+        HlodBakeRow row;
+        row.chunk = c.id;
+        Array<byte> mesh, file;
+        if (kit::bake_chunk_hlod(*project_.mounted(), c.scene, c.origin, settings, mesh, &row.stats)) {
+            // assets/hlod/<scene file stem>/chunk_<id>.mchlod: stable per chunk, so re-bakes overwrite.
+            cook::String rel("hlod/");
+            rel += scene_stem(scene_.path());
+            rel += "/chunk_";
+            char num[16];
+            std::snprintf(num, sizeof(num), "%u", c.id);
+            rel += StringView(num);
+            rel += ".mchlod";
+            const cook::String abs = project_.asset_path(rel.view());
+            MCE_TRY(bake_sidecar(abs, "hlod", row.proxy));
+            cook::write_hlod_file(mesh.span(), file);
+            MCE_TRY(cook::fs::write_file_atomic(abs.view(), file.span()));
+            row.bytes = static_cast<u32>(file.size());
+            written.push_back(rel);
+        }
+        rows.push_back(row);
+    }
+    if (!written.empty()) {
+        watcher_.poll(0.0, 0.0);  // the writes are ours: re-baseline the watcher
+        const HotReloadResult r = hot_reload(written.span());
+        if (r.failed > 0) return Error(Errc::ImportFailed, kWhere, "a baked HLOD did not cook (see the log)");
+    }
+
+    bool editing = false;
+    for (const HlodBakeRow& row : rows) {
+        if (row.proxy.is_null()) continue;
+        const kit::ChunkLod3D* cur = scene_.get<kit::ChunkLod3D>(row.chunk);
+        if (cur && cur->proxy.guid == row.proxy) continue;
+        if (!editing) {
+            scene_.begin_edit("Bake HLOD");
+            editing = true;
+        }
+        if (!cur) scene_.add_component(row.chunk, refl::type_of<kit::ChunkLod3D>());
+        kit::ChunkLod3D lod = *scene_.get<kit::ChunkLod3D>(row.chunk);
+        lod.proxy.guid = row.proxy;
+        scene_.set(row.chunk, lod);
+    }
+    if (editing) scene_.end_edit();
+    MCE_LOG_INFO("editor: baked {} HLOD prox{} for {} chunk(s)", written.size(), written.size() == 1 ? "y" : "ies", rows.size());
+    return rows;
 }
 
 Result<void> EditorSession::apply_to_prefab(asset::Guid prefab, const DocComponent& value, u64 fields) {

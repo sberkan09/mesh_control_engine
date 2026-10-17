@@ -144,7 +144,7 @@ WALLS = [
     (
         "socket wall",
         re.compile(r"[<\"](sys/socket\.h|netinet/|arpa/inet\.h|netdb\.h|winsock2?\.h|ws2tcpip\.h|emscripten/websocket\.h)"),
-        ["src/engine/net/src/"],
+        ["src/engine/net/src/", "tests/fuzz/test_websocket.cpp"],  # the fuzz test is a raw TCP peer
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
     # WebRTC (M-NET3 step 4): libdatachannel's C API is private to rtc_native.cpp (the browser's
