@@ -368,6 +368,9 @@ public:
     void set_angular_velocity(Entity e, vec3 v);  // kinematic + dynamic bodies, rad/s
     void apply_impulse(Entity e, vec3 impulse);  // dynamic bodies, at the centre of mass
     void teleport(Entity e, vec3 position, quat rotation);  // bodies and characters
+    // Floating origin (M-OPENWORLD A2): moves every body, character and world-held joint anchor by -delta
+    // at once, keeping velocities, sleep states and the bodies' poses relative to each other.
+    void shift_origin(vec3 delta);
 
     bool body_state(Entity e, BodyState3D& out) const;
 

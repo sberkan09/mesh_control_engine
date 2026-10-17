@@ -6,6 +6,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/static_merge3d.h"
@@ -180,6 +181,16 @@ void kit3d_environment(Frame& f) {
     });
 }
 
+// Floating origin (M-OPENWORLD A2): every body, character and world-held joint moves with the entities, and so
+// do the static copies a game placed in world space.
+void kit3d_origin_shift(World& w, const math::vec3& d, void*) {
+    if (Physics3D* phys = w.try_resource<Physics3D>()) phys->world.shift_origin(d);
+    if (StaticInstances3D* si = w.try_resource<StaticInstances3D>()) {
+        for (StaticInstance3D& c : si->instances) c.position = c.position - d;
+        for (StaticCell3D& c : si->cells) c.center = c.center - d;
+    }
+}
+
 }  // namespace
 
 u32 StaticInstances3D::mesh_slot(asset::Guid mesh) {
@@ -266,6 +277,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     world.set_resource(Kit3DAssets{assets});
     if (!world.try_resource<StaticInstances3D>()) world.set_resource(StaticInstances3D{});
     if (!world.try_resource<Physics3D>()) world.set_resource(Physics3D{});
+    on_origin_shift(world, &kit3d_origin_shift);
     world.add_system(Phase::Startup, "kit3d_environment", &kit3d_environment);
     world.add_system(Phase::Startup, "kit3d_colliders", &kit3d_colliders, "kit3d_environment");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_physics", &kit3d_physics);

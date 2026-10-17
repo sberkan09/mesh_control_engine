@@ -6,6 +6,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/containers/hash_map.h"
 #include "mce/ecs/hierarchy.h"
+#include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
@@ -368,12 +369,21 @@ void kit3d_triggers(Frame& f) {
     st.inside = static_cast<Array<Pair>&&>(now);
 }
 
+// Floating origin: the remembered poses move with the transforms, so a rebase is not read as an outside move
+// (no collider rebuilt, no character's walk reset). The bodies themselves move in kit3d_origin_shift.
+void bodies3d_origin_shift(World& w, const math::vec3& d, void*) {
+    Bodies3DState* st = w.try_resource<Bodies3DState>();
+    if (!st) return;
+    for (auto&& kv : st->poses) kv.value.position = kv.value.position - d;
+}
+
 }  // namespace
 
 void install_bodies3d(World& world, asset::AssetSystem* assets) {
     install_kit3d(world, assets);
     if (world.try_resource<Bodies3DState>()) return;
     world.set_resource(Bodies3DState{});
+    on_origin_shift(world, &bodies3d_origin_shift);
     world.register_components<RigidBody3D, CharacterController3D, Trigger3D>();
     world.register_event<TriggerEnter3D>(Phase::FixedUpdate_Physics);
     world.register_event<TriggerExit3D>(Phase::FixedUpdate_Physics);

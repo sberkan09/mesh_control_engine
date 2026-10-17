@@ -74,7 +74,7 @@ MCE_COMPONENT(Ragdoll3D, (active, Help{"1: limp, the physics poses the mesh; 0: 
               (swing, Range{0, 175}, Help{"degrees"}), (twist, Range{0, 175}, Help{"degrees, either way"}), (friction, Range{0, 1}),
               (damping, Range{0, 1}, Help{"angular damping"}), (joint_friction, Range{0, 100000}, Help{"N*m"}),
               (impulse, Help{"N*s, applied once and cleared"}), (impulse_bone, Help{"empty = the whole body"}),
-              (parts, ReadOnly, Transient), (blend, ReadOnly, Transient), (root_position, ReadOnly, Transient),
+              (parts, ReadOnly, Transient), (blend, ReadOnly, Transient), (root_position, ReadOnly, Transient, WorldPoint),
               (settled, ReadOnly, Transient),
               (on_trigger, Help{"1: goes limp when a trigger or sensor event names it (a hit, a fall); stops its NavAgent3D"}))
 

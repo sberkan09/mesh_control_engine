@@ -231,6 +231,22 @@ These components are not in `mce/gameplay.h`: a game module that touches them ad
 `#include <mce/scene/streaming.h>`.
 Save games do not track areas yet, so keep `SaveKey` entities in the base scene.
 
+A world several kilometres across loses float precision far from its origin (shaking models,
+jittery contacts). Add `FloatingOrigin3D` to one base-scene entity and the stream pump moves the whole
+world back near zero whenever the focus gets farther than `threshold` metres (default 1024) from it,
+in whole steps of `snap` metres (default 256):
+
+```json
+{ "name": "World", "components": { "FloatingOrigin3D": { "threshold": 1024, "snap": 256 } } }
+```
+
+Keep authoring areas in world coordinates: an area that loads after a move is placed by the engine.
+Physics bodies, characters, joints, navigation and the camera follow the move, and the frame after it
+renders as a camera cut. Game code that keeps world positions outside components (a list of waypoints
+in a resource, for example) either marks the field `WorldPoint` in its `MCE_COMPONENT` or registers
+`ecs::on_origin_shift`; `ecs::to_absolute` / `to_local` (`mce/ecs/origin.h`) convert to and from the
+fixed world frame.
+
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
 player reads area files on a background thread and instantiates at most one area per tick; headless
 runs and play-in-editor load an area in the tick that wants it, so their state hashes stay
