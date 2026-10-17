@@ -942,6 +942,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     const rhi::Extent2D view = scene.view().viewport;
     if (view.width == 0 || view.height == 0) return;
     reserve_instancing(scene);
+    count_draw_causes(scene);
     // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
     const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
     const rhi::Extent2D size = scale >= 1.0f ? view
@@ -2378,6 +2379,24 @@ namespace {
 u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 1) / align * align; }
 }  // namespace
 
+// M-CONTENT 2: Scene3D's reasons, plus the two this renderer adds: no instanced pipelines (the whole run list
+// then draws singly) and, in upload_runs, a main-pass run past the frame's budget.
+void Forward3D::count_draw_causes(const Scene3D& scene) {
+    if (!scene.collect_draw_causes()) return;  // Scene3D::set_collect_draw_causes: off, the causes stay zero
+    const Scene3D::Stats& ss = scene.stats();
+    u32* c = stats_.draw_causes;
+    const auto at = [&](DrawCause k) -> u32& { return c[static_cast<u32>(k)]; };
+    at(DrawCause::UniqueMesh) = ss.not_instanced_unique_mesh;
+    at(DrawCause::Other) = ss.not_instanced_short;
+    at(DrawCause::Material) = ss.not_instanced_single - ss.not_instanced_unique_mesh - ss.not_instanced_short;
+    at(DrawCause::Skinned) = ss.not_instanced_skinned;
+    at(DrawCause::Terrain) = ss.not_instanced_terrain;
+    at(DrawCause::Moving) = ss.not_instanced_moving;
+    at(DrawCause::Blended) = ss.not_instanced_blended;
+    at(DrawCause::Disabled) = ss.not_instanced_disabled;
+    if (mesh_cull_inst_.is_null()) at(DrawCause::Disabled) += ss.draws_instanced;  // -r.instancing 0 or no pipelines
+}
+
 void Forward3D::reserve_instancing(const Scene3D& scene) {
     // The opaque runs' copies (the main and prepass blocks carry model and normal, the velocity one the model).
     u32 copies = 0;
@@ -2412,6 +2431,7 @@ bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstP
         const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
         if (ring_bytes(used + r.count * per_copy * u32(sizeof(mat4)), align) > inst_budget_[pass]) {
             ++stats_.instancing_overflow;
+            if (pass == kInstMain && scene.collect_draw_causes()) stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count;
             continue;
         }
         inst_slots_[r.first] = {r.count, static_cast<u32>(inst_data_.size() / per_copy)};

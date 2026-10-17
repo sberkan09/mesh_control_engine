@@ -132,6 +132,9 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     a.frames[5].phase_ms[0] = 0.25f;
     a.frames[5].counters.runs_instanced = 3;  // M-VISUAL3 5a
     a.frames[5].counters.draws_instanced = 40;
+    a.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Material)] = 7;  // M-CONTENT 2
+    a.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Budget)] = 2;
+    a.frames[6].counters.draw_causes[static_cast<u32>(DrawCause::Material)] = 3;
     Array<char> text;
     perf::write_mcperf(a, perf::summarize(a), text);
     perf::Capture b;
@@ -142,6 +145,34 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     CHECK(b.frames[5].counters.runs_instanced == 3);
     CHECK(b.frames[5].counters.draws_instanced == 40);
     CHECK(perf::summarize(b).counters_max.draws_instanced == 40);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Material)] == 7);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Budget)] == 2);
+    CHECK(b.frames[5].counters.draw_causes[static_cast<u32>(DrawCause::Skinned)] == 0);
+    CHECK(perf::summarize(b).counters_max.draw_causes[static_cast<u32>(DrawCause::Material)] == 7);
+    CHECK(perf::summarize(b).counters_avg.draw_causes[static_cast<u32>(DrawCause::Material)] == static_cast<u32>(10 / a.frames.size()));  // the mean, rounded down
+    CHECK(StringView(text.data(), text.size()).find("\"draw_causes\": [\"material\", \"unique_mesh\"") != StringView::npos);
+    CHECK(StringView(text.data(), text.size()).find("\"draw_cause_hints\"") != StringView::npos);
+    // A file from before the report has no names and no counts: they read as zero.
+    {
+        perf::Capture old;
+        cook::String err2;
+        const char* doc = "{\"format\": \"mce-perf\", \"version\": 1, \"frames\": [{\"index\": 0, \"counters\": {\"draws\": 5}}]}";
+        REQUIRE_MESSAGE(read_mcperf(doc, old, err2), err2.c_str());
+        CHECK(old.frames[0].counters.draws == 5);
+        CHECK(old.frames[0].counters.draw_causes[0] == 0);
+    }
+    // An old capture against a new one: the causes and instanced counts are not compared (no counter row, no verdict).
+    {
+        perf::Capture old = capture(12.0f, 7);
+        Comparison oc;
+        compare_captures(old, a, oc);
+        for (const auto& k : oc.counters) {
+            CHECK(StringView(k.metric) != StringView("draw_causes"));
+            CHECK(StringView(k.metric) != StringView("draws_instanced"));
+        }
+        CHECK(oc.better.empty());
+        CHECK(oc.worse.empty());
+    }
     Comparison c;
     compare_captures(a, b, c);
     CHECK(c.better.empty());

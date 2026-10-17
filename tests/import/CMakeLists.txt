@@ -24,3 +24,7 @@ add_test(NAME cli_max_texture_size
 # M-CONTENT 1b-iv: `mce cook` / `mce ship` --textures reaches mce_cook; web + bc exits; ship.py refuses bc on phones and the web.
 add_test(NAME cli_textures
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_textures.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_textures")
+
+# M-CONTENT 2: `mce perf` prints the draw calls by cause from a .mcperf capture.
+add_test(NAME cli_perf
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_perf.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_perf")
