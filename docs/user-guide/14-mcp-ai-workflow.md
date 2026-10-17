@@ -439,6 +439,19 @@ them) from the actor's position, so they need no game code:
 | `explore` | wanders in seeded random directions, turning when blocked (and jumping, side view); coverage shows in `cells_visited` | `actor`, `plane`, `seed` |
 | `masher` | holds a seeded random chord of `actions` (default Move, Jump, Fire, Confirm, Cancel), a new one every `period` ticks (8): crash and soft-lock hunting | `actions`, `period`, `seed`, `actor?` |
 
+Every bot also takes three optional keys that make it act, not only move (a stealth test needs no
+custom C++ system):
+
+- `hold`: action names held down the whole run, e.g. `["Crouch"]` for a crouch walk.
+- `hold_when`: `[{"action": "Crouch", "entity": "Sentry", "field": "Perceiver.sees", "value": 1}]` holds the
+  action on the ticks the field check is true (the same `entity` / `field` / `value` or `{">": 5}` wording as a
+  test's checks). Several entries are independent, so a bot can crouch while a sentry sees it.
+- `stop_when`: one field check, `{"entity": ..., "field": ..., "value": ...}`. While it is true the bot stands
+  still (no steering, no jump, a `wait` is paused), e.g. freeze while `Perceiver.sees` is 1.
+
+A `walk_to` waypoint (in `through`, or the `target`) can also be `{"at": ..., "wait": ticks, "press": ["Interact"]}`:
+the `press` actions go out for one tick when the bot arrives, once per waypoint.
+
 `plane` is `xy` (top-down 2D or flying: `Move` is the direction), `x` (side view: `Move.x` and
 `Jump`) or `xz` (3D on the ground: `Move` is `(x, -z)`, forward is -Z). Bots are deterministic:
 the same scenario gives the same `state_hash`.
