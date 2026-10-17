@@ -72,22 +72,53 @@ void script_text(const input::InputScript& s, cook::String& out) {
     }
 }
 
-// Runs the player to its exit with Mesa's software switch set around the spawn when `software`
+#if !defined(_WIN32)
+namespace {
+
+// Sets an environment variable for the child (a null value leaves it alone) and puts the old value back.
+struct ScopedEnv {
+    const char* name;
+    bool set = false, had = false;
+    cook::String saved;
+    ScopedEnv(const char* n, const char* value) : name(n), set(value != nullptr) {
+        if (!set) return;
+        const char* old = std::getenv(n);
+        had = old != nullptr;
+        if (had) saved = cook::String(old);
+        setenv(n, value, 1);
+    }
+    ~ScopedEnv() {
+        if (!set) return;
+        if (had) setenv(name, saved.c_str(), 1);
+        else unsetenv(name);
+    }
+    ScopedEnv(const ScopedEnv&) = delete;
+    ScopedEnv& operator=(const ScopedEnv&) = delete;
+};
+
+// Mesa's libglvnd EGL vendor file. LIBGL_ALWAYS_SOFTWARE only reaches Mesa: on a box whose EGL also has
+// NVIDIA's vendor (sorted first), the offscreen player would get the GPU, not llvmpipe.
+const char* mesa_egl_vendor() {
+    for (const char* p : {"/usr/share/glvnd/egl_vendor.d/50_mesa.json", "/etc/glvnd/egl_vendor.d/50_mesa.json"})
+        if (platform::file_exists(StringView(p))) return p;
+    return nullptr;
+}
+
+}  // namespace
+#endif
+
+// Runs the player to its exit with Mesa's software rasterizer forced around the spawn when `software`
 // (the child inherits the environment). False with c.error set when it cannot start.
 bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code) {
-    const char* had = std::getenv("LIBGL_ALWAYS_SOFTWARE");
-    cook::String saved(had ? had : "");
 #if !defined(_WIN32)
-    if (software) setenv("LIBGL_ALWAYS_SOFTWARE", "1", 1);
+    ScopedEnv sw("LIBGL_ALWAYS_SOFTWARE", software ? "1" : nullptr);
+    ScopedEnv glx("__GLX_VENDOR_LIBRARY_NAME", software ? "mesa" : nullptr);
+    ScopedEnv egl("__EGL_VENDOR_LIBRARY_FILENAMES", software ? mesa_egl_vendor() : nullptr);
+#else
+    (void)software;
 #endif
     platform::Process proc;
     Result<void> started = proc.start(args, true);
-#if !defined(_WIN32)
-    if (software) {
-        if (had) setenv("LIBGL_ALWAYS_SOFTWARE", saved.c_str(), 1);
-        else unsetenv("LIBGL_ALWAYS_SOFTWARE");
-    }
-#endif
     if (!started) {
         c.error += "cannot start the player ";
         c.error += player;

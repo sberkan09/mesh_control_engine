@@ -44,6 +44,7 @@ A `ScriptSystem` component names one script. Put it on its own entity (by conven
 | `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post). A script that calls `mce.move_and_collide` or sets 2D velocities needs `Post`: the bodies are made by the first physics step |
 | `order` | 0 | scripts of a phase run lowest first; ties run in ECS order |
 | `enabled` | true | off: the script is not loaded |
+| `during_cutscenes` | false | on: the script keeps running while a cutscene holds the game (a pause hold still stops it). Scripts with it on run after the others of their phase, whatever their `order`; scripts without it are held during a cutscene, as before |
 
 `mce_player`, the editor's play mode and MCP's `run_headless` run a scene's scripts the same way. The
 set is read again whenever it changes (a scene change, an edit), and the new set loads from the

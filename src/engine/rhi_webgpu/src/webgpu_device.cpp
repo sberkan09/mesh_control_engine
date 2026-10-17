@@ -306,6 +306,7 @@ ResultV WebGpuDevice::request_device() {
     for (u32& n : caps_.max_compute_group_count) n = got.maxComputeWorkgroupsPerDimension;
     caps_.max_storage_image_units = kMaxImageUnits;
     caps_.texture_bc = wgpuDeviceHasFeature(device_, WGPUFeatureName_TextureCompressionBC);
+    caps_.texture_bc_srgb = caps_.texture_bc;  // the BC feature covers the sRGB variants
     caps_.texture_astc = wgpuDeviceHasFeature(device_, WGPUFeatureName_TextureCompressionASTC);
     MCE_LOG_INFO("rhi.webgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
     return ok();
