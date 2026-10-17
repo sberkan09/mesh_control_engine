@@ -56,3 +56,4 @@ assets.mce
 *.autosave
 mce_editor.ini
 __pycache__/
+!samples/import_demo/assets/models/tent.obj

@@ -176,7 +176,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   Regression: the roads case under the ASan stage (a plain build does not see it).
 - **Mesh importers (M-IMPORT3D's, added at the coordinator's request).** The ASCII FBX (`quad.fbx`, ufbx), the MTL and the glTF of
   `samples/import_demo` are picked up by the importers test as seeds with no change (300 mutants each under ASan, clean).
-  The sample `.obj` is git-ignored, so `tests/fuzz/test_mesh_import.cpp` builds its own: a tent OBJ with a material
+  `samples/import_demo/assets/models/tent.obj` was git-ignored (`*.obj`), so a clean clone lacked it and the sample's `import_demo_reimport` test failed (it regenerates the file and sees a new one); this PR commits it with a `.gitignore` exception, which also makes it an importers seed. `tests/fuzz/test_mesh_import.cpp` builds a corpus of its own as well: a tent OBJ with a material
   library (byte damage and swapped lines), and two GLB grids whose position and index buffers are `EXT_meshopt_compression`
   streams (one with the EXPONENTIAL filter) mutated byte-wise, which reaches the damaged streams and the damaged
   `count` / `byteStride` / `mode` / `filter` fields. 12,000 mutants of each under ASan: no finding. The "meshopt wall"

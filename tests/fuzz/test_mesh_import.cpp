@@ -1,6 +1,6 @@
-// M-FUZZ 4: the mesh importers the committed samples cannot feed. samples/import_demo ships a glTF, an ASCII FBX and an
-// MTL (the importers test mutates those), but its .obj is git-ignored and nothing in the tree carries a meshopt-compressed
-// glTF, so both corpora are built here: a small OBJ with a material library, and GLB files whose vertex and index
+// M-FUZZ 4: the mesh importers the committed samples cannot feed. samples/import_demo ships a glTF, an ASCII FBX, an
+// MTL and an OBJ (the importers test mutates those), but nothing in the tree carries a meshopt-compressed glTF and
+// the sample OBJ is tiny, so the corpora are built here too: a small OBJ with a material library, and GLB files whose vertex and index
 // buffers are EXT_meshopt_compression streams (plain, and with the EXPONENTIAL filter). Each is mutated byte-wise
 // and, for the OBJ, line by line, then run through the importer; the meshopt decoder sees damaged streams and damaged
 // stream descriptions (count, stride, mode, filter).
