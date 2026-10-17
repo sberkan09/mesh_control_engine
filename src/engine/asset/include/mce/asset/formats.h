@@ -48,6 +48,7 @@ inline constexpr u8 SKELETON2D_MINOR_ANIMATIONS = 1;  // minor of a CHNK_SKEL2D 
 inline constexpr u8 SKELETON2D_MINOR_ATTACHMENTS = 2;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::Attachments (M-ANIM2D 3)
 inline constexpr u8 SKELETON2D_MINOR_IK = 3;  // minor of a CHNK_SKEL2D with Skeleton2DHeaderFlags::IK (M-ANIM2D 4)
 inline constexpr u8 REMOTE_CONFIG_VERSION = 1;  // CHNK_RCFG: remote config defaults (M-LIVEOPS; mce/liveops/remote_config.h)
+inline constexpr u8 CONVAR_DEFAULTS_VERSION = 1;  // CHNK_CVARS: a project's convar defaults, "name value" lines (M-WORKFLOW 7)
 
 // ------------------------------------------------------------------ manifest (CHNK_Manifest)
 // GUID -> {logical path, content hash, primary chunk type}. Entries sorted by GUID (the sort is

@@ -184,6 +184,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
 | RoadNetwork | `.mcroads` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
+| ConvarDefaults | `.mcdefaults` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/12-ui-and-console.md |
 
 ## MCP tools
 

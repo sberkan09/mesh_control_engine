@@ -34,6 +34,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_shader.cpp
         test_cook_store.cpp
         test_cook_config.cpp
+        test_cook_defaults.cpp
         test_cook_roads.cpp
         test_cook_terrain.cpp
         test_cook_texture_cap.cpp

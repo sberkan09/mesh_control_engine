@@ -341,8 +341,17 @@ before the saved options load. A value given on the command line and a saved opt
 back to the project's default; a default is never written to `settings.cfg`. A missing file is no error. An unknown
 name, a value the convar rejects, a `ReadOnly` convar and a `Cheat` convar in a build that locks cheats are warned
 about and skipped. Convars read before the game starts (`headless`, the window and platform switches, `r.gl_debug`)
-do not see the file, and `-help` lists the built-in defaults. Desktop builds only for now: the file sits beside the
-pack, so the web and phone packages do not carry it yet.
+do not see the file, and `-help` lists the built-in defaults. 
+Better, put the defaults in the pack so every platform carries them: a `.mcdefaults` file in the project's assets
+(`asset_create` makes one),
+
+```json
+{ "format": "mce-defaults", "version": 1, "guid": "<uuid>",
+  "convars": { "ui.reference_height": 720, "access.captions": true, "audio.music_db": -6 } }
+```
+
+cooks to a chunk the player applies at the same point, before `defaults.cfg` (which overrides it, for a developer's
+tweak). A name is checked when the game runs: the cook does not know a game module's convars.
 
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and
