@@ -27,8 +27,12 @@ struct Walker {
     f32 door_x = 1000.0f;    // crossing this x changes to scenes/win.mcscene
     mce::u32 flaps = 0;      // side view: Jump presses allowed in the air (a double jump)
     mce::u32 flapped = 0;
+    mce::u8 seen = 0;        // a "sentry sees the player" flag the scene sets
+    mce::u32 crouch_ticks = 0;    // ticks the Crouch action was held
+    mce::u32 interacts = 0;       // Interact presses
+    mce::u32 moved_ticks = 0;     // ticks the Move action was non-zero
 };
-MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy, door_x, flaps, flapped)
+MCE_COMPONENT(Walker, speed, side, wall_x, wall_h, hazard_x, vy, door_x, flaps, flapped, seen, crouch_ticks, interacts, moved_ticks)
 
 struct HazardCrossed {  // pushed on each respawn
     mce::u32 unused = 0;
@@ -45,6 +49,10 @@ namespace {
 void walk(Frame& f) {
     const input::InputState& in = f.resource<input::InputState>();
     f.query<playtest_game::Walker&, LocalTransform&>().each([&](playtest_game::Walker& w, LocalTransform& t) {
+        const StringId crouch("Crouch"), interact("Interact");
+        if (in.has_action(crouch) && in.held(crouch)) ++w.crouch_ticks;
+        if (in.has_action(interact) && in.pressed(interact)) ++w.interacts;
+        if (in.move.x != 0.0f || in.move.y != 0.0f) ++w.moved_ticks;
         const f32 dx = in.move.x * w.speed * f.dt;
         if (w.side) {
             if (in.jump_pressed && t.position.y <= 0.001f) {
@@ -398,4 +406,52 @@ TEST_CASE("run_headless trace: fields sampled every N ticks") {
     CHECK(num(pos.at(2).at(0)) == doctest::Approx(4.0).epsilon(0.02));
     CHECK(num(trace.get("series").at(1).get("values").at(1)) == 4);
     CHECK(c.fails("run_headless", R"({"trace":{"fields":[{"entity":"Player","field":"Walker"}]}})").find("Component.path") != std::string::npos);
+}
+
+TEST_CASE("playtest: bots hold, press and stop on a field check (crouch, interact, freeze when seen)") {
+    GameGuard game;
+    // The Player starts at the origin; `seen` is the scene's "a sentry sees the player" flag.
+    const std::string root = project("mcp_playtest_actions", R"({ "seen": 1 })");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/play.mcscene"));
+    c.init();
+    auto ran = [&](const std::string& bot, const char* ticks) {
+        return c.ok("playtest", std::string(R"({"ticks":)") + ticks + R"(,"bot":)" + bot + R"(,"assert":[)" +
+                                    R"({"entity":"Player","field":"Walker.crouch_ticks",">=":0},)" +
+                                    R"({"entity":"Player","field":"Walker.interacts",">=":0},)" +
+                                    R"({"entity":"Player","field":"Walker.moved_ticks",">=":0}]})");
+    };
+    auto actual = [](const auto& r, u32 i) { return num(r.v().get("checks").at(i).get("actual")); };
+
+    // Without `hold` the game sees no Crouch; with it, it is down on every tick.
+    auto plain = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0]})", "120");
+    CHECK(actual(plain, 0) == 0);
+    auto held = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0],"hold":["Crouch"]})", "120");
+    CHECK(actual(held, 0) == 120);
+    CHECK(actual(held, 2) > 0);  // it still walked
+
+    // `hold_when` holds Crouch only while the check is true: `seen` is 1 here, so all ticks; 0 makes it never.
+    auto when_seen = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0],"hold_when":[{"action":"Crouch","entity":"Player","field":"Walker.seen","value":1}]})", "120");
+    CHECK(actual(when_seen, 0) == 120);
+    auto when_not = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0],"hold_when":[{"action":"Crouch","entity":"Player","field":"Walker.seen","value":0}]})", "120");
+    CHECK(actual(when_not, 0) == 0);
+
+    // `stop_when` freezes the bot while it holds: seen == 1 means it never moves; seen == 0 never stops it.
+    auto frozen = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0],"stop_when":{"entity":"Player","field":"Walker.seen","value":1}})", "120");
+    CHECK(actual(frozen, 2) == 0);
+    auto free_run = ran(R"({"kind":"walk_to","actor":"Player","target":[60,0],"stop_when":{"entity":"Player","field":"Walker.seen","value":0}})", "120");
+    CHECK(actual(free_run, 2) > 0);
+
+    // A waypoint's `press` goes out once, on arrival: Interact pressed once at the point, once at the target.
+    auto pressed = ran(R"({"kind":"walk_to","actor":"Player","through":[{"at":[1,0],"press":["Interact"]}],"target":[2,0]})", "300");
+    CHECK(actual(pressed, 1) == 1);
+    auto both = ran(R"({"kind":"walk_to","actor":"Player","through":[{"at":[1,0],"press":["Interact"]}],"target":{"at":[2,0],"press":["Interact"]}})", "300");
+    CHECK(actual(both, 1) == 2);
+
+    // Mistakes name the key.
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":[1,0],"hold":"Crouch"}})").find("bot.hold") != std::string::npos);
+    const std::string no_check = c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":[1,0],"hold_when":[{"action":"Crouch"}]}})");
+    CHECK_MESSAGE(no_check.find("field") != std::string::npos, no_check);  // no check given
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":[1,0],"stop_when":{"alive":"Player"}}})").find("bot.stop_when") != std::string::npos);
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","through":[{"at":[1,0],"press":[]}],"target":[2,0]}})").find("press") != std::string::npos);
 }
