@@ -19,7 +19,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
-| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau: #424; 3b importers: #501; 3c `.mcperf`, websocket, command line, scene instantiate left) |
+| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau: #424; 3b importers: #501; 3b2 font importer hardening: #520; 3c `.mcperf`, websocket, command line, scene instantiate left) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
@@ -106,7 +106,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   `luau_load`; (c) a signed or hashed script chunk that only the cook can produce; (d) accept the risk for
   first-party packs and refuse bytecode from mods. Not decided here.
 
-## Step 3b — Importers (SBA-187, #501)
+## Step 3b — Importers (SBA-187, #501; font hardening #520)
 
 - **`test_fuzz_importers`.** Every built-in importer is called directly (`scan_dependencies`, then `cook`) over mutated
   copies of up to six committed sources per extension (25 extensions: the native text assets, png, wav, mpg, csv,
@@ -118,16 +118,28 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   `as_number()` on an accessor index it has not type-checked in the `ctype == 5125` branch (`bufferView`, `buffer`);
   in release the same read is out of bounds on the JSON node array. Owner: M-IMPORT3D (asset/cook mesh import).
   **Fixed in M-IMPORT3D 1:** the accessor reader is type-checked end to end (a systematic type-confusion mutation test covers the whole indices chain) and the `.glb`/`.gltf` files are fuzzed by default again (`MCE_FUZZ_GLTF` is gone).
-- **Finding: a mutated TrueType font crashes the font importer.** `stbrp_pack_rects` in the atlas bake gets a negative
-  width from a damaged `.ttf` (`font_importer.cpp:111`); stb_truetype is documented as unsafe for untrusted fonts.
-  Options: validate the table directory and glyph metrics before the bake, or bake in a subprocess. The `.ttf` and
-  `.otf` files are skipped unless `MCE_FUZZ_FONT=1`.
+- **Finding, fixed in 3b2: a mutated TrueType font crashes the font importer.** `stbrp_pack_rects` in the atlas bake got
+  a negative width from a damaged glyph box (`font_importer.cpp`). stb_truetype trusts its input, so `font_structure_ok`
+  now walks what it reads before it is called: table directory and bounds, head/maxp/hhea/hmtx, the one cmap subtable
+  stb selects (search fields, group and range bounds), loca/glyf (flags and coordinates fit, points inside the header
+  box, component nesting and expanded point count capped, no point matching or scaled components) and the kern table
+  it reads. The importer also skips codepoints whose glyph id is outside the font, refuses a glyph whose box is inverted
+  or scales past 1024 px (256 for a distance field), and skips with a warning a glyph (coverage bake only) whose outline rises above the box the
+  font gives it (the rasterizer assumes the outline lies inside the bitmap sized from that box). Refused on purpose: CFF
+  (`OTTO`) outlines, because stb sizes the CFF buffer at 512 MB. An independent review found the first version's gaps (cmap glyph ids, nesting memo,
+  fan-out, SDF size, CFF, format 4 and 0 header fields); each has a case in `test_cook_font_damage.cpp`, which also
+  builds small fonts by hand. A second review round added the cost cap (outline points plus component records,
+  because stb_truetype keeps no memo), the kern cap, a 256 px glyph limit for the distance-field bake and a 16-byte
+  minimum. Known residual: a distance-field bake of a hostile font with thousands of 256 px glyphs of thousands of points
+  is slow (time, not memory); the cook is a developer-side tool. A first version compared the outline with the box inside
+  the validator and refused scaled components; the project font NothingYouCouldDo (outline up to 9 units outside its
+  boxes, scaled components) failed the cook, so the comparison moved to the importer, on the shapes stb itself builds. `.ttf` fuzz: 11,252 mutants under ASan, clean.
 
 ### Open items from step 3
 
 - Luau bytecode loader trusts its input (3a); decision with the M-SCRIPT owner.
-- glTF importer wrongly-typed values (3b); M-IMPORT3D.
-- Font importer and damaged `.ttf` (3b); owner not assigned.
+- pl_mpeg heap overflow in `the third-party decoder's macroblock step via `VideoDecoder::count_frames` (found at 2,500 mutants of the
+  sample `.mpg`; render/video owner). `.mpg` cases run only with `MCE_FUZZ_VIDEO=1`.
 - 3c not started: `.mcperf`, websocket frames, console/command line, scene instantiate.
 
 ### Planned: Detour defense in depth (separate item)
@@ -149,7 +161,7 @@ validation switched on.
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
-| glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | **findings, see step 3b**; cases off by default | open |
+| glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`, ...) | cook JSON reader and per-type validators | project sources, agents | mutated text and valid JSON with one value swapped (`test_fuzz_importers`) | done |
 | Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | mutated and re-sealed (`test_fuzz_player_data`) | done |
 | Input recordings | `input/script.h` `parse` | tests, bug reports | raw stream and script text (`test_fuzz_player_data`) | done |

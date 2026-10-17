@@ -176,6 +176,13 @@ tick with gravity and splash), `apply_damage` for any other source; events `Weap
 (`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
 `"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
 
+`wanted3d.h` (M-OPENWORLD C3): `Wanted3D` (on the offender: `heat`, `level`, per-crime heat, witness rule,
+cool-down) and `Police3D` (on a unit: `min_level`, `attack_level`, `PoliceState` Idle / Pursue / Attack / Search,
+sight, `drive_nav` for its `NavAgent3D`, `aim` for its `Weapon3D`; blackboard keys `wanted`, `police_state`,
+`target`, `last_known` on an `AiBrain`). Crimes come from `Damage3D` / `Died3D` against `civilian_team` /
+`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`. System `"kit3d_wanted"`
+(`FixedUpdate_Pre`, after `"kit3d_health"`). Tests: `tests/kit/test_wanted3d.cpp`.
+
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
 entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
 paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot
@@ -184,6 +191,17 @@ reload; `define` registers one from a payload) with a 32 m grid of lane segments
 opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left), `road_route` (A* over
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
+
+`crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
+a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
+crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
+along, direction, hop target, own random stream), no behaviour tree: edges are the road centreline offset by half the
+carriageway plus half `sidewalk`, trimmed at the junction; at a junction it hops to another edge end there, round
+the corner or across a road, and a crossing waits until every road it crosses has no straight-on traffic with green or
+amber and enough red left (`road_light`). Level of detail: step every tick within `near_radius`, every 4th within
+`far_radius`, else every 16th, staggered by entity index. Spawn candidates are a function of the focus's 32 m cell and
+`CrowdSpawner3D::serial` counts attempts, so replays and saves resume exactly. `"kit_crowd"` runs in FixedUpdate_Pre
+after `"roads_clock"`; `crowd_stats` is the per-tick budget counters. Tests: `tests/kit/test_crowd.cpp`.
 
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the

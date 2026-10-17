@@ -33,10 +33,13 @@
 #include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
 #include "mce/kit/ai.h"                // AiBrain, Blackboard (M-AI)
 #include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)
+#include "mce/kit/crowd.h"             // Pedestrian3D, CrowdSpawner3D (M-OPENWORLD B3)
 #include "mce/kit/roads.h"             // RoadNetwork3D (M-OPENWORLD B1)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
 #include "mce/kit/combat3d.h"          // Health3D, Weapon3D, Projectile3D (M-OPENWORLD C2)
+#include "mce/kit/missions.h"          // Mission, Objective (M-MISSION 1)
+#include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)
 #include "mce/kit/ui_flow.h"          // UiFlowRules (M-WORKFLOW 7)
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

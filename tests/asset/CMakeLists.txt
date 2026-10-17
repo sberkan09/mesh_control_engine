@@ -25,6 +25,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_mesh_golden.cpp
         test_cook_input.cpp
         test_cook_navmesh.cpp
+        test_cook_font_damage.cpp
         test_cook_json_audio.cpp
         test_cook_mod.cpp
         test_cook_obj.cpp
@@ -60,6 +61,7 @@ target_include_directories(test_cook_bc_arch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 mce_mark_slow(test_cook_bc_arch)
 # The ufbx pin (M-IMPORT3D 3a, ADR-0047): links mce_ufbx alone, no engine library (the "ufbx link wall" allows tests/asset/).
 if(TARGET mce_ufbx)
+    target_sources(test_cook PRIVATE test_cook_fbx.cpp)  # the FBX importer exists only where ufbx does (host builds)
     mce_add_test(test_ufbx_smoke SOURCES test_ufbx_smoke.cpp DEPS mce_ufbx)
 endif()
 # tinyexr's own PIZ / tiled sample files (the FetchContent checkout); read as data at test time, no tinyexr code is linked.

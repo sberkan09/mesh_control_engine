@@ -16,11 +16,14 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/sensors3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/missions.h"
+#include "mce/kit/wanted3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/presence.h"
@@ -121,9 +124,12 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_joints3d(world, assets);
     install_ragdolls3d(world, assets);
     install_roads(world, assets);
+    install_crowd(world, assets);  // after the road clock: pedestrians read this tick's lights
     install_vehicles3d(world, assets);
     install_seats3d(world, assets);
     install_combat3d(world, assets);
+    install_missions(world, assets);
+    install_wanted3d(world);
     install_sensors3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);

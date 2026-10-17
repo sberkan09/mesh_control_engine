@@ -75,3 +75,17 @@ if(MCE_WITH_SCRIPT)
     target_sources(mce_asset_cook PRIVATE src/script_importer.cpp)
     target_link_libraries(mce_asset_cook PRIVATE mce::mce_script_compiler)
 endif()
+
+# Autodesk FBX (M-IMPORT3D 3b, ADR-0047) through ufbx, where the build has it (host builds; a cross build cooks with the
+# host's mce_cook). MCE_HAS_FBX guards the registration in importer_registry.cpp. -ffp-contract=off keeps the importer's
+# own float maths (it adds no libm calls beyond sqrt and ceil) identical on every compiler.
+if(TARGET mce_ufbx)
+    target_sources(mce_asset_cook PRIVATE src/fbx_importer.cpp)
+    target_link_libraries(mce_asset_cook PRIVATE mce_ufbx)
+    target_compile_definitions(mce_asset_cook PRIVATE MCE_HAS_FBX=1)
+    if(MSVC)
+        set_source_files_properties(src/fbx_importer.cpp PROPERTIES COMPILE_OPTIONS /fp:precise)
+    else()
+        set_source_files_properties(src/fbx_importer.cpp PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+    endif()
+endif()

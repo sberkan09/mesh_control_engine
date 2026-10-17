@@ -110,3 +110,44 @@ The cook stops, naming the file, line and column, on: an unknown node or road na
 itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
 road shorter than its two junctions need, a `signal` node without a signal (or a signal on a node with another
 control), a green entry that matches no turn, and a turn that is green in no phase.
+
+## 29.6 Pedestrian crowds
+
+Roads with a `sidewalk` have pavements, and a crowd walks them. Add a **`CrowdSpawner3D`** to any entity (a
+`Crowd` entity beside the network is the usual place); it keeps up to `max_count` **`Pedestrian3D`** walking the
+pavements of a `RoadNetwork3D` around a focus:
+
+| Field | Meaning |
+|---|---|
+| `network` | the entity with the `RoadNetwork3D`; empty: the first one |
+| `focus` | the entity the crowd gathers around (your player); empty: the first camera. With neither the crowd fills the whole network and never goes away |
+| `prefab` | spawned per pedestrian; it needs a `LocalTransform` and a `Pedestrian3D`. Empty: a bare entity (handy for tests and for a stand-in capsule you add yourself) |
+| `max_count`, `per_tick` | how many walkers at once; how many spawn attempts a tick makes |
+| `spawn_min`, `spawn_max` | nobody spawns closer to the focus than `spawn_min` (no pop-in under the player's nose) or farther than `spawn_max` |
+| `despawn_radius` | walkers farther than this from the focus are removed; keep it above `spawn_max` |
+| `near_radius`, `far_radius` | level of detail (below) |
+| `speed_min`, `speed_max` | walking speed in m/s, picked per pedestrian |
+| `cross` | 0-1: how willing they are to cross a road instead of going round the corner |
+| `seed` | the random stream; the same seed replays the same crowd |
+
+A pedestrian has no behaviour tree and no physics body: it is a few numbers (which pavement, how far along, which
+way) that one system advances, so hundreds cost less than a handful of AI characters. It writes the entity's
+`LocalTransform` (on the network's plane, facing the way it walks) and two fields an animation graph can read:
+`pace` (m/s it moves at now, 0 while waiting) and `mode` (`Walk`, `Wait` at a kerb, `Cross`). Give the prefab a
+walk/idle graph keyed on `pace`.
+
+**At junctions** a pedestrian goes round the corner, across a road or turns back, chosen by its own random stream. A
+crossing waits at the kerb until every road it crosses has no straight-on traffic with a green or amber light and
+enough red left to get across; an unsignalled junction never makes anyone wait (traffic gives way to them, B2).
+
+**Level of detail.** A pedestrian within `near_radius` of the focus steps every tick, within `far_radius` every 4th,
+beyond that every 16th, with the time that has passed, so far walkers are cheap and still arrive where they are going.
+`kit::crowd_stats(world)` returns last tick's counters (pedestrians, near/mid/far, waiting, crossing, stepped,
+spawned, despawned) for budgets.
+
+A hand-placed `Pedestrian3D` (no `crowd`) snaps to the nearest pavement and walks it with the defaults. The crowd is
+deterministic: positions, directions and the spawner's `serial` are saved, so a replay or a loaded save continues
+exactly.
+
+Not yet: pedestrians do not avoid each other, react to the player, or follow terrain height (flat networks), and cars
+do not yet slow for them (traffic, B2).

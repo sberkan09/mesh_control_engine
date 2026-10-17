@@ -55,7 +55,7 @@ widen one enum, the way `mce_import_skel.py` did for M-ANIM2D.
 | 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, #496; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
 | 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | done, PR pending; the `.mtl` is a registered asset (importer `mtl`), see Step 2 "as built"; open: the OBJ fuzz loop is in `test_cook_obj.cpp`, not yet in the M-FUZZ survey |
 | 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | done, PR pending; ufbx v0.23.1 @`26a482a`, ADR-0047 (0046 is taken by M-OPENWORLD's road networks), see Step 3a "as built" |
-| 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | planned |
+| 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | done, PR pending; see Step 3b "as built" |
 | 4 | glTF / FBX lights and cameras as a prefab (`mce import gltf|fbx`), MCP `asset_import` `tool: gltf|fbx`, a per-mesh import summary, guide 8.4, fixtures, the close | M (10–14 h) | Sonnet | planned |
 
 Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on it); 1 and 2 may run in parallel after it;
@@ -187,6 +187,25 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   each fixture cooked twice, identical bytes.
 - **Risks.** No DCC exporter in the container, so real Maya / Blender / Max files are unverified; ask the user for
   two or three real files before the close. FBX animation layers and blend modes beyond the base layer: warning.
+- **As built (PR pending).** `fbx_importer.cpp` (+ cook-private `fbx_importer.h`), registered for `.fbx` where `mce_ufbx`
+  exists (`MCE_HAS_FBX`, host builds); `.fbx` joins the editor's media list and the unused-asset lint's model case.
+  ufbx options: `target_axes = ufbx_axes_right_handed_y_up`, `target_unit_meters = 1`, `space_conversion` and
+  `geometry_transform_handling = MODIFY_GEOMETRY`, `inherit_mode_handling = HELPER_NODES`,
+  `handedness_conversion_axis = X`, `node_depth_limit = 4096`, `clean_skin_weights`, `use_blender_pbr_material`,
+  `file_format = FBX`, both allocators limited to 1 GiB plus an allocation cap, `ufbx_load_memory`, no thread pool.
+  The axis turn stays a rotation on root-level nodes (`MODIFY_GEOMETRY`), which `ufbx_evaluate_transform` includes, so
+  the node tree and animation are read as they are; the Blender 0.01 / 100 pair and Z-up centimetres equal the glTF cube
+  within one quantization step; a left-handed file is mirrored with the winding fixed. Skinned geometry goes to the bind
+  pose's world space and the inverse bind is the inverse of the joint's bind world matrix (glTF's convention). Clips:
+  `N = ceil(L * rate - 1e-4)` steps, key times `i * (1 / rate)`, the last key at the stack end; animated nodes are found
+  from the base layer's transform properties; a channel is written only when it differs from the rest pose. Plain FBX
+  `TransparencyFactor` is read as `1 - opacity`. Findings: ufbx reads the cluster `Transform` as the mesh-node-to-bone
+  matrix (not the mesh's world matrix), and a base layer with no `BlendMode` is "additive" to ufbx, which is not worth
+  a warning on its own (only a weight other than 1 or an animated weight warns). Embedded textures, hidden meshes, blend
+  shapes, extra layers, non-base-transform animation and unsupported content warn once per file (see guide 8.4).
+  Tests: `test_cook_fbx.cpp` (about 9 s with the rest of `test_cook`). Open: no real DCC file was tested; FBX
+  cooks are per host (ADR-0047); the FBX fixtures are not in the M-FUZZ survey yet; the caps (256K nodes, 16M vertices)
+  are checked only by their code path, not at size.
 
 ### Step 4 — lights, cameras, the MCP tool, the report, the guide, the close
 

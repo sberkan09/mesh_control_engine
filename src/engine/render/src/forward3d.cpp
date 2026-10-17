@@ -2395,6 +2395,13 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
 namespace {
 // What one set_storage_data of `bytes` takes from the ring: the device aligns each range.
 u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 1) / align * align; }
+// How many of a run's `want` copies of `copy_bytes` each still fit after `used` bytes: the most n with
+// ring_bytes(used + n * copy_bytes) <= budget. A run longer than the budget then draws its first n copies
+// instanced and the rest singly, instead of all of them singly (M-OPENWORLD A3: one 22k-copy run of a city).
+u32 copies_that_fit(u32 used, u32 want, u32 copy_bytes, u32 align, u32 budget) {
+    const u32 room = budget / align * align;
+    return room <= used ? 0u : min(want, (room - used) / copy_bytes);
+}
 }  // namespace
 
 // M-CONTENT 2: Scene3D's reasons, plus the two this renderer adds: no instanced pipelines (the whole run list
@@ -2447,13 +2454,16 @@ bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstP
     for (const DrawRun& r : runs) {
         if (r.count < 2) continue;
         const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
-        if (ring_bytes(used + r.count * per_copy * u32(sizeof(mat4)), align) > inst_budget_[pass]) {
+        u32 n = copies_that_fit(used, r.count, per_copy * u32(sizeof(mat4)), align, inst_budget_[pass]);
+        if (n < 2) n = 0;
+        if (n < r.count) {  // the tail draws singly
             ++stats_.instancing_overflow;
-            if (pass == kInstMain && scene.collect_draw_causes()) stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count;
-            continue;
+            if (pass == kInstMain && scene.collect_draw_causes())
+                stats_.draw_causes[static_cast<u32>(DrawCause::Budget)] += r.count - n;
+            if (n == 0) continue;
         }
-        inst_slots_[r.first] = {r.count, static_cast<u32>(inst_data_.size() / per_copy)};
-        for (u32 k = 0; k < r.count; ++k) {
+        inst_slots_[r.first] = {n, static_cast<u32>(inst_data_.size() / per_copy)};
+        for (u32 k = 0; k < n; ++k) {
             inst_data_.push_back(draws[r.first + k].model);
             if (!velocity) inst_data_.push_back(draws[r.first + k].normal);
         }
@@ -2485,12 +2495,12 @@ void Forward3D::draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, cons
         const DrawRun& r = caster_runs_[ri];
         if (r.count < 2) continue;
         const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
-        if (ring_bytes(used + r.count * u32(sizeof(mat4)), align) > inst_budget_[kInstShadow]) {
-            ++stats_.instancing_overflow;
-            continue;
-        }
-        inst_slots_[ri] = {r.count, static_cast<u32>(inst_data_.size())};
-        for (u32 k = 0; k < r.count; ++k) inst_data_.push_back(view_proj * casters[caster_sorted_[r.first + k]].model);
+        u32 n = copies_that_fit(used, r.count, u32(sizeof(mat4)), align, inst_budget_[kInstShadow]);
+        if (n < 2) n = 0;
+        if (n < r.count) ++stats_.instancing_overflow;  // the tail draws singly
+        if (n == 0) continue;
+        inst_slots_[ri] = {n, static_cast<u32>(inst_data_.size())};
+        for (u32 k = 0; k < n; ++k) inst_data_.push_back(view_proj * casters[caster_sorted_[r.first + k]].model);
     }
     if (!inst_data_.empty()) {
         const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
@@ -2523,6 +2533,8 @@ void Forward3D::draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, cons
         ++stats_.shadow_draws;
         ++stats_.shadow_runs_instanced;
         stats_.shadow_draws_instanced += run.count;
+        for (u32 k = run.count; k < r.count; ++k)  // past the budget: the run's tail, singly
+            shadow_draw(cmd, view_proj, casters[caster_sorted_[r.first + k]], bound_pipe, bound);
     }
 }
 

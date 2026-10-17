@@ -84,7 +84,7 @@ bool is_text_asset(StringView rel) {
 // Media that needs a credits row (code-made data files do not).
 bool is_media(StringView rel) {
     const cook::String ext = cook::lower_extension(rel);
-    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".obj", ".hdr", ".exr"})
+    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".obj", ".fbx", ".hdr", ".exr"})
         if (ext.view() == e) return true;
     return false;
 }
@@ -449,10 +449,10 @@ bool project_check(ToolCall& c) {
             cook::String text;
             if (cook::fs::read_text(cook::path_join(project.root(), v).view(), text)) code.push_back(static_cast<cook::String&&>(text));
         }
-        // Models name their textures by file name (glTF uri, an OBJ's .mtl).
+        // Models name their textures by file name (glTF uri, an OBJ's .mtl, the paths stored in an FBX).
         Array<cook::String> models;
         for (const cook::String& f : files) {
-            const bool model = ends_with(f.view(), ".glb") || ends_with(f.view(), ".gltf") || ends_with(f.view(), ".obj") || ends_with(f.view(), ".mtl");
+            const bool model = ends_with(f.view(), ".glb") || ends_with(f.view(), ".gltf") || ends_with(f.view(), ".obj") || ends_with(f.view(), ".mtl") || ends_with(f.view(), ".fbx");
             if (!model) continue;
             cook::String bytes;
             if (cook::fs::read_text(project.asset_path(f.view()).view(), bytes)) models.push_back(static_cast<cook::String&&>(bytes));

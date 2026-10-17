@@ -1,7 +1,6 @@
 # ADR-0047 — FBX import over ufbx (cook-only)
 
-**Status:** Proposed (2026-10-17), the coordinator's call as a new third-party dependency; accepted when the step-3a pin
-PR merges. **Milestone:** M-IMPORT3D step 3 (3a the pin, 3b the importer). **Plan:**
+**Status:** Accepted (2026-10-17) by the coordinator (a new third-party dependency, decided in the M-IMPORT3D plan). **Milestone:** M-IMPORT3D step 3 (3a the pin, 3b the importer). **Plan:**
 [`docs/milestones/M-IMPORT3D.md`](../milestones/M-IMPORT3D.md). **Reference:** `cmake/Dependencies.cmake` (`mce_ufbx`),
 `src/engine/asset/cook/src/ufbx_impl.c`, `tests/asset/test_ufbx_smoke.cpp`.
 
@@ -78,6 +77,13 @@ The cook must produce the same bytes on Linux and Windows (and macOS) for the sa
   amendment). If byte-identical FBX cooks across hosts become a requirement, `UFBX_EXTERNAL_MATH` lets the cook supply its own portable `sin` / `cos` / `atan2` /... to
   ufbx without patching it.
 - glTF stores rotations as quaternions and needs none of this; the difference is FBX's Euler angles.
+- **As built (step 3b).** `fbx_importer.cpp` adds no libm of its own beyond `sqrt` and `ceil`: sample times are
+  `i * (1 / rate)` in double, the last key is the stack end, and rotations are normalized and made continuous with
+  IEEE-exact arithmetic (`-ffp-contract=off` / `/fp:precise` on the file). Everything that differs between hosts comes
+  from ufbx's Euler / slerp evaluation, so **FBX cooks are byte-identical per host, not across hosts**; the tests cook each
+  fixture twice on one host and compare the bytes, with no pinned hash. Nothing depends on hash-map iteration order.
+  Memory: both ufbx allocators are limited to 1 GiB (`temp_allocator` and `result_allocator`), with an allocation-count
+  cap and `node_depth_limit` 4096; the importer's own caps are listed in the guide (section 8.4).
 
 ## Consequences
 

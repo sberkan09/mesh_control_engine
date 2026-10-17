@@ -199,6 +199,16 @@ TEST_CASE("cook bc: the auto picks hold on albedo, normal, grey and ORM images")
     // a grey image that is colour data (srgb true) is still BC7, and an LUT strip (w == h*h, h >= 16) stays RGBA8
     CHECK(cook_one("bc_auto_grey_srgb", Img::Grey, 64, 64, "{}", TextureCompression::Bc).format == TextureFormat::BC7);
     CHECK(cook_one("bc_auto_lut", Img::Lut, 256, 16, "{ \"srgb\": false }", TextureCompression::Bc).format == TextureFormat::RGBA8);
+    // the unit-normal share is 85% (calibrated on Poly Haven normal maps, which pass 89-100%): a normal map with 10% of
+    // its texels black (not unit length) is still BC5, one with 20% is BC7
+    for (const auto& [bad, want] : {std::pair<u32, TextureFormat>{10, TextureFormat::BC5}, {20, TextureFormat::BC7}}) {
+        std::vector<u8> px = make_pixels(Img::Normal, 64, 64);
+        for (usize i = 0; i < 64 * 64; ++i)
+            if (i % 100 < bad) px[i * 4] = px[i * 4 + 1] = px[i * 4 + 2] = 0;
+        const CookResult r = cook_project(make_project("bc_auto_share", make_png(64, 64, px), "{ \"srgb\": false }"),
+                                          TextureCompression::Bc);
+        CHECK_MESSAGE(r.format == want, bad << "% black texels");
+    }
     // an explicit value beats the rule
     CHECK(cook_one("bc_auto_over", Img::Normal, 64, 64, "{ \"srgb\": false, \"compress\": \"bc7\" }", TextureCompression::Bc).format ==
           TextureFormat::BC7);
