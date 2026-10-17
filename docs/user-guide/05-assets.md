@@ -160,7 +160,9 @@ Adopted textures default to `srgb: true`; fix the sidecar for a normal map or a 
 Art and levels drawn in Aseprite, Tiled or LDtk are not copied in as they are: their exports are
 converted into the engine's own assets (`.mcsheet`, `.mcscene`, `.mctilemap`) by `mce import`, or by the
 MCP tool `asset_import`; section 7.3 describes each tool's settings and limits. The converter also gives
-the tileset or sheet PNG its sidecar, so no adoption is needed for those.
+the tileset or sheet PNG its sidecar, so no adoption is needed for those. A glTF or FBX model's lights and cameras
+cannot live in its mesh asset: `mce import gltf|fbx` (or `asset_import` with `tool` `gltf` / `fbx`) writes them as a
+`.mcprefab` next to the model and creates the model's sidecar if it has none (section 8.4, "Lights and cameras").
 
 ### Open-licence content packs (`mce content`)
 

@@ -2,6 +2,7 @@
 //
 //   mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
 //            [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc] [--max-texture-size N]
+//   mce_cook --dump-fbx-scene <file.fbx>     the FBX's lights and cameras as JSON on stdout (for `mce import fbx`)
 //
 // A project with a mod.json is a mod (ADR-0034): its pack carries a ModInfo chunk and drops into a
 // game's mods folder as <id>.mce.
@@ -13,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "fbx_importer.h"
 #include "mce/cook/cook.h"
 #include "mce/log.h"
 #include "mce/module_host.h"
@@ -24,6 +26,7 @@ int usage(std::FILE* out = stderr, int rc = 2) {
         "usage: mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]\n"
         "                [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc]\n"
         "                [--max-texture-size N]\n"
+        "       mce_cook --dump-fbx-scene <file.fbx>   print the FBX's lights and cameras (world transforms, +Y up, metres) as JSON\n"
         "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --module <path>  load this game module (lib<game>.so / .dll) first, so scenes that use its\n"
         "                   components cook; without it only the engine's components are known\n"
@@ -56,10 +59,45 @@ const char* status_name(mce::cook::AssetStatus s) {
     return "?";
 }
 
+// `mce_cook --dump-fbx-scene <file>`: JSON on stdout, 0 ok, 1 unreadable file (message on stderr).
+int dump_fbx_scene(const char* path) {
+    using namespace mce;
+    constexpr usize kMaxBytes = usize(256) << 20;  // the importer's own file limit
+    std::FILE* f = std::fopen(path, "rb");
+    if (!f) {
+        std::fprintf(stderr, "mce_cook: cannot open %s\n", path);
+        return 1;
+    }
+    Array<byte> bytes;
+    byte buf[65536];
+    for (;;) {
+        const usize n = std::fread(buf, 1, sizeof buf, f);
+        if (n == 0) break;
+        if (bytes.size() + n > kMaxBytes) {
+            std::fclose(f);
+            std::fprintf(stderr, "mce_cook: %s: the file is over the importer's limit of 256 MiB\n", path);
+            return 1;
+        }
+        for (usize i = 0; i < n; ++i) bytes.push_back(buf[i]);
+    }
+    std::fclose(f);
+    cook::String json, error;
+    if (!cook::dump_fbx_scene_json(path, Span<const byte>(bytes.data(), bytes.size()), json, error)) {
+        std::fprintf(stderr, "mce_cook: %s: %s\n", path, error.c_str());
+        return 1;
+    }
+    std::fwrite(json.data(), 1, json.size(), stdout);
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     using namespace mce;
+    if (argc >= 2 && std::strcmp(argv[1], "--dump-fbx-scene") == 0) {
+        if (argc != 3) return usage();
+        return dump_fbx_scene(argv[2]);
+    }
     const char* project = nullptr;
     const char* module_path = nullptr;
     cook::CookOptions opt;

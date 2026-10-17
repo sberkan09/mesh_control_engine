@@ -250,7 +250,9 @@ struct Scene {
 };
 
 // `content` false: no geometry, animation or embedded data (the dependency scan only needs the materials).
-bool load_scene(Rep& rep, Span<const byte> src, bool content, Scene& out) {
+// `camera_axes` true: cameras look down -Z with +Y up (the engine's camera, as glTF's) for the scene dump. ufbx's "front" is the
+// axis toward the viewer, so a camera that looks down -Z has front +Z.
+bool load_scene(Rep& rep, Span<const byte> src, bool content, Scene& out, bool camera_axes = false) {
     if (src.empty()) return rep.fail("the file is empty");
     if (src.size() > kMaxFileBytes) return rep.failf("the file is over the importer's limit of %zu MiB", kMaxFileBytes >> 20);
     ufbx_load_opts opts = {};
@@ -272,6 +274,11 @@ bool load_scene(Rep& rep, Span<const byte> src, bool content, Scene& out) {
     opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
     opts.inherit_mode_handling = UFBX_INHERIT_MODE_HANDLING_HELPER_NODES;
     opts.handedness_conversion_axis = UFBX_MIRROR_AXIS_X;
+    if (camera_axes) {
+        opts.target_camera_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
+        opts.target_camera_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
+        opts.target_camera_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
+    }
     ufbx_error err = {};
     out.p = ufbx_load_memory(src.data(), src.size(), &opts, &err);
     if (out.p) return true;
@@ -1287,6 +1294,40 @@ void add_dep(Array<DepRef>& out, Guid g, StringView where) {
     out.push_back(d);
 }
 
+
+// ---- the scene dump for `mce import fbx` ----
+
+void json_string(String& out, StringView t) {
+    out += '"';
+    const usize n = std::min<usize>(t.size(), 256);
+    for (usize i = 0; i < n; ++i) {
+        const unsigned char c = static_cast<unsigned char>(t[i]);
+        if (c == '"' || c == '\\') {
+            out += '\\';
+            out += static_cast<char>(c);
+        } else if (c < 0x20 || c == 0x7F) {
+            appendf(out, "\\u%04x", unsigned(c));
+        } else {
+            out += static_cast<char>(c);
+        }
+    }
+    out += '"';
+}
+
+void json_real(String& out, f64 v) {
+    if (!std::isfinite(v)) v = 0.0;
+    appendf(out, "%.9g", v);
+}
+
+void json_vec(String& out, const f64* v, u32 n) {
+    out += '[';
+    for (u32 i = 0; i < n; ++i) {
+        if (i) out += ',';
+        json_real(out, v[i]);
+    }
+    out += ']';
+}
+
 class FbxImporter final : public IImporter {
 public:
     StringView id() const override { return "fbx"; }
@@ -1333,5 +1374,84 @@ public:
 }  // namespace
 
 mem::UniquePtr<IImporter> make_fbx_importer() { return mem::make_unique<FbxImporter>(mem::heap()); }
+
+bool dump_fbx_scene_json(StringView display_name, Span<const byte> src, String& json, String& error) {
+    DiagList diags;
+    Rep rep(display_name, diags);
+    Scene scene;
+    if (!load_scene(rep, src, false, scene, true) || !scene.p) {
+        for (const Diagnostic& d : diags.all()) {
+            error = d.message;
+            break;
+        }
+        if (error.empty()) error = String("cannot read the FBX");
+        return false;
+    }
+    const ufbx_scene& sc = *scene.p;
+    if (sc.nodes.count > kMaxNodes) {
+        error = String("the node tree is over the importer's limit of 262144 nodes");
+        return false;
+    }
+    json.clear();
+    json += "{\"format\":\"mce-fbx-scene\",\"version\":1,\"node_count\":";
+    appendf(json, "%zu", usize(sc.nodes.count));
+    json += ",\"nodes\":[";
+    bool first = true;
+    for (usize i = 0; i < sc.nodes.count; ++i) {
+        const ufbx_node& n = *sc.nodes.data[i];
+        if (!n.light && !n.camera) continue;
+        const ufbx_transform t = ufbx_matrix_to_transform(&n.node_to_world);
+        if (!first) json += ',';
+        first = false;
+        json += "{\"name\":";
+        json_string(json, sv(n.name));
+        json += ",\"translation\":";
+        const f64 tr[3] = {t.translation.x, t.translation.y, t.translation.z};
+        json_vec(json, tr, 3);
+        json += ",\"rotation\":";
+        const f64 rot[4] = {t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w};
+        json_vec(json, rot, 4);
+        json += ",\"scale\":";
+        const f64 sca[3] = {t.scale.x, t.scale.y, t.scale.z};
+        json_vec(json, sca, 3);
+        if (const ufbx_light* l = n.light) {
+            const char* type = "other";
+            switch (l->type) {
+                case UFBX_LIGHT_POINT: type = "point"; break;
+                case UFBX_LIGHT_DIRECTIONAL: type = "directional"; break;
+                case UFBX_LIGHT_SPOT: type = "spot"; break;
+                case UFBX_LIGHT_AREA: type = "area"; break;
+                case UFBX_LIGHT_VOLUME: type = "volume"; break;
+                default: break;
+            }
+            appendf(json, ",\"light\":{\"type\":\"%s\",\"color\":", type);
+            const f64 col[3] = {l->color.x, l->color.y, l->color.z};
+            json_vec(json, col, 3);
+            json += ",\"intensity\":";
+            json_real(json, l->intensity);
+            json += ",\"direction\":";
+            const f64 dir[3] = {l->local_direction.x, l->local_direction.y, l->local_direction.z};
+            json_vec(json, dir, 3);
+            json += ",\"inner_deg\":";
+            json_real(json, l->inner_angle);
+            json += ",\"outer_deg\":";
+            json_real(json, l->outer_angle);
+            appendf(json, ",\"enabled\":%d}", l->cast_light ? 1 : 0);
+        }
+        if (const ufbx_camera* c = n.camera) {
+            const bool persp = c->projection_mode == UFBX_PROJECTION_MODE_PERSPECTIVE;
+            appendf(json, ",\"camera\":{\"perspective\":%d,\"fov_y_deg\":", persp ? 1 : 0);
+            json_real(json, c->field_of_view_deg.y);
+            json += ",\"near\":";
+            json_real(json, c->near_plane);
+            json += ",\"far\":";
+            json_real(json, c->far_plane);
+            json += '}';
+        }
+        json += '}';
+    }
+    json += "]}\n";
+    return true;
+}
 
 }  // namespace mce::cook

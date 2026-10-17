@@ -14,3 +14,6 @@ mce_add_executable(mce_cook UMBRELLA
         mce::mce_ecs_scene
         mce::mce_scene
         mce::mce_module_host)
+
+# --dump-fbx-scene (M-IMPORT3D 4a) calls the cook-private fbx_importer.h; it declares one function and includes only public headers.
+target_include_directories(mce_cook PRIVATE ${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src)

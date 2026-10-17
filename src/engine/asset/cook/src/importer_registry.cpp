@@ -24,6 +24,13 @@ const IImporter* ImporterRegistry::for_extension(StringView lower_ext) const {
     return nullptr;
 }
 
+#if !MCE_HAS_FBX
+bool dump_fbx_scene_json(StringView, Span<const byte>, String&, String& error) {
+    error = String("this build has no FBX reader (a cross build); run `mce import fbx` with the host's mce_cook");
+    return false;
+}
+#endif
+
 void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_texture_importer());
     reg.add(make_wav_importer());

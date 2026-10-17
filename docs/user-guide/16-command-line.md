@@ -109,6 +109,8 @@ mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--
          [--textures rgba8|bc|astc] [--max-texture-size N]
 ```
 
+`mce_cook --dump-fbx-scene <file.fbx>` prints an FBX's lights, cameras and world transforms (engine frame) as JSON on stdout; `mce import fbx` uses it (chapter 8.4).
+
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
 without `--module` knows engine components only. `--base` names a game pack the project builds
 on (a mod, chapter 19): references may name its assets and same-GUID assets override them.
@@ -158,6 +160,7 @@ mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
 mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size m] [--werror]
+mce import gltf|fbx <model> [--out-dir d] [--name n] [--cook mce_cook] [--werror]    (lights and cameras as a prefab, chapter 8.4)
 mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
 mce content list|info|check|fetch|add|verify|credits ...    (open-licence content ledger, chapter 5.3)
 mce retarget <source.glb>... --onto <character.glb> [--out f.glb | --inplace] [--clips a,b] [--prefix p] [--map f.json]
