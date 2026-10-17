@@ -28,6 +28,7 @@
 #include "mce/kit/timeline.h"
 #include "mce/log.h"
 #include "mce/physics/world2d.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 
 namespace mce::script::detail {
@@ -70,6 +71,19 @@ int l_has(lua_State* L) {
 int l_alive(lua_State* L) {
     World& w = world_of(L);
     lua_pushboolean(L, w.alive(check_entity(L, 1)));
+    return 1;
+}
+
+// mce.find(name) -> entity or nil: the first live entity a loaded scene gave that name (scene::find_entity).
+// Entities made at run time have no name. A read of one resource: it changes nothing.
+int l_find(lua_State* L) {
+    size_t len = 0;
+    const char* name = luaL_checklstring(L, 1, &len);
+    const Entity e = scene::find_entity(world_of(L), StringView(name, len));
+    if (e.is_null())
+        lua_pushnil(L);
+    else
+        push_entity(L, e);
     return 1;
 }
 
@@ -1011,6 +1025,7 @@ int l_find_path3d(lua_State* L) {
 const luaL_Reg kWorldLib[] = {
     {"has", l_has},
     {"alive", l_alive},
+    {"find", l_find},
     {"spawn", l_spawn},
     {"add", l_add},
     {"remove", l_remove},
