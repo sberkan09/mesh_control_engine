@@ -13,6 +13,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/crowd.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/traffic.h"
@@ -177,6 +178,22 @@ TEST_CASE("traffic: at a stop junction a car stands at the line, then crosses") 
     }
     CHECK(stood);
     CHECK(s.pos(c).z < -10.0f);
+}
+
+TEST_CASE("traffic: a car stops for a pedestrian crossing in front, then drives on") {
+    Scene s(kStreet);
+    const Entity c = s.car(1.75f, 185.0f);
+    Pedestrian3D p;
+    p.mode = PedestrianMode::Cross;
+    const Entity walker = s.w.spawn_with(pose({1.75f, 0.0f, 120.0f}), p);
+    s.run(60 * 12);
+    CHECK(s.drv(c).state == TrafficState::Yielding);
+    CHECK(std::fabs(s.speed(c)) < 0.5f);
+    CHECK(s.pos(c).z > 122.0f);  // short of the pedestrian
+    CHECK(s.pos(c).z < 130.0f);
+    s.w.try_get_mut<Pedestrian3D>(walker)->mode = PedestrianMode::Walk;  // across: the road is clear
+    s.run(60 * 10);
+    CHECK(s.pos(c).z < 100.0f);
 }
 
 TEST_CASE("traffic: a spawner keeps cars around the focus and removes the far ones") {

@@ -204,6 +204,11 @@ public:
     // the build; the Document keeps the bits so an editor's extract / save round-trips them.
     void set_own_style(WidgetId w, u8 own);
     void set_binding(WidgetId w, StringView path, StringView format);
+    // A Minimap widget (mce/ui/minimap.h): its authoring values, and each frame the tracked entity and the
+    // markers to draw, which the host fills (the widget reads no world). Other kinds ignore them.
+    void set_minimap(WidgetId w, const Minimap& m);
+    const Minimap& minimap(WidgetId w) const;
+    void set_minimap_view(WidgetId w, const MinimapView& view, Span<const MinimapMarker> markers);
     // Whether a host has dealt with the widget's binding (bound it, or given up on a bad path):
     // ui::bind_document's bookkeeping. set_binding clears it.
     bool binding_done(WidgetId w) const;
@@ -301,6 +306,9 @@ private:
         FontRole font_role = FontRole::Auto;
         TextAlign text_align = TextAlign::Left;
         u8 own_style = 0;
+        Minimap minimap;                  // a Minimap's values
+        MinimapView minimap_view;
+        Array<MinimapMarker> minimap_markers;
         u32 console = ~0u;  // index into consoles_
         bool pressed = false;
         render::SpriteSetId image_set;  // set_image_texture: an Image's own set (invalid = the skin's)
@@ -328,6 +336,7 @@ private:
     bool effectively_visible(u32 index) const;
     u32 hit_test(vec2 p) const;
     WidgetId navigate(vec2 dir) const;
+    void draw_minimap(render::SpriteBatch& batch, const Node& n, const Style& st, i16 layer, i32 order) const;
     void emit(UiEvent::Kind kind, WidgetId w, f32 value = 0.0f) { events_.push_back(UiEvent{kind, w, value}); }
     void change_value(u32 index, f32 v);
     void sync_bindings();
