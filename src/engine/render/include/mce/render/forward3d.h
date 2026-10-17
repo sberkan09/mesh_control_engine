@@ -27,6 +27,7 @@
 // scene's viewport size and are recreated on resize. Each stage boundary writes a GPU timestamp
 // (rhi::CommandBuffer::write_timestamp) for the NFR-F-01 per-stage budget table.
 
+#include "mce/draw_cause.h"
 #include "mce/render/scene3d.h"
 #include "mce/render/texture_store.h"
 #include "mce/rhi/command_buffer.h"
@@ -150,6 +151,9 @@ struct Forward3DStats {
     u32 shadow_draws_instanced = 0;  // ... the caster draws they replaced
     u32 instancing_overflow = 0;     // runs of any pass drawn singly because the frame's instancing budget ran out
     u32 instancing_bytes = 0;        // per-copy data uploaded this record()
+    // M-CONTENT 2: the scene draws of the main pass that did not take part in an instanced run, by DrawCause
+    // (core/draw_cause.h); with draws_instanced they add up to scene.draws().size(). Deterministic.
+    u32 draw_causes[kDrawCauseCount] = {};
 };
 
 // Milliseconds per stage of one completed frame; -1 = not measured.
@@ -368,6 +372,7 @@ private:
     // model and normal) within the budget and fills inst_slots_; false when nothing is drawn instanced.
     enum InstPass : u32 { kInstMain, kInstPrepass, kInstVelocity, kInstShadow, kInstPassCount };
     bool upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass);
+    void count_draw_causes(const Scene3D& scene);  // Forward3DStats::draw_causes, before the passes draw
     // Splits the frame's remaining instancing budget into this view's per-pass reservations (main first).
     void reserve_instancing(const Scene3D& scene);
     // The caster list `list` (indices into shadow_draws()) of one depth pass, in caster runs.

@@ -16,7 +16,7 @@ texture importer's LDR path, the cook CLI and `mce ship`, the RHI upload mapping
 |---|---|---|---|
 | 1a | `max_size` for ordinary textures (power-of-two downscale before mips), `mce ship` / `mce cook` size options, a cook size report by asset type | Sonnet | done |
 | 1b | `compress` import setting (`none`, `bc7`, `bc5` for normal maps, `bc4`/`bc1` where cheaper, `astc` on phones), a deterministic encoder, the loader and the RHI upload for the BC formats on every desktop backend, a fallback where a backend lacks BC (GLES, WebGL), a size gate on a sample scene | Sonnet (Opus review of the upload and of determinism) | done (§Step 1b plan below; as built after it) |
-| 2 | Draw-call report: `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) | Sonnet | not started |
+| 2 | Draw-call report: `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) | Sonnet | done (as built below) |
 | 3 | `perf_run` progress lines while it runs and a `frames` argument for a short run; the close | Sonnet | not started |
 
 **Step 1a as built.** The LDR (PNG/JPEG) path of `texture_importer.cpp` takes a sidecar `"max_size"` (power of two 1..16384,
@@ -38,6 +38,29 @@ is read back to compare its base size with the source only when a cap could appl
 text is unchanged; `cook_run` returns it as `sizes`. Tests: `tests/asset/test_cook_texture_cap.cpp`, the `cook_run` case in
 `tests/mcp/test_mcp.cpp`, `tests/import/test_cli_max_texture_size.py`. The MCP golden (`demo_edit`) changed legitimately: the
 `cook_run` schema and description, and its result gained `sizes`.
+
+**Step 2 as built.** `mce/draw_cause.h` (core) names nine causes with a one-line hint each: `material`, `unique_mesh`,
+`skinned`, `terrain`, `moving`, `blended`, `instancing_off`, `budget`, `other`. `Scene3D::Stats` splits
+`not_instanced_single` with two new subsets (`not_instanced_unique_mesh`: no other eligible draw has the mesh, submesh and
+level; `not_instanced_short`: identical copies exist but fewer than `min_count`; the rest is `material`). The split costs
+two sorts of the eligible keys, only in frames with singles. `Forward3DStats::draw_causes[kDrawCauseCount]` (the only change
+to `forward3d.h`, which 86 of 640 TUs include; `scene3d.h` 99) is filled from those stats at the start of `record_view`
+and gains two causes only the renderer knows: `instancing_off` also when the instanced pipelines are missing
+(`-r.instancing 0`: the scene's runs exist, none is drawn) and `budget` for each main-pass run `upload_runs` could not fit
+(counted in scene draws). With `draws_instanced` they add up to the main view's scene draws. The player copies them
+into `perf::Counters::draw_causes` for every captured frame (the last 3D view recorded); the `.mcperf` header names them
+(`draw_causes`, `draw_cause_hints`) and each frame's `counters.draw_causes` holds the counts in that order, so a reader
+maps by name; version stays 1, older files read as zero. `perf_run` returns `draw_causes`
+`{scene_draws_avg, instanced_draws_avg, instanced_runs_avg, not_instanced_avg, causes: [{cause, avg, max, hint}]}`, the
+causes that occurred, largest mean first. `mce perf [<project | file.mcperf>] [--json]` is new (the command did not
+exist; it reads a capture and runs nothing) and prints the frame times and the table. Counts only, no timings, so the
+`demo_edit` transcript changed only in the `perf_run` description. Not done: the top offending meshes and
+materials by name, because `GpuMesh` and the draw list carry store keys, not asset names; the same for a static-batch
+cause, which is the `unique_mesh` hint (the engine has no static batching beyond instancing and `InstanceBatch`).
+Tests: `tests/render/test_render3d_instancing.cpp` (the split), `tests/render_gl/test_render3d_instancing_gl.cpp` (repeated
+meshes, a tint and a material override, instancing off in the scene and in the renderer, a spent budget),
+`tests/editor/test_perf_compare.cpp` (file round trip, old file), `tests/mcp/test_mcp_agent.cpp`,
+`tests/import/test_cli_perf.py`.
 
 **Not in scope:** a bundled realistic sound, texture or model library (content, not engine); HDR texture compression (BC6H),
 which M-VISUAL3 left to this milestone's later work.

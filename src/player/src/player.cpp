@@ -758,6 +758,7 @@ public:
             const kit::ViewRecordStats vs = kit::record_views(cmd, world_, views_.span(), vc);
             if (vs.views_3d > 0) {
                 stats3d_ = vs.first_3d;
+                take_draw_causes();
                 drew_3d_ = true;
             }
             batch_stats_ = vs.first_2d;
@@ -787,6 +788,7 @@ public:
             scene3.build();
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
+            take_draw_causes();
             drew_3d_ = true;
         }
 
@@ -2492,6 +2494,7 @@ private:
             f.counters.meshes = stats3d_.visible;
             f.counters.runs_instanced = stats3d_.runs_instanced;
             f.counters.draws_instanced = stats3d_.draws_instanced;
+            for (u32 k = 0; k < kDrawCauseCount; ++k) f.counters.draw_causes[k] = draw_causes3d_[k];
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;
@@ -2757,6 +2760,11 @@ private:
     bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
+    u32 draw_causes3d_[kDrawCauseCount] = {};  // Forward3DStats::draw_causes of the last 3D view recorded (M-CONTENT 2)
+    void take_draw_causes() {
+        const render::Forward3DStats& fs = renderer_.forward_3d().last_stats();
+        for (u32 k = 0; k < kDrawCauseCount; ++k) draw_causes3d_[k] = fs.draw_causes[k];
+    }
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
     bool three_d_failed_ = false;  // init_3d failed once: the game runs 2D-only
     bool relative_mouse_ = false;

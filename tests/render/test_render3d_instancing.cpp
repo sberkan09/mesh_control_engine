@@ -79,6 +79,7 @@ void check_cover(const Scene3D& s) {
     CHECK(st.draws_instanced + st.not_instanced_blended + st.not_instanced_terrain + st.not_instanced_skinned +
               st.not_instanced_moving + st.not_instanced_single + st.not_instanced_disabled ==
           s.draws().size());
+    CHECK(st.not_instanced_unique_mesh + st.not_instanced_short <= st.not_instanced_single);  // M-CONTENT 2
 }
 
 u32 run_containing(const Scene3D& s, u32 instance) {
@@ -332,4 +333,41 @@ TEST_CASE("instancing: alpha-masked casters stay single") {
     scene.caster_runs(list.span(), sorted, runs);
     CHECK(runs.size() == 4);
     for (const DrawRun& r : runs) CHECK(r.count == 1);
+}
+
+TEST_CASE("instancing: the singles say whether the mesh is unique, differs by tint, or is a group under min_count") {
+    MeshStore store;
+    REQUIRE(store.upload(1, 1, box_mesh().span()).has_value());
+    REQUIRE(store.upload(2, 1, box_mesh(0, 0.3f).span()).has_value());
+    REQUIRE(store.upload(3, 1, box_mesh(0, 0.2f).span()).has_value());
+    const auto build = [&](u32 min_count, Scene3D& scene) {
+        scene.set_instancing({true, min_count});
+        scene.begin(camera(), {256, 256});
+        for (int i = 0; i < 4; ++i) scene.add(at(1, {f32(i) - 1.5f, 0.0f, -5.0f}));  // four copies of mesh 1
+        MeshInstance red = at(1, {0.0f, 2.0f, -5.0f});  // the same mesh, another tint
+        red.tint = {1, 0, 0, 1};
+        scene.add(red);
+        scene.add(at(2, {0.0f, -2.0f, -5.0f}));  // mesh 2 once
+        scene.add(at(3, {1.0f, -2.0f, -5.0f}));  // mesh 3 twice (a pair)
+        scene.add(at(3, {2.0f, -2.0f, -5.0f}));
+        scene.build();
+    };
+    Scene3D scene(store, mem::heap());
+    build(2, scene);
+    check_cover(scene);
+    const Scene3D::Stats& st = scene.stats();
+    CHECK(st.runs_instanced == 2);  // mesh 1's four, mesh 3's pair
+    CHECK(st.draws_instanced == 6);
+    CHECK(st.not_instanced_single == 2);
+    CHECK(st.not_instanced_unique_mesh == 1);  // mesh 2
+    CHECK(st.not_instanced_short == 0);
+    // single - unique - short = the red copy: its mesh is shared, its material key is not.
+
+    Scene3D wide(store, mem::heap());
+    build(3, wide);  // the pair is now too short to instance
+    check_cover(wide);
+    CHECK(wide.stats().runs_instanced == 1);
+    CHECK(wide.stats().not_instanced_single == 4);
+    CHECK(wide.stats().not_instanced_unique_mesh == 1);
+    CHECK(wide.stats().not_instanced_short == 2);
 }

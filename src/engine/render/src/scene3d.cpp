@@ -1,5 +1,6 @@
 #include "mce/render/scene3d.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -699,6 +700,8 @@ void Scene3D::build_runs() {
     Array<u8> cause(*alloc_);
     Array<u64> key(*alloc_);
     Array<u16> segment(*alloc_);
+    Array<u64> mesh_key(*alloc_);  // eligible draws: the mesh, submesh and level alone (M-CONTENT 2)
+    mesh_key.resize(n);
     cause.resize(n);
     key.resize(n);
     segment.resize(n);
@@ -713,9 +716,11 @@ void Scene3D::build_runs() {
                    : !same_bits(&d.prev_model, &d.model, sizeof(mat4)) ? kMoving
                                                                        : kEligible;
         u64 h = kFnv64Offset;
+        mesh_key[i] = 0;
         if (cause[i] == kEligible) {
             h = hash_combine(h, ptr_bits(d.mesh));
             h = hash_combine(h, (u64(d.submesh) << 32) | d.lod);
+            mesh_key[i] = h;
             h = hash_combine(h, ptr_bits(inst.material));
             h = fnv1a64(&inst.tint, sizeof(inst.tint), h);
             h = fnv1a64(&inst.emissive_tint, sizeof(inst.emissive_tint), h);
@@ -757,6 +762,28 @@ void Scene3D::build_runs() {
     u32 eligible = 0;
     for (u32 i = 0; i < n; ++i) eligible += cause[i] == kEligible ? 1u : 0u;
     stats_.not_instanced_single = eligible - grouped;
+    if (eligible > grouped) {  // why the singles are single: nobody else has their mesh, or only others with another material
+        Array<u64> by_mesh(*alloc_), by_key(*alloc_);
+        for (u32 i = 0; i < n; ++i)
+            if (cause[i] == kEligible) {
+                by_mesh.push_back(mesh_key[i]);
+                by_key.push_back(key[i]);
+            }
+        std::sort(by_mesh.begin(), by_mesh.end());
+        std::sort(by_key.begin(), by_key.end());
+        const auto count_of = [](const Array<u64>& v, u64 k) {
+            const auto r = std::equal_range(v.begin(), v.end(), k);
+            return static_cast<u32>(r.second - r.first);
+        };
+        for (const DrawRun& r : runs_) {
+            if (r.count != 1 || cause[order[r.first]] != kEligible) continue;
+            const u32 i = order[r.first];
+            if (count_of(by_key, key[i]) >= 2)
+                ++stats_.not_instanced_short;
+            else if (count_of(by_mesh, mesh_key[i]) == 1)
+                ++stats_.not_instanced_unique_mesh;
+        }
+    }
     bool moved = false;
     for (u32 i = 0; i < n && !moved; ++i) moved = order[i] != i;
     if (!moved) return;

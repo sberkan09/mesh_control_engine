@@ -633,6 +633,10 @@ public:
         u32 not_instanced_moving = 0;    // moved since last frame (prev_model != model)
         u32 not_instanced_single = 0;    // eligible, but no copy shares the run (or the run is under min_count)
         u32 not_instanced_disabled = 0;  // InstancingSettings::enabled is off: every draw
+        // M-CONTENT 2: the parts of not_instanced_single (the rest differ from every other copy of their mesh by
+        // material, tint or emissive tint).
+        u32 not_instanced_unique_mesh = 0;  // no other eligible draw uses this mesh, submesh and level
+        u32 not_instanced_short = 0;        // identical copies exist, but fewer than min_count (or a split's tail)
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };

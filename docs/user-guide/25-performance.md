@@ -24,7 +24,10 @@ Each frame records:
 - the counters: draws, passes, compute dispatches, triangles, meshes, sprites, sprite batches,
   upload bytes and live heap allocations, and for 3D `runs_instanced` and `draws_instanced` (copies of one
   mesh drawn as one instanced draw in the main view, and the submesh draws inside them; chapter 8.6). An
-  instanced draw counts once in `draws`.
+  instanced draw counts once in `draws`;
+- for 3D, `draw_causes`: the scene draws that were not part of an instanced run, counted by cause (see
+  "Draw calls by cause" below). The cause names are stored in the file's header, and the counts of a frame in its
+  `counters.draw_causes`, in that order. Older files have none and read as zero.
 
 The run as a whole records each system's total time and its worst frame.
 
@@ -35,6 +38,43 @@ run (`-headless 1 -ticks N`) records the sim alone, which is the quickest way to
 The file is JSON (`"format": "mce-perf"`, version 1). It holds the header, a summary (p50, p95, p99
 and max of each time, the counters' max and mean, and the spike frames with their cause) and one
 line per frame.
+
+### Draw calls by cause
+
+A budget miss on `draws` names a number, not a fix. `perf_run` (MCP) returns `draw_causes`, and `mce perf` prints the
+same as a table, for the 3D scene draws of the main view that were *not* folded into an instanced run (chapter 8.6):
+
+```
+$ mce perf MyGame
+...
+draw calls by cause (3D scene draws per frame, mean over the capture)
+  cause            draws    max  what to change
+  instanced           96         folded into 11 instanced draw(s): nothing to do
+  material            41     41  copies of one mesh differ in material, tint or emissive tint: ...
+  unique_mesh         23     23  meshes drawn once cannot instance: reuse one mesh ... or merge static meshes ...
+  total              160
+```
+
+`mce perf <project>` reads the project's last `perf_run` capture (`cooked/.perf/last.mcperf`); `mce perf <file>` reads
+any `.mcperf`, such as the player's `-perf_capture` file; `--json` prints the causes as JSON. It reads a capture and
+runs nothing. The numbers are counts, not times, so they repeat run to run like `draws`.
+
+| Cause | The draw is single because | What to change |
+|---|---|---|
+| `material` | another draw uses its mesh, but with a different material, tint or emissive tint | one material and tint for the copies; an atlas texture in place of many materials |
+| `unique_mesh` | the mesh (submesh and LOD) is drawn once | reuse one mesh for repeated props, or merge static meshes into one in the importer |
+| `skinned` | skinned meshes always draw singly | rigid meshes for props and distant crowds |
+| `terrain` | a terrain node | fewer, larger nodes |
+| `moving` | it moved since last frame while TAA or motion blur reads the previous transform | keep background props still, or turn the effect off |
+| `blended` | alpha blended or transmissive: sorted back to front after the opaques | alpha mask or opaque materials where you can |
+| `instancing_off` | `InstancingSettings::enabled` is off, `-r.instancing 0`, or the instanced pipelines failed | turn it back on |
+| `budget` | the frame's per-copy upload budget (`Forward3DDesc::instancing_budget`) ran out | raise the budget and `geometry_ring_bytes`, or draw fewer copies |
+| `other` | identical copies exist but fewer than `InstancingSettings::min_count` (or a split run's tail) | lower `min_count` or add copies |
+
+The causes and the instanced draws add up to the scene's draws in the main view (`Forward3DStats::draw_causes`;
+`draws_instanced` counts the draws inside instanced runs, which `draws` counts once per run). Batches
+(`InstanceBatch`, the GPU-culled path) and the shadow, prepass and probe passes are not in it. Which mesh or
+material is behind a count is not reported: the renderer knows meshes by store key, not by name.
 
 ## 25.2 Budgets per target
 

@@ -78,6 +78,30 @@ void write_verdict(JsonWriter& w, const perf::Verdict& v) {
     w.end_array().end_object();
 }
 
+// M-CONTENT 2: the 3D scene draws that were not part of an instanced run, by cause, the largest (mean per frame)
+// first, each with what to change. Counts repeat run to run; a capture without 3D has none.
+void write_draw_causes(JsonWriter& w, const perf::Summary& s) {
+    const perf::Counters& avg = s.counters_avg;
+    const perf::Counters& max = s.counters_max;
+    u32 order[kDrawCauseCount];
+    u32 n = 0, total = 0;
+    for (u32 k = 0; k < kDrawCauseCount; ++k) {
+        total += avg.draw_causes[k];
+        if (max.draw_causes[k] > 0) order[n++] = k;
+    }
+    std::sort(order, order + n, [&](u32 a, u32 b) { return avg.draw_causes[a] != avg.draw_causes[b] ? avg.draw_causes[a] > avg.draw_causes[b] : a < b; });
+    w.key("draw_causes").begin_object();
+    w.key("scene_draws_avg").num_u(avg.draws_instanced + total).key("instanced_draws_avg").num_u(avg.draws_instanced);
+    w.key("instanced_runs_avg").num_u(avg.runs_instanced).key("not_instanced_avg").num_u(total);
+    w.key("causes").begin_array();
+    for (u32 i = 0; i < n; ++i) {
+        const DrawCause c = static_cast<DrawCause>(order[i]);
+        w.begin_object().key("cause").str(draw_cause_name(c)).key("avg").num_u(avg.draw_causes[order[i]]);
+        w.key("max").num_u(max.draw_causes[order[i]]).key("hint").str(draw_cause_hint(c)).end_object();
+    }
+    w.end_array().end_object();
+}
+
 void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& s, u64 top) {
     w.key("app").str(cap.app.view()).key("backend").str(cap.backend.view()).key("scene").str(cap.scene.view());
     w.key("frames").num_u(s.frames);
@@ -87,6 +111,7 @@ void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& 
     write_stat(w, "gpu_ms", s.gpu);
     write_counters(w, "counters_max", s.counters_max);
     write_counters(w, "counters_avg", s.counters_avg);
+    write_draw_causes(w, s);
 
     Array<usize> order;
     editor::rank_capture_systems(cap, order);
