@@ -55,7 +55,8 @@ if(NOT defs MATCHES "declare mce: {" OR NOT defs MATCHES "\"LocalTransform\"")
 endif()
 
 set(PLAY "${MCE_PLAYER}" -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID} -headless 1 -ticks 12 -platform.error_box 0)
-run(0 ${PLAY})
+# A script that failed makes the headless run exit 3 (M-SCRIPT3 2b), after printing the state hash.
+run(3 ${PLAY})
 if(NOT LAST_OUTPUT MATCHES "script: crate x=11")
     message(FATAL_ERROR "the scene's script did not run in the player:\n${LAST_OUTPUT}")
 endif()
@@ -63,10 +64,23 @@ if(NOT LAST_OUTPUT MATCHES "scripts/fail.luau:3: ")
     message(FATAL_ERROR "the failing script was not reported with its line:\n${LAST_OUTPUT}")
 endif()
 string(REGEX MATCH "state_hash[^\n]*" first "${LAST_OUTPUT}")
-run(0 ${PLAY})
+run(3 ${PLAY})
 string(REGEX MATCH "state_hash[^\n]*" second "${LAST_OUTPUT}")
 if(first STREQUAL "" OR NOT first STREQUAL second)
     message(FATAL_ERROR "two runs differ: '${first}' vs '${second}'")
+endif()
+
+# Hidden state the cook's static check misses (an alias of a top-level table) fails at run time (M-SCRIPT3 2): a headless run checks by
+# default, and -script.state_check 0 turns it off.
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local t = { n = 0 }\nfunction update()\n    local a = t\n    a.n += 1\nend\n")
+run(0 "${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
+run(3 ${PLAY})
+if(NOT LAST_OUTPUT MATCHES "push.luau:4: [^\n]*readonly table")
+    message(FATAL_ERROR "the run-time state check did not fail the aliasing script at its line:\n${LAST_OUTPUT}")
+endif()
+run(3 ${PLAY} -script.state_check 0)
+if(LAST_OUTPUT MATCHES "readonly table")
+    message(FATAL_ERROR "-script.state_check 0 still froze the tables:\n${LAST_OUTPUT}")
 endif()
 
 # A syntax error fails the cook with the file, line and column.

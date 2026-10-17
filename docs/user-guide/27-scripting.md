@@ -190,10 +190,16 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
   `newproxy` metatable fails at that line with `attempt to modify a readonly table (tables reachable
   from update() are frozen after the top level; keep state in a component)`. Upvalues (a closure made
   by a factory, `local inc = counter()`) and buffers it reaches are compared after each `update()`; a
-  change disables the script on that tick with `update() kept state between ticks: upvalue #1 of the
-  function defined at line 3 changed (reached from upvalue #1 of update()); keep it in a component`.
+  change disables the script on that tick with `update() kept state between ticks: upvalue 'n' of the
+  function defined at line 3 changed (reached from upvalue 'inc' of update()); keep it in a component`.
   A top-level scratch table or a cache filled lazily is therefore an error too: build it at the top
   level, or make it per call.
+
+  The check runs in the editor, `mce run`, `run_headless` and `mce_player -headless`, where a script
+  that failed for this or any other reason also makes the player exit with status 3 (after printing
+  the state hash), so a CI run notices. A shipped game's window leaves it off (the pack found beside
+  the executable): a player cannot fix a script and the check costs a walk of the script's data once
+  and a compare per tick. `-script.state_check 1` or `0` overrides either default.
 - **Keys with a stable order.** Iterating a table keyed by tables or functions follows their addresses,
   which differ between runs. The cook rejects such keys where the source shows them (`{[{}] = 1}`,
   `seen[f] = true` with `local function f`), and `pairs` and `next` raise when they meet one at run time.
