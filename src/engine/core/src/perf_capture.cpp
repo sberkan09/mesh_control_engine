@@ -95,8 +95,9 @@ void write_counters(Out& o, const Counters& c) {
     o.fmt("{\"draws\": %u, \"passes\": %u, \"dispatches\": %u, \"triangles\": %u, \"meshes\": %u, \"sprites\": %u, "
           "\"sprite_batches\": %u, ",
           c.draws, c.passes, c.dispatches, c.triangles, c.meshes, c.sprites, c.sprite_batches);
-    o.fmt("\"ring_overflows\": %u, \"upload_bytes\": %llu, \"heap_allocations\": %llu}", c.ring_overflows,
+    o.fmt("\"ring_overflows\": %u, \"upload_bytes\": %llu, \"heap_allocations\": %llu, ", c.ring_overflows,
           static_cast<unsigned long long>(c.upload_bytes), static_cast<unsigned long long>(c.heap_allocations));
+    o.fmt("\"runs_instanced\": %u, \"draws_instanced\": %u}", c.runs_instanced, c.draws_instanced);
 }
 
 void write_names(Out& o, const Array<FixedString<32>>& names) {
@@ -160,6 +161,8 @@ Summary summarize(const Capture& c) {
         m.ring_overflows = std::max(m.ring_overflows, k.ring_overflows);
         m.upload_bytes = std::max(m.upload_bytes, k.upload_bytes);
         m.heap_allocations = std::max(m.heap_allocations, k.heap_allocations);
+        m.runs_instanced = std::max(m.runs_instanced, k.runs_instanced);
+        m.draws_instanced = std::max(m.draws_instanced, k.draws_instanced);
         sum.draws += k.draws;
         sum.passes += k.passes;
         sum.dispatches += k.dispatches;
@@ -170,13 +173,16 @@ Summary summarize(const Capture& c) {
         sum.ring_overflows += k.ring_overflows;
         sum.upload_bytes += k.upload_bytes;
         sum.heap_allocations += k.heap_allocations;
+        sum.runs_instanced += k.runs_instanced;
+        sum.draws_instanced += k.draws_instanced;
     }
     const u64 n = c.frames.size();
     s.counters_avg = {static_cast<u32>(sum.draws / n),       static_cast<u32>(sum.passes / n),
                       static_cast<u32>(sum.dispatches / n),  static_cast<u32>(sum.triangles / n),
                       static_cast<u32>(sum.meshes / n),      static_cast<u32>(sum.sprites / n),
                       static_cast<u32>(sum.sprite_batches / n), static_cast<u32>(sum.ring_overflows / n),
-                      sum.upload_bytes / n,                  sum.heap_allocations / n};
+                      sum.upload_bytes / n,                  sum.heap_allocations / n,
+                      static_cast<u32>(sum.runs_instanced / n), static_cast<u32>(sum.draws_instanced / n)};
 
     // Spikes: frames at least twice the median frame time and 1 ms over it.
     if (s.frame.count == 0) return s;

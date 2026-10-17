@@ -9,3 +9,4 @@
   reserved first), `InstancingSettings::max_count` (`kMaxInstancesPerRun`) splits longer runs, and `-r.instancing 0`
   turns it off. On by default (every existing golden is byte-identical with it on); the showcase's main-pass draws fall
   by about a third and its shadow draws by about 30 %. New golden `instanced_props`.
+  `perf_run`, `.mcperf` captures and `perf_compare` inputs carry `runs_instanced` and `draws_instanced`.

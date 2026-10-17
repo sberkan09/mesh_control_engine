@@ -33,6 +33,8 @@ struct Counters {
     u32 ring_overflows = 0;  // RHI upload rings that ran out this frame
     u64 upload_bytes = 0;    // geometry + uniform + indirect ring bytes written this frame
     u64 heap_allocations = 0;  // live heap allocations at the end of the frame
+    u32 runs_instanced = 0;    // 3D: instanced draws of identical meshes, main view (M-VISUAL3 5a)
+    u32 draws_instanced = 0;   // 3D: the submesh draws folded into them
 };
 
 struct Frame {
