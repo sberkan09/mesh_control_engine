@@ -34,6 +34,8 @@
 #include "mce/kit/ai.h"                // AiBrain, Blackboard (M-AI)
 #include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
+#include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
+#include "mce/kit/combat3d.h"          // Health3D, Weapon3D, Projectile3D (M-OPENWORLD C2)
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus
 #include "mce/ui/types.h"             // UiAnchors, UiStyle, UiSlice, UiStackLayout, UiGridLayout (values, not components)

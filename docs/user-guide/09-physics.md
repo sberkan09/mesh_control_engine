@@ -337,6 +337,28 @@ Front, All).
   fire. After `laps` laps (0 runs forever) it brakes to a stop and sets `finished`. `drive = 0`
   hands the car back. A tall car needs `anti_roll` to take the corners flat.
 
+### Getting in and out (M-OPENWORLD C1)
+
+Put a `VehicleSeat3D` (`mce/kit/seats3d.h`) on the car and a `Rider3D` on the character that walks
+(a `CharacterController3D`). `seat` and `exit` are body-space points: where the driver sits and where
+they step out. With the rider's `use_input = 1` the **Interact** action boards the nearest free seat
+within `enter_radius` metres of the seat or the exit point; setting `enter = 1` does the same from a
+module, a sequence or MCP (the engine clears it), and while seated it leaves again.
+
+- **Boarding.** The rider's `CharacterController3D` is taken off (its settings are kept and come back on
+  exit), so the capsule stops colliding, and the rider rides at `seat` every tick. The car gets
+  `use_input = 1`: the player's Move, Jump and TriggerL drive it. A `VehicleDriver3D` on the car is
+  switched off while someone sits. `locked = 1` keeps everyone out; a taken seat refuses a second rider.
+- **Leaving.** Only slower than `max_exit_speed`. The rider steps out at `exit`, else the mirrored side,
+  else above the roof, whichever has room; the car gets its handbrake, its input mode and its AI driver
+  back. If the car or the rider is destroyed, the seat is freed.
+- **Camera.** Name a `CameraFollow3D` entity in `camera` and it follows the car while seated and the
+  rider afterwards.
+- **Events.** `VehicleEntered3D` and `VehicleExited3D` (rider, vehicle).
+
+A rider is not saved mid-ride: a reloaded rider that was seated gets a default `CharacterController3D`
+when it steps out.
+
 Changing a setting other than the driver's inputs, the wheel entities, `downforce`, `skid_slip` and
 the self-righting rebuilds the vehicle. The
 wheels find the ground with cylinder casts against whatever the body's layer collides with. From
@@ -361,3 +383,34 @@ The editor viewport overlays colliders. In code, `World2D::debug_draw(sink, flag
 circle primitives for a renderer you provide; `stats()` reports body and contact counts;
 `validate_broadphase()` checks the tree. `hash_state()` is part of the determinism hash, so a
 physics change shows up in `-headless` runs immediately.
+
+## 9.12 Weapons, health and damage (M-OPENWORLD C2)
+
+`mce/kit/combat3d.h` has three components. `Health3D` goes on anything that can be hurt: a character, a car,
+a crate. `Weapon3D` fires from its entity. `Projectile3D` is a shot in flight.
+
+- **Health.** `current` of `max`; `armor` (0..1) is the fraction of every hit absorbed; `regen` hp/s starts
+  `regen_delay` seconds after the last hit. At zero it dies: `dead = 1` and a `Died3D` event (with the
+  killer), its `CharacterController3D` stops listening to the input and its `NavAgent3D` stops. With
+  `ragdoll_on_death = 1` its `Ragdoll3D` goes limp with the hit's push; with `destroy_on_death = 1` the entity
+  is destroyed `linger` seconds later. A hit of at least `stagger_damage` (0 = off) knocks a living entity with
+  a `Ragdoll3D` limp for `stagger_time` seconds. `invulnerable = 1` takes hits (events still fire) and loses
+  nothing. `team` groups: a weapon whose owner shares the team hurts nothing here unless `friendly_fire`.
+- **Weapons.** The shot leaves from the entity's position plus `muzzle` along `direction` (entity space, forward
+  -Z): put the weapon on the camera, or on a child of the character at eye height, to shoot where it looks. It
+  fires when `fire` is set (the engine clears it), or with `use_input = 1` on the **Fire** action (held with
+  `automatic`, else one shot per press), at most `rate` shots a second. `pellets` rays fan out over a cone of
+  `spread_deg` from a seed kept in the component, so a replay shoots the same shots. `magazine` > 0 limits
+  the rounds; `reserve` refills it after `reload_time` seconds (the **Reload** action, `reload = 1`, or on its
+  own when empty; `infinite_ammo` never uses `reserve`). `owner` is credited for the damage and never hit.
+- **Hitscan and projectiles.** A hitscan ray reaches `range` metres. A `Projectile` weapon spawns a
+  `Projectile3D` with `projectile_mesh` that flies at `projectile_speed`, falls under `projectile_gravity` times
+  the world's gravity, and ends on its first hit or after `projectile_life` seconds; `splash_radius` > 0 makes
+  it explode where it lands, hurting everything in the radius with damage falling off to the edge. `impulse`
+  pushes dynamic bodies the shot hits.
+- **Events.** `WeaponFired3D` (every pellet, for tracers and muzzle flashes), `WeaponHit3D` (a shot landed,
+  hurt or not: impact marks and sounds), `Damage3D` and `Died3D`.
+- **Other damage.** `apply_damage(world, target, DamageInfo{...})` hurts a `Health3D` from any source (a fall,
+  a crash, an explosion, a script); call it from a `FixedUpdate_Pre` system or between ticks.
+
+Add `Health3D` to a `Vehicle3D`'s entity and a crash or a rocket can wreck it: `Died3D` tells the game when.
