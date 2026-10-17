@@ -102,7 +102,13 @@ if (kit::road_net_first(world, net)) {                 // or kit::road_net(world
 }
 ```
 
-`kit::road_debug_lines` returns every lane as lines, connectors coloured by their light, for an overlay.
+`kit::road_debug_lines` returns every lane as lines, connectors coloured by their light, for an overlay. The
+editor draws them while a 3D game plays (View > Roads).
+
+Over MCP, `roads_generate` writes a street grid to start from (junctions `n<i>_<j>`, roads `x<i>_<j>` along +x and
+`z<i>_<j>` along +z, signals with the x roads green first), and `roads_info` cooks a network and reports what the
+cook built and what traffic would trip on: one-way lanes that end with nowhere to go (`no_way_on`) and lanes cut off
+from the rest of the network (`cut_off`).
 
 ## 29.5 Traffic
 
@@ -120,6 +126,9 @@ A car joins traffic with a `TrafficDriver3D` next to its `Vehicle3D` (and `Rigid
   at a stop sign until it has stood at the line for a second; or while a conflicting connector is occupied,
   or a car that goes first (higher rank, or the same rank and sooner) would get there within `yield_time`
   seconds of it (state Yielding).
+- **Pedestrians.** A `Pedestrian3D` crossing a road (`mode` Cross, chapter 29.6) within a car's lanes ahead
+  stops it 3 m short until the pedestrian is across (state Yielding). Signalled crossings wait for the lights,
+  so in practice this is the unsignalled junctions.
 - **Its wheel.** Pure pursuit at a point `look_ahead` metres (at least 0.6 s) down its lanes.
 
 `TrafficSpawner3D` keeps `max_cars` alive between `min_radius` and `spawn_radius` of `focus` (the player),
@@ -134,13 +143,6 @@ world.set_resource(kit::TrafficSpawnHook{[](Frame& f, math::vec3 at, math::quat 
 ```
 
 A driver's state lives in its component, so traffic replays to the same `state_hash` and saves.
-
-## 29.6 Mistakes the cook catches
-
-The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
-itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
-road shorter than its two junctions need, a `signal` node without a signal (or a signal on a node with another
-control), a green entry that matches no turn, and a turn that is green in no phase.
 
 ## 29.6 Pedestrian crowds
 
@@ -182,3 +184,10 @@ exactly.
 
 Not yet: pedestrians do not avoid each other, react to the player, or follow terrain height (flat networks), and cars
 do not yet slow for them (traffic, B2).
+
+## 29.7 Mistakes the cook catches
+
+The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
+itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
+road shorter than its two junctions need, a `signal` node without a signal (or a signal on a node with another
+control), a green entry that matches no turn, and a turn that is green in no phase.
