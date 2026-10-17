@@ -169,3 +169,35 @@ TEST_CASE("asset_import: a glTF model's lights and camera become a prefab, re-im
     CHECK(c.fails("asset_import", R"({"tool":"fbx","file":"assets/models/room.gltf","tile_size":2})").find("'tile_size'") != std::string::npos);
     CHECK(c.fails("asset_import", R"({"tool":"gltf","file":"assets/models/room.gltf","level":"x"})").find("ldtk") != std::string::npos);
 }
+
+TEST_CASE("cook_run: meshes lists the import summary of every 3D model") {
+    const std::string root = fresh_dir("mcp_cook_meshes");
+    std::filesystem::copy(std::string(MCE_SOURCE_DIR) + "/samples/scene_demo/assets", root + "/assets",
+                          std::filesystem::copy_options::recursive);
+    write_file(root + "/assets/models/tri.obj", "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 1 1 0\nf 1 2 3\nf 2 4 3\n");
+    write_file(root + "/assets/models/tri.obj.mceasset",
+               R"({"guid":"6a1d9c58-0f4b-4b8e-9d1b-1c2a3b4c5f01","importer":"obj","importer_version":1,"settings":{}})");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    for (int pass = 0; pass < 2; ++pass) {  // fresh, then cached: the same numbers
+        auto r = c.ok("cook_run");
+        REQUIRE(r.v().get("ok").as_bool());
+        const cook::JsonValue meshes = r.v().get("meshes");
+        REQUIRE(meshes.is_array());
+        bool found = false;
+        for (u32 i = 0; i < meshes.size(); ++i) {
+            const cook::JsonValue m = meshes.at(i);
+            if (str(m.get("path")) != "models/tri.obj") continue;
+            found = true;
+            CHECK(m.get("triangles").as_number() == 2);
+            CHECK(m.get("submeshes").as_number() == 1);
+            CHECK(m.get("materials").as_number() == 1);
+            CHECK(m.get("joints").as_number() == 0);
+            CHECK(m.get("clips").as_number() == 0);
+            CHECK(m.get("lod_levels").as_number() >= 1);
+            CHECK(m.get("warnings").as_number() == 0);
+        }
+        CHECK(found);
+    }
+}

@@ -25,8 +25,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
 | A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
-| A3 | in progress: instancing past the budget done; HLOD bake next, then impostors and merge budget | #522 instancing | same design |
-| A4 | in progress: ChunkLod3D and the .mchlod importer | #529 ChunkLod3D | same design; next: city counter gate |
+| A3 | in progress: instancing past the budget and the HLOD bake (`hlod_bake`) and the cheap StaticMerge3D change check done; impostors next | #522 instancing, #534 HLOD bake, #536 city CPU | same design |
+| A4 | in progress: ChunkLod3D, the .mchlod importer and the city counter gate (4096 pieces as cells) | #529 ChunkLod3D, #536 city CPU | same design; next: the city sample |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
 

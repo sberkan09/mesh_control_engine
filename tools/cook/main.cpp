@@ -182,6 +182,14 @@ int main(int argc, char** argv) {
                 if (a.status != mce::cook::AssetStatus::Skipped)
                 std::printf("  %-10s %-8s assets/%s\n", status_name(a.status), asset::chunk_type_name(a.type), a.path.c_str());
         }
+        if (!quiet) {  // the import summary: one line per mesh model
+            for (const cook::MeshSummary& m : report.meshes) {
+                std::printf("  mesh assets/%s: %u tris, %u submeshes, %u materials, %u joints, %u clips, %u LODs", m.path.c_str(), m.triangles,
+                            m.submeshes, m.materials, m.joints, m.clips, m.lod_levels);
+                if (m.warnings) std::printf(", %u warning%s", m.warnings, m.warnings == 1 ? "" : "s");
+                std::printf("\n");
+            }
+        }
         std::printf("mce_cook: %u cooked, %u up to date, %u failed; %u error(s), %u warning(s); manifest %016llx", report.cooked,
                     report.up_to_date, report.failed, report.diags.error_count(), report.diags.warning_count(),
                     static_cast<unsigned long long>(report.manifest_hash));
