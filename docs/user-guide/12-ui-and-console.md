@@ -200,7 +200,10 @@ screen's entity shows, hides and holds it on input actions (the stock kit instal
 
 - `show_on` / `hide_on` name the actions that show and hide the screen: a button's `"action"`, a
   panel's Cancel action, Esc (`Pause` once screens are in the scene) or an `-input` script line.
-- `load_on` loads `scene` (often the scene itself, which restarts it: "Quit to title").
+- `load_on` loads `scene`. Loading the scene you are in restarts it, with every screen back at its authored
+  `visible`: a title screen that is `visible: true` in that scene shows again. Keep the title in its own scene
+  (`title.mcscene`, its Play button's `load_on` loading the level) so that Retry loads the level and "Quit to
+  title" loads the title; one scene holding both cannot tell a restart from a first start.
 - `quit_on` ends the game, as the window's close button does: `mce_player` quits cleanly (the
   `-save` slot is written), a headless run stops there and play mode in the editor pauses. Game
   code asks the same with `scene::request_quit(world)`.

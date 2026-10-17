@@ -64,6 +64,11 @@ numbers, and `nil` is the null entity.
 | `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |
 
+One call may mix components: `mce.get(e, "Counter", "n", "Mover", "velocity")` returns both values and
+`mce.set(e, "Counter", "n", 1, "Mover", "velocity", v)` writes both. A script cannot keep a variable between
+ticks; the place for a value that must survive is a component field, and for a game with no C++ of its own
+that is `ScriptVars` (27.8).
+
 Field values: numbers, booleans, enums by name (`"Dynamic"`), `Vec2`/`Vec3` as vectors, `Vec4`, `Quat` and
 `Color` as four numbers (or a `{x, y, z, w}` table inside a struct), strings, entities, asset references as
 `"guid:<uuid>"` and nested structs and arrays as tables. Handles are the fast path: the bench's 2,000
