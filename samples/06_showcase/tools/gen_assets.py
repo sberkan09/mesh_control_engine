@@ -14,7 +14,11 @@ only; the glTF / PNG writers and mesh helpers are 04_cubes' (samples/04_cubes/to
   models/brazier.glb    a dark iron bowl on legs (the particle source)
   models/crate.glb      a 0.8 m wooden crate
   models/grass.glb      a tuft of five tapered blades (the instanced foliage)
+  models/flower.glb     a stem with a cream head (the meadow's second kind; M-VISUAL3 6)
+  models/cobbles.glb    an 8 m square with UVs, the parallax floor's mesh (its maps are made in code)
+  models/wall_*.glb     a slab, a pillar and a cap sharing one sandstone material: a modular wall kit
   textures/*.png        the courtyard tiles' maps
+  textures/dusk_sky.hdr a 128 x 64 linear Radiance dusk sky with an HDR glow (the visual3 profile's sky)
 """
 
 import importlib.util
@@ -153,7 +157,66 @@ def build_models():
         idx += [i + off for i in bi]
     g.node({"name": "grass", "mesh": g.mesh("grass", (pos, nrm, uv, idx), green)}, root=True)
     models["grass.glb"] = g
+
+    # M-VISUAL3 6. A flower: a green stem and a cream head, two submeshes (the meadow's second kind).
+    g = Gltf()
+    stem = pbr(g, "stem", [0.2, 0.4, 0.12, 1], 0.0, 0.85)
+    head = pbr(g, "petals", [0.95, 0.9, 0.82, 1], 0.0, 0.7)
+    root = g.node({"name": "flower"}, root=True)
+    g.node({"name": "stem", "mesh": g.mesh("stem", tapered_tube(0.012, 0.006, 0.42, 3, 2), stem)}, parent=root)
+    part(g, "head", box(0.05, 0.025, 0.05), head, (0, 0.44, 0), parent=root)
+    models["flower.glb"] = g
+
+    # The parallax floor's mesh: 8 m square, UV 0..1 (the material repeats it).
+    g = Gltf()
+    mat = pbr(g, "cobbles", [1, 1, 1, 1], 0.0, 0.9)
+    g.node({"name": "cobbles", "mesh": g.mesh("cobbles", plane(4.0, 1.0), mat)}, root=True)
+    models["cobbles.glb"] = g
+
+    # A modular wall kit: three different pieces, one material (so StaticMerge3D folds them into one submesh).
+    def sandstone(g):
+        return pbr(g, "sandstone", [0.62, 0.5, 0.36, 1], 0.0, 0.85)
+
+    g = Gltf()
+    root = g.node({"name": "wall_slab"}, root=True)
+    part(g, "slab", box(1.0, 0.6, 0.18, uv_scale=1.0), sandstone(g), (0, 0.6, 0), parent=root)
+    models["wall_slab.glb"] = g
+    g = Gltf()
+    root = g.node({"name": "wall_pillar"}, root=True)
+    part(g, "pillar", box(0.26, 0.74, 0.26, uv_scale=1.0), sandstone(g), (0, 0.74, 0), parent=root)
+    models["wall_pillar.glb"] = g
+    g = Gltf()
+    root = g.node({"name": "wall_cap"}, root=True)
+    part(g, "cap", box(1.1, 0.07, 0.3, uv_scale=1.0), sandstone(g), (0, 0.07, 0), parent=root)
+    models["wall_cap.glb"] = g
     return models
+
+
+def dusk_sky_hdr(w=128, h=64):
+    """A flat (not run-length coded) Radiance file: a linear dusk sky, deep blue overhead, an orange horizon and a
+    bright sun glow toward +X (equirect u = 0.5) at 40x the horizon's radiance."""
+    out = bytearray(("#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y %d +X %d\n" % (h, w)).encode())
+    for y in range(h):
+        up = math.cos((y + 0.5) / h * math.pi)
+        for x in range(w):
+            phi = ((x + 0.5) / w - 0.5) * 2 * math.pi
+            glow = max(0.0, math.cos(phi)) ** 24 * math.exp(-abs(up) * 7.0)
+            if up >= 0:
+                t = up ** 0.5
+                c = [1.4 * (1 - t) + 0.05 * t, 0.6 * (1 - t) + 0.12 * t, 0.3 * (1 - t) + 0.35 * t]
+                c = [c[0] + 40.0 * glow, c[1] + 22.0 * glow, c[2] + 8.0 * glow]
+            else:
+                c = [0.12, 0.1, 0.09]
+            m = max(c)
+            if m < 1e-32:
+                out += bytes(4)
+                continue
+            mant, e = math.frexp(m)
+            sc = mant * 256.0 / m
+            out += bytes((int(c[0] * sc), int(c[1] * sc), int(c[2] * sc), e + 128))
+    # stb reads a file whose first pixel starts 2, 2 as run-length coded: this one is flat, so it must not.
+    assert not (out[-w * h * 4] == 2 and out[-w * h * 4 + 1] == 2)
+    return bytes(out)
 
 
 def sidecar(path, importer, version, settings):
@@ -168,6 +231,8 @@ def main():
     for name, px, srgb in (("tiles_albedo", a, True), ("tiles_normal", n, False), ("tiles_orm", o, False)):
         base.write_png(textures / (name + ".png"), 256, 256, px)
         sidecar(textures / (name + ".png"), "texture", 1, {} if srgb else {"srgb": False})
+    (textures / "dusk_sky.hdr").write_bytes(dusk_sky_hdr())
+    sidecar(textures / "dusk_sky.hdr", "texture", 1, {})
     for name, g in build_models().items():
         g.doc["asset"]["generator"] = "mce 06_showcase gen_assets.py"
         g.write(ROOT / "models" / name)

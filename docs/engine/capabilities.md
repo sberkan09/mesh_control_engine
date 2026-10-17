@@ -110,6 +110,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `RoadNetwork3D` | `mce/kit/roads.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | allowed: tested in tests/kit/test_roads.cpp; M-OPENWORLD B2 shows it in the traffic sample, E1 in samples/09_openworld |
 | `VehicleSeat3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C1: tested in tests/kit/test_seats3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it |
 | `Rider3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C1: tested in tests/kit/test_seats3d.cpp; the 1 km2 slice (E1, samples/09_openworld) shows it |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -120,7 +121,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-VISUAL3 step 6 puts it in the demo scene |
+| `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `UiFlowRules` | `mce/kit/ui_flow.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | allowed: tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
@@ -172,6 +173,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | BehaviorTree | `.mcbt` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
+| RoadNetwork | `.mcroads` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
 
 ## MCP tools
 

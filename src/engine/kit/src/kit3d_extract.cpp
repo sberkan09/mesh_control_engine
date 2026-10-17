@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
@@ -20,6 +21,37 @@ namespace mce::kit {
 using namespace mce::math;
 
 namespace {
+
+// Foliage tint variation and wind shaping on a batch (M-VISUAL3 6): the fields as the renderer reads them.
+template <class F>
+void foliage_look(const F& f, render::InstanceBatch& b) {
+    b.tint_variation = f.tint_variation;
+    b.wind_ext = {max(f.wind_height, 0.0f), clamp(f.wind_gust, 0.0f, 1.0f), max(f.wind_flutter, 0.0f), 0.0f};
+}
+
+// The kind (0..3) a scattered copy belongs to: a hash of its origin and the seed against the cumulative weights.
+// Integer arithmetic only, so the split is the same on every machine and in every run.
+u32 foliage_kind(const math::mat4& m, u32 seed, const f32 cumulative[4], u32 live_mask) {
+    u32 x, y, z;
+    std::memcpy(&x, &m.c[3][0], 4);
+    std::memcpy(&y, &m.c[3][1], 4);
+    std::memcpy(&z, &m.c[3][2], 4);
+    u32 h = seed * 0x9e3779b9u + 0x7f4a7c15u;
+    for (const u32 v : {x, y, z}) {
+        h ^= v;
+        h *= 0x85ebca6bu;
+        h ^= h >> 13;
+        h *= 0xc2b2ae35u;
+        h ^= h >> 16;
+    }
+    const f32 pick = static_cast<f32>(h >> 8) * (1.0f / 16777216.0f) * cumulative[3];
+    for (u32 k = 0; k < 3; ++k)
+        if (pick < cumulative[k]) return k;
+    for (u32 k = 3; k > 0; --k)  // rounding put the pick past the sum: the last kind that has copies
+        if (live_mask >> k & 1u) return k;
+    return 0;
+}
+
 
 // The entity's pose: WorldTransform when the hierarchy wrote one, else LocalTransform.
 bool pose_of(World& world, Entity e, vec3& pos, quat& rot, vec3& scale) {
@@ -256,6 +288,15 @@ void Kit3DExtract::shutdown() {
     assets_ = nullptr;
 }
 
+void Kit3DExtract::note_built(const render::Scene3D& built) {
+    stats_.decals_dropped = built.stats().decals_dropped;
+    if (stats_.decals_dropped == 0 || decal_warnings_ > 0) return;
+    ++decal_warnings_;
+    MCE_LOG_WARN("kit3d: {} visible Decal3D(s) dropped: a frame draws at most {} decals from {} distinct textures. Pack the "
+                 "decal textures into one atlas and give each decal its uv_rect, or reduce the visible count",
+                 stats_.decals_dropped, render::kMaxDecals, render::kMaxDecalTextures);
+}
+
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
     release_static_merges();
     release_terrains();
@@ -263,6 +304,7 @@ void Kit3DExtract::reset(asset::AssetSystem* assets) {
     foliage_.clear();
     terrain_foliage_.clear();
     bursts_.clear();
+    decal_warnings_ = 0;
     assets_ = assets;
 }
 
@@ -1053,9 +1095,22 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         vec3 pos, scale;
         quat rot;
         if (!pose_of(world, e, pos, rot, scale)) return;
-        const u32 key = mesh_key(f.mesh.guid);
-        const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
-        if (!mesh) {
+        // Up to four kinds (mesh, mesh_1..3) share the scatter; a kind whose mesh is unbound or not resident, or whose weight
+        // is 0, gets no copies.
+        const asset::Guid kind_guid[4] = {f.mesh.guid, f.mesh_1.guid, f.mesh_2.guid, f.mesh_3.guid};
+        const auto finite_weight = [](f32 w) { return std::isfinite(w) ? clamp(w, 0.0f, 1.0e6f) : 0.0f; };
+        const f32 kind_weight[4] = {finite_weight(f.mesh_weights.x), finite_weight(f.mesh_weights.y), finite_weight(f.mesh_weights.z),
+                                    finite_weight(f.mesh_weights.w)};
+        u32 kind_key[4];
+        f32 cumulative[4];
+        u32 resolved = 0;
+        for (u32 k = 0; k < 4; ++k) {
+            kind_key[k] = mesh_key(kind_guid[k]);
+            const bool live = kind_key[k] != ~0u && meshes_ && meshes_->get(kind_key[k]) && kind_weight[k] > 0.0f;
+            if (live) resolved |= 1u << k;
+            cumulative[k] = (k ? cumulative[k - 1] : 0.0f) + (live ? kind_weight[k] : 0.0f);
+        }
+        if (!resolved) {
             ++stats_.missing;
             return;
         }
@@ -1071,6 +1126,8 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         mix(&f.scale_min, sizeof(f.scale_min));
         mix(&f.scale_max, sizeof(f.scale_max));
         mix(&f.random_yaw, sizeof(f.random_yaw));
+        mix(&resolved, sizeof(resolved));  // which kinds exist, and their shares, split the scatter
+        mix(cumulative, sizeof(cumulative));
         FoliageEntry* entry = nullptr;
         for (FoliageEntry& fe : foliage_)
             if (fe.entity == e) entry = &fe;
@@ -1079,7 +1136,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             entry = &foliage_.back();
             entry->entity = e;
         }
-        if (entry->transforms.empty() || entry->key != h) {
+        if (entry->version == 0 || entry->key != h) {  // a new entry, or the inputs changed
             render::FoliageScatter sc;
             sc.origin = pos;
             sc.half_extents = f.half_extents;
@@ -1088,26 +1145,46 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             sc.scale_min = f.scale_min;
             sc.scale_max = f.scale_max;
             sc.random_yaw = f.random_yaw != 0;
-            render::scatter_foliage(sc, entry->transforms);
+            if (resolved == 1u) {  // one kind: the scatter as it always was
+                render::scatter_foliage(sc, entry->transforms);
+                for (Array<math::mat4>& m : entry->more) m.clear();
+            } else {
+                Array<math::mat4> all(mem::heap());
+                render::scatter_foliage(sc, all);
+                entry->transforms.clear();
+                for (Array<math::mat4>& m : entry->more) m.clear();
+                for (const math::mat4& m : all) {
+                    const u32 kind = foliage_kind(m, f.seed, cumulative, resolved);
+                    (kind == 0 ? entry->transforms : entry->more[kind - 1]).push_back(m);
+                }
+            }
             entry->key = h;
             ++entry->version;
         }
         entry->stamp = frame_stamp_;
-        render::InstanceBatch b;
-        b.id = e.index + 1;
-        b.version = entry->version;
-        b.mesh = key;
-        b.transforms = entry->transforms.span();
-        b.cast_shadows = f.cast_shadows != 0;
-        b.cull_distance = bake_mode_ ? 0.0f : f.cull_distance;
-        b.tint = f.tint;
-        b.material = material(f.material.guid);
-        b.wind_amplitude = f.wind_amplitude;
-        b.wind_frequency = f.wind_frequency;
-        b.wind_direction = f.wind_direction;
-        scene.add_batch(b);
-        ++stats_.foliage;
-        stats_.foliage_instances += static_cast<u32>(entry->transforms.size());
+        for (u32 k = 0; k < 4; ++k) {
+            if (!(resolved >> k & 1u)) continue;
+            const Array<math::mat4>& copies = k == 0 ? entry->transforms : entry->more[k - 1];
+            if (copies.empty()) continue;
+            render::InstanceBatch b;
+            // Entity indices stay far below 2^29 (a world holds millions at most); a larger one would collide with another kind's id.
+            MCE_ASSERT_MSG(e.index < (1u << 29) - 1, "Foliage3D batch id: entity index needs bit 29");
+            b.id = (e.index + 1) | (k << 29);  // disjoint per kind, and from the TerrainFoliage3D ids (bit 31)
+            b.version = entry->version;
+            b.mesh = kind_key[k];
+            b.transforms = copies.span();
+            b.cast_shadows = f.cast_shadows != 0;
+            b.cull_distance = bake_mode_ ? 0.0f : f.cull_distance;
+            b.tint = f.tint;
+            b.material = material(f.material.guid);
+            b.wind_amplitude = f.wind_amplitude;
+            b.wind_frequency = f.wind_frequency;
+            b.wind_direction = f.wind_direction;
+            foliage_look(f, b);
+            scene.add_batch(b);
+            ++stats_.foliage;
+            stats_.foliage_instances += static_cast<u32>(copies.size());
+        }
     });
     // Foliage on a terrain (M-TERRAIN 5): re-scattered when the terrain's pose, its cooked generation
     // (a brush stroke re-bakes it) or the scatter's inputs change.
@@ -1196,6 +1273,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         b.wind_amplitude = f.wind_amplitude;
         b.wind_frequency = f.wind_frequency;
         b.wind_direction = f.wind_direction;
+        foliage_look(f, b);
         scene.add_batch(b);
         ++stats_.foliage;
         stats_.foliage_instances += static_cast<u32>(entry->transforms.size());

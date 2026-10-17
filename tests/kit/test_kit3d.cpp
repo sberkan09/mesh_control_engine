@@ -819,6 +819,159 @@ TEST_CASE("kit3d: Foliage3D, Decal3D and ParticleEmitter3D become a batch, decal
     CHECK(third.particle_emitters()[0].burst == 30);
 }
 
+TEST_CASE("kit3d: Foliage3D's variation and wind fields reach the batch; mesh_1..3 split the scatter into kinds (M-VISUAL3 6)") {
+    Fixture f;
+    f.camera();
+    const Array<byte> blob = box_mesh_blob();
+    const asset::Guid kGrass{0x3d00000000000011ull, 0x8000000000000001ull}, kFern{0x3d00000000000012ull, 0x8000000000000001ull};
+    REQUIRE(f.store.upload(11, 1, blob.span()).has_value());
+    REQUIRE(f.store.upload(12, 1, blob.span()).has_value());
+    f.extract.bind_mesh(kGrass, 11);
+    f.extract.bind_mesh(kFern, 12);
+    kit::Foliage3D meadow;
+    meadow.mesh.guid = kBox;
+    meadow.count = 400;
+    meadow.seed = 5;
+    meadow.half_extents = {6, 6};
+    meadow.tint = {0.5f, 1, 1, 1};
+    meadow.tint_variation = {1, 0.25f, 0.5f, 1};
+    meadow.wind_height = 4.0f;
+    meadow.wind_gust = 0.5f;
+    meadow.wind_flutter = 0.05f;
+    const Entity field = f.world.spawn_with(at({0, 0, -10}), meadow);
+    f.step();
+    auto frame = [&](render::Scene3D& scene) {
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+        scene.build();
+    };
+    render::Scene3D one(f.store, mem::heap());
+    frame(one);
+    REQUIRE(one.batches().size() == 1);
+    CHECK(one.batches()[0].id == 1u + field.index);
+    CHECK(one.batches()[0].transforms.size() == 400);
+    CHECK(one.batches()[0].tint_variation.y == doctest::Approx(0.25f));
+    CHECK(one.batches()[0].tint_variation.z == doctest::Approx(0.5f));
+    CHECK(one.batches()[0].wind_ext.x == doctest::Approx(4.0f));
+    CHECK(one.batches()[0].wind_ext.y == doctest::Approx(0.5f));
+    CHECK(one.batches()[0].wind_ext.z == doctest::Approx(0.05f));
+    const math::mat4 first = one.batches()[0].transforms[0];
+
+    // Three kinds, weights 2 : 1 : 1 (mesh_2 unbound: no share): one batch per kind, disjoint ids, every copy once.
+    kit::Foliage3D* authored = f.world.try_get_mut<kit::Foliage3D>(field);
+    authored->mesh_1.guid = kGrass;
+    authored->mesh_3.guid = kFern;
+    authored->mesh_weights = {2, 1, 5, 1};
+    render::Scene3D split(f.store, mem::heap());
+    frame(split);
+    REQUIRE(split.batches().size() == 3);
+    CHECK(f.extract.stats().foliage == 3);
+    CHECK(f.extract.stats().foliage_instances == 400);
+    u32 total = 0;
+    u32 meshes[3];
+    for (usize i = 0; i < 3; ++i) {
+        const render::InstanceBatch& b = split.batches()[i];
+        total += static_cast<u32>(b.transforms.size());
+        meshes[i] = b.mesh;
+        CHECK(b.transforms.size() > 0);
+        CHECK(b.wind_ext.x == doctest::Approx(4.0f));  // every kind carries the look
+        for (usize j = 0; j < i; ++j) CHECK(split.batches()[j].id != b.id);
+    }
+    CHECK(total == 400);
+    CHECK(meshes[0] == 1);
+    CHECK(meshes[1] == 11);
+    CHECK(meshes[2] == 12);
+    CHECK(split.batches()[0].transforms.size() > split.batches()[1].transforms.size());  // 2 : 1 shares
+    CHECK(split.batches()[0].transforms.size() > split.batches()[2].transforms.size());
+    const u32 version = split.batches()[0].version;
+
+    // Deterministic in the seed: the batches alias the extract's own arrays, so keep copies to compare.
+    auto snapshot = [](const render::Scene3D& sc) {
+        Array<math::mat4> all(mem::heap());
+        for (const render::InstanceBatch& b : sc.batches()) {
+            for (const math::mat4& m : b.transforms) all.push_back(m);
+            all.push_back(math::mat4::identity());  // a marker between kinds
+        }
+        return all;
+    };
+    const Array<math::mat4> reference = snapshot(split);
+    auto same_as_reference = [&](const render::Scene3D& sc) {
+        const Array<math::mat4> now = snapshot(sc);
+        if (now.size() != reference.size()) return false;
+        for (usize i = 0; i < now.size(); ++i)
+            if (!same_matrix(now[i], reference[i])) return false;
+        return true;
+    };
+    render::Scene3D again(f.store, mem::heap());
+    frame(again);
+    REQUIRE(again.batches().size() == 3);
+    CHECK(again.batches()[0].version == version);  // nothing changed: no re-upload
+    CHECK(same_as_reference(again));
+    f.world.try_get_mut<kit::Foliage3D>(field)->seed = 6;  // another seed re-scatters and re-splits
+    render::Scene3D other(f.store, mem::heap());
+    frame(other);
+    CHECK_FALSE(same_as_reference(other));
+    f.world.try_get_mut<kit::Foliage3D>(field)->seed = 5;  // and back: the split follows the seed alone
+    render::Scene3D fresh(f.store, mem::heap());
+    frame(fresh);
+    REQUIRE(fresh.batches().size() == 3);
+    CHECK(same_as_reference(fresh));
+
+    // The scatter itself is the unchanged one: with one kind the copies are the first frame's.
+    f.world.try_get_mut<kit::Foliage3D>(field)->mesh_weights = {1, 0, 0, 0};
+    render::Scene3D back(f.store, mem::heap());
+    frame(back);
+    REQUIRE(back.batches().size() == 1);
+    CHECK(back.batches()[0].transforms.size() == 400);
+    CHECK(same_matrix(back.batches()[0].transforms[0], first));
+}
+
+TEST_CASE("kit3d: decals past the frame's limit are counted and warned about once per extract (M-VISUAL3 6)") {
+    Fixture f;
+    f.camera();
+    kit::Decal3D decal;
+    decal.size = {0.5f, 1, 0.5f};
+    for (u32 i = 0; i < render::kMaxDecals + 6; ++i) f.world.spawn_with(at({-1.0f + 0.03f * f32(i), 0, -6}), decal);
+    f.step();
+    auto frame = [&] {
+        render::Scene3D scene(f.store, mem::heap());
+        render::Camera3D cam;
+        REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+        scene.begin(cam, {320, 180});
+        f.extract.extract(f.world, scene, 1.0f);
+        scene.build();
+        f.extract.note_built(scene);
+        return scene.stats().decals_dropped;
+    };
+    CHECK(frame() == 6);
+    CHECK(f.extract.stats().decals_dropped == 6);
+    CHECK(f.extract.decal_warnings() == 1);
+    CHECK(frame() == 6);  // the next frame drops them again, and says nothing more
+    CHECK(f.extract.decal_warnings() == 1);
+    f.extract.reset(nullptr);  // a new pack re-arms the warning
+    f.extract.bind_mesh(kBox, 1);
+    CHECK(frame() == 6);
+    CHECK(f.extract.decal_warnings() == 1);
+}
+
+TEST_CASE("kit3d: no dropped decals, no warning (M-VISUAL3 6)") {
+    Fixture f;
+    f.camera();
+    f.world.spawn_with(at({0, 0, -6}), kit::Decal3D{});
+    f.step();
+    render::Scene3D scene(f.store, mem::heap());
+    render::Camera3D cam;
+    REQUIRE(f.extract.camera(f.world, 1.0f, cam));
+    scene.begin(cam, {320, 180});
+    f.extract.extract(f.world, scene, 1.0f);
+    scene.build();
+    f.extract.note_built(scene);
+    CHECK(f.extract.stats().decals_dropped == 0);
+    CHECK(f.extract.decal_warnings() == 0);
+}
+
 TEST_CASE("kit3d: Terrain3D draws its LOD nodes, uploads them once and drops them with the entity (M-TERRAIN 1)") {
     const std::string src = cook_test::fresh_dir("kit3d_terrain");
     // A 129-sample, 128 m terrain: a ridge along x (heights from 0 to 32 m) so far nodes coarsen.
@@ -1053,6 +1206,10 @@ TEST_CASE("kit3d: TerrainFoliage3D stands its copies on its own or its parent's 
     grass.mesh.guid = kBox;
     grass.density = 0.25f;  // a 2 m grid: 32 x 32 cells, every one kept on a terrain without layers
     grass.cull_distance = 0.0f;
+    grass.tint_variation = {0.4f, 1, 1, 1};  // M-VISUAL3 6: the look reaches the batch
+    grass.wind_height = 0.8f;
+    grass.wind_gust = 0.3f;
+    grass.wind_flutter = 0.02f;
     const Entity child = f.world.spawn_with(at({}), ChildOf{ground}, grass);
     kit::TerrainFoliage3D rocks = grass;
     rocks.layer = 1;  // no such layer on this terrain: nothing
@@ -1076,6 +1233,10 @@ TEST_CASE("kit3d: TerrainFoliage3D stands its copies on its own or its parent's 
         const render::InstanceBatch& b = scene.batches()[0];
         CHECK(b.mesh == 1);
         CHECK(b.id == ((child.index + 1) | 0x80000000u));
+        CHECK(b.tint_variation.x == doctest::Approx(0.4f));
+        CHECK(b.wind_ext.x == doctest::Approx(0.8f));
+        CHECK(b.wind_ext.y == doctest::Approx(0.3f));
+        CHECK(b.wind_ext.z == doctest::Approx(0.02f));
         for (const math::mat4& m : b.transforms) {
             CHECK(m.c[3][1] == doctest::Approx(4.0f).epsilon(1e-3));  // 3 m of fill on an entity 1 m up
             CHECK(std::fabs(m.c[3][0]) <= 32.0f);

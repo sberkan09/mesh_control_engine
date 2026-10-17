@@ -52,9 +52,9 @@ widen one enum, the way `mce_import_skel.py` did for M-ANIM2D.
 | # | Step | Size | Model | State |
 |---|---|---|---|---|
 | 0 | Seam: move the mesh back end out of `gltf_importer.cpp` into cook-private `src/mesh_build.h` / `.cpp`; byte-identical output | S (4–6 h) | Sonnet (Opus review: determinism) | done, #485 |
-| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, PR pending; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
-| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | planned |
-| 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | planned |
+| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, #496; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
+| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | done, PR pending; the `.mtl` is a registered asset (importer `mtl`), see Step 2 "as built"; open: the OBJ fuzz loop is in `test_cook_obj.cpp`, not yet in the M-FUZZ survey |
+| 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | done, PR pending; ufbx v0.23.1 @`26a482a`, ADR-0047 (0046 is taken by M-OPENWORLD's road networks), see Step 3a "as built" |
 | 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | planned |
 | 4 | glTF / FBX lights and cameras as a prefab (`mce import gltf|fbx`), MCP `asset_import` `tool: gltf|fbx`, a per-mesh import summary, guide 8.4, fixtures, the close | M (10–14 h) | Sonnet | planned |
 
@@ -127,6 +127,16 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   through step 0's back end); n-gon fans; missing `.mtl` is a warning, missing texture an error naming the line;
   `lod_levels` and `max_triangles` work. Determinism: cooked twice, identical bytes; CRLF and LF give the same bytes.
 - **Risks.** OBJ dialects vary (3ds Max, ZBrush): the parser errors with file:line on anything it cannot read.
+- **As built (PR pending).** The *(guess)* about a non-asset sibling was wrong: an importer sees only registered
+  assets (`IAssetLookup::guid_for_path` / `source_bytes`), and the re-cook key hashes a dependency's *output*. So the
+  `.mtl` is an asset of its own: importer `mtl` (`.mtl` -> the `CHNK_MAT` of its first `newmtl`, with a fingerprint of
+  the whole file in the chunk's unused `user_flags`, so a change to any material re-cooks the models), declared by the
+  `.obj` as a dependency together with the textures its materials name. An `.obj` whose `mtllib` is missing or not
+  adopted cooks with a warning and default materials. Both factories are in the cook-private `obj_importer.h`;
+  `importer.h` is unchanged. Also: V of `vt` is flipped (OBJ's origin is the bottom left); `Pr` / `Pm` scalars are read as
+  well as the maps; a texture's `-s -o -bm ...` options are skipped with a warning; the editor's unused-asset lint counts
+  `.obj` / `.mtl` text as a model that names textures (`tools_check.cpp`). Limits: 256 MiB file, 16 MiB line, 16M
+  v / vt / vn, 32M face corners, 1M-vertex polygon, 1M nodes, 256K submeshes.
 
 ### Step 3a — FBX: ufbx, the pin and the wall
 
@@ -134,14 +144,29 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   `LICENSE` on 2026-10-17: dual, MIT (Copyright (c) 2020 Samuli Raivio) **or** public domain (Unlicense), user's
   choice. The master header reads `UFBX_HEADER_VERSION 0.23.1`; pin a tagged release by commit hash (the tag list was
   not reachable from this container: confirm the tag and its hash when pinning).
-- **Files.** `docs/adr/0046-fbx-ufbx.md` (FetchContent per ADR-0017; why ufbx over Assimp and the Autodesk SDK:
+- **Files.** `docs/adr/0047-fbx-ufbx.md` (FetchContent per ADR-0017; why ufbx over Assimp and the Autodesk SDK:
   license, size, no system install); `cmake/Dependencies.cmake` (`mce_ufbx` static, warnings off, built like
   `mce_tinyexr`, `-ffp-contract=off` / `/fp:precise`); `scripts/ci/check_walls.py` "ufbx wall" (`ufbx.h` and
   `ufbx_\w+(` only in `fbx_importer.cpp` / `ufbx_impl.c`) and a link wall (`mce_ufbx` only under
-  `src/engine/asset/cook/` and `tests/asset/`), like the bc7enc pair; `docs/ARCHITECTURE.md` §7 row 26.
+  `src/engine/asset/cook/` and `tests/asset/`), like the bc7enc pair; a `docs/ARCHITECTURE.md` §7 row ("FBX import").
 - **Tests.** `tests/asset/test_ufbx_smoke.cpp` loads an ASCII FBX 7.4 cube written in-test from a string.
 - **Risks.** A new dependency is the coordinator's call; ufbx's own float paths (unit and axis conversion,
   `ufbx_evaluate_*`) must be checked for determinism across hosts (Linux and Windows cook the same bytes).
+- **As built (PR pending).** ufbx **v0.23.1**, tag commit `26a482ae66871d7de36eb722aa060bce95bce274` (2026-09-25; tags
+  read with `git ls-remote`, licence read from the pinned `LICENSE`: MIT or Unlicense, unchanged). The ADR is
+  [ADR-0047](../adr/0047-fbx-ufbx.md): 0046 is the road-network ADR of an in-flight M-OPENWORLD PR. `mce_ufbx` compiles
+  `src/engine/asset/cook/src/ufbx_impl.c` (which includes `ufbx.c`, like `tinyexr_impl.cpp`) with `UFBX_NO_FORMAT_OBJ`
+  and `UFBX_NO_GEOMETRY_CACHE`; ufbx has no threading switch and runs single-threaded unless given a thread pool.
+  `tests/asset/test_ufbx_smoke.cpp` (its own small binary, links `mce_ufbx` only) loads the ASCII cube (8 vertices,
+  6 quads, 12 triangles), checks two loads byte-equal raw and with Z-up centimetres converted to +Y up metres
+  (`MODIFY_GEOMETRY` scales the vertices; the axis turn stays in the node's adjust rotation, so 3b reads
+  `geometry_to_world` or the adjust transforms, not the vertices alone; the option names in 3b's "Unit and axis"
+  exist as written in v0.23.1), and runs every truncation, 400 seeded byte
+  mutations and a flip at every byte of a binary file. Findings for 3b: without `memory_limit` a 150-byte binary file
+  claiming 2^29 doubles makes ufbx ask for 4 GiB (with 64 MiB limits it is `UFBX_ERROR_MEMORY_LIMIT`); ASCII `*N`
+  counts are ignored (the values present are read). Cross-host: parsing, unit and axis maths are IEEE-exact with
+  `-ffp-contract=off`; Euler rotations and animation evaluation call libm `sin` / `cos` / `atan2` (ADR-0047
+  "Determinism"), so FBX goldens are per host until checked, with `UFBX_EXTERNAL_MATH` as the escape hatch.
 
 ### Step 3b — the FBX importer
 
@@ -154,7 +179,7 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   `target_unit_meters = 1`, with `space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY` so nodes keep identity
   roots (option names to check against the pinned version); the sidecar `"scale"` multiplies on top. Blender's 0.01 / 100 scale pair and 3ds Max Z-up are the cases to
   test.
-- **Files.** `src/engine/asset/cook/src/fbx_importer.cpp`, `ufbx_impl.c`, registry and the private factory header,
+- **Files.** `src/engine/asset/cook/src/fbx_importer.cpp` (`ufbx_impl.c` landed in 3a), registry and the private factory header,
   the two editor extension lists (`.fbx`), `tests/asset/test_cook_fbx.cpp`.
 - **Tests.** ASCII FBX fixtures generated in-test (cube in cm and Z-up equals the glTF cube in m and Y-up within a
   quantization step; a 3-bone skin with one clip whose sampled poses match the analytic ones; binary FBX via a

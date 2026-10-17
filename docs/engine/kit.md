@@ -176,6 +176,15 @@ tick with gravity and splash), `apply_damage` for any other source; events `Weap
 (`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
 `"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
 
+`roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
+entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
+paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot
+reload; `define` registers one from a payload) with a 32 m grid of lane segments. Queries on a placed
+`RoadNet` (`road_net`, `road_net_first`): `road_nearest` (flat distance, optional heading filter, connectors
+opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left), `road_route` (A* over
+lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
+`tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
