@@ -13,7 +13,7 @@ threads fix what a round finds and write down here what the next round must chec
 | Round | dev_claude | Found | Fixed by |
 |---|---|---|---|
 | r1–r3 (2026-10-17) | before #467 | goldens `filmic_lens`, `parallax_cobble`, `ibl_roughness` over threshold; shadow map bound dead (NVIDIA UB warning); 50k sprites crashed; render-texture test too strict; no 2D `gpu_ms` | #467, #470, #474, #479 |
-| r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #488 (below) |
+| r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #498 (below) |
 | r5 (2026-10-17) | 70113c9 | BC vs RGBA re-measured on 04_diorama / 06_showcase (same numbers as r4) | analysis below, no code change |
 
 ## r4 findings
@@ -44,7 +44,7 @@ every run, more so on sdlgpu, whose frame pacing differs. Checked:
 
 The next round re-measures it deterministically (checklist below).
 
-### 3. No `gpu_ms` on sdlgpu (fixed, #488)
+### 3. No `gpu_ms` on sdlgpu (fixed, #498)
 
 SDL GPU has no timestamp queries. The device now has `DeviceCaps::fence_timestamps`: a timestamp outside a pass ends
 the SDL command buffer with a fence, and a waiter thread stamps the CPU time each fence passes (`engine/rhi.md`). The
@@ -53,7 +53,7 @@ player's two frame timestamps under `-perf_capture` use it, so sdlgpu captures h
 
 ## Next round: what to check
 
-Run on the dev_claude head that has #487 and #488. Do not start pods from a thread; the coordinator does.
+Run on the dev_claude head that has #487 and #498. Do not start pods from a thread; the coordinator does.
 
 1. **Golden `parallax_cobble`:** `test_golden_gl` under `MCE_RHI=gl` and `MCE_RHI=sdlgpu`, 3 runs each. Pass: 0
    blocks over 0.5%. If it still fails, keep `golden_out/linux-*/parallax_cobble.{actual,diff}.png` and report the
