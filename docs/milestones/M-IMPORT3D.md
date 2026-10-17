@@ -52,8 +52,8 @@ widen one enum, the way `mce_import_skel.py` did for M-ANIM2D.
 | # | Step | Size | Model | State |
 |---|---|---|---|---|
 | 0 | Seam: move the mesh back end out of `gltf_importer.cpp` into cook-private `src/mesh_build.h` / `.cpp`; byte-identical output | S (4–6 h) | Sonnet (Opus review: determinism) | done, #485 |
-| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, PR pending; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
-| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | planned |
+| 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, #496; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
+| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | done, PR pending; the `.mtl` is a registered asset (importer `mtl`), see Step 2 "as built"; open: the OBJ fuzz loop is in `test_cook_obj.cpp`, not yet in the M-FUZZ survey |
 | 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | planned |
 | 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | planned |
 | 4 | glTF / FBX lights and cameras as a prefab (`mce import gltf|fbx`), MCP `asset_import` `tool: gltf|fbx`, a per-mesh import summary, guide 8.4, fixtures, the close | M (10–14 h) | Sonnet | planned |
@@ -127,6 +127,16 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
   through step 0's back end); n-gon fans; missing `.mtl` is a warning, missing texture an error naming the line;
   `lod_levels` and `max_triangles` work. Determinism: cooked twice, identical bytes; CRLF and LF give the same bytes.
 - **Risks.** OBJ dialects vary (3ds Max, ZBrush): the parser errors with file:line on anything it cannot read.
+- **As built (PR pending).** The *(guess)* about a non-asset sibling was wrong: an importer sees only registered
+  assets (`IAssetLookup::guid_for_path` / `source_bytes`), and the re-cook key hashes a dependency's *output*. So the
+  `.mtl` is an asset of its own: importer `mtl` (`.mtl` -> the `CHNK_MAT` of its first `newmtl`, with a fingerprint of
+  the whole file in the chunk's unused `user_flags`, so a change to any material re-cooks the models), declared by the
+  `.obj` as a dependency together with the textures its materials name. An `.obj` whose `mtllib` is missing or not
+  adopted cooks with a warning and default materials. Both factories are in the cook-private `obj_importer.h`;
+  `importer.h` is unchanged. Also: V of `vt` is flipped (OBJ's origin is the bottom left); `Pr` / `Pm` scalars are read as
+  well as the maps; a texture's `-s -o -bm ...` options are skipped with a warning; the editor's unused-asset lint counts
+  `.obj` / `.mtl` text as a model that names textures (`tools_check.cpp`). Limits: 256 MiB file, 16 MiB line, 16M
+  v / vt / vn, 32M face corners, 1M-vertex polygon, 1M nodes, 256K submeshes.
 
 ### Step 3a — FBX: ufbx, the pin and the wall
 

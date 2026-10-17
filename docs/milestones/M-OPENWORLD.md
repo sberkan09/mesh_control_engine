@@ -24,9 +24,11 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | design done | | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
+| A2 | in progress: seam (`WorldPoint` field flag) | #495 design, seam PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); next: core rebase, then module listeners |
 | A3 | design done | | same design |
 | A4 | design done | | same design |
+
+Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
 
 ## Gates
 - Every step: `local_ci.sh --task` green, headless test with numbers, replay hash stable, existing scenes unchanged (opt-in per component).
@@ -40,3 +42,31 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 3. **C1–C4** (enter/exit, weapons and damage, wanted and police, missions and map UI): C1+C2 first, C3/C4 after.
 4. **D2–D3** (content ledger and cook scripts, retarget) after D1 lands in the M-IMPORT3D thread.
 5. **E1** integration sample last.
+
+## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)
+
+Linear is at its free issue limit (creating SBA issues for D2/D3 failed with "exceeded the free issue limit"), so this
+section is the tracker. State: D2 and D3 implemented in one PR (PR number added at merge).
+
+**D2: ledger and cook scripts.** `content/ledger.json` (13 packs, all CC0-1.0): Kenney City Kit commercial / suburban / roads,
+Car Kit, Blocky Characters, Impact Sounds; ambientCG Asphalt031, Road007, Concrete034, PavingStones070, Grass004 (1K PBR);
+Poly Haven `kloppenheim_06_puresky` 1K HDRI; Quaternius Universal Animation Library (manual download: itch.io needs a
+browser session, no hash pinned yet). Every http pack pins its archive SHA-256 and size (read 2026-10-17); a changed upstream
+file fails the fetch. `tools/mce_cli/mce_content.py` (`mce content list|info|check|fetch|add|verify|credits`) validates the
+ledger (only CC0-1.0, CC-BY-3.0, CC-BY-4.0; CC-BY needs an attribution line; https URLs, sha256, safe paths), downloads into a
+cache, extracts by rule into `assets/third_party/<pack>/`, writes sidecars with GUIDs derived from pack id + path, `.mcmat`
+materials for PBR sets (colour + normal, roughness as a factor), `third_party_content.json` and the generated block of
+`CREDITS.md`; `verify` is the ship gate. Tests: `tests/import/test_content.py` (offline: fake opener, synthetic zips; cooks with
+`mce_cook` when given). Docs: guide 5.3, 16.7.
+Open items: pin the Quaternius hash once someone downloads it; roughness maps are not packed into `metallic_roughness`
+(needs an image tool); `--online` check is not run in CI; ledger entries for Quaternius city/vehicle packs, OpenGameArt and
+Poly Haven models/textures; hooking the ledger into MCP `library_search` / `library_add`; a real-pack cook with `mce_cook` was
+not run here (the offline test cooks a synthetic pack).
+
+**D3: humanoid retarget.** `tools/mce_cli/mce_retarget.py` (`mce retarget <src>... --onto <character.glb>`): name-based humanoid
+map (Mixamo, Unreal, Rigify, VRM, Biped, engine names; `--map` overrides), world-space delta retarget (A-pose to T-pose,
+facing correction, spine chain resampling), hips translation scaled by hip height, `--in-place-motion`, `--no-translation`,
+`--prefix`, `--clips`, `--replace`, `--strict`; output is the character `.glb` plus clips (the importer puts clips in the mesh
+chunk), deterministic. Tests: `tests/import/test_retarget.py` (rigs built in code; cooks the output with `mce_cook` when
+given). Docs: guide 8.9, 16.7. Open items: no IK/foot-slide fix, Y-up only, skinless node rigs (Kenney Blocky) unsupported,
+fingers matched by name only, retarget not exposed as an MCP tool, not run on a real Mixamo/Quaternius file here.

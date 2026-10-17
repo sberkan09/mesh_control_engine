@@ -15,6 +15,7 @@ formats, which is what keeps the shipped game small and safe.
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
 | Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
+| Model (OBJ) | `.obj`, `.mtl` | mesh: quantized streams, nodes per `o` / `g`, inline materials from the `.mtl` (adopt both files; section 8.4) | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
@@ -61,6 +62,7 @@ Settings per importer (every key is optional; the defaults are shown):
 | `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
 | `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |
 | `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#86-rendering-a-frame-yourself)), `"lod_levels": 0` (1..3 generates that many coarser levels), `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4), `"ragdoll": {}` (per-bone ragdoll overrides by bone name; section 9.8) |
+| `obj` | `"up": "y"` (`"z"` for a +Z-up file), `"scale": 1.0`, `"max_triangles": 0`, `"lod_levels": 0`, `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4); the `.mtl` next to it is adopted with `"importer": "mtl"` (no settings) |
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
 re-cooks the asset.
@@ -155,6 +157,50 @@ Art and levels drawn in Aseprite, Tiled or LDtk are not copied in as they are: t
 converted into the engine's own assets (`.mcsheet`, `.mcscene`, `.mctilemap`) by `mce import`, or by the
 MCP tool `asset_import`; section 7.3 describes each tool's settings and limits. The converter also gives
 the tileset or sheet PNG its sidecar, so no adoption is needed for those.
+
+### Open-licence content packs (`mce content`)
+
+The engine keeps one list of third-party packs it knows how to bring in: the **ledger**, `content/ledger.json` in the
+engine tree and `share/mce/content/ledger.json` in an SDK. Every pack records its author, licence, homepage, the archive
+URL with a SHA-256, the attribution text and the rules that turn archive members into project assets. Only CC0 and
+CC-BY packs are admitted (an NC, SA or ND licence fails `mce content check`), so what the ledger produces can ship in
+a commercial game. The first entries: Kenney's City Kits (commercial, suburban, roads), Car Kit, Blocky Characters and
+Impact Sounds, ambientCG PBR sets (asphalt, road, concrete, paving, grass), a Poly Haven sky HDRI and Quaternius'
+Universal Animation Library.
+
+```sh
+mce content list [--kind models|textures|audio|animations|hdri] [--tag car] [--json]
+mce content info kenney-car-kit
+mce content add kenney-car-kit MyGame [--only 'models/sedan*' --only 'models/Textures/*'] [--dry-run]
+mce content add ambientcg-asphalt031 MyGame
+mce content verify MyGame
+```
+
+`add` downloads the archive once into a cache (`MCE_CONTENT_CACHE`, default `~/.cache/mce/content`), refuses it unless its
+SHA-256 matches the ledger, and writes the selected files under `assets/third_party/<pack>/` with a sidecar for each
+(the importer comes from the extension; a rule can set import settings, e.g. `"srgb": false` for normal maps). GUIDs
+derive from the pack id and the file path, so adding a pack twice, or on another machine, gives identical sidecars. A pack
+of PBR textures also gets `.mcmat` materials that reference its colour and normal maps. `add` records the pack in
+`<project>/third_party_content.json` and rewrites the generated block of `CREDITS.md` (your own text around it is left
+alone); a CC-BY pack adds its attribution line there, which `mce ship` copies into the shipped folder. The cook then
+treats the files like any other source.
+
+`mce content verify <project>` is the gate to run before shipping: it fails on a file under `assets/third_party/` that
+no recorded pack owns, on a recorded file that changed or vanished, and on a recorded pack whose licence is not CC0 or
+CC-BY. If a download's hash no longer matches, the upstream file changed: read its licence again, then update the ledger
+entry (`source.sha256`, `size`, `retrieved`) in a PR. A pack whose download needs a browser session (`source.kind`
+`manual`, e.g. itch.io) is fetched by hand and passed with `--file <archive>`; `mce content fetch` verifies it and
+puts it in the cache.
+
+To add a pack to the ledger: read its licence on the author's page, download it, compute `sha256sum`, copy an existing
+entry of the same kind, fill in `license`, `license_url`, `homepage`, `retrieved` (the date you read the licence),
+`source` and the `cook` rules, and run `mce content check`. A CC-BY pack needs an `attribution` line; the check fails
+without one. Nothing under `content/` holds the archives themselves; they are never committed.
+
+Limits: the generated materials set `roughness` as a factor, because the packs ship roughness as a separate grey map
+and the engine's `metallic_roughness` slot wants one packed texture (G roughness, B metallic); packing needs an image
+tool the SDK does not carry. The Kenney kits' glTF files are static meshes; Blocky Characters animate their parts as
+nodes, not through a skin, so they do not take `mce retarget` (chapter 8.9).
 
 ## 5.4 The cook
 
