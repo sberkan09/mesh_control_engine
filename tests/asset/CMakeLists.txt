@@ -19,6 +19,7 @@ mce_add_test(test_cook UMBRELLA
     SOURCES
         test_cook_bc.cpp
         test_cook_gltf.cpp
+        test_cook_gltf_ext.cpp
         test_cook_hdr.cpp
         test_cook_lod.cpp
         test_cook_mesh_golden.cpp
@@ -41,6 +42,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_ui.cpp
     DEPS
         mce::mce_asset_cook
+        mce_meshopt  # test_cook_gltf_ext.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
         mce::mce_audio
         mce::mce_input
         mce::mce_monetize
