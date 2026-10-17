@@ -13,7 +13,7 @@ formats, which is what keeps the shipped game small and safe.
 | Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
 | HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
-| Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
+| Font | `.ttf` (TrueType outlines; CFF `.otf` is refused) | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Model (OBJ) | `.obj`, `.mtl` | mesh: quantized streams, nodes per `o` / `g`, inline materials from the `.mtl` (adopt both files; section 8.4) | 3D rendering (chapter 8) |
 | Model (FBX) | `.fbx` | mesh: quantized streams, node tree, inline materials (external textures), skins, animation clips sampled at a fixed rate (section 8.4) | 3D rendering (chapter 8) |
