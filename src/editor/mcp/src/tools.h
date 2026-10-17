@@ -53,6 +53,8 @@ Span<const ToolDef> import_tool_table();
 Span<const ToolDef> views_tool_table();
 // tools_terrain.cpp (M-TERRAIN 6): terrain_sculpt, terrain_paint, terrain_import, terrain_generate.
 Span<const ToolDef> terrain_tool_table();
+// tools_roads.cpp (M-OPENWORLD B1): roads_info, roads_generate.
+Span<const ToolDef> roads_tool_table();
 
 // tools_procgen.cpp (M-PROCGEN 4): procgen_run.
 Span<const ToolDef> procgen_tool_table();

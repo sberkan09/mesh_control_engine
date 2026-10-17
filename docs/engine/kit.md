@@ -197,7 +197,9 @@ lanes by travel time) and `road_debug_lines`. `install_stock` installs it before
 choice two lanes ahead, IDM speed against the car ahead, stop lines (red, amber, stop signs, conflicting
 connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawner3D` (`"traffic_spawners"`,
 before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
-removes far, lost or flipped ones. All driver state is in the component (saved, hashed).
+removes far, lost or flipped ones. All driver state is in the component (saved, hashed). A `Pedestrian3D` in `Cross` mode
+within a car's lanes ahead (lane half width + 1.2 m, checked every 1.5 m up to its stopping distance + 15 m) stops it
+3 m short.
 
 `crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
