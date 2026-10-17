@@ -129,7 +129,7 @@ const ProjectAsset* EditorProject::find(asset::Guid g) const {
 }
 
 const cook::CookReport& EditorProject::cook(bool pack, bool adopt, Span<const cook::String> paths, bool skip_errors,
-                                            u32 max_texture_size) {
+                                            u32 max_texture_size, cook::TextureCompression textures) {
     if (!is_open()) return report_;
     rescan();
     cook::CookOptions opt;
@@ -137,6 +137,7 @@ const cook::CookReport& EditorProject::cook(bool pack, bool adopt, Span<const co
     opt.adopt = adopt;
     opt.skip_errors = skip_errors;
     opt.max_texture_size = max_texture_size;
+    opt.textures = textures;
     for (const cook::String& p : paths) opt.paths.push_back(p);
     report_ = service_.cook(root_.view(), opt);
     if (adopt) rescan();  // the catalog picks up the sidecars the cook just wrote

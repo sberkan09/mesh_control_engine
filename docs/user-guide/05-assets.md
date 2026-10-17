@@ -126,7 +126,12 @@ Three importer rules that the error text alone does not make obvious:
   the same goes for colour palettes (such as a kit's `colormap.png`) and LUTs. A BC pack runs only on a GPU that samples
   BC textures (every desktop GPU; not phones or web): cook phones with `--textures astc` and web with `rgba8`. `.hdr`
   and `.exr` skies are never compressed, and `compress` on them is an error. The encoder is deterministic, so a BC pack
-  cooks to the same bytes twice on x86_64.
+  cooks to the same bytes twice on x86_64. To ship one, run `mce ship MyGame --textures bc` (it re-cooks the pack
+  with BC into `MyGame/assets.mce` and zips that; combine it with `--max-texture-size`), `python3 scripts/ship.py --project
+  projects/MyGame --textures bc` from a checkout, or `cook_run {"textures": "bc"}` over MCP. `--target web` with `bc`
+  exits (a web pack serves every browser, phones included), and `ship.py --target android|ios` always cooks ASTC and
+  refuses `bc`. The size report after the cook shows the saving. The Ashen Court sample (six 256² textures) drops to
+  about a quarter of its RGBA8 texture bytes.
 - **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
   brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
   set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
