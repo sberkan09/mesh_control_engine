@@ -71,6 +71,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |
 | `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
+| `Pedestrian3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | allowed: tested in tests/kit/test_crowd.cpp; M-OPENWORLD E1 shows crowds in samples/09_openworld |
+| `CrowdSpawner3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | allowed: tested in tests/kit/test_crowd.cpp; M-OPENWORLD E1 shows crowds in samples/09_openworld |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |

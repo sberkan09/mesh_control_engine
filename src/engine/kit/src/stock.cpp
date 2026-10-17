@@ -16,6 +16,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/traffic.h"
 #include "mce/kit/sensors3d.h"
@@ -123,6 +124,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_ragdolls3d(world, assets);
     install_roads(world, assets);
     install_traffic(world, assets);
+    install_crowd(world, assets);  // after the road clock: pedestrians read this tick's lights
     install_vehicles3d(world, assets);
     install_seats3d(world, assets);
     install_combat3d(world, assets);

@@ -24,8 +24,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | Step | Status | PRs | Notes |
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
-| A2 | in progress: seam merged, floating origin (core + module listeners) in review | #495 design, #502 seam, floating-origin PR | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md) |
-| A3 | design done | | same design |
+| A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
+| A3 | in progress: instancing past the budget (A1 finding) | instancing PR | same design; next: HLOD proxy bake, impostors, merge budget |
 | A4 | design done | | same design |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
@@ -70,11 +70,15 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
 | B1 authoring: MCP `roads_*` tools, editor overlay | next (after B2) | | |
 | B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus (`TrafficDriver3D`, `TrafficSpawner3D`) | in review | #510 | drives `Vehicle3D` directly (IDM + pure pursuit), not through `VehicleDriver3D`: lanes and stop lines need their own speed control |
-| B3 crowds | planned (own thread once B1 lands) | | uses `RoadRoad::sidewalk` beside each kerb |
+| B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0048](../adr/0048-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:
 - Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
 - Junction radii come from widths and angles; very acute junctions may need a hand-set `radius`.
+- B3: pedestrians do not avoid each other or react to the player; unsignalled crossings never wait, so B2 traffic must yield
+  to a walker on a crossing (it needs a crowd query: a cheap "who is crossing near here" lookup is the next seam). Heights
+  follow the network's plane only. The prefab spawn path is exercised by the same code as co-op's player prefab but has no
+  test of its own yet. Linear: not updated (connector unreachable this session); recorded here.
 - The nearest-lane grid is rebuilt on every hot reload of a network; fine for a city, slow for a country.
 
 ## Track D as built (D2, D3; thread "open-licence content line", 2026-10-17)

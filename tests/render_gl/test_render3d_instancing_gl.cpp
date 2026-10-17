@@ -121,6 +121,32 @@ TEST_CASE("instancing gl: past the upload budget the runs draw singly with equal
     }
 }
 
+TEST_CASE("instancing gl: a run longer than the budget draws the copies that fit instanced, the rest singly") {
+    // M-OPENWORLD A3: a city's one long run (22k copies of one mesh) used to need its whole block in the budget
+    // and drew every copy singly when it did not fit. A 1.5 KiB budget holds 12 main copies of the ~18 in each
+    // crate run: the first 12 draw as one instanced draw, the tail singly, and the frame is unchanged.
+    Frame reference;
+    {
+        Fixture3D f;
+        upload_crate(f, kCrate);
+        reference = render_crates(f, false);
+    }
+    Forward3DDesc fd;
+    fd.instancing_budget = 1536;
+    Fixture3D f(4, true, true, 1.0f, &fd);
+    upload_crate(f, kCrate);
+    const Frame on = render_crates(f, true);
+    CHECK(f.device->validation_error_count() == 0);
+    CHECK(on.stats.instancing_overflow > 0);
+    CHECK(on.stats.instancing_bytes <= 1536);
+    REQUIRE(on.stats.runs_instanced >= 1);
+    CHECK(on.stats.draws_instanced <= 12);
+    CHECK(on.stats.draws_instanced >= 2);
+    CHECK(differing(on.pixels, reference.pixels) == 0);
+    const u32 folded = on.stats.draws_instanced - on.stats.runs_instanced;
+    CHECK(on.stats.main_draws == reference.stats.main_draws - folded);
+}
+
 TEST_CASE("instancing gl: a small geometry ring caps the budget; main is served first, the rest draws singly") {
     Frame reference;
     {
