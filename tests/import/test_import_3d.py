@@ -14,6 +14,7 @@ import json
 import math
 import os
 import random
+import re
 import shutil
 import struct
 import subprocess
@@ -23,6 +24,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "tools", "mce_cli"))
 import mce_import  # noqa: E402
+import mce_import_3d  # noqa: E402
+rotate = mce_import_3d.rotate
 
 failures = []
 COOK = sys.argv[2] if len(sys.argv) > 2 else None
@@ -293,6 +296,75 @@ def test_gltf_values(work):
     check(entity(p, "Wide")["components"]["SpotLight3D"]["outer_deg"] == 89, "a 90 degree cone is clamped to 89")
 
 
+def test_gltf_review(work):
+    """Sidecar safety, a sun and a camera on one node, overflowing transforms, inner cone, far plane, name collisions."""
+    # S1: a sidecar that exists but is malformed or has no GUID is an error, never replaced.
+    for label, text in (("typo", '{"guid": "abc", "importer": '), ("noguid", '{"importer": "gltf", "settings": {}}'),
+                        ("array", "[1]"), ("emptyguid", '{"guid": ""}')):
+        d = fresh(work, "side_" + label)
+        src = os.path.join(d, "m.gltf")
+        write_gltf(src, model_doc([lit(0, name="L")], lights=[{"type": "point"}], with_mesh=False))
+        with open(src + ".mceasset", "w") as f:
+            f.write(text)
+        code, err = run(["gltf", src])
+        check(code == 1 and "m.gltf.mceasset" in err and "Traceback" not in err and len(err.strip().splitlines()) == 1,
+              f"sidecar '{label}': exit 1, one line naming the sidecar: code {code}, {err.strip()[:300]}")
+        check(read_bytes(src + ".mceasset") == text.encode() and sorted(os.listdir(d)) == ["m.gltf", "m.gltf.mceasset"],
+              f"sidecar '{label}': left as it was, nothing written")
+    # N1: a node with a sun and a camera yields the camera (and the sun warning).
+    d = fresh(work, "sun_cam")
+    nodes = [lit(0, name="SunCam", camera=0, translation=[1, 2, 3])]
+    cams = [{"type": "perspective", "perspective": {"yfov": 0.8, "znear": 0.1, "zfar": 50}}]
+    write_gltf(os.path.join(d, "s.gltf"), model_doc(nodes, lights=[{"type": "directional"}], cameras=cams, with_mesh=False))
+    code, err = run(["gltf", os.path.join(d, "s.gltf")])
+    p = load(os.path.join(d, "s.mcprefab")) if code == 0 else {"entities": []}
+    check(code == 0 and "directional light 'SunCam'" in err and entity(p, "SunCam") is not None and
+          "Camera3DComponent" in entity(p, "SunCam")["components"], f"a node with a sun and a camera keeps the camera: {err}")
+    # N2: scales that overflow when multiplied down a chain are a named error, not 'cannot convert float NaN'.
+    d = fresh(work, "overflow")
+    chain = [{"scale": [1e9, 1e9, 1e9], "children": [i + 1]} for i in range(60)] + [lit(0, name="End")]
+    write_gltf(os.path.join(d, "o.gltf"), model_doc(chain, lights=[{"type": "point"}], with_mesh=False))
+    code, err = run(["gltf", os.path.join(d, "o.gltf")])
+    check(code == 1 and "not finite" in err and "NaN" not in err and "Traceback" not in err, f"overflowing chain: {err.strip()[:300]}")
+    d = fresh(work, "overflow_tr")
+    chain = [{"translation": [1e9, 0, 0], "scale": [1e9, 1e9, 1e9], "children": [i + 1]} for i in range(40)] + [lit(0, name="End")]
+    write_gltf(os.path.join(d, "o.gltf"), model_doc(chain, lights=[{"type": "point"}], with_mesh=False))
+    code, err = run(["gltf", os.path.join(d, "o.gltf")])
+    check(code == 1 and "NaN" not in err and "Traceback" not in err, f"overflowing translations: {err.strip()[:300]}")
+    # N9: a spot's inner cone beyond the outer one and a far plane behind the near plane are warned about.
+    d = fresh(work, "clamps")
+    nodes = [lit(0, name="S"), lit(1, name="Neg"), {"name": "C", "camera": 0}]
+    lights = [{"type": "spot", "spot": {"innerConeAngle": 0.6, "outerConeAngle": 0.4}},
+              {"type": "spot", "spot": {"innerConeAngle": -0.2, "outerConeAngle": 0.4}}]
+    cams = [{"type": "perspective", "perspective": {"yfov": 0.8, "znear": 5, "zfar": 2}}]
+    write_gltf(os.path.join(d, "c.gltf"), model_doc(nodes, scene_roots=(0, 1, 2), lights=lights, cameras=cams, with_mesh=False))
+    code, err = run(["gltf", os.path.join(d, "c.gltf")])
+    check(code == 0 and "light 'S': inner cone" in err and "light 'Neg': inner cone" in err and "not beyond the near plane" in err,
+          f"inner > outer, negative inner and far <= near warn: {err}")
+    p = load(os.path.join(d, "c.mcprefab"))
+    check(near(entity(p, "S")["components"]["SpotLight3D"]["inner_deg"], math.degrees(0.4), 1e-3) and
+          entity(p, "Neg")["components"]["SpotLight3D"]["inner_deg"] == 0, "the inner cone is clamped into 0..outer")
+    # N10: names that collide with a generated "N 2" still get unique entity names.
+    d = fresh(work, "names")
+    nodes = [lit(0, name="L"), lit(0, name="L"), lit(0, name="L 2"), lit(0, name="L"), lit(0, name="names")]
+    write_gltf(os.path.join(d, "names.gltf"), model_doc(nodes, scene_roots=(0, 1, 2, 3, 4), lights=[{"type": "point"}], with_mesh=False))
+    code, err = run(["gltf", os.path.join(d, "names.gltf")])
+    got = [e["name"] for e in load(os.path.join(d, "names.mcprefab"))["entities"]]
+    check(code == 0 and len(set(got)) == len(got) and got[:4] == ["names", "L", "L 2", "L 2 2"], f"unique entity names: {got}")
+
+
+def test_importer_versions(work):
+    """The sidecar a converter writes carries the importer's real version."""
+    def version_of(name):
+        text = open(os.path.join(ROOT, "src", "engine", "asset", "cook", "src", name), encoding="utf-8").read()
+        m = re.search(r"u32 version\(\) const override \{ return (\d+); \}", text)
+        return int(m.group(1)) if m else None
+    check(version_of("gltf_importer.cpp") == mce_import_3d.GLTF_IMPORTER_VERSION,
+          f"GLTF_IMPORTER_VERSION {mce_import_3d.GLTF_IMPORTER_VERSION} equals gltf_importer.cpp version() {version_of('gltf_importer.cpp')}")
+    check(version_of("fbx_importer.cpp") == mce_import_3d.FBX_IMPORTER_VERSION,
+          f"FBX_IMPORTER_VERSION {mce_import_3d.FBX_IMPORTER_VERSION} equals fbx_importer.cpp version() {version_of('fbx_importer.cpp')}")
+
+
 # --- untrusted input -----------------------------------------------------------------------------------------------
 
 def expect_error(work, name, data, needle, ext=".gltf"):
@@ -413,16 +485,30 @@ GlobalSettings:  {
 """
 
 
+def fbx_model(i, name, kind, t, r=(0, 0, 0), s=(1, 1, 1)):
+    return (f'\tModel: {i}, "Model::{name}", "{kind}" {{\n\t\tVersion: 232\n\t\tProperties70:  {{\n'
+            f'\t\t\tP: "Lcl Translation", "Lcl Translation", "", "A",{t[0]},{t[1]},{t[2]}\n'
+            f'\t\t\tP: "Lcl Rotation", "Lcl Rotation", "", "A",{r[0]},{r[1]},{r[2]}\n'
+            f'\t\t\tP: "Lcl Scaling", "Lcl Scaling", "", "A",{s[0]},{s[1]},{s[2]}\n\t\t}}\n\t}}\n')
+
+
+def fbx_light(i, ltype, props):
+    return (f'\tNodeAttribute: {i}, "NodeAttribute::", "Light" {{\n\t\tTypeFlags: "Light"\n\t\tProperties70:  {{\n'
+            f'\t\t\tP: "LightType", "enum", "", "",{ltype}\n{props}\t\t}}\n\t}}\n')
+
+
+def fbx_doc(lamps):
+    """lamps: [(name, translation, rotation, scale, light type, light properties)]; each a model with its light."""
+    objs, conn = "", ""
+    for k, (name, t, r, sc, ltype, props) in enumerate(lamps):
+        objs += fbx_model(100 + 2 * k, name, "Light", t, r, sc) + fbx_light(101 + 2 * k, ltype, props)
+        conn += f'\tC: "OO",{100 + 2 * k},0\n\tC: "OO",{101 + 2 * k},{100 + 2 * k}\n'
+    return FBX_HEAD + "Objects:  {\n" + objs + "}\nConnections:  {\n" + conn + "}\n"
+
+
 def fbx_text(extra_objects="", extra_conn=""):
     """Z-up centimetres (3ds Max): a spot light, a point light, a sun and a camera."""
-    def model(i, name, kind, t, r=(0, 0, 0)):
-        return (f'\tModel: {i}, "Model::{name}", "{kind}" {{\n\t\tVersion: 232\n\t\tProperties70:  {{\n'
-                f'\t\t\tP: "Lcl Translation", "Lcl Translation", "", "A",{t[0]},{t[1]},{t[2]}\n'
-                f'\t\t\tP: "Lcl Rotation", "Lcl Rotation", "", "A",{r[0]},{r[1]},{r[2]}\n\t\t}}\n\t}}\n')
-
-    def light(i, ltype, props):
-        return (f'\tNodeAttribute: {i}, "NodeAttribute::", "Light" {{\n\t\tTypeFlags: "Light"\n\t\tProperties70:  {{\n'
-                f'\t\t\tP: "LightType", "enum", "", "",{ltype}\n{props}\t\t}}\n\t}}\n')
+    model, light = fbx_model, fbx_light
     objs = model(1, "Lamp", "Light", (100, 200, 300))
     objs += light(2, 2, '\t\t\tP: "Color", "Color", "", "A",1,0.5,0.25\n\t\t\tP: "Intensity", "Number", "", "A",150\n'
                         '\t\t\tP: "OuterAngle", "Number", "", "A",60\n\t\t\tP: "InnerAngle", "Number", "", "A",30\n')
@@ -483,6 +569,52 @@ def test_fbx(work):
     check(r.returncode == 2, "mce_cook --dump-fbx-scene without a file is a usage error")
 
 
+def test_fbx_review(work):
+    """World aim of a spot, decay, switched-off lights, cone fallbacks, mirrored and zero scales."""
+    d = fresh(work, "fbx_review")
+    spot = '\t\t\tP: "Intensity", "Number", "", "A",100\n\t\t\tP: "OuterAngle", "Number", "", "A",60\n\t\t\tP: "InnerAngle", "Number", "", "A",30\n'
+    lamps = [("Aim0", (0, 0, 0), (0, 0, 0), (1, 1, 1), 2, spot),
+             ("Aim90", (0, 0, 0), (0, 0, 90), (1, 1, 1), 2, spot),
+             ("Linear", (0, 0, 0), (0, 0, 0), (1, 1, 1), 0, '\t\t\tP: "DecayType", "enum", "", "",1\n'),
+             ("NoDecay", (0, 0, 0), (0, 0, 0), (1, 1, 1), 0, '\t\t\tP: "DecayType", "enum", "", "",0\n'),
+             ("Off", (0, 0, 0), (0, 0, 0), (1, 1, 1), 0, '\t\t\tP: "Intensity", "Number", "", "A",100\n\t\t\tP: "CastLight", "bool", "", "",0\n'),
+             ("NoCone", (0, 0, 0), (0, 0, 0), (1, 1, 1), 2, '\t\t\tP: "OuterAngle", "Number", "", "A",0\n'),
+             ("Inverted", (0, 0, 0), (0, 0, 0), (1, 1, 1), 2, '\t\t\tP: "OuterAngle", "Number", "", "A",40\n\t\t\tP: "InnerAngle", "Number", "", "A",80\n'),
+             ("Area", (0, 0, 0), (0, 0, 0), (1, 1, 1), 3, ""),
+             ("Mirror", (0, 0, 0), (0, 0, 0), (-1, 1, 1), 0, "")]
+    src = os.path.join(d, "r.fbx")
+    with open(src, "w") as f:
+        f.write(fbx_doc(lamps))
+    code, err = run(["fbx", src, "--cook", COOK])
+    check(code == 0, "the review FBX converts: " + err)
+    if code != 0:
+        return
+    p = load(os.path.join(d, "r.mcprefab"))
+
+    def world_aim(name):
+        c = entity(p, name)["components"]
+        return rotate(c["LocalTransform"]["rotation"], c["SpotLight3D"]["direction"])
+    a0, a90 = world_aim("Aim0"), world_aim("Aim90")
+    # Z-up file -> +Y up engine: file (x, y, z) is engine (x, z, -y). The light aims down its local -Y (file frame).
+    check(near_all(a0, [0, 0, 1], 1e-3), f"spot world aim with no rotation (file -Y is engine +Z): {a0}")
+    check(near_all(a90, [1, 0, 0], 1e-3), f"spot world aim after 90 degrees about the file's Z (file +X is engine +X): {a90}")
+    check("decay 'linear'" in err and "decay 'none'" in err and "inverse" in err, "linear and no decay both warn: " + err)
+    off = entity(p, "Off")["components"]["PointLight3D"]
+    check(off["enabled"] == 0 and near(off["intensity"], 1.0, 1e-3) and "switched off" not in err, f"a switched-off light imports with enabled = 0: {off}")
+    check("enabled" not in entity(p, "Linear")["components"]["PointLight3D"], "a light that is on carries no enabled field")
+    nc = entity(p, "NoCone")["components"]["SpotLight3D"]
+    check(near(nc["outer_deg"], 22.5) and "22.5" in err, f"no cone angle: FBX's 45 degree full angle = 22.5 half-angle: {nc}")
+    check("light 'Inverted': inner cone" in err and near(entity(p, "Inverted")["components"]["SpotLight3D"]["inner_deg"], 20), "an inner cone past the outer one is clamped with a warning")
+    check("area light" in err and entity(p, "Area") is None, "an area light is dropped with a named warning")
+    check("'Mirror'" in err and "mirrored" in err, "a negative world scale warns: " + err)
+    # A zero scale is an error, as for glTF.
+    src = os.path.join(d, "z.fbx")
+    with open(src, "w") as f:
+        f.write(fbx_doc([("Flat", (0, 0, 0), (0, 0, 0), (0, 1, 1), 0, "")]))
+    code, err = run(["fbx", src, "--cook", COOK])
+    check(code == 1 and "zero scale" in err and not os.path.exists(os.path.join(d, "z.mcprefab")), f"a zero scale fails: code {code}, {err.strip()[:300]}")
+
+
 def test_cooks(work):
     """The prefab and its model cook for real (the MeshRef GUID, the light and camera fields all validate)."""
     p = fresh(work, "cook")
@@ -507,10 +639,10 @@ def main():
     work = os.path.abspath(sys.argv[1])
     shutil.rmtree(work, ignore_errors=True)
     os.makedirs(work)
-    tests = [test_gltf_prefab, test_gltf_directions, test_gltf_transforms, test_gltf_rules, test_gltf_values, test_gltf_corrupt,
-             test_gltf_fuzz]
+    tests = [test_gltf_prefab, test_gltf_directions, test_gltf_transforms, test_gltf_rules, test_gltf_values, test_gltf_review,
+             test_importer_versions, test_gltf_corrupt, test_gltf_fuzz]
     if COOK:
-        tests += [test_fbx, test_cooks]
+        tests += [test_fbx, test_fbx_review, test_cooks]
     for t in tests:
         t(work)
     if COOK is None:

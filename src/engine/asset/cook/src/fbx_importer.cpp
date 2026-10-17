@@ -1316,7 +1316,7 @@ void json_string(String& out, StringView t) {
 
 void json_real(String& out, f64 v) {
     if (!std::isfinite(v)) v = 0.0;
-    appendf(out, "%.9g", v);
+    appendf(out, "%.17g", v);
 }
 
 void json_vec(String& out, const f64* v, u32 n) {
@@ -1424,7 +1424,15 @@ bool dump_fbx_scene_json(StringView display_name, Span<const byte> src, String& 
                 case UFBX_LIGHT_VOLUME: type = "volume"; break;
                 default: break;
             }
-            appendf(json, ",\"light\":{\"type\":\"%s\",\"color\":", type);
+            const char* decay = "quadratic";
+            switch (l->decay) {
+                case UFBX_LIGHT_DECAY_NONE: decay = "none"; break;
+                case UFBX_LIGHT_DECAY_LINEAR: decay = "linear"; break;
+                case UFBX_LIGHT_DECAY_QUADRATIC: decay = "quadratic"; break;
+                case UFBX_LIGHT_DECAY_CUBIC: decay = "cubic"; break;
+                default: break;
+            }
+            appendf(json, ",\"light\":{\"type\":\"%s\",\"type_id\":%d,\"decay\":\"%s\",\"color\":", type, int(l->type), decay);
             const f64 col[3] = {l->color.x, l->color.y, l->color.z};
             json_vec(json, col, 3);
             json += ",\"intensity\":";

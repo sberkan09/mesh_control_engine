@@ -7,8 +7,9 @@
 A model's cook (CHNK_MESH) holds geometry, materials, skins and clips but cannot place entities, so the lights and
 cameras that come with the file are written here as <name>.mcprefab:
 
-    entity 0   <name>: MeshRef to the model (its GUID is read from the model's .mceasset sidecar; a model that is not
-               adopted yet gets a sidecar here, with a new GUID), at the origin
+    entity 0   <name>: MeshRef to the model (its GUID is read from the model's .mceasset sidecar; a model that has no
+               sidecar yet gets one here, with a new GUID; a sidecar that exists but cannot be read, or has no
+               "guid", is an error and nothing is written), at the origin
     then       one child (ChildOf $0) per light or camera, at the node's WORLD transform in the engine's frame
                (+Y up, right-handed, metres; the sidecar's "scale" multiplies positions, as the cook does):
                PointLight3D, SpotLight3D (direction along the node's local aim axis) or Camera3DComponent (the first
@@ -23,7 +24,9 @@ photometric (ADR-0024): a white Lambert surface 1 m from a point light of intens
 physical E / pi. With the usual 683 lm/W:
     glTF point / spot   intensity = candela / (683 * pi)         clamped to 0..100
     glTF directional    lux -> Environment3D.sun_intensity = lux / (683 * pi)   (in the warning, not written)
-    FBX                 intensity = the DCC's Intensity / 100 as ufbx reads it (FBX has no photometric unit)
+    FBX                 intensity = the DCC's Intensity / 100 as ufbx reads it (FBX has no photometric unit);
+                        cone angles are full angles (halved); a light with no OuterAngle gets FBX's default 45 deg
+                        full angle = 22.5 deg half-angle; a light switched off in the file gets enabled = 0
     radius              the file's range (glTF), else the distance where the inverse square falls to 0.01:
                         10 * sqrt(intensity) metres, clamped to 1..200
 Colour is taken as linear. Re-importing keeps the prefab's GUID; the output is a pure function of the inputs.
@@ -149,6 +152,16 @@ def decompose(m):
     return m[12:15], quat_from_basis(*u), scale, mirrored
 
 
+def world_pose(world, scale, who):
+    """(position in metres, rotation, mirrored) of a world matrix; a transform that overflowed is a named error."""
+    pos, rot, _scl, mirrored = decompose(world)
+    pos = [p * scale for p in pos]
+    if any(not math.isfinite(v) or abs(v) > MAX_COORD * 1e6 for v in pos + rot):
+        raise ValueError(f"node {who} has a world transform that is not finite (huge scales or offsets multiplied "
+                         "down its parents)")
+    return pos, rot, mirrored
+
+
 def rotate(q, v):
     x, y, z, w = q
     # v' = v + 2w (q x v) + 2 q x (q x v)
@@ -180,12 +193,16 @@ def light_radius(intensity, rng):
 def build_prefab(name, guid, mesh_ref, placed):
     """placed: [{"name", "pos", "rot", "components": {...}}] in file order."""
     entities = [{"name": name, "components": {"LocalTransform": {}, "MeshRef": {"mesh": mesh_ref}}}]
-    taken = {name: 1}
+    taken, counts = {name}, {}
     for p in placed:
         base = p["name"] or p["fallback"]
-        n = taken.get(base, 0) + 1
-        taken[base] = n
+        n = counts.get(base, 0) + 1
         ename = base if n == 1 else f"{base} {n}"
+        while ename in taken:  # "L", "L", "L 2" must not produce two "L 2"
+            n += 1
+            ename = f"{base} {n}"
+        counts[base] = n
+        taken.add(ename)
         comps = dict(p["components"])
         comps["LocalTransform"] = {"position": [num(v) for v in p["pos"]], "rotation": [num(v) for v in p["rot"]]}
         comps["ChildOf"] = {"parent": "$0"}
@@ -200,24 +217,34 @@ def clean_name(v, fallback):
     return s[:MAX_NAME]
 
 
-def sun_warning(imp, who, direction, lux_or_intensity, glTF):
+def sun_warning(imp, who, direction, lux_or_intensity, glTF, off=False):
     if glTF:
         hint = (f"; Environment3D.sun_intensity about {lux_or_intensity / (LUMENS_PER_WATT * math.pi):.3g} "
                 f"({lux_or_intensity:.6g} lux / (683 pi))")
     else:
         hint = f"; Environment3D.sun_intensity about {lux_or_intensity:.3g}"
     imp.warn(f"directional light {who} has no entity (the engine has one sun): set Environment3D.sun_direction to "
-             f"{vec_text(direction)}{hint}")
+             f"{vec_text(direction)}{hint}{'; it is switched off in the file' if off else ''}")
 
 
-def point_or_spot_components(kind, color, intensity, radius, direction=None, outer=None, inner=None):
+def point_or_spot_components(kind, color, intensity, radius, direction=None, outer=None, inner=None, enabled=True):
     comp = {"color": [num(c) for c in color] + [1], "intensity": num(intensity, 4), "radius": num(radius, 3)}
+    if not enabled:
+        comp["enabled"] = 0
     if kind == "spot":
         comp["direction"] = [num(v) for v in direction]
         comp["outer_deg"] = num(outer, 4)
         comp["inner_deg"] = num(inner, 4)
         return {"SpotLight3D": comp}
     return {"PointLight3D": comp}
+
+
+def clamp_inner(imp, who, inner, outer):
+    if inner < 0 or inner > outer:
+        clamped = min(max(inner, 0.0), outer)
+        imp.warn(f"light {who}: inner cone {num(inner, 4):g} deg is outside 0..outer ({num(outer, 4):g}); clamped to {clamped:g}")
+        return clamped
+    return inner
 
 
 def camera_components(fov_deg, near, far, primary, imp, who):
@@ -236,6 +263,9 @@ def camera_components(fov_deg, near, far, primary, imp, who):
     elif far < 1.0:
         imp.warn(f"camera {who}: far plane {num(far, 4):g} m is under the engine's 1; clamped to 1")
         far = 1.0
+    if far <= near:
+        imp.warn(f"camera {who}: far plane {num(far, 4):g} m is not beyond the near plane {num(near, 4):g} m after clamping; "
+                 "the engine will not render it")
     comp = {"fov_deg": num(fov_deg, 4), "near_z": num(near, 4), "far_z": num(far, 3)}
     if not primary:
         comp["primary"] = 0
@@ -364,8 +394,7 @@ def convert_gltf(doc, scale, imp):
         cref = node.get("camera")
         if lref is None and cref is None:
             continue
-        pos, rot, _scl, mirrored = decompose(world)
-        pos = [p * scale for p in pos]
+        pos, rot, mirrored = world_pose(world, scale, who)
         if mirrored:
             imp.warn(f"node {who} has a mirrored (negative scale) world transform; the mirroring is dropped")
         name = clean_name(node.get("name"), "")
@@ -384,39 +413,38 @@ def convert_gltf(doc, scale, imp):
                 raise ValueError(f"light {lref} has a negative intensity")
             if kind == "directional":
                 sun_warning(imp, who, rotate(rot, [0, 0, -1]), inten, True)
-                continue
-            if kind not in ("point", "spot"):
-                raise ValueError(f"light {lref} has type {kind!r} (point, spot or directional)")
-            engine = inten / (LUMENS_PER_WATT * math.pi)
-            if engine > MAX_INTENSITY:
-                imp.warn(f"light {who}: {num(inten, 4):g} cd is {num(engine, 4):g} in engine units; clamped to {MAX_INTENSITY:g}")
-                engine = MAX_INTENSITY
-            rng = lt.get("range")
-            rng = finite(rng, f"light {lref} range") * scale if rng is not None else None
-            if rng is not None and rng <= 0:
-                raise ValueError(f"light {lref} has a range of 0 or less")
-            if rng is not None and not 0.1 <= rng <= 200.0:
-                imp.warn(f"light {who}: range {num(rng, 4):g} m is outside the engine's 0.1..200; clamped")
-            radius = light_radius(engine, rng)
-            n_light += 1
-            if kind == "spot":
-                sp = lt.get("spot") or {}
-                if not isinstance(sp, dict):
-                    raise ValueError(f"light {lref} spot is not an object")
-                outer = math.degrees(finite(sp.get("outerConeAngle", math.pi / 4), f"light {lref} outerConeAngle"))
-                inner = math.degrees(finite(sp.get("innerConeAngle", 0.0), f"light {lref} innerConeAngle"))
-                if not 1.0 <= outer <= 89.0:
-                    clamped = min(89.0, max(1.0, outer))
-                    imp.warn(f"light {who}: outer cone {num(outer, 4):g} deg is outside the engine's 1..89; clamped to {clamped:g}")
-                    outer = clamped
-                if inner < 0 or inner > outer:
-                    inner = min(max(inner, 0.0), outer)
-                comps = point_or_spot_components("spot", color, engine, radius, [0, 0, -1], outer, inner)
-                fallback = f"Spot Light {n_light}"
-            else:
-                comps = point_or_spot_components("point", color, engine, radius)
-                fallback = f"Point Light {n_light}"
-            placed.append({"name": name, "fallback": fallback, "pos": pos, "rot": rot, "components": comps})
+            else:  # (the node may also carry a camera: handled below)
+                if kind not in ("point", "spot"):
+                    raise ValueError(f"light {lref} has type {kind!r} (point, spot or directional)")
+                engine = inten / (LUMENS_PER_WATT * math.pi)
+                if engine > MAX_INTENSITY:
+                    imp.warn(f"light {who}: {num(inten, 4):g} cd is {num(engine, 4):g} in engine units; clamped to {MAX_INTENSITY:g}")
+                    engine = MAX_INTENSITY
+                rng = lt.get("range")
+                rng = finite(rng, f"light {lref} range") * scale if rng is not None else None
+                if rng is not None and rng <= 0:
+                    raise ValueError(f"light {lref} has a range of 0 or less")
+                if rng is not None and not 0.1 <= rng <= 200.0:
+                    imp.warn(f"light {who}: range {num(rng, 4):g} m is outside the engine's 0.1..200; clamped")
+                radius = light_radius(engine, rng)
+                n_light += 1
+                if kind == "spot":
+                    sp = lt.get("spot") or {}
+                    if not isinstance(sp, dict):
+                        raise ValueError(f"light {lref} spot is not an object")
+                    outer = math.degrees(finite(sp.get("outerConeAngle", math.pi / 4), f"light {lref} outerConeAngle"))
+                    inner = math.degrees(finite(sp.get("innerConeAngle", 0.0), f"light {lref} innerConeAngle"))
+                    if not 1.0 <= outer <= 89.0:
+                        clamped = min(89.0, max(1.0, outer))
+                        imp.warn(f"light {who}: outer cone {num(outer, 4):g} deg is outside the engine's 1..89; clamped to {clamped:g}")
+                        outer = clamped
+                    inner = clamp_inner(imp, who, inner, outer)
+                    comps = point_or_spot_components("spot", color, engine, radius, [0, 0, -1], outer, inner)
+                    fallback = f"Spot Light {n_light}"
+                else:
+                    comps = point_or_spot_components("point", color, engine, radius)
+                    fallback = f"Point Light {n_light}"
+                placed.append({"name": name, "fallback": fallback, "pos": pos, "rot": rot, "components": comps})
         if cref is not None:
             if not isinstance(cref, int) or isinstance(cref, bool) or not 0 <= cref < len(cams) or not isinstance(cams[cref], dict):
                 raise ValueError(f"node {idx} names camera {cref!r}, which does not exist")
@@ -494,6 +522,11 @@ def convert_fbx(doc, scale, imp):
         name = clean_name(n.get("name"), "")
         who = f"'{name}'" if name else f"(node {i})"
         pos = [p * scale for p in numbers(n.get("translation"), 3, "a node translation")]
+        scl = numbers(n["scale"], 3, "a node scale") if n.get("scale") is not None else [1.0, 1.0, 1.0]
+        if min(abs(v) for v in scl) < 1e-12:
+            raise ValueError(f"node {who} has a world transform with a zero scale")
+        if scl[0] * scl[1] * scl[2] < 0:
+            imp.warn(f"node {who} has a mirrored (negative scale) world transform; the mirroring is dropped")
         rot = numbers(n.get("rotation"), 4, "a node rotation")
         if all(v == 0 for v in rot):
             raise ValueError("a node rotation has zero length")
@@ -510,13 +543,13 @@ def convert_fbx(doc, scale, imp):
                 color = [min(1.0, max(0.0, c)) for c in color]
             inten = finite(lt.get("intensity"), "a light intensity")
             direction = numbers(lt.get("direction"), 3, "a light direction")
-            if not lt.get("enabled", 1):
-                imp.warn(f"light {who} is switched off in the file; imported at its intensity")
+            on = bool(lt.get("enabled", 1))  # the file's "cast light" switch; the components have an `enabled`
             if kind == "directional":
-                sun_warning(imp, who, rotate(rot, direction), inten, False)
+                sun_warning(imp, who, rotate(rot, direction), inten, False, not on)
             elif kind in ("point", "spot"):
                 if lt.get("decay") not in (None, "quadratic"):
-                    imp.warn(f"light {who}: decay '{lt.get('decay')}' is ignored; engine lights fall off with the inverse square")
+                    imp.warn(f"light {who}: decay '{lt.get('decay')}' is ignored; engine lights always fall off with the inverse "
+                             "square")
                 engine = max(0.0, inten)
                 if engine > MAX_INTENSITY:
                     imp.warn(f"light {who}: intensity {num(engine, 4):g} is over the engine's {MAX_INTENSITY:g}; clamped")
@@ -531,21 +564,23 @@ def convert_fbx(doc, scale, imp):
                     outer = finite(lt.get("outer_deg"), "a light outer angle") / 2  # FBX cone angles are full angles
                     inner = finite(lt.get("inner_deg"), "a light inner angle") / 2
                     if outer <= 0:
-                        imp.warn(f"light {who} has no cone angle; using 45 deg")
-                        outer = 45.0
+                        imp.warn(f"light {who} has no cone angle; using FBX's default of 45 deg (full angle), 22.5 deg here")
+                        outer = 22.5
                     if not 1.0 <= outer <= 89.0:
                         clamped = min(89.0, max(1.0, outer))
                         imp.warn(f"light {who}: outer cone {num(outer, 4):g} deg is outside the engine's 1..89; clamped to {clamped:g}")
                         outer = clamped
-                    inner = min(max(inner, 0.0), outer)
-                    comps = point_or_spot_components("spot", color, engine, radius, direction, outer, inner)
+                    inner = clamp_inner(imp, who, inner, outer)
+                    comps = point_or_spot_components("spot", color, engine, radius, direction, outer, inner, on)
                     fallback = f"Spot Light {n_light}"
                 else:
-                    comps = point_or_spot_components("point", color, engine, radius)
+                    comps = point_or_spot_components("point", color, engine, radius, enabled=on)
                     fallback = f"Point Light {n_light}"
                 placed.append({"name": name, "fallback": fallback, "pos": pos, "rot": rot, "components": comps})
             else:
-                imp.warn(f"light {who} is an {kind} light, which the engine has no equivalent for; dropped")
+                what = {"area": "an area light", "volume": "a volume light"}.get(
+                    kind, f"a light of an unrecognised type (ufbx type {lt.get('type_id', '?')})")
+                imp.warn(f"light {who} is {what}, which the engine has no equivalent for; dropped")
         cm = n.get("camera")
         if isinstance(cm, dict):
             if not cm.get("perspective", 1):
@@ -567,6 +602,7 @@ def read_json(path):
 
 
 def existing_guid(path):
+    """The GUID of a prefab written earlier, None when there is none or it is unreadable (it is rewritten then)."""
     try:
         g = read_json(path).get("guid")
         return g if isinstance(g, str) and g else None
@@ -574,13 +610,24 @@ def existing_guid(path):
         return None
 
 
-def sidecar_scale(side):
-    """The model sidecar's "scale" setting (the cook multiplies every root node by it); 1 when absent."""
+def read_sidecar(side):
+    """(guid, scale) of an existing model sidecar, (None, 1.0) when there is none. A sidecar that cannot be read or has no
+    "guid" is an error: replacing it would give the model a new identity and break every reference to it. The "scale"
+    setting is what the cook multiplies every root node by; 1 when absent."""
+    if not os.path.exists(side):
+        return None, 1.0
     try:
-        s = read_json(side).get("settings", {}).get("scale", 1.0)
-    except (OSError, ValueError, AttributeError, RecursionError):
-        return 1.0
-    return float(s) if isinstance(s, (int, float)) and not isinstance(s, bool) and math.isfinite(s) and 0 < s < 1e6 else 1.0
+        doc = read_json(side)
+    except (OSError, ValueError, RecursionError) as e:
+        why = (str(e).splitlines() or [type(e).__name__])[0]
+        raise ValueError(f"{side} exists but cannot be read as JSON ({why}); fix or delete it") from None
+    guid = doc.get("guid") if isinstance(doc, dict) else None
+    if not isinstance(guid, str) or not guid:
+        raise ValueError(f'{side} exists but has no "guid"; fix or delete it')
+    settings = doc.get("settings")
+    s = settings.get("scale", 1.0) if isinstance(settings, dict) else 1.0
+    ok = isinstance(s, (int, float)) and not isinstance(s, bool) and math.isfinite(s) and 0 < s < 1e6
+    return guid, float(s) if ok else 1.0
 
 
 def safe_name(s):
@@ -600,7 +647,7 @@ def run(tool, args):
         if tool == "fbx" and ext != ".fbx":
             raise ValueError("expected a .fbx file")
         side = src + ".mceasset"
-        scale = sidecar_scale(side)
+        model_guid, scale = read_sidecar(side)
         if tool == "gltf":
             placed = convert_gltf(read_gltf_json(src), scale, imp)
         else:
@@ -608,7 +655,6 @@ def run(tool, args):
         out_dir = args.out_dir or os.path.dirname(os.path.abspath(src))
         name = safe_name(args.name or os.path.splitext(os.path.basename(src))[0])
         out = os.path.join(out_dir, name + ".mcprefab")
-        model_guid = existing_guid(side)
         new_side = model_guid is None
         if new_side:
             model_guid = str(uuid.uuid4())

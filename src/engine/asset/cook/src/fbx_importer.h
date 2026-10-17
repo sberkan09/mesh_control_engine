@@ -9,9 +9,11 @@ namespace mce::cook {
 
 mem::UniquePtr<IImporter> make_fbx_importer();  // .fbx (binary or ASCII, version 3000 and up) -> CHNK_MESH
 
-// `mce_cook --dump-fbx-scene` (M-IMPORT3D step 4a): the lights and cameras of an FBX with their world transforms in the
-// engine's frame (+Y up, right-handed, metres), as JSON for `mce import fbx`. Same load limits as the importer; false with
-// a one-line `error` when the file cannot be read. Without ufbx (a cross build) it returns false saying so.
+// `mce_cook --dump-fbx-scene` (M-IMPORT3D step 4a): the lights and cameras of an FBX as JSON for `mce import fbx`: per node the
+// world translation / rotation / scale in the engine's frame (+Y up, right-handed, metres), plus the light (type, decay,
+// colour, intensity, local aim direction, cone angles as the file's full angles, cast_light as "enabled") or camera
+// (projection, vertical field of view, planes). Same load limits as the importer; false with a one-line `error` when the
+// file cannot be read. Without ufbx (a cross build) it returns false saying so.
 bool dump_fbx_scene_json(StringView display_name, Span<const byte> src, String& json, String& error);
 
 }  // namespace mce::cook

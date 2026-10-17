@@ -78,7 +78,9 @@ int dump_fbx_scene(const char* path) {
             std::fprintf(stderr, "mce_cook: %s: the file is over the importer's limit of 256 MiB\n", path);
             return 1;
         }
-        for (usize i = 0; i < n; ++i) bytes.push_back(buf[i]);
+        const usize at = bytes.size();
+        bytes.resize(at + n);
+        std::memcpy(bytes.data() + at, buf, n);
     }
     std::fclose(f);
     cook::String json, error;
