@@ -227,7 +227,8 @@ private:
         u64 key = 0;
         u32 version = 0;
         u32 stamp = 0;     // the extract that last saw it
-        Array<math::mat4> transforms;
+        Array<math::mat4> transforms;       // kind 0 (Foliage3D::mesh)
+        Array<math::mat4> more[3];          // kinds 1..3 (Foliage3D::mesh_1..3), M-VISUAL3 6
     };
     Array<FoliageEntry> foliage_;
     Array<FoliageEntry> terrain_foliage_;  // TerrainFoliage3D scatters (M-TERRAIN 5)
