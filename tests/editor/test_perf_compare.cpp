@@ -130,6 +130,8 @@ TEST_CASE("perf compare: a frame's parts, sim then render then GPU, slowest firs
 TEST_CASE("perf compare: a capture written and read back compares equal to itself") {
     perf::Capture a = capture(12.0f, 7);
     a.frames[5].phase_ms[0] = 0.25f;
+    a.frames[5].counters.runs_instanced = 3;  // M-VISUAL3 5a
+    a.frames[5].counters.draws_instanced = 40;
     Array<char> text;
     perf::write_mcperf(a, perf::summarize(a), text);
     perf::Capture b;
@@ -137,6 +139,9 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     REQUIRE_MESSAGE(read_mcperf(StringView(text.data(), text.size()), b, err), err.c_str());
     CHECK(b.frames.size() == a.frames.size());
     CHECK(b.frames[5].index == 35);
+    CHECK(b.frames[5].counters.runs_instanced == 3);
+    CHECK(b.frames[5].counters.draws_instanced == 40);
+    CHECK(perf::summarize(b).counters_max.draws_instanced == 40);
     Comparison c;
     compare_captures(a, b, c);
     CHECK(c.better.empty());
