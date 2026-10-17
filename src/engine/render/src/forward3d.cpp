@@ -221,6 +221,12 @@ struct PostU {
     vec4 params;  // x: threshold, y: knee, z: first pass, w: exposure
 };
 
+// The tonemap pass's FilmU block (shaders3d.h kTonemapFS), bank kPass.
+struct FilmU {
+    vec4 lens;   // vignette, vignette smoothness, grain, grain cell size
+    vec4 lens2;  // chromatic aberration, lens dirt intensity, tonemapper, grain seed
+};
+
 enum Stage : u32 {
     kTsBegin, kTsClusters, kTsScale, kTsSsao, kTsSsr, kTsContact, kTsShadow, kTsGi, kTsVol, kTsMain, kTsResolve, kTsTaa, kTsPostFx, kTsBloom, kTsTonemap, kTsFxaa
 };
@@ -2645,9 +2651,20 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         have = want;
     };
     if (finish) ensure(fin_src_, fin_src_size_, post_size_, "mce.3d.fin_src");
+    // M-VISUAL3 3: the camera's look. Dirt needs the bloom it lights and a texture the store holds.
+    const PostFx::Lens& lens = post.lens;
+    const rhi::TextureHandle dirt = lens.dirt_key != 0 && textures_->contains(lens.dirt_key) ? textures_->get(lens.dirt_key) : rhi::TextureHandle{};
+    const bool dirt_on = !dirt.is_null() && bloom && lens.dirt_intensity > 0.0f;
+    FilmU film;
+    film.lens = {clamp(lens.vignette, 0.0f, 1.0f), clamp(lens.vignette_smoothness, 0.05f, 1.0f), clamp(lens.grain, 0.0f, 1.0f),
+                 clamp(lens.grain_size, 1.0f, 4.0f)};
+    film.lens2 = {clamp(lens.chromatic_aberration, 0.0f, 1.0f), dirt_on ? clamp(lens.dirt_intensity, 0.0f, 4.0f) : 0.0f,
+                  f32(static_cast<u32>(post.tonemapper)), f32(((static_cast<i64>(std::floor(scene.time() * 24.0f)) % 65536) + 65536) % 65536)};
     fullscreen(fxaa ? ldr_ : finish ? fin_src_ : target, rhi::LoadOp::DontCare, "tonemap", !fxaa && !finish);
     cmd.bind_pipeline(tonemap_);
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(film));
+    cmd.bind_texture(rhi::bank::kShadowMap, dirt_on ? dirt : textures_->white(), linear_clamp_);
     // 1:1 reads texel-exact; a scaled frame is upsampled bilinearly (TAA upsamples it itself).
     cmd.bind_texture(rhi::bank::kAlbedo, post_source_, post_size_ == out || finish ? point_sampler_ : linear_clamp_);
     cmd.bind_texture(rhi::bank::kNormal, bloom ? bloom_[0] : post_source_, linear_clamp_);

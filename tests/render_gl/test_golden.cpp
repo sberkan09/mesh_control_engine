@@ -628,3 +628,44 @@ TEST_CASE("golden: a cooked .hdr sky with a 200x hot spot lights a white sphere,
     });
     check_golden("hdr_sky", f);
 }
+
+// ---- M-VISUAL3 3: the camera's look ---------------------------------------------------------------
+
+TEST_CASE("golden: filmic_lens: vignette, chromatic aberration and grain on the ground, the box and the sky at a fixed time") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.lens.vignette = 0.7f;
+        p.lens.chromatic_aberration = 0.8f;
+        p.lens.grain = 0.25f;
+        s.set_post(p);
+        s.set_time(2.0f, 1.0f / 60.0f);
+    });
+    check_golden("filmic_lens", f);
+}
+
+TEST_CASE("golden: tonemap_agx: the same scene through the AgX curve") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::AgX;
+        s.set_post(p);
+    });
+    check_golden("tonemap_agx", f);
+}
+
+TEST_CASE("golden: tonemap_neutral: the same scene through Khronos PBR Neutral") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::PbrNeutral;
+        s.set_post(p);
+    });
+    check_golden("tonemap_neutral", f);
+}
