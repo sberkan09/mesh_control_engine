@@ -1,8 +1,9 @@
-// PNG/JPG -> CHNK_TEX, RGBA8 with a box-filtered mip chain (assets.md §5.2; BCn is v0.5). Phone
+// PNG/JPG -> CHNK_TEX, RGBA8 with a box-filtered mip chain (assets.md §5.2). Phone
 // cooks (ImportInput::texture_compression, mce_cook --textures astc) store every level as ASTC 4x4
-// blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread).
+// blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread). Desktop
+// cooks with --textures bc store BC7 / BC5 / BC4 / BC1 (texture_bc.cpp, bc7enc_rdo), see "compress".
 //
-// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest", "max_size": 1024 }
+// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest", "max_size": 1024, "compress": "auto" }
 //   srgb  color data is sRGB-encoded: mips are averaged in linear space and the chunk carries the
 //         Srgb flag so the renderer samples through an sRGB view (never double-corrects)
 //   mips  generate the full chain down to 1x1
@@ -10,6 +11,16 @@
 //   max_size  (M-CONTENT 1a) largest side, a power of two 1..16384: a bigger image is box-halved (the same filter as the
 //         mips, sRGB-aware, no renormalizing of normal maps) until it fits, BEFORE the mips. Default: no limit. The
 //         project-wide cap (ImportInput::max_texture_size, mce_cook --max-texture-size) applies as min(sidecar, cap).
+//   compress  (M-CONTENT 1b) "none" | "auto" | "bc7" | "bc5" | "bc4" | "bc1" | "astc". The cook mode decides what a value
+//         produces; a missing key means the mode's default (rgba8: RGBA8, bc: as "auto", astc: ASTC 4x4):
+//           value               --textures rgba8   --textures bc          --textures astc
+//           missing             RGBA8              as auto                ASTC 4x4
+//           none                RGBA8              RGBA8                  RGBA8
+//           auto                RGBA8              the rule (choose_auto) ASTC 4x4
+//           bc7|bc5|bc4|bc1     RGBA8              that format            ASTC 4x4
+//           astc                RGBA8              RGBA8                  ASTC 4x4
+//         BC5 and BC4 are linear data: "srgb": true with them is an error. BC needs both base sides to be multiples of 4;
+//         otherwise the texture cooks to RGBA8 with a warning. Not accepted on .hdr/.exr (BC6H is out of scope).
 //
 // HDR sources (M-VISUAL3 4): Radiance .hdr (stb) and OpenEXR .exr (tinyexr: uncompressed, ZIP, PIZ, the
 // first RGB(A) layer) cook to TextureFormat::RGBA16F, linear, never Srgb. Settings: { "mips": true,
@@ -29,6 +40,7 @@
 #include "importer_common.h"
 #include "mce/asset/formats.h"
 #include "stb_image.h"
+#include "texture_bc.h"
 #include "tinyexr.h"
 
 namespace mce::cook {
@@ -412,10 +424,52 @@ bool cook_hdr(const ImportInput& in, bool exr, asset::ContainerWriter& out, Diag
     return true;
 }
 
+// What one texture cooks to under the current mode (see the table in the file comment).
+enum class Target : u8 { Rgba8, Astc, Bc };
+enum class CompressKey : u8 { Missing, None, Auto, Bc7, Bc5, Bc4, Bc1, Astc };
+
+// `auto` under --textures bc, on the base level after max_size. Integer-only, so the choice is deterministic.
+// PROVISIONAL: the 99% and the length bounds are guesses; they will be calibrated with RunPod measurements
+// (M-CONTENT 1b-iv tunes them on the Lantern Keep and Poly Haven normal maps).
+// Order: (0) LUT strips stay RGBA8 (colour grading cannot take block error), (1) srgb -> BC7, (2) grey opaque data
+// (r == g == b, a == 255 on every texel) -> BC4, (3) at least 99% of texels decode to a unit normal -> BC5, (4) BC7.
+// Grey is tested first because bright grey (c about 194..208) also passes the unit-normal length test.
+// Never picks BC1. Returns false for "keep RGBA8" (a LUT strip), else sets `fmt`; `normal_map` says rule 3 fired.
+bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& normal_map) {
+    normal_map = false;
+    if ((h >= 16 && w == h * h) || (w >= 16 && h == w * w)) return false;
+    if (srgb) {
+        fmt = BcFormat::BC7;
+        return true;
+    }
+    const usize n = usize(w) * h;
+    usize normals = 0;
+    bool grey = true;
+    for (usize i = 0; i < n; ++i) {
+        const u8* p = rgba + i * 4;
+        if (p[3] != 255) grey = false;
+        if (p[0] != p[1] || p[1] != p[2]) grey = false;
+        const i64 x = 2 * i64(p[0]) - 255, y = 2 * i64(p[1]) - 255, z = 2 * i64(p[2]) - 255;
+        const i64 len2 = (x * x + y * y + z * z) * 100;  // within [0.81, 1.21] * 255^2, scaled by 100
+        if (p[3] == 255 && z > 0 && len2 >= 81 * 255 * 255 && len2 <= 121 * 255 * 255) ++normals;
+    }
+    if (grey) {
+        fmt = BcFormat::BC4;
+        return true;
+    }
+    if (normals * 100 >= n * 99) {
+        normal_map = true;
+        fmt = BcFormat::BC5;
+        return true;
+    }
+    fmt = BcFormat::BC7;
+    return true;
+}
+
 class TextureImporter final : public IImporter {
 public:
     StringView id() const override { return "texture"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 1; }  // bump with any encoder setting in texture_bc.cpp
     ChunkType type() const override { return ChunkType::Texture; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override {
@@ -426,7 +480,7 @@ public:
         const String ext = lower_extension(in.display_path);
         if (ext.view() == ".hdr" || ext.view() == ".exr") return cook_hdr(in, ext.view() == ".exr", out, diags);
         const JsonValue s = in.settings;
-        if (!detail::check_keys(s, {"srgb", "mips", "filter", "max_size"}, in.display_path, kStage, diags)) return false;
+        if (!detail::check_keys(s, {"srgb", "mips", "filter", "max_size", "compress"}, in.display_path, kStage, diags)) return false;
         bool is_srgb = true, mips = true, linear = false;
         if (!detail::read_bool(s, "srgb", true, is_srgb, in.display_path, kStage, diags)) return false;
         if (!detail::read_bool(s, "mips", true, mips, in.display_path, kStage, diags)) return false;
@@ -437,6 +491,30 @@ public:
                 return false;
             }
             linear = v == "linear";
+        }
+
+        CompressKey key = CompressKey::Missing;
+        if (const JsonValue cv = s.get("compress"); cv.valid()) {
+            const StringView v = cv.is_string() ? cv.as_string() : StringView();
+            if (v == "none") key = CompressKey::None;
+            else if (v == "auto") key = CompressKey::Auto;
+            else if (v == "bc7") key = CompressKey::Bc7;
+            else if (v == "bc5") key = CompressKey::Bc5;
+            else if (v == "bc4") key = CompressKey::Bc4;
+            else if (v == "bc1") key = CompressKey::Bc1;
+            else if (v == "astc") key = CompressKey::Astc;
+            else {
+                detail::error_at(diags, Errc::ParseError, in.display_path, cv, kStage,
+                                 "'compress' must be one of \"none\", \"auto\", \"bc7\", \"bc5\", \"bc4\", \"bc1\" or \"astc\" "
+                                 "(or leave the key out for the cook mode's default)");
+                return false;
+            }
+            if ((key == CompressKey::Bc5 || key == CompressKey::Bc4) && is_srgb) {
+                detail::error_at(diags, Errc::ParseError, in.display_path, cv, kStage,
+                                 "'compress' bc5 and bc4 store linear data: set \"srgb\": false (normal, height and mask "
+                                 "maps), or use \"bc7\" or \"bc1\" for colour");
+                return false;
+            }
         }
 
         // max_size: no limit unless the sidecar or the project cap says so; the smaller of the two wins.
@@ -514,8 +592,61 @@ public:
         }
         cw = bw;
         ch = bh;
-        const bool astc = in.texture_compression == TextureCompression::Astc4x4;
-        Array<Array<u8>> blocks;  // per level, when encoding ASTC
+        // What this texture cooks to: the cook mode and the sidecar's "compress" (the table in the file comment).
+        Target target = Target::Rgba8;
+        BcFormat bcf = BcFormat::BC7;
+        if (in.texture_compression == TextureCompression::Astc4x4) {
+            target = key == CompressKey::None ? Target::Rgba8 : Target::Astc;
+        } else if (in.texture_compression == TextureCompression::Bc) {
+            bool auto_normal_map = false;
+            switch (key) {
+                case CompressKey::None:
+                case CompressKey::Astc: break;
+                case CompressKey::Bc7: target = Target::Bc, bcf = BcFormat::BC7; break;
+                case CompressKey::Bc5: target = Target::Bc, bcf = BcFormat::BC5; break;
+                case CompressKey::Bc4: target = Target::Bc, bcf = BcFormat::BC4; break;
+                case CompressKey::Bc1: target = Target::Bc, bcf = BcFormat::BC1; break;
+                case CompressKey::Missing:
+                case CompressKey::Auto: {
+                    bool normal_map = false;
+                    if (choose_auto(levels.data(), cw, ch, is_srgb, bcf, normal_map)) {
+                        target = Target::Bc;
+                        auto_normal_map = normal_map;
+                    }
+                    break;
+                }
+            }
+            if (target == Target::Bc && ((cw & 3) != 0 || (ch & 3) != 0)) {
+                char buf[256];
+                std::snprintf(buf, sizeof buf,
+                              "texture is %ux%u: block compression needs both sides to be multiples of 4, so it is cooked as "
+                              "RGBA8. Resize the image to a multiple of 4 or set a \"max_size\" that gives one",
+                              cw, ch);
+                const String msg(buf);
+                diags.warning(in.display_path, 0, 0, kStage, msg);
+                target = Target::Rgba8;
+            } else if (target == Target::Bc && auto_normal_map) {
+                String msg("'compress' auto chose bc5 (the texture looks like a normal map); set \"compress\" to override");
+                diags.warning(in.display_path, 0, 0, kStage, msg);
+            }
+        }
+        const bool astc = target == Target::Astc;
+        const bool bc = target == Target::Bc;
+        Array<Array<u8>> blocks;  // per level, when encoding ASTC or BC
+        if (bc) {
+            blocks.resize(offsets.size());
+            u32 lw = cw, lh = ch;
+            bool alpha_dropped = false;
+            for (usize i = 0; i < offsets.size(); ++i) {
+                blocks[i].resize_uninitialized(usize(bc_level_bytes(bcf, lw, lh)));
+                encode_bc_level(bcf, is_srgb, levels.data() + offsets[i], lw, lh, blocks[i].data(), &alpha_dropped);
+                lw = lw > 1 ? lw / 2 : 1;
+                lh = lh > 1 ? lh / 2 : 1;
+            }
+            if (alpha_dropped)
+                diags.warning(in.display_path, 0, 0, kStage,
+                              "'compress' bc1 is opaque: the texture has alpha below 255, which is dropped. Use \"bc7\" to keep it");
+        }
         if (astc) {
             astcenc_config cfg;
             astcenc_context* ctx = nullptr;
@@ -540,7 +671,7 @@ public:
             }
         }
         for (usize i = 0; i < offsets.size(); ++i) {
-            if (astc) {
+            if (astc || bc) {
                 const Span<const byte> bytes(reinterpret_cast<const byte*>(blocks[i].data()), blocks[i].size());
                 mip_data.push_back(asset::TextureMipData{cw, ch, bytes});
                 cw = cw > 1 ? cw / 2 : 1;
@@ -554,7 +685,8 @@ public:
         }
 
         Array<byte> payload;
-        const asset::TextureFormat format = astc ? asset::TextureFormat::ASTC_4x4 : asset::TextureFormat::RGBA8;
+        const asset::TextureFormat format = astc ? asset::TextureFormat::ASTC_4x4
+                                            : bc ? bc_texture_format(bcf) : asset::TextureFormat::RGBA8;
         const u32 flags = (is_srgb ? asset::TextureFlags::Srgb : 0u) | (linear ? asset::TextureFlags::LinearFilter : 0u);
         asset::write_texture(format, 1, flags, mip_data.span(), payload);
         asset::ContainerWriter::ChunkDesc d;
