@@ -123,6 +123,35 @@ void main() {
 }
 )";
 
+// Automatic instancing (M-VISUAL3 5a): a run of draws of one rigid submesh with one material reads its
+// per-draw matrices from a transient storage block at bank 13 (Forward3D uploads it per pass); slot
+// o_skin.y + gl_InstanceID is this copy's. kMeshVS's math with o_model / o_normal read per instance, so a
+// run's pixels equal the single draws' bit for bit. Feeds kMeshFS and kAoPrepassFS (ObjectU carries the rest).
+constexpr const char* kDrawInstancedVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U R"(
+struct DrawInst { mat4 model; mat4 normal; };
+layout(std430, binding = 13) readonly buffer DrawInstances { DrawInst d_inst[]; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 1) in vec2 a_oct;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec3 v_world;
+layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+vec3 oct_decode(vec2 e) {
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(n);
+}
+void main() {
+    uint k = uint(o_skin.y) + uint(gl_InstanceID);
+    vec4 w = d_inst[k].model * vec4(a_pos.xyz, 1.0);
+    v_world = w.xyz;
+    v_normal = mat3(d_inst[k].normal) * oct_decode(a_oct);
+    v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    gl_Position = u_view_proj * w;
+}
+)";
+
 // Skinning (FR-R3D-060, optional): the joint palette (model-space joint matrices, Scene3D) and
 // the skin matrix of a vertex's 4 influences. Joint indices arrive as unorm8 (x255 to index).
 #define MCE_GLSL_SKIN R"(
@@ -901,6 +930,16 @@ out gl_PerVertex { vec4 gl_Position; };
 void main() { gl_Position = s_mvp * (skin_matrix(s_skin.x) * (s_dequant * vec4(a_pos.xyz, 1.0))); }
 )";
 
+// Automatic instancing (M-VISUAL3 5a): per copy the premultiplied cascade or tile MVP the CPU computes for
+// a single draw (not view_proj x model on the GPU), slot s_skin.y + gl_InstanceID, so the depth is the same.
+constexpr const char* kShadowInstancedVS = R"(#version 450 core
+layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; mat4 s_dequant; vec4 s_skin; };
+layout(std430, binding = 13) readonly buffer ShadowInstances { mat4 d_mvp[]; };
+layout(location = 0) in vec4 a_pos;
+out gl_PerVertex { vec4 gl_Position; };
+void main() { gl_Position = d_mvp[uint(s_skin.y) + uint(gl_InstanceID)] * vec4(a_pos.xyz, 1.0); }
+)";
+
 constexpr const char* kShadowFS = R"(#version 450 core
 void main() {}
 )";
@@ -934,6 +973,19 @@ void main() {
     gl_Position = vp_jittered * w;
     v_current = vp_current * w;
     v_previous = vp_previous * (m_previous * (skin_matrix(m_skin.y) * p));
+}
+)";
+// Automatic instancing (M-VISUAL3 5a): the model of each copy at slot m_skin.z + gl_InstanceID. Runs never
+// hold a moving draw, so last frame's model is this frame's.
+constexpr const char* kVelocityInstancedVS = "#version 450 core\n" MCE_GLSL_VELOCITY_U R"(
+layout(std430, binding = 13) readonly buffer VelocityInstances { mat4 d_model[]; };
+void main() {
+    vec4 p = vec4(a_pos.xyz, 1.0);
+    mat4 m = d_model[uint(m_skin.z) + uint(gl_InstanceID)];
+    vec4 w = m * p;
+    gl_Position = vp_jittered * w;
+    v_current = vp_current * w;
+    v_previous = vp_previous * (m * p);
 }
 )";
 #undef MCE_GLSL_VELOCITY_U

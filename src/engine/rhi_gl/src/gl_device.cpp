@@ -225,13 +225,11 @@ ResultV GlDevice::init() {
     }
     glGetIntegerv(GL_MAX_IMAGE_UNITS, &v);
     caps_.max_storage_image_units = static_cast<u32>(v);
-    // GL 4.5 is required, so BC4/BC5 (RGTC) and BC7 (BPTC) are core; BC1 comes with S3TC, which every desktop driver
-    // exposes. texture_bc claims BC1/4/5/7 non-sRGB only: DeviceCaps has no per-format bit, and BC1_SRGB needs the sRGB
-    // flavour of S3TC (GL_EXT_texture_sRGB or GL_EXT_texture_compression_s3tc_srgb). A driver without it still gets
-    // BC4/5/7 and linear BC1; the one gap is logged here, and an sRGB BC1 pack is not refused by the device.
+    // GL 4.5 is required, so BC4/BC5 (RGTC) and BC7 (BPTC, sRGB included) are core; BC1 comes with S3TC, which every
+    // desktop driver exposes. BC1_SRGB needs the sRGB flavour of S3TC (GL_EXT_texture_sRGB or
+    // GL_EXT_texture_compression_s3tc_srgb), so it has its own bit; texture_bc_srgb false makes the texture store refuse it.
     caps_.texture_bc = has_gl_extension("GL_EXT_texture_compression_s3tc");
-    if (caps_.texture_bc && !has_gl_extension("GL_EXT_texture_sRGB") && !has_gl_extension("GL_EXT_texture_compression_s3tc_srgb"))
-        MCE_LOG_WARN("rhi.gl: no sRGB S3TC extension; BC1_SRGB textures are not supported on this driver (BC4/BC5/BC7 and linear BC1 are)");
+    caps_.texture_bc_srgb = caps_.texture_bc && (has_gl_extension("GL_EXT_texture_sRGB") || has_gl_extension("GL_EXT_texture_compression_s3tc_srgb"));
     caps_.texture_astc = has_gl_extension("GL_KHR_texture_compression_astc_ldr");
     MCE_LOG_INFO("rhi.gl: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 

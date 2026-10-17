@@ -100,6 +100,7 @@ TEST_CASE("bc runtime: rhi_format_for maps every cooked format and the sRGB flag
 TEST_CASE("bc runtime: upload_cooked_texture reaches the device with the BC format") {
     StubDevice dev;
     dev.caps_.texture_bc = true;
+    dev.caps_.texture_bc_srgb = true;
     TextureStore store;
     REQUIRE(store.init(dev).has_value());
     struct Case {
@@ -161,6 +162,33 @@ TEST_CASE("bc runtime: a device that cannot sample the format refuses it, and th
     auto raw = create_texture(dev, up);
     REQUIRE_FALSE(raw.has_value());
     CHECK(raw.error().code == Errc::Unsupported);
+}
+
+TEST_CASE("bc runtime: BC1_SRGB is refused when the device has BC but no sRGB BC1") {
+    StubDevice dev;
+    dev.caps_.texture_bc = true;
+    dev.caps_.texture_bc_srgb = false;
+    TextureStore store;
+    REQUIRE(store.init(dev).has_value());
+    const u32 base = dev.creates;
+    Array<byte> lin, srgb, bc7srgb;
+    bc_blob(AF::BC1, 0, 8, 1, 8, byte{0}, lin);
+    bc_blob(AF::BC1, asset::TextureFlags::Srgb, 8, 1, 8, byte{0}, srgb);
+    bc_blob(AF::BC7, asset::TextureFlags::Srgb, 8, 1, 16, byte{0}, bc7srgb);
+    CHECK(upload_cooked_texture(store, 1, 1, lin.span()).has_value());
+    CHECK(dev.last.format == RF::BC1_UNorm);
+    const u32 after_lin = dev.creates;
+    auto r = upload_cooked_texture(store, 2, 1, srgb.span());
+    REQUIRE_FALSE(r.has_value());
+    CHECK(r.error().code == Errc::Unsupported);
+    CHECK(StringView(r.error().stage) == "render.texture.format");
+    CHECK(dev.creates == after_lin);  // refused before the device is touched
+    CHECK(after_lin == base + 1);
+    CHECK(upload_cooked_texture(store, 3, 1, bc7srgb.span()).has_value());  // BC7 sRGB is gated by texture_bc only
+    CHECK(dev.last.format == RF::BC7_SRGB);
+    dev.caps_.texture_bc_srgb = true;
+    CHECK(upload_cooked_texture(store, 2, 1, srgb.span()).has_value());
+    CHECK(dev.last.format == RF::BC1_SRGB);
 }
 
 TEST_CASE("bc runtime: create_texture reports a null handle from the backend") {

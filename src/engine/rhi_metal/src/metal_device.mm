@@ -243,6 +243,7 @@ ResultV MetalDevice::init() {
         for (u32& n : caps_.max_compute_group_count) n = 0xFFFFFFFFu;
         caps_.max_storage_image_units = kMaxImageUnits;
         if (@available(macOS 11.0, iOS 16.4, *)) caps_.texture_bc = [device_ supportsBCTextureCompression];
+        caps_.texture_bc_srgb = caps_.texture_bc;  // conservative: Metal has no per-format query
         caps_.texture_astc = [device_ supportsFamily:MTLGPUFamilyApple2];
         init_timestamps();
         MCE_LOG_INFO("rhi.metal: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
