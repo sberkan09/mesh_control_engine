@@ -2322,7 +2322,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ou.emissive = {mat.emissive[0], mat.emissive[1], mat.emissive[2], keys[3] != ~0u ? 1.0f : 0.0f};
             ou.params = {(mat.flags & asset::MaterialFlags::AlphaMask) ? mat.alpha_cutoff : 0.0f,
                          (mat.flags & asset::MaterialFlags::Unlit) ? 1.0f : 0.0f, mat.roughness, mat.metallic};
-            ou.maps = {keys[1] != ~0u && (!b.material || !b.material->parallax || b.material->parallax_normal) ? 1.0f : 0.0f,
+            ou.maps = {normal_map_of(b.material, keys[1]) ? 1.0f : 0.0f,
                        keys[2] != ~0u ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};

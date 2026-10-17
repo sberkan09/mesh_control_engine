@@ -233,7 +233,7 @@ struct ParallaxFloor {
     u32 albedo = ~0u, array = ~0u;
 };
 
-inline ParallaxFloor make_parallax_floor(Fixture3D& f) {
+inline ParallaxFloor make_parallax_floor(Fixture3D& f, bool tilted_normals = false) {
     constexpr u32 N = 64;
     Array<u8> albedo, layers;
     for (u32 y = 0; y < N; ++y)
@@ -246,9 +246,9 @@ inline ParallaxFloor make_parallax_floor(Fixture3D& f) {
             albedo.push_back(255);
         }
     for (u32 i = 0; i < N * N; ++i) {  // layer 0: a flat normal map
+        layers.push_back(tilted_normals ? 238 : 128);  // 60 degrees toward +x, or flat
         layers.push_back(128);
-        layers.push_back(128);
-        layers.push_back(255);
+        layers.push_back(tilted_normals ? 191 : 255);
         layers.push_back(255);
     }
     for (u32 y = 0; y < N; ++y)  // layer 1: the height map, grooves low
@@ -288,6 +288,7 @@ inline ParallaxFloor make_parallax_floor(Fixture3D& f) {
     p.on = p.off;
     p.on.normal_key = p.array;
     p.on.parallax = true;
+    p.on.parallax_normal = tilted_normals;
     p.on.ext.set_height(asset::Guid{1, 2});
     p.on.ext.height_scale = 0.08f;
     return p;

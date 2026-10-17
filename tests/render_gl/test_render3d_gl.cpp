@@ -2413,6 +2413,29 @@ TEST_CASE("render3d_gl: parallax shifts a brick floor at grazing angles, less lo
     apply_quality(quality_settings(QualityTier::Medium), medium);
     CHECK(medium.distance == 15.0f);
     CHECK(medium.max_steps == 16);
+    CHECK(differing(draw(&p.on, medium), flat_grazing) > 0);  // the Medium tier still marches at 7 m, with at most 16 steps
     CHECK(differing(draw(&p.on), pom_grazing) == 0);  // deterministic
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a parallax array's layer 0 is a normal map read at the shifted uv; without parallax_normal it is ignored") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f, true);
+    MaterialOverride no_normal = p.on;
+    no_normal.parallax_normal = false;
+    f.pitch_deg = 30.0f;
+    const auto draw = [&](const MaterialOverride* m) {
+        f.render(0.0f, true, [&, m](Scene3D& s) {
+            MeshInstance fl;
+            fl.mesh = 20;
+            fl.material = m;
+            s.add(fl);
+        });
+        return f.pixels;
+    };
+    const Array<u8> with_normal = draw(&p.on);
+    const Array<u8> without = draw(&no_normal);
+    INFO("differing pixels " << differing(with_normal, without));
+    CHECK(differing(with_normal, without) > 300);  // the tilted normal map lights the floor differently
     CHECK(f.device->validation_error_count() == 0);
 }

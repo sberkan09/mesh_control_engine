@@ -410,10 +410,12 @@ inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::Material
 }
 inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
 inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }
-// Whether the draw's normal map is a real normal map (a parallax array may hold only a height layer).
-inline bool normal_map_of(const MeshInstance& inst, const GpuSubmesh& sm) {
-    return normal_key_of(inst, sm) != ~0u && (!inst.material || !inst.material->parallax || inst.material->parallax_normal);
+// Whether a draw with this material override (null: the submesh's own) and normal key samples a real normal
+// map (a parallax array may hold only a height layer).
+inline bool normal_map_of(const MaterialOverride* material, u32 normal_key) {
+    return normal_key != ~0u && (!material || !material->parallax || material->parallax_normal);
 }
+inline bool normal_map_of(const MeshInstance& inst, const GpuSubmesh& sm) { return normal_map_of(inst.material, normal_key_of(inst, sm)); }
 inline u32 orm_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->orm_key : sm.orm_key; }
 inline u32 emissive_key_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->emissive_key : sm.emissive_key;
