@@ -908,10 +908,9 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     const Span<const mat4> palette = scene.joint_palette();
     if (!palette.empty()) cmd.set_storage_data(rhi::bank::kJointPalette, std::as_bytes(palette));
     stats_.joints = static_cast<u32>(palette.size());
-    update_atmosphere(scene);   // CPU: re-bakes the sky texture when the sun or the air changed
-    record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
-    record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
-    // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume.
+    // The volume's sun fit takes one more shadow-map layer, added once a scene has a volume. Before the probe
+    // captures, which bind the shadow map: a handle destroyed after they record is gone when they execute
+    // (texture 0 under a depth-compare sampler, undefined; NVIDIA warns).
     if (scene.gi_volume().enabled && !gi_project_.is_null() && gi_shadow_layer_ == 0) {
         destroy(*device_, shadow_map_);
         rhi::TextureDesc td;
@@ -924,6 +923,9 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         td.debug_name = "mce.3d.shadow_cascades";
         shadow_map_ = device_->create_texture(td);
     }
+    update_atmosphere(scene);   // CPU: re-bakes the sky texture when the sun or the air changed
+    record_ibl(cmd, scene);     // rare (sky changes), so outside the per-stage budget
+    record_probes(cmd, scene);  // rare too (probe placed, moved or version bumped)
     timestamp(cmd, kTsBegin);
     record_clusters(cmd, scene);
     timestamp(cmd, kTsClusters);
