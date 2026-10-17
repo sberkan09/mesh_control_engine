@@ -408,13 +408,28 @@ struct Foliage3D {
     u32 cast_shadows = 1;
     u32 random_yaw = 1;
     u32 enabled = 1;
+    // M-VISUAL3 6: each copy's tint = mix(tint, tint_variation, hash of its origin); the default (white) keeps `tint`.
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 wind_height = 0.0f;    // metres where the sway reaches wind_amplitude; 0 = amplitude x h^2 (h in metres)
+    f32 wind_gust = 0.0f;      // 0..1: slow gusts travelling along wind_direction across the field
+    f32 wind_flutter = 0.0f;   // metres of fast per-vertex leaf jitter at wind_height
+    // More kinds in one scatter: each point picks mesh, mesh_1, mesh_2 or mesh_3 by a hash weighted by mesh_weights
+    // (relative shares; an unbound mesh gets none).
+    asset::AssetRef<asset::Mesh> mesh_1, mesh_2, mesh_3;
+    math::vec4 mesh_weights{1.0f, 0.0f, 0.0f, 0.0f};
 };
 MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
               (half_extents, Help{"metres, x and z, around the entity"}), (count, Range{0, 1000000}), seed,
               (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
-              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's tint mixes from tint toward this by a hash of its origin; white = no variation"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height"}),
+              (mesh_1, Help{"a second kind in the same scatter"}), (mesh_2, Help{"a third kind"}), (mesh_3, Help{"a fourth kind"}),
+              (mesh_weights, Help{"relative share of mesh, mesh_1, mesh_2, mesh_3"}))
 
 // ---- terrain (M-TERRAIN) -------------------------------------------------------------------------
 
@@ -470,6 +485,10 @@ struct TerrainFoliage3D {
     u32 random_yaw = 1;
     u32 enabled = 1;
     u32 pad_ = 0;
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};  // as Foliage3D
+    f32 wind_height = 0.0f;
+    f32 wind_gust = 0.0f;
+    f32 wind_flutter = 0.0f;
 };
 MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
               (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
@@ -478,7 +497,11 @@ MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the me
               (max_slope_deg, Range{0, 90}, Help{"no copies on steeper ground"}),
               (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
               (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
-              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled)
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's tint mixes from tint toward this by a hash of its origin; white = no variation"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height"}))
 
 // A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
 // entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
