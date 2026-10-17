@@ -117,7 +117,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Finding: the glTF importer asserts on a wrongly typed value.** `read_indices` (`gltf_importer.cpp:447`) calls
   `as_number()` on an accessor index it has not type-checked in the `ctype == 5125` branch (`bufferView`, `buffer`);
   in release the same read is out of bounds on the JSON node array. Owner: M-IMPORT3D (asset/cook mesh import).
-  The `.glb`/`.gltf` files are skipped unless `MCE_FUZZ_GLTF=1`.
+  **Fixed in M-IMPORT3D 1:** the accessor reader is type-checked end to end (a systematic type-confusion mutation test covers the whole indices chain) and the `.glb`/`.gltf` files are fuzzed by default again (`MCE_FUZZ_GLTF` is gone).
 - **Finding, fixed in 3b2: a mutated TrueType font crashes the font importer.** `stbrp_pack_rects` in the atlas bake got
   a negative width from a damaged glyph box (`font_importer.cpp`). stb_truetype trusts its input, so `font_structure_ok`
   now walks what it reads before it is called: table directory and bounds, head/maxp/hhea/hmtx, the one cmap subtable
@@ -138,7 +138,6 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 ### Open items from step 3
 
 - Luau bytecode loader trusts its input (3a); decision with the M-SCRIPT owner.
-- glTF importer wrongly-typed values (3b); M-IMPORT3D.
 - pl_mpeg heap overflow in `the third-party decoder's macroblock step via `VideoDecoder::count_frames` (found at 2,500 mutants of the
   sample `.mpg`; render/video owner). `.mpg` cases run only with `MCE_FUZZ_VIDEO=1`.
 - 3c not started: `.mcperf`, websocket frames, console/command line, scene instantiate.
@@ -162,7 +161,7 @@ validation switched on.
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
-| glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | **findings, see step 3b**; cases off by default | open |
+| glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`, ...) | cook JSON reader and per-type validators | project sources, agents | mutated text and valid JSON with one value swapped (`test_fuzz_importers`) | done |
 | Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | mutated and re-sealed (`test_fuzz_player_data`) | done |
 | Input recordings | `input/script.h` `parse` | tests, bug reports | raw stream and script text (`test_fuzz_player_data`) | done |

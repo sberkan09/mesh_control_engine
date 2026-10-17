@@ -19,7 +19,7 @@ namespace {
 
 void check_golden(const char* name, const Fixture3D& f) {
     CHECK(f.device->validation_error_count() == 0);
-    golden::check(name, kW, kH, f.pixels.span());
+    golden::check(name, kW, kH, f.pixels.span(), f.device->caps().device_name.c_str());
 }
 
 Sky gradient_sky() {
@@ -549,6 +549,36 @@ TEST_CASE("golden: a scattered, wind-swept batch with its shadows and a projecte
     CHECK(f.renderer.forward_3d().last_stats().batches == 1);
     CHECK(f.renderer.forward_3d().last_stats().decals == 1);
     check_golden("scale_foliage_decal", f);
+}
+
+// ---- M-VISUAL3 6: foliage variation and wind ------------------------------------------------------------------------
+
+TEST_CASE("golden: a windy meadow whose copies vary in colour, with a wind height, gusts and flutter") {
+    Fixture3D f;
+    FoliageScatter sc;
+    sc.half_extents = {3.0f, 3.0f};
+    sc.count = 90;
+    sc.seed = 4;
+    sc.scale_min = 0.2f;
+    sc.scale_max = 0.5f;
+    Array<math::mat4> grass;
+    scatter_foliage(sc, grass);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(0.8f, 0.016f);
+        InstanceBatch b;
+        b.id = 1;
+        b.version = 1;
+        b.mesh = 1;
+        b.transforms = grass.span();
+        b.tint = {0.55f, 0.9f, 0.4f, 1.0f};
+        b.tint_variation = {0.1f, 2.5f, 3.0f, 1.0f};
+        b.wind_amplitude = 0.25f;
+        b.wind_frequency = 0.7f;
+        b.wind_ext = {0.5f, 0.7f, 0.03f, 0.0f};
+        s.add_batch(b);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().batches == 1);
+    check_golden("foliage_variation", f);
 }
 
 TEST_CASE("golden: a GPU particle burst glowing above the ground") {

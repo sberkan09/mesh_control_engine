@@ -349,14 +349,17 @@ u64 sky_radiance_key(const Sky& sky, rhi::TextureHandle sky_tex, f32 sky_lod) {
 }
 
 // What a probe's capture depends on: its placement, its version and the sky lighting it.
-u64 probe_key(const ReflectionProbe& p, u64 sky_key) {
+// Keys are taken in absolute coordinates (`origin`: the floating-origin shifts seen so far), so a rebase that moves a
+// probe or the volume with the rest of the world keeps its capture.
+u64 probe_key(const ReflectionProbe& p, u64 sky_key, const f64 (&origin)[3]) {
     u64 h = sky_key;
     auto mix = [&h](const void* q, usize n) {
         const auto* b = static_cast<const u8*>(q);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[9] = {p.position.x, p.position.y, p.position.z, p.bounds.min.x, p.bounds.min.y,
-                      p.bounds.min.z, p.bounds.max.x, p.bounds.max.y, p.bounds.max.z};
+    const f64 f[9] = {p.position.x + origin[0], p.position.y + origin[1], p.position.z + origin[2],
+                      p.bounds.min.x + origin[0], p.bounds.min.y + origin[1], p.bounds.min.z + origin[2],
+                      p.bounds.max.x + origin[0], p.bounds.max.y + origin[1], p.bounds.max.z + origin[2]};
     mix(f, sizeof(f));
     mix(&p.version, sizeof(p.version));
     return h | 1u;
@@ -375,13 +378,14 @@ void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&v
 }
 
 // The volume's contents depend on its placement, its version and its bake (or the lack of one).
-u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked) {
+u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked, const f64 (&origin)[3]) {
     u64 h = 1469598103934665603ull;
     auto mix = [&h](const void* q, usize n) {
         const auto* b = static_cast<const u8*>(q);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f32 f[6] = {gi.bounds.min.x, gi.bounds.min.y, gi.bounds.min.z, gi.bounds.max.x, gi.bounds.max.y, gi.bounds.max.z};
+    const f64 f[6] = {gi.bounds.min.x + origin[0], gi.bounds.min.y + origin[1], gi.bounds.min.z + origin[2],
+                      gi.bounds.max.x + origin[0], gi.bounds.max.y + origin[1], gi.bounds.max.z + origin[2]};
     const u32 u[6] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation};
     mix(f, sizeof(f));
     mix(u, sizeof(u));
@@ -962,6 +966,20 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     } else {
         history_valid_ = false;  // a frame without TAA breaks the history
     }
+    // Floating origin: the frame after a rebase is a camera cut for the temporal history (the previous matrices
+    // are in the old coordinates); the world-space state shared by the views moves once, on the first view.
+    if (const vec3 d = scene.origin_shift(); d.x != 0.0f || d.y != 0.0f || d.z != 0.0f) {
+        history_valid_ = false;
+        velocity_prev_valid_ = false;
+        ssr_prev_valid_ = false;
+        if (out.first) {
+            origin_[0] += f64(d.x);
+            origin_[1] += f64(d.y);
+            origin_[2] += f64(d.z);
+            for (EmitterGpu& e : emitters_gpu_) if (!e.particles.is_null()) device_->destroy_buffer(e.particles);  // world-space rings restart
+            emitters_gpu_.clear();
+        }
+    }
     post_source_ = hdr_;
     post_size_ = size;
     // The joint palette stays bound for the shadow and main passes (one copy per frame).
@@ -1218,7 +1236,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                              d.size.width, d.size.height, d.array_layers, kIblEnvWidth, kIblEnvWidth / 2, kProbeLayers);
         }
         // A bake depends on nothing but its texture.
-        keys[i] = baked[i].is_null() ? probe_key(probes[i], ibl_key_)
+        keys[i] = baked[i].is_null() ? probe_key(probes[i], ibl_key_, origin_)
                                      : ((u64(baked[i].index) << 32 | baked[i].generation) * 1099511628211ull) | 1u;
         any |= keys[i] != probe_keys_[i];
     }
@@ -1906,7 +1924,7 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         gi_key_ = 0;
     }
     const u32 total = gi.counts[0] * gi.counts[1] * gi.counts[2];
-    const u64 key = gi_key(gi, baked);
+    const u64 key = gi_key(gi, baked, origin_);
     cmd.push_debug_scope("gi");
     if (key != gi_key_) {
         gi_key_ = key;
@@ -2557,6 +2575,10 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
             ou.dequant = mat4::identity();
+            // The shader reads a batch's colour variation (column 0) and wind extension (column 1) from the unused dequant.
+            const f32 extra[8] = {b.tint_variation.x, b.tint_variation.y, b.tint_variation.z, b.tint_variation.w,
+                                  b.wind_ext.x,       b.wind_ext.y,       b.wind_ext.z,       b.wind_ext.w};
+            for (u32 i = 0; i < 8; ++i) ou.dequant.c[i / 4][i % 4] = extra[i];
             ou.inst = batch_wind(b);
             parallax_uniforms(b.material, scene.parallax(), ou);
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);

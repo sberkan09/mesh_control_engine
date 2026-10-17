@@ -239,6 +239,13 @@ struct AudioRef {
     u32 snapshot_count = 0;
 };
 
+// World resource the UI flow (kit::UiFlow, system kit_ui_flow) writes every tick: `keep` is set while a pause screen
+// that asked to keep the sound going (UiFlow::keep_audio) holds the world. Under a pause hold (World::paused())
+// audio_bridge runs only when `keep` is set; without the resource a pause is silent, and without a pause nothing changes.
+struct PauseMix {
+    bool keep = false;
+};
+
 // Registers AudioSource, AudioSpatial, AudioOcclusion, AudioDoppler, AudioListener, AudioBusEffects, AudioReverb, AudioLimiter, AudioDuck,
 // AudioSnapshot, PlaySfx, the AudioRef resource, the remove hook (stop with a 50 ms
 // fade) and the audio_bridge system in FixedUpdate_Post. Call after any system named in `after`.

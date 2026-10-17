@@ -132,11 +132,7 @@ TEST_CASE("fuzz: importers survive mutated source files of every committed sampl
             if (!e.is_regular_file()) continue;
             const std::string ext = e.path().extension().string();
             if (reg.for_extension(StringView(ext.c_str(), ext.size())) == nullptr) continue;
-            // KNOWN GAP (M-FUZZ 3 finding): the glTF importer asserts on a wrongly typed JSON value (an accessor
-            // index that is not a number, gltf_importer.cpp read_indices). Off until M-IMPORT3D fixes it;
-            // MCE_FUZZ_GLTF=1 runs it.
-            if ((ext == ".glb" || ext == ".gltf") && std::getenv("MCE_FUZZ_GLTF") == nullptr) continue;
-            // Likewise the MPEG decoder: a mutated .mpg overflows the heap in its macroblock decoding (found at 2,500 mutants,
+            // KNOWN GAP: the MPEG decoder: a mutated .mpg overflows the heap in its macroblock decoding (found at 2,500 mutants,
             // reached through VideoDecoder::count_frames in the video importer). MCE_FUZZ_VIDEO=1 runs it.
             if (ext == ".mpg" && std::getenv("MCE_FUZZ_VIDEO") == nullptr) continue;
             if (e.file_size() > 1024 * 1024) continue;

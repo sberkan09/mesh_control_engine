@@ -816,6 +816,7 @@ public:
             extract3d_.set_frame_dt(capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
             extract3d_.extract(world_, scene3, alpha);
             scene3.build();
+            extract3d_.note_built(scene3);  // one warning when decals were dropped
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
             take_draw_causes();
@@ -2576,6 +2577,7 @@ private:
             for (u32 k = 0; k < kDrawCauseCount; ++k) f.counters.draw_causes[k] = draw_causes3d_[k];
             f.counters.merged_groups = extract3d_.stats().merged_groups;
             f.counters.merged_children = extract3d_.stats().merged_children;
+            f.counters.decals_dropped = stats3d_.decals_dropped;
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;

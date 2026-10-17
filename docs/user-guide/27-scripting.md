@@ -107,6 +107,7 @@ the new entity is alive at once, its components appear after the phase.
 | `mce.emit("Type", {...})` | pushes an event of any reflected event type the world has |
 | `mce.signal("name", e?)` | a named signal that sequences' and behavior trees' wait nodes hear |
 | `mce.signals("name")` | the emitters of this tick's signals of that name (sequences, timelines, behavior trees) |
+| `mce.make_noise(position, loudness?, source?, team?)` | a noise perceivers hear on the next tick (`loudness` metres for hearing 1, default 10; perceivers of `team` ignore it); needs the AI kit's perception |
 | `mce.play_sound("guid:<sfx>", gain_db?)` | a one-shot sound |
 
 **Input.** `mce.pressed(action)`, `mce.held(action)`, `mce.released(action)`, `mce.axis(action)` (a
@@ -215,6 +216,11 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
   scripts keep running.
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
+
+**Limits at a glance.** No state between ticks (use a component); no quaternion type (rotations are Euler degrees);
+`Perceiver.sees` and `.heard` read as numbers (`0` or `1`), not booleans; no `os`, `io`, `print` or `math.random`.
+The full table, with what to do instead, is in the [engine reference](../engine/script.md#limits); the typed list of
+every `mce` function is `mce.d.luau` ([where it comes from](../engine/script.md#mcedluau-the-typed-reference)).
 
 ## 27.5 Checks before the game runs
 

@@ -90,6 +90,10 @@ Built-in shaders are GLSL 450 strings in `src/renderer.cpp` (2D) and `src/shader
   tonemap encode sRGB themselves (`RendererDesc::encode_srgb_output`,
   `Forward3DDesc::encode_srgb_output`); turn it off when rendering into an sRGB target. 2D post
   works in that display (sRGB-encoded) space.
+- **Floating origin.** `Scene3D::set_origin_shift(delta)` marks the frame after a world rebase
+  (M-OPENWORLD A2). Forward3D treats it as a camera cut (TAA, velocity and SSR history restart),
+  keeps the accumulated origin so reflection probes and GI volumes are keyed by absolute position
+  (no re-capture), and restarts GPU particle rings.
 - **Failure handling.** Missing or failed textures resolve to the magenta checker; uploads
   validate cooked bytes and keep the previous generation on failure. Mesh instances whose key is
   not resident are skipped.
