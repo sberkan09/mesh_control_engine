@@ -142,14 +142,16 @@ struct UiFlow {
     FixedString<32> load_on;
     FixedString<32> quit_on;
     bool pause = false;
-    u8 pad_[3] = {};
+    bool keep_audio = false;
+    u8 pad_[2] = {};
 };
 MCE_COMPONENT(UiFlow, (scene, Help{"the scene load_on loads (null: none)"}),
               (show_on, Help{"an input action that shows this screen, e.g. Pause"}),
               (hide_on, Help{"an input action that hides it, e.g. Resume"}),
               (load_on, Help{"an input action that loads 'scene', e.g. Restart"}),
               (quit_on, Help{"an input action that ends the game (scene::request_quit), e.g. Quit"}),
-              (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}))
+              (pause, Help{"hold the game (systems, physics, audio) while this screen is visible"}),
+              (keep_audio, Help{"with 'pause': the sound goes on while held (playing sources, Sfx triggers, music fades); menu clicks and the screen's own SfxTrigger play"}))
 
 // The view a player renders from: the first `primary` camera in ECS order, at its entity's
 // position (rotation about +Z included).
@@ -296,7 +298,7 @@ struct SequencePlayer {
     u32 pad_ = 0;
 };
 MCE_COMPONENT(SequencePlayer, sequence, name, (active, Save), (anchored, Save, ReadOnly), (step, Save, ReadOnly),
-              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly))
+              (elapsed, Save, ReadOnly), (anchor, Save, ReadOnly, WorldPoint))
 
 enum class PathStatus : u8 { Idle, Moving, Arrived, NoPath };
 MCE_ENUM(PathStatus, Idle, Moving, Arrived, NoPath)

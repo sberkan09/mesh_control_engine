@@ -160,6 +160,11 @@ public:
     bool loaded() const;
     const NavBakeSettings3D& settings() const;
     math::aabb3 bounds() const;
+    // Floating origin (M-OPENWORLD A2): the mesh stays where it was baked and every call converts, so
+    // Detour coordinates = the caller's + offset. A rebase by d adds d; a fresh load or bake keeps the
+    // offset it is given here (0 by default).
+    void set_origin_offset(vec3 offset);
+    vec3 origin_offset() const;
 
     // ---- path costs (used by queries and agents) -----------------------------------------------------
     void set_area_cost(u8 area, f32 cost);  // >= 1 keeps paths optimal; area 0 ignored

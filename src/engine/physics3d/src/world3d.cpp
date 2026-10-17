@@ -676,6 +676,32 @@ void World3D::teleport(Entity e, vec3 position, quat rotation) {
                                                              JPH::EActivation::Activate);
 }
 
+void World3D::shift_origin(vec3 delta) {
+    if (delta.x == 0.0f && delta.y == 0.0f && delta.z == 0.0f) return;
+    Impl& w = *impl_;
+    const JPH::Vec3 d = to_jph(delta);
+    // Every body of the system: the slots' bodies, ragdoll parts and vehicle chassis alike. Sleeping
+    // bodies stay asleep; velocities and the bodies' relative poses are untouched.
+    JPH::BodyInterface& bi = w.system.GetBodyInterfaceNoLock();
+    JPH::BodyIDVector ids;
+    w.system.GetBodies(ids);
+    for (const JPH::BodyID& id : ids) bi.SetPosition(id, bi.GetPosition(id) - d, JPH::EActivation::DontActivate);
+    for (Impl::Slot& s : w.slots) {
+        if (!s.alive || !s.character) continue;
+        s.character->SetPosition(s.character->GetPosition() - d);
+        s.last.position = s.last.position - delta;
+    }
+    // A joint held to the world keeps its world-side point in world coordinates (body 1 is Jolt's fixed
+    // world body, at the origin): move that point with everything else.
+    for (Impl::Joint& j : w.joints) {
+        if (!j.alive || j.slot_b != 0xFFFFFFFFu) continue;
+        j.constraint->NotifyShapeChanged(JPH::BodyID(), d);
+        j.desc.anchor = j.desc.anchor - delta;
+        j.desc.anchor_b = j.desc.anchor_b - delta;
+        if (j.desc.type == JointType3D::Distance) j.local_b -= d;
+    }
+}
+
 bool World3D::body_state(Entity e, BodyState3D& out) const {
     const Impl& w = *impl_;
     const Impl::Slot* s = w.find(e);

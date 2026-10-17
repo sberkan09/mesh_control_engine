@@ -1,7 +1,8 @@
 # M-GPU-VERIFY — Real-GPU verification rounds (milestone record)
 
 **Status:** ongoing. The Linux CI renders with Mesa llvmpipe (GL) and lavapipe (Vulkan, `MCE_RHI=sdlgpu`) only, so
-real-GPU checks run in rounds on a rented RunPod RTX 3070 (driver 590.48). Each round's raw logs and its report
+real-GPU checks run in rounds on rented RunPod GPUs (RTX 3070 for r1–r5; RTX 4090 and RTX PRO 4000/4500 Blackwell for
+the parallel round). Each round's raw logs and its report
 (`RAPOR.md`) are in the project files under `gpu-runs/<date>-<gpu>-r<N>/`. The coordinator starts the pods;
 threads fix what a round finds and write down here what the next round must check.
 
@@ -15,6 +16,7 @@ threads fix what a round finds and write down here what the next round must chec
 | r1–r3 (2026-10-17) | before #467 | goldens `filmic_lens`, `parallax_cobble`, `ibl_roughness` over threshold; shadow map bound dead (NVIDIA UB warning); 50k sprites crashed; render-texture test too strict; no 2D `gpu_ms` | #467, #470, #474, #479 |
 | r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #498 (below) |
 | r5 (2026-10-17) | 70113c9 | BC vs RGBA re-measured on 04_diorama / 06_showcase (same numbers as r4) | analysis below, no code change |
+| parallel (2026-10-17) | d221a48, 0ad5735 | r4 checks pass (`parallax_cobble` 0 blocks, BC equal on both backends, sdlgpu `gpu_ms` 539/540); `ibl_roughness` NVIDIA-specific; sdlgpu 2D `gpu_ms` p50 about 0.001 ms; `editor_play_smoke` 0 ticks on the 4090; `player_capture_no_display`; BC `auto` misses most real normal maps | #506, #512, #521 (below) |
 
 ## r4 findings
 
@@ -51,27 +53,59 @@ the SDL command buffer with a fence, and a waiter thread stamps the CPU time eac
 player's two frame timestamps under `-perf_capture` use it, so sdlgpu captures have `gpu_ms` for 2D and 3D frames
 (49 of 50 frames on lavapipe in a 50-frame `extras_2d` capture). Forward3D's per-stage columns stay GL/Metal only.
 
+## Parallel round findings
+
+Report: `gpu-runs/2026-10-17-parallel/RAPOR.md`. Pod F ran the r4 checklist below on 0ad5735 (#487 + #498).
+
+### 1. sdlgpu 2D `gpu_ms` near zero (fixed, #506)
+
+3D frames read the same as GL (kit3d_tour p50 1.61–1.86 ms against GL's 1.61–1.96), but 2D frames, which are a few
+microseconds of GPU work, read p50 0.001 ms (coop) and 0.000 ms (extras_2d) against GL's 0.008 / 0.026. The waiter
+blocked in `SDL_WaitForGPUFences` and woke tens of microseconds after the GPU finished, so the frame's first stamp was
+taken late and the second fence, already passed, collapsed onto it. The waiter now polls `SDL_QueryGPUFence` (yielding)
+for up to 2 ms before it blocks, so a short frame's stamps are taken when the fences pass (`engine/rhi.md`).
+
+### 2. `ibl_roughness` NVIDIA-specific (NVIDIA golden, #512)
+
+One block of 300 at 0.974%, the same on the 3070, 4090 and Blackwell, under GL and sdlgpu, on three drivers. The
+difference is 8 pixels on the boxes' bottom edges (4x MSAA coverage); the 4090 and Blackwell images are identical
+(max difference 0). The golden check now looks in `linux-<backend>-nvidia/` first on an NVIDIA device; that directory
+holds only `ibl_roughness`, taken from the 4090's actual images. The llvmpipe/lavapipe repo goldens are unchanged.
+
+### 3. `editor_play_smoke` 0 ticks on the 4090 (fixed, #512)
+
+90 frames without vsync took 13 ms there, less than one 60 Hz tick, so play never ticked. The test runs
+`-sim.fast_forward 1 -sim.max_catchup 1` (one tick a frame).
+
+### 4. `player_capture_no_display` (fixed, #512)
+
+Not an NVIDIA problem: the pod sets `SDL_VIDEO_DRIVER=offscreen` (SDL 3's spelling), which the test did not unset, so
+the first `platform::init` succeeded and the fallback line was never printed. The test unsets both spellings.
+
+### 5. BC `auto` normal-map threshold (#521)
+
+Calibration on 14 Poly Haven 1k textures (`70_bc_calibration.csv`): at 99% unit normals only 4 of 14 normal maps
+pick BC5 (pass fractions 0.56–1.00, most 0.89–0.99), while non-grey colour maps pass at most 0.003. The report's
+90% would still miss `clay_block_wall` (0.8905), so the threshold is 85%: 13 of 14 (`forrest_ground_03`, 0.56, stays
+BC7). The grey rule runs first, so roughness and AO maps (up to 0.80) never reach it. The size gate (0.27 of RGBA8)
+counts the six textures of `05_ashen_court` only; the report's 0.381 is the whole pack and is not the gate's number.
+
 ## Next round: what to check
 
-Run on the dev_claude head that has #487 and #498. Do not start pods from a thread; the coordinator does.
+Run on the dev_claude head that has #506, #512 and #521. Do not start pods from a thread; the coordinator does. The r4
+checklist passed in the parallel round (pod F) and is not repeated, except where a fix touched it.
 
-1. **Golden `parallax_cobble`:** `test_golden_gl` under `MCE_RHI=gl` and `MCE_RHI=sdlgpu`, 3 runs each. Pass: 0
-   blocks over 0.5%. If it still fails, keep `golden_out/linux-*/parallax_cobble.{actual,diff}.png` and report the
-   worst block and count.
-2. **Other goldens:** the full `test_golden_gl` on both backends must not regress. `ibl_roughness` (1 block, 0.97%)
-   is a known machine-specific candidate; do not change its repo golden.
-3. **BC vs RGBA, deterministic:** for `06_showcase` and `04_diorama`, on both backends, capture RGBA twice and BC once
-   with `-frames 120 -capture <ppm> -sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0 -platform.error_box 0`
-   (one fixed tick per frame, so frame 120 is the same moment every run). Report mean |R| and the share of pixels
-   with |R| > 16 for RGBA-vs-RGBA (the noise floor) and BC-vs-RGBA, per backend. Also `06_showcase -sheet`
-   (fixed 60 Hz settles) for RGBA and BC on both backends. Expected: BC-vs-RGBA is about the same on GL and sdlgpu
-   and well above the noise floor only in textured detail. If sdlgpu BC-vs-RGBA is still over 2x GL's with a flat
-   noise floor, keep the ppm files: that would be a real sdlgpu BC difference.
-4. **sdlgpu `gpu_ms`:** `mce_player -perf_capture` with `-sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0
+1. **sdlgpu `gpu_ms`:** `mce_player -perf_capture` with `-sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0
    -perf_warmup 60 -frames 600` on `09_coop` (arena), `extras_2d` and `kit3d_tour -split_views 0/2/3/4`, under
-   `MCE_RHI=sdlgpu`. Pass: `summary.gpu_ms.count` close to the frame count (not 0). Compare p50 with GL on the same
-   scenes: sdlgpu should read a little higher (fence wake-up latency), not several times higher. Also check
-   `frame_ms` against r4's sdlgpu numbers (5.08 / 5.38 / 5.87 / 6.23 ms for 1–4 views): the two extra submits per
-   frame should not move it by more than about 0.1 ms.
-5. **`ctest -L gpu`** on both backends: `test_rhi_sdlgpu` includes the new fence-timestamp case; no new failures
-   (`player_capture_no_display` is the known SDL offscreen one).
+   `MCE_RHI=gl` and `MCE_RHI=sdlgpu`. Pass: `summary.gpu_ms.count` close to the frame count, and the 2D scenes' p50
+   on sdlgpu at least GL's (0.008 / 0.026 ms on the 4090), not about 0.001. 3D p50 should stay within about 0.1 ms
+   of the parallel round's (1.61 / 1.68 / 1.77 / 1.86 ms), and `frame_ms` within about 0.1 ms of its
+   (2.20 / 2.35 / 2.44 / 2.58 ms): the waiter's poll is on its own thread.
+2. **Goldens:** the full `test_golden_gl` on both backends, 3 runs each. Pass: 0 failing blocks, `ibl_roughness`
+   included (it now reads `linux-<backend>-nvidia/`). On a non-NVIDIA GPU, report `ibl_roughness`'s block count
+   against the plain golden, without adding a vendor directory.
+3. **`ctest -L gpu`** on both backends, with the pod's usual `SDL_VIDEO_DRIVER=offscreen` for GL: 0 failures.
+   `editor_play_smoke` and `player_capture_no_display` must pass on every pod (they failed on the 4090s).
+4. **BC `auto`:** re-run the Poly Haven calibration (`70_bc_calibration.csv`'s 14 textures, cooked with
+   `--textures bc`): 13 of 14 normal maps cooked as BC5 (all but `forrest_ground_03`), no colour map as BC5. Report
+   the cooked pack sizes of `04_diorama`, `05_ashen_court` and `06_showcase` against RGBA8.

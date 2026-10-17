@@ -434,7 +434,8 @@ TEST_CASE("obj: MTL materials and textures resolve to the mesh's inline material
     const CookReport r2 = svc.cook(root.c_str(), CookOptions{});
     INFO(diag_text(r2));
     REQUIRE(r2.ok());
-    const MeshView m2 = view_of(cooked_mesh(root, kObjGuid));
+    const std::vector<byte> m2_bytes = cooked_mesh(root, kObjGuid);  // the view points into these bytes
+    const MeshView m2 = view_of(m2_bytes);
     CHECK(m2.submeshes[1].material.base_color[2] == doctest::Approx(0.9f));
     CHECK(m2.submeshes[0].material.texture(MaterialSlot::BaseColor) == G(kTexGuid));
 }
@@ -465,7 +466,8 @@ TEST_CASE("obj: packed ORM, map_Ke, d over Tr and absolute texture paths") {
     REQUIRE(r.ok());
     CHECK(has(text, "absolute texture paths"));
     CHECK(has(text, "first: line 22, 2 statements"));
-    const MeshView m = view_of(cooked_mesh(root, kObjGuid));
+    const std::vector<byte> m_bytes = cooked_mesh(root, kObjGuid);  // the view points into these bytes
+    const MeshView m = view_of(m_bytes);
     REQUIRE(m.submeshes.size() == 8);
     const MaterialChunk& packed = m.submeshes[0].material;
     CHECK(packed.texture(MaterialSlot::MetallicRoughness) == G(kTexGuid));

@@ -451,6 +451,8 @@ endif()
 FetchContent_Declare(pl_mpeg
     GIT_REPOSITORY https://github.com/phoboslab/pl_mpeg.git
     GIT_TAG        c871f2be022ece7ef4f64230b4fb8e1fb9eb6023
+    # a bounds fix in the macroblock copy, until upstream has one (cmake/patch_pl_mpeg.cmake)
+    PATCH_COMMAND  ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/patch_pl_mpeg.cmake"
     SOURCE_SUBDIR  _no_cmake_)
 FetchContent_MakeAvailable(pl_mpeg)
 

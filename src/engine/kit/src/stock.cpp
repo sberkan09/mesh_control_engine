@@ -16,6 +16,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/joints3d.h"
 #include "mce/kit/ragdolls3d.h"
+#include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/sensors3d.h"
 #include "mce/kit/vehicles3d.h"
@@ -77,13 +78,18 @@ void kit_ui_flow(Frame& f) {
     });
     apply_ui_flow_rules(f, in, load);  // after the actions: a rule sees the screens as UiFlow left them
     bool hold = false;
-    f.query<const UiFlow&, const UiScreen&>().each(
-        [&](const UiFlow& flow, const UiScreen& screen) { hold = hold || (screen.visible && flow.pause); });
+    bool keep = false;
+    f.query<const UiFlow&, const UiScreen&>().each([&](const UiFlow& flow, const UiScreen& screen) {
+        if (!screen.visible || !flow.pause) return;
+        hold = true;
+        keep = keep || flow.keep_audio;
+    });
     if (!load.is_null()) {
         scene::request_change(f.world(), load);
-        hold = false;  // the next scene starts from its own screens
+        hold = keep = false;  // the next scene starts from its own screens
     }
     f.world().set_held(hold);
+    if (audio::PauseMix* mix = f.world().try_resource<audio::PauseMix>()) mix->keep = keep;
 }
 
 }  // namespace
@@ -91,6 +97,7 @@ void kit_ui_flow(Frame& f) {
 void install_ui_flow(World& world) {
     if (world.try_resource<UiFlowInstalled>()) return;
     world.set_resource(UiFlowInstalled{});
+    world.set_resource(audio::PauseMix{});
     world.register_components<UiScreen, UiFlow, UiFlowRules>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_ui_flow", &kit_ui_flow);
     world.run_when_held(Phase::FixedUpdate_Pre, "kit_ui_flow");
@@ -116,6 +123,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_joints3d(world, assets);
     install_ragdolls3d(world, assets);
     install_roads(world, assets);
+    install_crowd(world, assets);  // after the road clock: pedestrians read this tick's lights
     install_vehicles3d(world, assets);
     install_seats3d(world, assets);
     install_combat3d(world, assets);

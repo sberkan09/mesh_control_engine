@@ -192,6 +192,17 @@ opt-in), `road_lane_point`, `road_light` (Green, Amber, Red and the seconds left
 lanes by travel time) and `road_debug_lines`. `install_stock` installs it before the vehicles. Tests:
 `tests/kit/test_roads.cpp`; the cook side is `tests/asset/test_cook_roads.cpp`.
 
+`crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
+a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
+crowd fills the network) and removes the ones past `despawn_radius`. A pedestrian is a few numbers (edge, distance
+along, direction, hop target, own random stream), no behaviour tree: edges are the road centreline offset by half the
+carriageway plus half `sidewalk`, trimmed at the junction; at a junction it hops to another edge end there, round
+the corner or across a road, and a crossing waits until every road it crosses has no straight-on traffic with green or
+amber and enough red left (`road_light`). Level of detail: step every tick within `near_radius`, every 4th within
+`far_radius`, else every 16th, staggered by entity index. Spawn candidates are a function of the focus's 32 m cell and
+`CrowdSpawner3D::serial` counts attempts, so replays and saves resume exactly. `"kit_crowd"` runs in FixedUpdate_Pre
+after `"roads_clock"`; `crowd_stats` is the per-tick budget counters. Tests: `tests/kit/test_crowd.cpp`.
+
 `sensors3d.h` (M-GAMEPLAY3D 6): `Raycast3D` (a ray, or a sphere cast with `radius`, from the entity:
 `hit`, `point`, `normal`, `hit_distance`, `hits`) and `Overlap3D` (a sphere or a turned box at the
 entity: `count`, `enters`, `last_other`), both pushing `TriggerEnter3D` / `TriggerExit3D` with the
@@ -279,12 +290,26 @@ together:
 - Missing or unloadable textures draw as the magenta checker (FR-DX-050); a null texture GUID draws
   a solid quad.
 - Component layouts carry explicit `pad_` fields so hashed component bytes stay defined.
+- Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
+  `install_nav3d` and `install_cinematic` register `ecs::on_origin_shift` listeners for the physics world,
+  static instances, cached body poses, world-anchored joint ends, the navmesh offset and crowd targets,
+  and root camera rails. Kit fields holding world points (`Locomotion3D::last_position`,
+  `SequencePlayer::anchor`, `CameraFollow3D::pivot` and `last_goal`, `NavAgent3D::target` and
+  `next_corner`, `Perceiver::last_seen` and `heard_at`, `Ragdoll3D::root_position`, `Raycast3D::point`)
+  are flagged `WorldPoint`; `Blackboard` vectors are not. An absolute sequence `MoveTo` is a fixed-world
+  target. `Kit3DExtract` notices a rebase through `WorldOrigin::serial`: it shifts its interpolation
+  history, foliage and merged-mesh caches, re-uploads terrains, starts a camera cut and passes the shift
+  to `Scene3D::set_origin_shift`.
 - The renderer has no particle code; particles are sprite instances in the one sprite batch.
 - Engine container ban applies (`scripts/ci/check_walls.py`).
 
 ## How it is tested
 
 ctest `test_kit` (no GPU), `tests/kit/`:
+
+- `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
+  stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
+  more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
 
 - `test_fsm.cpp`: "fsm: a timed transition fires on its exact tick and resets state time", exit and
   entry order, `StateChanged`, validation, "fsm: state and state time survive a save mid-state".

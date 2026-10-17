@@ -92,21 +92,23 @@ entities are ordinary base-scene entities, so their boxes move with the rebase.
 | physics3d | Jolt bodies, characters, vehicles | `World3D::shift_origin(delta)`: every body `SetPosition(p - delta, DontActivate)`, every `CharacterVirtual` the same, contact cache kept (Jolt stores it body-local) |
 | kit (bodies3d) | `Bodies3DState::poses` | subtract `delta`, so the shifted transforms are not read as outside moves (no collider rebuild, no character velocity reset) |
 | kit (nav3d) | Detour mesh and crowd | a per-world nav offset added at the Detour boundary (queries and crowd positions); the mesh is not rewritten |
-| audio bridge | last listener and source positions (Doppler) | subtract `delta`, so a shift is not heard as a 2 km jump |
+| audio bridge | last listener and source positions (Doppler) | no listener: the bridge already treats a move faster than sound as a teleport and holds the Doppler shift for that frame (as built) |
+| kit (joints3d, cinematic, sequence) | world-anchored joint ends, root camera rails, absolute `MoveTo` targets | joints move their fixed-to-world side (`Constraint::NotifyShapeChanged` with an invalid body id) and the cached anchor; rails shift their points; an absolute `MoveTo` subtracts `origin_offset` |
 | kit (extract) | interpolation history, TAA previous worlds, terrain and merge caches | the extract is not world-bound: it compares `WorldOrigin::serial` each frame and shifts its own caches by the cell difference |
-| render | Forward3D history (previous view-projection, SSR reprojection), reflection-probe and GI-volume positions, particle rings | `Scene3D::set_origin_shift(delta)` for the frame; Forward3D shifts its stored matrices and positions before comparing them, so no probe re-capture, no GI refill and no TAA history reset |
+| render | Forward3D history (previous view-projection, SSR reprojection), reflection-probe and GI-volume positions, particle rings | `Scene3D::set_origin_shift(delta)` for the frame. As built: Forward3D treats that frame as a camera cut (TAA, velocity and SSR history reset, one frame), and keys probes and GI volumes by absolute f64 positions, so no probe re-capture and no GI refill. Merged static meshes draw with a translation by the accumulated shift instead of re-merging |
 
 GPU particles are the one cache that is not moved in v1: a shift restarts the particle rings (live particles vanish,
 emitters keep emitting). The shader change needed to move them is listed as an open item.
 
 ### Not supported in v1 (documented, not silently wrong)
 
-- Networked worlds (server and clients would need a shared origin): `FloatingOrigin3D` is ignored when a net session
-  is active, with one warning.
-- Save games store local positions; a save written after a rebase records `WorldOrigin` too (a `Save` field) and a
-  load restores it before the entities.
-- Luau scripts get `world.to_absolute` / `world.to_local`; a script that stores raw positions across ticks in its own
-  tables must convert them (documented in the scripting guide).
+- Networked worlds (server and clients would need a shared origin): do not add `FloatingOrigin3D` to a networked
+  scene. Open item: ignore it with one warning while a net session is active (the scene module cannot see net).
+- Save games store local positions. Open item: record `WorldOrigin` in the save and restore it before the entities;
+  until then a save written after a rebase loads offset by the origin.
+- Luau scripts: open item `world.to_absolute` / `world.to_local`; a script that keeps raw positions across ticks in
+  its own tables sees them jump by the shift.
+- Kit `Blackboard` vectors mix points and offsets, so they are not flagged `WorldPoint` and do not move.
 - The editor does not rebase in edit mode; play-in-editor does, and stopping play restores the edit scene as today.
 
 ### Tests (A2)
@@ -191,8 +193,7 @@ off, gated in `local_ci.sh` by counters (not by GPU time, which only A1 measures
 |---|---|---|---|
 | 1 | this design | docs | docs only |
 | 2 | `WorldPoint` field flag | refl | seam: `refl/type.h` and `refl/macros.h` are wide headers |
-| 3 | `rebase_world`, `WorldOrigin`, `FloatingOrigin3D`, streaming offset | ecs, scene | tests above |
-| 4 | physics and kit listeners, audio, extract, Forward3D history | physics3d, kit, audio, render | the cross-module part; Opus |
+| 3+4 | `rebase_world`, `WorldOrigin`, `FloatingOrigin3D`, streaming offset; physics and kit listeners, extract, Forward3D history | ecs, scene, physics3d, kit, render | shipped as one PR (no audio change needed) |
 | 5 | `.mchlod` importer, `hlod_bake` (mesh), `ChunkLod3D` | cook, mcp, kit | A3 + A4 |
 | 6 | impostor bake | mcp (tools) | CPU rasteriser |
 | 7 | merge budget and change skip | kit | building batching |
