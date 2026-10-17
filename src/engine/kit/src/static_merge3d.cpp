@@ -3,6 +3,7 @@
 // local keys, remembers which children they replace and re-merges when the children change.
 
 #include <cmath>
+#include <cstring>
 
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
@@ -17,6 +18,15 @@ namespace mce::kit {
 using namespace mce::math;
 
 namespace {
+
+// Grows a per-entity array to `n`, by at least half its capacity: resizing to e.index + 1 for each new entity copied
+// the whole array every time (24k entities arriving at once: seconds).
+template <class T>
+void grow_to(Array<T>& a, usize n, const T& fill = T{}) {
+    const usize c = a.capacity() + a.capacity() / 2;
+    if (n > a.capacity()) a.reserve(n > c ? n : c);
+    a.resize(n, fill);
+}
 
 // The entity's pose: WorldTransform when the hierarchy wrote one, else LocalTransform (as kit3d_extract.cpp reads it).
 bool pose_of(World& world, Entity e, vec3& pos, quat& rot, vec3& scale) {
@@ -35,10 +45,23 @@ bool pose_of(World& world, Entity e, vec3& pos, quat& rot, vec3& scale) {
     return false;
 }
 
+// Word at a time: the inputs of every child are hashed on every frame, so the per-byte FNV loop was most of a big
+// group's cost (24k children: ~10 ms). The tail of a value that is not a multiple of 4 bytes goes in byte by byte.
 struct Hasher {
     u64 h = 1469598103934665603ull;
+    void word(u64 w) {
+        h ^= w + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
+        h *= 1099511628211ull;
+    }
     void mix(const void* p, usize n) {
-        for (usize i = 0; i < n; ++i) h = (h ^ static_cast<const u8*>(p)[i]) * 1099511628211ull;
+        const u8* b = static_cast<const u8*>(p);
+        usize i = 0;
+        for (; i + 4 <= n; i += 4) {
+            u32 w;
+            std::memcpy(&w, b + i, 4);
+            word(w);
+        }
+        for (; i < n; ++i) word(b[i]);
     }
     template <class T>
     void mix(const T& v) {
@@ -85,6 +108,7 @@ struct Kit3DExtract::MergeState {
     };
     Array<mem::UniquePtr<Group>> groups;
     u32 stamp = 0;
+    Array<Entity> children;       // scratch: the children that may merge, in hierarchy order
     Array<Candidate> candidates;  // scratch
     Array<Bucket> buckets;
     Array<render::MergeSource> sources;
@@ -180,8 +204,9 @@ void Kit3DExtract::update_static_merges(World& world) {
         }
         group->stamp = st.stamp;
 
-        // ---- the children that qualify, in hierarchy order -------------------------------------------------------
-        st.candidates.clear();
+        // ---- the children that may merge, in hierarchy order, and the hash of what they are ------------------------
+        // Every frame: only what is cheap to read (no mesh views), so an unchanged group costs a walk and a hash.
+        st.children.clear();
         Hasher hash;
         hash.mix(m.cell_size);
         hash.mix(m.cast_shadows);
@@ -205,6 +230,44 @@ void Kit3DExtract::update_static_merges(World& world) {
                 const u32 key = mesh_key(r->mesh.guid);
                 const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
                 if (!mesh || mesh->skinned()) continue;
+                hash.mix(d);
+                hash.mix(r->mesh.guid);
+                hash.mix(r->material.guid);
+                hash.mix(pos);
+                hash.mix(rot);
+                hash.mix(scale);
+                hash.mix(r->tint);
+                hash.mix(r->emissive_tint);
+                hash.mix(r->cast_shadows);
+                hash.mix(mesh->generation);
+                // An override still loading draws as the mesh's own materials: merge again once it resolves.
+                const u8 resolved = r->material.guid != asset::Guid{} && material(r->material.guid) ? 1 : 0;
+                hash.mix(resolved);
+                st.children.push_back(d);
+            }
+        }
+
+        // ---- merge, unless the children are the ones merged last time ---------------------------------------------
+        const u64 h = hash.h;
+        if (group->rebased) {
+            group->hash = h;
+            group->rebased = false;
+        }
+        if (!group->built || group->hash != h) {
+            for (const MergeState::Cell& c : group->cells)
+                if (c.key != ~0u) writable_->release(c.key);
+            group->cells.clear();
+            group->hash = h;
+            group->built = true;
+            ++stats_.merged_rebuilt;
+            // The candidates: the children whose cooked mesh reads and whose material is opaque or masked.
+            st.candidates.clear();
+            for (const Entity d : st.children) {
+                const MeshRef* r = world.try_get<MeshRef>(d);
+                vec3 pos, scale;
+                quat rot;
+                pose_of(world, d, pos, rot, scale);
+                const render::GpuMesh* mesh = meshes_->get(mesh_key(r->mesh.guid));
                 Candidate c;
                 if (!read_mesh_view(r->mesh.guid, c.view) || c.view.skinned()) continue;
                 // Opaque or masked only: blended and transmissive draws are sorted per draw, behind the opaques.
@@ -223,30 +286,8 @@ void Kit3DExtract::update_static_merges(World& world) {
                 c.ref = r;
                 c.world = trs(pos, rot, scale);
                 c.center = transform_point(c.world, mesh->bounds.center());
-                hash.mix(d);
-                hash.mix(r->mesh.guid);
-                hash.mix(r->material.guid);
-                hash.mix(c.world);
-                hash.mix(r->tint);
-                hash.mix(r->emissive_tint);
-                hash.mix(r->cast_shadows);
-                hash.mix(mesh->generation);
                 st.candidates.push_back(c);
             }
-        }
-
-        // ---- merge, unless the children are the ones merged last time ---------------------------------------------
-        const u64 h = hash.h;
-        if (group->rebased) {
-            group->hash = h;
-            group->rebased = false;
-        }
-        if (!group->built || group->hash != h) {
-            for (const MergeState::Cell& c : group->cells)
-                if (c.key != ~0u) writable_->release(c.key);
-            group->cells.clear();
-            group->hash = h;
-            group->built = true;
             st.buckets.clear();
             const f32 inv = 1.0f / max(m.cell_size, 0.5f);
             for (u32 i = 0; i < st.candidates.size(); ++i) {
@@ -307,7 +348,7 @@ void Kit3DExtract::update_static_merges(World& world) {
         u32 children = 0;
         for (MergeState::Cell& c : group->cells) {
             for (u32 index : c.children) {
-                if (merged_stamp_.size() <= index) merged_stamp_.resize(index + 1, 0);
+                if (merged_stamp_.size() <= index) grow_to(merged_stamp_, index + 1, 0u);
                 merged_stamp_[index] = merge_stamp_;
             }
             children += static_cast<u32>(c.children.size());
