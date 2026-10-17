@@ -2437,6 +2437,8 @@ TEST_CASE("render3d_gl: a parallax array's layer 0 is a normal map read at the s
     const Array<u8> without = draw(&no_normal);
     INFO("differing pixels " << differing(with_normal, without));
     CHECK(differing(with_normal, without) > 300);  // the tilted normal map lights the floor differently
+    CHECK(f.device->validation_error_count() == 0);
+}
 
 // ---- M-VISUAL3 4: HDR sky and image-based light ---------------------------------------------------
 
