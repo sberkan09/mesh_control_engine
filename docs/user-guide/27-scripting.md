@@ -217,6 +217,11 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
 
+**Limits at a glance.** No state between ticks (use a component); no quaternion type (rotations are Euler degrees);
+`Perceiver.sees` and `.heard` read as numbers (`0` or `1`), not booleans; no `os`, `io`, `print` or `math.random`.
+The full table, with what to do instead, is in the [engine reference](../engine/script.md#limits); the typed list of
+every `mce` function is `mce.d.luau` ([where it comes from](../engine/script.md#mcedluau-the-typed-reference)).
+
 ## 27.5 Checks before the game runs
 
 The cook checks every script before it compiles it, and reports every problem it finds, each at

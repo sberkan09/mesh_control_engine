@@ -1,0 +1,1 @@
+- Script docs, M-SCRIPT3 step 6: a new engine reference page `docs/engine/script.md` (surface, `mce.d.luau` as the typed reference, the limits table, known gaps) and a limits note in guide chapter 27.4.
