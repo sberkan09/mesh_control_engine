@@ -770,7 +770,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     // Every type asset_schema lists is created from its template and cooks clean.
     auto listed = c.ok("asset_schema");
     const cook::JsonValue types = listed.v().get("types");
-    REQUIRE(types.size() == 18);
+    REQUIRE(types.size() == 19);
     for (u32 i = 0; i < types.size(); ++i) {
         const std::string type = str(types.at(i).get("type")), ext = str(types.at(i).get("extension"));
         auto schema = c.ok("asset_schema", R"({"type":")" + type + R"("})");
