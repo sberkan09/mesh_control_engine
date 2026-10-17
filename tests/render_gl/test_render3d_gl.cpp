@@ -2596,3 +2596,109 @@ TEST_CASE("render3d_gl: a one-texel sun 80000 times the sky leaves no sparkles o
     CHECK(worst < 24);
     CHECK(f.device->validation_error_count() == 0);
 }
+
+namespace {
+
+Array<u8> copy_pixels(const Fixture3D& f) {
+    Array<u8> p;
+    p.resize(f.pixels.size());
+    std::memcpy(p.data(), f.pixels.data(), p.size());
+    return p;
+}
+
+// One frame with the given lens and tonemapper (FXAA and bloom off: the lens is the only variable).
+Array<u8> lens_frame(Fixture3D& f, const std::function<void(PostFx&)>& set, f32 time = 0.0f) {
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.bloom = false;
+        set(p);
+        s.set_post(p);
+        s.set_time(time, 1.0f / 60.0f);
+    });
+    return copy_pixels(f);
+}
+
+int px_luma(const Array<u8>& p, u32 x, u32 y) {
+    const usize i = (usize(y) * kW + x) * 4;
+    return (p[i] * 2 + p[i + 1] * 5 + p[i + 2]) / 8;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: the camera's look is off by default; vignette darkens the corners and not the centre (M-VISUAL3 3)") {
+    Fixture3D f;
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> explicit_off = lens_frame(f, [](PostFx& p) {
+        p.lens = PostFx::Lens{};
+        p.tonemapper = Tonemapper::AcesFit;
+    });
+    CHECK(std::memcmp(plain.data(), explicit_off.data(), plain.size()) == 0);
+    const Array<u8> vig = lens_frame(f, [](PostFx& p) { p.lens.vignette = 0.8f; });
+    CHECK(px_luma(vig, 1, 1) + 10 < px_luma(plain, 1, 1));
+    CHECK(px_luma(vig, kW - 2, kH - 2) + 10 < px_luma(plain, kW - 2, kH - 2));
+    CHECK(px_luma(vig, kW / 2, kH / 2) == px_luma(plain, kW / 2, kH / 2));
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: chromatic aberration separates the channels at the edge and not at the centre") {
+    Fixture3D f;
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> ca = lens_frame(f, [](PostFx& p) { p.lens.chromatic_aberration = 1.0f; });
+    const usize centre = (usize(kH / 2) * kW + kW / 2) * 4;
+    for (u32 c = 0; c < 3; ++c) CHECK(plain[centre + c] == ca[centre + c]);
+    // Some pixel in the left quarter (where the sky meets the ground) differs between red and blue only with the fringe.
+    u32 plain_split = 0, ca_split = 0;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW / 4; ++x) {
+            const usize i = (usize(y) * kW + x) * 4;
+            plain_split += std::abs(int(plain[i]) - int(plain[i + 2])) > 12;
+            ca_split += std::abs(int(ca[i]) - int(ca[i + 2])) > 12;
+        }
+    INFO("red/blue split pixels: plain " << plain_split << ", with the fringe " << ca_split);
+    CHECK(ca_split > plain_split);
+}
+
+TEST_CASE("render3d_gl: grain changes between two seeds, repeats for the same one, and keeps the mean") {
+    Fixture3D f;
+    const auto grain = [](PostFx& p) { p.lens.grain = 0.6f; };
+    const Array<u8> plain = lens_frame(f, [](PostFx&) {});
+    const Array<u8> a = lens_frame(f, grain, 0.0f), a2 = lens_frame(f, grain, 0.0f), b = lens_frame(f, grain, 1.0f);
+    CHECK(std::memcmp(a.data(), a2.data(), a.size()) == 0);  // deterministic per time
+    CHECK(std::memcmp(a.data(), b.data(), a.size()) != 0);   // animated
+    CHECK(std::memcmp(a.data(), plain.data(), a.size()) != 0);
+    f64 sum_plain = 0.0, sum_grain = 0.0;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            sum_plain += px_luma(plain, x, y);
+            sum_grain += px_luma(a, x, y);
+        }
+    const f64 shift = std::abs(sum_grain - sum_plain) / f64(kW * kH);
+    INFO("mean luma shift " << shift);
+    CHECK(shift < 1.0);
+}
+
+TEST_CASE("render3d_gl: AgX and PBR Neutral differ from ACES on a bright scene and stay close in the mid tones") {
+    Fixture3D f;
+    const Array<u8> aces = lens_frame(f, [](PostFx&) {});
+    const Array<u8> agx = lens_frame(f, [](PostFx& p) { p.tonemapper = Tonemapper::AgX; });
+    const Array<u8> neutral = lens_frame(f, [](PostFx& p) { p.tonemapper = Tonemapper::PbrNeutral; });
+    CHECK(std::memcmp(aces.data(), agx.data(), aces.size()) != 0);
+    CHECK(std::memcmp(aces.data(), neutral.data(), aces.size()) != 0);
+    CHECK(std::memcmp(agx.data(), neutral.data(), agx.size()) != 0);
+    // Mean luma over the frame: three different curves, one scene, no curve black or blown.
+    const auto mean = [](const Array<u8>& p) {
+        f64 sum = 0.0;
+        for (u32 y = 0; y < kH; ++y)
+            for (u32 x = 0; x < kW; ++x) sum += px_luma(p, x, y);
+        return sum / f64(kW * kH);
+    };
+    INFO("mean luma: aces " << mean(aces) << ", agx " << mean(agx) << ", neutral " << mean(neutral));
+    for (const Array<u8>* p : {&aces, &agx, &neutral}) {
+        CHECK(mean(*p) > 25.0);
+        CHECK(mean(*p) < 230.0);
+    }
+    CHECK(std::abs(mean(agx) - mean(aces)) < 60.0);
+    CHECK(std::abs(mean(neutral) - mean(aces)) < 60.0);
+    CHECK(f.device->validation_error_count() == 0);
+}
