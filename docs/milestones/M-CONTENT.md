@@ -113,8 +113,9 @@ with 16 partitions and perceptual weights: 0.42-0.54 s, PSNR 37.7 dB. BC1 at lev
 `encode_bc5`, but 1.3-1.6 s with `encode_bc5_hq`. The output bytes (FNV hash) were identical across gcc 13.3 -O0/-O2
 and clang 18 -O2/-O3 `-march=native`, all with `-ffp-contract=off`. With `-ffp-contract=fast -march=native` the BC7 and
 BC1 bytes changed, so the flag is required, as it is for tinyexr and astcenc. An arm64 host is not measured. *(guess:
-the encoder is scalar float with only `sqrtf` and `floorf`, which IEEE rounds exactly, so arm64 matches)*. The
-macOS test in the acceptance list settles it. Cook cost for a 1024² texture with mips is about 0.6 s; jobs run
+the encoder is scalar float with only `sqrtf` and `floorf`, which IEEE rounds exactly, so arm64 matches)*. Until it is tested, cook golden hashes are guaranteed only on x86_64
+(coordinator decision); 1b-ii's acceptance adds a cross-arch encoder byte-equality test (marked slow/manual if no arm64
+host is available), which settles it. Cook cost for a 1024² texture with mips is about 0.6 s; jobs run
 textures in parallel (`cook.cpp:549`).
 
 ADR-0017 integration: `FetchContent_Declare(bc7enc_rdo GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
@@ -145,7 +146,7 @@ PIC. Never compile `bc7e.ispc`, the repo's `ispc.exe` or the RDO files. Walls: a
   so the choice is deterministic. (1) `srgb` true → `BC7` with the `Srgb` flag. (2) `srgb` false and at least 99% of
   texels decode to a unit normal → `BC5`. A texel passes when `x,y,z = 2c-255`, `x²+y²+z²` is within `[0.81, 1.21]·255²`,
   `z > 0`, and `a == 255`. (3) `srgb` false, `r == g == b` on every texel and `a == 255` → `BC4` (height and other grey
-  data). (4) Otherwise → `BC7`. *(guess: the 99% and the length bounds; 1b-iv tunes them on the Lantern Keep and
+  data). (4) Otherwise → `BC7`. *(provisional; will be calibrated with RunPod measurements. guess: the 99% and the length bounds; 1b-iv tunes them on the Lantern Keep and
   Poly Haven normal maps)*. The rule never picks `bc1`, which is lossy on gradients. `bc1` is for opaque colour by
   explicit choice. `auto` also keeps `none` for LUT-shaped strips (`w == h*h` or `h == w*w`, with `h >= 16`), where
   colour grading cannot take block error *(guess)*.
@@ -256,6 +257,8 @@ packs already give each device its native format.
   the right byte sizes; `srgb`+BC4 is refused; `compress` on `.hdr` is refused; the PSNR bounds hold; the cook is
   deterministic (twice, plus the pinned hash); a missing key under `rgba8` gives an identical manifest; `--textures bc`
   re-cooks.
+- Cross-arch encoder byte-equality test (x86_64 vs arm64 pinned hash; `mce_mark_slow` / manual when no arm64 host).
+- Rejection error text for a pack the device cannot sample names the target and the fix ("re-cook for this target").
 - `tests/asset/test_guid_formats.cpp`: `texture_level_bytes`, and `TextureView::read` for the four new formats.
 - `tests/render_gl/test_render_bc_gl.cpp` (GL and `MCE_RHI=sdlgpu`): upload, sample and read back each format within
   the bounds; `unpack_normal` on BC5 matches RGBA8 shading within the error bound; a format whose cap is false is
