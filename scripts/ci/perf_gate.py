@@ -44,7 +44,8 @@ def png(w, h, rgba):
 
 
 def seed(s, project, scene):
-    """Three sprites with a texture each, in `scene`: three more batches, so more draws."""
+    """Three sprites with a texture each, in `scene`: three more batches, so more draws. Each is 400 m wide so it is in
+    view whatever the camera does (a game whose camera follows its player walks away from small ones)."""
     ok, _, text = s.tool("scene_open", {"path": scene})
     if not ok:
         raise RuntimeError(f"scene_open {scene}: {text[:300]}")
@@ -56,7 +57,7 @@ def seed(s, project, scene):
         tex.with_name(tex.name + ".mceasset").write_text(
             json.dumps({"guid": guid, "importer": "texture", "importer_version": 1, "settings": {}}) + "\n", encoding="utf-8")
         ok, _, text = s.tool("entity_create", {"name": f"PerfSeed{i}", "components": {
-            "Sprite": {"texture": f"guid:{guid}"}, "LocalTransform": {"position": [i, 1, 0]}}})
+            "Sprite": {"texture": f"guid:{guid}", "size": [400, 400]}, "LocalTransform": {"position": [i, 1, 0]}}})
         if not ok:
             raise RuntimeError(f"entity_create: {text[:300]}")
     ok, _, text = s.tool("scene_save", {})
