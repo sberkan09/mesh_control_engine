@@ -526,6 +526,21 @@ public:
         settings_on_ = device_ && cv_settings.get_bool() && cv_capture.get_string().empty() && cv_capture_tick.get_int() == 0 &&
                        cv_capture_ticks.get_string().empty();
         {   // the project's own defaults, under the player's saved choices and the command line
+            // The pack's convar-defaults chunks first (every platform carries them), in pack order; defaults.cfg
+            // beside the pack overrides them for a developer's tweak.
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                if (assets_.info(k).type != asset::ChunkType::ConvarDefaults) continue;
+                const Result<asset::AssetHandle<asset::ConvarDefaultsChunk>> h =
+                    assets_.load_sync<asset::ConvarDefaultsChunk>(k);
+                if (!h) {
+                    MCE_LOG_WARN("{}: convar defaults {} unreadable", desc_.app_name, assets_.info(k).path);
+                    continue;
+                }
+                const Span<const byte> bytes = assets_.resolve(h.value());
+                console::set_defaults_text(StringView(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+                MCE_LOG_INFO("{}: convar defaults {}", desc_.app_name, assets_.info(k).path);
+                assets_.release(asset::AnyHandle(h.value()));
+            }
             FixedString<1024> defaults(cv_defaults.get_string());
             if (defaults.empty() && !pack.empty()) {
                 std::error_code ec;

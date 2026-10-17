@@ -352,10 +352,11 @@ Better, put the defaults in the pack so every platform carries them: a `.mcdefau
   "convars": { "ui.reference_height": 720, "access.captions": true, "audio.music_db": -6 } }
 ```
 
-cooks to a convar-defaults chunk. The chunk is cook-side only for now: the player applies it (before `defaults.cfg`,
-which overrides it, for a developer's tweak) once the loader lands in the next step of M-WORKFLOW 7. A text value is
-1-128 bytes without leading or trailing spaces. A name is checked when the game runs: the cook does not know a
-game module's convars.
+cooks to a convar-defaults chunk that the player applies on every platform (desktop, web, phone) at the same point,
+before `defaults.cfg`, which overrides it for a developer's tweak. A project has one `.mcdefaults` file: with two the
+cook stops and names both. A text value is 1-128 bytes without leading or trailing spaces. A name is checked when the
+game runs: the cook does not know a game module's convars. A pack cooked without the file has no such chunk and starts
+exactly as before. Undertow ships `ui.reference_height = 720` this way.
 
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and

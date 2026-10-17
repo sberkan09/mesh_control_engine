@@ -590,31 +590,46 @@ SettingLine* find_line(StringView name) {
 
 }  // namespace
 
+namespace {
+
+void apply_default_line(StringView t) {
+    while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
+    usize at = 0;  // a hand-written file: indentation and aligned columns are fine
+    while (at < t.size() && is_space(t[at])) ++at;
+    if (at == t.size() || t[at] == '#') return;
+    usize end = at;
+    while (end < t.size() && !is_space(t[end])) ++end;
+    const StringView name = t.substr(at, end - at);
+    usize vs = end;
+    while (vs < t.size() && is_space(t[vs])) ++vs;
+    const StringView value = t.substr(vs);
+    ConVar* v = ConVar::find(StringId(name));
+    if (!v) MCE_LOG_WARN("defaults: unknown convar '{}'", name);
+    else if (cheat_locked(*v, "defaults")) return;
+    else if (v->flags() & CVarFlags::ReadOnly) MCE_LOG_WARN("defaults: '{}' is read-only", name);
+    else if (!v->set_default(value)) MCE_LOG_WARN("defaults: '{}' rejects '{}'", name, value);
+}
+
+}  // namespace
+
 Result<void> set_defaults(StringView path) {
     const FixedString<512> p(path);
     std::FILE* f = std::fopen(p.c_str(), "rb");
     if (!f) return ok();
     char line[1200];
-    while (std::fgets(line, sizeof(line), f)) {
-        StringView t(line);
-        while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
-        usize at = 0;  // a hand-written file: indentation and aligned columns are fine
-        while (at < t.size() && is_space(t[at])) ++at;
-        if (at == t.size() || t[at] == '#') continue;
-        usize end = at;
-        while (end < t.size() && !is_space(t[end])) ++end;
-        const StringView name = t.substr(at, end - at);
-        usize vs = end;
-        while (vs < t.size() && is_space(t[vs])) ++vs;
-        const StringView value = t.substr(vs);
-        ConVar* v = ConVar::find(StringId(name));
-        if (!v) MCE_LOG_WARN("defaults: unknown convar '{}'", name);
-        else if (cheat_locked(*v, "defaults")) continue;
-        else if (v->flags() & CVarFlags::ReadOnly) MCE_LOG_WARN("defaults: '{}' is read-only", name);
-        else if (!v->set_default(value)) MCE_LOG_WARN("defaults: '{}' rejects '{}'", name, value);
-    }
+    while (std::fgets(line, sizeof(line), f)) apply_default_line(StringView(line));
     std::fclose(f);
     return ok();
+}
+
+void set_defaults_text(StringView text) {
+    usize at = 0;
+    while (at < text.size()) {
+        usize end = at;
+        while (end < text.size() && text[end] != '\n') ++end;
+        apply_default_line(text.substr(at, end - at));
+        at = end + 1;
+    }
 }
 
 Result<void> load_settings(StringView path) {

@@ -296,6 +296,23 @@ void report_cycle(Array<Node>& nodes, u32 start, Array<u8>& reported, DiagList& 
 // "en" one, else the first by path); a key a locale lacks shows the base text in play, so it is a
 // warning, as is a key the base table does not know (usually a typo). Parse errors are the
 // importer's to report.
+// A project ships one convar-defaults file: with two, which one wins would be a silent rule, so each file after the
+// first is an error naming the first.
+void check_single_defaults(const AssetRegistry& registry, DiagList& diags) {
+    const AssetRecord* first = nullptr;
+    for (usize i = 0; i < registry.size(); ++i) {
+        const AssetRecord& rec = registry.at(i);
+        if (rec.importer->type() != ChunkType::ConvarDefaults) continue;
+        if (!first) {
+            first = &rec;
+            continue;
+        }
+        String msg;
+        appendf(msg, "a project has one convar-defaults file and %s is already one: merge the two", display(*first).c_str());
+        diags.error(Errc::InvalidArgument, display(rec), 0, 0, kStageGraph, msg);
+    }
+}
+
 void check_string_tables(const AssetRegistry& registry, DiagList& diags) {
     struct Table {
         const AssetRecord* rec;
@@ -434,6 +451,7 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
         ++report.overrides;
     }
     check_string_tables(registry, report.diags);
+    check_single_defaults(registry, report.diags);
     RegistryLookup lookup(registry, &base);
 
     // 2. Graph build: importers declare references; missing and mistyped refs are reported as a

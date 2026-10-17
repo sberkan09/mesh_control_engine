@@ -83,3 +83,33 @@ TEST_CASE("convar defaults: authoring mistakes are cook errors") {
         CHECK(defaults_diags(r).find("project.mcdefaults") != std::string::npos);
     }
 }
+
+TEST_CASE("convar defaults: two files in a project are a cook error naming both") {
+    const std::string root = fresh_dir("defaults_two");
+    write_file(root + "/assets/a.mcdefaults", R"({ "format": "mce-defaults", "version": 1,
+        "guid": "5703e000-0000-4000-8000-0000000000d1", "convars": { "a.b": 1 } })");
+    write_file(root + "/assets/b.mcdefaults", R"({ "format": "mce-defaults", "version": 1,
+        "guid": "5703e000-0000-4000-8000-0000000000d2", "convars": { "a.c": 2 } })");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    CHECK_FALSE(r.ok());
+    const std::string d = defaults_diags(r);
+    CHECK(d.find("one convar-defaults file") != std::string::npos);
+    CHECK(d.find("a.mcdefaults") != std::string::npos);
+    CHECK(d.find("b.mcdefaults") != std::string::npos);
+}
+
+TEST_CASE("convar defaults: a project without one cooks no such chunk (old packs behave as before)") {
+    const std::string root = fresh_dir("defaults_none");
+    write_file(root + "/assets/x.mcconfig", R"({ "format": "mce-config", "version": 1,
+        "guid": "5703e000-0000-4000-8000-0000000000d3", "values": {} })");
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(defaults_diags(r));
+    REQUIRE(r.ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) CHECK(assets.info(k).type != asset::ChunkType::ConvarDefaults);
+}
