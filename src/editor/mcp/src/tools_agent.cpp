@@ -63,9 +63,10 @@ const ToolDef kAgentTools[] = {
      "for each limit over, frame/sim/render/GPU ms (p50/p95/p99/max), draws, triangles, sprites and other counters, "
      "the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
      "(cooked/.perf/last.mcperf, or 'save'); perf_compare compares two. Works without a GPU (software rendering; "
-     "times are then the CPU's). headless: true measures the sim alone.",
+     "times are then the CPU's). headless: true measures the sim alone. With a progressToken it sends "
+     "notifications/progress with the phase (launching, warmup N/M, capturing N/M, reading the capture).",
      R"j({"type":"object","properties":{"scene":{"type":"string","description":"Scene path under assets/ (default: the open scene, saved)"},)j"
-     R"j("frames":{"type":"integer","minimum":10,"maximum":3600,"default":300},"warmup":{"type":"integer","minimum":0,"maximum":3600,"default":30,"description":"Frames run first and left out (loading, first uploads)"},)j"
+     R"j("frames":{"type":"integer","minimum":1,"maximum":3600,"default":300,"description":"Frames captured after the warmup; 1-29 is a quick look (counters still repeat, percentiles are noisy and the report says so)"},"warmup":{"type":"integer","minimum":0,"maximum":3600,"default":30,"description":"Frames run first and left out (loading, first uploads)"},)j"
      R"j("target":{"type":"string","enum":["desktop","mobile","web"],"default":"desktop"},)j"
      R"j("width":{"type":"integer","minimum":64,"maximum":3840,"default":960},"height":{"type":"integer","minimum":64,"maximum":3840,"default":540},)j"
      R"j("headless":{"type":"boolean","default":false},"software":{"type":"boolean","default":false,"description":"Force the software rasterizer"},)j"

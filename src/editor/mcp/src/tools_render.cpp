@@ -109,7 +109,8 @@ const char* mesa_egl_vendor() {
 
 // Runs the player to its exit with Mesa's software rasterizer forced around the spawn when `software`
 // (the child inherits the environment). False with c.error set when it cannot start.
-bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code) {
+bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, bool software, Array<char>& output, i32& code,
+                  PlayerLineFn on_line, void* user) {
 #if !defined(_WIN32)
     ScopedEnv sw("LIBGL_ALWAYS_SOFTWARE", software ? "1" : nullptr);
     ScopedEnv glx("__GLX_VENDOR_LIBRARY_NAME", software ? "mesa" : nullptr);
@@ -124,7 +125,24 @@ bool spawn_player(ToolCall& c, StringView player, Span<const StringView> args, b
         c.error += player;
         return false;
     }
-    code = proc.wait(&output);
+    if (!on_line) {
+        code = proc.wait(&output);
+        return true;
+    }
+    // Read as it prints so the caller can report progress; `output` is still everything it wrote.
+    usize line_start = 0;
+    char buf[1024];
+    while (const usize n = proc.read_some(buf, sizeof(buf))) {
+        for (usize i = 0; i < n; ++i) output.push_back(buf[i]);
+        for (usize i = line_start; i < output.size(); ++i)
+            if (output[i] == '\n') {
+                on_line(StringView(output.data() + line_start, i - line_start), user);
+                line_start = i + 1;
+            }
+    }
+    Array<char> rest;
+    code = proc.wait(&rest);
+    for (char ch : rest) output.push_back(ch);
     return true;
 }
 
