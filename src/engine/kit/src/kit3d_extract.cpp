@@ -1,13 +1,16 @@
 #include "mce/kit/kit3d_extract.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/refl/property_path.h"
 #include "mce/render/accessibility.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -39,6 +42,88 @@ u32 find_clip_id(const render::GpuMesh& mesh, u64 id) {
     for (u32 i = 0; i < mesh.clips.size(); ++i)
         if (StringId(mesh.clips[i].name.view()).value == id) return i;
     return ~0u;
+}
+
+
+// MCP render_frame / render_sheet per-shot control (M-VISUAL3 3c): the tool hands the player these as flags.
+MCE_CVAR(cv_env_override, "r.env_override", "",
+         "Environment3D field overrides, 'field=value;field=a,b,c;...' (numbers, 0/1 for flags, comma lanes for vectors and colors); empty = none",
+         CVarFlags::None);
+MCE_CVAR(cv_dof_focus, "r.dof_focus", 0.0f, "Depth of field: meters to the sharpest plane, overriding the environment and the camera (0 = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_exposure_scale, "r.exposure_scale", 1.0f, "Multiplies the scene's exposure (1 = unchanged)", CVarFlags::None);
+
+// The parsed r.env_override, rebuilt only when the string changes.
+struct EnvOverride {
+    refl::PropertyRef ref;
+    f32 lanes[4] = {};
+    u32 count = 0;
+};
+constexpr u32 kMaxEnvOverrides = 32;
+
+struct EnvOverrides {
+    FixedString<1024> text;
+    EnvOverride items[kMaxEnvOverrides];
+    u32 count = 0;
+};
+
+void parse_env_overrides(StringView text, EnvOverrides& out) {
+    out.count = 0;
+    const refl::TypeRecord& type = refl::type_of<Environment3D>();
+    usize pos = 0;
+    while (pos < text.size() && out.count < kMaxEnvOverrides) {
+        usize end = pos;
+        while (end < text.size() && text[end] != ';') ++end;
+        StringView item = text.substr(pos, end - pos);
+        pos = end + 1;
+        usize eq = 0;
+        while (eq < item.size() && item[eq] != '=') ++eq;
+        if (eq == 0 || eq >= item.size()) continue;
+        Result<refl::PropertyRef> ref = refl::resolve_path(type, item.substr(0, eq));
+        if (!ref) {
+            MCE_LOG_WARN("r.env_override: no Environment3D field '{}'", item.substr(0, eq));
+            continue;
+        }
+        EnvOverride o;
+        o.ref = ref.value();
+        char buf[256];
+        const StringView rest = item.substr(eq + 1);
+        const usize n = rest.size() < sizeof(buf) - 1 ? rest.size() : sizeof(buf) - 1;
+        for (usize i = 0; i < n; ++i) buf[i] = rest[i];
+        buf[n] = 0;
+        const char* q = buf;
+        while (o.count < 4 && *q) {
+            char* next = nullptr;
+            o.lanes[o.count++] = std::strtof(q, &next);
+            if (next == q) break;
+            q = *next == ',' ? next + 1 : next;
+        }
+        if (o.count > 0) out.items[out.count++] = o;
+    }
+}
+
+// Writes the override into env. A lane count that does not match the field is skipped (the MCP tool validates it).
+void apply_env_override(Environment3D& env, const EnvOverride& o) {
+    using refl::FieldKind;
+    void* base = &env;
+    u8* at = static_cast<u8*>(base) + o.ref.offset;
+    const f32 v = o.lanes[0];
+    switch (o.ref.kind) {
+        case FieldKind::Bool: *reinterpret_cast<bool*>(at) = v != 0.0f; break;
+        case FieldKind::F32: *reinterpret_cast<f32*>(at) = v; break;
+        case FieldKind::U32: *reinterpret_cast<u32*>(at) = v < 0.0f ? 0u : static_cast<u32>(v); break;
+        case FieldKind::I32: *reinterpret_cast<i32*>(at) = static_cast<i32>(v); break;
+        case FieldKind::Vec3:
+        case FieldKind::Color:
+        case FieldKind::Vec4: {
+            const u32 want = o.ref.kind == FieldKind::Vec3 ? 3u : 4u;
+            if (o.count < want - (o.ref.kind == FieldKind::Color ? 1u : 0u)) break;
+            f32* p = reinterpret_cast<f32*>(at);
+            for (u32 i = 0; i < want && i < o.count; ++i) p[i] = o.lanes[i];
+            break;
+        }
+        default: break;
+    }
 }
 
 }  // namespace
@@ -560,6 +645,15 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             env = c;
         });
     }
+    {
+        static EnvOverrides parsed;
+        const StringView want = cv_env_override.get_string();
+        if (want != parsed.text.view()) {
+            parsed.text.assign(want);
+            parse_env_overrides(want, parsed);
+        }
+        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
+    }
     render::DirectionalLight sun;
     sun.direction = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
     sun.color = env.sun_color;
@@ -602,7 +696,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     vol.max_distance = env.volumetric_distance;
     render::apply_quality(quality_, vol);
     scene.set_volumetrics(vol);
-    scene.set_exposure(env.exposure);
+    scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
     post.bloom = env.bloom != 0 && quality_.bloom;
     post.bloom_intensity = env.bloom_intensity;
@@ -643,6 +737,10 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         focused = true;
         if (c.focus_distance > 0.0f) post.dof.focus_distance = c.focus_distance;
     });
+    if (cv_dof_focus.get_float() > 0.0f) {
+        post.dof.enabled = quality_.dof_motion_blur;
+        post.dof.focus_distance = cv_dof_focus.get_float();
+    }
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
