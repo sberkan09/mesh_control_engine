@@ -158,7 +158,7 @@ TEST_CASE("asset_import: a glTF model's lights and camera become a prefab, re-im
     CHECK(!std::filesystem::exists(root + "/assets/models/strict.mcprefab"));
 
     // A corrupt model and an FBX that is not one are failures, not crashes.
-    write_file(root + "/assets/models/bad.glb", "glTF\x02\x00\x00\x00");
+    write_file(root + "/assets/models/bad.glb", std::string("glTF\x02\x00\x00\x00", 8));
     CHECK(c.fails("asset_import", R"({"tool":"gltf","file":"assets/models/bad.glb"})").find("truncated") != std::string::npos);
     write_file(root + "/assets/models/bad.fbx", "this is not an FBX file");
     CHECK(!c.fails("asset_import", R"({"tool":"fbx","file":"assets/models/bad.fbx"})").empty());

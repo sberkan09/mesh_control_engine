@@ -14,10 +14,15 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "fbx_importer.h"
 #include "mce/cook/cook.h"
 #include "mce/log.h"
 #include "mce/module_host.h"
+
+// Defined in the asset cook (fbx_importer.cpp; a stub without ufbx). Declared here instead of through the cook-private
+// fbx_importer.h so no tool target needs the cook's src/ on its include path; see that header for the contract.
+namespace mce::cook {
+bool dump_fbx_scene_json(StringView display_name, Span<const byte> src, String& json, String& error);
+}  // namespace mce::cook
 
 namespace {
 
