@@ -67,6 +67,7 @@ file name when the number alone is ambiguous.
 | [0045](0045-behavior-trees.md) | M-AI | Behavior trees as data: `.mcbt` cooked to a flat node array, run state and blackboard in components, tasks by name |
 | [0046](0046-road-network.md) | M-OPENWORLD | Road networks as data: `.mcroads` cooked to lanes, junction connectors, conflicts, ranks and signal phases; traffic and crowds drive on them |
 | [0047](0047-fbx-ufbx.md) | M-IMPORT3D | FBX import over ufbx (MIT or Unlicense), cook-only: pinned v0.23.1, memory limits on untrusted files, libm in its rotation paths (Accepted) |
+| [0048](0048-pedestrian-crowds.md) | M-OPENWORLD | Pedestrian crowds as data on the road network's pavements: edge graph, kerb hops, light-aware crossings, level of detail, spawn ring |
 
 Some records amend earlier ones in dated "Amendment" sections at the end
 of the file (0017, 0018, 0021, 0022, 0029, 0032) or are superseded in part by later ADRs (0022 §7 and 0023 by 0036).

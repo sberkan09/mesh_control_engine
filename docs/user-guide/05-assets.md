@@ -122,8 +122,9 @@ Three importer rules that the error text alone does not make obvious:
   | `astc` | RGBA8 | RGBA8 | ASTC 4x4 |
 
   `auto` picks BC7 for colour (`"srgb": true`), BC4 for opaque grey data such as height maps, BC5 for a normal map (a
-  linear image where at least 99% of the texels are unit-length normals), and BC7 for everything else; it keeps RGBA8 for
-  colour-grading LUT strips. (These thresholds are provisional and will be calibrated on real content.) BC1 is never picked
+  linear image where at least 85% of the texels are unit-length normals; real normal maps pass 89-100%, colour maps
+  well under 1%), and BC7 for everything else; it keeps RGBA8 for colour-grading LUT strips. A normal map with many
+  flat or out-of-range texels can still land on BC7: set `"compress": "bc5"` on it. BC1 is never picked
   for you: it is for opaque colour by explicit choice, and it drops alpha. BC5 and BC4 hold linear data, so they need
   `"srgb": false`. BC needs both sides of the texture, after `max_size`, to be multiples of 4: otherwise the texture
   cooks to RGBA8 and the cook warns with the file name (resize the image or pick a `max_size`). **Pixel art and UI:**
