@@ -1,6 +1,6 @@
 # M-IMPORT3D — A wider 3D import path: glTF gaps, OBJ, FBX (milestone record)
 
-**Status:** planned (added 2026-10-17; no Linear issues: the workspace is at its free limit, the record is the tracker).
+**Status:** done (steps 0 to 4 shipped; see "As built, the close" below; added 2026-10-17; no Linear issues: the workspace is at its free limit, the record is the tracker).
 Plan: this record (ROADMAP status row only). Source: the Unreal comparison of 2026-10-16
 (`assessments/unreal-kiyaslama-2026-10-16.md`), which rates import "behind (the 3D DCC path is narrow)": Unreal takes
 FBX, glTF and USD, the engine takes glTF only.
@@ -53,10 +53,10 @@ widen one enum, the way `mce_import_skel.py` did for M-ANIM2D.
 |---|---|---|---|---|
 | 0 | Seam: move the mesh back end out of `gltf_importer.cpp` into cook-private `src/mesh_build.h` / `.cpp`; byte-identical output | S (4–6 h) | Sonnet (Opus review: determinism) | done, #485 |
 | 1 | glTF gaps: extension list fix, sparse accessors, KHR_mesh_quantization, EXT_meshopt_compression, 8 influences reduced to 4, morph default weights baked, warnings for every dropped attribute; KHR_draco a named error | M (12–18 h) | Sonnet (Opus review: untrusted input, determinism) | done, #496; open: M-FUZZ survey row for the meshopt path, meshopt OCTAHEDRAL/QUATERNION output is SIMD-dependent across hosts (never put a filtered fixture in the mesh golden), animation `out.keys` has no scene-wide cap |
-| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | done, PR pending; the `.mtl` is a registered asset (importer `mtl`), see Step 2 "as built"; open: the OBJ fuzz loop is in `test_cook_obj.cpp`, not yet in the M-FUZZ survey |
-| 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | done, PR pending; ufbx v0.23.1 @`26a482a`, ADR-0047 (0046 is taken by M-OPENWORLD's road networks), see Step 3a "as built" |
-| 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | done, PR pending; see Step 3b "as built" |
-| 4 | glTF / FBX lights and cameras as a prefab (`mce import gltf|fbx`), MCP `asset_import` `tool: gltf|fbx`, a per-mesh import summary, guide 8.4, fixtures, the close | M (10–14 h) | Sonnet | planned |
+| 2 | OBJ (+MTL) importer, own parser, on the step-0 back end | M (8–12 h) | Sonnet | done, #505 (+#518 test fix); the `.mtl` is a registered asset (importer `mtl`), see Step 2 "as built"; open: the OBJ fuzz loop is in `test_cook_obj.cpp`, not yet in the M-FUZZ survey |
+| 3a | FBX decision and pin: ADR on ufbx, `Dependencies.cmake`, the "ufbx wall", ARCHITECTURE §7 row; one smoke test | S (4–6 h) | Opus (new third-party dependency) | done, #511; ufbx v0.23.1 @`26a482a`, ADR-0047 (0046 is taken by M-OPENWORLD's road networks), see Step 3a "as built" |
+| 3b | FBX importer on ufbx: meshes, materials, unit and axis conversion, skeleton, skins, animation stacks onto `Geometry` | L (20–30 h) | Sonnet (Opus review: axis/unit maths and determinism) | done, #523; see Step 3b "as built" |
+| 4 | glTF / FBX lights and cameras as a prefab (`mce import gltf|fbx`), MCP `asset_import` `tool: gltf|fbx`, a per-mesh import summary, guide 8.4, fixtures, the close | M (10–14 h) | Sonnet | done: 4a #530 (prefab tool, MCP enum, guide), 4b PR pending (import summary in `CookReport`, `samples/import_demo` fixtures, docs, the close); see Step 4 "as built (4a)" and "as built (4b)" |
 
 Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on it); 1 and 2 may run in parallel after it;
 3a before 3b; 4 last.
@@ -225,6 +225,83 @@ Total ≈ 60–85 h *(rough guess)*. Order: 0 first (everything else builds on i
 - **Docs and fixtures.** User guide 8.4 (formats, sidecar keys, what is dropped and why), 5.3 and 14 for the tool;
   `samples/import_demo` gains a generated `.obj` and an ASCII `.fbx` written by its `gen_art.py` (no binaries), and
   its `import_demo_reimport` check covers the prefab. The record closed with "as built".
+- **As built (4a, #530).** `tools/mce_cli/mce_import_3d.py` (dispatched from `mce_import.py`, installed by
+  `cmake/MceInstall.cmake`), `mce_cook --dump-fbx-scene <file>` (`tools/cook/main.cpp` calls `dump_fbx_scene_json`, declared
+  in the cook-private `fbx_importer.h` (4 TUs), defined in `fbx_importer.cpp` with the importer's load limits and, for the
+  dump only, `target_camera_axes` = looks down -Z; `importer_registry.cpp` holds the no-ufbx stub; `tools/cook/CMakeLists.txt`
+  adds the cook `src/` directory to `mce_cook`'s include path; no header under `include/` changed). The glTF container is
+  parsed in Python (JSON or GLB; 128 MiB / 64 MiB JSON chunk, 262,144 nodes, depth 4096, iterative walk, NaN and cycles
+  refused). Units (guide 8.4): glTF candela `/ (683 pi)` (ADR-0024: intensity is reflected radiance), FBX `Intensity / 100`
+  as ufbx reads it, radius from the file's range or `10 sqrt(I)`; the sun is a warning with `sun_intensity` suggested.
+  Spot cones: glTF half-angles, FBX full angles halved. MCP `asset_import` `tool` gains `gltf` and `fbx` (the model must be
+  under `assets/`; `mce_cook` beside the server is passed as `--cook`); the `tools/list` schema text changes, so the MCP
+  transcript golden needs the integration runner's regeneration. Tests: `tests/import/test_import_3d.py` (ctest
+  `import_3d`: glTF point / spot / sun / cameras, node transforms and `matrix`, sidecar scale, run twice, kept GUIDs,
+  `--werror`, 25 corrupt-input cases and 300 seeded mutations, an ASCII FBX in Z-up centimetres through the dump, the
+  prefab cooked with `mce_cook`) and the `asset_import` case in `tests/mcp/test_mcp_import.cpp`. Open for 4b: the cook's own
+  "lights / cameras are not imported" warnings still print (the prefab path is in the guide, not in the message), and the
+  Blender / Max / Maya light conventions (FBX `Intensity`, cone angles, decay) are checked against the library's reading
+  only, not against real exporter files.
+
+- **As built (4b, PR pending).** `CookReport::meshes` (`cook.h`, one new struct `MeshSummary {path, triangles, submeshes,
+  materials, joints, clips, lod_levels, warnings}` and one array; no new include, fan-out 149 of 680 TUs before and
+  after, one under the 150 line, so the next change to this header needs a seam PR first). `cook.cpp` fills it in the
+  commit loop for every Cooked or UpToDate mesh asset by reading the cooked `CHNK_MESH` back with `MeshView` (the same
+  place the size report reads the file), so a cached run gives the numbers a fresh one does. `importer.h`, `formats.h`
+  and every importer are untouched. Definitions: triangles = base level of all submeshes; materials = distinct inline
+  materials (bytes of `MaterialChunk` + `MaterialExt` equal); joints = all skin joints; clips = `MeshView::clips` (the
+  view does expose them); `lod_levels` = most levels any submesh has, the base included (1 = none). `warnings` is the
+  one number that is not stable across cached and fresh: it counts the warnings the importer raised in this run, and
+  warnings are not stored in the cook DB, so an up-to-date model reports 0 (the doc says so). `mce_cook` prints
+  `  mesh assets/models/x.fbx: N tris, N submeshes, N materials, N joints, N clips, N LODs[, N warning(s)]` per model
+  (not with `--quiet`); MCP `cook_run` returns `meshes` with the same fields (tool description updated; the transcript
+  golden `demo_edit.golden.jsonl` regenerated, two lines of schema text). Fixtures: `samples/import_demo/gen_art.py`
+  writes `assets/models/tent.obj` + `tent.mtl` (a default and an MTL material), `quad.fbx` (ASCII 7.4) and `lamp.gltf`
+  (a triangle, no lights), each with a committed sidecar of a fixed GUID, plus `import/lamp_lit.gltf` (the same triangle
+  with a point light and a camera, as an exporter writes it) from which `mce import gltf --werror` makes
+  `assets/prefabs/lamp.mcprefab`. The lit file is under `import/` because the cook warns that it drops lights and
+  cameras, and the sample cooks with 0 warnings; its sidecar there carries the model's GUID, so the prefab's `MeshRef`
+  resolves. `check_reimport.py` (ctest `import_demo_reimport`, about 1 s) now also compares `import/`, and checks that
+  the prefab has the `MeshRef` root, a `PointLight3D` and a `Camera3DComponent`; the second run keeps every byte and
+  the prefab's GUID. The mesh golden (`test_cook_mesh_golden.cpp`) gained one row, `samples/import_demo/models/lamp.gltf`,
+  because it hashes every sample glTF. Tests: `test_cook_obj.cpp` "cook report: the import summary of a mesh, fresh and
+  cached" and `tests/mcp/test_mcp_import.cpp` "cook_run: meshes ...". Docs: guide 8.4 ("The import summary"), 5.3, 14,
+  `docs/engine/asset.md`.
+
+## As built, the close
+
+What shipped, per step: step 0 #485 (the mesh back end in cook-private `mesh_build`, byte-identical); step 1 #496 (glTF
+gaps: sparse, quantization, meshopt, 8 influences, baked morph weights, named warnings, KHR_draco refused); step 2 #505
+(+#518 test fix) (OBJ + MTL, the `.mtl` a registered asset); step 3a #511 (ufbx pin, ADR-0047, the wall); step 3b #523
+(FBX importer: meshes, materials, units and axes, skins, animation stacks); step 4a #530 (`mce import gltf|fbx` prefab,
+MCP `asset_import`, guide); step 4b (this PR, number pending): import summary in `CookReport`, `mce_cook` lines, MCP
+`meshes`, `samples/import_demo` fixtures, docs. Gates held: every earlier mesh cooks to the same bytes (the mesh golden
+has only the one added row), fixtures cook to identical bytes twice, every dropped feature is a named warning, no change
+to `importer.h`, `formats.h`, `render/`, the script VM or perf files.
+
+Open items:
+- No real DCC file was tried (Blender, Max, Maya, Unreal exports, Sketchfab / Kenney FBX and OBJ downloads); every
+  fixture is written by a test or `gen_art.py`. The Blender / Max / Maya light conventions (FBX `Intensity`, cone angles,
+  decay) are checked against the library's reading only.
+- FBX cooked bytes are per host: ufbx evaluates Euler angles and slerp with libm (ADR-0047), so a goldens-style
+  cross-host comparison does not exist for FBX.
+- OBJ smooth normals weight each corner by its angle, computed with `std::atan2` (`obj_importer.cpp`), whose last bit
+  can differ between libm builds, so the cross-host byte equality of OBJ cooks is unverified (only x86_64 Linux ran it);
+  the mesh golden records the rock fixtures for x86_64 only for a similar reason.
+- M-FUZZ survey rows are missing for the three new paths: the OBJ parser and the meshopt decode path (their loops live in
+  `test_cook_obj.cpp` / `test_cook_gltf_ext.cpp`), and the FBX / ufbx reader (`test_cook_fbx.cpp`, plus the 300-mutation
+  glTF container loop in `tests/import/test_import_3d.py`).
+- Render milestone (ROADMAP backlog, starts only if a user's content needs it): vertex colours (`COLOR_0`),
+  `TEXCOORD_1` and runtime morph targets need a render-owned vertex stream, morph deltas and a vertex or compute path;
+  until then they stay named warnings (morph default weights are baked).
+- The cook still warns "lights / cameras are not imported" for a model that has them; the message does not mention
+  `mce import gltf|fbx` (an importer text change, left out of 4b by the rule of no importer changes). The guide says it.
+- `warnings` in the import summary is this run's only (cached models report 0); storing warning counts in the cook DB
+  would change its record format.
+- `cook.h` has 149 includers; a change to it needs a seam PR.
+- The generated files are the integration runner's: `docs/engine/capabilities.md` (the `asset_import` / `cook_run`
+  schema text changed in 4a and 4b) and `scripts/ci/sample_coverage.allow` are not regenerated here; the MCP
+  transcript golden was regenerated in this PR because the `cook_run` description changed.
 
 ## Decisions (approved by the coordinator)
 

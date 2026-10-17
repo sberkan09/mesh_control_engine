@@ -399,3 +399,69 @@ TEST_CASE("ui theme: authoring mistakes fail the cook with file and line") {
         CHECK(diags.find(b.expect) != std::string::npos);
     }
 }
+
+// M-MISSION step 2: a Minimap widget keeps its values through the cook, the writer and a Document.
+TEST_CASE("ui: a Minimap widget cooks, round-trips and rejects bad values") {
+    const char* const hud = R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1", "modal": false,
+  "widgets": [
+    { "name": "mini", "kind": "Minimap", "at": [1, 0, 200, 200],
+      "minimap": { "track": "Hero", "radius": 80, "zoom": 2, "rotate_with_heading": true, "clamp_to_rim": true,
+                   "background": [0, 0, 0.5, 1], "marker_px": 12, "layer_mask": 5 } },
+    { "name": "world", "kind": "Minimap", "fill": true,
+      "minimap": { "full_map": true, "world_min": [-100, -200], "world_max": [300, 400] } },
+    { "name": "plain", "kind": "Minimap" } ] })";
+    const std::vector<byte> first = cook_ui("ui_minimap_a", hud);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(Span<const byte>(first.data(), first.size()), d));
+    const ui::Minimap& m = d.widgets[d.find("mini")].minimap;
+    CHECK(d.widgets[d.find("mini")].kind == ui::WidgetKind::Minimap);
+    CHECK(m.track.view() == "Hero");
+    CHECK(m.radius == 80.0f);
+    CHECK(m.zoom == 2.0f);
+    CHECK(m.rotate_with_heading);
+    CHECK(m.clamp_to_rim);
+    CHECK_FALSE(m.full_map);
+    CHECK(m.background.b == 0.5f);
+    CHECK(m.marker_px == 12.0f);
+    CHECK(m.layer_mask == 5u);
+    const ui::Minimap& w = d.widgets[d.find("world")].minimap;
+    CHECK(w.full_map);
+    CHECK(w.world_min.x == -100.0f);
+    CHECK(w.world_max.y == 400.0f);
+    CHECK(w.track.view() == "Player");  // the default
+    CHECK(d.widgets[d.find("plain")].minimap.radius == 50.0f);
+
+    cook::String text;
+    cook::write_ui_document(d, asset::parse_guid(kGuid).value(), text);
+    CHECK(cook_ui("ui_minimap_b", text.c_str()) == first);
+    ui::Document doc;
+    REQUIRE(ui::build_document(d, doc));
+    CHECK(doc.minimap(doc.find("mini")).layer_mask == 5u);
+    ui::DocumentData back;
+    ui::extract_document(doc, back);
+    Array<byte> enc;
+    ui::encode_ui_document(back, enc);
+    CHECK(std::vector<byte>(enc.begin(), enc.end()) == first);
+    // The minimap records are the tail of the chunk: cut one and it does not decode.
+    CHECK_FALSE(ui::decode_ui_document(Span<const byte>(first.data(), first.size() - 1), d));
+
+    struct Bad {
+        const char* widget;
+        const char* expect;
+    };
+    const Bad bad[] = {
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "radius": 0 } })", "above 0"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "zoom": -1 } })", "above 0"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "full_map": true, "world_min": [5, 5], "world_max": [5, 9] } })", "world_max above world_min"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "raduis": 5 } })", "raduis"},
+        {R"({ "name": "a", "kind": "Panel", "minimap": {} })", "Minimap widget"},
+    };
+    for (const Bad& b : bad) {
+        const std::string root = fresh_dir("ui_minimap_bad");
+        write_file(root + "/assets/menu.mcui", std::string(R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1", "widgets": [ )") + b.widget + " ] }");
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        CHECK(ui_diags(r).find(b.expect) != std::string::npos);
+    }
+}

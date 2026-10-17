@@ -25,8 +25,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
 | A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
-| A3 | in progress: instancing past the budget done; HLOD bake next, then impostors and merge budget | #522 instancing | same design |
-| A4 | in progress: ChunkLod3D and the .mchlod importer | #529 ChunkLod3D | same design; next: city counter gate |
+| A3 | in progress: instancing past the budget and the HLOD bake (`hlod_bake`) and the cheap StaticMerge3D change check done; impostors next | #522 instancing, #534 HLOD bake, #536 city CPU | same design |
+| A4 | in progress: ChunkLod3D, the .mchlod importer and the city counter gate (4096 pieces as cells) | #529 ChunkLod3D, #536 city CPU | same design; next: the city sample |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
 
@@ -68,15 +68,18 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
-| B1 authoring: MCP `roads_*` tools, editor overlay | next (after B2) | | |
-| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus (`TrafficDriver3D`, `TrafficSpawner3D`) | in review | #510 | drives `Vehicle3D` directly (IDM + pure pursuit), not through `VehicleDriver3D`: lanes and stop lines need their own speed control |
+| B1 authoring: MCP `roads_info`, `roads_generate`; editor View > Roads overlay while playing | done | #528 | `roads_info` reports one-way dead ends and lanes outside the lane graph's largest strongly connected component |
+| B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus (`TrafficDriver3D`, `TrafficSpawner3D`) | done | #510 | drives `Vehicle3D` directly (IDM + pure pursuit), not through `VehicleDriver3D`: lanes and stop lines need their own speed control |
+| B2 pedestrians: cars stop for a `Pedestrian3D` crossing in their lanes ahead | done | #528 | unsignalled crossings leave the giving way to the cars (B3, ADR-0048) |
 | B3 crowds: `CrowdSpawner3D`, `Pedestrian3D` (`kit/crowd.h`), pavement edge graph, kerb hops, light-aware crossings, LOD stepping, spawn ring | in review | #513 | [ADR-0048](../adr/0048-pedestrian-crowds.md), guide 29.6; `tests/kit/test_crowd.cpp` |
 
 Open items and risks:
 - Lane changes along a road are not modelled; a car keeps its lane until a junction (ADR-0046 "Not now").
 - Junction radii come from widths and angles; very acute junctions may need a hand-set `radius`.
-- B3: pedestrians do not avoid each other or react to the player; unsignalled crossings never wait, so B2 traffic must yield
-  to a walker on a crossing (it needs a crowd query: a cheap "who is crossing near here" lookup is the next seam). Heights
+- Traffic: no lane changes, no overtaking, no reaction to the player's car beyond following it when it is in the lane ahead;
+  a car stopped by a pedestrian waits behind a walker standing still on the road. The spawner's prefab path has no test of its own.
+- B3: pedestrians do not avoid each other or react to the player; unsignalled crossings never wait; B2 traffic yields
+  to a walker in `Cross` mode in its lanes ahead (#528, no crowd query needed: it reads `Pedestrian3D` directly). Heights
   follow the network's plane only. The prefab spawn path is exercised by the same code as co-op's player prefab but has no
   test of its own yet. Linear: not updated (connector unreachable this session); recorded here.
 - The nearest-lane grid is rebuilt on every hot reload of a network; fine for a city, slow for a country.

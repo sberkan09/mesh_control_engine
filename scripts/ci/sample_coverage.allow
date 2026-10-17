@@ -25,3 +25,4 @@ FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_o
 ChunkLod3D | tested in tests/kit/test_chunk_lod3d.cpp; the M-OPENWORLD city sample (A4) shows it with a baked proxy
 Mission | M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it
 Objective | M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it
+MapMarker | M-MISSION 2: tested in tests/kit/test_map_markers.cpp; the three-mission demo (step 4) shows it

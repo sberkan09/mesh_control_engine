@@ -31,6 +31,14 @@ if(MCE_WITH_NET)
         DEPS
             mce::mce_net)
     target_include_directories(test_fuzz_net PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+    # The WebSocket transport over loopback TCP, a raw socket on the other end.
+    mce_add_test(test_fuzz_websocket UMBRELLA
+        SOURCES
+            test_websocket.cpp
+        DEPS
+            mce::mce_net)
+    target_include_directories(test_fuzz_websocket PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
 # Luau source through the checks and the compiler, and bytecode through the host.
@@ -52,3 +60,25 @@ mce_add_test(test_fuzz_importers UMBRELLA
         mce::mce_asset_cook)
 target_include_directories(test_fuzz_importers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(test_fuzz_importers PRIVATE MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+
+# The command line and console, and (with the editor) .mcperf captures read back.
+mce_add_test(test_fuzz_misc UMBRELLA
+    SOURCES
+        test_misc.cpp
+    DEPS
+        mce::mce_core)
+target_include_directories(test_fuzz_misc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+if(MCE_BUILD_EDITOR)
+    target_link_libraries(test_fuzz_misc PRIVATE mce::mce_editor_core)
+    target_compile_definitions(test_fuzz_misc PRIVATE MCE_FUZZ_HAS_EDITOR_CORE=1)
+endif()
+
+# Scene instantiate over mutated scene chunks (the kit's components are linked so real columns resolve).
+mce_add_test(test_fuzz_scene UMBRELLA
+    SOURCES
+        test_scene.cpp
+    DEPS
+        mce::mce_scene
+        mce::mce_gameplay_kit)
+target_include_directories(test_fuzz_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(test_fuzz_scene PROPERTIES ENVIRONMENT "MCE_FUZZ_ROOT=${CMAKE_BINARY_DIR}")

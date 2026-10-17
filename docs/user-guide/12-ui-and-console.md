@@ -107,7 +107,8 @@ ui::build_document(data, doc);                          // the skin (data.font, 
   `UiAnchors`, `UiStackLayout` and `UiGridLayout` fields, by the names the editor shows.
 - `"fill": true` and `"at": [x, y, width, height]` are `Builder::fill` and `Builder::at`. A Panel
   with `"modal": true` is `Builder::modal`'s veil; a Tabs widget's `"tabs"` are `Builder::tab`
-  pages and its `"value"` is the page shown.
+  pages and its `"value"` is the page shown. A `"kind": "Minimap"` widget draws a map of the world
+  around a tracked entity from `MapMarker`s (its `"minimap"` object is `UiMinimap`; section 9.15).
 - A Text widget's `"text_align"` (`Left`, the default, `Center` or `Right`) places its lines
   across its own rect, so a centered title needs no wrapping Stack: give it the full width
   (`"anchors"` or `"at"` with a width) and `"text_align": "Center"`. In C++ it is

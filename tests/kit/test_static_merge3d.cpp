@@ -378,3 +378,34 @@ TEST_CASE("static merge: shutdown and reset release the merged meshes") {
     f.extract.shutdown();
     CHECK(f.store.live_meshes() == meshes_before);
 }
+
+// The M-OPENWORLD city gate (A4), by counts: a block of 4096 static pieces reaches the scene as its cells, and an
+// unchanged block is not merged again (release build, 24k pieces: 15 ms of Scene3D::build one by one, 0.6 ms merged;
+// the per-frame check of an unchanged block went from 10 to 3 ms with the merge-time reads moved out of it).
+TEST_CASE("static merge: a 4096-piece city block reaches the scene as its cells and merges again only on a change") {
+    Fixture f("static_merge_kit_city");
+    const u32 side = 64;
+    Entity last;
+    for (u32 i = 0; i < side * side; ++i) {
+        const asset::Guid g = i % 3 == 0 ? kRedA : i % 3 == 1 ? kRedB : kGreen;
+        const u32 row = i / side, column = i % side;
+        last = f.child(g, {f32(column) * 6.0f - 192.0f, 0.0f, -f32(row) * 6.0f - 10.0f});
+    }
+    usize instances = 0;
+    f.frame([&](const render::Scene3D& scene) { instances = scene.instances().size(); });
+    const kit::Kit3DStats first = f.extract.stats();
+    CHECK(first.merged_rebuilt == 1);
+    CHECK(first.merged_children == side * side);
+    CHECK(first.meshes == 0);                     // no piece draws on its own
+    CHECK(first.merged_cells == 13u * 13u);  // ~384 m square in 32 m cells, one mesh per cell (a submesh per material)
+    CHECK(instances > 0);
+    CHECK(instances < first.merged_cells);  // the cells behind the camera are culled as cells
+    f.frame();
+    CHECK(f.extract.stats().merged_rebuilt == 0);
+    CHECK(f.extract.stats().merged_cells == first.merged_cells);
+    f.world.try_get_mut<LocalTransform>(last)->position.y = 1.0f;
+    f.frame();
+    CHECK(f.extract.stats().merged_rebuilt == 1);
+    f.frame();
+    CHECK(f.extract.stats().merged_rebuilt == 0);
+}
