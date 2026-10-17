@@ -671,9 +671,10 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
                 }
             }
             for (u32 i = 0; i < nin; ++i) {
-                RoadLane& src = lanes[in_lanes[i]];
-                src.first_next = static_cast<u32>(lanes.size());
-                src.next_count = static_cast<u32>(per[i].size());
+                // Copies, not a reference: the push_back below may move `lanes` (found by the ASan stage's fuzz test).
+                const f32 src_speed = lanes[in_lanes[i]].speed, src_width = lanes[in_lanes[i]].width;
+                lanes[in_lanes[i]].first_next = static_cast<u32>(lanes.size());
+                lanes[in_lanes[i]].next_count = static_cast<u32>(per[i].size());
                 for (const Pending& p : per[i]) {
                     const Array<V3>& li = lane_lines[in_lanes[i]];
                     const Array<V3>& lo = lane_lines[p.to];
@@ -703,8 +704,8 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
                     c.first_point = static_cast<u32>(points.size());
                     c.point_count = static_cast<u32>(curve.size());
                     c.length = append_points(points, curve);
-                    c.speed = std::fmax(2.0f, std::fmin(std::fmin(src.speed, dst.speed), std::sqrt(kLateralAccel * tight)));
-                    c.width = std::fmin(src.width, dst.width);
+                    c.speed = std::fmax(2.0f, std::fmin(std::fmin(src_speed, dst.speed), std::sqrt(kLateralAccel * tight)));
+                    c.width = std::fmin(src_width, dst.width);
                     c.first_next = p.to;
                     c.next_count = 1;
                     c.prev = in_lanes[i];

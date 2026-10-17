@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 and 2 done). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** active (added 2026-10-16; steps 1 to 3 done, step 4 in review). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
@@ -20,7 +20,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
 | 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | done (3a #424, 3b #501 and #520, 3c #533) |
-| 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
+| 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | done (this PR) |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
 
@@ -151,9 +151,38 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Step 3 is complete.** The `.mpg` case runs by default again (the pl_mpeg overflow was fixed in #521). The Luau
   bytecode loader decision and the Detour guard below remain open.
 
+## Step 4 — The gate and the close (SBA-188)
+
+- **ASan stage.** The fuzz tests are ordinary ctest tests, so the `linux-asan` stage of `local_ci.sh` already ran them; what
+  was missing was a failure on a UBSan report (it only printed) and a bound on time. `tests/fuzz/CMakeLists.txt` now labels
+  all of them `fuzz` (`ctest -L fuzz`), gives each a 600 s timeout, and in an ASan build sets
+  `UBSAN_OPTIONS=halt_on_error=1` with `cmake/ubsan.supp`. The only entry is pl_mpeg's left shift of negative values
+  (third-party; every compiler we use gives the arithmetic shift the decoder wants). The default iteration counts are
+  fixed per test and keep the whole group near 30 s under ASan on the CI machine; `MCE_FUZZ_ITERS` is for long runs by hand.
+  Checked: without the suppression the importers test fails on the first shift.
+- **Walls.** `check_walls.py` fails when a `ChunkType` is not named in `tests/fuzz/test_chunk_readers.cpp` and when an
+  `*_importer.cpp` has no source of any of its extensions in `samples/`, `projects/`, `templates/`, `games/` and no corpus
+  in `tests/fuzz/`. Allow-lists (`FUZZ_CHUNK_EXEMPT`, `FUZZ_IMPORTER_EXEMPT`) carry the reason, and a stale entry fails
+  too. First run: `Prefab` (the scene's layout, now read as a `SceneView`) and `RoadNetwork` had no reader in the test.
+  Exempt for now, each with a reason: chunk types `Atlas` and `AudioPacket` (reserved, nothing reads them); importers for
+  `.mcenv`, `.mchlod`, `.fbx`, `.obj` and `.glsl` (no committed source; they need an embedded corpus, a follow-up).
+- **Roads case** (`tests/fuzz/test_roads.cpp`, part of `test_fuzz_importers`). A crossroads with a signal is cooked
+  from mutated source text (raw and value-swapped) and the `RoadNetwork` chunk is mutated byte-wise and read through
+  `RoadView` with every lane, successor, conflict and phase range followed (`fuzz::walk`).
+- **Finding, fixed here: heap use-after-free in the road cook on a valid network.** `roads_importer.cpp` kept
+  `RoadLane& src = lanes[...]` across the loop that `push_back`s the connector lanes, so the second connector read a
+  reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only; fixed by copying
+  the two fields it needs. Owner of the file: M-OPENWORLD; the fix is three lines and the roads cook tests still pass.
+  Regression: the roads case under the ASan stage (a plain build does not see it).
+- **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
+- **Milestone state.** Steps 1 to 4 are done. Still open: the Luau bytecode change (M-SCRIPT, above), the Detour guard
+  and a long run with validation on (below), and corpora for the five exempt importers.
+
 ### Open items from step 3
 
-- Luau bytecode loader trusts its input (3a); decision with the M-SCRIPT owner.
+- Luau bytecode loader trusts its input (3a). Decision (coordinator, 2026-10-17): bytecode is never loaded from untrusted
+  input, only what the cook puts in the pack; outside sources compile from source. The M-SCRIPT thread makes the change
+  as a small PR; when it lands, drop the `MCE_FUZZ_BYTECODE` case from `test_fuzz_script`.
 
 ### Planned: Detour defense in depth (separate item)
 
@@ -172,6 +201,7 @@ validation switched on.
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
+| Road network | `asset/roads_format.h` `RoadView::read`; `.mcroads` importer | packs, mods, project sources | mutated source and chunk (`test_roads.cpp`); every range followed | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | mutated scene chunks of every cooked pack, spawned (`test_fuzz_scene`) | done |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
 | glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |

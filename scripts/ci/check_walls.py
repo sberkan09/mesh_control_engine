@@ -240,6 +240,71 @@ def umbrella_violations() -> list:
     return out
 
 
+# M-FUZZ 4: a parser of untrusted bytes without a fuzz target is a hole. Every ChunkType must be named in
+# tests/fuzz/test_chunk_readers.cpp (its reader walks mutated payloads), and every importer must have a source
+# the importers fuzz test reads (a committed sample, project, template or game file with one of its extensions)
+# or a corpus of its own under tests/fuzz/. The allow-lists carry the reason; a stale entry is a violation too.
+FUZZ_CHUNK_EXEMPT = {
+    "Atlas": "reserved type: no reader, no importer writes it",
+    "AudioPacket": "reserved type: no reader, no importer writes it",
+}
+FUZZ_IMPORTER_EXEMPT = {
+    "envmap_importer.cpp": "no committed .mcenv source yet; needs a corpus",
+    "fbx_importer.cpp": "no committed .fbx source; ufbx is the parser (M-IMPORT3D)",
+    "hlod_importer.cpp": "no committed .mchlod source yet; needs a corpus",
+    "obj_importer.cpp": "no committed .obj source; text parser, needs an embedded corpus",
+    "shader_importer.cpp": "no committed .glsl source; goes through the shader compiler, needs a corpus",
+}
+FUZZ_SOURCE_DIRS = ["samples", "projects", "templates", "games"]
+
+
+def fuzz_coverage_violations() -> list:
+    out = []
+    header = (ROOT / "src/engine/asset/include/mce/asset/container.h").read_text(encoding="utf-8")
+    m = re.search(r"enum class ChunkType\s*:\s*\w+\s*\{(.*?)\};", header, re.S)
+    names = []
+    if m:
+        for line in m.group(1).splitlines():
+            mm = re.match(r"\s*([A-Z]\w*)\s*(=\s*\d+)?\s*,", line)
+            if mm:
+                names.append(mm.group(1))
+    readers = (ROOT / "tests/fuzz/test_chunk_readers.cpp").read_text(encoding="utf-8")
+    for n in names:
+        covered = re.search(r"ChunkType::%s\b" % n, readers) is not None
+        if n in FUZZ_CHUNK_EXEMPT:
+            if covered:
+                out.append(f"tests/fuzz: fuzz wall: ChunkType::{n} is covered; drop it from FUZZ_CHUNK_EXEMPT in check_walls.py")
+        elif not covered:
+            out.append(f"tests/fuzz/test_chunk_readers.cpp: fuzz wall: ChunkType::{n} has no reader in the fuzz test "
+                       "(add a case to read_chunk and has_reader, or an entry with a reason to FUZZ_CHUNK_EXEMPT)")
+    for n in FUZZ_CHUNK_EXEMPT:
+        if n not in names:
+            out.append(f"scripts/ci/check_walls.py: fuzz wall: FUZZ_CHUNK_EXEMPT names {n}, which is not a ChunkType")
+
+    have = set()
+    for d in FUZZ_SOURCE_DIRS:
+        base = ROOT / d
+        if base.exists():
+            have |= {f.suffix for f in base.rglob("*") if f.is_file()}
+    fuzz_text = "".join(p.read_text(encoding="utf-8", errors="replace") for p in (ROOT / "tests/fuzz").glob("*.cpp"))
+    cook = ROOT / "src/engine/asset/cook/src"
+    files = sorted(p.name for p in cook.glob("*_importer.cpp"))
+    for name in files:
+        exts = set(re.findall(r'"(\.[a-z0-9]+)"', (cook / name).read_text(encoding="utf-8", errors="replace")))
+        covered = any(e in have or f'"{e}"' in fuzz_text for e in exts)
+        if name in FUZZ_IMPORTER_EXEMPT:
+            if covered:
+                out.append(f"scripts/ci/check_walls.py: fuzz wall: {name} is covered; drop it from FUZZ_IMPORTER_EXEMPT")
+        elif not covered:
+            out.append(f"src/engine/asset/cook/src/{name}: fuzz wall: no source of its extensions "
+                       f"({', '.join(sorted(exts)) or 'none found'}) in {', '.join(FUZZ_SOURCE_DIRS)} and no corpus in "
+                       "tests/fuzz (add one, or an entry with a reason to FUZZ_IMPORTER_EXEMPT)")
+    for name in FUZZ_IMPORTER_EXEMPT:
+        if name not in files:
+            out.append(f"scripts/ci/check_walls.py: fuzz wall: FUZZ_IMPORTER_EXEMPT names {name}, which does not exist")
+    return out
+
+
 def link_violations() -> list:
     out = []
     for d in SCAN_DIRS:
@@ -259,7 +324,7 @@ def link_violations() -> list:
 
 
 def main() -> int:
-    violations = link_violations() + umbrella_violations()
+    violations = link_violations() + umbrella_violations() + fuzz_coverage_violations()
     for d in SCAN_DIRS:
         base = ROOT / d
         if not base.exists():

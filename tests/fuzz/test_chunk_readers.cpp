@@ -71,7 +71,8 @@ bool read_chunk(ChunkType t, Span<const byte> p) {
         case ChunkType::Skeleton2D: return walked<Skeleton2DView>(p);
         case ChunkType::Shader: return walked<ShaderView>(p);
         case ChunkType::Mesh: return walked<MeshView>(p);
-        case ChunkType::Scene: return walked<SceneView>(p);
+        case ChunkType::Scene: case ChunkType::Prefab: return walked<SceneView>(p);  // a prefab has the scene's layout
+        case ChunkType::RoadNetwork: return walked<RoadView>(p);
         case ChunkType::ModInfo: return walked<ModInfoView>(p);
         case ChunkType::SpriteSheet: return walked<SpriteSheetView>(p);
         case ChunkType::StringTable: { loc::StringTable o; return static_cast<bool>(loc::decode_table(p, o)); }
@@ -113,6 +114,7 @@ bool has_reader(ChunkType t) {
         case ChunkType::Mesh: case ChunkType::Scene: case ChunkType::ModInfo: case ChunkType::SpriteSheet:
         case ChunkType::StringTable: case ChunkType::InputMap: case ChunkType::StoreCatalog: case ChunkType::RemoteConfig:
         case ChunkType::GameServicesCatalog: case ChunkType::UiTheme: case ChunkType::UiDocument: case ChunkType::NavMesh:
+        case ChunkType::Prefab: case ChunkType::RoadNetwork:
             return true;
         default: return false;
     }
