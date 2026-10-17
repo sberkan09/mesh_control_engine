@@ -319,6 +319,7 @@ long box(FbxDoc& doc, V3 half, bool reverse = false, const std::string& material
     std::vector<long> uv_index;
     for (int f = 0; f < 6; ++f) {
         std::vector<long> face;
+        face.reserve(4);
         for (int k = 0; k < 4; ++k) face.push_back(kFaceVerts[f][k]);
         if (reverse) std::reverse(face.begin(), face.end());
         faces.push_back(face);
@@ -842,6 +843,7 @@ std::string skin_fbx(const SkinSpec& s, int up_axis, double unit_cm, bool animat
     doc.connect(geom, mesh_node);
     const long armature = doc.model("Armature", "Null", 0);
     std::vector<long> bone;
+    bone.reserve(static_cast<size_t>(s.bones));
     const V3 step = to_file({0, 1, 0}, up_axis, unit_cm);
     for (int b = 0; b < s.bones; ++b) bone.push_back(doc.limb("Bone" + std::to_string(b), b == 0 ? armature : bone[static_cast<size_t>(b) - 1], b == 0 ? V3{} : step));
     const long sk = doc.skin(geom);
@@ -1870,6 +1872,7 @@ TEST_CASE("fbx: a vertex with an absurd number of skin weights is an error namin
         s.verts = {{0, 0, 0}, {1, 0, 0}, {0, 0, 1}};
         s.faces = {{0, 1, 2}};
         std::vector<std::pair<int, double>> w;
+        w.reserve(static_cast<size_t>(weights_on_vertex0));
         for (int i = 0; i < weights_on_vertex0; ++i) w.push_back({0, 1.0 / weights_on_vertex0});
         s.weights = {w, {{0, 1.0}}, {{0, 1.0}}};
         return s;
@@ -1904,7 +1907,7 @@ TEST_CASE("fbx: a read error shows the reader's description on one line, without
     INFO(d.diags);
     REQUIRE_FALSE(d.ok);
     CHECK(has(d.diags, "cannot read the FBX: "));
-    CHECK_FALSE(has(d.diags, "ufbx.c"));
+    CHECK_FALSE(has(d.diags, (std::string("ufbx") + ".c").c_str()));  // spelled so the ufbx wall does not read it as the header
     CHECK_FALSE(has(d.diags, "Stack"));
     CHECK_FALSE(has(d.diags, "\x7f"));
     CHECK(std::count(d.diags.begin(), d.diags.end(), '\n') == 1);
