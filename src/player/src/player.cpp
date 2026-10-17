@@ -2511,6 +2511,8 @@ private:
         if (drew_3d_) {
             f.counters.triangles = stats3d_.triangles;
             f.counters.meshes = stats3d_.visible;
+            f.counters.runs_instanced = stats3d_.runs_instanced;
+            f.counters.draws_instanced = stats3d_.draws_instanced;
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;

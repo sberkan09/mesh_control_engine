@@ -247,9 +247,21 @@ def max_texture_size_flag(value):
     return ["--max-texture-size", str(value)]
 
 
-def cook_script_pack(p, max_texture_size=None):
+def textures_flag(value, ship=False):
+    """['--textures', V] for mce_cook (nothing for None). `mce ship` offers rgba8|bc (astc is a phone cook:
+    scripts/ship.py); an invalid value exits with the fix."""
+    if value is None:
+        return []
+    allowed = ("rgba8", "bc") if ship else ("rgba8", "bc", "astc")
+    if value not in allowed:
+        sys.exit(f"mce: --textures {value} is not valid: use {' or '.join(allowed)}"
+                 + (" (phones cook astc with scripts/ship.py --target android|ios)" if value == "astc" else ""))
+    return ["--textures", value]
+
+
+def cook_script_pack(p, max_texture_size=None, textures=None):
     """A script project has no build: cooking assets/ (which checks the scripts) is it. Incremental."""
-    return run([tool("mce_cook"), p.dir, "--pack"] + max_texture_size_flag(max_texture_size))
+    return run([tool("mce_cook"), p.dir, "--pack"] + max_texture_size_flag(max_texture_size) + textures_flag(textures, True))
 
 
 def cmd_build(args):
@@ -350,7 +362,8 @@ def cmd_cook(args):
     p = Project(args.project)
     p.built(host=False)
     module = [] if p.script else ["--module", p.module]
-    return run([tool("mce_cook")] + module + [p.dir] + max_texture_size_flag(args.max_texture_size) + args.rest)
+    return run([tool("mce_cook")] + module + [p.dir] + max_texture_size_flag(args.max_texture_size)
+               + textures_flag(args.textures) + args.rest)
 
 
 def story_compiler():
@@ -392,6 +405,9 @@ def engine_checkout():
 
 
 def cmd_ship_web(args, p):
+    if args.textures == "bc":
+        sys.exit("mce: --textures bc is not offered for --target web: a web pack serves every browser, phones "
+                 "included, so ship it rgba8 (the default)")
     # A web build cross-compiles the engine with the project (cmake/MceProject.cmake links the game in),
     # which the installed SDK has no libraries for: it runs from the engine checkout.
     checkout = engine_checkout()
@@ -417,7 +433,7 @@ def cmd_ship_web(args, p):
 
 def cmd_ship_script(args, p):
     """A script project ships the stock player, the engine library, the pack and a launcher."""
-    if cook_script_pack(p, args.max_texture_size):
+    if cook_script_pack(p, args.max_texture_size, args.textures):
         return 1
     version, stamp = sdk_version()
     version = args.version or p.meta.get("version") or version
@@ -463,7 +479,7 @@ def cmd_ship(args):
         # The browser build (and phones, with the engine checkout's scripts/ship.py --target android|ios) builds
         # the stock player with the project's pack: user guide 27.7.
         return cmd_ship_web(args, p) if args.target == "web" else cmd_ship_script(args, p)
-    cap = max_texture_size_flag(args.max_texture_size)
+    cap = max_texture_size_flag(args.max_texture_size) + textures_flag(args.textures, True)
     if args.target == "web":
         if args.steam:
             sys.exit("mce: --steam ships the desktop build")
@@ -474,9 +490,9 @@ def cmd_ship(args):
     pack = p.pack
     if cap:
         # `mce build` cooks at full size: re-cook the project with the cap into <project>/assets.mce and ship that pack
-        # (it prints the size report; the build tree's pack stays as it was).
+        # (it prints the size report; the build tree's pack stays as it was). `cap` holds --max-texture-size and --textures.
         if run([tool("mce_cook"), "--module", p.module, p.dir, "--pack"] + cap):
-            sys.exit("mce: the capped cook failed; nothing was shipped")
+            sys.exit("mce: the re-cook failed; nothing was shipped")
         pack = p.dir / "assets.mce"
     version, stamp = sdk_version()
     version = args.version or p.meta.get("version") or version
@@ -763,6 +779,8 @@ def main(argv):
             s.add_argument("--max-texture-size", type=int, metavar="N",
                            help="cap PNG/JPG textures at N pixels on the longest side (a power of two, 1..16384); "
                                 "default: no limit")
+            s.add_argument("--textures", metavar="MODE",
+                           help="rgba8 (default), bc (BC7/BC5/BC4/BC1 blocks for desktop packs) or astc (phones)")
         s.add_argument("rest", nargs=argparse.REMAINDER, help="flags passed through")
         s.set_defaults(fn=fn)
 
@@ -798,6 +816,9 @@ def main(argv):
     s.add_argument("--max-texture-size", type=int, metavar="N",
                    help="re-cook the pack with PNG/JPG textures capped at N pixels on the longest side (a power of two, "
                         "1..16384) so the zip is smaller; a sidecar's smaller max_size wins. Default: no limit")
+    s.add_argument("--textures", metavar="MODE",
+                   help="rgba8 (default) or bc: re-cook the pack with BC7/BC5/BC4/BC1 block textures (about a quarter of "
+                        "the size; desktop only, a GPU without BC cannot draw them). Not for --target web")
     s.add_argument("--smoke", action="store_true", help="--target web: play it once in headless Chromium")
     s.add_argument("--smoke-ticks", type=int, default=0,
                    help="--target web: play N ticks in headless Chromium, screenshot, and check the state hash against "

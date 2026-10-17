@@ -836,8 +836,13 @@ bool cook_run(ToolCall& c) {
     }
     u64 max_texture_size = 0;  // 0 = no limit; a bad value (not a power of two from 1 to 16384) is the cook's error
     if (!arg_uint(c, "max_texture_size", max_texture_size, 1, 0x7FFFFFFF, false)) return false;
+    StringView textures_arg;  // "rgba8" (default) or "bc"; astc is a phone cook (scripts/ship.py), not an editor one
+    if (!arg_string(c, "textures", textures_arg, false)) return false;
+    cook::TextureCompression textures = cook::TextureCompression::None;
+    if (textures_arg == "bc") textures = cook::TextureCompression::Bc;
+    else if (!textures_arg.empty() && textures_arg != "rgba8") return arg_missing(c, "textures", "\"rgba8\" or \"bc\"");
     progress(c.server, c.progress_token, 0, 1);
-    const cook::CookReport& r = c.server.session().cook(pack, adopt, paths.span(), skip_errors, static_cast<u32>(max_texture_size));
+    const cook::CookReport& r = c.server.session().cook(pack, adopt, paths.span(), skip_errors, static_cast<u32>(max_texture_size), textures);
     progress(c.server, c.progress_token, 1, 1);
     c.out.begin_object();
     write_report(c.out, r);
@@ -1531,7 +1536,7 @@ const ToolDef kTools[] = {
      R"({"type":"object","properties":{"type":{"type":"string","description":"Texture, Font, Sfx, Scene, Mesh, Material, ..."}}})",
      asset_list},
     {"asset_set_import_settings",
-     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool, \"max_size\": 1024} where max_size is a power of two that halves a bigger image before its mips, to shrink the pack; a normal map or LUT needs srgb false; video (.mpg): {\"audio\": bool, \"normalize\": bool}). Keys are validated by the next cook_run.",
+     "Replace an asset's importer settings in its .mceasset sidecar (texture: {\"srgb\": bool, \"mips\": bool, \"max_size\": 1024} where max_size is a power of two that halves a bigger image before its mips, to shrink the pack; \"compress\": \"none\"|\"auto\"|\"bc7\"|\"bc5\"|\"bc4\"|\"bc1\"|\"astc\" picks the block format under a cook with textures \"bc\" (none keeps RGBA8: pixel art, LUTs; auto picks by content); a normal map or LUT needs srgb false; video (.mpg): {\"audio\": bool, \"normalize\": bool}). Keys are validated by the next cook_run.",
      R"({"type":"object","properties":{"path":{"type":"string","description":"Path under assets/, e.g. textures/rock_n.png"},"guid":{"type":"string","description":"\"guid:<uuid>\" instead of path"},"settings":{"type":"object"}},"required":["settings"]})",
      asset_set_import_settings},
     {"entity_create",
@@ -1605,10 +1610,10 @@ const ToolDef kTools[] = {
      "build`) and restart the server if it was not started with --module. max_texture_size: cap the largest side of "
      "PNG/JPG textures at this many pixels (a power of two, 1..16384; default no limit) so the pack shrinks: bigger "
      "ones are box-halved before their mips, a sidecar \"max_size\" (asset_set_import_settings) smaller than it wins; "
-     "changing it re-cooks the textures. Returns counts, diagnostics with "
+     "changing it re-cooks the textures. textures: \"rgba8\" (default) or \"bc\" to store color textures as BC7/BC5/BC4/BC1 blocks (about a quarter of the size; desktop packs only, phones and the web need their own cook) per the sidecar \"compress\" key; switching it re-cooks everything. Returns counts, diagnostics with "
      "file:line, the output paths (relative to the project folder) and sizes: cooked bytes by type (textures, meshes, "
      "audio, scenes, other), the five largest assets, and how many textures the cap downscaled.",
-     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false},"max_texture_size":{"type":"integer","minimum":1,"maximum":16384,"description":"Cap on a PNG/JPG texture's largest side, a power of two; default no limit"}}})",
+     R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false},"max_texture_size":{"type":"integer","minimum":1,"maximum":16384,"description":"Cap on a PNG/JPG texture's largest side, a power of two; default no limit"},"textures":{"type":"string","enum":["rgba8","bc"],"default":"rgba8","description":"Texture storage: rgba8, or bc for BC7/BC5/BC4/BC1 blocks in desktop packs"}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
     {"asset_delete", "Delete a source file under assets/ together with its .mceasset sidecar and its CREDITS.md row (a font's "

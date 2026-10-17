@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <filesystem>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -417,4 +418,42 @@ TEST_CASE("cook bc: a missing key under rgba8 cooks the same manifest as before;
     REQUIRE(r.ok);
     CHECK(r.cooked == 1);
     CHECK(r.format == TextureFormat::BC1);
+}
+
+// Size gate (M-CONTENT 1b-iv): the six 256x256 textures of samples/05_ashen_court (albedo, normal, ORM) cooked with
+// --textures bc against the rgba8 cook. Thresholds are provisional: they will be calibrated with RunPod measurements.
+// Expected: BC7/BC5 is 1 byte per texel against 4, so about 0.25 plus the headers and the mip table.
+TEST_CASE("cook bc: size gate on samples/05_ashen_court") {
+    const std::string src = std::string(MCE_SAMPLES_DIR) + "/05_ashen_court/assets/textures";
+    REQUIRE(std::filesystem::is_directory(src));
+    const std::string root = fresh_dir("bc_size_gate");
+    std::filesystem::create_directories(root + "/assets");
+    std::filesystem::copy(src, root + "/assets/textures", std::filesystem::copy_options::recursive);
+
+    CookOptions opt;
+    opt.textures = TextureCompression::None;
+    CookService svc;
+    const CookReport rgba = svc.cook(root.c_str(), opt);
+    REQUIRE_MESSAGE(rgba.ok(), diag_str(rgba));
+    REQUIRE(rgba.sizes.texture_count == 6);
+    opt.textures = TextureCompression::Bc;
+    const CookReport bc = svc.cook(root.c_str(), opt);
+    REQUIRE_MESSAGE(bc.ok(), diag_str(bc));
+    REQUIRE(bc.sizes.texture_count == 6);
+    INFO("rgba8 textures " << rgba.sizes.textures << " bytes, bc " << bc.sizes.textures << " bytes");
+    CHECK(double(bc.sizes.textures) <= 0.27 * double(rgba.sizes.textures));
+
+    // both normal maps (sidecar srgb false, unit-length texels) are picked as BC5 by `auto`
+    AssetSystem as;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {cooked};
+    REQUIRE(as.mount(Span<const StringView>(roots, 1)));
+    for (const char* guid : {"143cc14d-bea7-54c4-afde-c909ba9c0088", "739006d3-062e-5248-bbe3-df6cb497ffdb"}) {
+        auto h = as.load_sync<Texture>(parse_guid(guid).value());
+        REQUIRE(h);
+        auto v = TextureView::read(as.resolve(h.value()));
+        REQUIRE(v);
+        CHECK_MESSAGE(v.value().header->format == TextureFormat::BC5, guid);
+        as.release(AnyHandle(h.value()));
+    }
 }

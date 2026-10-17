@@ -47,7 +47,7 @@ mce_add_test(test_cook UMBRELLA
         mce::mce_physics3d
         mce::mce_ui)
 target_include_directories(test_cook PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src)
-target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS})
+target_compile_definitions(test_cook PRIVATE ${MCE_ASSET_TEST_DEFS} MCE_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
 # Encoder byte-equality across architectures (M-CONTENT 1b-ii): the pinned x86_64 hash, run by hand on an arm64 host.
 # Slow-labelled: --task skips it, the integration run (local_ci.sh slow) executes it.
 mce_add_test(test_cook_bc_arch UMBRELLA SOURCES test_cook_bc_arch.cpp DEPS mce::mce_asset_cook)

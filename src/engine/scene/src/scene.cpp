@@ -1,10 +1,12 @@
 #include "mce/scene/scene.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/save.h"
 #include "mce/log.h"
+#include "mce/scene/entity_names.h"
 #include "mce/refl/refl.h"
 #include "mce/scene/streaming.h"
 
@@ -19,7 +21,42 @@ struct ColumnPlan {
     ecs::ComponentId id = ecs::kInvalidComponent;
 };
 
+// Adds the scene's named entities to the world's EntityNames (created on the first named entity).
+void record_names(World& world, const asset::SceneView& scene, const Array<Entity>& spawned) {
+    EntityNames* names = nullptr;
+    for (u32 e = 0; e < scene.header->entity_count && e < spawned.size(); ++e) {
+        const StringView name = scene.entity_name(e);
+        if (name.empty()) continue;
+        if (!names) {
+            names = world.try_resource<EntityNames>();
+            if (!names) names = &world.set_resource(EntityNames{});
+        }
+        names->rows.push_back(EntityNames::Row{StringId(name).value, spawned[e]});
+    }
+    if (names) {
+        // Rows of entities that are gone (a streamed chunk unloaded, a destroyed entity) would pile up
+        // over load/unload cycles: drop them now, while the table is being rebuilt anyway.
+        usize kept = 0;
+        for (usize i = 0; i < names->rows.size(); ++i)
+            if (world.alive(names->rows[i].entity)) names->rows[kept++] = names->rows[i];
+        names->rows.resize(kept);
+        std::stable_sort(names->rows.begin(), names->rows.end(),
+                         [](const EntityNames::Row& a, const EntityNames::Row& b) { return a.hash < b.hash; });
+    }
+}
+
 }  // namespace
+
+Entity find_entity(World& world, StringView name) {
+    EntityNames* names = world.try_resource<EntityNames>();
+    if (!names) return Entity::null;
+    const u64 h = StringId(name).value;
+    const auto it = std::lower_bound(names->rows.begin(), names->rows.end(), h,
+                                     [](const EntityNames::Row& r, u64 v) { return r.hash < v; });
+    for (auto i = it; i != names->rows.end() && i->hash == h; ++i)
+        if (world.alive(i->entity)) return i->entity;
+    return Entity::null;
+}
 
 ecs::ComponentId component_for(World& world, const refl::TypeRecord& type) {
     const ecs::ComponentId found = world.find_component(type.type_hash);
@@ -96,6 +133,7 @@ Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Enti
         ecs::propagate_transforms(world);
         break;
     }
+    record_names(world, scene, out);
     return ok();
 }
 
@@ -140,6 +178,7 @@ static Result<bool> change_scene(World& world, asset::AssetSystem& assets, Array
     MCE_TRY_ASSIGN(const asset::Guid guid, find_scene(assets, target.view()));
     if (SceneStreaming* s = world.try_resource<SceneStreaming>()) s->unload_all(world);
     world.destroy_all();
+    if (EntityNames* names = world.try_resource<EntityNames>()) names->rows.clear();
     if (spawned) spawned->clear();
     MCE_TRY(load(world, assets, guid, spawned));
     world.rerun_startup();
