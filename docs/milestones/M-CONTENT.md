@@ -168,10 +168,10 @@ PIC. Never compile `bc7e.ispc`, the repo's `ispc.exe` or the RDO files. Walls: a
   `.hdr` or `.exr` is an unknown-key error (BC6H is out of scope). `envmap_importer.cpp` never compresses (RGBM).
 - **`auto` under `bc`.** The rules are checked in order on the base level, after `max_size`. Each test is integer-only,
   so the choice is deterministic. (1) `srgb` true → `BC7` with the `Srgb` flag. (2) `srgb` false, `r == g == b` on every texel and `a == 255` → `BC4` (height and other grey
-  data; tested before the normal rule because bright grey, c about 194..208, also passes the unit-length test). (3) `srgb` false and at least 99% of
+  data; tested before the normal rule because bright grey, c about 194..208, also passes the unit-length test). (3) `srgb` false and at least 85% of
   texels decode to a unit normal → `BC5`. A texel passes when `x,y,z = 2c-255`, `x²+y²+z²` is within `[0.81, 1.21]·255²`,
-  `z > 0`, and `a == 255`. (4) Otherwise → `BC7`. *(provisional; will be calibrated with RunPod measurements. guess: the 99% and the length bounds; 1b-iv tunes them on the Lantern Keep and
-  Poly Haven normal maps)*. The rule never picks `bc1`, which is lossy on gradients. `bc1` is for opaque colour by
+  `z > 0`, and `a == 255`. (4) Otherwise → `BC7`. The 85% was 99% until the RunPod parallel round measured 14 Poly Haven normal maps
+  (`M-GPU-VERIFY.md`): 99% picked BC5 for 4 of them, 85% for 13. *(guess: the length bounds)*. The rule never picks `bc1`, which is lossy on gradients. `bc1` is for opaque colour by
   explicit choice. `auto` also keeps `none` for LUT-shaped strips (`w == h*h` or `h == w*w`, with `h >= 16`), where
   colour grading cannot take block error *(guess)*.
 - **Sizes.** BC is used only when both base sides are multiples of 4. WebGPU and D3D12 refuse a BC texture whose base
@@ -332,10 +332,10 @@ backends. 1b-iv follows both.
   83 TUs, under the 150 warning; no wide header was touched). The `demo_edit` transcript golden and
   `docs/engine/capabilities.md` follow the changed `cook_run` schema; the `asset_set_import_settings` text names `compress`.
 - **Size gate.** `tests/asset/test_cook_bc.cpp` cooks the six 256² textures of `samples/05_ashen_court` with `rgba8` and `bc`:
-  `sizes.textures` must be at most 0.27 times the RGBA8 cook, and both normal maps must be BC5. The thresholds, and the
-  `auto` thresholds (99% unit normals, length bounds 0.81..1.21), are provisional and will be calibrated with RunPod
-  measurements, including the Lantern Keep and Poly Haven normal maps (the Lantern Keep number is information only: that
-  content is not in the repo).
+  `sizes.textures` must be at most 0.27 times the RGBA8 cook, and both normal maps must be BC5. The size threshold and
+  the `auto` length bounds 0.81..1.21 are provisional and will be calibrated with RunPod measurements (the Lantern Keep
+  number is information only: that content is not in the repo); the unit-normal share (85%) was calibrated on the Poly
+  Haven normal maps. The gate counts these six textures only, not the whole pack.
 - **Tests.** `test_cook_bc` (cook, auto, PSNR, determinism, size gate), `test_cook_bc_arch` (slow), `tests/mcp/test_mcp.cpp`
   (`cook_run` `textures`), `tests/import/test_cli_textures.py` (`cli_textures`: flag passed through, web plus `bc` exits,
   `ship.py` refuses `bc` on android, ios and web).
