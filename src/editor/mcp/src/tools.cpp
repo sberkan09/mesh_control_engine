@@ -1650,8 +1650,8 @@ const ToolDef kTools[] = {
      "while the area is not loaded. Meshes smaller than min_size metres (default 1) are left out. Re-baking keeps the "
      "file and GUID; the same scene bakes byte-identical (content_hash). Returns per chunk the mesh counts (merged, "
      "small, skipped), submeshes, triangles and LOD levels.",
-     R"({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)"
-     R"("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"}},"additionalProperties":false})",
+     R"j({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)j"
+     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"}},"additionalProperties":false})j",
      hlod_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},

@@ -67,7 +67,8 @@ bool bake_chunk_hlod(asset::AssetSystem& assets, asset::Guid scene, const vec3& 
         }
         const asset::MeshHeader& hd = *v.value().header;
         const vec3 extent{hd.bounds_max[0] - hd.bounds_min[0], hd.bounds_max[1] - hd.bounds_min[1], hd.bounds_max[2] - hd.bounds_min[2]};
-        const f32 scale = math::max(math::length(world.c[0]), math::max(math::length(world.c[1]), math::length(world.c[2])));
+        const auto axis = [&world](int i) { return math::length(vec3{world.c[i][0], world.c[i][1], world.c[i][2]}); };
+        const f32 scale = math::max(axis(0), math::max(axis(1), axis(2)));
         if (math::length(extent) * scale < settings.min_size) {
             ++st.small;
             return;
