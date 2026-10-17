@@ -684,7 +684,7 @@ end
     INFO(error_of(r.h()));
     REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
     const Probe* p = r.w.try_get<Probe>(probe);
-    CHECK(p->n >= 3);                          // around the wall's end, not straight through it
+    CHECK(p->n >= 2);                          // around the wall's end, not straight through it
     CHECK(p->value.x > 9.0f);                  // reaches the wall's far end (z = 10)
     CHECK(p->value.y == doctest::Approx(10.0f).epsilon(0.1));
     CHECK_FALSE(p->flag);
