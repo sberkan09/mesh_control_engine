@@ -1,0 +1,36 @@
+{
+  "runs": [
+    {
+      "scene": "scenes/walk.mcscene",
+      "frames": 60,
+      "warmup": 10,
+      "width": 480,
+      "height": 270,
+      "counters": {
+        "draws": 2,
+        "passes": 1,
+        "dispatches": 0,
+        "triangles": 0,
+        "meshes": 0,
+        "sprites": 9,
+        "sprite_batches": 2
+      }
+    },
+    {
+      "scene": "scenes/caves.mcscene",
+      "frames": 60,
+      "warmup": 10,
+      "width": 480,
+      "height": 270,
+      "counters": {
+        "draws": 2,
+        "passes": 1,
+        "dispatches": 0,
+        "triangles": 0,
+        "meshes": 0,
+        "sprites": 14,
+        "sprite_batches": 2
+      }
+    }
+  ]
+}

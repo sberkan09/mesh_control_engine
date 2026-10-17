@@ -1369,12 +1369,51 @@ void main() {
 // u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off),
 // z = color-vision mode (0 = off), w = its strength.
 constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") MCE_GLSL_CVD R"(
+layout(std140, binding = 1) uniform FilmU {
+    vec4 f_lens;   // x vignette, y vignette smoothness, z grain, w grain cell size (pixels)
+    vec4 f_lens2;  // x chromatic aberration, y lens dirt intensity, z tonemapper (0 ACES, 1 AgX, 2 Neutral), w grain seed
+};
 layout(binding = 6) uniform sampler2D u_hdr;
 layout(binding = 7) uniform sampler2D u_bloom;
 layout(binding = 8) uniform sampler2DArray u_lut;  // 256 × 16 strip (16³), display space
+layout(binding = 9) uniform sampler2DArray u_dirt;  // lens dirt mask (linear rgb)
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+// AgX base (Troy Sobotka's; this is the formulation three.js ships): Rec.2020 inset, log2 over 16.5 stops,
+// a sigmoid fit, outset, and back to linear sRGB.
+vec3 agx_contrast(vec3 x) {
+    vec3 x2 = x * x, x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+}
+vec3 agx(vec3 c) {
+    const mat3 to2020 = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956);
+    const mat3 from2020 = mat3(1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187);
+    // Column-major: each row of the matrix as a color transform sums to 1 (inset) / each column does (outset).
+    const mat3 inset = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995,
+                            0.0951212405381588, 0.761241990602591, 0.0767994186031903,
+                            0.0482516061458583, 0.101439036467562, 0.811302368396859);
+    const mat3 outset = mat3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
+                             -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
+                             -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
+    c = inset * (to2020 * c);
+    c = clamp((log2(max(c, 1e-10)) + 12.47393) / 16.5, 0.0, 1.0);
+    c = outset * agx_contrast(c);
+    return clamp(from2020 * pow(max(c, 0.0), vec3(2.2)), 0.0, 1.0);
+}
+// Khronos PBR Neutral: leaves in-gamut colors alone up to a knee, then rolls the peak off and desaturates.
+vec3 neutral(vec3 c) {
+    c = max(c, 0.0);
+    const float start = 0.8 - 0.04, desat = 0.15;
+    float x = min(c.r, min(c.g, c.b));
+    c -= x < 0.08 ? x - 6.25 * x * x : 0.04;
+    float peak = max(c.r, max(c.g, c.b));
+    if (peak < start) return c;
+    const float d = 1.0 - start;
+    float new_peak = 1.0 - d * d / (peak + d - start);
+    c *= new_peak / peak;
+    return mix(c, vec3(new_peak), 1.0 - 1.0 / (desat * (peak - new_peak) + 1.0));
+}
 vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 vec3 srgb_to_linear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
@@ -1385,10 +1424,38 @@ vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
     vec3 s1 = textureLod(u_lut, vec3(rg + vec2(b1 / 16.0, 0.0), 0.0), 0.0).rgb;
     return mix(s0, s1, c.b - b0);
 }
+float grain_hash(vec2 cell, float seed) {
+    uvec3 q = uvec3(uvec2(cell + 4096.0), uint(seed));
+    q = q * 1664525u + 1013904223u;
+    q.x += q.y * q.z;
+    q.y += q.z * q.x;
+    q.z += q.x * q.y;
+    q ^= q >> 16u;
+    q.x += q.y * q.z;
+    return float(q.x >> 8u) * (1.0 / 16777216.0);
+}
 void main() {
-    vec3 c = texture(u_hdr, v_uv).rgb * (u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0));
-    if (u_params.w > 0.5) c += textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
-    c = aces(c * 0.6);
+    float exposure = u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0);
+    vec3 c;
+    vec3 bloom = vec3(0.0);
+    if (f_lens2.x > 0.0) {  // chromatic aberration: the red and blue taps slide along the radius (1 = 0.5 % of the width at the edge)
+        vec2 shift = (v_uv - 0.5) * (f_lens2.x * 0.01);
+        c = vec3(texture(u_hdr, v_uv + shift).r, texture(u_hdr, v_uv).g, texture(u_hdr, v_uv - shift).b) * exposure;
+        if (u_params.w > 0.5)
+            bloom = vec3(textureLod(u_bloom, v_uv + shift, 0.0).r, textureLod(u_bloom, v_uv, 0.0).g, textureLod(u_bloom, v_uv - shift, 0.0).b) * u_params.z;
+    } else {
+        c = texture(u_hdr, v_uv).rgb * exposure;
+        if (u_params.w > 0.5) bloom = textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
+    }
+    c += bloom;
+    if (f_lens2.y > 0.0) c += bloom * textureLod(u_dirt, vec3(v_uv, 0.0), 0.0).rgb * f_lens2.y;  // bloom lights the dirt
+    if (f_lens.x > 0.0) {  // vignette in linear light: 0 at the centre, 1 at the corners
+        float r = length(v_uv - 0.5) * 1.41421356;
+        c *= 1.0 - f_lens.x * smoothstep(1.0 - f_lens.y, 1.0, r);
+    }
+    if (f_lens2.z > 1.5) c = neutral(c);
+    else if (f_lens2.z > 0.5) c = agx(c);
+    else c = aces(c * 0.6);
     c = u_params.y > 0.5 ? linear_to_srgb(c) : c;
     if (u_cluster.y > 0.0) {  // the LUT is authored on display (sRGB) values
         vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(c);
@@ -1400,7 +1467,17 @@ void main() {
         l = cvd_correct(int(u_cluster.z + 0.5), u_cluster.w, l);
         c = u_params.y > 0.5 ? linear_to_srgb(l) : l;
     }
-    o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));  // FXAA reads this: taken before the grain, which it would chase
+    if (f_lens.z > 0.0) {  // animated grain in display space, strongest in the mid tones
+        // On an sRGB target (u_params.y < 0.5) the hardware encodes on write and c is still linear: grain there
+        // is added to the encoded value so GL and SDL GPU agree.
+        vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(clamp(c, 0.0, 1.0));
+        float dl = dot(d, vec3(0.299, 0.587, 0.114));
+        float n = grain_hash(floor(v_uv * u_viewport.xy / max(f_lens.w, 1.0)), f_lens2.w) - 0.5;
+        d += n * f_lens.z * 0.3 * (4.0 * dl * (1.0 - dl));
+        c = u_params.y > 0.5 ? d : srgb_to_linear(clamp(d, 0.0, 1.0));
+    }
+    o_color = vec4(c, luma);
 }
 )";
 
