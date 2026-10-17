@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "mce/asset/file_io.h"
+#include "mce/asset/roads_format.h"
 #include "mce/asset/xxhash.h"
 #include "mce/log.h"
 
@@ -31,6 +32,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {BehaviorTree::name, BehaviorTree::chunk},
         {Skeleton2D::name, Skeleton2D::chunk},
         {Script::name, Script::chunk},
+        {RoadNetwork::name, RoadNetwork::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {
@@ -83,6 +85,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::BehaviorTree: return BEHAVIOR_TREE_VERSION;
         case ChunkType::Skeleton2D: return SKELETON2D_VERSION;
         case ChunkType::Script: return SCRIPT_VERSION;
+        case ChunkType::RoadNetwork: return ROAD_NETWORK_VERSION;
         default: return 0;
     }
 }
