@@ -477,7 +477,13 @@ public:
         audio::install(world_, audio_, &clips_);
         kit::install_stock(world_, &assets_);
 #if MCE_HAS_SCRIPT
-        script::install_scene_scripts(world_, &assets_);  // the scene's ScriptSystems (M-SCRIPT 1)
+        // The hidden-state check (M-SCRIPT3 2) runs everywhere but in a shipped game's window: the pack found beside the
+        // executable, not -pack or the build tree's. A player cannot fix a script, and the check costs; -script.state_check 1 forces it.
+        script::ScriptBudget script_budget;
+        const bool shipped_pack = cv_pack.get_string().empty() && desc_.pack &&
+                                  pack.view() != StringView(desc_.pack_fallback ? desc_.pack_fallback : "");
+        script_budget.check_state = window_ == nullptr || !shipped_pack;
+        script::install_scene_scripts(world_, &assets_, script_budget);  // the scene's ScriptSystems (M-SCRIPT 1)
 #endif
         if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());  // the entitlements live there too
         MCE_LOG_INFO("{}: save folder {}", desc_.app_name, save::root().c_str());  // -save_dir, else the per-user default
@@ -913,6 +919,21 @@ public:
     }
 
     u64 state_hash() { return world_.state_hash(); }
+    // Scripts the run disabled (an error, the step budget, a hidden-state change): a headless run exits non-zero for them.
+    u32 failed_scripts() {
+#if MCE_HAS_SCRIPT
+        u32 n = 0;
+        if (const script::ScriptHost* host = script::scene_script_host(world_))
+            for (const script::ScriptInfo& info : host->scripts())
+                if (info.state == script::ScriptState::Failed) {
+                    ++n;
+                    std::fprintf(stderr, "%s: script failed: %s\n", desc_.app_name, info.error.c_str());
+                }
+        return n;
+#else
+        return 0;
+#endif
+    }
     input::InputSystem& input() { return input_; }
 
     // -input's script, read by the sim's own tick count: a capture hold, a pause or an ad holds
@@ -3078,8 +3099,9 @@ int run_headless(const player::PlayerDesc& pd) {
     desc.max_ticks = static_cast<u64>(cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 600);
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : nullptr;
-    const int rc = app::run(app, desc);
-    if (rc == 0)
+    int rc = app::run(app, desc);
+    if (rc == 0 && app.failed_scripts() != 0) rc = 3;  // after the state_hash line below, so determinism logs still show it
+    if (rc == 0 || rc == 3)
         std::printf("%s: %llu ticks, %zu entities, state_hash %016llx\n", pd.app_name, static_cast<unsigned long long>(app.ticks()),
                     app.entity_count(), static_cast<unsigned long long>(app.state_hash()));
     if (rc == 0 && !record.empty() && !write_audio_record(pd, record, app.audio_recording())) return 1;
