@@ -26,4 +26,10 @@ if(MCE_BUILD_TESTS AND NOT MCE_SDK AND TARGET mce_mcp AND EXISTS "${MCE_SCRIPT_P
                      --player $<TARGET_FILE:${_perf_game}> --project "${MCE_SCRIPT_PROJECT_DIR}"
                      --work "${CMAKE_CURRENT_BINARY_DIR}/perf_gate")
     set_tests_properties(${_perf_project_name}_perf_counters PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass")
+    # ... and it catches a planted regression (three big textured sprites).
+    add_test(NAME ${_perf_project_name}_perf_counters_seeded
+             COMMAND ${Python3_EXECUTABLE} "${PROJECT_SOURCE_DIR}/scripts/ci/perf_gate.py" --mcp $<TARGET_FILE:mce_mcp>
+                     --player $<TARGET_FILE:${_perf_game}> --project "${MCE_SCRIPT_PROJECT_DIR}"
+                     --work "${CMAKE_CURRENT_BINARY_DIR}/perf_gate_seeded" --seed)
+    set_tests_properties(${_perf_project_name}_perf_counters_seeded PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "gate: pass")
 endif()
