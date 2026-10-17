@@ -126,7 +126,6 @@ struct Scene {
     f32 speed(Entity e) { return w.try_get<Vehicle3D>(e)->speed; }
 };
 
-
 }  // namespace
 
 TEST_CASE("traffic: a car keeps to its lane at the lane's speed") {
