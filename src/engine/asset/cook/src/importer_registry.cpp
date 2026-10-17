@@ -1,4 +1,5 @@
 #include "importer_common.h"
+#include "obj_importer.h"
 
 namespace mce::cook {
 
@@ -29,6 +30,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_material_importer());
     reg.add(make_scene_importer());
     reg.add(make_gltf_importer());
+    reg.add(make_obj_importer());
+    reg.add(make_mtl_importer());
     reg.add(make_prefab_importer());
     reg.add(make_tilemap_importer());
     reg.add(make_spritesheet_importer());

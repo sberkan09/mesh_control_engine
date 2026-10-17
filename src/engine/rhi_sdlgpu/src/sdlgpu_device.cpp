@@ -730,7 +730,10 @@ TextureDesc SdlGpuDevice::texture_desc(TextureHandle h) const {
 
 // ---- fence timestamps ------------------------------------------------------------------------
 
-// The waiter: one fence at a time, in submit order, so `passed_ns` only grows.
+// The waiter: one fence at a time, in submit order, so `passed_ns` only grows. It polls the fence for up to
+// kTimingSpinNs before it blocks: a blocking wait wakes tens of microseconds late, and a frame's work that
+// finished within that lateness of the previous fence read as 0 (2D frames on an RTX 4090: p50 0.001 ms against
+// GL's 0.008-0.026). Only measuring runs write fence timestamps, so the spinning core is theirs.
 void SdlGpuDevice::timing_loop() {
     std::unique_lock<std::mutex> lock(timing_mutex_);
     for (;;) {
@@ -738,7 +741,13 @@ void SdlGpuDevice::timing_loop() {
         if (timing_head_ == timing_waiting_.size()) return;  // stopping, and every fence passed
         TimedFence t = timing_waiting_[timing_head_];
         lock.unlock();
-        SDL_WaitForGPUFences(device_, true, &t.fence, 1);
+        const u64 spin_until = SDL_GetTicksNS() + kTimingSpinNs;
+        bool passed = SDL_QueryGPUFence(device_, t.fence);
+        while (!passed && SDL_GetTicksNS() < spin_until) {
+            std::this_thread::yield();
+            passed = SDL_QueryGPUFence(device_, t.fence);
+        }
+        if (!passed) SDL_WaitForGPUFences(device_, true, &t.fence, 1);
         t.passed_ns = SDL_GetTicksNS();
         lock.lock();
         timing_passed_.push_back(t);
