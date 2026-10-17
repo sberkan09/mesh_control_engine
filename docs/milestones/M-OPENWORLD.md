@@ -50,7 +50,7 @@ Linear: the Linear connector was unreachable when B1 started; the steps are trac
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | in review | #500 | the chunk type ships with its importer: the capabilities wall needs both |
+| B1 road network: `.mcroads` cook (`CHNK_ROADS`), `RoadNetwork3D`, lane queries, lights, routes | done | #500 | the chunk type ships with its importer: the capabilities wall needs both |
 | B1 authoring: MCP `roads_*` tools, editor overlay | next | | |
 | B2 traffic: lane-following drivers on `Vehicle3D`, yielding, signals, spawn/despawn around a focus | planned | | |
 | B3 crowds | planned (own thread once B1 lands) | | uses `RoadRoad::sidewalk` beside each kerb |
