@@ -414,3 +414,29 @@ a crate. `Weapon3D` fires from its entity. `Projectile3D` is a shot in flight.
   a crash, an explosion, a script); call it from a `FixedUpdate_Pre` system or between ticks.
 
 Add `Health3D` to a `Vehicle3D`'s entity and a crash or a rocket can wreck it: `Died3D` tells the game when.
+
+## 9.13 Wanted level and police (M-OPENWORLD C3)
+
+`mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,
+the `level` made from it (0..`max_level`, `heat_per_level` heat for each) and how crimes count. `Police3D` goes
+on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and a `NavAgent3D` as needed).
+
+- **Crimes.** A `Damage3D` or `Died3D` (9.12) whose instigator is the offender (or hangs under it) adds heat when
+  the victim's `Health3D::team` is `civilian_team` (`hit_civilian`, `kill_civilian`) or `police_team`
+  (`hit_police`, `kill_police`). A hit on police is always known. A civilian hit counts only when a living
+  `Police3D` within `witness_range` of the victim has a clear line to it (`require_witness = 0`: always).
+  `report_crime(world, offender, heat, position)` adds heat from a script or another system; both push
+  `Crime3D`. Crimes from combat events are counted one tick after the hit. `clear_wanted` ends the chase (a pay-and-spray). `WantedChanged3D` fires when the level changes.
+- **Cool-down.** Once no unit has seen the offender for `cooldown_delay` seconds the heat falls by `decay`
+  a second; a new crime restarts the wait.
+- **Units.** A unit answers from `min_level`. It looks for the nearest offender within `sight_range` with a clear
+  line. Seen, it is `Pursue`, or `Attack` within `attack_range` from `attack_level` up. Lost, it is `Search`
+  for `search_time` seconds at the last place it saw the offender, then `Idle`. In `Attack` it turns to face the
+  target and fires its own `Weapon3D` (`aim`); with `drive_nav` a `NavAgent3D` follows the target, walks to the
+  last known place, and stands still in `Attack` and `Idle`.
+- **Behavior trees.** A unit with an `AiBrain` gets the blackboard keys `wanted` (number), `police_state` (number,
+  the `PoliceState` index), `target` (entity, cleared when none) and `last_known` (vec3). Turn `drive_nav` and
+  `aim` off and let the tree do the moving and shooting with the stock `move_to` and `look_at` tasks.
+
+Not in this step: spawning reinforcements as the level rises, arrests, and civilians that flee (they come
+with the pedestrian crowds, B3).
