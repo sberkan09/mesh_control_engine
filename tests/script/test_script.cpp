@@ -126,6 +126,29 @@ end
     CHECK(w.is_changed<Counter>(e, before));
 }
 
+TEST_CASE("script: one mce.get / mce.set call spans fields of several components (M-WORKFLOW 7)") {
+    World w;
+    w.register_components<Mover, Counter>();
+    Mover m;
+    m.velocity = vec3{1, 0, 0};
+    const Entity e = w.spawn_with(Counter{}, m);
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "mixed", R"(
+function update()
+    mce.each("Counter", "Mover", function(e)
+        local n, v = mce.get(e, "Counter", "n", "Mover", "velocity")
+        mce.set(e, "Counter", "n", n + 1, "Mover", "velocity", v * 2)
+    end)
+end
+)"));
+    host.install(w);
+    w.tick(1.0 / 60, 1);
+    w.tick(1.0 / 60, 2);
+    CHECK(host.scripts()[0].state == ScriptState::Running);
+    CHECK(w.try_get<Counter>(e)->n == 2);
+    CHECK(w.try_get<Mover>(e)->velocity.x == doctest::Approx(4.0f));
+}
+
 TEST_CASE("script: the sandbox hides the clock, the OS and unseeded randomness") {
     World w;
     w.register_components<Mover, Counter>();
