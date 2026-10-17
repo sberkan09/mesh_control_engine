@@ -763,7 +763,8 @@ public:
         rhi::CommandBuffer cmd(mem::frame());
         // The frame's GPU span for -perf_capture: what a 2D or split-screen frame has (the 3D stages time
         // the first 3D view only).
-        const bool frame_timestamps = !cv_perf_capture.get_string().empty() && device_->caps().timestamp_queries;
+        const bool frame_timestamps = !cv_perf_capture.get_string().empty() &&
+                                      (device_->caps().timestamp_queries || device_->caps().fence_timestamps);
         if (frame_timestamps) cmd.write_timestamp(kFrameTimestampBegin);
         const bool multi = have_views && !film_;
         if (!multi && !ui_preview_) render_textures_.clear_new(cmd);
