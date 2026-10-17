@@ -26,6 +26,7 @@ cannot yet say or check:
 | 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | name lookup is M-WORKFLOW 7 PR 10 (`mce.find`, Rutin 3); `during_cutscenes` and multi-component `mce.get` / `mce.set` already shipped with M-WORKFLOW 7; `mce.make_noise` merged in #492 (open work: a running perceiver hearing a script noise is not tested end to end) |
 | 6 | Docs the same notes asked for: the Luau limits (no state between ticks, one component per `("Comp", "field")` call, `Perceiver.sees` is a number) in the guide itself, and `mce.d.luau` as a reference page in the SDK docs | Sonnet | done: `docs/engine/script.md` (surface, `mce.d.luau`, limits, gaps) and a limits note in guide 27.4; open: none |
 | 7 | The perf gate's `--seed` self-check catches nothing on Dungeon (so its baseline cannot be trusted yet): find why three textured sprites added to `walk.mcscene` do not change `sprites` / `sprite_batches`, fix it, and make `Dungeon_perf_counters` run the seeded variant too | Sonnet | done |
+| 8 | Bytecode trust (M-FUZZ decision, coordinator 2026-10-17): bytecode loads only from the game's own cooked pack; mods, base packs, fetched config and user files are data-only. Pin it so a new mount site or raw-bytecode caller cannot slip in | Sonnet | done in PR (see "Step 8 as built") |
 
 ## Step 3 as built
 
@@ -67,3 +68,15 @@ cannot yet say or check:
   (M-WORKFLOW 7 PR 8) and multi-component `mce.get` / `mce.set` (`test_script.cpp`, M-WORKFLOW 7) are in `dev_claude`.
 - Open: an end-to-end check of a perceiver hearing a script noise; step 6 should mention `mce.find` and `mce.make_noise`.
 - Linear: this milestone has no cards (the workspace is at its free limit), so this file is the tracker.
+
+## Step 8 as built (bytecode trust)
+
+- The rule was already in place since M-SCRIPT2 step 0 (`MountOptions::allow_code`, default false; Script entries of such a root are dropped at mount).
+  What was missing was a pin: `scripts/ci/check_walls.py` now has two walls. `allow_code = true` may appear only in the player's pack mount, the
+  editor project's cook, the headless run's pack and `tests/`; `add_bytecode(` may be called only inside `src/engine/script/` and `tests/`. A new
+  mount site or loader fails the walls stage until it is named there on purpose.
+- Test: `test_scene_scripts` "a pack mounted without allow_code never runs its scripts": a pack mounted with default options has no Script
+  entries and a `ScriptSystem` naming one does nothing.
+- Not built: accepting mod or network scripts as `.luau` source and compiling them at load. The shipped player has no compiler by design
+  (`player_no_luau_compiler`), so that is a separate decision; until then those sources cannot carry code at all.
+- No raw-bytecode API takes an external path today: `ScriptHost::add_bytecode` is reached only from scene scripts (mounted chunks) and `compile()`.
