@@ -916,8 +916,8 @@ int l_teleport3d(lua_State* L) {
     return 0;
 }
 
-// mce.find_path3d(from, to) -> array of corner points (from first, to last), and true when the path is partial
-// (the target cannot be reached: it ends at the closest reachable point); nil when there is no navmesh path.
+// mce.find_path3d(from, to) -> the corner points after leaving `from`, ending at `to` (as mce.find_path), and true when
+// the path is partial (the target cannot be reached: it ends at the closest reachable point); nil when there is no path.
 int l_find_path3d(lua_State* L) {
     World& w = world_of(L);
     const math::vec3 from = check_vec3(L, 1);
@@ -930,10 +930,12 @@ int l_find_path3d(lua_State* L) {
         lua_pushnil(L);
         return 1;
     }
-    lua_createtable(L, static_cast<int>(path.size()), 0);
-    for (usize i = 0; i < path.size(); ++i) {
+    // The navmesh answers with the start (snapped to the mesh) first; mce.find_path does not list it, and neither does this.
+    const usize first = path.size() > 1 ? 1 : 0;
+    lua_createtable(L, static_cast<int>(path.size() - first), 0);
+    for (usize i = first; i < path.size(); ++i) {
         push_vec3(L, path[i]);
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
+        lua_rawseti(L, -2, static_cast<int>(i - first + 1));
     }
     lua_pushboolean(L, r == physics::NavPath3D::Partial);
     return 2;
