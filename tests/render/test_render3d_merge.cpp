@@ -229,7 +229,7 @@ TEST_CASE("static merge: past 65536 vertices in a submesh the indices widen, and
     const Piece a = make_piece({0.2f, 0.2f, 0.2f}, 0.6f, 0.6f, 0.6f);
     const Piece b = make_piece({0.3f, 0.1f, 0.2f}, 0.6f, 0.6f, 0.6f);
     Array<MergeSource> s;
-    for (u32 i = 0; i < 4300; ++i) s.push_back(src(i % 2 ? a : b, {f32(i % 65) * 0.8f, 0.0f, f32(i / 65) * 0.8f}, 0.01f * f32(i % 7)));
+    for (u32 i = 0, row = 0; i < 4300; ++i, row = i / 65) s.push_back(src(i % 2 ? a : b, {f32(i % 65) * 0.8f, 0.0f, f32(row) * 0.8f}, 0.01f * f32(i % 7)));
     Array<byte> blob;
     MergeStats st;
     const auto t0 = std::chrono::steady_clock::now();
@@ -258,7 +258,8 @@ TEST_CASE("static merge: the merged cells draw once per material, not once per p
         Array<MergeSource> s;
         for (u32 i = 0; i < kPerCell; ++i) {
             const Piece& p = i % 3 == 0 ? wall : i % 3 == 1 ? pillar : beam;
-            const vec3 at{f32(c) * 8.0f - 8.0f + f32(i % 4) * 1.5f, 0.0f, -30.0f - f32(i / 4) * 1.5f};
+            const u32 row = i / 4;
+            const vec3 at{f32(c) * 8.0f - 8.0f + f32(i % 4) * 1.5f, 0.0f, -30.0f - f32(row) * 1.5f};
             s.push_back(src(p, at));
             const u32 key = 100 + (i % 3);
             if (!store.get(key)) REQUIRE(store.upload(key, 1, p.blob.span()).has_value());
