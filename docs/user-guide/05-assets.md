@@ -197,10 +197,18 @@ entry of the same kind, fill in `license`, `license_url`, `homepage`, `retrieved
 `source` and the `cook` rules, and run `mce content check`. A CC-BY pack needs an `attribution` line; the check fails
 without one. Nothing under `content/` holds the archives themselves; they are never committed.
 
-Limits: the generated materials set `roughness` as a factor, because the packs ship roughness as a separate grey map
-and the engine's `metallic_roughness` slot wants one packed texture (G roughness, B metallic); packing needs an image
-tool the SDK does not carry. The Kenney kits' glTF files are static meshes; Blocky Characters animate their parts as
-nodes, not through a skin, so they do not take `mce retarget` (chapter 8.9).
+A PBR set's roughness (and occlusion, when the pack has one) is packed into the engine's `metallic_roughness` texture
+at `add` time (R occlusion, G roughness, B metallic; the ledger entry's `orm` block names the source maps and the
+output, `mce content` reads and writes 8-bit PNG itself): the pack's `.mcmat` then references colour, normal and the
+packed `<Name>_ORM.png`, with roughness and metallic factors of 1 so the texture decides. The ambientCG entries
+therefore pin the `1K-PNG` archives. The packed file is recorded in the lock like any other.
+
+Limits: the Kenney kits' glTF files are static meshes; Blocky Characters animate their parts as nodes, not through a
+skin, so they take `mce retarget` only with `--map-only` (chapter 8.9). A 16-bit or palette PNG cannot be packed.
+
+The ledger's real packs are exercised by `tests/import/test_content_real.py` (ctest `import_content_real`, label
+`slow`: it needs the network or a populated `MCE_CONTENT_CACHE`, otherwise it skips): it adds roads, car, character,
+sound and PBR packs to a scratch project and runs `mce_cook` over it.
 
 ## 5.4 The cook
 

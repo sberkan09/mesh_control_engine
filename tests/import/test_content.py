@@ -256,6 +256,56 @@ def test_add(work, zpath, led_path):
     return pj
 
 
+def grey_png(w, h, value_of):
+    raw = b"".join(b"\x00" + bytes(value_of(x, y) for x in range(w)) for y in range(h))
+
+    def chunk(t, d):
+        c = struct.pack(">I", len(d)) + t + d
+        return c + struct.pack(">I", zlib.crc32(t + d))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)) + \
+        chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+
+
+def test_orm(work):
+    rough = grey_png(5, 3, lambda x, y: 10 * x + y)
+    ao = grey_png(5, 3, lambda x, y: 200 - x)
+    z = os.path.join(work, "orm.zip")
+    make_zip(z, [("License.txt", b"l"), ("R.png", rough), ("AO.png", ao), ("C.png", png(5, 3)), ("N.png", png(5, 3))])
+    mat = {"path": "m.mcmat", "textures": {"base_color": "t/C.png", "normal": "t/N.png"},
+           "orm": {"roughness": "t/R.png", "ao": "t/AO.png", "out": "t/m_ORM.png", "metallic": 0.5}}
+    pack = base_pack(z, cook=[{"from": "", "include": ["*.png"], "to": "t"}], materials=[mat])
+    lp = os.path.join(work, "orm.json")
+    json.dump(ledger_of(pack), open(lp, "w"))
+    check(not mc.validate_ledger(ledger_of(pack)), "an orm material validates")
+    pj = os.path.join(work, "orm_proj")
+    os.makedirs(os.path.join(pj, "assets"))
+    code, _, err = run(["--ledger", lp, "add", "test-kit", pj, "--cache", os.path.join(work, "cache"), "--file", z])
+    check(code == 0, "add with an orm material: " + err)
+    root = os.path.join(pj, "assets", "third_party", "test-kit")
+    w, h, ch, px = mc.decode_png(open(os.path.join(root, "t", "m_ORM.png"), "rb").read())
+    check((w, h, ch) == (5, 3, 3), "the packed texture is RGB, same size")
+    i = (1 * w + 3) * 3  # x=3, y=1
+    check((px[i], px[i + 1], px[i + 2]) == (197, 31, 128), f"R occlusion, G roughness, B metallic: {tuple(px[i:i + 3])}")
+    doc = json.load(open(os.path.join(root, "m.mcmat")))
+    side = json.load(open(os.path.join(root, "t", "m_ORM.png.mceasset")))
+    check(doc["textures"]["metallic_roughness"] == "guid:" + side["guid"] and side["settings"] == {"srgb": False}, "material uses the packed texture (linear)")
+    check(doc["roughness"] == 1 and doc["metallic"] == 1, "factors are 1 so the texture decides")
+    check(run(["--ledger", lp, "verify", pj])[0] == 0, "the generated texture is recorded, verify passes")
+    a = open(os.path.join(root, "t", "m_ORM.png"), "rb").read()
+    shutil.rmtree(pj)
+    os.makedirs(os.path.join(pj, "assets"))
+    run(["--ledger", lp, "add", "test-kit", pj, "--cache", os.path.join(work, "cache"), "--file", z])
+    check(open(os.path.join(root, "t", "m_ORM.png"), "rb").read() == a, "the packed texture is deterministic")
+    try:
+        mc.pack_orm(png(2, 2).replace(b"\x08\x06", b"\x10\x06"))
+        check(False, "a 16-bit PNG is refused")
+    except mc.ContentError:
+        pass
+    pack2 = base_pack(z, cook=[{"from": "", "include": ["*.png"], "to": "t"}],
+                      materials=[{"path": "m.mcmat", "orm": {"roughness": "t/R.png", "out": "t/o.png"}, "textures": {"metallic_roughness": "t/C.png"}}])
+    check(any("same slot" in e for e in mc.validate_ledger(ledger_of(pack2))), "orm plus an explicit metallic_roughness is refused")
+
+
 def test_cc_by(work, zpath):
     pack = base_pack(zpath, license="CC-BY-4.0", license_url="https://creativecommons.org/licenses/by/4.0/")
     led = ledger_of(pack)
@@ -323,6 +373,7 @@ def main():
     json.dump(ledger_of(base_pack(zpath)), open(lp, "w"))
     pj = test_add(work, zpath, lp)
     test_cc_by(work, zpath)
+    test_orm(work)
     test_zip_slip(work)
     test_single_file(work)
     pj_cook = os.path.join(work, "cook_proj")
