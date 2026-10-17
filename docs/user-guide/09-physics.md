@@ -454,8 +454,13 @@ without a `MapMarker` are unchanged: nothing runs unless a host asks for the mar
   the other, and goes away when the mission completes or fails, with nothing added per objective.
   `follow_objective` names an `Objective` or a `Mission` explicitly, so a marker can live anywhere else.
 - **Reading them.** `kit::collect_map_markers(world, out)` lists the shown markers in entity order;
-  `kit::map_tracked_view(world, "Player", pos, heading)` gives the tracked entity's place. A host (the stock
-  player's UI layer, a test) copies them into the widget with `Document::set_minimap_view`.
+  `kit::map_tracked_view(world, "Player", pos, heading)` gives the tracked entity's place. A custom host copies
+  them into the widget with `Document::set_minimap_view`.
+- **Fed automatically.** The stock player does that for you: every frame, before a visible `UiScreen` document
+  updates, each of its `Minimap` widgets gets the shown markers and the view of the entity named by its `track`
+  (default `Player`; a name nobody has leaves the arrow at the origin). A scene needs only the `MapMarker`s and a
+  `.mcui` with a `Minimap`; a document without one costs nothing. In split-screen every Minimap follows its own
+  `track` name, so name the players' entities apart and give each HUD its own `track`.
 
 The widget is `"kind": "Minimap"` with a `"minimap"` object (`UiMinimap`):
 
