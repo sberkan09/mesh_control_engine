@@ -97,7 +97,8 @@ void write_counters(Out& o, const Counters& c) {
           c.draws, c.passes, c.dispatches, c.triangles, c.meshes, c.sprites, c.sprite_batches);
     o.fmt("\"ring_overflows\": %u, \"upload_bytes\": %llu, \"heap_allocations\": %llu, ", c.ring_overflows,
           static_cast<unsigned long long>(c.upload_bytes), static_cast<unsigned long long>(c.heap_allocations));
-    o.fmt("\"runs_instanced\": %u, \"draws_instanced\": %u, \"draw_causes\": [", c.runs_instanced, c.draws_instanced);
+    o.fmt("\"runs_instanced\": %u, \"draws_instanced\": %u, \"merged_groups\": %u, \"merged_children\": %u, \"draw_causes\": [", c.runs_instanced,
+          c.draws_instanced, c.merged_groups, c.merged_children);
     for (u32 k = 0; k < kDrawCauseCount; ++k) o.fmt(k ? ", %u" : "%u", c.draw_causes[k]);
     o.raw("]}");
 }
@@ -169,6 +170,8 @@ Summary summarize(const Capture& c) {
             m.draw_causes[d] = std::max(m.draw_causes[d], k.draw_causes[d]);
             sum.draw_causes[d] += k.draw_causes[d];
         }
+        m.merged_groups = std::max(m.merged_groups, k.merged_groups);
+        m.merged_children = std::max(m.merged_children, k.merged_children);
         sum.draws += k.draws;
         sum.passes += k.passes;
         sum.dispatches += k.dispatches;
@@ -181,6 +184,8 @@ Summary summarize(const Capture& c) {
         sum.heap_allocations += k.heap_allocations;
         sum.runs_instanced += k.runs_instanced;
         sum.draws_instanced += k.draws_instanced;
+        sum.merged_groups += k.merged_groups;
+        sum.merged_children += k.merged_children;
     }
     const u64 n = c.frames.size();
     Counters& avg = s.counters_avg;
@@ -196,6 +201,8 @@ Summary summarize(const Capture& c) {
     avg.heap_allocations = sum.heap_allocations / n;
     avg.runs_instanced = static_cast<u32>(sum.runs_instanced / n);
     avg.draws_instanced = static_cast<u32>(sum.draws_instanced / n);
+    avg.merged_groups = static_cast<u32>(sum.merged_groups / n);
+    avg.merged_children = static_cast<u32>(sum.merged_children / n);
     for (u32 k = 0; k < kDrawCauseCount; ++k) avg.draw_causes[k] = static_cast<u32>(sum.draw_causes[k] / n);
 
     // Spikes: frames at least twice the median frame time and 1 ms over it.

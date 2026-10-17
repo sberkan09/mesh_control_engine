@@ -10,3 +10,4 @@
   `merged_children`, `merged_cells`. Nothing changes for scenes without the component (every existing golden is
   byte-identical). New golden `static_merge_kit`; chapter 8 says when to use it against automatic instancing and
   `Foliage3D`.
+  `perf_run`, `.mcperf` captures and `perf_compare` inputs carry `merged_groups` and `merged_children`.

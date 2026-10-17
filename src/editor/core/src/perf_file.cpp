@@ -32,6 +32,8 @@ void read_counters(cook::JsonValue v, perf::Counters& c, const u32* slot, u32 sl
     const cook::JsonValue dc = v.get("draw_causes");  // absent before M-CONTENT 2: zeros
     for (u32 i = 0; dc.is_array() && i < dc.size() && i < slots; ++i)
         if (slot[i] < kDrawCauseCount) c.draw_causes[slot[i]] = static_cast<u32>(num_u(dc.at(i)));
+    c.merged_groups = static_cast<u32>(num_u(v.get("merged_groups")));  // absent before M-VISUAL3 5b: 0
+    c.merged_children = static_cast<u32>(num_u(v.get("merged_children")));
 }
 
 }  // namespace
