@@ -305,3 +305,39 @@ TEST_CASE("project defaults: a defaults file moves the default, a settings value
     cv_test_saved_db.reset();
     CHECK(console::set_defaults("/nonexistent-dir/defaults.cfg"));  // a missing file is no error
 }
+
+TEST_CASE("project defaults: a command-line value equal to the old or new default still wins; cheats stay locked; spacing is forgiven") {
+    const std::string dir = std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp";
+    const std::string defaults = dir + "/mce_test_defaults2.cfg";
+    const std::string settings = dir + "/mce_test_defaults2_settings.cfg";
+    std::remove(settings.c_str());
+    cv_test_saved_db.reset();
+    cv_test_saved_flag.reset();
+    {
+        std::FILE* f = std::fopen(defaults.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("  test.saved_db    -9\ntest.saved_flag\tfalse\ntest.cheat 50\ntest.readonly 5\n", f);
+        std::fclose(f);
+    }
+    {
+        std::FILE* f = std::fopen(settings.c_str(), "wb");
+        REQUIRE(f);
+        std::fputs("test.saved_db -3\ntest.saved_flag true\n", f);
+        std::fclose(f);
+    }
+    // -test.saved_db -9 (the project's new default) and -test.saved_flag true (the built-in default) were given.
+    const char* argv[] = {"app", "-test.saved_db", "-9", "-test.saved_flag", "true"};
+    CHECK(console::parse_command_line(5, argv) == 0);
+    console::set_cheats_allowed(false);
+    REQUIRE(console::set_defaults(StringView(defaults.c_str())));
+    console::set_cheats_allowed(true);
+    CHECK(cv_test_cheat.get_float() == 1.0f);  // a defaults file cannot get round the cheat lock
+    CHECK(cv_test_ro.get_int() == 1);           // nor set a read-only convar
+    CHECK(cv_test_saved_flag.get_bool());       // -test.saved_flag true stays, though true is the built-in default
+    REQUIRE(console::load_settings(StringView(settings.c_str())));
+    CHECK(cv_test_saved_db.get_float() == -9.0f);  // the command line, equal to the new default, beats the saved -3
+    CHECK(cv_test_saved_flag.get_bool());
+
+    std::remove(defaults.c_str());
+    std::remove(settings.c_str());
+}

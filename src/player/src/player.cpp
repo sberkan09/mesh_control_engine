@@ -148,7 +148,7 @@ MCE_CVAR(cv_pack, "pack", "", "Cooked pack (assets.mce) or cooked/ directory to 
          CVarFlags::None);
 MCE_CVAR(cv_defaults, "defaults", "",
          "A file of 'name value' lines that become the convars' defaults (a project's own; a saved option and the command line "
-         "still win). Default: defaults.cfg in the folder of the pack, when there is one",
+         "still win). Default: defaults.cfg in the folder of the pack (inside it, for a cooked/ directory), when there is one",
          CVarFlags::None);
 MCE_CVAR(cv_module, "module", "", "Game module to install on top of the engine systems (a host's default: its own module)",
          CVarFlags::None);
@@ -528,7 +528,10 @@ public:
         {   // the project's own defaults, under the player's saved choices and the command line
             FixedString<1024> defaults(cv_defaults.get_string());
             if (defaults.empty() && !pack.empty()) {
-                defaults.assign(std::filesystem::path(pack.c_str()).parent_path().generic_string().c_str());
+                std::error_code ec;
+                const std::filesystem::path pack_path(pack.c_str());
+                const std::filesystem::path folder = std::filesystem::is_directory(pack_path, ec) ? pack_path : pack_path.parent_path();
+                defaults.assign(folder.generic_string().c_str());
                 defaults.append(defaults.empty() ? "defaults.cfg" : "/defaults.cfg");
             }
             if (!defaults.empty()) (void)console::set_defaults(defaults.view());  // a missing file is no error

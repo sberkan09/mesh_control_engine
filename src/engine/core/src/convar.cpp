@@ -246,18 +246,36 @@ void ConVar::reset() {
 }
 
 bool ConVar::set_default(StringView text) {
-    if (type_ == CVarType::String && text.size() > default_str_.capacity()) return false;
-    const bool was_default = is_default();
-    const auto kept = value_;
-    const FixedString<1024> kept_str = str_;
-    if (!set_from_string(text, true)) return false;
-    default_ = value_;
-    default_str_.assign(str_.view());
-    if (!was_default) {
-        value_ = kept;
-        str_ = kept_str;
-        changed();
+    const bool keep = from_command_line_ || !is_default();  // a value someone chose stays; only the default moves
+    switch (type_) {
+        case CVarType::Bool: {
+            bool b;
+            if (!parse_bool(text, b)) return false;
+            default_.b = b;
+            if (!keep) value_.b = b;
+            break;
+        }
+        case CVarType::Int: {
+            i32 i;
+            if (!parse_int(text, i)) return false;
+            default_.i = i;
+            if (!keep) value_.i = i;
+            break;
+        }
+        case CVarType::Float: {
+            f32 f;
+            if (!parse_float(text, f)) return false;
+            default_.f = f;
+            if (!keep) value_.f = f;
+            break;
+        }
+        case CVarType::String:
+            if (text.size() > default_str_.capacity() || text.size() > str_.capacity()) return false;
+            default_str_.assign(text);
+            if (!keep) str_.assign(text);
+            break;
     }
+    if (!keep) changed();
     return true;
 }
 
@@ -463,9 +481,12 @@ bool apply_arg(ConVar& v, const char* value) {
             MCE_LOG_WARN("command line: bad value '{}' for '{}'", value, v.name());
             return false;
         }
+        v.mark_command_line();
         return true;
     }
-    return v.type() == CVarType::Bool && v.set_bool(true, /*force=*/true);
+    if (!(v.type() == CVarType::Bool && v.set_bool(true, /*force=*/true))) return false;
+    v.mark_command_line();
+    return true;
 }
 
 StringView arg_name(StringView tok) {
@@ -577,13 +598,19 @@ Result<void> set_defaults(StringView path) {
     while (std::fgets(line, sizeof(line), f)) {
         StringView t(line);
         while (!t.empty() && is_space(t[t.size() - 1])) t = t.substr(0, t.size() - 1);
-        usize sp = 0;
-        while (sp < t.size() && !is_space(t[sp])) ++sp;
-        if (sp == 0 || t[0] == '#') continue;
-        const StringView name = t.substr(0, sp);
-        const StringView value = sp < t.size() ? t.substr(sp + 1) : StringView();
+        usize at = 0;  // a hand-written file: indentation and aligned columns are fine
+        while (at < t.size() && is_space(t[at])) ++at;
+        if (at == t.size() || t[at] == '#') continue;
+        usize end = at;
+        while (end < t.size() && !is_space(t[end])) ++end;
+        const StringView name = t.substr(at, end - at);
+        usize vs = end;
+        while (vs < t.size() && is_space(t[vs])) ++vs;
+        const StringView value = t.substr(vs);
         ConVar* v = ConVar::find(StringId(name));
         if (!v) MCE_LOG_WARN("defaults: unknown convar '{}'", name);
+        else if (cheat_locked(*v, "defaults")) continue;
+        else if (v->flags() & CVarFlags::ReadOnly) MCE_LOG_WARN("defaults: '{}' is read-only", name);
         else if (!v->set_default(value)) MCE_LOG_WARN("defaults: '{}' rejects '{}'", name, value);
     }
     std::fclose(f);
@@ -612,7 +639,7 @@ Result<void> load_settings(StringView path) {
     }
     for (const SettingLine& l : g_setting_lines) {
         ConVar* v = ConVar::find(StringId(l.name.view()));
-        if (!v || !(v->flags() & CVarFlags::Saved) || !v->is_default()) continue;
+        if (!v || !(v->flags() & CVarFlags::Saved) || v->from_command_line() || !v->is_default()) continue;
         if (!v->set_from_string(l.value.view())) MCE_LOG_WARN("settings: '{}' rejects '{}'", l.name.view(), l.value.view());
     }
     Array<ConVar*> all;

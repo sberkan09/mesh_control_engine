@@ -334,11 +334,15 @@ the player and the editor define. Flags you will meet:
 | `RequiresRestart` | read at start-up only (`headless`, `r.gl_debug`) |
 | `ReadOnly` | reported, never set |
 
-A project can ship its own defaults: the player reads `defaults.cfg` from the folder of the pack (or the file
-named by `-defaults <path>`), lines of `name value` like `settings.cfg`, and makes each the convar's default, before
-the saved options load. A saved option and a command-line value still win; `reset` and `-help` show the project's
-default, and a default is never written to `settings.cfg`. A missing file is no error, an unknown name or a value the
-convar rejects is warned about and skipped.
+A project can ship its own defaults: the player reads `defaults.cfg` from the folder of the pack (inside it, for a
+`cooked/` directory; or the file named by `-defaults <path>`), lines of `name value` like `settings.cfg` (indentation
+and aligned columns are fine, `#` starts a comment line), and makes each the convar's default once the game starts,
+before the saved options load. A value given on the command line and a saved option still win, and `reset` goes
+back to the project's default; a default is never written to `settings.cfg`. A missing file is no error. An unknown
+name, a value the convar rejects, a `ReadOnly` convar and a `Cheat` convar in a build that locks cheats are warned
+about and skipped. Convars read before the game starts (`headless`, the window and platform switches, `r.gl_debug`)
+do not see the file, and `-help` lists the built-in defaults. Desktop builds only for now: the file sits beside the
+pack, so the web and phone packages do not carry it yet.
 
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and

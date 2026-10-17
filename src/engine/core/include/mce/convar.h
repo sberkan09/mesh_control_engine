@@ -57,9 +57,12 @@ public:
     bool set_from_string(StringView text, bool force = false);
     void to_string(FixedString<128>& out) const;
     void reset();
-    // Makes `text` the default (what reset() and -help show, and what the settings file measures "changed" against). A
-    // value already moved off the old default (a command-line value) stays. False when `text` does not parse.
+    // Makes `text` the default (what reset() shows, and what the settings file measures "changed" against). A value
+    // given on the command line, or already moved off the old default, stays. False when `text` does not parse.
     bool set_default(StringView text);
+    // True once the command line gave this convar a value: that value beats a project default and a saved option.
+    bool from_command_line() const { return from_command_line_; }
+    void mark_command_line() { from_command_line_ = true; }
     bool is_default() const;
 
     const char* name() const { return name_; }
@@ -94,6 +97,7 @@ private:
     FixedString<128> default_str_;
     ChangeFn on_change_ = nullptr;
     ConVar* next_ = nullptr;
+    bool from_command_line_ = false;
 };
 
 class ConFunc {
@@ -151,10 +155,11 @@ bool cheats_allowed();
 // it then stands; save_settings writes the file's lines back with the Saved convars changed since
 // then, so a command-line value is never written. Lines naming a convar not registered yet (a game
 // module's) are kept and applied by a later load_settings. A missing file is no error.
-// set_defaults reads a file of the same "name value" lines and makes each a convar's default (a project's own
-// defaults, shipped beside its pack), before load_settings: a command-line value still wins, a player's saved value
-// still wins, and a default is never written to the settings file. Unknown names and rejected values are warned about;
-// a missing file is no error.
+// set_defaults reads a file of the same "name value" lines (blanks between them skipped) and makes each a convar's
+// default (a project's own defaults, shipped beside its pack), before load_settings: a command-line value still wins,
+// a player's saved value still wins, and a default is never written to the settings file. Unknown names, rejected
+// values, Cheat convars while cheats are locked and ReadOnly convars are warned about and skipped; a missing file is
+// no error.
 Result<void> set_defaults(StringView path);
 Result<void> load_settings(StringView path);
 Result<void> save_settings(StringView path);
