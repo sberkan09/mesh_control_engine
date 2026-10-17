@@ -509,10 +509,13 @@ is reflected; `08-3d.md` explains when to use 5b against 5a and `Foliage3D`. Cha
 
 ### Step 6 — foliage, decals, the demo and the close
 
+**Step 6 status:** 6a data seam merged (#488); 6b renderer (variation, wind, multiple kinds) in the PR that adds this line; open: decal-drop warning, `decals_dropped` perf counter, showcase demo and the close (6c-6e). Linear: none filed (free issue limit).
+
 **Foliage3D and TerrainFoliage3D** (kit3d.h; same fields on both where marked ✱):
 
 ```cpp
 math::vec4 tint_variation{1, 1, 1, 1};  // ✱ each copy's tint = mix(tint, tint_variation, hash(copy origin))
+// As built: tint × mix(white, tint_variation, hash(copy origin)), see "Known limits" under the closing record
 f32 wind_height = 0.0f;   // ✱ metres where the sway reaches wind_amplitude; 0 = today's amplitude × h² (h in m)
 f32 wind_gust = 0.0f;     // ✱ 0..1: slow gusts travelling along wind_direction across the field
 f32 wind_flutter = 0.0f;  // ✱ metres of fast per-vertex leaf jitter at wind_height
