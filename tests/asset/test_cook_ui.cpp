@@ -319,6 +319,11 @@ TEST_CASE("ui theme: .mcuitheme cooks; a theme restyles what a document leaves a
     CHECK(theme.styles[u32(ui::WidgetKind::Slider)][kNormal].accent.g == 1.0f);
     CHECK(theme.font(ui::FontRole::Title) == asset::parse_guid(kFontGuid).value());
     CHECK(theme.font(ui::FontRole::Body).is_null());
+    CHECK(theme.overlay_font() == asset::parse_guid(kFontGuid).value());  // no Body font: the Title font
+    ui::ThemeData with_body = theme;
+    with_body.fonts[u32(ui::FontRole::Body) - 1] = asset::parse_guid(kGuid).value();
+    CHECK(with_body.overlay_font() == asset::parse_guid(kGuid).value());  // Body first
+    CHECK(ui::default_theme().overlay_font().is_null());
 
     auto dh = p.assets.load_sync<asset::UiDocument>(p.assets.find(asset::parse_guid(kGuid).value()));
     REQUIRE(dh);

@@ -24,7 +24,7 @@ Each frame records:
 - the counters: draws, passes, compute dispatches, triangles, meshes, sprites, sprite batches,
   upload bytes and live heap allocations, and for 3D `runs_instanced` and `draws_instanced` (copies of one
   mesh drawn as one instanced draw in the main view, and the submesh draws inside them; chapter 8.6). An
-  instanced draw counts once in `draws`;
+  instanced draw counts once in `draws`; `merged_groups` and `merged_children` count the `StaticMerge3D` components drawing merged meshes and the `MeshRef` children they replace (chapter 8.6);
 - for 3D, `draw_causes`: the scene draws that were not part of an instanced run, counted by cause (see
   "Draw calls by cause" below). The cause names are stored in the file's header, and the counts of a frame in its
   `counters.draw_causes`, in that order. Older files have none and read as zero.
@@ -113,6 +113,15 @@ Its capture goes to `cooked/.perf/last.mcperf`, and the previous one moves to `p
 `perf_compare` with no arguments compares those two. It lists what got better or worse: a time
 counts when it moved at least 10% and 0.1 ms, and a counter on any change. Chapter 14 ("Is it fast
 enough?") has the arguments.
+
+`frames` (default 300, 1 to 3600) is the number of frames captured after the `warmup` (default 30). A short run is
+useful to see the counters or to check a change quickly: with fewer than 30 frames the report adds a `note` that the
+percentiles are noisy, because p95 and p99 of a handful of frames mean little. The counters (draws, triangles, sprites)
+do not depend on the machine's speed, so a short run still compares exactly; use 30 frames or more for a time verdict.
+
+A run takes a while. When the client sends a `progressToken`, `perf_run` sends `notifications/progress` while the
+player works: the phase (`launching the player`, `warmup 10/30`, `capturing 120/300`, `reading the capture`) in
+`message`, and `progress` of `total` frames. The player prints about ten of these lines per phase, never one per frame.
 
 The loop for an agent or a person: `perf_run` with the target, read what is over and what the
 advice and `top_systems` name, change one thing, `perf_run` again, `perf_compare`.

@@ -32,6 +32,11 @@ There is no hosted CI. `scripts/ci/local_ci.sh` is the CI; the gate has three le
 - Never delete or shrink the ccache (`ccache -C`, `-M`); the script's `reclaim_space` frees disk by removing
   finished build trees, which the cache rebuilds cheaply.
 - Do not restart the container while a run is in flight.
+- A message reaching your thread (from the user, the coordinator or a peer) restarts the container and kills detached
+  runs, whatever `nohup` says (observed: every restart matched a message time to the second). So start `--task`, then
+  do not expect a message-free half hour: after each wake check `uptime -s`, and if the run died continue with
+  `--task --resume` (once #408 lands) instead of starting over. Long measurements belong in the scheduled
+  integration run, which gets no messages.
 
 ## Change rules that keep builds cheap
 

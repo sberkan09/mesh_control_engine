@@ -16,7 +16,7 @@
 // texture assets; their URI (relative to the glTF) resolves to the texture's GUID, which becomes a
 // dependency. Errors name the file and the JSON pointer of the offending element.
 //
-// Per primitive: de-duplicate vertices (meshopt_generateVertexRemap), meshopt_optimizeVertexCache,
+// Per primitive (mesh_build.cpp, shared by every model importer): de-duplicate vertices (meshopt_generateVertexRemap), meshopt_optimizeVertexCache,
 // meshopt_optimizeVertexFetch, then quantize (formats.h MeshVertex). Deterministic: no hashing of
 // pointers, no clocks, stable iteration order everywhere.
 //
@@ -49,13 +49,15 @@
 #include "importer_common.h"
 #include "mce/asset/formats.h"
 #include "mce/math/math.h"
-#include "meshoptimizer.h"
+#include "mesh_build.h"
 
 namespace mce::cook {
 
 namespace {
 
 using namespace mce::math;
+using detail::Geometry;
+using detail::SkinTables;
 
 constexpr const char* kStage = "cook.gltf";
 constexpr u32 kGlbMagic = 0x46546C67;  // "glTF"
@@ -685,86 +687,6 @@ asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_inde
     return m;
 }
 
-struct FatVertex {
-    f32 p[3];
-    f32 n[3];
-    f32 uv[2];
-    f32 joints[4];   // skinned primitives only (zero otherwise): skin-local joint indices
-    f32 weights[4];  // normalized to sum 1
-};
-
-i16 snorm16(f32 v) {
-    const f32 c = math::clamp(v, -1.0f, 1.0f);
-    return static_cast<i16>(std::lround(c * 32767.0f));
-}
-
-u16 unorm16(f32 v) { return static_cast<u16>(std::lround(math::clamp(v, 0.0f, 1.0f) * 65535.0f)); }
-
-// Octahedral encoding (Cigolle et al. 2014) of a unit vector into [-1, 1]^2.
-void oct_encode(const f32 n[3], f32 out[2]) {
-    const f32 l1 = std::fabs(n[0]) + std::fabs(n[1]) + std::fabs(n[2]);
-    f32 x = n[0] / l1, y = n[1] / l1;
-    if (n[2] < 0.0f) {
-        const f32 ox = x, oy = y;
-        x = (1.0f - std::fabs(oy)) * (ox >= 0.0f ? 1.0f : -1.0f);
-        y = (1.0f - std::fabs(ox)) * (oy >= 0.0f ? 1.0f : -1.0f);
-    }
-    out[0] = x;
-    out[1] = y;
-}
-
-// Bind-space bounds of the vertices one joint influences.
-struct JointBox {
-    f32 min[3] = {0, 0, 0};
-    f32 max[3] = {0, 0, 0};
-    bool any = false;
-
-    void add(const f32 p[3]) {
-        for (int c = 0; c < 3; ++c) {
-            min[c] = any ? math::min(min[c], p[c]) : p[c];
-            max[c] = any ? math::max(max[c], p[c]) : p[c];
-        }
-        any = true;
-    }
-};
-
-struct Geometry {
-    Array<asset::MeshVertex> vertices;
-    Array<asset::MeshSkinVertex> skin_vertices;  // parallel to `vertices` (zero for rigid ones)
-    Array<u32> indices;  // relative to the submesh's base_vertex
-    Array<asset::MeshSubmesh> submeshes;
-    Array<asset::MaterialExt> submesh_ext;  // per submesh (M-VISUAL2 4)
-    Array<i32> submesh_gltf_skin;           // per submesh: the glTF skin index, -1 = rigid
-    Array<Array<JointBox>> joint_boxes;     // per glTF skin, per joint
-    Array<Array<asset::MeshLod>> lods;      // per submesh: its coarser levels, finest first
-};
-
-// Rounds normalized weights to unorm8 summing to exactly 255 (largest remainder; ties by slot).
-void quantize_weights(const f32 w[4], u8 out[4]) {
-    u32 total = 0;
-    f32 rem[4];
-    for (int c = 0; c < 4; ++c) {
-        const f32 x = math::clamp(w[c], 0.0f, 1.0f) * 255.0f;
-        out[c] = static_cast<u8>(std::floor(x));
-        rem[c] = x - std::floor(x);
-        total += out[c];
-    }
-    while (total < 255) {
-        int best = 0;
-        for (int c = 1; c < 4; ++c)
-            if (rem[c] > rem[best]) best = c;
-        if (rem[best] <= 0.0f) {  // all remainders spent: the heaviest influence takes the rest
-            for (int c = 1; c < 4; ++c)
-                if (out[c] > out[best]) best = c;
-            out[best] = static_cast<u8>(out[best] + (255 - total));
-            return;
-        }
-        ++out[best];
-        rem[best] = 0.0f;
-        ++total;
-    }
-}
-
 // `skin` is the glTF skin of the primitive's node (-1 = rigid) with `skin_joints` joints.
 // With `lod_of` set the primitive is an authored LOD of submesh `*lod_of`: its vertices are
 // appended quantized with that submesh's bounds and `*lod_out` receives the range (no submesh).
@@ -823,240 +745,47 @@ bool import_primitive(Ctx& cx, const Gltf& g, JsonValue prim, StringView ptr, u3
     const asset::MaterialExt mat_ext = lod_of ? asset::MaterialExt{} : convert_material_ext(cx, g, prim.get("material"));
     if (cx.errors()) return false;
 
-    Array<FatVertex> fat;
-    fat.resize(vcount);
-    for (usize v = 0; v < vcount; ++v) {
-        FatVertex& f = fat[v];
-        for (int c = 0; c < 3; ++c) f.p[c] = pos[v * 3 + c];
-        for (int c = 0; c < 3; ++c) f.n[c] = nrm.empty() ? 0.0f : nrm[v * 3 + c];
-        f32 u = uv.empty() ? 0.0f : uv[v * 2], w = uv.empty() ? 0.0f : uv[v * 2 + 1];
-        if (tex.present) {  // KHR_texture_transform: offset * rotation * scale, baked into the UVs
+    if (skin >= 0) {
+        for (usize v = 0; v < vcount; ++v)
+            for (int c = 0; c < 4; ++c) {
+                const f32 wt = math::max(weights[v * 4 + c], 0.0f);
+                if (wt > 0.0f && joints[v * 4 + c] >= f32(skin_joints)) {
+                    cx.error(attrs.get("JOINTS_0"), ptr, "JOINTS_0 names a joint outside the node's skin");
+                    return false;
+                }
+            }
+    }
+    Array<f32> uv_baked;
+    if (tex.present) {  // KHR_texture_transform: offset * rotation * scale, baked into the UVs
+        uv_baked.resize(vcount * 2);
+        for (usize v = 0; v < vcount; ++v) {
+            f32 u = uv.empty() ? 0.0f : uv[v * 2], w = uv.empty() ? 0.0f : uv[v * 2 + 1];
             const f32 cs = std::cos(tex.uv_rotation), sn = std::sin(tex.uv_rotation);
             const f32 su = u * tex.uv_scale[0], sv = w * tex.uv_scale[1];
             u = tex.uv_offset[0] + cs * su + sn * sv;
             w = tex.uv_offset[1] - sn * su + cs * sv;
-        }
-        f.uv[0] = u;
-        f.uv[1] = w;
-        if (skin >= 0) {
-            f32 sum = 0.0f;
-            for (int c = 0; c < 4; ++c) {
-                const f32 wt = math::max(weights[v * 4 + c], 0.0f);
-                const f32 j = joints[v * 4 + c];
-                if (wt > 0.0f && j >= f32(skin_joints)) {
-                    cx.error(attrs.get("JOINTS_0"), ptr, "JOINTS_0 names a joint outside the node's skin");
-                    return false;
-                }
-                f.joints[c] = wt > 0.0f ? j : 0.0f;
-                f.weights[c] = wt;
-                sum += wt;
-            }
-            for (f32& wt : f.weights) wt = sum > 0.0f ? wt / sum : 0.0f;
-        }
-    }
-    if (nrm.empty()) {  // area-weighted smooth normals over the indexed triangles
-        for (usize t = 0; t + 2 < idx.size(); t += 3) {
-            const vec3 a{fat[idx[t]].p[0], fat[idx[t]].p[1], fat[idx[t]].p[2]};
-            const vec3 b{fat[idx[t + 1]].p[0], fat[idx[t + 1]].p[1], fat[idx[t + 1]].p[2]};
-            const vec3 c{fat[idx[t + 2]].p[0], fat[idx[t + 2]].p[1], fat[idx[t + 2]].p[2]};
-            const vec3 fn = cross(b - a, c - a);
-            for (int k = 0; k < 3; ++k) {
-                FatVertex& f = fat[idx[t + k]];
-                f.n[0] += fn.x;
-                f.n[1] += fn.y;
-                f.n[2] += fn.z;
-            }
-        }
-    }
-    for (FatVertex& f : fat) {
-        const f32 l = std::sqrt(f.n[0] * f.n[0] + f.n[1] * f.n[1] + f.n[2] * f.n[2]);
-        if (l > 1e-12f) {
-            for (f32& c : f.n) c /= l;
-        } else {
-            f.n[0] = 0.0f;
-            f.n[1] = 1.0f;
-            f.n[2] = 0.0f;
+            uv_baked[v * 2] = u;
+            uv_baked[v * 2 + 1] = w;
         }
     }
 
-    // meshopt: de-duplicate, then vertex cache, then vertex fetch order.
-    Array<u32> remap;
-    remap.resize(vcount);
-    const usize unique = meshopt_generateVertexRemap(remap.data(), idx.data(), idx.size(), fat.data(), vcount, sizeof(FatVertex));
-    Array<FatVertex> uniq;
-    uniq.resize(unique);
-    meshopt_remapVertexBuffer(uniq.data(), fat.data(), vcount, sizeof(FatVertex), remap.data());
-    meshopt_remapIndexBuffer(idx.data(), idx.data(), idx.size(), remap.data());
-    meshopt_optimizeVertexCache(idx.data(), idx.data(), idx.size(), unique);
-    Array<FatVertex> opt;
-    opt.resize(unique);
-    const usize used = meshopt_optimizeVertexFetch(opt.data(), idx.data(), idx.size(), uniq.data(), unique, sizeof(FatVertex));
-
-    asset::MeshSubmesh sm{};
-    sm.first_index = static_cast<u32>(geo.indices.size());
-    sm.index_count = static_cast<u32>(idx.size());
-    sm.base_vertex = static_cast<u32>(geo.vertices.size());
-    sm.vertex_count = static_cast<u32>(used);
-    sm.node = node;
-    sm.material = mat;
-    if (lod_of) {  // an authored level: the base's quantization, its own vertex range
-        const asset::MeshSubmesh& base = geo.submeshes[*lod_of];
-        for (usize v = 0; v < used; ++v) {
-            asset::MeshVertex q{};
-            for (int c = 0; c < 3; ++c) q.position[c] = snorm16((opt[v].p[c] - base.center[c]) / base.extent[c]);
-            f32 o[2];
-            oct_encode(opt[v].n, o);
-            q.normal[0] = snorm16(o[0]);
-            q.normal[1] = snorm16(o[1]);
-            for (int c = 0; c < 2; ++c) q.uv[c] = unorm16((opt[v].uv[c] - base.uv_offset[c]) / base.uv_scale[c]);
-            geo.vertices.push_back(q);
-            geo.skin_vertices.push_back(asset::MeshSkinVertex{});
-        }
-        for (u32 i : idx) geo.indices.push_back(i);
-        *lod_out = asset::MeshLod{};
-        lod_out->first_index = sm.first_index;
-        lod_out->index_count = sm.index_count;
-        lod_out->base_vertex = sm.base_vertex;
-        lod_out->vertex_count = sm.vertex_count;
-        return true;
-    }
-    f32 pmin[3] = {0, 0, 0}, pmax[3] = {0, 0, 0}, umin[2] = {0, 0}, umax[2] = {0, 0};
-    for (usize v = 0; v < used; ++v) {
-        for (int c = 0; c < 3; ++c) {
-            pmin[c] = v ? math::min(pmin[c], opt[v].p[c]) : opt[v].p[c];
-            pmax[c] = v ? math::max(pmax[c], opt[v].p[c]) : opt[v].p[c];
-        }
-        for (int c = 0; c < 2; ++c) {
-            umin[c] = v ? math::min(umin[c], opt[v].uv[c]) : opt[v].uv[c];
-            umax[c] = v ? math::max(umax[c], opt[v].uv[c]) : opt[v].uv[c];
-        }
-    }
-    for (int c = 0; c < 3; ++c) {
-        sm.center[c] = (pmin[c] + pmax[c]) * 0.5f;
-        sm.extent[c] = math::max((pmax[c] - pmin[c]) * 0.5f, 1e-6f);
-    }
-    for (int c = 0; c < 2; ++c) {
-        sm.uv_offset[c] = umin[c];
-        sm.uv_scale[c] = umax[c] > umin[c] ? umax[c] - umin[c] : 1.0f;
-    }
-    for (usize v = 0; v < used; ++v) {
-        asset::MeshVertex q{};
-        for (int c = 0; c < 3; ++c) q.position[c] = snorm16((opt[v].p[c] - sm.center[c]) / sm.extent[c]);
-        f32 o[2];
-        oct_encode(opt[v].n, o);
-        q.normal[0] = snorm16(o[0]);
-        q.normal[1] = snorm16(o[1]);
-        for (int c = 0; c < 2; ++c) q.uv[c] = unorm16((opt[v].uv[c] - sm.uv_offset[c]) / sm.uv_scale[c]);
-        geo.vertices.push_back(q);
-    }
-    if (skin >= 0 && geo.joint_boxes.size() <= static_cast<usize>(skin)) geo.joint_boxes.resize(static_cast<usize>(skin) + 1);
-    for (usize v = 0; v < used; ++v) {
-        asset::MeshSkinVertex sv{};
-        if (skin >= 0) {
-            quantize_weights(opt[v].weights, sv.weights);
-            Array<JointBox>& boxes = geo.joint_boxes[static_cast<usize>(skin)];
-            if (boxes.size() < skin_joints) boxes.resize(skin_joints);
-            for (int c = 0; c < 4; ++c) {
-                if (sv.weights[c] == 0) continue;
-                sv.joints[c] = static_cast<u8>(opt[v].joints[c]);
-                boxes[sv.joints[c]].add(opt[v].p);
-            }
-        }
-        geo.skin_vertices.push_back(sv);
-    }
-    for (u32 i : idx) geo.indices.push_back(i);
-    geo.submeshes.push_back(sm);
-    geo.submesh_ext.push_back(mat_ext);
-    geo.submesh_gltf_skin.push_back(skin);
-    geo.lods.emplace_back();
+    detail::Primitive out;
+    out.positions = pos.span();
+    out.normals = nrm.span();
+    out.uvs = tex.present ? uv_baked.span() : uv.span();
+    out.joints = joints.span();
+    out.weights = weights.span();
+    out.indices = idx.span();
+    out.material = mat;
+    out.material_ext = mat_ext;
+    out.node = node;
+    out.skin = skin;
+    out.skin_joints = skin_joints;
+    if (lod_of)
+        *lod_out = detail::add_authored_lod(out, *lod_of, geo);
+    else
+        detail::add_submesh(out, geo);
     return true;
-}
-
-// Node-local positions of a submesh's vertices [base_vertex, base_vertex + count) (dequantized).
-void dequantize_positions(const Geometry& geo, const asset::MeshSubmesh& sm, u32 base_vertex, u32 count, Array<f32>& out) {
-    out.resize(usize(count) * 3);
-    for (u32 v = 0; v < count; ++v) {
-        const asset::MeshVertex& q = geo.vertices[base_vertex + v];
-        for (int c = 0; c < 3; ++c)
-            out[usize(v) * 3 + c] = sm.center[c] + math::max(static_cast<f32>(q.position[c]) / 32767.0f, -1.0f) * sm.extent[c];
-    }
-}
-
-// Generated levels (sidecar lod_levels): each simplified from the base so errors do not compound.
-void generate_lods(Geometry& geo, u32 levels, f32 ratio, f32 max_error) {
-    Array<f32> pos;
-    Array<u32> base_idx, out_idx;
-    for (usize si = 0; si < geo.submeshes.size(); ++si) {
-        if (!geo.lods[si].empty()) continue;  // authored levels win
-        const asset::MeshSubmesh sm = geo.submeshes[si];
-        if (sm.index_count < 3 * 16) continue;  // too small to be worth a level
-        dequantize_positions(geo, sm, sm.base_vertex, sm.vertex_count, pos);
-        base_idx.resize(sm.index_count);
-        for (u32 i = 0; i < sm.index_count; ++i) base_idx[i] = geo.indices[sm.first_index + i];
-        const f32 scale = meshopt_simplifyScale(pos.data(), sm.vertex_count, sizeof(f32) * 3);
-        usize previous = sm.index_count;
-        f32 keep = 1.0f;
-        for (u32 level = 1; level <= levels; ++level) {
-            keep *= ratio;
-            const usize target = math::max<usize>(3, static_cast<usize>(static_cast<f32>(sm.index_count) * keep) / 3 * 3);
-            out_idx.resize(sm.index_count);
-            f32 error = 0.0f;
-            const usize n = meshopt_simplify(out_idx.data(), base_idx.data(), sm.index_count, pos.data(), sm.vertex_count,
-                                             sizeof(f32) * 3, target, max_error, 0, &error);
-            if (n < 3 || static_cast<f32>(n) > static_cast<f32>(previous) * 0.9f) break;
-            out_idx.resize(n);
-            meshopt_optimizeVertexCache(out_idx.data(), out_idx.data(), n, sm.vertex_count);
-            asset::MeshLod lod{};
-            lod.first_index = static_cast<u32>(geo.indices.size());
-            lod.index_count = static_cast<u32>(n);
-            lod.base_vertex = sm.base_vertex;
-            lod.vertex_count = sm.vertex_count;
-            lod.error = error * scale;
-            for (u32 i : out_idx) geo.indices.push_back(i);
-            geo.lods[si].push_back(lod);
-            previous = n;
-        }
-    }
-}
-
-// Squared distance from `p` to triangle abc (Ericson, Real-Time Collision Detection 5.1.5).
-f32 point_triangle_dist2(vec3 p, vec3 a, vec3 b, vec3 c) {
-    const vec3 ab = b - a, ac = c - a, ap = p - a;
-    const f32 d1 = dot(ab, ap), d2 = dot(ac, ap);
-    if (d1 <= 0.0f && d2 <= 0.0f) return length_sq(p - a);
-    const vec3 bp = p - b;
-    const f32 d3 = dot(ab, bp), d4 = dot(ac, bp);
-    if (d3 >= 0.0f && d4 <= d3) return length_sq(p - b);
-    const f32 vc = d1 * d4 - d3 * d2;
-    if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) return length_sq(p - (a + ab * (d1 / (d1 - d3))));
-    const vec3 cp = p - c;
-    const f32 d5 = dot(ab, cp), d6 = dot(ac, cp);
-    if (d6 >= 0.0f && d5 <= d6) return length_sq(p - c);
-    const f32 vb = d5 * d2 - d1 * d6;
-    if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) return length_sq(p - (a + ac * (d2 / (d2 - d6))));
-    const f32 va = d3 * d6 - d5 * d4;
-    if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
-        return length_sq(p - (b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)))));
-    const f32 denom = 1.0f / (va + vb + vc);
-    return length_sq(p - (a + ab * (vb * denom) + ac * (vc * denom)));
-}
-
-// An authored level's deviation from its base: the larger of the two one-sided distances from
-// one surface's vertices to the other's triangles (a vertex-sampled Hausdorff distance).
-f32 lod_deviation(const Array<f32>& a_pos, Span<const u32> a_idx, const Array<f32>& b_pos, Span<const u32> b_idx) {
-    auto at = [](const Array<f32>& pos, u32 i) { return vec3{pos[usize(i) * 3], pos[usize(i) * 3 + 1], pos[usize(i) * 3 + 2]}; };
-    auto one_sided = [&](const Array<f32>& from, const Array<f32>& to_pos, Span<const u32> to_idx) {
-        f32 worst = 0.0f;
-        for (usize i = 0; i < from.size(); i += 3) {
-            const vec3 p{from[i], from[i + 1], from[i + 2]};
-            f32 best = 1e30f;
-            for (usize t = 0; t + 2 < to_idx.size() && best > worst; t += 3)
-                best = math::min(best, point_triangle_dist2(p, at(to_pos, to_idx[t]), at(to_pos, to_idx[t + 1]), at(to_pos, to_idx[t + 2])));
-            worst = math::max(worst, best);
-        }
-        return std::sqrt(worst);
-    };
-    return math::max(one_sided(a_pos, b_pos, b_idx), one_sided(b_pos, a_pos, a_idx));
 }
 
 // Level n of name, or 0 when `name` is not `<base>_LOD<n>` (n = 1..kMaxMeshLods - 1).
@@ -1260,7 +989,6 @@ bool import_nodes(Ctx& cx, const Gltf& g, f32 import_scale, bool skinning, Outpu
 // `<name>_LOD<n>` meshes onto node `<name>`'s submeshes (primitive p -> its p-th submesh).
 bool attach_authored_lods(Ctx& cx, const Gltf& g, const Array<AuthoredLod>& authored, Output& out) {
     const JsonValue meshes = g.root.get("meshes");
-    Array<f32> base_pos, lod_pos;
     for (const AuthoredLod& a : authored) {
         u32 node = ~0u;
         for (u32 i = 0; i < out.nodes.size() && node == ~0u; ++i) {
@@ -1279,7 +1007,7 @@ bool attach_authored_lods(Ctx& cx, const Gltf& g, const Array<AuthoredLod>& auth
         const JsonValue prims = meshes.at(a.gltf_mesh).get("primitives");
         for (u32 p = 0; prims.is_array() && p < prims.size() && p < subs.size(); ++p) {
             const u32 si = subs[p];
-            if (out.geo.submesh_gltf_skin[si] >= 0) {
+            if (out.geo.submesh_skin[si] >= 0) {
                 cx.warning(prims.at(p), "authored LODs of skinned primitives are ignored");
                 continue;
             }
@@ -1287,12 +1015,6 @@ bool attach_authored_lods(Ctx& cx, const Gltf& g, const Array<AuthoredLod>& auth
             appendf(pptr, "/meshes/%u/primitives/%u", a.gltf_mesh, p);
             asset::MeshLod lod{};
             if (!import_primitive(cx, g, prims.at(p), pptr, node, -1, 0, out.geo, &si, &lod)) return false;
-            const asset::MeshSubmesh& sm = out.geo.submeshes[si];
-            dequantize_positions(out.geo, sm, sm.base_vertex, sm.vertex_count, base_pos);
-            dequantize_positions(out.geo, sm, lod.base_vertex, lod.vertex_count, lod_pos);
-            const Span<const u32> base_idx = out.geo.indices.span().subspan(sm.first_index, sm.index_count);
-            const Span<const u32> lod_idx = out.geo.indices.span().subspan(lod.first_index, lod.index_count);
-            lod.error = lod_deviation(base_pos, base_idx, lod_pos, lod_idx);
             lod.reserved[0] = a.level;  // sort key below, cleared after
             out.geo.lods[si].push_back(lod);
         }
@@ -1390,25 +1112,14 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
     return true;
 }
 
-mat4 node_local(const asset::MeshNode& n) {
-    return trs({n.translation[0], n.translation[1], n.translation[2]},
-               normalize(quat{n.rotation[0], n.rotation[1], n.rotation[2], n.rotation[3]}), {n.scale[0], n.scale[1], n.scale[2]});
-}
-
-struct SkinOutput {
-    Array<asset::MeshSkin> skins;
-    Array<asset::MeshJoint> joints;
-    Array<i32> submesh_skins;
-};
-
 // The glTF skins the submeshes use, in order of first use: joints remapped to imported nodes,
 // inverse bind matrices (identity when absent) and the per-joint bind bounds.
-bool import_skins(Ctx& cx, const Gltf& g, const Array<i32>& remap, const Geometry& geo, SkinOutput& out) {
+bool import_skins(Ctx& cx, const Gltf& g, const Array<i32>& remap, const Geometry& geo, SkinTables& out) {
     const JsonValue skins = g.root.get("skins");
     Array<i32> mapped;  // glTF skin -> our skin
     mapped.resize(skins.is_array() ? skins.size() : 0, -1);
     for (usize s = 0; s < geo.submeshes.size(); ++s) {
-        const i32 gs = geo.submesh_gltf_skin[s];
+        const i32 gs = geo.submesh_skin[s];
         if (gs < 0) {
             out.submesh_skins.push_back(-1);
             continue;
@@ -1418,53 +1129,33 @@ bool import_skins(Ctx& cx, const Gltf& g, const Array<i32>& remap, const Geometr
             String ptr;
             append_pointer(ptr, "skins", static_cast<u32>(gs));
             const JsonValue js = sk.get("joints");
-            asset::MeshSkin skin{};
-            skin.first_joint = static_cast<u32>(out.joints.size());
-            skin.joint_count = js.size();
             Array<f32> ibm;
             if (sk.get("inverseBindMatrices").valid()) {
                 if (!read_accessor(cx, g, sk.get("inverseBindMatrices"), 16, false, ibm, ptr)) return false;
-                if (ibm.size() != usize(skin.joint_count) * 16) {
+                if (ibm.size() != usize(js.size()) * 16) {
                     cx.error(sk, ptr, "inverseBindMatrices count differs from the joint count");
                     return false;
                 }
             }
-            const Array<JointBox>* boxes =
-                static_cast<usize>(gs) < geo.joint_boxes.size() ? &geo.joint_boxes[static_cast<usize>(gs)] : nullptr;
-            for (u32 j = 0; j < skin.joint_count; ++j) {
+            Array<u32> joint_nodes;
+            for (u32 j = 0; j < js.size(); ++j) {
                 const JsonValue jv = js.at(j);
                 if (!nonneg(jv) || jv.as_number() >= static_cast<f64>(remap.size()) || remap[static_cast<usize>(jv.as_number())] < 0) {
                     cx.error(jv, ptr, "skin joint is not a node of the imported scene");
                     return false;
                 }
-                asset::MeshJoint mj{};
-                mj.node = static_cast<u32>(remap[static_cast<usize>(jv.as_number())]);
-                for (u32 k = 0; k < 16; ++k) mj.inverse_bind[k] = ibm.empty() ? (k % 5 == 0 ? 1.0f : 0.0f) : ibm[usize(j) * 16 + k];
-                const JointBox* b = boxes && j < boxes->size() ? &(*boxes)[j] : nullptr;
-                for (int c = 0; c < 3; ++c) {
-                    mj.bounds_min[c] = b && b->any ? b->min[c] : 1.0f;  // min > max: influences nothing
-                    mj.bounds_max[c] = b && b->any ? b->max[c] : -1.0f;
-                }
-                out.joints.push_back(mj);
+                joint_nodes.push_back(static_cast<u32>(remap[static_cast<usize>(jv.as_number())]));
             }
-            mapped[static_cast<usize>(gs)] = static_cast<i32>(out.skins.size());
-            out.skins.push_back(skin);
+            mapped[static_cast<usize>(gs)] = detail::add_skin(out, geo, gs, joint_nodes.span(), ibm.span());
         }
         out.submesh_skins.push_back(mapped[static_cast<usize>(gs)]);
     }
     return true;
 }
 
-mat4 mat4_from(const f32 m[16]) {
-    mat4 r;
-    for (int c = 0; c < 4; ++c)
-        for (int k = 0; k < 4; ++k) r.c[c][k] = m[c * 4 + k];
-    return r;
-}
-
 // The sidecar's "ragdoll" object: per-bone overrides written into the skin joints of the bones it
 // names (asset::MeshRagdoll). `any` is set when one was written.
-bool apply_ragdoll_settings(const ImportInput& in, const Output& out, SkinOutput& skins, bool& any, DiagList& diags) {
+bool apply_ragdoll_settings(const ImportInput& in, const Output& out, SkinTables& skins, bool& any, DiagList& diags) {
     const JsonValue rag = in.settings.valid() ? in.settings.get("ragdoll") : JsonValue();
     if (!rag.valid() || rag.is_null()) return true;
     if (!rag.is_object()) {
@@ -1603,9 +1294,9 @@ public:
         Array<AuthoredLod> authored;
         if (!import_nodes(cx, g, static_cast<f32>(scale), skinning, out, remap, authored)) return false;
         if (!attach_authored_lods(cx, g, authored, out)) return false;
-        if (lod_levels > 0.0) generate_lods(out.geo, static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error));
+        if (lod_levels > 0.0) detail::generate_lods(out.geo, static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error));
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
-        SkinOutput skin_out;
+        SkinTables skin_out;
         if (!import_skins(cx, g, remap, out.geo, skin_out)) return false;
         bool ragdoll = false;
         if (!apply_ragdoll_settings(in, out, skin_out, ragdoll, diags)) return false;
@@ -1620,94 +1311,13 @@ public:
             return false;
         }
 
-        // Rest-pose model bounds over every submesh's node-local box.
-        Array<mat4> world;
-        world.resize(out.nodes.size());
-        for (usize i = 0; i < out.nodes.size(); ++i)
-            world[i] = out.nodes[i].parent < 0 ? node_local(out.nodes[i]) : world[static_cast<usize>(out.nodes[i].parent)] * node_local(out.nodes[i]);
-        asset::MeshData d;
-        bool any = false;
-        u32 max_vertices = 0;
-        auto grow = [&](const vec3& w) {
-            const f32 c[3] = {w.x, w.y, w.z};
-            for (int k = 0; k < 3; ++k) {
-                d.bounds_min[k] = any ? math::min(d.bounds_min[k], c[k]) : c[k];
-                d.bounds_max[k] = any ? math::max(d.bounds_max[k], c[k]) : c[k];
-            }
-            any = true;
-        };
-        for (usize si = 0; si < out.geo.submeshes.size(); ++si) {
-            const asset::MeshSubmesh& sm = out.geo.submeshes[si];
-            max_vertices = math::max(max_vertices, sm.vertex_count);
-            for (const asset::MeshLod& l : out.geo.lods[si]) max_vertices = math::max(max_vertices, l.vertex_count);
-            if (const i32 sk = skin_out.submesh_skins[si]; sk >= 0) {
-                // Skinned: the rest pose of each joint (world * inverse bind) moves its bind box.
-                const asset::MeshSkin& skin = skin_out.skins[static_cast<usize>(sk)];
-                for (u32 j = 0; j < skin.joint_count; ++j) {
-                    const asset::MeshJoint& mj = skin_out.joints[skin.first_joint + j];
-                    if (mj.bounds_min[0] > mj.bounds_max[0]) continue;
-                    const mat4 m = world[mj.node] * mat4_from(mj.inverse_bind);
-                    for (int corner = 0; corner < 8; ++corner)
-                        grow(transform_point(m, {(corner & 1) ? mj.bounds_max[0] : mj.bounds_min[0],
-                                                 (corner & 2) ? mj.bounds_max[1] : mj.bounds_min[1],
-                                                 (corner & 4) ? mj.bounds_max[2] : mj.bounds_min[2]}));
-                }
-                continue;
-            }
-            for (int corner = 0; corner < 8; ++corner) {
-                const vec3 p{sm.center[0] + ((corner & 1) ? sm.extent[0] : -sm.extent[0]),
-                             sm.center[1] + ((corner & 2) ? sm.extent[1] : -sm.extent[1]),
-                             sm.center[2] + ((corner & 4) ? sm.extent[2] : -sm.extent[2])};
-                grow(transform_point(world[sm.node], p));
-            }
-        }
-
-        Array<u16> idx16;
-        if (max_vertices > 0xFFFF) {
-            d.flags |= asset::MeshFlags::Index32;
-            d.indices = std::as_bytes(out.geo.indices.span());
-        } else {
-            idx16.resize(out.geo.indices.size());
-            for (usize i = 0; i < idx16.size(); ++i) idx16[i] = static_cast<u16>(out.geo.indices[i]);
-            d.indices = std::as_bytes(idx16.span());
-        }
-        // LOD table: each submesh's levels in a run, named by its reserved[0] (count) / [1] (first).
-        Array<asset::MeshLod> lods;
-        for (usize si = 0; si < out.geo.submeshes.size(); ++si) {
-            asset::MeshSubmesh& sm = out.geo.submeshes[si];
-            sm.reserved[0] = static_cast<u32>(out.geo.lods[si].size());
-            sm.reserved[1] = sm.reserved[0] ? static_cast<u32>(lods.size()) : 0u;
-            for (const asset::MeshLod& l : out.geo.lods[si]) lods.push_back(l);
-        }
-        d.lods = lods.span();
-        bool any_ext = false;
-        for (const asset::MaterialExt& e : out.geo.submesh_ext) any_ext = any_ext || e.any();
-        if (any_ext) d.materials = out.geo.submesh_ext.span();
-        d.vertices = out.geo.vertices.span();
-        d.submeshes = out.geo.submeshes.span();
-        d.nodes = out.nodes.span();
-        d.clips = out.clips.span();
-        d.channels = out.channels.span();
-        d.keys = out.keys.span();
-        d.strings = out.strings.span();
-        if (!skin_out.skins.empty()) {
-            d.skins = skin_out.skins.span();
-            d.joints = skin_out.joints.span();
-            d.skin_vertices = out.geo.skin_vertices.span();
-            d.submesh_skins = skin_out.submesh_skins.span();
-        }
-        if (ragdoll) d.flags |= asset::MeshFlags::Ragdoll;
-        Array<byte> payload;
-        asset::write_mesh(d, payload);
-        asset::ContainerWriter::ChunkDesc desc;
-        desc.type = ChunkType::Mesh;
-        desc.version = asset::chunk_version(asset::MESH_VERSION, any_ext                  ? asset::MESH_MINOR_MATERIALS
-                                                                 : ragdoll                ? asset::MESH_MINOR_RAGDOLL
-                                                                 : !lods.empty()          ? asset::MESH_MINOR_LODS
-                                                                 : skin_out.skins.empty() ? 0
-                                                                                          : asset::MESH_MINOR_SKIN);
-        desc.guid = in.guid;
-        writer.add(desc, payload.span());
+        detail::MeshTables tables;
+        tables.nodes = out.nodes.span();
+        tables.clips = out.clips.span();
+        tables.channels = out.channels.span();
+        tables.keys = out.keys.span();
+        tables.strings = out.strings.span();
+        detail::write_mesh_chunk(out.geo, skin_out, tables, ragdoll, in.guid, writer);
         return true;
     }
 };

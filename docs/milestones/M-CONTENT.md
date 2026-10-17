@@ -1,6 +1,6 @@
 # M-CONTENT — Cooked-pack size and draw-call visibility (milestone record)
 
-**Status:** active (steps 1a and 1b done; claimed 2026-10-17 by the routine 1 thread). Plan: ROADMAP §M-CONTENT. Source: GitHub #383
+**Status:** done (all steps shipped; see Milestone close below). Earlier: active (steps 1a and 1b done; claimed 2026-10-17 by the routine 1 thread). Plan: ROADMAP §M-CONTENT. Source: GitHub #383
 (blind test 3). **Tracker:** this table. Linear is at its free issue limit, so no issues are filed.
 
 **Why:** the Lantern Keep project had 78 textures at 1024² and its cooked `assets.mce` was 614 MB (228 MB zipped, 386 MB in
@@ -15,9 +15,9 @@ texture importer's LDR path, the cook CLI and `mce ship`, the RHI upload mapping
 | # | Step | Model | State |
 |---|---|---|---|
 | 1a | `max_size` for ordinary textures (power-of-two downscale before mips), `mce ship` / `mce cook` size options, a cook size report by asset type | Sonnet | done |
-| 1b | `compress` import setting (`none`, `bc7`, `bc5` for normal maps, `bc4`/`bc1` where cheaper, `astc` on phones), a deterministic encoder, the loader and the RHI upload for the BC formats on every desktop backend, a fallback where a backend lacks BC (GLES, WebGL), a size gate on a sample scene | Sonnet (Opus review of the upload and of determinism) | done (§Step 1b plan below; as built after it) |
-| 2 | Draw-call report: `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) | Sonnet | done (as built below) |
-| 3 | `perf_run` progress lines while it runs and a `frames` argument for a short run; the close | Sonnet | not started |
+| 1b | `compress` import setting (`none`, `bc7`, `bc5` for normal maps, `bc4`/`bc1` where cheaper, `astc` on phones), a deterministic encoder, the loader and the RHI upload for the BC formats on every desktop backend, a fallback where a backend lacks BC (GLES, WebGL), a size gate on a sample scene | Sonnet (Opus review of the upload and of determinism) | done (#444 #460 #463 #466 #469 #472; §Step 1b plan below; as built after it) |
+| 2 | Draw-call report: `perf_run` and `mce perf` list draw calls by cause (material, no instancing, no static batch) | Sonnet | done (#476) |
+| 3 | `perf_run` progress lines while it runs and a `frames` argument for a short run; the close | Sonnet | done (this PR, GH-390) |
 
 **Step 1a as built.** The LDR (PNG/JPEG) path of `texture_importer.cpp` takes a sidecar `"max_size"` (power of two 1..16384,
 same wording as the HDR key; no default, so no limit) and `ImportInput::max_texture_size`, the project-wide cap that
@@ -349,3 +349,19 @@ backends. 1b-iv follows both.
   fix it before ASTC reaches a WebGPU target.
 - Calibrate the `auto` thresholds and the size gate with real content (RunPod).
 - Cross-arch encoder byte equality (`test_cook_bc_arch`) still waits for an arm64 host.
+
+## Step 3 as built, and the milestone close
+
+**Step 3.** `perf_run` reports progress when the client sends a `progressToken`: a `notifications/progress` with the phase in
+`message` (`launching the player`, `warmup N/M`, `capturing N/M`, `reading the capture`) and `progress` / `total` counting
+warmup plus captured frames. The player prints `perf warmup N/M` and `perf capturing N/M` about ten times per phase (the frame
+counts decide, not the clock, so the lines repeat); `spawn_player` reads its stdout as it arrives (`Process::read_some`) and
+`perf_run` turns the lines into notifications. A client with no token gets nothing extra. `frames` now starts at 1; below 30
+captured frames the report carries a `note` that the percentiles are noisy (the counters still repeat). The stats are
+unchanged for 30 or more.
+
+**Milestone close.** Shipped: `max_size` and a cook size report (1a); the BC `compress` setting, deterministic encoder, loader
+and upload on the desktop backends, `auto` rule and size gate (1b); the draw-call report by cause in `perf_run` / `mce perf`
+(2); progress and short runs (3). Stays open: GPU verification of Metal, WebGPU and D3D12 uploads on RunPod; calibrating the
+`auto` thresholds and the size gate with real content; ASTC 4x4 on a WebGPU device for a texture whose base is not a multiple
+of 4; and offender names in the `perf_run` draw-call report (it names causes and counts, not the materials or entities).

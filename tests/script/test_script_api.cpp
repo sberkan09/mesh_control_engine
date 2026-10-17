@@ -20,6 +20,7 @@
 #include "mce/kit/sequence.h"
 #include "mce/physics/module.h"
 #include "mce/refl/macros.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 #include "mce/script/compiler.h"
 
@@ -115,6 +116,31 @@ end
     CHECK(r.h().scripts()[0].state == ScriptState::Running);
     CHECK(r.w.try_get<Probe>(e)->n == 3);
     CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(6.0f));
+}
+
+TEST_CASE("script api: mce.find returns the entity a scene named, and nil for an unknown or destroyed one (M-WORKFLOW 7)") {
+    Rig r(R"(
+function update()
+    local p = mce.find("Player")
+    if mce.tick() == 3 then
+        assert(p == nil)  -- destroyed after tick 2
+        return
+    end
+    assert(p ~= nil and mce.alive(p))
+    assert(mce.find("Nobody") == nil)
+    mce.set(p, "Probe", "n", mce.get(p, "Probe", "n") + 1)
+end
+)");
+    const Entity player = r.w.spawn_with(Probe{});
+    scene::EntityNames names;
+    names.rows.push_back(scene::EntityNames::Row{StringId("Player").value, player});
+    r.w.set_resource(std::move(names));
+    r.step(2);
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(player)->n == 2);
+    r.w.destroy(player);
+    r.step(1);
+    CHECK(r.h().scripts()[0].state == ScriptState::Running);
 }
 
 TEST_CASE("script api: spawn, add, remove and destroy go through Commands") {
