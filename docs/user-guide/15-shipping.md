@@ -228,3 +228,5 @@ path as `steam_build_script`.
 4. The packaged game starts and quits cleanly on the target platform (unzip the `mce ship` zip and run it with
    `-headless 1 -ticks 60`; in a checkout `python3 scripts/ship.py --project projects/MyGame --smoke`).
 5. Keep the symbols zip with the version.
+
+A desktop pack can store its textures block-compressed (about a quarter of the size, in the file and in GPU memory): cook it with `mce_cook MyGame --textures bc` (section 5.2, "Compress the pack with BC"). Phone packs use `--textures astc` and web packs stay `rgba8`, because those targets cannot sample BC textures. `mce ship --textures` follows in a later step.
