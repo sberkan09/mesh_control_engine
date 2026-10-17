@@ -3,6 +3,7 @@
 
     perf_gate.py --mcp <game>_mcp --project projects/<Name>             compare with perf/counters.json
     perf_gate.py --mcp <game>_mcp --project projects/<Name> --update    write the measured counters there
+    perf_gate.py --mcp <mcp> --project projects/<Name> --player <host>  a script project: the host measures
     perf_gate.py --mcp <game>_mcp --project projects/<Name> --seed      the gate must catch a planted regression
 
 perf/counters.json lists the runs and the counters each one had: {"runs": [{"scene": "scenes/level1.mcscene",
@@ -78,6 +79,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mcp", required=True)
     ap.add_argument("--project", required=True, type=pathlib.Path)
+    ap.add_argument("--player", help="the player perf_run measures with (default: mce_player beside the server)")
     ap.add_argument("--work", type=pathlib.Path, help="copy the project here (default: a temp folder)")
     ap.add_argument("--update", action="store_true", help="write the measured counters to perf/counters.json")
     ap.add_argument("--seed", action="store_true", help="plant a draw regression; pass only when the gate catches it")
@@ -104,7 +106,7 @@ def main():
     shutil.copytree(source, work, ignore=lambda d, names: [n for n in names if n in SKIP])
 
     problems, notes = [], []
-    s = Server(a.mcp, work.resolve())
+    s = Server(a.mcp, work.resolve(), ["--player", a.player] if a.player else [])
     try:
         if a.seed:
             seed(s, work.resolve(), runs[0]["scene"])
