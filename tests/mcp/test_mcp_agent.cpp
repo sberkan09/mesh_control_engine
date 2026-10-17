@@ -4,6 +4,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -84,6 +85,15 @@ TEST_CASE("mcp agent tools: listed, and arguments are checked before anything ru
     CHECK(c.fails("render_frame", R"({"camera":{"position":[0,1,2]}})").find("camera.position") != std::string::npos);
     CHECK(c.fails("render_frame", R"({"camera":{"fov":3}})").find("camera") != std::string::npos);
     CHECK(c.fails("render_frame", R"({"safe_area":{"top":-1}})").find("safe_area") != std::string::npos);
+    // M-VISUAL3 3c: the per-shot look is checked against the reflected fields before anything runs.
+    CHECK(c.fails("render_frame", R"({"camera":{"focus":"target"}})").find("position and camera.target") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"focus":-2}})").find("camera.focus") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"exposure":0}})").find("camera.exposure") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":[1]})").find("environment") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"fog_dencity":1}})").find("fog_dencity") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"sky_texture":"x"}})").find("sky_texture") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"sun_color":[1,0]}})").find("[x, y, z]") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"fog_density":"thick"}})").find("number") != std::string::npos);
     CHECK(c.fails("render_frame", R"({"save":"../x.png"})").find("inside the project") != std::string::npos);
     CHECK(c.fails("render_frame", R"({"input":"x Jump"})").find("line 1") != std::string::npos);
     CHECK(c.fails("render_sheet", R"({"ticks":[5,3]})").find("ascending") != std::string::npos);
@@ -390,6 +400,76 @@ TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures
     for (u32 i = 0; i < worse.size(); ++i) draws_worse = draws_worse || str(worse.at(i)) == "draws";
     CHECK(draws_worse);
     CHECK(str(cmp.v().get("target")) == "mobile");
+}
+
+// M-VISUAL3 3c: camera.focus and camera.exposure, and `environment` overrides, change one shot and not the scene.
+TEST_CASE("render_frame: camera.focus, camera.exposure and environment overrides shape one shot") {
+    const std::string root = fresh_dir("mcp_agent_look");
+    std::filesystem::create_directories(root + "/assets");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    const auto box = [&](const char* name, const char* size, const char* color) {
+        const std::string path = std::string("models/") + name + ".glb";
+        return str(c.ok("gen_mesh", std::string(R"({"shape":"box","size":)") + size + R"(,"color":")" + color + R"(","save":")" + path + R"("})")
+                       .v().get("saved").get("guid"));
+    };
+    const std::string near_m = box("near", "[1,1,1]", "#d03020");
+    const std::string left_m = box("left", "[16,16,1]", "#f0f0f0");
+    const std::string right_m = box("right", "[16,16,1]", "#101010");
+    c.ok("scene_new", R"({"name":"look"})");
+    const auto make = [&](const std::string& args) { c.ok("entity_create", args); };
+    const auto at = [](const char* mesh, const std::string& guid, const char* pos) {
+        return std::string(R"({"name":")") + mesh + R"(","components":{"LocalTransform":{"position":)" + pos + R"(},"MeshRef":{"mesh":")" + guid + R"("}}})";
+    };
+    make(at("Near", near_m, "[0,0,-4]"));
+    make(at("Left", left_m, "[-8,0,-20]"));    // a hard vertical edge at x = 0, far behind
+    make(at("Right", right_m, "[8,0,-20]"));
+    make(R"({"name":"Camera","components":{"LocalTransform":{},"Camera3DComponent":{}}})");
+    make(R"({"name":"Env","components":{"Environment3D":{"bloom":0,"fxaa":0,"auto_exposure":0}}})");
+    c.ok("scene_save", R"({"path":"scenes/look.mcscene"})");
+    REQUIRE(c.ok("cook_run").v().get("ok").as_bool());
+
+    // The far edge's sharpest luma step along the middle row.
+    const auto edge = [](const cook::Image& img) {
+        const u32 y = img.height / 2 + img.height / 4;
+        int best = 0;
+        for (u32 x = 1; x < img.width; ++x) {
+            const usize a = (usize(y) * img.width + x - 1) * 4, b = a + 4;
+            best = std::max(best, std::abs(int(img.rgba[a]) - int(img.rgba[b])));
+        }
+        return best;
+    };
+    const auto mean = [](const cook::Image& img) {
+        u64 sum = 0;
+        for (usize i = 0; i < img.rgba.size(); i += 4) sum += img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2];
+        return double(sum) / (double(img.width) * double(img.height) * 3.0);
+    };
+    const std::string dof = R"("environment":{"depth_of_field":1,"dof_focus_range":0.5,"dof_blur_range":4,"dof_max_radius":0.02})";
+    const std::string base = R"({"tick":3,"width":320,"height":180,"software":true)";
+    const auto shot = [&](const std::string& extra) {
+        auto r = c.ok("render_frame", base + (extra.empty() ? "" : "," + extra) + "}");
+        REQUIRE(r.images.size() == 1);
+        return r.images[0];
+    };
+    const cook::Image sharp = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1],"focus":20},)" + dof);
+    const cook::Image blurred = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1],"focus":4},)" + dof);
+    const cook::Image plain = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1]})");
+    CHECK(edge(sharp) > 100);
+    CHECK(edge(blurred) < edge(sharp) - 30);  // focus on the near box blurs the far edge
+    CHECK(edge(plain) > 100);                  // no DoF without the override (the scene has none)
+    // "target" is the distance from position to target: a target at the near box keeps it sharp and the far wall soft.
+    const cook::Image by_target = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-4],"focus":"target"},)" + dof);
+    CHECK(edge(by_target) < edge(sharp) - 30);
+
+    // Exposure scales the frame; an environment override moves it too, and neither touches the saved scene.
+    const cook::Image dim = shot(R"("camera":{"exposure":0.25})");
+    const cook::Image normal = shot(R"("camera":{"exposure":1})");
+    CHECK(mean(dim) < mean(normal) * 0.8);
+    const cook::Image sunless = shot(R"("environment":{"sun_intensity":0,"ambient_sky":[0,0,0],"ambient_ground":[0,0,0]})");
+    CHECK(mean(sunless) < mean(normal));
+    CHECK(same_pixels(normal, shot(R"("camera":{"exposure":1})")));
+    CHECK(same_pixels(normal, shot("")));  // the overrides lived in one player run only
 }
 
 }  // TEST_SUITE("gpu")

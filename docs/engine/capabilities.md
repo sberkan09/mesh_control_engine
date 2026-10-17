@@ -208,8 +208,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `run_headless` | `tools.cpp` | docs/user-guide/02-projects.md |
 | `console_list` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `console_exec` | `tools.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `render_frame` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `render_sheet` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `render_frame` | `tools_agent.cpp` | docs/user-guide/08-3d.md |
+| `render_sheet` | `tools_agent.cpp` | docs/user-guide/08-3d.md |
 | `timeline_preview` | `tools_agent.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `image_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `perf_run` | `tools_agent.cpp` | docs/user-guide/03-editor.md |

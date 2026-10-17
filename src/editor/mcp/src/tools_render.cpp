@@ -5,12 +5,14 @@
 // runs on SDL's offscreen driver with Mesa's software rasterizer, so a GPU is never required.
 
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
 
 #include "agent_image.h"
 #include "mce/cook/cook.h"
 #include "mce/cook/fs.h"
 #include "mce/platform/library.h"
+#include "mce/refl/type.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/process.h"
 #include "mce/kit/coop.h"
@@ -196,7 +198,7 @@ bool parse_view(ToolCall& c, const cook::JsonValue& view, bool open_scene, Rende
 // `camera`: {"entity": id|name} (a camera entity of the open scene), {"index": n} (scene entity
 // index in file order), {"position": [x,y,z], "target": [x,y,z], "fov": deg} (a free 3D camera) or
 // {"center": [x,y], "zoom": z} (a free 2D camera).
-bool parse_camera(ToolCall& c, const cook::JsonValue& cam, bool open_scene, RenderRequest& rq) {
+bool parse_camera_view(ToolCall& c, const cook::JsonValue& cam, bool open_scene, RenderRequest& rq) {
     if (!cam.valid()) return true;
     if (!cam.is_object()) return arg_missing(c, "camera", "an object: {entity}, {index}, {position, target, fov} or {center, zoom}");
     const cook::JsonValue ent = cam.get("entity"), idx = cam.get("index"), pos = cam.get("position"), ctr = cam.get("center");
@@ -240,6 +242,101 @@ bool parse_camera(ToolCall& c, const cook::JsonValue& cam, bool open_scene, Rend
     return arg_missing(c, "camera", "one of {entity}, {index}, {position, target, fov} or {center, zoom}");
 }
 
+void add_convar(RenderRequest& rq, const char* name, const cook::String& value) {
+    rq.convars.names.push_back(cook::String(name));
+    rq.convars.values.push_back(cook::String(value.view()));
+}
+
+// The camera's per-shot look (M-VISUAL3 3c) on top of its view: `focus` (meters to the sharpest plane, or "target" =
+// the distance from position to target of a free 3D camera) and `exposure` (a multiplier of the scene's exposure).
+// They reach the player as r.dof_focus and r.exposure_scale.
+bool parse_camera(ToolCall& c, const cook::JsonValue& cam, bool open_scene, RenderRequest& rq) {
+    // {focus, exposure} alone keep the scene's own camera.
+    const bool has_view = cam.is_object() && (cam.get("entity").valid() || cam.get("index").valid() || cam.get("position").valid() || cam.get("center").valid());
+    if ((has_view || !cam.is_object() || (!cam.get("focus").valid() && !cam.get("exposure").valid())) && !parse_camera_view(c, cam, open_scene, rq)) return false;
+    if (!cam.is_object()) return true;
+    if (const cook::JsonValue f = cam.get("focus"); f.valid()) {
+        cook::String text;
+        if (f.is_string() && f.as_string() == "target") {
+            f64 p[3], t[3];
+            if (!numbers(cam.get("position"), 3, p) || !numbers(cam.get("target"), 3, t))
+                return fail(c, "camera.focus \"target\" needs a free 3D camera: give camera.position and camera.target (or a number of meters)");
+            const f64 dx = t[0] - p[0], dy = t[1] - p[1], dz = t[2] - p[2];
+            const f64 d = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (!(d > 0.0)) return fail(c, "camera.focus \"target\": position and target are the same point");
+            cook::appendf(text, "%g", d);
+        } else if (f.is_number() && f.as_number() > 0 && f.as_number() <= 1000) {
+            cook::appendf(text, "%g", f.as_number());
+        } else {
+            return arg_missing(c, "camera.focus", "meters in (0, 1000], or \"target\"");
+        }
+        add_convar(rq, "r.dof_focus", text);
+    }
+    if (const cook::JsonValue e = cam.get("exposure"); e.valid()) {
+        if (!e.is_number() || e.as_number() <= 0 || e.as_number() > 1000) return arg_missing(c, "camera.exposure", "a multiplier in (0, 1000] (1 = the scene's exposure)");
+        cook::String text;
+        cook::appendf(text, "%g", e.as_number());
+        add_convar(rq, "r.exposure_scale", text);
+    }
+    return true;
+}
+
+// `environment`: {field: value} overrides of the scene's Environment3D for this shot (render only), validated against
+// the reflected fields: numbers, true/false for flags and [x,y,z] / [r,g,b(,a)] for vectors and colors. They reach the
+// player as r.env_override ("field=value;...").
+bool parse_environment(ToolCall& c, const cook::JsonValue& env, RenderRequest& rq) {
+    if (!env.valid()) return true;
+    if (!env.is_object()) return arg_missing(c, "environment", "an object of Environment3D fields, e.g. {\"fog_density\": 0.04, \"sun_color\": [1, 0.6, 0.3]}");
+    const refl::TypeRecord* type = refl::find_type(StringId(StringView("Environment3D")));
+    if (!type) return fail(c, "environment: this server has no Environment3D (the 3D kit is not loaded)");
+    cook::String text;
+    for (u32 i = 0; i < env.size(); ++i) {
+        const StringView name = env.key_at(i);
+        const refl::FieldRecord* f = type->find_field(StringId(name));
+        if (!f || f->has(refl::FieldFlags::ReadOnly)) {
+            c.error += "environment: no Environment3D field '";
+            c.error += cook::String(name).view();
+            c.error += "' (refl_describe_component Environment3D lists them)";
+            return false;
+        }
+        usize lanes = 1;
+        using refl::FieldKind;
+        switch (f->kind) {
+            case FieldKind::Bool: case FieldKind::I8: case FieldKind::I16: case FieldKind::I32: case FieldKind::I64:
+            case FieldKind::U8: case FieldKind::U16: case FieldKind::U32: case FieldKind::U64: case FieldKind::F32: case FieldKind::F64:
+                break;
+            case FieldKind::Vec3: lanes = 3; break;
+            case FieldKind::Vec4: lanes = 4; break;
+            case FieldKind::Color: lanes = 4; break;
+            default:
+                c.error += "environment: field '";
+                c.error += cook::String(name).view();
+                c.error += "' is an asset or text field: change it in the scene instead";
+                return false;
+        }
+        const cook::JsonValue v = env.at(i);
+        if (!text.empty()) text += ";";
+        text += cook::String(name).view();
+        text += "=";
+        if (lanes == 1) {
+            if (v.is_bool()) text += v.as_bool() ? "1" : "0";
+            else if (v.is_number()) cook::appendf(text, "%.9g", v.as_number());
+            else return fail(c, "environment: scalar fields take a number or true/false");
+        } else {
+            const usize min_lanes = f->kind == FieldKind::Color ? 3 : lanes;
+            if (!v.is_array() || v.size() < min_lanes || v.size() > lanes) return fail(c, "environment: vector and color fields take an [x, y, z] (colors: [r, g, b] or [r, g, b, a]) array");
+            for (u32 k = 0; k < v.size(); ++k) {
+                if (!v.at(k).is_number()) return fail(c, "environment: vector and color lanes are numbers");
+                cook::appendf(text, k ? ",%.9g" : "%.9g", v.at(k).as_number());
+            }
+        }
+    }
+    if (text.empty()) return true;
+    if (text.size() > 900) return fail(c, "environment: too many overrides (the list must stay under 900 characters)");
+    add_convar(rq, "r.env_override", text);
+    return true;
+}
+
 // The arguments render_frame and render_sheet share: scene, input, camera, safe_area, software.
 bool parse_common(ToolCall& c, RenderRequest& rq) {
     if (!need_project(c)) return false;
@@ -264,6 +361,7 @@ bool parse_common(ToolCall& c, RenderRequest& rq) {
     if (!arg_input(c, rq.script) || !arg_convars(c, rq.convars)) return false;
     if (!parse_camera(c, arg(c, "camera"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
     if (!parse_view(c, arg(c, "view"), rq.scene_rel.view() == file.rel.view(), rq)) return false;
+    if (!parse_environment(c, arg(c, "environment"), rq)) return false;
     if (const cook::JsonValue sa = arg(c, "safe_area"); sa.valid()) {
         static constexpr const char* kKeys[4] = {"left", "top", "right", "bottom"};
         if (!sa.is_object()) return arg_missing(c, "safe_area", "an object {left, top, right, bottom} in pixels");
