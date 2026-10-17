@@ -184,6 +184,12 @@ def project_outputs(project, args):
     }
 
 
+def cap_define(args):
+    """The cmake cache entry that makes the build's pack cook cap PNG/JPG textures (mce_cook --max-texture-size);
+    always passed, empty for no limit, so a cap from an earlier ship does not stick in the build tree."""
+    return "-DMCE_COOK_MAX_TEXTURE_SIZE=" + (str(args.max_texture_size) if args.max_texture_size else "")
+
+
 def build_mobile(art, args, env=None):
     """A cross build (phones, the web): the host's mce_cook (and a project's <game>_cook) first, they
     cook the packs; then the game on the cross preset."""
@@ -191,7 +197,7 @@ def build_mobile(art, args, env=None):
     run(["cmake", "--build", "--preset", args.host_preset, "--target", "mce_cook", *art.get("host_targets", [])])
     host_dir = os.path.join(ROOT, "build", args.host_preset)
     cook = os.path.join(host_dir, "tools", "cook", "mce_cook" + EXE)
-    configure = ["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}", f"-DMCE_HOST_BUILD_DIR={host_dir}",
+    configure = ["cmake", "--preset", args.preset, f"-DMCE_HOST_COOK={cook}", f"-DMCE_HOST_BUILD_DIR={host_dir}", cap_define(args),
                  # The phone presets add no projects: a project brings in just itself (a sample clears it).
                  f"-DMCE_ONLY_PROJECT={os.path.abspath(args.project) if args.project else ''}"]
     print("+ " + " ".join(configure), flush=True)
@@ -261,7 +267,7 @@ def ship(art, args):
         return ship_ios(art, args)
     build_dir = os.path.join(ROOT, "build", args.preset)
     if not args.no_build:
-        run(["cmake", "--preset", args.preset])
+        run(["cmake", "--preset", args.preset, cap_define(args)])
         run(["cmake", "--build", "--preset", args.preset, "--target", *art["targets"]])
 
     exe = art["exe"]
@@ -465,6 +471,9 @@ def main():
                     help="default: the platform's release preset (android: android-arm64-release, ios: ios-sim-arm64, "
                          "web: web-release)")
     ap.add_argument("--host-preset", default=default_preset(), help="--target android/ios/web: the host build whose mce_cook cooks the pack")
+    ap.add_argument("--max-texture-size", type=int, default=0, metavar="N",
+                    help="cap PNG/JPG textures in the pack at N pixels on the longest side (a power of two, 1..16384; a "
+                         "sidecar's smaller max_size wins) so the ship is smaller; default: no limit")
     ap.add_argument("--aab", action="store_true", help="--target android: also build the Play Store bundle (.aab)")
     ap.add_argument("--version", default=None, help="default: <engine version>+<short commit> (the engine's CMake project VERSION)")
     ap.add_argument("--build-number", type=int, default=None,
@@ -490,6 +499,10 @@ def main():
     ap.add_argument("--steam-library", help="with --steam: the steam_api to ship (default: from STEAMWORKS_SDK)")
     ap.add_argument("--steam-branch", default="", help="with --steam: the branch the build is set live on (default: none)")
     args = ap.parse_args()
+    if args.max_texture_size and not (1 <= args.max_texture_size <= 16384 and args.max_texture_size & (args.max_texture_size - 1) == 0):
+        ap.error("--max-texture-size must be a power of two from 1 to 16384 (for example 1024)")
+    if args.max_texture_size < 0:
+        ap.error("--max-texture-size must be a power of two from 1 to 16384 (for example 1024)")
     if args.steam and args.target != "desktop":
         ap.error("--steam ships the desktop build (--target desktop)")
     if (args.steam_depot or args.steam_library or args.steam_branch) and not args.steam:

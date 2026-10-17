@@ -41,6 +41,12 @@ set(MCE_COOK_TEXTURE_ARGS)  # the build-time cooks' extra arguments (samples/CMa
 if(MCE_COOK_TEXTURES STREQUAL "astc")
     set(MCE_COOK_TEXTURE_ARGS --textures astc)
 endif()
+# Cap on PNG/JPG textures in the packs this build cooks (mce_cook --max-texture-size; M-CONTENT 1a): a power of two,
+# empty = no limit. scripts/ship.py --max-texture-size N sets it for one ship.
+set(MCE_COOK_MAX_TEXTURE_SIZE "" CACHE STRING "Largest side of PNG/JPG textures in cooked packs: a power of two from 1 to 16384, empty for no limit")
+if(MCE_COOK_MAX_TEXTURE_SIZE)
+    list(APPEND MCE_COOK_TEXTURE_ARGS --max-texture-size ${MCE_COOK_MAX_TEXTURE_SIZE})
+endif()
 
 if(ANDROID)
     set(MCE_SDL_MAIN_HEADER "${CMAKE_CURRENT_LIST_DIR}/mobile/mce_sdl_main.h")

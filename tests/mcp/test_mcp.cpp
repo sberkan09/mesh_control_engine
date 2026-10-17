@@ -651,6 +651,34 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: cook_run max_texture_size and the sizes report") {
+    const std::string root = demo_project("mcp_cap");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto plain = c.ok("cook_run");
+    REQUIRE(plain.v().get("ok").as_bool());
+    const cook::JsonValue sizes = plain.v().get("sizes");
+    REQUIRE(sizes.valid());
+    CHECK(sizes.get("textures").as_number() > 0);
+    CHECK(sizes.get("total").as_number() >= sizes.get("textures").as_number());
+    CHECK(sizes.get("texture_count").as_number() >= 1);
+    CHECK(sizes.get("textures_downscaled").as_number() == 0);
+    CHECK(sizes.get("largest").is_array());
+    CHECK(sizes.get("largest").size() <= 5);
+    CHECK(sizes.get("largest").at(0).get("bytes").as_number() > 0);
+    CHECK(sizes.get("largest").at(0).get("path").is_string());
+    // the demo's textures are 4x4 (or so): a cap of 1 halves them all, and a bad cap is the cook's error
+    auto cut = c.ok("cook_run", R"({"max_texture_size":1})");
+    REQUIRE(cut.v().get("ok").as_bool());
+    CHECK(cut.v().get("sizes").get("textures_downscaled").as_number() >= 1);
+    CHECK(cut.v().get("sizes").get("textures").as_number() < sizes.get("textures").as_number());
+    auto bad = c.ok("cook_run", R"({"max_texture_size":100})");
+    CHECK_FALSE(bad.v().get("ok").as_bool());
+    CHECK(compact(bad.v().get("diagnostics")).find("power of two") != std::string::npos);
+    CHECK(c.fails("cook_run", R"({"max_texture_size":"big"})").find("max_texture_size") != std::string::npos);
+}
+
 TEST_CASE("mcp tools: cook_run paths and skip_errors") {
     const std::string root = demo_project("mcp_cook_paths");
     std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");

@@ -2,11 +2,14 @@
 // cooks (ImportInput::texture_compression, mce_cook --textures astc) store every level as ASTC 4x4
 // blocks instead, encoded from the same RGBA8 chain (astc-encoder, medium quality, one thread).
 //
-// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest" }
+// sidecar settings: { "srgb": true, "mips": true, "filter": "nearest", "max_size": 1024 }
 //   srgb  color data is sRGB-encoded: mips are averaged in linear space and the chunk carries the
 //         Srgb flag so the renderer samples through an sRGB view (never double-corrects)
 //   mips  generate the full chain down to 1x1
 //   filter  "nearest" (pixel art, the default) or "linear": how kit sprites sample it (LinearFilter flag)
+//   max_size  (M-CONTENT 1a) largest side, a power of two 1..16384: a bigger image is box-halved (the same filter as the
+//         mips, sRGB-aware, no renormalizing of normal maps) until it fits, BEFORE the mips. Default: no limit. The
+//         project-wide cap (ImportInput::max_texture_size, mce_cook --max-texture-size) applies as min(sidecar, cap).
 //
 // HDR sources (M-VISUAL3 4): Radiance .hdr (stb) and OpenEXR .exr (tinyexr: uncompressed, ZIP, PIZ, the
 // first RGB(A) layer) cook to TextureFormat::RGBA16F, linear, never Srgb. Settings: { "mips": true,
@@ -17,6 +20,7 @@
 // "srgb": true is an error. Phone cooks (--textures astc) keep RGBA16F for these.
 
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -96,6 +100,7 @@ bool encode_astc(astcenc_context* ctx, const u8* rgba, u32 w, u32 h, Array<u8>& 
 // ------------------------------------------------------------------ HDR (RGBA16F)
 
 constexpr int kMaxHdrSide = 16384;
+constexpr i64 kMaxHdrPixels = i64(8192) * 8192;  // 64 MP: 1 GiB of float RGBA at most
 
 // IEEE half from a finite float already inside [0, 65504], round to nearest even.
 u16 to_half(f32 f) {
@@ -130,9 +135,54 @@ void downsample_f(const f32* src, u32 sw, u32 sh, f32* dst, u32 dw, u32 dh) {
     }
 }
 
-// Decodes a Radiance .hdr or an OpenEXR file to linear float RGBA (alpha 1 when the file has none).
-// False with a diagnostic on a decode error or an out-of-range size.
-bool decode_hdr(const ImportInput& in, bool exr, Array<f32>& rgba, u32& w, u32& h, DiagList& diags) {
+// stb reads missing bytes of a truncated Radiance file as zeros (or, in the flat form, as uninitialized stack), and
+// reports success. Reading through callbacks lets the cook see the first read past the end and refuse the file.
+struct StbMemory {
+    const unsigned char* data;
+    usize size;
+    usize pos;
+    bool past_end;
+};
+int stb_mem_read(void* user, char* dst, int n) {
+    auto* m = static_cast<StbMemory*>(user);
+    const usize left = m->size - m->pos;
+    const usize got = usize(n) < left ? usize(n) : left;
+    if (got == 0 && n > 0) m->past_end = true;
+    std::memcpy(dst, m->data + m->pos, got);
+    m->pos += got;
+    return int(got);
+}
+void stb_mem_skip(void* user, int n) {
+    auto* m = static_cast<StbMemory*>(user);
+    if (n < 0 || usize(n) > m->size - m->pos) {
+        m->pos = m->size;
+        m->past_end = true;
+    } else {
+        m->pos += usize(n);
+    }
+}
+int stb_mem_eof(void* user) {
+    const auto* m = static_cast<const StbMemory*>(user);
+    return m->pos >= m->size;
+}
+
+// Owns a decoder's float buffer (stb and tinyexr both allocate with malloc); freed on every path.
+struct DecodedPixels {
+    f32* p = nullptr;
+    DecodedPixels() = default;
+    DecodedPixels(const DecodedPixels&) = delete;
+    DecodedPixels& operator=(const DecodedPixels&) = delete;
+    ~DecodedPixels() { reset(); }
+    void reset() {
+        std::free(p);
+        p = nullptr;
+    }
+};
+
+// Decodes a Radiance .hdr or an OpenEXR file to linear float RGBA (alpha 1 when the file has none); the decoder's
+// own buffer is kept in `px` (w * h * 4 floats), not copied. The header is read and its size checked first, so a
+// tiny hostile file cannot force a huge allocation. False with a diagnostic on a decode error or a refused size.
+bool decode_hdr(const ImportInput& in, bool exr, DecodedPixels& px, u32& w, u32& h, DiagList& diags) {
     const auto* bytes = reinterpret_cast<const unsigned char*>(in.source.data());
     const usize size = in.source.size();
     auto fail = [&](const char* what, const char* detail) {
@@ -144,46 +194,116 @@ bool decode_hdr(const ImportInput& in, bool exr, Array<f32>& rgba, u32& w, u32& 
         diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, msg);
         return false;
     };
-    int iw = 0, ih = 0;
-    f32* px = nullptr;
-    if (exr) {
-        const char* err = nullptr;
-        {  // the size first: a hostile header must not allocate gigabytes of floats
-            EXRVersion ver;
-            EXRHeader hdr;
-            InitEXRHeader(&hdr);
-            if (ParseEXRVersionFromMemory(&ver, bytes, size) != TINYEXR_SUCCESS) return fail("EXR decode failed", "not an OpenEXR file");
-            if (ParseEXRHeaderFromMemory(&hdr, &ver, bytes, size, &err) != TINYEXR_SUCCESS) {
-                const bool ok = fail("EXR decode failed", err);
-                if (err) FreeEXRErrorMessage(err);
-                return ok;
-            }
-            const i64 dw = i64(hdr.data_window.max_x) - hdr.data_window.min_x + 1, dh = i64(hdr.data_window.max_y) - hdr.data_window.min_y + 1;
-            FreeEXRHeader(&hdr);
-            if (dw <= 0 || dh <= 0 || dw > kMaxHdrSide || dh > kMaxHdrSide)
-                return fail("image dimensions out of range (1..16384)", nullptr);
+    // Sizes are checked in 64-bit math: each side 1..16384 and the pixel count under kMaxHdrPixels.
+    auto check_size = [&](i64 sw, i64 sh) {
+        if (sw <= 0 || sh <= 0) return fail("image dimensions out of range (an empty image; each side must be 1..16384)", nullptr);
+        if (sw > kMaxHdrSide || sh > kMaxHdrSide) return fail("image dimensions out of range (each side must be 1..16384): downscale the source", nullptr);
+        if (sw * sh > kMaxHdrPixels) {
+            char msg[160];
+            std::snprintf(msg, sizeof msg, "image is %lld x %lld, over the limit of 64 megapixels (8192 x 8192): downscale the source",
+                          static_cast<long long>(sw), static_cast<long long>(sh));
+            return fail(msg, nullptr);
         }
-        if (LoadEXRFromMemory(&px, &iw, &ih, bytes, size, &err) != TINYEXR_SUCCESS) {
+        return true;
+    };
+    int iw = 0, ih = 0;
+    if (exr) {
+        // tinyexr's one-call LoadEXRFromMemory leaks the parsed header when the pixel load fails or a channel is
+        // missing, so the header-based path is used and both the header and the image are freed here, on every path.
+        struct ExrState {
+            EXRHeader hdr;
+            EXRImage img;
+            bool image_loaded = false;  // FreeEXRImage after a failed load frees pointers tinyexr never set: only free a good one
+            ExrState() {
+                InitEXRHeader(&hdr);
+                InitEXRImage(&img);
+            }
+            ~ExrState() {
+                if (image_loaded) FreeEXRImage(&img);
+                FreeEXRHeader(&hdr);
+            }
+        } ex;
+        const char* err = nullptr;
+        EXRVersion ver;
+        if (ParseEXRVersionFromMemory(&ver, bytes, size) != TINYEXR_SUCCESS) return fail("EXR decode failed", "not an OpenEXR file");
+        if (ParseEXRHeaderFromMemory(&ex.hdr, &ver, bytes, size, &err) != TINYEXR_SUCCESS) {
             const bool ok = fail("EXR decode failed", err);
             if (err) FreeEXRErrorMessage(err);
             return ok;
         }
+        // the size first: a hostile header must not allocate gigabytes of floats
+        const i64 dw = i64(ex.hdr.data_window.max_x) - ex.hdr.data_window.min_x + 1, dh = i64(ex.hdr.data_window.max_y) - ex.hdr.data_window.min_y + 1;
+        if (!check_size(dw, dh)) return false;
+        for (int c = 0; c < ex.hdr.num_channels; ++c)  // half channels are read as float
+            if (ex.hdr.pixel_types[c] == TINYEXR_PIXELTYPE_HALF) ex.hdr.requested_pixel_types[c] = TINYEXR_PIXELTYPE_FLOAT;
+        if (LoadEXRImageFromMemory(&ex.img, &ex.hdr, bytes, size, &err) != TINYEXR_SUCCESS) {
+            const bool ok = fail("EXR decode failed", err);
+            if (err) FreeEXRErrorMessage(err);
+            return ok;
+        }
+        ex.image_loaded = true;
+        iw = ex.img.width;
+        ih = ex.img.height;
+        if (!check_size(iw, ih)) return false;
+        // To RGBA as LoadEXRFromMemory does: a single channel is grey (and alpha), otherwise R, G, B and an optional A.
+        int idx[4] = {-1, -1, -1, -1};
+        for (int c = 0; c < ex.hdr.num_channels; ++c) {
+            const char* n = ex.hdr.channels[c].name;
+            if (n[0] && !n[1]) {
+                if (n[0] == 'R') idx[0] = c;
+                else if (n[0] == 'G') idx[1] = c;
+                else if (n[0] == 'B') idx[2] = c;
+                else if (n[0] == 'A') idx[3] = c;
+            }
+        }
+        const bool grey = ex.hdr.num_channels == 1;
+        if (!grey) {
+            if (idx[0] < 0) return fail("EXR decode failed", "R channel not found");
+            if (idx[1] < 0) return fail("EXR decode failed", "G channel not found");
+            if (idx[2] < 0) return fail("EXR decode failed", "B channel not found");
+        }
+        const usize npx = usize(iw) * usize(ih);
+        px.p = static_cast<f32*>(std::calloc(npx * 4, sizeof(f32)));  // zeroed: a tiled file may leave texels unwritten
+        if (!px.p) return fail("EXR decode failed", "out of memory");
+        auto put = [&](usize dst, unsigned char* const* chans, usize src) {
+            const f32* const* ch = reinterpret_cast<const f32* const*>(chans);
+            f32* o = px.p + dst * 4;
+            if (grey) {
+                o[0] = o[1] = o[2] = o[3] = ch[0][src];
+            } else {
+                o[0] = ch[idx[0]][src];
+                o[1] = ch[idx[1]][src];
+                o[2] = ch[idx[2]][src];
+                o[3] = idx[3] >= 0 ? ch[idx[3]][src] : 1.0f;
+            }
+        };
+        if (ex.hdr.tiled) {
+            const usize tx = usize(ex.hdr.tile_size_x), ty = usize(ex.hdr.tile_size_y);
+            for (int it = 0; it < ex.img.num_tiles; ++it) {
+                for (usize j = 0; j < ty; ++j) {
+                    for (usize i = 0; i < tx; ++i) {
+                        const usize ii = usize(ex.img.tiles[it].offset_x) * tx + i, jj = usize(ex.img.tiles[it].offset_y) * ty + j;
+                        if (ii >= usize(iw) || jj >= usize(ih)) continue;  // outside the image: edge tile padding
+                        put(ii + jj * usize(iw), ex.img.tiles[it].images, i + j * tx);
+                    }
+                }
+            }
+        } else {
+            for (usize i = 0; i < npx; ++i) put(i, ex.img.images, i);
+        }
     } else {
         int comp = 0;
         if (!stbi_info_from_memory(bytes, int(size), &iw, &ih, &comp)) return fail("image decode failed", stbi_failure_reason());
-        if (iw <= 0 || ih <= 0 || iw > kMaxHdrSide || ih > kMaxHdrSide) return fail("image dimensions out of range (1..16384)", nullptr);
-        px = stbi_loadf_from_memory(bytes, int(size), &iw, &ih, &comp, 4);
-        if (!px) return fail("image decode failed", stbi_failure_reason());
+        if (!check_size(iw, ih)) return false;
+        StbMemory mem{bytes, size, 0, false};
+        const stbi_io_callbacks cb{stb_mem_read, stb_mem_skip, stb_mem_eof};
+        px.p = stbi_loadf_from_callbacks(&cb, &mem, &iw, &ih, &comp, 4);
+        if (!px.p) return fail("image decode failed", stbi_failure_reason());
+        if (mem.past_end) return fail("image decode failed", "the file is truncated (its pixel data ends early)");
     }
-    if (iw <= 0 || ih <= 0 || iw > kMaxHdrSide || ih > kMaxHdrSide) {
-        std::free(px);  // stb and tinyexr both allocate with malloc
-        return fail("image dimensions out of range (1..16384)", nullptr);
-    }
+    if (!check_size(iw, ih)) return false;  // the decoder disagreeing with its own header; px frees itself
     w = u32(iw);
     h = u32(ih);
-    rgba.resize_uninitialized(usize(w) * h * 4);
-    std::memcpy(rgba.data(), px, rgba.size() * sizeof(f32));
-    std::free(px);
     return true;
 }
 
@@ -229,25 +349,34 @@ bool cook_hdr(const ImportInput& in, bool exr, asset::ContainerWriter& out, Diag
         return false;
     }
 
-    Array<f32> cur;
+    DecodedPixels px;
     u32 w = 0, h = 0;
-    if (!decode_hdr(in, exr, cur, w, h, diags)) return false;
+    if (!decode_hdr(in, exr, px, w, h, diags)) return false;
 
-    // Exposure, then the half range: negatives and NaN/Inf become 0, the rest clamps to 65504.
+    // Exposure, then the half range: negatives and NaN/Inf become 0, the rest clamps to 65504. In place, in the
+    // decoder's buffer: the full-size image is never copied.
     const f32 gain = static_cast<f32>(std::exp2(exposure_ev));
-    for (usize i = 0; i < cur.size(); ++i) {
-        f32 v = cur[i];
+    const usize count = usize(w) * h * 4;
+    for (usize i = 0; i < count; ++i) {
+        f32 v = px.p[i];
         if (i % 4 != 3) v *= gain;
-        cur[i] = std::isfinite(v) ? (v < 0.0f ? 0.0f : (v > 65504.0f ? 65504.0f : v)) : 0.0f;
+        px.p[i] = std::isfinite(v) ? (v < 0.0f ? 0.0f : (v > 65504.0f ? 65504.0f : v)) : 0.0f;
     }
 
     // Power-of-two downscale until the largest side fits, then the mip chain, both box-filtered in float.
-    Array<f32> next;
+    // `cur` reads the decoder's buffer first and the owned array after the first reduction (then px is freed).
+    const f32* cur = px.p;
+    Array<f32> owned, next;
+    auto step = [&](u32 sw, u32 sh, u32 nw, u32 nh) {
+        next.resize_uninitialized(usize(nw) * nh * 4);
+        downsample_f(cur, sw, sh, next.data(), nw, nh);
+        owned = static_cast<Array<f32>&&>(next);
+        cur = owned.data();
+        px.reset();
+    };
     while (w > max_size || h > max_size) {
         const u32 nw = w > 1 ? w / 2 : 1, nh = h > 1 ? h / 2 : 1;
-        next.resize_uninitialized(usize(nw) * nh * 4);
-        downsample_f(cur.data(), w, h, next.data(), nw, nh);
-        cur = static_cast<Array<f32>&&>(next);
+        step(w, h, nw, nh);
         w = nw;
         h = nh;
     }
@@ -260,9 +389,7 @@ bool cook_hdr(const ImportInput& in, bool exr, asset::ContainerWriter& out, Diag
         for (usize i = 0; i < half.size(); ++i) half[i] = to_half(cur[i]);
         if (!mips || (lw == 1 && lh == 1)) break;
         const u32 nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
-        next.resize_uninitialized(usize(nw) * nh * 4);
-        downsample_f(cur.data(), lw, lh, next.data(), nw, nh);
-        cur = static_cast<Array<f32>&&>(next);
+        step(lw, lh, nw, nh);
         lw = nw;
         lh = nh;
     }
@@ -299,7 +426,7 @@ public:
         const String ext = lower_extension(in.display_path);
         if (ext.view() == ".hdr" || ext.view() == ".exr") return cook_hdr(in, ext.view() == ".exr", out, diags);
         const JsonValue s = in.settings;
-        if (!detail::check_keys(s, {"srgb", "mips", "filter"}, in.display_path, kStage, diags)) return false;
+        if (!detail::check_keys(s, {"srgb", "mips", "filter", "max_size"}, in.display_path, kStage, diags)) return false;
         bool is_srgb = true, mips = true, linear = false;
         if (!detail::read_bool(s, "srgb", true, is_srgb, in.display_path, kStage, diags)) return false;
         if (!detail::read_bool(s, "mips", true, mips, in.display_path, kStage, diags)) return false;
@@ -310,6 +437,21 @@ public:
                 return false;
             }
             linear = v == "linear";
+        }
+
+        // max_size: no limit unless the sidecar or the project cap says so; the smaller of the two wins.
+        u32 cap = in.max_texture_size;
+        if (const JsonValue mv = s.get("max_size"); mv.valid()) {
+            f64 mv_num = 0.0;
+            if (!detail::read_number(s, "max_size", 0.0, mv_num, in.display_path, kStage, diags)) return false;
+            const u32 side = mv_num >= 1.0 && mv_num <= kMaxHdrSide ? u32(mv_num) : 0u;
+            if (side == 0 || f64(side) != mv_num || (side & (side - 1)) != 0) {
+                detail::error_at(diags, Errc::ParseError, in.display_path, mv, kStage,
+                                 "'max_size' must be a power of two from 1 to 16384 (no limit by default), for example "
+                                 "\"max_size\": 1024: change it in the .mceasset sidecar, or remove the key to use the project-wide cap");
+                return false;
+            }
+            if (cap == 0 || side < cap) cap = side;
         }
 
         if (in.source.size() > 0x7FFFFFFF) {
@@ -331,11 +473,27 @@ public:
             return false;
         }
 
+        // Power-of-two downscale until the largest side fits `cap`, box-filtered like the mips, before the chain.
+        u32 cw = static_cast<u32>(w), ch = static_cast<u32>(h);
+        const u8* base = px;
+        Array<u8> reduced, next;
+        if (cap != 0) {
+            while (cw > cap || ch > cap) {
+                const u32 nw = cw > 1 ? cw / 2 : 1, nh = ch > 1 ? ch / 2 : 1;
+                next.resize_uninitialized(usize(nw) * nh * 4);
+                downsample(base, cw, ch, next.data(), nw, nh, is_srgb);
+                reduced = static_cast<Array<u8>&&>(next);
+                base = reduced.data();
+                cw = nw;
+                ch = nh;
+            }
+        }
+        const u32 bw = cw, bh = ch;  // the base level
+
         // Mip chain storage: level i lives at offsets[i] in `levels`.
         Array<u8> levels;
         Array<asset::TextureMipData> mip_data;
         Array<usize> offsets;
-        u32 cw = static_cast<u32>(w), ch = static_cast<u32>(h);
         usize total = 0;
         for (u32 lw = cw, lh = ch;;) {
             offsets.push_back(total);
@@ -345,16 +503,17 @@ public:
             lh = lh > 1 ? lh / 2 : 1;
         }
         levels.resize_uninitialized(total);
-        std::memcpy(levels.data(), px, static_cast<usize>(cw) * ch * 4);
+        std::memcpy(levels.data(), base, static_cast<usize>(bw) * bh * 4);
         stbi_image_free(px);
+        reduced.clear();
         for (usize i = 1; i < offsets.size(); ++i) {
             const u32 nw = cw > 1 ? cw / 2 : 1, nh = ch > 1 ? ch / 2 : 1;
             downsample(levels.data() + offsets[i - 1], cw, ch, levels.data() + offsets[i], nw, nh, is_srgb);
             cw = nw;
             ch = nh;
         }
-        cw = static_cast<u32>(w);
-        ch = static_cast<u32>(h);
+        cw = bw;
+        ch = bh;
         const bool astc = in.texture_compression == TextureCompression::Astc4x4;
         Array<Array<u8>> blocks;  // per level, when encoding ASTC
         if (astc) {
