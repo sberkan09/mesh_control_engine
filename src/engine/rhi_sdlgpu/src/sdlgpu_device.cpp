@@ -210,8 +210,9 @@ ResultV SdlGpuDevice::init() {
             return SDL_GPUTextureSupportsFormat(device_, f, SDL_GPU_TEXTURETYPE_2D_ARRAY, SDL_GPU_TEXTUREUSAGE_SAMPLER);
         };
         caps_.texture_bc = sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC4_R_UNORM) &&
-                           sampled(SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM);
-        caps_.texture_astc = sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM);
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC5_RG_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM) &&
+                           sampled(SDL_GPU_TEXTUREFORMAT_BC1_RGBA_UNORM_SRGB) && sampled(SDL_GPU_TEXTUREFORMAT_BC7_RGBA_UNORM_SRGB);
+        caps_.texture_astc = sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM) && sampled(SDL_GPU_TEXTUREFORMAT_ASTC_4x4_UNORM_SRGB);
     }
     MCE_LOG_INFO("rhi.sdlgpu: {} on {}", caps_.api_name.c_str(), caps_.device_name.c_str());
 

@@ -10,6 +10,21 @@ namespace mce::render {
 static_assert(sizeof(asset::FontGlyph) == sizeof(FontGlyph) && sizeof(asset::FontKern) == sizeof(FontKern),
               "render and asset font records must stay layout-identical");
 
+rhi::TextureFormat rhi_format_for(asset::TextureFormat format, bool srgb) {
+    using F = asset::TextureFormat;
+    using R = rhi::TextureFormat;
+    switch (format) {
+        case F::ASTC_4x4: return srgb ? R::ASTC_4x4_SRGB : R::ASTC_4x4_UNorm;
+        case F::RGBA16F: return R::RGBA16F;  // HDR skies and environment maps: linear half floats (M-VISUAL3 4)
+        case F::BC1: return srgb ? R::BC1_SRGB : R::BC1_UNorm;
+        case F::BC4: return R::BC4_UNorm;  // never sRGB (TextureView::read refuses it)
+        case F::BC5: return R::BC5_UNorm;
+        case F::BC7: return srgb ? R::BC7_SRGB : R::BC7_UNorm;
+        case F::RGBA8: break;
+    }
+    return srgb ? R::RGBA8_SRGB : R::RGBA8_UNorm;
+}
+
 Result<rhi::TextureHandle> upload_cooked_texture(TextureStore& store, u32 key, u32 generation, Span<const byte> blob) {
     MCE_TRY_ASSIGN(asset::TextureView view, asset::TextureView::read(blob));
     const asset::TextureHeader& h = *view.header;
@@ -24,12 +39,7 @@ Result<rhi::TextureHandle> upload_cooked_texture(TextureStore& store, u32 key, u
     }
     TextureUpload up;
     const bool srgb = (h.flags & asset::TextureFlags::Srgb) != 0;
-    if (h.format == asset::TextureFormat::ASTC_4x4)
-        up.format = srgb ? rhi::TextureFormat::ASTC_4x4_SRGB : rhi::TextureFormat::ASTC_4x4_UNorm;
-    else if (h.format == asset::TextureFormat::RGBA16F)  // HDR skies and environment maps: linear half floats (M-VISUAL3 4)
-        up.format = rhi::TextureFormat::RGBA16F;
-    else
-        up.format = srgb ? rhi::TextureFormat::RGBA8_SRGB : rhi::TextureFormat::RGBA8_UNorm;
+    up.format = rhi_format_for(h.format, srgb);
     up.layers = h.layers;
     up.array = true;  // the sprite path samples sampler2DArray; one-layer textures are 1-layer arrays
     up.mips = Span<const TextureMipUpload>(mips, view.mips.size());

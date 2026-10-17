@@ -619,7 +619,8 @@ layout(local_size_x = 8, local_size_y = 8) in;
 layout(rgba8, binding = 0) uniform writeonly image2D u_out;
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(u_out, p, vec4(float(p.x) / 255.0, p.y == 0 ? 1.0 : 0.0, 0.5, 1.0));
+    // Blue 128 / 255, not 0.5: 127.5 is a rounding tie a driver may store as 127 (NVIDIA does).
+    imageStore(u_out, p, vec4(float(p.x) / 255.0, p.y == 0 ? 1.0 : 0.0, 128.0 / 255.0, 1.0));
 }
 )";
 
