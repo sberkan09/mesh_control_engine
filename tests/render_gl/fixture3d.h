@@ -484,7 +484,6 @@ struct MergeKit {
     Array<asset::MeshView> views;     // ... read
     Array<u32> cell_keys;             // the merged cells' mesh keys
     u32 cells = 0, materials = 2;
-    f32 merge_ms = 0.0f;
 };
 
 inline void upload_merge_kit(Fixture3D& f, MergeKit& kit) {
@@ -527,7 +526,7 @@ inline void upload_merge_kit(Fixture3D& f, MergeKit& kit) {
         kit.placements.push_back({3, {-2.3f + 0.3f * f32(i), 0.0f, z + 0.5f}, 0.3f * f32(i)});
         kit.placements.push_back({3, {1.9f - 0.2f * f32(i), 0.0f, z + 0.3f}, 0.2f * f32(i)});
     }
-    // Cells of 4 m: x < 0 and x >= 0 (a piece belongs to the cell of its origin).
+    // Two cells, split at x = 0 (a piece belongs to the cell of its origin).
     Array<render::MergeSource> cell[2];
     for (const MergeKit::Placement& p : kit.placements) {
         render::MergeSource s;

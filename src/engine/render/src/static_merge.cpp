@@ -94,6 +94,21 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
         nodes.resize(v.nodes.size());
         for (usize i = 0; i < v.nodes.size(); ++i)
             nodes[i] = v.nodes[i].parent < 0 ? node_local(v.nodes[i]) : nodes[static_cast<usize>(v.nodes[i].parent)] * node_local(v.nodes[i]);
+        // Draws that need per-draw state keep their own draw: blended and transmissive ones are sorted back to front
+        // after the opaques, parallax needs MeshInstance::material. One such submesh keeps the whole source out.
+        bool blended = false, parallax = false;
+        for (u32 s = 0; s < v.submeshes.size(); ++s) {
+            const asset::MaterialChunk& mc = src.material ? *src.material : v.submeshes[s].material;
+            const asset::MaterialExt me = src.material ? (src.material_ext ? *src.material_ext : asset::MaterialExt{}) : v.material_ext(s);
+            blended = blended || (mc.flags & asset::MaterialFlags::AlphaBlend) != 0 || me.transmission > 0.0f;
+            parallax = parallax || me.parallax();
+        }
+        if (blended || parallax) {
+            ++st.skipped;
+            if (blended) ++st.skipped_blended;
+            else ++st.skipped_parallax;
+            continue;
+        }
         bool any = false;
         for (u32 s = 0; s < v.submeshes.size(); ++s) {
             const asset::MeshSubmesh& sm = v.submeshes[s];
@@ -133,10 +148,14 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
         if (any) ++st.sources;
         else ++st.skipped;
     }
-    if (groups.empty()) return false;
+    if (groups.empty()) {
+        if (stats) *stats = st;  // what was left out, for the caller's report
+        return false;
+    }
 
     // ---- build the groups ------------------------------------------------------------------------------------
     Array<asset::MeshVertex> out_vertices;
+    Array<vec3> out_positions;  // world positions, quantized once every group is known
     Array<u32> out_indices;  // relative to each group's first vertex
     Array<asset::MeshSubmesh> out_subs;
     Array<asset::MeshLod> out_lods;
@@ -205,7 +224,7 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
         // Make errors monotonic: a coarser level is never more exact than the one before it.
         for (u32 k = 1; k < levels; ++k) level_error[k] = max(level_error[k], level_error[k - 1]);
 
-        // ---- quantize the group over its own bounds ----------------------------------------------------------
+        // ---- UVs over the group's own range; positions wait for the shared box ------------------------------------
         vec3 lo = wv[0].p, hi = wv[0].p;
         vec2 uv_lo = wv[0].uv, uv_hi = wv[0].uv;
         for (const WorldVertex& x : wv) {
@@ -214,19 +233,12 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
             uv_lo = min(uv_lo, x.uv);
             uv_hi = max(uv_hi, x.uv);
         }
-        const vec3 center = (lo + hi) * 0.5f, extent = max((hi - lo) * 0.5f, vec3{1e-4f, 1e-4f, 1e-4f});
         asset::MeshSubmesh sm{};
         sm.first_index = first_index;
         sm.index_count = level_count[0];
         sm.base_vertex = static_cast<u32>(out_vertices.size());
         sm.vertex_count = static_cast<u32>(wv.size());
         sm.node = 0;
-        sm.center[0] = center.x;
-        sm.center[1] = center.y;
-        sm.center[2] = center.z;
-        sm.extent[0] = extent.x;
-        sm.extent[1] = extent.y;
-        sm.extent[2] = extent.z;
         sm.uv_offset[0] = uv_lo.x;
         sm.uv_offset[1] = uv_lo.y;
         sm.uv_scale[0] = uv_hi.x > uv_lo.x ? uv_hi.x - uv_lo.x : 1.0f;
@@ -247,9 +259,6 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
         }
         for (const WorldVertex& x : wv) {
             asset::MeshVertex q{};
-            q.position[0] = snorm16((x.p.x - center.x) / extent.x);
-            q.position[1] = snorm16((x.p.y - center.y) / extent.y);
-            q.position[2] = snorm16((x.p.z - center.z) / extent.z);
             f32 oct[2];
             oct_encode(x.n, oct);
             q.normal[0] = snorm16(oct[0]);
@@ -257,8 +266,9 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
             q.uv[0] = unorm16((x.uv.x - uv_lo.x) / sm.uv_scale[0]);
             q.uv[1] = unorm16((x.uv.y - uv_lo.y) / sm.uv_scale[1]);
             out_vertices.push_back(q);
+            out_positions.push_back(x.p);
         }
-        wide = wide || wv.size() > 0x10000;
+        wide = wide || wv.size() > 0xFFFF;  // as the cook and the terrain: 0xFFFF is the restart index
         out_subs.push_back(sm);
         out_ext.push_back(g.ext);
         static constexpr asset::MaterialExt kNone{};
@@ -268,6 +278,23 @@ bool build_merged_mesh(Span<const MergeSource> sources, Array<byte>& blob, Merge
         box_any = true;
         st.triangles += level_count[0] / 3;
         st.lod_levels = max(st.lod_levels, levels);
+    }
+
+    // One box for every submesh: points shared by two materials round the same way, so the merged geometry stays
+    // watertight across them.
+    const vec3 center = (box_min + box_max) * 0.5f, extent = max((box_max - box_min) * 0.5f, vec3{1e-4f, 1e-4f, 1e-4f});
+    for (usize i = 0; i < out_vertices.size(); ++i) {
+        out_vertices[i].position[0] = snorm16((out_positions[i].x - center.x) / extent.x);
+        out_vertices[i].position[1] = snorm16((out_positions[i].y - center.y) / extent.y);
+        out_vertices[i].position[2] = snorm16((out_positions[i].z - center.z) / extent.z);
+    }
+    for (asset::MeshSubmesh& m : out_subs) {
+        m.center[0] = center.x;
+        m.center[1] = center.y;
+        m.center[2] = center.z;
+        m.extent[0] = extent.x;
+        m.extent[1] = extent.y;
+        m.extent[2] = extent.z;
     }
 
     // ---- write the payload ------------------------------------------------------------------------------------

@@ -7,9 +7,12 @@
 //   if (render::build_merged_mesh(sources.span(), blob)) meshes.upload(meshes.allocate_key(), 1, blob.span());
 //
 // The result is a CHNK_MESH payload (the TerrainLod::build_mesh precedent) in the space the worlds are in: one
-// node at the identity, positions re-quantized (snorm16) over the bounds of each merged submesh, so a cell of
-// `s` metres keeps s / 65534 of precision (0.5 mm at 32 m). A merged mesh is an ordinary mesh: it draws with an
-// identity world, and Scene3D's instancing folds identical merged cells the same as any other copies.
+// node at the identity, positions re-quantized (snorm16) over ONE box shared by every submesh (the bounds of all
+// the merged vertices), so points shared by two materials round alike and the geometry stays watertight. The
+// quantum is extent / 65534 per axis and a vertex moves by at most half of it: about 0.25 mm over a 32 m box. The
+// box is the sources' union, not a cell: a piece belongs to a cell by its origin, so a long piece can reach past it.
+// A merged mesh is an ordinary mesh: it draws with an identity world, and Scene3D's instancing folds identical
+// merged cells the same as any other copies.
 //
 // Merge key: two submeshes share a merged submesh when their materials are identical after the source's tint
 // is folded in: the MaterialChunk bytes (base color x tint, emissive x emissive tint, texture GUIDs, flags
@@ -21,8 +24,12 @@
 // min(k, its levels - 1), with the error of the coarsest of them (scaled by the source's world scale), so a
 // far cell is cheap while a source without levels stays whole.
 //
-// Only rigid sources merge: a skinned mesh is skipped (MergeStats::skipped). Winding and normals follow the
-// world matrix the way an unmerged draw does (normals by its inverse transpose).
+// Preconditions: only sources whose draw needs no per-draw state merge. A skinned mesh, a blended (AlphaBlend)
+// or transmissive material (drawn after the opaques, back to front: the order would be lost) and a parallax
+// material (needs MeshInstance::material) keep the whole source out: it is counted in MergeStats::skipped and in
+// skipped_blended / skipped_parallax (skipped is every source left out, so it is at least their sum).
+// Winding is kept as authored, also under a mirroring (negative determinant) world, as an unmerged draw does;
+// normals follow the world matrix by its inverse transpose.
 
 #include "mce/containers/array.h"
 #include "mce/math/math.h"
@@ -46,7 +53,9 @@ struct MergeSource {
 
 struct MergeStats {
     u32 sources = 0;     // merged
-    u32 skipped = 0;     // not merged (no mesh, skinned or without geometry)
+    u32 skipped = 0;     // not merged: no mesh, skinned, without geometry, blended / transmissive or parallax
+    u32 skipped_blended = 0;   // of them: an alpha-blended or transmissive material
+    u32 skipped_parallax = 0;  // ... and a parallax material (blended wins when a source has both)
     u32 submeshes = 0;   // merged submeshes: the materials
     u32 vertices = 0;
     u32 triangles = 0;   // of level 0
