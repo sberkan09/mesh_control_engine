@@ -1,6 +1,6 @@
 # M-VISUAL3 — What keeps the engine from an AAA look with data alone (milestone record)
 
-**Status:** step 1 (the plan below) done (2026-10-16). Plan: ROADMAP §M-VISUAL3 and the plan section of this file; Linear SBA-199 (step 1; the other steps are not filed, see below). Source: GitHub #428.
+**Status:** done in the cloud (steps 1 to 6, 2026-10-17); Metal pixels and real-GPU budgets wait on the Mac/device session. Step 1 (the plan below) was done 2026-10-16. Plan: ROADMAP §M-VISUAL3 and the plan section of this file; Linear SBA-199 (step 1; the other steps are not filed, see below). Source: GitHub #428.
 
 **Why:** blind test 3 (rounds 5 and 6) had an art agent dress a world with real scanned and low-poly content through
 data and MCP only and rate it about 4/10 against an AAA bar. #428 lists what stopped it: no parallax or displacement,
@@ -15,13 +15,13 @@ any change to the shaders or the draw path.
 | # | Step | Linear | Model | State |
 |---|---|---|---|---|
 | 1 | Plan and interfaces: #428 checked against the code, fields, keys, arguments, cost | SBA-199 | Opus | done: the plan section below (PR #430) |
-| 1b | Seam: `asset/formats.h` (`MaterialExt` height fields, `TextureFormat::RGBA16F`) | not filed | Sonnet | not started |
-| 2 | Parallax occlusion mapping from a height map on `.mcmat` | not filed | Sonnet (Opus review) | not started |
-| 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | 3a data (fields, `PostFx::lens`, `Camera3DComponent.focus_distance`, kit extract): in review; 3b tonemap shader and goldens, 3c MCP per-shot control and `r.env_override`: not started |
+| 1b | Seam: `asset/formats.h` (`MaterialExt` height fields, `TextureFormat::RGBA16F`) | not filed | Sonnet | done: merged first |
+| 2 | Parallax occlusion mapping from a height map on `.mcmat` | not filed | Sonnet (Opus review) | done: 2a cook and kit (height keys, `[normal, height]` array), 2b shader, quality tiers and golden `parallax_cobble` |
+| 3 | Filmic post chain: vignette, grain, chromatic aberration, lens dirt, tonemapper; per-shot focus and exposure | not filed | Sonnet (Opus review) | done: 3a data (fields, `PostFx::lens`, `Camera3DComponent.focus_distance`, kit extract), 3b tonemap shader and goldens (`filmic_lens`, AgX, Neutral), 3c MCP per-shot focus, exposure and environment overrides |
 | 4 | `.hdr` / `.exr` sky and image-based light (#409), sky rotation | not filed | Sonnet (Opus glance at the sky shader) | done: see "Step 4 as built" |
-| 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus | not started |
-| 5b | `StaticMerge3D`: merged static props per material and cell | not filed | Sonnet (Opus review) | not started |
-| 6 | Foliage variation and wind, decal warnings, the demo, gates and the close | not filed | Sonnet (Opus review) | not started |
+| 5a | Automatic instancing of identical `MeshRef` draws | not filed | Opus | done: runs in every depth and lit pass, `r.instancing`, golden `instanced_props`, `runs_instanced` / `draws_instanced` in `perf_run` |
+| 5b | `StaticMerge3D`: merged static props per material and cell | not filed | Sonnet (Opus review) | done: `render::build_merged_mesh`, the component, golden `static_merge_kit`, `merged_groups` / `merged_children` in `perf_run` |
+| 6 | Foliage variation and wind, decal warnings, the demo, gates and the close | not filed | Sonnet (Opus review) | done: see "Step 6 as built" and "Closing record" |
 
 **Not in scope:** texture compression and shipped size (M-CONTENT 1); more than one `GiVolume3D` or 4 reflection
 probes; retargeting, cloth, hair; subsurface scattering; per-light shaft control; a 3D importer beyond glTF. Each one,
@@ -547,6 +547,105 @@ known limits and the sheet.
 **Acceptance.** Kit tests for the fields' reach and the kinds' split; render tests: defaults byte-identical, variation
 changes copies' colour deterministically, `wind_height` caps a 5 m mesh's sway at the amplitude. Docs: `08-3d.md`
 foliage section (including the glTF `lod_levels` keys for heavy scanned plants). Changelog fragment.
+
+**Step 6 as built.** Five commits, each stackable as its own PR: the kit seam (A), the renderer (B), the decal warning (C1),
+the perf counter (C2) and the demo with this record (D).
+
+- **Fields (A).** `Foliage3D` and `TerrainFoliage3D` gained `tint_variation`, `wind_height`, `wind_gust`, `wind_flutter`;
+  `Foliage3D` also `mesh_1..3` and `mesh_weights`. Sizes: `Foliage3D` 120 to 240 bytes, `TerrainFoliage3D` 128 to 160. Defaults
+  keep today's data; `kit3d.h` reaches 116 TUs, below the warning.
+- **Renderer (B).** `InstanceBatch::tint_variation` and `wind_ext` (height, gust, flutter). `wind_offset()` takes a `vec3 ext`:
+  all zero returns today's expression, character for character (the goldens prove it); otherwise the profile is `(h / H)^2`
+  when `H > 0` (else `h^2`), times `1 + gust * g(dot(origin.xz, dir) - 3 t)` with `g = 0.6 sin(0.35 s) + 0.4 sin(0.83 s + 1.3)`,
+  plus a flutter of `flutter * (h / H)` metres: a vertex-position hash (integer PCG, so the same on every device) picks a
+  4 to 6 Hz frequency and a phase. A batch's main draw has no free uniform, so it carries `tint_variation` and `wind_ext` in
+  the columns 0 and 1 of the otherwise unused `ObjectU::o_dequant` (identity for rigid draws; `ObjectU` keeps its size); the
+  shadow and velocity draws carry the extension in `InstDrawU::s_base.yzw`. Every vertex shader that feeds `kMeshFS` writes
+  `layout(location = 3) flat out vec4 v_tint` (`vec4(1)` except `kInstancedMeshVS`, which writes
+  `mix(1, tint_variation, hash01(origin))`), and `kMeshFS` multiplies only its base-colour line by it (`* 1.0` is exact, so
+  frames without batches do not change).
+  `Kit3DExtract` assigns each scattered copy to a kind by an integer hash of its origin and `seed` against the cumulative
+  `mesh_weights` (a kind whose mesh is unbound or not resident, or with weight 0, gets none), one `InstanceBatch` per kind with
+  the ids `(entity + 1) | kind << 29` (kind 0 keeps today's id, `TerrainFoliage3D` keeps bit 31). `scatter_foliage` is untouched, so
+  with one kind the copies are the old ones. The split is part of the scatter's cache key.
+- **Decals (C1, C2).** `Kit3DExtract::note_built(scene)` (the player calls it after `build()`) copies `decals_dropped` into
+  `Kit3DStats` and logs one warning, naming 64 decals, 3 textures and the atlas + `uv_rect` workaround. `perf::Counters` and
+  `.mcperf` carry `decals_dropped` (older files read 0), and `perf_run` lists it.
+- **Gates.** Render tests (both backends): explicit defaults equal the default frame byte for byte, gusts and flutter change the
+  frame, the same variation draws the same frame twice and shows several colours across copies, and a 5 m pole with
+  `wind_height` 5 sways at most `amplitude x 1.35` while without it the same pole bends metres. Kit tests: the fields reach the
+  batches (both components), the kinds split by their weights, deterministically in the seed, with disjoint ids, and a
+  one-kind scatter is the old one; one warning per extract, none without drops. Golden `foliage_variation` on `linux-gl` and
+  `linux-sdlgpu`; the 30 existing goldens were rerun on both backends and stayed identical.
+- **Demo (D).** `samples/06_showcase` gained the profiles `visual3` (everything on) and `visual3off` (the same scene, each feature
+  off) and a fourth shot, "meadow". Both draw a corner west of the pavilion: a cobble floor, a crate yard, a wall and a meadow.
+  The courtyard's own grass leaves the corner out in these two profiles; the other profiles are unchanged.
+
+| feature | visual3 | visual3off |
+|---|---|---|
+| parallax floor (step 2) | cobbles with a height map, 0.06 repeats deep, normal map from the height | the same albedo and normal map, no parallax |
+| filmic lens (step 3) | vignette 0.5, grain 0.12, chromatic aberration 0.4 | none |
+| HDR sky (step 4) | `textures/dusk_sky.hdr` (cooked RGBA16F, a glow 40x the horizon), rotated to face the sun; no atmosphere | the physically based sky of the High profile |
+| crate yard (5a) | 40 identical crates, folded by automatic instancing | `InstancingSettings::enabled = false`: one draw each |
+| modular wall (5b) | 25 pieces of 3 meshes merged by `render::build_merged_mesh` into 1 mesh, 1 material | the same 25 pieces, one draw each |
+| meadow (6) | 1400 grass and 250 flowers, two batches, `tint_variation`, `wind_height` 0.7 and 0.5, gust 0.6, flutter 0.01 | 1650 copies of the grass, one batch, one tint, amplitude x h^2 |
+
+The sheet is `06_showcase -sheet sheet.ppm -sheet.profiles visual3off,visual3` (rows: dusk, interior, noon, meadow; columns: off,
+on; 640 x 360 cells, 24 frames per shot, debug build, Mesa llvmpipe). Its first and last rows:
+
+![06_showcase M-VISUAL3 sheet: dusk and meadow, visual3off left, visual3 right](img/m-visual3-showcase.jpg)
+
+The sheet prints the draw counts of the main pass per cell (an instanced run counts once; batch draws are the foliage's):
+
+| profile | shot | main draws | instanced runs | draws folded | batch draws | wall |
+|---|---|---|---|---|---|---|
+| visual3off | dusk | 122 | 0 | 0 | 12 | 25 pieces, one draw each |
+| visual3off | interior | 26 | 0 | 0 | 12 | 25 pieces, one draw each |
+| visual3off | noon | 159 | 0 | 0 | 12 | 25 pieces, one draw each |
+| visual3off | meadow | 186 | 0 | 0 | 12 | 25 pieces, one draw each |
+| visual3 | dusk | 41 | 6 | 71 | 24 | 25 pieces merged into 1 mesh, 1 material |
+| visual3 | interior | 23 | 3 | 9 | 24 | 25 pieces merged into 1 mesh, 1 material |
+| visual3 | noon | 41 | 6 | 112 | 24 | 25 pieces merged into 1 mesh, 1 material |
+| visual3 | meadow | 32 | 6 | 138 | 24 | 25 pieces merged into 1 mesh, 1 material |
+
+The meadow shot goes from 186 to 32 main-pass draws. GPU times on llvmpipe are relative only (the two columns ran minutes apart and
+the noise of the big stages is larger than the features' cost); the real-GPU budget is the Mac/device session's, with the same run
+at `-sheet.w 1920 -sheet.h 1080`. The sample's device now has a 4 MiB uniform ring (the player's default): the corner's
+draws across the cascades and local shadow tiles outgrew the 1 MiB ring (`rhi.gl: uniform ring overflow`, commands dropped).
+
+### Closing record
+
+| Step | What shipped | Goldens / gates |
+|---|---|---|
+| 1b | `MaterialExt` height fields, `TextureFormat::RGBA16F` | size `static_assert`s, round trips |
+| 2 | Parallax occlusion mapping from a height map on `.mcmat` | `parallax_cobble` |
+| 3 | Vignette, grain, chromatic aberration, lens dirt, AgX and PBR Neutral, per-shot focus and exposure | `filmic_lens`, `tonemap_agx`, `tonemap_neutral` |
+| 4 | `.hdr` / `.exr` sky and IBL, sky rotation | `hdr_sky` |
+| 5a | Automatic instancing of identical draws | `instanced_props` |
+| 5b | `StaticMerge3D` | `static_merge_kit` |
+| 6 | Foliage variation, wind shaping, kinds; decal warning; the demo | `foliage_variation`; the on/off sheet above |
+
+**Known limits.**
+
+- Colour variation is multiplicative: a copy's colour is `tint x mix(white, tint_variation, hash)`, not `mix(tint, tint_variation, hash)`
+  as the plan's formula says, because only the first keeps "white = no variation" for a tint that is not white. Its alpha reaches the
+  main pass only, not the shadow's alpha mask, so keep it 1 on alpha-masked materials.
+- `wind_flutter` needs `wind_amplitude > 0` (a batch with no wind returns before the flutter). `wind_height` sets where the sway
+  equals the amplitude; it does not clamp the sway above that height.
+- All kinds of one `Foliage3D` share its tint, material, wind and cull distance; give a kind its own material or wind with a second
+  component. The kinds' ids use bits 29 and 30 of the batch id.
+- A scatter is still one rectangle per component; there is no kind mask by terrain layer on `Foliage3D`.
+- The decal limits stand (64 decals, 3 textures per frame; a decal texture array was out of scope). The warning is once per
+  `Kit3DExtract` (re-armed by `reset()`), not once per loaded scene: no scene-change hook exists to re-arm it on.
+- The demo draws through `Scene3D` and has no kit world, so its wall is `render::build_merged_mesh`, the merge `StaticMerge3D` runs,
+  rather than the component on an entity (the kit's tests cover the component). The sample names `StaticMerge3D` in its comment,
+  which is what takes it off `sample_coverage.allow`.
+- The rest of the plan's "out" list stands: alpha-to-coverage control, LOD cross-fade, more than one `GiVolume3D` or 4 reflection
+  probes, retargeting, cloth, hair, subsurface scattering, per-light shaft scale, a 3D importer beyond glTF, texture compression
+  (M-CONTENT 1).
+- Metal pixels and real-GPU budgets were not run (no Mac in the cloud session); GL and SDL GPU (lavapipe) are gated.
+- The three generated files were not refreshed for the new fields: the transcript golden and `capabilities.md` (apart from the
+  sample-coverage row of `StaticMerge3D`) are the integration runner's.
 
 ### Waves: what can run in parallel
 
