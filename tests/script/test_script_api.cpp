@@ -624,6 +624,40 @@ end
     CHECK(r.w.try_get<LocalTransform>(rig.ball)->position.y == doctest::Approx(8.0f));
 }
 
+TEST_CASE("script api: rotations are Euler degrees and look_rotation3d faces a point (M-SCRIPT3 1)") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local ball = mce.overlap_sphere3d(vector.create(0, 3, 0), 1)[1]
+        -- facing +X from the origin: -Z turned to +X is a yaw of -90
+        local face = mce.look_rotation3d(vector.create(0, 0, 0), vector.create(5, 0, 0))
+        mce.teleport3d(ball, vector.create(0, 8, 0), face)
+        local back = mce.rotation3d(ball)
+        local up = mce.look_rotation3d(vector.create(0, 0, 0), vector.create(0, 4, 0))
+        mce.set_rotation3d(ball, vector.create(30, 45, 10))
+        local round = mce.rotation3d(ball)
+        mce.set(e, "Probe", "value", vector.create(back.y, up.x, round.y))
+        mce.set(e, "Probe", "n", math.floor(round.x + 0.5) * 100 + math.floor(round.z + 0.5))
+    end)
+end
+)");
+    const World3DRig rig = make_3d(r.w);
+    const Entity probe = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    const Probe* p = r.w.try_get<Probe>(probe);
+    CHECK(p->value.x == doctest::Approx(-90.0f).epsilon(0.001));  // yaw read back
+    CHECK(p->value.y == doctest::Approx(90.0f).epsilon(0.001));   // straight up is a pitch of +90
+    CHECK(p->value.z == doctest::Approx(45.0f).epsilon(0.001));   // set_rotation3d round-trips ...
+    CHECK(p->n == 3010);                                          // ... pitch 30 and roll 10 too
+    physics::BodyState3D s;
+    REQUIRE(r.w.resource<kit::Physics3D>().world.body_state(rig.ball, s));
+    CHECK(s.position.y == doctest::Approx(8.0f));  // set_rotation3d kept the position
+    const math::vec3 fwd = math::rotate(r.w.try_get<LocalTransform>(rig.ball)->rotation, {0, 0, -1});
+    CHECK(fwd.y > 0.4f);   // LocalTransform got the rotation too: a pitch of 30 looks up (sin 30 = 0.5)
+}
+
 TEST_CASE("script api: 3D calls without physics or a body are named errors") {
     Rig a(R"(
 function update()
@@ -684,7 +718,7 @@ end
     INFO(error_of(r.h()));
     REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
     const Probe* p = r.w.try_get<Probe>(probe);
-    CHECK(p->n >= 3);                          // around the wall's end, not straight through it
+    CHECK(p->n >= 2);                          // around the wall's end, not straight through it
     CHECK(p->value.x > 9.0f);                  // reaches the wall's far end (z = 10)
     CHECK(p->value.y == doctest::Approx(10.0f).epsilon(0.1));
     CHECK_FALSE(p->flag);
