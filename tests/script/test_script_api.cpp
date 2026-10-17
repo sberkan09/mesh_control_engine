@@ -690,6 +690,26 @@ end
     CHECK_FALSE(p->flag);
 }
 
+TEST_CASE("script api: the vector functions the guide's chaser recipe uses exist") {
+    Rig r(R"(
+function update()
+    mce.each("Probe", function(e)
+        local d = vector.create(3, 4, 0)
+        local moved = vector.create(1, 1, 0) + vector.normalize(d) * math.min(0.5, vector.magnitude(d))
+        mce.set(e, "Probe", "value", moved)
+        mce.set(e, "Probe", "n", math.floor(vector.magnitude(d)))
+    end)
+end
+)");
+    const Entity e = r.w.spawn_with(Probe{});
+    r.step(1);
+    INFO(error_of(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<Probe>(e)->n == 5);
+    CHECK(r.w.try_get<Probe>(e)->value.x == doctest::Approx(1.3f));
+    CHECK(r.w.try_get<Probe>(e)->value.y == doctest::Approx(1.4f));
+}
+
 TEST_CASE("script api: teleport2d moves a body, and the physics step keeps it there") {
     Rig r(R"(
 function update()
