@@ -330,3 +330,112 @@ TEST_CASE("render3d_scale: a smooth decal fills the normal map's bumps under it 
     }
     CHECK(f.device->validation_error_count() == 0);
 }
+
+// ---- M-VISUAL3 6: foliage variation and wind shaping --------------------------------------------------------------
+
+namespace {
+
+// The blue pole's pixels: the horizontal extent and count of the pixels that are clearly bluer than the scene.
+struct PoleBox {
+    int min_x = 1 << 20, max_x = -1;
+    usize count = 0;
+};
+PoleBox pole_pixels(const Fixture3D& f) {
+    PoleBox out;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            const u8* p = &f.pixels[(usize(y) * kW + x) * 4];
+            if (p[2] > p[0] + 25 && p[2] > p[1] + 25) {
+                out.min_x = std::min(out.min_x, int(x));
+                out.max_x = std::max(out.max_x, int(x));
+                ++out.count;
+            }
+        }
+    return out;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_scale: foliage defaults draw today's frame; variation and gusts change it") {
+    Fixture3D f;
+    const Array<math::mat4> grid = box_grid();
+    auto frame = [&](const std::function<void(InstanceBatch&)>& tweak) {
+        f.render(0.0f, true, [&](Scene3D& s) {
+            s.set_time(0.37f, 0.016f);
+            InstanceBatch b = grid_batch(grid.span());
+            b.wind_amplitude = 0.3f;
+            b.wind_frequency = 1.0f;
+            if (tweak) tweak(b);
+            s.add_batch(b);
+        });
+        return f.pixels;
+    };
+    const Array<u8> base = frame({});
+    const Array<u8> explicit_defaults = frame([](InstanceBatch& b) {
+        b.tint_variation = {1.0f, 1.0f, 1.0f, 1.0f};
+        b.wind_ext = {0.0f, 0.0f, 0.0f, 0.0f};
+    });
+    CHECK(differing(base, explicit_defaults) == 0);
+    const Array<u8> gust = frame([](InstanceBatch& b) { b.wind_ext = {0.0f, 1.0f, 0.0f, 0.0f}; });
+    CHECK(differing(base, gust) > 0);
+    const Array<u8> flutter = frame([](InstanceBatch& b) { b.wind_ext = {0.0f, 0.0f, 0.1f, 0.0f}; });
+    CHECK(differing(base, flutter) > 0);
+
+    // Variation: every copy mixes toward the second colour by its own hash; the same scene draws the same frame.
+    auto varied = [&] { return frame([](InstanceBatch& b) { b.tint_variation = {1.0f, 0.2f, 0.1f, 1.0f}; }); };
+    const Array<u8> v1 = varied(), v2 = varied();
+    CHECK(differing(v1, v2) == 0);
+    CHECK(differing(base, v1) > 0);
+    // The tops of the copies (each box is 0.3 m tall): the plain frame shows one colour, the varied frame several.
+    auto distinct_tops = [&](const Array<u8>& px) {
+        f.pixels = px;
+        Array<int> reds(mem::heap());
+        for (const math::mat4& m : grid) {
+            const Rgb c = f.at_world({m.c[3][0], 0.3f, m.c[3][2]});
+            bool seen = false;
+            for (int r : reds) seen = seen || std::abs(r - c.luma()) <= 3;
+            if (!seen) reds.push_back(c.luma());
+        }
+        return reds.size();
+    };
+    const usize plain_colours = distinct_tops(base), varied_colours = distinct_tops(v1);
+    CHECK(varied_colours >= plain_colours + 3);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_scale: wind_height caps a 5 m mesh's sway at the amplitude") {
+    Fixture3D f;
+    const f32 amplitude = 0.3f;
+    const Array<math::mat4> pole = [] {
+        Array<math::mat4> a(mem::heap());
+        a.push_back(math::translation({0.0f, 0.0f, 1.5f}) * math::scaling({0.2f, 5.0f, 0.2f}));
+        return a;
+    }();
+    auto frame = [&](f32 wind, f32 wind_height) {
+        f.render(0.0f, false, [&](Scene3D& s) {
+            s.set_time(0.25f, 0.016f);  // sin(2 pi f t) = 1: near the sway's peak
+            InstanceBatch b = grid_batch(pole.span());
+            b.tint = {0.0f, 0.0f, 4.0f, 1.0f};
+            b.wind_amplitude = wind;
+            b.wind_frequency = 1.0f;
+            b.wind_ext = {wind_height, 0.0f, 0.0f, 0.0f};
+            s.add_batch(b);
+        });
+        return pole_pixels(f);
+    };
+    const PoleBox still = frame(0.0f, 0.0f);
+    REQUIRE(still.count > 40);
+    const math::vec4 a = f.view.view_proj * math::vec4({0.0f, 0.0f, 1.5f}, 1.0f), c = f.view.view_proj * math::vec4({1.0f, 0.0f, 1.5f}, 1.0f);
+    const f32 px_per_m = std::fabs((c.x / c.w - a.x / a.w) * 0.5f * f32(kW));
+    REQUIRE(px_per_m > 5.0f);
+    auto shift = [&](const PoleBox& b) { return std::max(b.max_x - still.max_x, still.min_x - b.min_x); };
+    const PoleBox capped = frame(amplitude, 5.0f);
+    CHECK(capped.count > 40);
+    // At most the amplitude × 1.35 (the sway's peak factor), plus a pixel of rasterization slack.
+    CHECK(f32(shift(capped)) <= amplitude * 1.35f * px_per_m + 1.5f);
+    CHECK(shift(capped) >= 1);  // and it does sway
+    // Without a wind height the same pole bends h² × amplitude: metres, not centimetres.
+    const PoleBox uncapped = frame(amplitude, 0.0f);
+    CHECK(f32(shift(uncapped)) > 2.0f * px_per_m);
+    CHECK(f.device->validation_error_count() == 0);
+}

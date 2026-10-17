@@ -466,6 +466,12 @@ struct InstanceBatch {
     f32 wind_amplitude = 0.0f;
     f32 wind_frequency = 0.5f;
     math::vec2 wind_direction{1.0f, 0.0f};  // xz, normalized on use
+    // M-VISUAL3 6. A copy's colour = tint × mix(white, tint_variation, hash of the copy's origin); white = none. The
+    // alpha reaches the main pass only, so keep it 1 on alpha-masked materials (the shadow masks do not see it).
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};
+    // x: wind height, the metres where the sway reaches wind_amplitude (the profile is (h / H)^2; 0 = amplitude × h^2);
+    // y: gust 0..1 (slow gusts along wind_direction); z: flutter, metres of 4-6 Hz leaf jitter at the wind height; w: 0.
+    math::vec4 wind_ext{0.0f, 0.0f, 0.0f, 0.0f};
 };
 
 struct InstanceCulling {

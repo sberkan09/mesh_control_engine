@@ -388,6 +388,16 @@ def cmd_import(args):
     return mce_import.main(args.rest)
 
 
+def cmd_content(args):
+    import mce_content  # the open-licence content ledger (M-OPENWORLD D2), installed beside this script
+    return mce_content.main(args.rest)
+
+
+def cmd_retarget(args):
+    import mce_retarget  # humanoid animation retargeting (M-OPENWORLD D3), installed beside this script
+    return mce_retarget.main(args.rest)
+
+
 def sdk_version():
     version = SHARE / "VERSION"
     lines = version.read_text(encoding="utf-8").splitlines() if version.is_file() else []
@@ -870,6 +880,14 @@ def main(argv):
     s = sub.add_parser("import", help="2D authoring-tool exports into native assets (mce import aseprite <export.json>)")
     s.add_argument("rest", nargs=argparse.REMAINDER, help="aseprite|spine|dragonbones <export.json> [--out f] [--name n] [--werror|--strict]")
     s.set_defaults(fn=cmd_import)
+
+    s = sub.add_parser("content", help="the open-licence content ledger: list, fetch and cook CC0 / CC-BY packs into a project")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="list|info|check|fetch|add|verify|credits ... (mce content --help)")
+    s.set_defaults(fn=cmd_content)
+
+    s = sub.add_parser("retarget", help="retarget humanoid animation clips from other glTF files onto a character's skeleton")
+    s.add_argument("rest", nargs=argparse.REMAINDER, help="<source.glb>... --onto <character.glb> [--out f.glb] (mce retarget --help)")
+    s.set_defaults(fn=cmd_retarget)
 
     s = sub.add_parser("mcp-config", help="register the project's MCP server with Claude Code (.mcp.json) "
                                           "and, with --desktop, Claude Desktop")

@@ -250,6 +250,7 @@ private:
         u64 submitted_ns = 0;
         u64 passed_ns = 0;
     };
+    static constexpr u64 kTimingSpinNs = 2'000'000;  // the waiter polls a fence this long before it blocks
     std::mutex timing_mutex_;
     std::condition_variable timing_cv_;
     std::thread timing_thread_;

@@ -2575,6 +2575,10 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
                        (mat.flags & asset::MaterialFlags::OcclusionInMR) ? 1.0f : 0.0f,
                        (mat.flags & asset::MaterialFlags::OcclusionOnly) ? 1.0f : 0.0f};
             ou.dequant = mat4::identity();
+            // The shader reads a batch's colour variation (column 0) and wind extension (column 1) from the unused dequant.
+            const f32 extra[8] = {b.tint_variation.x, b.tint_variation.y, b.tint_variation.z, b.tint_variation.w,
+                                  b.wind_ext.x,       b.wind_ext.y,       b.wind_ext.z,       b.wind_ext.w};
+            for (u32 i = 0; i < 8; ++i) ou.dequant.c[i / 4][i % 4] = extra[i];
             ou.inst = batch_wind(b);
             parallax_uniforms(b.material, scene.parallax(), ou);
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
