@@ -82,6 +82,11 @@ Cook (`src/engine/asset/cook/include/mce/cook/`)
   meshoptimizer; only version 0 vertex streams, as the extension allows; `KHR_draco_mesh_compression` is refused when required, its fallback read when only used) and
   bakes the default morph weights into the rest pose (the targets are dropped with a warning); the sidecar setting `"skinning": false` imports a skinned mesh as a static one, and `"ragdoll"`
   writes per-bone ragdoll overrides into the joints (`MeshFlags::Ragdoll`, `MeshRagdoll` flags, chunk minor 3).
+  Also built in: Wavefront OBJ (`.obj` → `ChunkType::Mesh`, `src/obj_importer.cpp`; v, vt, vn, f with n-gon fans and
+  negative indices, o / g nodes, usemtl submeshes; sidecar `"up"` `"y"|"z"`, `"scale"`, `"max_triangles"`, `"lod_levels"`)
+  and its `.mtl` (`mtl` → `ChunkType::Material` of the first material; the `.obj` declares the `.mtl` as a dependency,
+  reads its bytes and cooks every material it names inline, textures resolved to GUIDs). Both share the glTF importer's
+  back end (`mesh_build.h`); their factories are declared in the cook-private `src/obj_importer.h`, not in `importer.h`.
 - `mod_project.h`: mod projects (ADR-0034). `is_mod_project`, `read_mod_project` (`mod.json`), and
   `read_base_assets` (GUID to type from the manifests of the game packs a mod builds on). `CookService::cook`
   uses them: references into a base resolve by type without a dependency edge, an override (a base GUID in the
@@ -166,7 +171,9 @@ errors, a module that fails to load among them) or 2 (usage).
   bind bounds", "skinning is optional per asset; bad skins fail with the JSON pointer". `test_cook_gltf_ext.cpp`
   (M-IMPORT3D step 1): sparse, quantized and meshopt-compressed (with filters) cubes equal the dense cook, Draco,
   8 influences, baked morph weights, dropped-feature warnings, and corrupt-input cases (truncated / flipped
-  streams, bad sparse indices, absurd counts) that must be errors. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
+  streams, bad sparse indices, absurd counts) that must be errors. `test_cook_obj.cpp` (M-IMPORT3D step 2): a quad cube equals
+  the same cube as glTF byte for byte, fans, negative indices, CRLF / LF / CR, MTL materials and textures, warnings, and
+  corrupt-input cases plus a seeded mutation loop. `test_cook_json_audio.cpp`: JSON positions and nesting limits,
   canonical writer, WAV decode and resampling. `test_cook_shader.cpp`: variants, SPIR-V and reflection in
   `CHNK_SHD`, compile errors with source line and variant, binding-bank enforcement. `test_cook_input.cpp`:
   ".mcinput cooks to CHNK_INPUT and loads into the input system", "authoring mistakes are cook errors".
