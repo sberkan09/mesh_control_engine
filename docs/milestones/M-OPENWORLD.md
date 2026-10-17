@@ -51,7 +51,7 @@ Linear: the SBA workspace is at its free issue limit (save_issue refuses new iss
 | C1 enter/exit vehicles | implemented, awaiting merge | see the C1-C2 PR | `VehicleSeat3D` + `Rider3D` (`mce/kit/seats3d.h`), Interact or `enter`, `VehicleEntered3D` / `VehicleExited3D`, AI driver hand-off, camera retarget; user guide 9.9 |
 | C2 weapons, health, damage | implemented, awaiting merge | same PR | `Health3D`, `Weapon3D`, `Projectile3D` + `apply_damage` (`mce/kit/combat3d.h`), hitscan and stepped projectiles with splash, teams, armor, regen, stagger, ragdoll on death; user guide 9.12 |
 | C3 wanted + police | implemented, awaiting merge | see the C3 PR | `Wanted3D` + `Police3D` (`mce/kit/wanted3d.h`): witnessed crimes from `Damage3D` / `Died3D` or `report_crime`, levels, cool-down, units that pursue, attack and search, blackboard keys for a behavior tree; user guide 9.13. Does not need B3: civilians that flee, reinforcement spawning and arrests wait for B3 |
-| C4 missions + minimap | moved to its own milestone [M-MISSION](M-MISSION.md) (2026-10-17) | | |
+| C4 missions + minimap | done: moved to its own milestone [M-MISSION](M-MISSION.md) (2026-10-17), closed with `samples/10_missions` | #524, #532, #537, #543 and the demo PR | `Mission` / `Objective`, `MapMarker` and the `Minimap` widget, Luau `mission.*` / `marker.*` |
 
 Design notes and open items (C1-C2):
 - Both steps live in new files (`seats3d.*`, `combat3d.*`); `vehicles3d.*` is untouched so the traffic thread (B2) does not conflict.
