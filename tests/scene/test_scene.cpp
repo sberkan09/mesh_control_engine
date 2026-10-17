@@ -7,6 +7,7 @@
 #include "mce/cook/cook.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/scene/entity_names.h"
 #include "mce/scene/scene.h"
 
 using namespace mce;
@@ -130,4 +131,57 @@ TEST_CASE("scene: components registered from reflection unify with typed registr
     CHECK(id == w.component_id<LocalTransform>());
     CHECK(refl::type_of<LocalTransform>().type_hash == kTypeHash<LocalTransform>);
     CHECK(refl::type_of<kit::Sprite>().is_component());
+}
+
+TEST_CASE("scene: entities are found by name, names go with a scene change, and the hash does not see them (M-WORKFLOW 7)") {
+    const std::string root = make_scene_project("scene_names",
+        R"({ "name": "Target", "components": { "LocalTransform": { "position": [1, 2, 0] } } },
+           { "name": "Camera", "components": { "LocalTransform": { "position": [5, 6, 0] } } },
+           { "components": { "LocalTransform": { "position": [9, 9, 0] } } })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    World w;
+    Array<Entity> spawned;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &spawned));
+    CHECK(scene::find_entity(w, "Target") == spawned[0]);
+    CHECK(scene::find_entity(w, "Camera") == spawned[1]);
+    CHECK(scene::find_entity(w, "Nobody").is_null());
+    CHECK(scene::find_entity(w, "").is_null());  // the unnamed entity is not found by ""
+
+    // A second copy of the scene: the earlier copy wins while it lives, then the next one takes over.
+    Array<Entity> copy;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &copy));
+    CHECK(scene::find_entity(w, "Target") == spawned[0]);
+    w.destroy(spawned[0]);
+    CHECK(scene::find_entity(w, "Target") == copy[0]);
+    w.destroy(copy[0]);
+    CHECK(scene::find_entity(w, "Target").is_null());
+
+    // Dead rows are dropped when the table is rebuilt, so load/unload cycles do not grow it.
+    for (int i = 0; i < 5; ++i) {
+        Array<Entity> again;
+        REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &again));
+        for (Entity e : again) w.destroy(e);
+    }
+    Array<Entity> last;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), &last));
+    CHECK(w.resource<scene::EntityNames>().rows.size() == 4);  // two Cameras still alive from earlier + the last copy's two; the 5 destroyed copies are gone
+
+    // The table is a resource, not a component: replacing it with an empty one leaves the state hash as it was.
+    const u64 with_names = w.state_hash();
+    w.set_resource(scene::EntityNames{});
+    CHECK(w.state_hash() == with_names);
+    CHECK(scene::find_entity(w, "Target").is_null());
+
+    // A scene change clears the table, then the new scene fills it.
+    scene::request_change(w, std::string("guid:").append(kSceneGuid));
+    Array<Entity> after;
+    REQUIRE(scene::apply_change(w, assets, &after).value());
+    CHECK(scene::find_entity(w, "Camera") == after[1]);
+    CHECK(w.alive(after[1]));
 }
