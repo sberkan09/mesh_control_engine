@@ -252,7 +252,7 @@ The player chooses what shows (all `Saved`, on the stock options screen's Audio 
 | `access.subtitle_background` | 0.6 | the box's opacity; 0 draws outlined text with no box |
 
 Subtitles, captions and the cutscene skip prompt are drawn with the engine's pixel font unless the
-project names a theme: set `ui.overlay_theme` to the GUID of a `.mcuitheme` (12) and its Body font (else its
+project names a theme: set `ui.overlay_theme` to the GUID of a UI theme asset (12) and its Body font (else its
 Title font) is used for them. A theme with no font, or one that does not load, is logged and the pixel font
 stays. Only the font changes; sizes and colors still follow the `access.*` convars.
 
