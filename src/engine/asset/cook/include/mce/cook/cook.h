@@ -109,8 +109,23 @@ struct SizeReport {
     Array<SizeEntry> largest;  // up to 5, biggest first (ties by path)
 };
 
+// The import summary of one cooked mesh model (M-IMPORT3D step 4b), read back from its cooked CHNK_MESH, so a cached
+// (up-to-date) model reports the same numbers as a fresh cook. `warnings` is the one exception: it counts the warnings
+// the importer raised in THIS run, so an up-to-date model reports 0 (its warnings were printed by the cook that made it).
+struct MeshSummary {
+    String path;  // relative to assets/
+    u32 triangles = 0;    // base level, all submeshes
+    u32 submeshes = 0;
+    u32 materials = 0;    // distinct materials over the submeshes
+    u32 joints = 0;       // skin joints (all skins)
+    u32 clips = 0;        // animation clips
+    u32 lod_levels = 0;   // most levels any submesh has, the base included (1 = no coarser level)
+    u32 warnings = 0;
+};
+
 struct CookReport {
     Array<AssetReport> assets;  // in cook (topological) order
+    Array<MeshSummary> meshes;  // one per live mesh asset, in `assets` order (empty when the project has no model)
     DiagList diags;
     Array<FailedFile> failed_files;  // every file with an error, in diagnostic order (not capped)
     u32 cooked = 0;

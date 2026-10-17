@@ -918,6 +918,22 @@ bool cook_run(ToolCall& c) {
         c.out.end_array();
         c.out.end_object();
     }
+    {  // the import summary: one entry per mesh model (cached models report the same numbers; warnings count this run's only)
+        c.out.key("meshes").begin_array();
+        for (const cook::MeshSummary& m : r.meshes) {
+            c.out.begin_object();
+            c.out.key("path").str(m.path.view());
+            c.out.key("triangles").num_u(m.triangles);
+            c.out.key("submeshes").num_u(m.submeshes);
+            c.out.key("materials").num_u(m.materials);
+            c.out.key("joints").num_u(m.joints);
+            c.out.key("clips").num_u(m.clips);
+            c.out.key("lod_levels").num_u(m.lod_levels);
+            c.out.key("warnings").num_u(m.warnings);
+            c.out.end_object();
+        }
+        c.out.end_array();
+    }
     if (r.subset) {
         c.out.key("skipped").num_u(r.skipped);
         c.out.key("subset").boolean(true);
@@ -1674,7 +1690,8 @@ const ToolDef kTools[] = {
      "ones are box-halved before their mips, a sidecar \"max_size\" (asset_set_import_settings) smaller than it wins; "
      "changing it re-cooks the textures. textures: \"rgba8\" (default) or \"bc\" to store color textures as BC7/BC5/BC4/BC1 blocks (about a quarter of the size; desktop packs only, phones and the web need their own cook) per the sidecar \"compress\" key; switching it re-cooks everything. Returns counts, diagnostics with "
      "file:line, the output paths (relative to the project folder) and sizes: cooked bytes by type (textures, meshes, "
-     "audio, scenes, other), the five largest assets, and how many textures the cap downscaled.",
+     "audio, scenes, other), the five largest assets, and how many textures the cap downscaled; meshes: one entry per 3D model "
+     "(path, triangles, submeshes, materials, joints, clips, lod_levels, warnings; the numbers are read from the cooked file, so a cached model reports them too, but warnings counts this run's only).",
      R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false},"max_texture_size":{"type":"integer","minimum":1,"maximum":16384,"description":"Cap on a PNG/JPG texture's largest side, a power of two; default no limit"},"textures":{"type":"string","enum":["rgba8","bc"],"default":"rgba8","description":"Texture storage: rgba8, or bc for BC7/BC5/BC4/BC1 blocks in desktop packs"}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},
