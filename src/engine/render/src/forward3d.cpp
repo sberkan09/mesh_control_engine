@@ -44,6 +44,9 @@ MCE_CVAR(cv_volumetrics, "r.volumetrics", true,
 MCE_CVAR(cv_post_fx, "r.post_fx", true,
          "Auto exposure, depth of field and motion blur for scenes that ask for them (PostFx; off = none of them)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_instancing, "r.instancing", true,
+         "Copies of one rigid mesh and material draw as one instanced draw per pass (M-VISUAL3 5a; off = single draws)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_local_shadows, "r.local_shadows", true,
          "Shadow maps for spot and point lights that ask for them (PointLight::cast_shadows; off = unshadowed)",
          CVarFlags::None);
@@ -608,6 +611,55 @@ ResultV Forward3D::create_pipelines() {
         MCE_TRY_ASSIGN(velocity_skinned_, device_->create_pipeline(vp));
     }
     MCE_TRY(create_scale_pipelines());
+    if (desc_.instancing && cv_instancing.get_bool()) {
+        // Automatic instancing (M-VISUAL3 5a): the twins of the pipelines above with the per-copy vertex
+        // stages. A driver that refuses one (no vertex-stage storage buffers) keeps the single draws.
+        bool ok_all = true;
+        auto twin = [&](rhi::GraphicsPipelineDesc d, const char* vs, const char* vs_name, const char* name,
+                        rhi::PipelineHandle& out) {
+            if (!ok_all) return;
+            d.vertex_shader = {vs, vs_name};
+            d.debug_name = name;
+            if (auto p = device_->create_pipeline(d))
+                out = p.value();
+            else
+                ok_all = false;
+        };
+        rhi::GraphicsPipelineDesc md;
+        md.vertex_shader = {kMeshVS, "pbr.vert"};
+        md.fragment_shader = {kMeshFS, "pbr.frag"};
+        md.vertex = layout;
+        md.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        md.state.raster.cull = rhi::CullMode::Back;
+        twin(md, kDrawInstancedVS, "pbr_draw_instanced.vert", "pbr.opaque.instanced", mesh_cull_inst_);
+        md.state.raster.cull = rhi::CullMode::None;
+        twin(md, kDrawInstancedVS, "pbr_draw_instanced.vert", "pbr.two_sided.instanced", mesh_two_sided_inst_);
+        if (!ao_prepass_.is_null()) {
+            rhi::GraphicsPipelineDesc ap = md;
+            ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
+            ap.state = {};
+            ap.state.depth = {true, true, rhi::CompareOp::LessEqual};
+            ap.state.raster.cull = rhi::CullMode::None;
+            twin(ap, kDrawInstancedVS, "pbr_draw_instanced.vert", "ssao.prepass.draw_instanced", ao_prepass_inst_);
+        }
+        rhi::GraphicsPipelineDesc sd = sp;  // the rigid stream (sp ends on the skinned twin's)
+        sd.vertex = layout;
+        twin(sd, kShadowInstancedVS, "shadow_draw_instanced.vert", "mesh.shadow.draw_instanced", shadow_inst_);
+        if (!velocity_pipe_.is_null()) {
+            rhi::GraphicsPipelineDesc vp = sd;
+            vp.fragment_shader = {kVelocityFS, "velocity.frag"};
+            twin(vp, kVelocityInstancedVS, "velocity_draw_instanced.vert", "taa.velocity.draw_instanced",
+                 velocity_inst_);
+        }
+        if (!ok_all) {
+            MCE_LOG_WARN("render3d: automatic instancing unavailable (its pipelines failed), drawing single draws");
+            for (rhi::PipelineHandle* p :
+                 {&mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_, &shadow_inst_, &velocity_inst_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
     if (taa) {
         fs.state.blend.mode = rhi::BlendMode::Opaque;
         fs.fragment_shader = {kTaaFS, "taa.frag"};
@@ -760,7 +812,8 @@ void Forward3D::shutdown() {
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
-          &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_}) {
+          &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_, &mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_,
+          &shadow_inst_, &velocity_inst_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
@@ -881,8 +934,14 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
     out_ = out;
+    for (u32& b : inst_budget_) b = 0;
+    if (out.first) {  // the frame's budget, shared by all its views (the device's ring is per frame slot)
+        const usize ring = desc_.geometry_ring_bytes / 4;
+        inst_frame_left_ = static_cast<u32>(min<usize>(desc_.instancing_budget, ring));
+    }
     const rhi::Extent2D view = scene.view().viewport;
     if (view.width == 0 || view.height == 0) return;
+    reserve_instancing(scene);
     // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
     const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
     const rhi::Extent2D size = scale >= 1.0f ? view
@@ -957,6 +1016,10 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
     ssr_prev_valid_ = true;
+    for (u32& b : inst_budget_) {  // what this view did not use goes back to the frame's later views
+        inst_frame_left_ += b;
+        b = 0;
+    }
 }
 
 // ---- 0. Forward+ light assignment on the GPU (M-VISUAL 1): fills banks 4 and 6 for the main pass
@@ -1382,8 +1445,9 @@ void Forward3D::record_prepass(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
     DrawCache cache;
     const Span<const Scene3D::Draw> draws = scene.draws();
-    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false, true);
-    stats_.ssao_draws = scene.opaque_count();
+    const bool instanced = !ao_prepass_inst_.is_null() && upload_runs(cmd, scene, kInstPrepass);
+    stats_.ssao_draws = draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, false,
+                                    true, false, instanced);
     draw_batches(cmd, scene, cache, true);
     cmd.end_pass();
     cmd.pop_debug_scope();
@@ -1505,7 +1569,6 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Span<const Cascade> cascades = scene.cascades();
     if (cascades.empty()) return;
     cmd.push_debug_scope("shadow");
-    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     const Span<const u32> lists = scene.cascade_casters();
     for (u32 ci = 0; ci < cascades.size(); ++ci) {
         const Cascade& c = cascades[ci];
@@ -1517,9 +1580,7 @@ void Forward3D::record_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         sp.depth = depth;
         sp.debug_name = "shadow.cascade";
         cmd.begin_pass(sp);
-        rhi::PipelineHandle bound_pipe;
-        const GpuMesh* bound = nullptr;
-        for (u32 k = 0; k < c.caster_count; ++k) shadow_draw(cmd, c.view_proj, casters[lists[c.first_caster + k]], bound_pipe, bound);
+        draw_casters(cmd, scene, c.view_proj, lists.subspan(c.first_caster, c.caster_count));
         draw_batches_depth(cmd, scene, 1 + ci, c.view_proj, false);
         cmd.end_pass();
     }
@@ -1562,7 +1623,6 @@ void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& sce
         return;
     }
     cmd.push_debug_scope("shadow.local");
-    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     const Span<const u32> lists = scene.local_shadow_casters();
     u32 cleared = 0;  // layers cleared so far (tiles fill the layers in order)
     for (const LocalShadowTile& t : tiles) {
@@ -1577,9 +1637,7 @@ void Forward3D::record_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& sce
         sp.viewport = t.rect;
         sp.debug_name = "shadow.local";
         cmd.begin_pass(sp);
-        rhi::PipelineHandle bound_pipe;
-        const GpuMesh* bound = nullptr;
-        for (u32 k = 0; k < t.caster_count; ++k) shadow_draw(cmd, t.view_proj, casters[lists[t.first_caster + k]], bound_pipe, bound);
+        draw_casters(cmd, scene, t.view_proj, lists.subspan(t.first_caster, t.caster_count));
         cmd.end_pass();
     }
     stats_.local_shadow_tiles = static_cast<u32>(tiles.size());
@@ -1767,7 +1825,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     bind_main_state(cmd, scene, true);
 
     DrawCache cache;
-    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true);
+    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
+    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
     draw_batches(cmd, scene, cache, false);
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
         cmd.bind_pipeline(sky_);
@@ -2201,8 +2260,10 @@ void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene
     pu.local.x = 1.0f;
 }
 
-void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
-                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame) {
+u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
+                           u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame,
+                           bool instanced) {
+    u32 issued = 0;
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
     auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
@@ -2214,7 +2275,13 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
     };
     for (u32 i = begin; i < end; ++i) {
         const Scene3D::Draw& d = draws[i];
-        if (d.mesh->vertices.is_null()) continue;
+        // An instanced run (M-VISUAL3 5a): draws [i, i + count) share the mesh, the material and the tint.
+        const InstSlot run = instanced && i < inst_slots_.size() ? inst_slots_[i] : InstSlot{};
+        const bool inst_run = run.count > 1;
+        if (d.mesh->vertices.is_null()) {
+            if (inst_run) i += run.count - 1;
+            continue;
+        }
         const GpuSubmesh& sm = d.mesh->submeshes[d.submesh];
         const MeshInstance& inst = scene.instances()[d.instance];
         const asset::MaterialChunk& mat = material_of(inst, sm);
@@ -2222,11 +2289,15 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
                   emissive = emissive_key_of(inst, sm);
         const bool skinned = d.mesh->skinned();
         const TerrainShading* terrain = !prepass && i < opaque_end ? inst.terrain : nullptr;
-        const rhi::PipelineHandle pipe = prepass                                   ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
+        const bool two_sided = (mat.flags & asset::MaterialFlags::DoubleSided) != 0;
+        const rhi::PipelineHandle pipe = inst_run                                 ? (prepass     ? ao_prepass_inst_
+                                                                                     : two_sided ? mesh_two_sided_inst_
+                                                                                                 : mesh_cull_inst_)
+                                         : prepass                                 ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
                                          : terrain                                 ? terrain_pipe_
                                          : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
-                                         : (mat.flags & asset::MaterialFlags::DoubleSided) ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
-                                                                                           : (skinned ? skinned_cull_ : mesh_cull_);
+                                         : two_sided                               ? (skinned ? skinned_two_sided_ : mesh_two_sided_)
+                                                                                   : (skinned ? skinned_cull_ : mesh_cull_);
         if (!(pipe == cache.pipe)) {
             cmd.bind_pipeline(pipe);
             cache.pipe = pipe;
@@ -2283,9 +2354,135 @@ void Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<
             ou.maps = {0.0f, 0.0f, 0.0f, 0.0f};
             material_ext_uniforms(asset::MaterialExt{}, ou);
         }
+        if (inst_run) ou.skin.y = f32(run.slot);  // model and normal come from the run's slots
         cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-        cmd.draw(d.index_count, 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        cmd.draw(d.index_count, inst_run ? run.count : 1, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        ++issued;
         if (main) ++stats_.main_draws;
+        if (inst_run) {
+            if (main) {
+                ++stats_.runs_instanced;
+                stats_.draws_instanced += run.count;
+            }
+            i += run.count - 1;
+        }
+    }
+    return issued;
+}
+
+// ---- automatic instancing (M-VISUAL3 5a) -------------------------------------------------------------
+namespace {
+// What one set_storage_data of `bytes` takes from the ring: the device aligns each range.
+u32 ring_bytes(u32 bytes, u32 align) { return bytes == 0 ? 0 : (bytes + align - 1) / align * align; }
+}  // namespace
+
+void Forward3D::reserve_instancing(const Scene3D& scene) {
+    // The opaque runs' copies (the main and prepass blocks carry model and normal, the velocity one the model).
+    u32 copies = 0;
+    for (const DrawRun& r : scene.opaque_runs()) copies += r.count >= 2 ? r.count : 0u;
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    const u32 lit = ring_bytes(copies * 2u * u32(sizeof(mat4)), align);
+    const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
+    const bool prepass =
+        scene.ambient_occlusion().enabled || scene.reflections().enabled || scene.contact_shadows().enabled;
+    const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
+                                   ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
+                                   velocity_inst_.is_null() || !scene.post().needs_velocity() ? 0u : vel};
+    for (u32 p = 0; p < kInstShadow; ++p) {  // main first, then the prepasses
+        inst_budget_[p] = min(want[p], inst_frame_left_);
+        inst_frame_left_ -= inst_budget_[p];
+    }
+    inst_budget_[kInstShadow] = inst_frame_left_;  // the cascades and tiles share the rest
+    inst_frame_left_ = 0;
+}
+
+bool Forward3D::upload_runs(rhi::CommandBuffer& cmd, const Scene3D& scene, InstPass pass) {
+    const Span<const DrawRun> runs = scene.opaque_runs();
+    const Span<const Scene3D::Draw> draws = scene.draws();
+    inst_slots_.clear();
+    inst_slots_.resize(scene.opaque_count());
+    inst_data_.clear();
+    const bool velocity = pass == kInstVelocity;
+    const u32 per_copy = velocity ? 1u : 2u;  // mat4s
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    for (const DrawRun& r : runs) {
+        if (r.count < 2) continue;
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        if (ring_bytes(used + r.count * per_copy * u32(sizeof(mat4)), align) > inst_budget_[pass]) {
+            ++stats_.instancing_overflow;
+            continue;
+        }
+        inst_slots_[r.first] = {r.count, static_cast<u32>(inst_data_.size() / per_copy)};
+        for (u32 k = 0; k < r.count; ++k) {
+            inst_data_.push_back(draws[r.first + k].model);
+            if (!velocity) inst_data_.push_back(draws[r.first + k].normal);
+        }
+    }
+    if (inst_data_.empty()) return false;
+    const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+    inst_budget_[pass] -= ring_bytes(bytes, align);
+    cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
+    stats_.instancing_bytes += bytes;
+    return true;
+}
+
+void Forward3D::draw_casters(rhi::CommandBuffer& cmd, const Scene3D& scene, const mat4& view_proj,
+                             Span<const u32> list) {
+    const Span<const Scene3D::Draw> casters = scene.shadow_draws();
+    rhi::PipelineHandle bound_pipe;
+    const GpuMesh* bound = nullptr;
+    if (shadow_inst_.is_null()) {
+        for (u32 c : list) shadow_draw(cmd, view_proj, casters[c], bound_pipe, bound);
+        return;
+    }
+    scene.caster_runs(list, caster_sorted_, caster_runs_);
+    // Per copy the MVP shadow_draw() computes, for the runs within the budget (slot ~0u: drawn singly).
+    inst_data_.clear();
+    inst_slots_.clear();
+    inst_slots_.resize(caster_runs_.size());
+    const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
+    for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
+        const DrawRun& r = caster_runs_[ri];
+        if (r.count < 2) continue;
+        const u32 used = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        if (ring_bytes(used + r.count * u32(sizeof(mat4)), align) > inst_budget_[kInstShadow]) {
+            ++stats_.instancing_overflow;
+            continue;
+        }
+        inst_slots_[ri] = {r.count, static_cast<u32>(inst_data_.size())};
+        for (u32 k = 0; k < r.count; ++k) inst_data_.push_back(view_proj * casters[caster_sorted_[r.first + k]].model);
+    }
+    if (!inst_data_.empty()) {
+        const u32 bytes = static_cast<u32>(inst_data_.size() * sizeof(mat4));
+        inst_budget_[kInstShadow] -= ring_bytes(bytes, align);
+        cmd.set_storage_data(rhi::bank::kInstances, std::as_bytes(inst_data_.span()));
+        stats_.instancing_bytes += bytes;
+    }
+    for (u32 ri = 0; ri < caster_runs_.size(); ++ri) {
+        const DrawRun& r = caster_runs_[ri];
+        const InstSlot run = inst_slots_[ri];
+        if (run.count < 2) {
+            for (u32 k = 0; k < r.count; ++k)
+                shadow_draw(cmd, view_proj, casters[caster_sorted_[r.first + k]], bound_pipe, bound);
+            continue;
+        }
+        const Scene3D::Draw& d = casters[caster_sorted_[r.first]];
+        if (d.mesh->vertices.is_null()) continue;
+        if (!(shadow_inst_ == bound_pipe)) {
+            cmd.bind_pipeline(shadow_inst_);
+            bound_pipe = shadow_inst_;
+        }
+        if (d.mesh != bound) {
+            cmd.bind_vertex_buffer(d.mesh->vertices);
+            cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+            bound = d.mesh;
+        }
+        const ShadowU su{mat4::identity(), mat4::identity(), {-1.0f, f32(run.slot), 0.0f, 0.0f}};
+        cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(su));
+        cmd.draw(d.index_count, run.count, d.first_index, 0, static_cast<i32>(d.base_vertex));
+        ++stats_.shadow_draws;
+        ++stats_.shadow_runs_instanced;
+        stats_.shadow_draws_instanced += run.count;
     }
 }
 
@@ -2388,8 +2585,28 @@ void Forward3D::record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     rhi::PipelineHandle bound_pipe;
     const GpuMesh* bound = nullptr;
     const Span<const Scene3D::Draw> draws = scene.draws();
+    const bool instanced = !velocity_inst_.is_null() && upload_runs(cmd, scene, kInstVelocity);
     for (u32 i = 0; i < scene.opaque_count(); ++i) {
         const Scene3D::Draw& d = draws[i];
+        const InstSlot run = instanced ? inst_slots_[i] : InstSlot{};
+        if (run.count > 1) {  // an instanced run (M-VISUAL3 5a): never moving, so previous = current
+            i += run.count - 1;
+            if (d.mesh->vertices.is_null()) continue;
+            if (!(velocity_inst_ == bound_pipe)) {
+                cmd.bind_pipeline(velocity_inst_);
+                bound_pipe = velocity_inst_;
+            }
+            if (d.mesh != bound) {
+                cmd.bind_vertex_buffer(d.mesh->vertices);
+                cmd.bind_index_buffer(d.mesh->indices, d.mesh->index_format);
+                bound = d.mesh;
+            }
+            const VelObjU ou{d.model, d.prev_model, d.dequant, {-1.0f, -1.0f, f32(run.slot), 0.0f}};
+            cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
+            cmd.draw(d.index_count, run.count, d.first_index, 0, static_cast<i32>(d.base_vertex));
+            ++stats_.velocity_draws;
+            continue;
+        }
         if (d.mesh->vertices.is_null()) continue;
         const rhi::PipelineHandle pipe = d.mesh->skinned() ? velocity_skinned_ : velocity_pipe_;
         if (!(pipe == bound_pipe)) {
