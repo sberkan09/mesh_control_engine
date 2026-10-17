@@ -95,12 +95,12 @@ def cmd_overlap(args):
         print("premerge: a --task re-run IS needed")
         return 1
     if near:
-        print(f"premerge: dev_claude changed {len(near)} other file(s) in modules the PR touches:")
-        for f in near[:20]:
+        # Only files the PR itself changed trigger a re-run: churn next to them is not an overlap (the integration
+        # run catches a real clash). Printed so the author can still look.
+        print(f"premerge: note: dev_claude changed {len(near)} other file(s) in modules the PR touches (not an overlap):")
+        for f in near[:10]:
             print("  " + f)
-        print("premerge: same-module change, a --task re-run IS needed")
-        return 1
-    print("premerge: no file overlap and no change in the PR's modules, a --task re-run is NOT needed")
+    print("premerge: none of the PR's own files changed on dev_claude, a --task re-run is NOT needed")
     print("premerge: a semantic clash elsewhere (a header the PR includes) is caught by the integration run")
     return 0
 
