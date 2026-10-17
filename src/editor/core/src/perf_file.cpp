@@ -15,7 +15,8 @@ void read_names(cook::JsonValue v, usize max, Array<FixedString<32>>& out) {
         out.push_back(FixedString<32>(v.at(i).is_string() ? v.at(i).as_string() : StringView("?")));
 }
 
-void read_counters(cook::JsonValue v, perf::Counters& c) {
+// `slot` maps the position in the file's "draw_causes" array to a DrawCause index (~0u: a name this engine lacks).
+void read_counters(cook::JsonValue v, perf::Counters& c, const u32* slot, u32 slots) {
     c.draws = static_cast<u32>(num_u(v.get("draws")));
     c.passes = static_cast<u32>(num_u(v.get("passes")));
     c.dispatches = static_cast<u32>(num_u(v.get("dispatches")));
@@ -28,6 +29,9 @@ void read_counters(cook::JsonValue v, perf::Counters& c) {
     c.heap_allocations = num_u(v.get("heap_allocations"));
     c.runs_instanced = static_cast<u32>(num_u(v.get("runs_instanced")));  // absent before M-VISUAL3 5a: 0
     c.draws_instanced = static_cast<u32>(num_u(v.get("draws_instanced")));
+    const cook::JsonValue dc = v.get("draw_causes");  // absent before M-CONTENT 2: zeros
+    for (u32 i = 0; dc.is_array() && i < dc.size() && i < slots; ++i)
+        if (slot[i] < kDrawCauseCount) c.draw_causes[slot[i]] = static_cast<u32>(num_u(dc.at(i)));
 }
 
 }  // namespace
@@ -78,6 +82,15 @@ bool read_mcperf(StringView text, perf::Capture& out, cook::String& err) {
         out.systems.push_back(st);
     }
 
+    u32 slot[64];  // the file names its draw causes; a name this engine does not know is skipped
+    u32 slots = 0;
+    const cook::JsonValue names = root.get("draw_causes");
+    for (u32 i = 0; names.is_array() && i < names.size() && slots < 64; ++i, ++slots) {
+        slot[slots] = ~0u;
+        for (u32 k = 0; k < kDrawCauseCount && names.at(i).is_string(); ++k)
+            if (names.at(i).as_string() == StringView(draw_cause_name(static_cast<DrawCause>(k)))) slot[slots] = k;
+    }
+
     const cook::JsonValue frames = root.get("frames");
     if (!frames.is_array()) {
         err += "the capture has no \"frames\" array";
@@ -97,7 +110,7 @@ bool read_mcperf(StringView text, perf::Capture& out, cook::String& err) {
         const cook::JsonValue ph = f.get("phase_ms"), gs = f.get("gpu_stage_ms");
         for (u32 p = 0; ph.is_array() && p < ph.size() && p < perf::kMaxPhases; ++p) fr.phase_ms[p] = num_f(ph.at(p), 0.0f);
         for (u32 g = 0; gs.is_array() && g < gs.size() && g < perf::kMaxGpuStages; ++g) fr.gpu_stage_ms[g] = num_f(gs.at(g));
-        read_counters(f.get("counters"), fr.counters);
+        read_counters(f.get("counters"), fr.counters, slot, slots);
         out.frames.push_back(fr);
     }
     return true;

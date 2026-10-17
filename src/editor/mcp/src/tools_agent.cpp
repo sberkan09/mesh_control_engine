@@ -61,7 +61,7 @@ const ToolDef kAgentTools[] = {
      "Measure a scene with the real player: N frames at one sim tick per frame (counters repeat run to run), "
      "judged against a target's performance budget (project_get budgets_in_force). Returns the verdict with advice "
      "for each limit over, frame/sim/render/GPU ms (p50/p95/p99/max), draws, triangles, sprites and other counters, "
-     "the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
+     "draw_causes (3D scene draws that were not instanced, by cause, each with what to change), the slowest systems, the GPU stages, and spike frames with their cause. The .mcperf capture is kept "
      "(cooked/.perf/last.mcperf, or 'save'); perf_compare compares two. Works without a GPU (software rendering; "
      "times are then the CPU's). headless: true measures the sim alone.",
      R"j({"type":"object","properties":{"scene":{"type":"string","description":"Scene path under assets/ (default: the open scene, saved)"},)j"

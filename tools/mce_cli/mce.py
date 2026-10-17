@@ -29,6 +29,8 @@
                                                 checkout's scripts/ship.py: needs the Emscripten SDK)
     mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
                                                 MIME types and headers; browsers do not run file:// pages)
+    mce perf [<project | file.mcperf>] [--json]   read a perf capture (perf_run's cooked/.perf/last.mcperf, or the player's
+                                                -perf_capture file): the frame cost and the draw calls by cause
     mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
                                                 written by the MCP tool report_friction) into one backlog
     mce update [<project>...] [--release [tag]] [--no-pull]  reinstall this SDK from where it came from, then rebuild
@@ -743,6 +745,80 @@ def cmd_version(args):
     return 0
 
 
+def perf_capture_path(where):
+    """A .mcperf file, or a project folder's last perf_run capture."""
+    path = pathlib.Path(where)
+    if path.is_dir():
+        path = path / "cooked" / ".perf" / "last.mcperf"
+    if not path.is_file():
+        sys.exit(f"mce: {path} does not exist (perf_run, an MCP tool, writes <project>/cooked/.perf/last.mcperf; "
+                 f"the player writes one with -perf_capture <file>)")
+    return path
+
+
+def perf_draw_causes(cap):
+    """[(cause, mean per frame, max, hint)] largest mean first, from the per-frame counters; the file names its
+    causes, so a capture from another engine version still reads. Counts are machine independent."""
+    names = cap.get("draw_causes") or []
+    hints = cap.get("draw_cause_hints") or []
+    frames = [f.get("counters", {}) for f in cap.get("frames", [])]
+    rows = []
+    for i, name in enumerate(names):
+        col = [(c.get("draw_causes") or [])[i] if i < len(c.get("draw_causes") or []) else 0 for c in frames]
+        if col and max(col) > 0:
+            rows.append((name, sum(col) // len(col), max(col), hints[i] if i < len(hints) else ""))
+    rows.sort(key=lambda r: (-r[1], names.index(r[0])))
+    instanced = [c.get("draws_instanced", 0) for c in frames]
+    runs = [c.get("runs_instanced", 0) for c in frames]
+    n = len(frames) or 1
+    return rows, sum(instanced) // n, sum(runs) // n
+
+
+def perf_report(cap, path):
+    """The text `mce perf` prints. Only the counters are deterministic; the times are the machine's."""
+    out = []
+    summary = cap.get("summary", {})
+    frames = summary.get("frames", len(cap.get("frames", [])))
+    out.append(f"{path}: {cap.get('app', '?')} on {cap.get('backend', '?')}, scene {cap.get('scene', '?')}, {frames} frames")
+    for key, label in (("frame_ms", "frame"), ("sim_ms", "sim"), ("render_ms", "render"), ("gpu_ms", "gpu")):
+        st = summary.get(key) or {}
+        if st.get("count"):
+            out.append(f"  {label + ' ms':<10} p50 {st['p50']:.2f}  p95 {st['p95']:.2f}  max {st['max']:.2f}")
+    k = summary.get("counters_avg", {})
+    out.append(f"  per frame (mean): {k.get('draws', 0)} draw calls, {k.get('triangles', 0)} triangles, "
+               f"{k.get('meshes', 0)} meshes, {k.get('sprites', 0)} sprites")
+    rows, inst_draws, inst_runs = perf_draw_causes(cap)
+    out.append("")
+    out.append("draw calls by cause (3D scene draws per frame, mean over the capture)")
+    if not rows and not inst_draws:
+        out.append("  none: the capture drew no 3D (or it predates the report)")
+        return "\n".join(out)
+    total = inst_draws + sum(r[1] for r in rows)
+    out.append(f"  {'cause':<16}{'draws':>7}{'max':>7}  what to change")
+    out.append(f"  {'instanced':<16}{inst_draws:>7}{'':>7}  folded into {inst_runs} instanced draw(s): nothing to do")
+    for name, mean, mx, hint in rows:
+        out.append(f"  {name:<16}{mean:>7}{mx:>7}  {hint}")
+    out.append(f"  {'total':<16}{total:>7}")
+    return "\n".join(out)
+
+
+def cmd_perf(args):
+    path = perf_capture_path(args.where)
+    try:
+        cap = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        sys.exit(f"mce: {path} is not JSON: {e}")
+    if cap.get("format") != "mce-perf":
+        sys.exit(f'mce: {path} is not a .mcperf capture ("format" must be "mce-perf")')
+    if args.json:
+        rows, inst_draws, inst_runs = perf_draw_causes(cap)
+        print(json.dumps({"file": str(path), "instanced_draws": inst_draws, "instanced_runs": inst_runs,
+                          "draw_causes": [{"cause": n, "avg": a, "max": m, "hint": h} for n, a, m, h in rows]}, indent=2))
+    else:
+        print(perf_report(cap, path))
+    return 0
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="mce", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", metavar="<command>")
@@ -837,6 +913,11 @@ def main(argv):
     s.add_argument("--open", action="store_true", help="open it in the default browser")
     s.add_argument("--quiet", action="store_true", help="no request log")
     s.set_defaults(fn=cmd_serve)
+
+    s = sub.add_parser("perf", help="read a perf capture: frame cost and the draw calls by cause")
+    s.add_argument("where", nargs="?", default=".", help="a .mcperf file, or a project folder (its last perf_run capture)")
+    s.add_argument("--json", action="store_true", help="the draw-call causes as JSON")
+    s.set_defaults(fn=cmd_perf)
 
     s = sub.add_parser("friction", help="collect the friction notes agents wrote (report_friction) into a backlog")
     s.add_argument("projects", nargs="*", help="project folders (default: the current folder)")

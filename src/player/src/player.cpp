@@ -769,9 +769,13 @@ public:
             vc.lod.enabled = cv_lod.get_bool();
             vc.lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             vc.lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
+            vc.collect_draw_causes = perf_on_;
             const kit::ViewRecordStats vs = kit::record_views(cmd, world_, views_.span(), vc);
             if (vs.views_3d > 0) {
-                stats3d_ = vs.first_3d;
+                stats3d_ = vs.first_3d;  // the renderer's numbers of that same view, not the last one recorded
+                runs_instanced3d_ = vs.first_3d_runs_instanced;
+                draws_instanced3d_ = vs.first_3d_draws_instanced;
+                for (u32 k = 0; k < kDrawCauseCount; ++k) draw_causes3d_[k] = vs.first_3d_draw_causes[k];
                 drew_3d_ = true;
             }
             batch_stats_ = vs.first_2d;
@@ -795,12 +799,14 @@ public:
             lod.pixel_error = math::max(cv_lod_pixels.get_float(), 0.01f);
             lod.force_level = cv_lod_force.get_int() < 0 ? ~0u : static_cast<u32>(cv_lod_force.get_int());
             scene3.set_lod(lod);
+            scene3.set_collect_draw_causes(perf_on_);
             // Auto exposure adapts by the frame's wall time (a capture frame by a fixed step, to repeat).
             extract3d_.set_frame_dt(capture_due() ? 1.0f / 60.0f : static_cast<f32>(rc.frame_dt));
             extract3d_.extract(world_, scene3, alpha);
             scene3.build();
             renderer_.record_3d(cmd, scene3);
             stats3d_ = scene3.stats();
+            take_draw_causes();
             drew_3d_ = true;
         }
 
@@ -2506,8 +2512,9 @@ private:
         if (drew_3d_) {
             f.counters.triangles = stats3d_.triangles;
             f.counters.meshes = stats3d_.visible;
-            f.counters.runs_instanced = stats3d_.runs_instanced;
-            f.counters.draws_instanced = stats3d_.draws_instanced;
+            f.counters.runs_instanced = runs_instanced3d_;  // the renderer's drawn numbers, with the causes
+            f.counters.draws_instanced = draws_instanced3d_;
+            for (u32 k = 0; k < kDrawCauseCount; ++k) f.counters.draw_causes[k] = draw_causes3d_[k];
         }
         f.counters.sprites = batch_stats_.quads + batch_stats_.tile_quads;
         f.counters.sprite_batches = batch_stats_.groups;
@@ -2819,6 +2826,16 @@ private:
     bool film_ = false;
     kit::Kit3DExtract extract3d_;
     render::Scene3D::Stats stats3d_;
+    // M-CONTENT 2: what the renderer drew of stats3d_'s view (Forward3DStats): instanced runs and draws, and the
+    // draws that were not instanced by cause. With these, sum(causes) + draws_instanced = the view's scene draws.
+    u32 runs_instanced3d_ = 0, draws_instanced3d_ = 0;
+    u32 draw_causes3d_[kDrawCauseCount] = {};
+    void take_draw_causes() {  // the single-view path: the frame's only 3D view just recorded
+        const render::Forward3DStats& fs = renderer_.forward_3d().last_stats();
+        runs_instanced3d_ = fs.runs_instanced;
+        draws_instanced3d_ = fs.draws_instanced;
+        for (u32 k = 0; k < kDrawCauseCount; ++k) draw_causes3d_[k] = fs.draw_causes[k];
+    }
     bool three_d_ = false;         // the 3D path is on (a scene with a Camera3DComponent)
     bool three_d_failed_ = false;  // init_3d failed once: the game runs 2D-only
     bool split_views_warned_ = false;
