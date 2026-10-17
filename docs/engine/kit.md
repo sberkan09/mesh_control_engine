@@ -161,6 +161,21 @@ events and `FireOn::Skid`, `self_right` after `right_after` seconds flipped); `W
 `VehicleDriver3D` (M-MOVE3D 4: pure-pursuit AI driver with corner braking and laps, `LapCompleted3D`,
 `FireOn::Lap`), run inside `"kit3d_vehicles"` before the car takes its inputs.
 
+`seats3d.h` (M-OPENWORLD C1): `VehicleSeat3D` (on a `Vehicle3D`: `seat`, `exit`, `enter_radius`,
+`max_exit_speed`, `locked`, `driver`) and `Rider3D` (on a character: `use_input` for the Interact action, `enter`,
+`seated`, `vehicle`, `camera`), `VehicleEntered3D` / `VehicleExited3D`. Boarding takes the rider's
+`CharacterController3D` off (the settings are held in a resource and restored on exit), sets
+`Vehicle3D.use_input`, and switches a `VehicleDriver3D` off; `"kit3d_seats"` (`FixedUpdate_Pre`, after
+`"kit3d_vehicles"`) decides, `"kit3d_seat_pose"` (`FixedUpdate_Physics`, after `"kit3d_vehicle_state"`)
+carries the rider. Tests: `tests/kit/test_seats3d.cpp`.
+
+`combat3d.h` (M-OPENWORLD C2): `Health3D`, `Weapon3D` (hitscan rays or projectiles; Fire / Reload actions,
+rate, spread from a component seed, magazine and reload), `Projectile3D` (stepped by the engine as a ray per
+tick with gravity and splash), `apply_damage` for any other source; events `WeaponFired3D`, `WeaponHit3D`,
+`Damage3D`, `Died3D` (producer `FixedUpdate_Pre`). A death sets `Ragdoll3D.active` with the hit's impulse
+(`ragdoll_on_death`), a big hit staggers (`stagger_damage`). Systems `"kit3d_weapons"`, `"kit3d_projectiles"`,
+`"kit3d_health"` after `"kit3d_ragdolls"`. Tests: `tests/kit/test_combat3d.cpp`.
+
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
 entity (translation only) and runs its traffic lights on `time` (saved; `"roads_clock"`, FixedUpdate_Pre,
 paused by `lights` 0). `RoadRegistry` (a resource) copies each network out of its chunk once (re-read on hot

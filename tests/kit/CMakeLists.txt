@@ -30,6 +30,8 @@ mce_add_test(test_kit UMBRELLA
         test_ragdolls3d.cpp
         test_roads.cpp
         test_vehicles3d.cpp
+        test_seats3d.cpp
+        test_combat3d.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_procgen.cpp
