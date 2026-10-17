@@ -106,7 +106,7 @@ for `my_game_mcp`). `--docs` is the folder served as `mce://docs/...` (default: 
 ```
 my_game_cook <project-dir> [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
 mce_cook <project-dir> [--module <lib<game>.so>] [--base <pack>]... [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet]
-         [--textures rgba8|astc] [--max-texture-size N]
+         [--textures rgba8|bc|astc] [--max-texture-size N]
 ```
 
 Exit 0 clean, 1 cook errors (a module that fails to load among them), 2 usage. `mce_cook`
@@ -116,11 +116,13 @@ on (a mod, chapter 19): references may name its assets and same-GUID assets over
 
 `--max-texture-size N` caps the longest side of PNG and JPEG textures at N pixels (a power of two from 1 to 16384; bigger images are box-halved before their mips; default no limit), applied as the smaller of N and the texture's sidecar `max_size` (section 5.2). Any other value is an error, exit 1, that says what to change. Unless `--quiet`, the cook ends with a size report after the summary line: `mce_cook: size: textures …, meshes …, audio …, scenes …, other …, total … bytes`, `mce_cook: textures: N, D downscaled by max_size / --max-texture-size`, and the five largest assets with their bytes.
 
+`--textures rgba8|bc|astc` picks the texture storage: `rgba8` (default), `bc` (BC7, BC5, BC4 or BC1 blocks by the sidecar's `compress`, for desktop packs) or `astc` (phones); `mce cook` passes it through, and `mce ship --textures rgba8|bc` re-cooks the pack with it (section 5.2). An unknown value is exit 1 with the allowed ones.
+
 ## 16.5 Scripts
 
 ```
 python3 scripts/new_project.py <Name> [--game id] [--title "Title"] [--dest dir] [--seed N] [--force]
-python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--out dir] [--no-build] [--keep-symbols] [--smoke] [--smoke-headless] [--max-texture-size N]
+python3 scripts/ship.py --project projects/<Name> [--preset p] [--version v] [--out dir] [--no-build] [--keep-symbols] [--smoke] [--smoke-headless] [--max-texture-size N] [--textures rgba8|bc]
 python3 scripts/ship.py platformer | diorama | all
 python3 scripts/symbolicate.py <report.crash> --symbols <dir>...
 ./install.sh [archive.tar.gz | --release [tag]] [--prefix dir] [--no-path] [--yes]   # install the SDK (section 1.9)
@@ -151,13 +153,13 @@ mce headless <project> [--ticks N] [player flags ...]
 mce editor <project> [editor flags ...]
 mce mcp <project> [--scene <path>] [--allow-cheats] [--agent <name>]
 mce mcp-config <project> [--desktop] [--remove]
-mce cook <project> [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet] [--max-texture-size N]
+mce cook <project> [--pack] [--force] [--adopt] [--only <path>]... [--skip-errors] [--quiet] [--max-texture-size N] [--textures rgba8|bc|astc]
 mce story compile [<project>] [--check] [--werror] [--out header] [--report md]
 mce import aseprite <export.json> [--out f.mcsheet] [--name n] [--werror]
 mce import tiled <map.tmj> [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import ldtk <project.ldtk> [--level L] [--out-dir d] [--name n] [--tile-size m] [--werror]
 mce import spine|dragonbones <export.json> [--out f.mcskel2d] [--name n] [--ppm 100] [--atlas f] [--texture f.png] [--strict]
-mce ship <project> [--out dir] [--version v] [--max-texture-size N]
+mce ship <project> [--target desktop|web] [--out dir] [--version v] [--max-texture-size N] [--textures rgba8|bc]
 mce friction [<project> ...] [--out file] [--json]
 mce update [<project> ...] [--release [tag]] [--no-pull]
 mce version

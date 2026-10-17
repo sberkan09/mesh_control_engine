@@ -31,6 +31,7 @@ Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-
 | `--preset` | the CMake preset to build (default: the platform's release preset) |
 | `--version` | default `<engine version>+<short commit>` |
 | `--out` | output directory (default `dist/`) |
+| `--textures rgba8\|bc` | desktop: the pack's texture storage; `bc` stores BC7/BC5/BC4/BC1 blocks, about a quarter of the size, and needs a GPU that samples BC textures (every desktop GPU). `--target android\|ios` always cooks ASTC and `--target web` stays `rgba8`, so they refuse `bc` (section 5.2) |
 | `--max-texture-size N` | (`mce ship` too) cap PNG/JPEG textures in the pack at N pixels on the longest side (a power of two, 1 to 16384), so the ship is smaller; a sidecar's smaller `max_size` wins; default no limit (section 5.2) |
 | `--no-build` | package what is already built |
 | `--keep-symbols` | do not strip the binaries (Linux, macOS) |
@@ -229,4 +230,4 @@ path as `steam_build_script`.
    `-headless 1 -ticks 60`; in a checkout `python3 scripts/ship.py --project projects/MyGame --smoke`).
 5. Keep the symbols zip with the version.
 
-A desktop pack can store its textures block-compressed (about a quarter of the size, in the file and in GPU memory): cook it with `mce_cook MyGame --textures bc` (section 5.2, "Compress the pack with BC"). Phone packs use `--textures astc` and web packs stay `rgba8`, because those targets cannot sample BC textures. `mce ship --textures` follows in a later step. A pack cooked for another target is not decoded at load: a device that cannot sample the format logs one error that names the fix ("re-cook for this target") and draws the texture as the magenta error checker. A grey (BC4) texture bound to a colour or normal slot logs a Kit3D warning that suggests `compress: bc7` or `bc5`.
+A desktop pack can store its textures block-compressed (about a quarter of the size, in the file and in GPU memory): cook it with `mce_cook MyGame --textures bc` (section 5.2, "Compress the pack with BC"). Phone packs use `--textures astc` and web packs stay `rgba8`, because those targets cannot sample BC textures. `mce ship MyGame --textures bc` re-cooks the pack with BC into `MyGame/assets.mce` and zips it (it combines with `--max-texture-size`); `mce ship --target web --textures bc` exits, and `scripts/ship.py --target android|ios --textures bc` is refused. A pack cooked for another target is not decoded at load: a device that cannot sample the format logs one error that names the fix ("re-cook for this target") and draws the texture as the magenta error checker. A grey (BC4) texture bound to a colour or normal slot logs a Kit3D warning that suggests `compress: bc7` or `bc5`.
