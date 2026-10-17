@@ -860,10 +860,17 @@ bool same_value(lua_State* L, const StateWatch& w) {
     const int type = lua_type(L, -1);
     if (type != w.type) return false;
     if (type == LUA_TNUMBER) {
+        // Bit patterns, so a NaN upvalue stays equal to itself.
         const double d = lua_tonumber(L, -1);
-        return std::memcmp(&d, w.bits, sizeof(d)) == 0;
+        u64 now;
+        std::memcpy(&now, &d, sizeof(now));
+        return now == w.bits[0];
     }
-    if (type == LUA_TVECTOR) return std::memcmp(lua_tovector(L, -1), w.bits, LUA_VECTOR_SIZE * sizeof(float)) == 0;
+    if (type == LUA_TVECTOR) {
+        u64 now[2] = {};
+        std::memcpy(now, lua_tovector(L, -1), LUA_VECTOR_SIZE * sizeof(float));
+        return now[0] == w.bits[0] && now[1] == w.bits[1];
+    }
     lua_getref(L, w.base_ref);
     const bool same = lua_rawequal(L, -1, -2) != 0;
     lua_pop(L, 1);
