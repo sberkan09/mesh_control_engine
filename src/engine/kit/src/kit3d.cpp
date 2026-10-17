@@ -25,12 +25,12 @@ static_assert(sizeof(Camera3DComponent) == 24);
 static_assert(sizeof(Environment3D) == 496);
 static_assert(sizeof(BoxCollider3D) == 40);
 static_assert(sizeof(MeshCollider3D) == 32);
-static_assert(sizeof(Foliage3D) == 120);
+static_assert(sizeof(Foliage3D) == 240);
 static_assert(sizeof(Decal3D) == 96);
 static_assert(sizeof(ParticleEmitter3D) == 184);
 static_assert(sizeof(Terrain3D) == 80);
 static_assert(sizeof(TerrainCollider3D) == 8);
-static_assert(sizeof(TerrainFoliage3D) == 128);
+static_assert(sizeof(TerrainFoliage3D) == 160);
 
 // The asset system mesh colliders read their meshes from (install_kit3d's argument).
 struct Kit3DAssets {
