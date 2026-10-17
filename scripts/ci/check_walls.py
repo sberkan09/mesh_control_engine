@@ -55,6 +55,11 @@ WALLS = [
     # astc-encoder (M-MOBILE step 8) is cook-time only: the texture importer writes ASTC blocks, runtimes upload them.
     ("astcenc wall", re.compile(r"[<\"]astcenc\.h|\bastcenc_\w+\("), ["src/engine/asset/cook/src/texture_importer.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # bc7enc_rdo (M-CONTENT 1b-ii) is cook-time only: texture_bc.cpp writes BC blocks, runtimes upload them. The test
+    # reads them back through the same headers (bc7decomp for the reference decode).
+    ("bc7enc wall", re.compile(r"[<\"](bc7enc|rgbcx|bc7decomp)\.h|\bbc7enc_\w+\(|\brgbcx::"),
+     ["src/engine/asset/cook/src/texture_bc.cpp", "tests/asset/test_cook_bc.cpp"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # tinyexr (M-VISUAL3 step 4) is cook-time only: the texture importer reads .exr into RGBA16F, runtimes upload it.
     ("tinyexr wall", re.compile(r"[<\"]tinyexr\.h|\b(Load|Parse|Free|Init|Is)EXR\w*\s*\("),
      ["src/engine/asset/cook/src/texture_importer.cpp", "src/engine/asset/cook/src/tinyexr_impl.cpp"],
@@ -193,6 +198,7 @@ LINK_WALLS = [
     ("Recast link wall", re.compile(r"\bmce_recast\b"), ["src/engine/physics3d/"]),
     ("ENet link wall", re.compile(r"\bmce_enet\b"), ["src/engine/net/"]),
     ("libdatachannel link wall", re.compile(r"\b(datachannel-static|juice-static|usrsctp)\b"), ["src/engine/net/"]),
+    ("bc7enc link wall", re.compile(r"\bmce_bc7enc\b"), ["src/engine/asset/cook/", "tests/asset/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
     # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The

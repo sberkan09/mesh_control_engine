@@ -1,7 +1,7 @@
 // mce_cook — command-line cook (assets.md §5.1, FR-AST-070).
 //
 //   mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]
-//            [--only <asset path>]... [--skip-errors] [--textures rgba8|astc] [--max-texture-size N]
+//            [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc] [--max-texture-size N]
 //
 // A project with a mod.json is a mod (ADR-0034): its pack carries a ModInfo chunk and drops into a
 // game's mods folder as <id>.mce.
@@ -22,7 +22,7 @@ namespace {
 int usage(std::FILE* out = stderr, int rc = 2) {
     std::fputs(
         "usage: mce_cook <project-dir> [--module <game module>] [--base <pack>]... [--pack] [--force] [--adopt] [--quiet]\n"
-        "                [--only <asset path>]... [--skip-errors] [--textures rgba8|astc]\n"
+        "                [--only <asset path>]... [--skip-errors] [--textures rgba8|bc|astc]\n"
         "                [--max-texture-size N]\n"
         "  Cooks <project-dir>/assets into <project-dir>/cooked (incremental: the cook DB skips what is up to date).\n"
         "  --module <path>  load this game module (lib<game>.so / .dll) first, so scenes that use its\n"
@@ -36,7 +36,7 @@ int usage(std::FILE* out = stderr, int rc = 2) {
         "                 cooks into cooked/ only, never the pack\n"
         "  --skip-errors  cook what can be cooked and list every failing file at the end\n"
         "  --quiet   print errors and the summary only\n"
-        "  --textures rgba8|astc  texture storage: rgba8 (default, desktops) or ASTC 4x4 blocks (phones)\n"
+        "  --textures rgba8|bc|astc  texture storage: rgba8 (default), BC7/BC5/BC4/BC1 blocks (desktop packs), or ASTC 4x4 (phones)\n"
         "  --max-texture-size N  cap the largest side of PNG/JPG textures at N (a power of two, 1..16384): bigger ones are\n"
         "                   halved before their mips, so the pack shrinks; a sidecar's \"max_size\" smaller than N wins.\n"
         "                   Default: no limit. A non-cooked .hdr/.exr keeps its own max_size\n"
@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
         else if (a == "--textures" && i + 1 < argc) {
             const StringView t(argv[++i]);
             if (t == "astc") opt.textures = cook::TextureCompression::Astc4x4;
+            else if (t == "bc") opt.textures = cook::TextureCompression::Bc;
             else if (t != "rgba8") return usage();
         }
         else if (a == "--max-texture-size" && i + 1 < argc) {

@@ -244,6 +244,31 @@ if(NOT CMAKE_CROSSCOMPILING)
     endif()
 endif()
 
+# ---- bc7enc_rdo (cook-time only: BC7 / BC5 / BC4 / BC1 desktop textures, mce_cook --textures bc; M-CONTENT 1b) ----
+# MIT or Unlicense (Richard Geldreich). The repo has no tags: pinned by commit (master on 2026-10-17), no GIT_SHALLOW,
+# like tinyexr. Built from three sources only (bc7enc.cpp BC7, rgbcx.cpp BC1/BC4/BC5, bc7decomp.cpp for the tests'
+# decode): scalar C++, no SIMD in the encoder, no threads. Never compile bc7e.ispc, ispc.exe or the RDO files.
+# -ffp-contract=off keeps the output bytes identical across compilers and hosts. Confined to the cook's texture_bc.cpp
+# by the "bc7enc wall" and "bc7enc link wall" in scripts/ci/check_walls.py. Licenses: docs/ARCHITECTURE.md §7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(bc7enc_rdo
+        GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
+        GIT_TAG        b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(bc7enc_rdo)
+    add_library(mce_bc7enc STATIC
+        "${bc7enc_rdo_SOURCE_DIR}/bc7enc.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp"
+        "${bc7enc_rdo_SOURCE_DIR}/bc7decomp.cpp")
+    target_include_directories(mce_bc7enc SYSTEM PUBLIC "${bc7enc_rdo_SOURCE_DIR}")
+    set_target_properties(mce_bc7enc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_bc7enc PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_bc7enc PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
 # ---- libogg + libvorbis (cook-time only: Ogg Vorbis encoding of audio clips — ADR-0044) ----------
 # The encoder half of the Xiph reference codec, built from its sources like astcenc (its own CMake
 # needs find_package(Ogg) and installs). Confined to the cook's audio importer by the "libvorbis wall"

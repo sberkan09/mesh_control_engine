@@ -42,6 +42,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/services_importer.cpp
         src/string_importer.cpp
         src/string.cpp
+        src/texture_bc.cpp
         src/texture_importer.cpp
         src/tilemap_importer.cpp
         src/ui_importer.cpp
@@ -60,6 +61,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         mce_meshopt
         mce_tinyexr
         mce_astcenc
+        mce_bc7enc
         mce_vorbisenc
         glslang::glslang
         glslang::glslang-default-resource-limits)
