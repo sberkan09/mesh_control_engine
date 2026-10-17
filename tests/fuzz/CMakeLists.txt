@@ -43,3 +43,12 @@ if(MCE_WITH_SCRIPT)
             mce::mce_script_compiler)
     target_include_directories(test_fuzz_script PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
+
+# The importers over mutated source files of the samples (cook-side code; never linked into a player).
+mce_add_test(test_fuzz_importers UMBRELLA
+    SOURCES
+        test_importers.cpp
+    DEPS
+        mce::mce_asset_cook)
+target_include_directories(test_fuzz_importers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_fuzz_importers PRIVATE MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

@@ -19,7 +19,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 |---|---|---|---|
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
-| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a: player data, net, Luau done) |
+| 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | in progress (3a player data, net, Luau and 3b importers done; 3c `.mcperf`, websocket, command line, scene instantiate left) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
@@ -106,6 +106,23 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   `luau_load`; (c) a signed or hashed script chunk that only the cook can produce; (d) accept the risk for
   first-party packs and refuse bytecode from mods. Not decided here.
 
+## Step 3b — Importers (SBA-187)
+
+- **`test_fuzz_importers`.** Every built-in importer is called directly (`scan_dependencies`, then `cook`) over mutated
+  copies of up to six committed sources per extension (25 extensions: the native text assets, png, wav, mpg, csv,
+  luau, ...). Text assets get two kinds of mutant: raw byte damage, and valid JSON with one value replaced by another
+  kind (a string for a number, `null`, `[]`, an out-of-range number, a nil GUID), which is what reaches the importer's
+  own type and range checks. No crash at 1,500 mutants per file (plain) and 200 (ASan). The lookup is empty, so
+  every reference dangles.
+- **Finding: the glTF importer asserts on a wrongly typed value.** `read_indices` (`gltf_importer.cpp:447`) calls
+  `as_number()` on an accessor index it has not type-checked in the `ctype == 5125` branch (`bufferView`, `buffer`);
+  in release the same read is out of bounds on the JSON node array. Owner: M-IMPORT3D (asset/cook mesh import).
+  The `.glb`/`.gltf` files are skipped unless `MCE_FUZZ_GLTF=1`.
+- **Finding: a mutated TrueType font crashes the font importer.** `stbrp_pack_rects` in the atlas bake gets a negative
+  width from a damaged `.ttf` (`font_importer.cpp:111`); stb_truetype is documented as unsafe for untrusted fonts.
+  Options: validate the table directory and glyph metrics before the bake, or bake in a subprocess. The `.ttf` and
+  `.otf` files are skipped unless `MCE_FUZZ_FONT=1`.
+
 ### Planned: Detour defense in depth (separate item)
 
 `simplifyContour` in Detour divides by `nverts`/`npoly`; step 2b stops bad layers before them, but a guard that
@@ -124,8 +141,9 @@ validation switched on.
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | none (the view's rows and fixups are walked) | 3 |
-| PNG, glTF, Ogg Vorbis, MPEG-1 | `cook/image.h` `decode_png`; cook glTF; `asset/vorbis.h` `decode_vorbis`; video | importing source files | Vorbis stream inside a sound chunk only | 3 |
-| Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`) | cook JSON reader and per-type validators | project sources, agents | none | 3 |
+| PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
+| glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | **findings, see step 3b**; cases off by default | open |
+| Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`, ...) | cook JSON reader and per-type validators | project sources, agents | mutated text and valid JSON with one value swapped (`test_fuzz_importers`) | done |
 | Save files, replays | `ecs/save.h` `read_save`, `read_replay` | the player's disk | mutated and re-sealed (`test_fuzz_player_data`) | done |
 | Input recordings | `input/script.h` `parse` | tests, bug reports | raw stream and script text (`test_fuzz_player_data`) | done |
 | `.mcperf` captures | `editor/core/perf_file.h` | tools | none | 3 |
