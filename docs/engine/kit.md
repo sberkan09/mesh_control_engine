@@ -312,7 +312,11 @@ together:
   submeshes that have none, leaving the sources' own levels and level 0 as baked.
 - StaticMerge3D per frame (M-OPENWORLD A3): an unchanged group costs a walk over its children and a word-wise hash of
   their raw inputs (entity, mesh, material, position, rotation, scale, tints, shadow flag, mesh generation); the mesh
-  views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. Per-entity
+  views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. The change
+  plans the cells (children by cell, kept as entity and placement on the group); `r.merge_budget` /
+  `set_merge_budget` then merges at most that many cells per frame, re-reading each child's MeshRef, mesh view and
+  material when its cell merges, while the unmerged children draw on their own (`merge_pending`). A rebase while
+  cells wait plans the group again. Per-entity
   arrays of the extract (`world_stamp_`, `worlds_`, `lod_states_`, `tracked_`, `merged_stamp_`) grow by half their
   capacity, not to `e.index + 1`: 24k entities arriving in one frame cost 16 ms instead of 2.7 s.
 - Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
@@ -337,7 +341,8 @@ ctest `test_kit` (no GPU), `tests/kit/`:
   The bake is tested in `tests/editor/test_hlod_bake.cpp` (`test_editor`, "editor hlod bake*": counts, undo,
   byte-identical re-bake, `min_size`).
 - `test_static_merge3d.cpp` also gates the city path by counts: "static merge: a 4096-piece city block reaches the
-  scene as its cells and merges again only on a change".
+  scene as its cells and merges again only on a change" and "static merge: a merge budget spreads a block over
+  frames, the waiting cells' children drawing on their own".
 - `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
   stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
   more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".
