@@ -64,7 +64,7 @@ protected:
 
 // How texture importers store color data (CookOptions::textures; M-MOBILE step 8): RGBA8 for
 // desktops, ASTC 4x4 blocks for phones (a quarter of the memory and bandwidth).
-enum class TextureCompression : u8 { None, Astc4x4 };
+enum class TextureCompression : u8 { None, Astc4x4, Bc };
 
 struct ImportInput {
     Guid guid;
