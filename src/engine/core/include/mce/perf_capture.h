@@ -42,6 +42,7 @@ struct Counters {
     u32 draw_causes[kDrawCauseCount] = {};
     u32 merged_groups = 0;     // 3D: StaticMerge3D components drawing merged meshes (M-VISUAL3 5b)
     u32 merged_children = 0;   // 3D: the MeshRef children they replace
+    u32 decals_dropped = 0;    // 3D: visible decals past the 64-decal or 3-texture limit (M-VISUAL3 6)
 };
 
 struct Frame {

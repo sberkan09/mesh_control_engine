@@ -9,7 +9,14 @@
             "command": "[ \"$CLAUDE_CODE_REMOTE\" = true ] && \"$CLAUDE_PROJECT_DIR\"/scripts/ci/setup_env.sh || true",
             "timeout": 600
           }
-        ]
+        ],
+        "permissions": {
+          "allow": [
+            "Bash(git merge origin/dev_claude:*)",
+            "Bash(git push -u origin claude/*:*)",
+            "mcp__github__merge_pull_request"
+          ]
+        }
       }
     ]
   }
