@@ -85,9 +85,12 @@ void install(World& world, AudioDevice& device, ClipBank* clips, const char* aft
     world.set_hooks<AudioSource>(nullptr, &on_source_removed);
     world.add_system(Phase::FixedUpdate_Post, "audio_bridge", &audio_bridge, after);
     world.run_during_cutscenes(Phase::FixedUpdate_Post, "audio_bridge");
+    world.run_when_held(Phase::FixedUpdate_Post, "audio_bridge");
 }
 
 void audio_bridge(Frame& f) {
+    // A pause screen holds the world; the bridge is registered to run on held ticks only to honour keep_audio.
+    if (const PauseMix* pause = f.world().try_resource<PauseMix>(); pause && pause->paused && !pause->keep) return;
     AudioRef& ref = f.resource<AudioRef>();
     AudioDevice* dev = ref.device;
     if (!dev) return;

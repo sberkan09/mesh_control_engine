@@ -291,3 +291,35 @@ TEST_CASE("audio_bridge: a Music source streams its clip and fades in; removing 
     CHECK(w.try_get<AudioSource>(next)->started);
     CHECK(dev->is_playing(w.try_get<AudioSource>(next)->handle));
 }
+
+TEST_CASE("audio_bridge: a pause hold keeps the sound only with PauseMix::keep (M-WORKFLOW 7)") {
+    asset::AssetSystem as;
+    mount(as, cooked_tree("bank_pause"));
+    auto dev = test::offline_device();
+    ClipBank bank(as, *dev);
+
+    World w;
+    install(w, *dev, &bank);
+    w.set_resource(PauseMix{});
+    AudioSource src;
+    src.clip.guid = kHum;
+    src.loop = true;
+    src.play_on_start = true;
+    const Entity e = w.spawn_with(src);
+    bank.sync();
+
+    const f64 dt = 1.0 / 60.0;
+    w.set_held(true);
+    w.try_resource<PauseMix>()->paused = true;
+    w.tick(dt, 1);
+    CHECK(w.try_get<AudioSource>(e)->handle.is_null());  // paused: the source never started
+
+    w.try_resource<PauseMix>()->keep = true;
+    w.tick(dt, 2);
+    CHECK(dev->is_playing(w.try_get<AudioSource>(e)->handle));  // keep: the bridge runs on the held tick
+
+    w.try_resource<PauseMix>()->paused = false;
+    w.set_held(false);
+    w.tick(dt, 3);
+    CHECK(dev->is_playing(w.try_get<AudioSource>(e)->handle));
+}
