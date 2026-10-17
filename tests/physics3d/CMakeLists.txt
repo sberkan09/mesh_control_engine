@@ -16,3 +16,5 @@ mce_add_test(test_physics3d
     DEPS
         mce::mce_physics3d
         mce::mce_physics2d)
+
+target_compile_definitions(test_physics3d PRIVATE MCE_NAV_SAMPLE="${CMAKE_SOURCE_DIR}/samples/07_gameplay3d/assets/navmesh/arena/nav_13.mcnav")

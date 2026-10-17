@@ -1,0 +1,39 @@
+{
+ "format": "mce-prefab",
+ "version": 1,
+ "guid": "b0c90000-0000-4000-8000-000000000001",
+ "name": "player",
+ "entities": [
+  {
+   "name": "Player",
+   "components": {
+    "LocalPlayer": {
+     "speed": 6
+    },
+    "LocalTransform": {},
+    "Sprite": {
+     "size": [
+      0.9,
+      0.9
+     ],
+     "layer": 2
+    },
+    "RigidBody2D": {
+     "type": "Dynamic",
+     "fixed_rotation": true,
+     "gravity_scale": 0
+    },
+    "Collider2D": {
+     "shape": {
+      "half": [
+       0.45,
+       0.45
+      ]
+     },
+     "density": 1,
+     "friction": 0
+    }
+   }
+  }
+ ]
+}

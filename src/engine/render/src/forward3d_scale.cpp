@@ -570,6 +570,14 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
     for (u32 t = 0; t < kMaxDecalTextures; ++t) tex[t] = white;
     Array<DecalRecord> records(mem::heap());
     if (on) {
+        // Decals past kMaxDecals or the third distinct texture are skipped silently by Scene3D::build: say so once.
+        static bool warned = false;
+        if (scene.stats().decals_dropped > 0 && !warned) {
+            warned = true;
+            MCE_LOG_WARN("render3d: {} visible decal(s) dropped: a frame draws at most {} decals from {} distinct textures "
+                         "(share textures between decals or reduce the visible count)",
+                         scene.stats().decals_dropped, kMaxDecals, kMaxDecalTextures);
+        }
         const Span<const u32> keys = scene.decal_textures();
         for (u32 t = 0; t < keys.size(); ++t) {
             resident[t] = textures_->contains(keys[t]);

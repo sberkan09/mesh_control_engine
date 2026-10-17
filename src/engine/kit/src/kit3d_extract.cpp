@@ -1,13 +1,16 @@
 #include "mce/kit/kit3d_extract.h"
 
 #include <cmath>
+#include <cstdlib>
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/refl/property_path.h"
 #include "mce/render/accessibility.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -39,6 +42,88 @@ u32 find_clip_id(const render::GpuMesh& mesh, u64 id) {
     for (u32 i = 0; i < mesh.clips.size(); ++i)
         if (StringId(mesh.clips[i].name.view()).value == id) return i;
     return ~0u;
+}
+
+
+// MCP render_frame / render_sheet per-shot control (M-VISUAL3 3c): the tool hands the player these as flags.
+MCE_CVAR(cv_env_override, "r.env_override", "",
+         "Environment3D field overrides, 'field=value;field=a,b,c;...' (numbers, 0/1 for flags, comma lanes for vectors and colors); empty = none",
+         CVarFlags::None);
+MCE_CVAR(cv_dof_focus, "r.dof_focus", 0.0f, "Depth of field: meters to the sharpest plane, overriding the environment and the camera (0 = off)",
+         CVarFlags::None);
+MCE_CVAR(cv_exposure_scale, "r.exposure_scale", 1.0f, "Multiplies the scene's exposure (1 = unchanged)", CVarFlags::None);
+
+// The parsed r.env_override, rebuilt only when the string changes.
+struct EnvOverride {
+    refl::PropertyRef ref;
+    f32 lanes[4] = {};
+    u32 count = 0;
+};
+constexpr u32 kMaxEnvOverrides = 32;
+
+struct EnvOverrides {
+    FixedString<1024> text;
+    EnvOverride items[kMaxEnvOverrides];
+    u32 count = 0;
+};
+
+void parse_env_overrides(StringView text, EnvOverrides& out) {
+    out.count = 0;
+    const refl::TypeRecord& type = refl::type_of<Environment3D>();
+    usize pos = 0;
+    while (pos < text.size() && out.count < kMaxEnvOverrides) {
+        usize end = pos;
+        while (end < text.size() && text[end] != ';') ++end;
+        StringView item = text.substr(pos, end - pos);
+        pos = end + 1;
+        usize eq = 0;
+        while (eq < item.size() && item[eq] != '=') ++eq;
+        if (eq == 0 || eq >= item.size()) continue;
+        Result<refl::PropertyRef> ref = refl::resolve_path(type, item.substr(0, eq));
+        if (!ref) {
+            MCE_LOG_WARN("r.env_override: no Environment3D field '{}'", item.substr(0, eq));
+            continue;
+        }
+        EnvOverride o;
+        o.ref = ref.value();
+        char buf[256];
+        const StringView rest = item.substr(eq + 1);
+        const usize n = rest.size() < sizeof(buf) - 1 ? rest.size() : sizeof(buf) - 1;
+        for (usize i = 0; i < n; ++i) buf[i] = rest[i];
+        buf[n] = 0;
+        const char* q = buf;
+        while (o.count < 4 && *q) {
+            char* next = nullptr;
+            o.lanes[o.count++] = std::strtof(q, &next);
+            if (next == q) break;
+            q = *next == ',' ? next + 1 : next;
+        }
+        if (o.count > 0) out.items[out.count++] = o;
+    }
+}
+
+// Writes the override into env. A lane count that does not match the field is skipped (the MCP tool validates it).
+void apply_env_override(Environment3D& env, const EnvOverride& o) {
+    using refl::FieldKind;
+    void* base = &env;
+    u8* at = static_cast<u8*>(base) + o.ref.offset;
+    const f32 v = o.lanes[0];
+    switch (o.ref.kind) {
+        case FieldKind::Bool: *reinterpret_cast<bool*>(at) = v != 0.0f; break;
+        case FieldKind::F32: *reinterpret_cast<f32*>(at) = v; break;
+        case FieldKind::U32: *reinterpret_cast<u32*>(at) = v < 0.0f ? 0u : static_cast<u32>(v); break;
+        case FieldKind::I32: *reinterpret_cast<i32*>(at) = static_cast<i32>(v); break;
+        case FieldKind::Vec3:
+        case FieldKind::Color:
+        case FieldKind::Vec4: {
+            const u32 want = o.ref.kind == FieldKind::Vec3 ? 3u : 4u;
+            if (o.count < want - (o.ref.kind == FieldKind::Color ? 1u : 0u)) break;
+            f32* p = reinterpret_cast<f32*>(at);
+            for (u32 i = 0; i < want && i < o.count; ++i) p[i] = o.lanes[i];
+            break;
+        }
+        default: break;
+    }
 }
 
 }  // namespace
@@ -142,6 +227,9 @@ void Kit3DExtract::build_terrain_shading(TerrainEntry& t, const asset::TerrainVi
 }
 
 void Kit3DExtract::release_handles() {
+    if (textures_)
+        for (const MaterialEntry& m : material_entries_)
+            if (m.parallax_key != ~0u) textures_->release(m.parallax_key);
     if (assets_) {
         for (const MeshEntry& m : mesh_entries_)
             if (m.handle.generation != 0) assets_->release(m.handle);
@@ -159,6 +247,7 @@ void Kit3DExtract::release_handles() {
 }
 
 void Kit3DExtract::shutdown() {
+    release_static_merges();
     release_terrains();
     release_handles();
     meshes_ = nullptr;
@@ -168,6 +257,7 @@ void Kit3DExtract::shutdown() {
 }
 
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
+    release_static_merges();
     release_terrains();
     release_handles();
     foliage_.clear();
@@ -223,6 +313,55 @@ u32 Kit3DExtract::texture_key(asset::Guid guid) {
     return e.key;
 }
 
+// M-VISUAL3 2: the normal map (layer 0) and the height map (layer 1) as one 2-layer array under a new
+// texture key, which replaces the material's normal_key (the shader reads layer 1 for the march). Without a
+// texture store, or when the two textures do not match (size, mips, format, color space) or the height does
+// not load, the material draws without parallax: `ext`'s height is cleared so the renderer sees none.
+// The array is built once, when the material first resolves, and lives until reset()/shutdown(): a texture hot
+// reload or a texture store swap does not rebuild it (follow-up if the editor needs it).
+u32 Kit3DExtract::build_parallax_array(render::MaterialOverride& m, asset::Guid material_guid) {
+    const asset::Guid layer_guid[2] = {m.params.texture(asset::MaterialSlot::Normal), m.ext.height()};
+    asset::TextureView views[2] = {};
+    const asset::TextureView* ptrs[2] = {};
+    if (textures_) {
+        for (u32 i = 0; i < 2; ++i) {
+            if (layer_guid[i] == asset::Guid{} || texture_key(layer_guid[i]) == ~0u) continue;
+            for (const TextureEntry& te : texture_entries_) {
+                if (!(te.guid == layer_guid[i]) || te.handle.generation == 0) continue;
+                const Result<asset::TextureView> tv =
+                    asset::TextureView::read(assets_->resolve(asset::AssetHandle<asset::Texture>{te.handle.index, te.handle.generation}));
+                if (tv) {
+                    views[i] = tv.value();
+                    ptrs[i] = &views[i];
+                }
+                break;
+            }
+        }
+        // Height is linear data: an sRGB one (and, with no normal map, the array's format) would bend the depth.
+        if (ptrs[1] && (views[1].header->flags & asset::TextureFlags::Srgb)) ptrs[1] = nullptr;
+    }
+    render::LayerArray arr;
+    u32 key = ~0u;
+    const bool composed = ptrs[1] && render::compose_layer_array(Span<const asset::TextureView* const>(ptrs, 2), arr, "material.parallax", true);
+    // Layer 1 (the height) must have made it in; a normal map that did not match leaves layer 0 flat instead.
+    if (composed && (arr.present & 2u)) {
+        key = textures_->allocate_key();
+        if (!textures_->upload(key, 1, arr.upload)) key = ~0u;
+    }
+    if (key == ~0u) {
+        MCE_LOG_WARN("kit3d: material {} draws without parallax: its height map {} is missing, not resident, imported as sRGB, or does "
+                     "not match the normal map {} (same size, mips and format, both linear)",
+                     asset::to_string(material_guid).view(), asset::to_string(layer_guid[1]).view(),
+                     asset::to_string(layer_guid[0]).view());
+        m.ext.height_scale = 0.0f;
+        return ~0u;
+    }
+    m.normal_key = key;
+    m.parallax = true;
+    m.parallax_normal = (arr.present & 1u) != 0;
+    return key;
+}
+
 const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
     if (guid == asset::Guid{} || !assets_) return nullptr;
     for (const MaterialEntry& m : material_entries_)
@@ -240,6 +379,24 @@ const render::MaterialOverride* Kit3DExtract::material(asset::Guid guid) {
             m.normal_key = texture_key(m.params.texture(asset::MaterialSlot::Normal));
             m.orm_key = texture_key(m.params.texture(asset::MaterialSlot::MetallicRoughness));
             m.emissive_key = texture_key(m.params.texture(asset::MaterialSlot::Emissive));
+            // M-CONTENT 1b: a BC4 texture holds one channel (R). In a slot that reads more than R it draws red/grey, so say so once.
+            static constexpr asset::MaterialSlot kWide[] = {asset::MaterialSlot::BaseColor, asset::MaterialSlot::MetallicRoughness,
+                                                            asset::MaterialSlot::Emissive, asset::MaterialSlot::Normal};
+            for (const asset::MaterialSlot slot : kWide) {
+                const asset::Guid tg = m.params.texture(slot);
+                if (tg == asset::Guid{}) continue;
+                for (const TextureEntry& te : texture_entries_) {
+                    if (!(te.guid == tg) || te.handle.generation == 0) continue;
+                    const Result<asset::TextureView> tv =
+                        asset::TextureView::read(assets_->resolve(asset::AssetHandle<asset::Texture>{te.handle.index, te.handle.generation}));
+                    if (tv && tv.value().header->format == asset::TextureFormat::BC4)
+                        MCE_LOG_WARN("kit3d: material {} binds texture {} cooked as BC4 (one channel) to a slot that reads more than R; "
+                                     "set \"compress\": \"bc7\" (colour, ORM) or \"bc5\" (normal) on it",
+                                     asset::to_string(guid).view(), asset::to_string(tg).view());
+                    break;
+                }
+            }
+            if (m.ext.parallax()) e.parallax_key = build_parallax_array(m, e.guid);
         } else {
             MCE_LOG_WARN("kit3d: material {} does not read", asset::to_string(guid).view());
         }
@@ -507,6 +664,15 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             env = c;
         });
     }
+    {
+        static EnvOverrides parsed;
+        const StringView want = cv_env_override.get_string();
+        if (want != parsed.text.view()) {
+            parsed.text.assign(want);
+            parse_env_overrides(want, parsed);
+        }
+        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
+    }
     render::DirectionalLight sun;
     sun.direction = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
     sun.color = env.sun_color;
@@ -529,6 +695,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sky.ibl = env.sky_ibl != 0;
     sky.ibl_texture = texture_key(env.ibl_texture.guid);
     sky.ibl_texture_intensity = env.ibl_texture_intensity;
+    sky.rotation = env.sky_rotation_deg * (3.14159265358979f / 180.0f);
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;
@@ -548,7 +715,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     vol.max_distance = env.volumetric_distance;
     render::apply_quality(quality_, vol);
     scene.set_volumetrics(vol);
-    scene.set_exposure(env.exposure);
+    scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
     post.bloom = env.bloom != 0 && quality_.bloom;
     post.bloom_intensity = env.bloom_intensity;
@@ -572,6 +739,27 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.motion_blur.intensity = env.motion_blur_intensity;
     post.upscaler = env.upscaler != 0 ? render::Upscaler::Spatial : render::Upscaler::Bilinear;
     post.sharpen = env.sharpen;
+    post.lens.vignette = env.vignette;
+    post.lens.vignette_smoothness = env.vignette_smoothness;
+    post.lens.grain = env.film_grain;
+    post.lens.grain_size = env.grain_size;
+    post.lens.chromatic_aberration = env.chromatic_aberration;
+    post.lens.dirt_intensity = env.lens_dirt_intensity;
+    const u32 dirt = texture_key(env.lens_dirt.guid);
+    post.lens.dirt_key = dirt == ~0u ? 0u : dirt;
+    post.tonemapper = env.tonemapper == 1 ? render::Tonemapper::AgX
+                    : env.tonemapper == 2 ? render::Tonemapper::PbrNeutral : render::Tonemapper::AcesFit;
+    // The primary camera's own focus wins over the environment's.
+    bool focused = false;
+    world.query<const Camera3DComponent&>().each([&](const Camera3DComponent& c) {
+        if (focused || !c.primary) return;
+        focused = true;
+        if (c.focus_distance > 0.0f) post.dof.focus_distance = c.focus_distance;
+    });
+    if (cv_dof_focus.get_float() > 0.0f) {
+        post.dof.enabled = quality_.dof_motion_blur;
+        post.dof.focus_distance = cv_dof_focus.get_float();
+    }
     render::apply_accessibility(render::accessibility_settings(), post);  // M-ACCESS: never in the state
     scene.set_post(post);
     render::AmbientOcclusion ao;
@@ -599,6 +787,9 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     contact.steps = env.contact_steps;
     render::apply_quality(quality_, contact);
     scene.set_contact_shadows(contact);
+    render::ParallaxSettings parallax;
+    render::apply_quality(quality_, parallax);
+    scene.set_parallax(parallax);
     render::ShadowSettings shadows;
     shadows.cascades = clamp(env.shadow_cascades, 1u, min(render::kMaxCascades, quality_.shadow_cascades));
     shadows.resolution = quality_.shadow_size;
@@ -684,9 +875,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         world.query<const ShowRenderTexture&>().each([&](const ShowRenderTexture&) { ++screens; });
         screen_materials_.reserve(screens);
     }
+    // StaticMerge3D (M-VISUAL3 5b): merged once per frame, the later views of the frame reuse it.
+    if (!extra_view_) update_static_merges(world);
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         if (!m.visible) return;
+        if (merge_stamp_ != 0 && e.index < merged_stamp_.size() && merged_stamp_[e.index] == merge_stamp_) return;  // drawn merged
         vec3 pos, scale;
         quat rot;
         if (!pose_of(world, e, pos, rot, scale)) return;
@@ -786,6 +980,14 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         worlds_[world_parity_][ent] = inst.world;
         world_stamp_[ent] = frame_stamp_;
         prev_ok_[ent] = prev ? 1 : 0;
+        scene.add(inst);
+    }
+    for (const MergedDraw& d : merged_draws_) {
+        if (!bake_mode_ && !in_view(d.center, d.radius)) continue;
+        render::MeshInstance inst;
+        inst.mesh = d.key;
+        inst.cast_shadows = d.cast_shadows;
+        inst.lod_state = d.lod_state;
         scene.add(inst);
     }
     extract_terrains(world, scene);

@@ -4,8 +4,12 @@
 
 #include <doctest/doctest.h>
 
+#include "../asset/hdr_fixtures.h"
 #include "fixture3d.h"
 #include "golden.h"
+#include "mce/asset/container.h"
+#include "mce/cook/importer.h"
+#include "mce/render/asset_upload.h"
 
 using namespace mce;
 using namespace mce::render;
@@ -565,4 +569,137 @@ TEST_CASE("golden: a GPU particle burst glowing above the ground") {
         });
     CHECK(f.renderer.forward_3d().last_stats().particle_emitters == 1);
     check_golden("particles_burst", f);
+}
+
+// ---- M-VISUAL3 2: parallax occlusion mapping ----------------------------------------------------
+
+TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints are carved by its height map") {
+    Fixture3D f;
+    ParallaxFloor p = make_parallax_floor(f);
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        MeshInstance fl;
+        fl.mesh = 20;
+        fl.material = &p.on;
+        s.add(fl);
+    });
+    check_golden("parallax_cobble", f);
+}
+
+// ---- M-VISUAL3 4: HDR sky -----------------------------------------------------------------------
+
+TEST_CASE("golden: a cooked .hdr sky with a 200x hot spot lights a white sphere, a box and the ground") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    // A 64x32 Radiance file written here, cooked by the texture importer (RGBA16F, mips), uploaded as the asset
+    // system would: base 0.25, a 50 patch on the horizon toward +Z and +X (equirect u = 0.5625): the light comes from the camera's right and lights the
+    // faces it sees.
+    std::vector<float> grey(64 * 32, 0.25f);
+    for (unsigned y = 14; y < 18; ++y)
+        for (unsigned x = 32; x < 40; ++x) grey[y * 64 + x] = 50.0f;
+    const std::string hdr = hdr_fixtures::make_rgbe_hdr(64, 32, grey);
+    const auto importer = cook::make_texture_importer();
+    cook::ImportInput in;
+    in.guid = asset::Guid{1, 2};
+    in.display_path = "hdr_sky.hdr";
+    in.source_path = "hdr_sky.hdr";
+    in.source = Span<const byte>(reinterpret_cast<const byte*>(hdr.data()), hdr.size());
+    cook::DiagList diags;
+    asset::ContainerWriter writer;
+    REQUIRE(importer->cook(in, writer, diags));
+    Array<byte> packed;
+    writer.finish(packed);
+    auto view = asset::ContainerView::open(packed.span());
+    REQUIRE(view.has_value());
+    const u32 chunk = view.value().find(asset::ChunkType::Texture);
+    REQUIRE(chunk < view.value().chunk_count());
+    const u32 tex = f.renderer.textures().allocate_key();
+    REQUIRE(upload_cooked_texture(f.renderer.textures(), tex, 1, view.value().payload(chunk)).has_value());
+    upload_sphere(f, 40, {-1.8f, 1.0f, 0.6f}, 0.8f);
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        Sky sky = constant_sky(0.0f, true);
+        sky.texture = tex;
+        sky.texture_intensity = 0.1f;
+        s.set_sky(sky);
+        MeshInstance m;
+        m.mesh = 40;
+        s.add(m);
+    });
+    check_golden("hdr_sky", f);
+}
+
+// ---- M-VISUAL3 3: the camera's look ---------------------------------------------------------------
+
+TEST_CASE("golden: filmic_lens: vignette, chromatic aberration and grain on the ground, the box and the sky at a fixed time") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.lens.vignette = 0.7f;
+        p.lens.chromatic_aberration = 0.8f;
+        p.lens.grain = 0.25f;
+        s.set_post(p);
+        s.set_time(2.0f, 1.0f / 60.0f);
+    });
+    check_golden("filmic_lens", f);
+}
+
+TEST_CASE("golden: tonemap_agx: the same scene through the AgX curve") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::AgX;
+        s.set_post(p);
+    });
+    check_golden("tonemap_agx", f);
+}
+
+TEST_CASE("golden: tonemap_neutral: the same scene through Khronos PBR Neutral") {
+    Fixture3D f;
+    f.pitch_deg = 12.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        PostFx p;
+        p.fxaa = false;
+        p.tonemapper = Tonemapper::PbrNeutral;
+        s.set_post(p);
+    });
+    check_golden("tonemap_neutral", f);
+}
+
+// ---- M-VISUAL3 5a: automatic instancing ----------------------------------------------------------
+
+TEST_CASE("golden: instanced_props: a grid of identical crates under three cascades, drawn as instanced runs") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    upload_crate(f, 60);
+    f.render(0.0f, true, [](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_crate_grid(s, 60);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.runs_instanced >= 2);
+    CHECK(st.shadow_runs_instanced >= 2);
+    check_golden("instanced_props", f);
+}
+
+// ---- M-VISUAL3 5b: static merge ------------------------------------------------------------------------------------
+
+TEST_CASE("golden: static_merge_kit: a modular kit of 32 pieces merged into two cells, one draw per material and cell") {
+    Fixture3D f;
+    f.pitch_deg = 30.0f;
+    MergeKit kit;
+    upload_merge_kit(f, kit);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_sky(gradient_sky());
+        add_merge_kit(s, kit, true);
+    });
+    const Forward3DStats& st = f.renderer.forward_3d().last_stats();
+    CHECK(st.cascades == 3);
+    CHECK(st.main_draws == 2 + kit.materials * kit.cells);  // the fixture's ground and box, then the kit
+    check_golden("static_merge_kit", f);
 }

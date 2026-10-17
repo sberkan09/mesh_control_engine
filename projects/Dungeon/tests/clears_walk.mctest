@@ -1,0 +1,41 @@
+{
+  "name": "the autopilot clears ten walk levels",
+  "scene": "scenes/walk.mcscene",
+  "ticks": 9000,
+  "actor": "Player",
+  "input": [
+    {
+      "from": 2,
+      "to": 2,
+      "actions": {
+        "Jump": true
+      }
+    }
+  ],
+  "assert": [
+    {
+      "log_contains": "level ready seed 1"
+    },
+    {
+      "log_contains": "level complete seed 1"
+    },
+    {
+      "log_contains": "level complete seed 9"
+    },
+    {
+      "log_contains": "level complete seed 10"
+    },
+    {
+      "reachable": {
+        "kind": "walk",
+        "width": 48,
+        "height": 32,
+        "seed": 1,
+        "count": 10
+      }
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

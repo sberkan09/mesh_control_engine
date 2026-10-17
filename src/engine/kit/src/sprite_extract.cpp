@@ -1,6 +1,7 @@
 #include "mce/kit/sprite_extract.h"
 
 #include <cmath>
+#include <limits>
 
 #include "mce/asset/formats.h"
 #include "mce/ecs/hierarchy.h"
@@ -330,6 +331,18 @@ void SpriteExtract::collect_lights(World& world, render::SpriteBatch& batch) {
     world.query<const WorldTransform, const Light2D>().each([&](const WorldTransform& t, const Light2D& l) { add(placement(t), l); });
     if (any_ambient) lights.ambient = ambient;
     batch.set_lights(lights);
+}
+
+void SpriteExtract::add_fill(render::SpriteBatch& batch, const math::Color& tint) {
+    if (!white_set_.valid()) return;
+    const math::aabb2& b = batch.view().world_bounds;
+    render::SpriteInstance inst;
+    inst.position = (b.min + b.max) * 0.5f;
+    inst.scale = (b.max - b.min) * 1.02f + math::vec2{0.01f, 0.01f};
+    inst.tint = tint;
+    inst.set = white_set_;
+    inst.sort_layer = std::numeric_limits<i16>::min();
+    batch.add(inst);
 }
 
 void SpriteExtract::extract(World& world, render::SpriteBatch& batch) {

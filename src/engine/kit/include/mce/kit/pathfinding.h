@@ -104,6 +104,10 @@ u32 mark_static_colliders(NavGrid& grid, World& world, f32 inflate = 0.0f);
 // when there are none).
 math::aabb2 static_collider_bounds(World& world);
 
+// A hash of everything mark_static_colliders reads (the world AABB of each blocking static collider, in
+// query order): a cached grid is stale when it changes. Cheap next to a search.
+u64 static_colliders_hash(World& world);
+
 struct PathOptions {
     bool diagonal = true;  // 8-neighbour; false = 4-neighbour
     bool smooth = true;    // string-pull the cell path

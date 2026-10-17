@@ -34,7 +34,9 @@ public:
     // formats that reference siblings by URI (glTF images) name their dependencies.
     virtual bool guid_for_path(StringView rel_path, Guid& out) const = 0;
     // The parsed document of a native asset and its path relative to assets/: how prefab
-    // instances are flattened at cook (FR-ENT-070). False when unknown or not a native asset.
+    // instances are flattened at cook (FR-ENT-070). For an interchange asset (a texture, a sound) the
+    // sidecar "settings" instead (how a material reads a height map's "srgb"). False when unknown or
+    // when there is no document or settings.
     virtual bool native_document(Guid g, JsonValue& out, StringView& source_path) const {
         (void)g;
         (void)out;
@@ -62,7 +64,7 @@ protected:
 
 // How texture importers store color data (CookOptions::textures; M-MOBILE step 8): RGBA8 for
 // desktops, ASTC 4x4 blocks for phones (a quarter of the memory and bandwidth).
-enum class TextureCompression : u8 { None, Astc4x4 };
+enum class TextureCompression : u8 { None, Astc4x4, Bc };
 
 struct ImportInput {
     Guid guid;
@@ -73,6 +75,9 @@ struct ImportInput {
                                // native: the parsed document root
     const IAssetLookup* lookup = nullptr;
     TextureCompression texture_compression = TextureCompression::None;
+    // Project-wide cap on an ordinary (PNG/JPG) texture's largest side, a power of two (CookOptions::max_texture_size;
+    // 0 = none). The texture importer applies min(this, the sidecar's "max_size").
+    u32 max_texture_size = 0;
 };
 
 class IImporter {

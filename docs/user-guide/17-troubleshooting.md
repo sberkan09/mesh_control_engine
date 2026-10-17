@@ -10,7 +10,7 @@ Symptoms, what they mean, what to do.
 | `EngineIdMismatch` when the game starts | the module was built by a different engine build (commit, build type, compiler or sanitizer) | rebuild both targets from the same tree: `cmake --build --preset <preset> --target my_game` |
 | `ModuleNotFound` | no `lib<game>.so` beside the host and no build-tree fallback | build `my_game_game`, or pass `-module <path>` |
 | "module install failed" | your `install()` returned an error | read the log line; a common one is a missing host resource (install order, section 6.8) |
-| Window never appears, "No available video device" | no display (a container, SSH) | run headless (`-headless 1`), or under `xvfb-run` with Mesa (`LIBGL_ALWAYS_SOFTWARE=1`) |
+| Window never appears, "No available video device" | no display (a container, SSH) | a capture (`-capture_tick N -capture a.ppm`) switches to the offscreen driver by itself; otherwise run headless (`-headless 1`), or under `xvfb-run` with Mesa (`LIBGL_ALWAYS_SOFTWARE=1`); 16.8 |
 | Two audio-device errors at start in a container | no sound card; the engine falls back to silence | harmless; `-audio.enabled 0` silences the log |
 | `-frames` has no effect | the run is headless | use `-ticks N` |
 | `-capture` fails with "cannot write" | the folder is not writable; a relative path is taken from the working directory, not the executable's folder | check the working directory, or pass an absolute path |

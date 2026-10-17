@@ -26,6 +26,9 @@ type Entity = number
 declare extern type FieldHandle with end
 type Fields = { [string]: any }
 type RayHit = { entity: Entity, point: vector, normal: vector, distance: number }
+type PathOptions = { cell: number?, radius: number?, diagonal: boolean?, smooth: boolean? }
+type ShapeHit = { entity: Entity, point: vector, normal: vector, fraction: number }
+type SphereHit = { entity: Entity, point: vector, normal: vector, position: vector, fraction: number }
 type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceiling: boolean, wall_left: boolean, wall_right: boolean }
 
 declare mce: {
@@ -44,6 +47,7 @@ declare mce: {
 
     has: (e: Entity, component: string) -> boolean,
     alive: (e: Entity) -> boolean,
+    find: (name: string) -> Entity?,
     spawn: (components: Fields) -> Entity,
     add: (e: Entity, component: string, fields: Fields?) -> (),
     remove: (e: Entity, component: string) -> (),
@@ -68,10 +72,42 @@ declare mce: {
     raycast2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
+    teleport2d: (e: Entity, position: vector) -> (),
+    find_path: (from: vector, to: vector, options: PathOptions?) -> { vector }?,
+    save: (slot: string) -> (boolean, string?),
+    load: (slot: string) -> boolean,
+    has_save: (slot: string) -> boolean,
+    set_time_scale: (scale: number) -> (),
+    time_scale: () -> number,
+    shake: (trauma: number) -> (),
+    burst: (e: Entity, count: number?) -> (),
     velocity2d: (e: Entity) -> vector,
     set_velocity2d: (e: Entity, velocity: vector) -> (),
-    impulse2d: (e: Entity, impulse: vector) -> (),
+    impulse2d: (e: Entity, impulse: vector, point: vector?) -> (),
+    force2d: (e: Entity, force: vector) -> (),
+    angular_velocity2d: (e: Entity) -> number,
+    set_angular_velocity2d: (e: Entity, w: number) -> (),
+    awake2d: (e: Entity) -> boolean,
+    set_awake2d: (e: Entity, awake: boolean) -> (),
+    set_enabled2d: (e: Entity, enabled: boolean) -> (),
+    overlap_point2d: (point: vector, skip: Entity?) -> boolean,
+    raycast_all2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> { RayHit },
+    circle_cast2d: (from: vector, to: vector, radius: number, skip: Entity?) -> ShapeHit?,
+    box_cast2d: (from: vector, to: vector, half: vector, skip: Entity?) -> ShapeHit?,
     raycast3d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
+    overlap_sphere3d: (center: vector, radius: number, skip: Entity?) -> { Entity },
+    overlap_box3d: (center: vector, half: vector, skip: Entity?) -> { Entity },
+    sphere_cast3d: (from: vector, to: vector, radius: number, skip: Entity?) -> SphereHit?,
+    velocity3d: (e: Entity) -> vector,
+    set_velocity3d: (e: Entity, v: vector) -> (),
+    angular_velocity3d: (e: Entity) -> vector,
+    set_angular_velocity3d: (e: Entity, w: vector) -> (),
+    impulse3d: (e: Entity, impulse: vector) -> (),
+    teleport3d: (e: Entity, position: vector, rotation: vector?) -> (),
+    rotation3d: (e: Entity) -> vector,
+    set_rotation3d: (e: Entity, rotation: vector) -> (),
+    look_rotation3d: (from: vector, to: vector) -> vector,
+    find_path3d: (from: vector, to: vector) -> ({ vector }?, boolean?),
 }
 )";
 

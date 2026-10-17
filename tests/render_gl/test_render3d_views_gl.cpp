@@ -331,20 +331,49 @@ TEST_CASE("render3d_views_gl: a mesh shows a render texture upright, as it shows
     const Array<u8> art_view = Array<u8>(f.pixels);
     frame(rt_key);  // what Kit3DExtract gives a ShowRenderTexture mesh: no flip of its own
 
-    // Both colors show, in the same places.
-    usize red = 0, green = 0, differ = 0;
+    // Both colors show, in the same places: no pixel turns from red to green or back. (A pixel near the blend
+    // of the two rows may fall in or out of a color by a step of filtering: the art is RGBA8, the render
+    // texture RGBA16F, and an RTX 3070 moved 103 of ~10800 slab pixels so.)
+    usize red = 0, green = 0, differ = 0, red_rt = 0, green_rt = 0;
     for (usize i = 0; i < f.pixels.size(); i += 4) {
         red += art_view[i] > 100 && art_view[i + 1] < 40 ? 1 : 0;
         green += art_view[i + 1] > 100 && art_view[i] < 40 ? 1 : 0;
         const bool red_a = art_view[i] > art_view[i + 1] + 30, red_b = f.pixels[i] > f.pixels[i + 1] + 30;
         const bool green_a = art_view[i + 1] > art_view[i] + 30, green_b = f.pixels[i + 1] > f.pixels[i] + 30;
-        differ += red_a != red_b || green_a != green_b ? 1 : 0;
+        differ += (red_a && green_b) || (green_a && red_b) ? 1 : 0;
+        red_rt += red_b ? 1 : 0;
+        green_rt += green_b ? 1 : 0;
     }
-    INFO("red " << red << " green " << green << " pixels whose color differs " << differ);
+    // What the render texture holds, copied texel for texel into an RGBA8 target (a failure on a real GPU
+    // tells an empty texture from a flipped or a partly drawn one).
+    rhi::TextureDesc pd;
+    pd.size = {2, 2};
+    pd.usage = rhi::TextureUsage::SampledColorTarget;
+    pd.debug_name = "test.rt_probe";
+    const rhi::TextureHandle probe = f.device->create_texture(pd);
+    SpriteSetDesc rsd;
+    rsd.texture_key = rt_key;
+    rsd.regions = Span<const SpriteRegion>(&whole, 1);
+    const SpriteSetId rt_set = f.renderer.create_sprite_set(rsd);
+    f.device->begin_frame(f.frame++);
+    {
+        rhi::CommandBuffer cmd;
+        draw_full(f, cmd, probe, {2, 2}, rt_set, false);
+        f.device->submit(cmd);
+    }
+    u8 texels[16] = {};
+    REQUIRE(f.device->read_pixels(probe, rhi::Rect2D{0, 0, 2, 2}, Span<u8>(texels, 16)).has_value());
+    f.device->end_frame();
+    INFO("red " << red << " green " << green << " pixels whose color swapped " << differ << "; through the render texture red "
+                << red_rt << " green " << green_rt << "; its texels (r,g) top row first " << int(texels[0]) << "," << int(texels[1])
+                << " " << int(texels[4]) << "," << int(texels[5]) << " / " << int(texels[8]) << "," << int(texels[9]) << " "
+                << int(texels[12]) << "," << int(texels[13]));
     CHECK(red > 200);
     CHECK(green > 200);
     CHECK(differ * 100 < red + green);
     CHECK(f.device->validation_error_count() == 0);
+    f.renderer.sprite_sets().destroy(rt_set);
+    f.device->destroy_texture(probe);
     f.renderer.sprite_sets().destroy(art_set);
     f.renderer.textures().release(art_key);
     f.renderer.textures().release(rt_key);

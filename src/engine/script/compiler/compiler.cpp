@@ -85,7 +85,7 @@ namespace {
 Result<Array<u8>> bytecode(StringView name, StringView source, CompileError* error) {
     lua_CompileOptions opts{};
     opts.optimizationLevel = 1;
-    opts.debugLevel = 1;  // line info for error messages
+    opts.debugLevel = 2;  // line info and local and upvalue names, for error messages (the state check names upvalues)
     usize size = 0;
     char* bc = luau_compile(source.data(), source.size(), &opts, &size);
     if (!bc) return Error(Errc::OutOfMemory, "script.compile", name);

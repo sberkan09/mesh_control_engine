@@ -125,6 +125,59 @@ TEST_CASE("scene_save: both agents changing one component conflict; nothing is l
     CHECK(entity(root, "Title").find("HELLO") != std::string::npos);
 }
 
+TEST_CASE("two servers on one scene: each adds entities and both saves land; a clash on one entity is refused by name, then overwrite") {
+    // Blind test 3 (#378): two agents, two servers, one project folder, one scene. This is the transcript of what they
+    // did, with the server a person would start for each of them (separate Server objects: nothing but the folder is shared).
+    const std::string root = demo_project("mcp_wf_two_servers");
+    Agent alice(root, "alice");
+    Agent bob(root, "bob");
+    u32 before = 0;
+    entity(root, "Ball", &before);
+
+    // Each adds different entities, with components, and neither has seen the other's.
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    alice.ok("entity_create", R"({"name":"Door"})");
+    bob.ok("entity_create", R"({"name":"Guard","components":{"LocalTransform":{"position":[-4,0,0]}}})");
+    bob.ok("entity_create", R"({"name":"Key"})");
+
+    alice.ok("scene_save");
+    bob.ok("scene_save");  // alice saved first: the second save merges by entity instead of replacing her file
+    u32 after = 0;
+    for (const char* name : {"Lantern", "Door", "Guard", "Key"}) CHECK_MESSAGE(!entity(root, name, &after).empty(), name << " is in the file");
+    CHECK(after == before + 4);
+    CHECK(entity(root, "Lantern").find("[3,1,0]") != std::string::npos);
+    CHECK(entity(root, "Guard").find("[-4,0,0]") != std::string::npos);
+
+    // Bob's open scene is the merge (he sees alice's work), and alice sees bob's after the reload she is told to do.
+    const std::string bobs = bob.ok("scene_list_entities").text;
+    CHECK(bobs.find("Lantern") != std::string::npos);
+    CHECK(bobs.find("Door") != std::string::npos);
+    alice.ok("scene_open", R"({"path":"scenes/demo.mcscene"})");
+    const std::string alices = alice.ok("scene_list_entities").text;
+    CHECK(alices.find("Guard") != std::string::npos);
+    CHECK(alices.find("Key") != std::string::npos);
+    CHECK(alices.find("Lantern") != std::string::npos);
+
+    // Both change the same field of the same entity: the second save is refused, names the entity and the ways out, and
+    // writes nothing.
+    alice.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.91})");
+    bob.ok("component_set", R"({"entity":"Ball","component":"Collider2D","path":"restitution","value":0.37})");
+    bob.ok("entity_create", R"({"name":"Chest"})");
+    alice.ok("scene_save");
+    const std::string err = bob.fails("scene_save");
+    CHECK(err.find("\"Ball\" components/Collider2D") != std::string::npos);
+    CHECK(err.find("nothing was written") != std::string::npos);
+    CHECK(err.find("overwrite") != std::string::npos);
+    CHECK(entity(root, "Ball").find("0.91") != std::string::npos);
+    CHECK(entity(root, "Chest").empty());
+
+    // overwrite saves bob's whole copy over the file: his Ball and his Chest, and everything he had merged in.
+    bob.ok("scene_save", R"({"overwrite":true})");
+    CHECK(entity(root, "Ball").find("0.37") != std::string::npos);
+    CHECK_FALSE(entity(root, "Chest").empty());
+    for (const char* name : {"Lantern", "Door", "Guard", "Key"}) CHECK_MESSAGE(!entity(root, name).empty(), name << " survived the overwrite");
+}
+
 TEST_CASE("merge_entity_files: references inside renumbered entities follow them") {
     const char* base = R"({"format":"mce-scene","version":1,"name":"s","entities":[{"id":1,"name":"A"}]})";
     const char* ours =

@@ -8,13 +8,22 @@ builds are normalized first: the state hash (checked for shape here, for equalit
 and log tails (absolute paths, timings). A tool result's text content must equal its
 structuredContent and is replaced by a marker.
 
+A transcripts/<name>.multi.jsonl drives SEVERAL mce_mcp processes on ONE project copy: each line is
+{"server": "a", "msg": {...JSON-RPC...}}. One process per distinct server name. Lines are sent strictly
+one at a time: write the message and, if it has an "id", read exactly one response line from that
+server before the next line (a notification gets none), so the order across processes is fixed. At the
+end every stdin is closed and every exit code checked. <name>.multi.golden.jsonl holds
+{"server": ..., "response": ...} per request, normalized like the single-server goldens.
+
   run_transcript.py --exe build/linux-gcc-debug/src/editor/mcp/mce_mcp [--work DIR] [--update]
 """
 
 import argparse
 import json
+import os
 import pathlib
 import re
+import select
 import shutil
 import subprocess
 import sys
@@ -49,7 +58,97 @@ def normalize_message(line):
     return normalize(msg)
 
 
+REPLY_TIMEOUT = 60.0
+
+
+def read_line(proc, buf, deadline_s=REPLY_TIMEOUT):
+    """One stdout line from proc (bytes buffer kept in buf), or None on EOF / timeout."""
+    fd = proc.stdout.fileno()
+    while b"\n" not in buf:
+        ready, _, _ = select.select([fd], [], [], deadline_s)
+        if not ready:
+            return None
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            return None
+        buf += chunk
+    line, _, rest = bytes(buf).partition(b"\n")
+    buf[:] = rest
+    return line.decode()
+
+
+def compare(name, got, want):
+    ok = True
+    for i in range(max(len(got), len(want))):
+        g = got[i] if i < len(got) else None
+        w = want[i] if i < len(want) else None
+        if g != w:
+            ok = False
+            print(f"{name}: message {i + 1} differs")
+            print("  want: " + json.dumps(w, ensure_ascii=False)[:2000])
+            print("  got:  " + json.dumps(g, ensure_ascii=False)[:2000])
+    print(f"{name}: {'ok' if ok else 'FAILED'} ({len(got)} messages)")
+    return ok
+
+
+def run_multi(exe, transcript, work, update):
+    name = transcript.name[: -len(".jsonl")]  # "<x>.multi"
+    project = work / name
+    if project.exists():
+        shutil.rmtree(project)
+    shutil.copytree(DEMO_ASSETS, project / "assets")
+    steps = [json.loads(l) for l in transcript.read_text(encoding="utf-8").splitlines() if l.strip()]
+    procs, bufs, got, failed = {}, {}, [], False
+    try:
+        for step in steps:
+            if step["server"] not in procs:
+                procs[step["server"]] = subprocess.Popen(
+                    [str(exe), "--project", str(project), "--docs", str(work / "no_docs")],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE)  # stderr inherited: a sanitizer report shows in the ctest log
+                bufs[step["server"]] = bytearray()
+        for n, step in enumerate(steps, 1):
+            srv, msg = step["server"], step["msg"]
+            proc = procs[srv]
+            proc.stdin.write((json.dumps(msg) + "\n").encode())
+            proc.stdin.flush()
+            if "id" not in msg:
+                continue
+            line = read_line(proc, bufs[srv])
+            if line is None:
+                print(f"{name}: step {n}: no response from server {srv!r} (exit {proc.poll()})")
+                failed = True
+                break
+            got.append({"server": srv, "response": normalize_message(line)})
+    finally:
+        for proc in procs.values():
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+        for srv, proc in procs.items():
+            try:
+                code = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                code = "timeout"
+            if code != 0:
+                print(f"{name}: server {srv!r} exited with {code}")
+                failed = True
+            proc.stdout.close()
+    if failed:
+        return False
+    golden = transcript.with_name(name + ".golden.jsonl")
+    if update:
+        golden.write_text("".join(json.dumps(m, ensure_ascii=False) + "\n" for m in got), encoding="utf-8")
+        print(f"{name}: wrote {golden.relative_to(ROOT)} ({len(got)} messages)")
+        return True
+    want = [json.loads(l) for l in golden.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return compare(name, got, want)
+
+
 def run_one(exe, transcript, work, update):
+    if transcript.name.endswith(".multi.jsonl"):
+        return run_multi(exe, transcript, work, update)
     name = transcript.name[: -len(".jsonl")]
     project = work / name
     if project.exists():
@@ -69,17 +168,7 @@ def run_one(exe, transcript, work, update):
         print(f"{name}: wrote {golden.relative_to(ROOT)} ({len(got)} messages)")
         return True
     want = [json.loads(l) for l in golden.read_text(encoding="utf-8").splitlines() if l.strip()]
-    ok = True
-    for i in range(max(len(got), len(want))):
-        g = got[i] if i < len(got) else None
-        w = want[i] if i < len(want) else None
-        if g != w:
-            ok = False
-            print(f"{name}: message {i + 1} differs")
-            print("  want: " + json.dumps(w, ensure_ascii=False)[:2000])
-            print("  got:  " + json.dumps(g, ensure_ascii=False)[:2000])
-    print(f"{name}: {'ok' if ok else 'FAILED'} ({len(got)} messages)")
-    return ok
+    return compare(name, got, want)
 
 
 def main():

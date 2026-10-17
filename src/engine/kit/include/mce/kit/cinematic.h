@@ -51,7 +51,7 @@ struct CameraRail3D {
     bool face_path = false;
     u8 pad_[2] = {};
 };
-MCE_COMPONENT(CameraRail3D, (points, Help{"the path's points (parent space); the first `count` are used"}),
+MCE_COMPONENT(CameraRail3D, (points, Help{"the path's points (parent space); always 8 entries, the first `count` are used"}),
               (count, Range{0, 8}, Help{"points in use (2 or more moves the camera)"}),
               (t, Range{0, 1}, Help{"place on the path: 0 = first point, 1 = last"}),
               (speed, Range{0, 10}, Help{"t per second; 0 = set by a timeline or the game"}),

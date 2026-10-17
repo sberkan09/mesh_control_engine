@@ -44,6 +44,7 @@ A `ScriptSystem` component names one script. Put it on its own entity (by conven
 | `phase` | `Pre` | `Pre`: before physics (FixedUpdate_Pre); `Post`: after it (FixedUpdate_Post). A script that calls `mce.move_and_collide` or sets 2D velocities needs `Post`: the bodies are made by the first physics step |
 | `order` | 0 | scripts of a phase run lowest first; ties run in ECS order |
 | `enabled` | true | off: the script is not loaded |
+| `during_cutscenes` | false | on: the script keeps running while a cutscene holds the game (a pause hold still stops it). Scripts with it on run after the others of their phase, whatever their `order`; scripts without it are held during a cutscene, as before |
 
 `mce_player`, the editor's play mode and MCP's `run_headless` run a scene's scripts the same way. The
 set is read again whenever it changes (a scene change, an edit), and the new set loads from the
@@ -63,6 +64,11 @@ numbers, and `nil` is the null entity.
 | `mce.get(e, h, ...)` | the values of one or more fields (handles, or `"Comp", "field"` pairs) in one call |
 | `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |
+
+One call may mix components: `mce.get(e, "LocalTransform", "position", "ScriptVars", "v")` returns both values and
+`mce.set(e, "LocalTransform", "position", p, "ScriptVars", "v", t)` writes both. A script cannot keep a variable between
+ticks; the place for a value that must survive is a component field, and for a game with no C++ of its own
+that is `ScriptVars` (27.8).
 
 Field values: numbers, booleans, enums by name (`"Dynamic"`), `Vec2`/`Vec3` as vectors, `Vec4`, `Quat` and
 `Color` as four numbers (or a `{x, y, z, w}` table inside a struct), strings, entities, asset references as
@@ -90,6 +96,7 @@ the new entity is alive at once, its components appear after the phase.
 | `mce.add(e, "Comp", {...})` | adds the component (or updates it, keeping the fields not named) |
 | `mce.remove(e, "Comp")`, `mce.destroy(e)` | removes a component, destroys the entity |
 | `mce.has(e, "Comp")`, `mce.alive(e)` | what the entity has now |
+| `mce.find(name)` | the entity a scene gave that name (`"name"` in the `.mcscene`), or `nil`; the first live one in scene order if several share it. Entities spawned at run time have no name, and a scene change forgets the old names |
 | `mce.instantiate("guid:<prefab>", pos?)` | spawns a prefab, its root at `pos`; the root entity, or `nil` (logged) |
 
 **Events and signals.** Events are readable from the tick after they were pushed.
@@ -113,8 +120,44 @@ map does not define reads as not pressed and zero.
 | `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
-| `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v)` | a 2D body's velocity, and pushes |
+| `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
+| `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v, point?)` | a 2D body's velocity, and pushes; with a world-space `point` the impulse spins the body |
+| `mce.force2d(e, f)` | a force on the body's origin, kept until the next physics step (call it every tick for a thruster) |
+| `mce.angular_velocity2d(e)`, `mce.set_angular_velocity2d(e, w)` | radians per second |
+| `mce.awake2d(e)`, `mce.set_awake2d(e, awake)`, `mce.set_enabled2d(e, enabled)` | sleep (needs sleeping on in the physics config) and switching a body off: a disabled body neither moves nor collides |
+| `mce.overlap_point2d(p, skip?)` | is there a shape at the point |
+| `mce.raycast_all2d(origin, dir, max, skip?)` | every hit along the ray, nearest first, each `{entity, point, normal, distance}` |
+| `mce.circle_cast2d(from, to, radius, skip?)`, `mce.box_cast2d(from, to, half, skip?)` | the first thing a circle or box hits on its way, `{entity, point, normal, fraction}` (0 to 1 along the move), or `nil` |
+| `mce.find_path(from, to, options?)` | a walk from `from` to `to` around the static colliders: an array of vectors (the last one is `to`), or `nil` when `to` is blocked or unreachable. Options: `cell` (grid cell, metres, default 0.5), `radius` (how wide the walker is, default 0.25), `diagonal` and `smooth` (both default true). The grid is built from the static colliders and rebuilt when they change; with none, the answer is `{to}` |
+
+The 2D body functions raise "the entity has no 2D body" for an entity without one (a body exists from the first physics step).
 | `mce.raycast3d(origin, dir, max, skip?)` | the same for the 3D physics world |
+| `mce.overlap_sphere3d(center, radius, skip?)`, `mce.overlap_box3d(center, half, skip?)` | the entities whose shapes touch a sphere or an axis-aligned box (at most 256) |
+| `mce.sphere_cast3d(from, to, radius, skip?)` | the first thing a sphere hits on its way, `{entity, point, normal, position, fraction}`, or `nil` |
+| `mce.velocity3d(e)`, `mce.set_velocity3d(e, v)`, `mce.angular_velocity3d(e)`, `mce.set_angular_velocity3d(e, w)`, `mce.impulse3d(e, impulse)` | a 3D body's velocities and a push at its centre of mass |
+| `mce.teleport3d(e, position, rotation?)` | puts a 3D body or character at `position` with no sweep; `rotation` (see below) defaults to the body's own; writing `LocalTransform.position` alone does not move a body |
+| `mce.rotation3d(e)` / `mce.set_rotation3d(e, rotation)` | a 3D body's rotation, and turning it in place |
+| `mce.look_rotation3d(from, to)` | the rotation that turns forward from `from` toward `to` (roll 0); pure, no entity |
+
+A rotation in Luau is a `vector` of Euler angles in degrees: `x` pitch, `y` yaw, `z` roll, applied yaw, then pitch, then roll.
+Forward is -Z and up is +Y, as for the camera, so a yaw of 0 faces -Z, +90 faces -X and a pitch of +90 looks straight up.
+There is no quaternion type; straight up or down has no yaw of its own (it reads back as 0 and the turn goes into roll).
+| `mce.find_path3d(from, to)` | the corner points along the baked navmesh after leaving `from`, ending at `to` (like `mce.find_path`), and `true` as a second result when the path is partial (the target cannot be reached; it ends at the closest point); `nil` when there is no path; an error when the world has no navmesh |
+
+A walking 3D character needs no call: set `CharacterController3D.move` and `jump` and the kit's own system moves it with the right slope, step and push rules. The 3D body functions raise "the entity has no 3D body" for an entity without one.
+
+**Game plumbing.**
+
+| Call | Does |
+|---|---|
+| `mce.save(slot)` | writes the entities that have a `SaveKey` (fields marked `Save`) to the slot now; `true`, or `false` and a reason. A slot is a name: 1 to 64 letters, digits, `_` or `-`, never a path |
+| `mce.load(slot)` | `true` when the slot exists; the host applies it right after this tick, on top of the scene that is loaded. The tick counter is not restored |
+| `mce.has_save(slot)` | does the slot exist |
+| `mce.set_time_scale(s)`, `mce.time_scale()` | game speed against the wall clock, 0.1 to 4 (slow motion, hit-stop); it scales the player's clock, never `dt`, so a headless run ignores it |
+| `mce.shake(trauma)` | adds trauma (0..1, total capped at 1) to every `CameraShake2D` and `CameraShake3D` |
+| `mce.burst(e, count?)` | fires the entity's `ParticleBurst` once, with `count` particles if given |
+
+Stopping or fading a sound has no call of its own: play it from an entity with an `AudioSource` and a `fade_s`, then destroy the entity (or set its `playing` field) and the voice fades out.
 
 **The rest.**
 
@@ -141,11 +184,29 @@ map does not define reads as not pressed and zero.
   The top level itself may build constant tables and field handles (it runs once, when the script
   loads), and the locals of `update()` and the closures inside it are fine, since they live for one call.
   Globals are read-only after the top level runs.
+
+  What the cook cannot see is caught when the game runs. Once the top level has run, every table that
+  `update()` and the script's globals reach is frozen, so writing into it through an alias
+  (`local a = t; a.n += 1`), a helper's parameter (`fill(t)`), a global table (`STATE.n += 1`) or a
+  `newproxy` metatable fails at that line with `attempt to modify a readonly table (tables reachable
+  from update() are frozen after the top level; keep state in a component)`. Upvalues (a closure made
+  by a factory, `local inc = counter()`) and buffers it reaches are compared after each `update()`; a
+  change disables the script on that tick with `update() kept state between ticks: upvalue 'n' of the
+  function defined at line 3 changed (reached from upvalue 'inc' of update()); keep it in a component`.
+  A top-level scratch table or a cache filled lazily is therefore an error too: build it at the top
+  level, or make it per call.
+
+  The check runs in the editor, `mce run`, `run_headless` and `mce_player -headless`, where a script
+  that failed for this or any other reason also makes the player exit with status 3 (after printing
+  the state hash), so a CI run notices. A shipped game's window leaves it off (the pack found beside
+  the executable): a player cannot fix a script and the check costs a walk of the script's data once
+  and a compare per tick. `-script.state_check 1` or `0` overrides either default.
 - **Keys with a stable order.** Iterating a table keyed by tables or functions follows their addresses,
   which differ between runs. The cook rejects such keys where the source shows them (`{[{}] = 1}`,
   `seen[f] = true` with `local function f`), and `pairs` and `next` raise when they meet one at run time.
   Key by entity, number or string. One gap remains: a plain `for k, v in t do` loop over such a table
-  is not caught (Luau runs that loop inside the VM, and the type check does not track key types).
+  is not caught (Luau runs that loop inside the VM, and the type check does not track key types), and
+  the run-time state check above does not see it either, since iteration order is not state.
 - **A sandbox.** Only the `table`, `string`, `math`, `utf8`, `bit32`, `buffer` and `vector` libraries
   are there; `os`, `io`, `debug`, `coroutine`, `print` and `math.random` are not, and the cook says what
   to use instead (`'print' is not available in scripts; use mce.log`).
@@ -314,3 +375,55 @@ end
 ```
 
 **Playing a sound on a press:** `if mce.pressed("Jump") then mce.play_sound("guid:<sfx>", -6) end`.
+
+**A chaser that goes around walls** (2D; `projects/Dungeon/assets/scripts/dungeon.luau` has the whole thing). Plan now and then, not every
+tick, and walk the first corner of the plan:
+
+```lua
+local VARS = mce.field("ScriptVars", "v")
+local POS = mce.field("LocalTransform", "position")
+-- v[1], v[2] the waypoint; v[3] ticks to the next plan
+local function chase(e, target)
+    local v = mce.get(e, VARS)
+    local pos = mce.get(e, POS)
+    v[3] = v[3] - 1
+    if v[3] <= 0 then
+        v[3] = 20
+        local path = mce.find_path(pos, target)          -- nil when the target is walled in
+        if path then v[1], v[2] = path[1].x, path[1].y end
+    end
+    local d = vector.create(v[1] - pos.x, v[2] - pos.y, 0)
+    if vector.magnitude(d) > 0.05 then
+        mce.set(e, POS, pos + vector.normalize(d) * math.min(3.5 * mce.dt, vector.magnitude(d)))
+    end
+    mce.set(e, VARS, v)
+end
+```
+
+A body-less chaser like this can move by writing `LocalTransform.position`; one with a 2D body moves with `mce.move_and_collide`
+or `mce.set_velocity2d`.
+
+**Hit-stop and a shake** (the moment a hit lands): `mce.shake(0.4)`, and slow the clock for a beat with `mce.set_time_scale(0.2)`;
+set it back to 1 a few ticks later (count them in a `ScriptVars` slot).
+
+**A save slot** (press F5 to save, F9 to load; only entities with a `SaveKey` and fields marked `Save` are written):
+
+```lua
+function update()
+    if mce.pressed("QuickSave") then mce.save("quick") end
+    if mce.pressed("QuickLoad") and mce.has_save("quick") then mce.load("quick") end   -- applied right after this tick
+end
+```
+
+**3D pickups** (a coin is collected when the player's sphere touches it):
+
+```lua
+function update()
+    mce.each("ScriptVars", function(p)
+        if mce.get(p, "ScriptVars", "v")[16] ~= 1 then return end
+        for _, thing in ipairs(mce.overlap_sphere3d(mce.get(p, "LocalTransform", "position"), 0.6, p)) do
+            if mce.has(thing, "Pickup") then mce.destroy(thing) end
+        end
+    end)
+end
+```

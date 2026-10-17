@@ -77,6 +77,9 @@ struct Sky {
     // environment for the lighting while the dome shows something else); ~0u = the sky itself.
     u32 ibl_texture = ~0u;
     f32 ibl_texture_intensity = 1.0f;
+    // M-VISUAL3 4: yaw of the sky and IBL textures about +Y, radians (an HDRI aligned by hand). 0 takes the
+    // shader's no-rotation branch, so frames without it are bit-identical. The gradient and the atmosphere ignore it.
+    f32 rotation = 0.0f;
 };
 
 // Volumetric fog (M-VISUAL 7): a froxel grid over the view (screen tiles × depth slices to
@@ -101,6 +104,8 @@ struct Volumetrics {
 
 // The post chain (FR-R3D-090): bloom -> ACES tonemap (exposure) -> FXAA. Toggleable per frame.
 enum class Upscaler : u8 { Bilinear, Spatial };
+// The curve from scene-linear light to display (M-VISUAL3 3): AcesFit is the engine's long-standing one.
+enum class Tonemapper : u8 { AcesFit, AgX, PbrNeutral };
 
 struct PostFx {
     bool bloom = true;
@@ -120,6 +125,18 @@ struct PostFx {
     // override both per player.
     Upscaler upscaler = Upscaler::Bilinear;
     f32 sharpen = 0.0f;
+    // M-VISUAL3 3. Camera look in the tonemap pass: all off by default (the frame is byte-identical).
+    // vignette darkens the corners in linear light; grain is animated, luminance-weighted noise in
+    // display space; chromatic_aberration fringes the channels toward the edges (1 = 0.5 % of the view
+    // width); the dirt texture (a TextureStore key; 0 = none) lights up where bloom is bright.
+    struct Lens {
+        f32 vignette = 0.0f, vignette_smoothness = 0.5f;
+        f32 grain = 0.0f, grain_size = 1.5f;
+        f32 chromatic_aberration = 0.0f;
+        u32 dirt_key = 0;
+        f32 dirt_intensity = 0.0f;
+    } lens;
+    Tonemapper tonemapper = Tonemapper::AcesFit;
 
     // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest
     // `low_percent` and brightest 1 - `high_percent`, averages the rest and moves the exposure toward
@@ -318,6 +335,17 @@ struct MaterialOverride {
     u32 normal_key = ~0u;
     u32 orm_key = ~0u;
     u32 emissive_key = ~0u;
+    // M-VISUAL3 2: normal_key is a 2-layer array, layer 0 the normal map (parallax_normal; else zero-filled
+    // and not a normal map) and layer 1 the height map, and ext holds the scale and steps.
+    bool parallax = false;
+    bool parallax_normal = false;
+};
+
+// Parallax occlusion mapping's reach (M-VISUAL3 2; the quality tiers set it): beyond `distance` (view
+// depth, meters) a parallax material draws flat; 0 = off. A material's march steps are clamped to `max_steps`.
+struct ParallaxSettings {
+    f32 distance = 30.0f;
+    u32 max_steps = 32;
 };
 
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
@@ -399,6 +427,12 @@ inline math::vec4 tiled_uv_rect(const math::vec4& uv_rect, const asset::Material
 }
 inline u32 albedo_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->albedo_key : sm.albedo_key; }
 inline u32 normal_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->normal_key : sm.normal_key; }
+// Whether a draw with this material override (null: the submesh's own) and normal key samples a real normal
+// map (a parallax array may hold only a height layer).
+inline bool normal_map_of(const MaterialOverride* material, u32 normal_key) {
+    return normal_key != ~0u && (!material || !material->parallax || material->parallax_normal);
+}
+inline bool normal_map_of(const MeshInstance& inst, const GpuSubmesh& sm) { return normal_map_of(inst.material, normal_key_of(inst, sm)); }
 inline u32 orm_key_of(const MeshInstance& inst, const GpuSubmesh& sm) { return inst.material ? inst.material->orm_key : sm.orm_key; }
 inline u32 emissive_key_of(const MeshInstance& inst, const GpuSubmesh& sm) {
     return inst.material ? inst.material->emissive_key : sm.emissive_key;
@@ -527,6 +561,21 @@ struct View3D {
     rhi::Extent2D viewport;
 };
 
+// Automatic instancing (M-VISUAL3 5a): consecutive draws of the same rigid submesh with the same material
+// and tint, drawn as one instanced draw per pass. Scene3D::build() forms the runs of the main view's opaque
+// list (and Scene3D::caster_runs() those of a shadow caster list); Forward3D draws them.
+struct DrawRun {  // draws()[first, first + count) draw as one instanced draw (count 1: a single draw)
+    u32 first = 0;
+    u32 count = 0;
+};
+// The most copies one instanced draw carries; a longer group is split into runs of at most this many.
+inline constexpr u32 kMaxInstancesPerRun = 65536;
+struct InstancingSettings {
+    bool enabled = true;  // false: no runs are formed and the draw order is the sort's alone
+    u32 min_count = 2;    // runs shorter than this stay single draws
+    u32 max_count = kMaxInstancesPerRun;  // longer groups split into runs of at most this many
+};
+
 View3D compute_view_3d(const Camera3D& cam, rhi::Extent2D viewport);
 // Sphere vs the view's frustum planes (conservative).
 bool sphere_visible(const View3D& v, math::vec3 center, f32 radius);
@@ -574,6 +623,20 @@ public:
         u32 decals_culled = 0;          // outside the view
         u32 decals_dropped = 0;         // visible, past kMaxDecals or kMaxDecalTextures
         u32 particle_emitters = 0;
+        // Automatic instancing (M-VISUAL3 5a), main view. Every draw of draws() is counted once:
+        // draws_instanced + the not_instanced_* counters = draws().size().
+        u32 runs_instanced = 0;          // opaque runs of at least InstancingSettings::min_count draws
+        u32 draws_instanced = 0;         // ... the draws inside them
+        u32 not_instanced_blended = 0;   // drawn after the opaques (alpha blended or transmissive)
+        u32 not_instanced_terrain = 0;   // terrain nodes
+        u32 not_instanced_skinned = 0;   // submeshes of skinned meshes (deformed or not)
+        u32 not_instanced_moving = 0;    // moved since last frame (prev_model != model)
+        u32 not_instanced_single = 0;    // eligible, but no copy shares the run (or the run is under min_count)
+        u32 not_instanced_disabled = 0;  // InstancingSettings::enabled is off: every draw
+        // M-CONTENT 2: the parts of not_instanced_single (the rest differ from every other copy of their mesh by
+        // material, tint or emissive tint).
+        u32 not_instanced_unique_mesh = 0;  // no other eligible draw uses this mesh, submesh and level
+        u32 not_instanced_short = 0;        // identical copies exist, but fewer than min_count (or a split's tail)
         f32 cluster_ms = 0.0f;   // CPU time of the Forward+ light setup + CPU assignment, if it ran (not deterministic)
         f32 build_ms = 0.0f;     // CPU time of build() in total (not deterministic)
     };
@@ -589,10 +652,17 @@ public:
     void set_ambient_occlusion(const AmbientOcclusion& ao) { ao_ = ao; }
     void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
     void set_contact_shadows(const ContactShadows& c) { contact_ = c; }
+    void set_parallax(const ParallaxSettings& p) { parallax_ = p; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
     void set_lod(const LodSettings& lod) { lod_ = lod; }
+    void set_instancing(const InstancingSettings& s) { instancing_ = s; }
+    const InstancingSettings& instancing() const { return instancing_; }
+    // Classify why single draws stayed single (Stats::not_instanced_short / _unique_mesh, and the player's
+    // Forward3DStats::draw_causes). Off by default: a normal frame pays nothing and those counters stay 0.
+    void set_collect_draw_causes(bool on) { collect_draw_causes_ = on; }
+    bool collect_draw_causes() const { return collect_draw_causes_; }
     // The physically based sky (M-VISUAL 7): with Atmosphere::enabled, build() tints the light and
     // sets its ambient from it (see Atmosphere) and Forward3D draws its sky in place of Sky's.
     void set_atmosphere(const Atmosphere& atmosphere) { atmosphere_ = atmosphere; }
@@ -640,6 +710,7 @@ public:
     const AmbientOcclusion& ambient_occlusion() const { return ao_; }
     const ScreenSpaceReflections& reflections() const { return ssr_; }
     const ContactShadows& contact_shadows() const { return contact_; }
+    const ParallaxSettings& parallax() const { return parallax_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -664,6 +735,19 @@ public:
     // attempted: the key's material field groups texture binds), then blended back-to-front.
     Span<const Draw> draws() const { return draws_.span(); }
     u32 opaque_count() const { return opaque_count_; }
+    // The opaque list as runs (M-VISUAL3 5a): they cover [0, opaque_count()) exactly, in draw order; a run of
+    // count >= InstancingSettings::min_count is one instanced draw. Within each material segment of the sort
+    // (equal albedo key and sidedness), build() gathers the draws sharing a key (mesh, submesh, LOD level,
+    // MeshInstance::material, bitwise tint and emissive_tint; rigid, not terrain, not moving) at the
+    // position of the first of them, so the list stays front to back between groups.
+    Span<const DrawRun> opaque_runs() const { return runs_.span(); }
+    // The runs of a shadow caster list (indices into shadow_draws(): a cascade's or a local tile's): the
+    // casters reordered into `sorted`, grouped on (mesh, submesh, LOD level), and `runs` into `sorted`.
+    // Rigid, not alpha-masked casters only: the shadow passes do not apply alpha masks today (kShadowFS is
+    // empty), and keeping masked casters single means a mask added there later never meets an instanced
+    // draw without it. Depth-only passes do not depend on the order. With instancing off, `sorted` is
+    // `casters` and every run is one draw. Not thread-safe (it reuses the scene's scratch arrays).
+    void caster_runs(Span<const u32> casters, Array<u32>& sorted, Array<DrawRun>& runs) const;
     // Every submesh of every instance (shadows come from off-screen casters too).
     Span<const Draw> shadow_draws() const { return shadow_draws_.span(); }
     Span<const InstanceBatch> batches() const { return batches_.span(); }
@@ -687,6 +771,20 @@ private:
     mutable Stats stats_;
     void build_cascades();
     void build_local_shadows();
+    void build_runs();
+    // Scratch of the run grouping (build_runs, caster_runs), kept so a frame's segments and caster lists do
+    // not allocate each time.
+    struct RunScratch {
+        explicit RunScratch(mem::IAllocator& a)
+            : table(a), hashes(a), head(a), tail(a), size(a), next(a), group(a), order(a) {}
+        Array<u32> table;   // group id per hash slot, ~0u = empty
+        Array<u64> hashes;  // per group
+        Array<u32> head, tail, size;
+        Array<u32> next;   // per item: the next item of its group
+        Array<u32> group;  // per item: its group, ~0u = none
+        Array<u32> order;  // the output order
+    };
+    mutable RunScratch run_scratch_;
     u32 select_lod(const MeshInstance& inst, const GpuMesh& mesh) const;
 
     const MeshStore* meshes_;
@@ -700,10 +798,13 @@ private:
     AmbientOcclusion ao_;
     ScreenSpaceReflections ssr_;
     ContactShadows contact_;
+    ParallaxSettings parallax_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
     LodSettings lod_;
+    InstancingSettings instancing_;
+    bool collect_draw_causes_ = false;
     GiVolume gi_;
     Atmosphere atmosphere_;
     math::vec3 atmosphere_sun_{0.0f, 1.0f, 0.0f};
@@ -718,6 +819,7 @@ private:
     Array<u32> local_casters_;
     Array<MeshInstance> instances_;
     Array<Draw> draws_;
+    Array<DrawRun> runs_;
     Array<Draw> shadow_draws_;
     Array<Draw> probe_draws_;
     Array<ReflectionProbe> probes_;

@@ -34,6 +34,10 @@ run(0 "${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
 file(WRITE "${WORK_DIR}/bigger/mod.json"
      "{ \"format\": \"mce-mod\", \"version\": 1, \"id\": \"bigger\", \"name\": \"Bigger Level\", \"base\": \"../game/assets.mce\" }\n")
 scene("${WORK_DIR}/bigger/assets/scenes/main_big.mcscene" ${SCENE_GUID} 5)
+# A script in a mod pack (M-SCRIPT2 0): the player drops it at mount, with a warning, and still plays the mod's scene.
+file(WRITE "${WORK_DIR}/bigger/assets/scripts/evil.luau" "function update()\nend\n")
+file(WRITE "${WORK_DIR}/bigger/assets/scripts/evil.luau.mceasset"
+     "{ \"guid\": \"6d000000-0000-4000-8000-0000000000e1\", \"importer\": \"script\", \"importer_version\": 1, \"settings\": {} }\n")
 run(0 "${MCE_COOK}" "${WORK_DIR}/bigger" --pack --quiet)
 if(NOT LAST_OUTPUT MATCHES "mod on 1 base asset\\(s\\), 1 override\\(s\\)")
     message(FATAL_ERROR "mod cook summary missing:\n${LAST_OUTPUT}")
@@ -47,6 +51,9 @@ set(PLAY "${MCE_PLAYER}" -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID
 run(0 ${PLAY} -mods_dir "${WORK_DIR}/mods")
 if(NOT LAST_OUTPUT MATCHES "1 mod\\(s\\) loaded" OR NOT LAST_OUTPUT MATCHES "10 ticks, 5 entities")
     message(FATAL_ERROR "the mod did not replace the scene:\n${LAST_OUTPUT}")
+endif()
+if(NOT LAST_OUTPUT MATCHES "carries a script, which only the game's own pack may do")
+    message(FATAL_ERROR "the mod's script was not dropped at mount:\n${LAST_OUTPUT}")
 endif()
 if(NOT LAST_OUTPUT MATCHES "mod skipped: [^\n]*readme.mce")
     message(FATAL_ERROR "the broken pack was not reported:\n${LAST_OUTPUT}")

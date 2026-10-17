@@ -21,7 +21,45 @@ namespace mce::mcp {
 namespace {
 
 constexpr u64 kMaxFrames = 3600;
+// Below this many captured frames the percentiles are noisy; the report says so (the run still works from 1).
+constexpr u64 kNoisyFrames = 30;
 constexpr u64 kMaxSide = 3840;
+
+// "notifications/progress" with a phase message, when the client sent a progressToken. `done` of `total` counts
+// the warmup and captured frames of the run (0 while launching, total while the capture is read).
+void phase_progress(ToolCall& c, u64 done, u64 total, StringView message) {
+    if (!c.progress_token.valid()) return;
+    cook::String params;
+    JsonWriter w(params);
+    w.begin_object().key("progressToken").copy(c.progress_token).key("progress").num_u(done).key("total").num_u(total);
+    w.key("message").str(message).end_object();
+    c.server.notify("notifications/progress", params.view());
+}
+
+struct PerfProgress {
+    ToolCall* call;
+    u64 total;   // warmup + frames
+    u64 warmup;
+};
+
+// The player prints "<app>: perf warmup N/M" and "<app>: perf capturing N/M" (a few per phase).
+void on_player_line(StringView line, void* user) {
+    auto* p = static_cast<PerfProgress*>(user);
+    const usize at = line.find(": perf ");
+    if (at == StringView::npos) return;
+    const StringView rest = line.substr(at + 7);
+    const bool warm = rest.substr(0, 7) == "warmup ";
+    if (!warm && rest.substr(0, 10) != "capturing ") return;
+    const StringView counts = rest.substr(warm ? 7 : 10);
+    u64 n = 0, m = 0;
+    usize i = 0;
+    for (; i < counts.size() && counts[i] >= '0' && counts[i] <= '9'; ++i) n = n * 10 + static_cast<u64>(counts[i] - '0');
+    if (i >= counts.size() || counts[i] != '/') return;
+    for (++i; i < counts.size() && counts[i] >= '0' && counts[i] <= '9'; ++i) m = m * 10 + static_cast<u64>(counts[i] - '0');
+    cook::String msg(warm ? "warmup " : "capturing ");
+    cook::appendf(msg, "%llu/%llu", static_cast<unsigned long long>(n), static_cast<unsigned long long>(m));
+    phase_progress(*p->call, warm ? n : p->warmup + n, p->total, msg.view());
+}
 
 f64 round3(f64 v) { return std::round(v * 1000.0) / 1000.0; }
 
@@ -48,7 +86,9 @@ void write_counters(JsonWriter& w, const char* name, const perf::Counters& k) {
     w.key("draws").num_u(k.draws).key("passes").num_u(k.passes).key("dispatches").num_u(k.dispatches);
     w.key("triangles").num_u(k.triangles).key("meshes").num_u(k.meshes).key("sprites").num_u(k.sprites);
     w.key("sprite_batches").num_u(k.sprite_batches).key("upload_bytes").num_u(k.upload_bytes);
-    w.key("heap_allocations").num_u(k.heap_allocations).end_object();
+    w.key("heap_allocations").num_u(k.heap_allocations);
+    w.key("runs_instanced").num_u(k.runs_instanced).key("draws_instanced").num_u(k.draws_instanced);
+    w.key("merged_groups").num_u(k.merged_groups).key("merged_children").num_u(k.merged_children).end_object();
 }
 
 // What to try when a limit is over: the next tool or change, in a sentence.
@@ -77,6 +117,40 @@ void write_verdict(JsonWriter& w, const perf::Verdict& v) {
     w.end_array().end_object();
 }
 
+// M-CONTENT 2: the 3D scene draws that were not part of an instanced run, by cause, the largest (mean per frame)
+// first, each with what to change. Counts repeat run to run; a capture without 3D has none.
+void write_draw_causes(JsonWriter& w, const perf::Summary& s) {
+    const perf::Counters& avg = s.counters_avg;
+    const perf::Counters& max = s.counters_max;
+    u32 order[kDrawCauseCount];
+    u32 n = 0, total = 0;
+    for (u32 k = 0; k < kDrawCauseCount; ++k) {
+        total += avg.draw_causes[k];
+        if (max.draw_causes[k] > 0) order[n++] = k;
+    }
+    // Insertion sort over at most kDrawCauseCount entries (std::sort trips -Warray-bounds on GCC 13 -O2).
+    for (u32 i = 1; i < n; ++i) {
+        const u32 key = order[i];
+        u32 j = i;
+        while (j > 0 && (avg.draw_causes[order[j - 1]] < avg.draw_causes[key] ||
+                         (avg.draw_causes[order[j - 1]] == avg.draw_causes[key] && order[j - 1] > key))) {
+            order[j] = order[j - 1];
+            --j;
+        }
+        order[j] = key;
+    }
+    w.key("draw_causes").begin_object();
+    w.key("scene_draws_avg").num_u(avg.draws_instanced + total).key("instanced_draws_avg").num_u(avg.draws_instanced);
+    w.key("instanced_runs_avg").num_u(avg.runs_instanced).key("not_instanced_avg").num_u(total);
+    w.key("causes").begin_array();
+    for (u32 i = 0; i < n; ++i) {
+        const DrawCause c = static_cast<DrawCause>(order[i]);
+        w.begin_object().key("cause").str(draw_cause_name(c)).key("avg").num_u(avg.draw_causes[order[i]]);
+        w.key("max").num_u(max.draw_causes[order[i]]).key("hint").str(draw_cause_hint(c)).end_object();
+    }
+    w.end_array().end_object();
+}
+
 void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& s, u64 top) {
     w.key("app").str(cap.app.view()).key("backend").str(cap.backend.view()).key("scene").str(cap.scene.view());
     w.key("frames").num_u(s.frames);
@@ -86,6 +160,7 @@ void write_report(JsonWriter& w, const perf::Capture& cap, const perf::Summary& 
     write_stat(w, "gpu_ms", s.gpu);
     write_counters(w, "counters_max", s.counters_max);
     write_counters(w, "counters_avg", s.counters_avg);
+    write_draw_causes(w, s);
 
     Array<usize> order;
     editor::rank_capture_systems(cap, order);
@@ -159,7 +234,7 @@ bool perf_run(ToolCall& c) {
     perf::Target target = perf::Target::Desktop;
     input::InputScript script;
     ConvarArgs convars;
-    if (!arg_uint(c, "frames", frames, 10, kMaxFrames, false) || !arg_uint(c, "warmup", warmup, 0, kMaxFrames, false) ||
+    if (!arg_uint(c, "frames", frames, 1, kMaxFrames, false) || !arg_uint(c, "warmup", warmup, 0, kMaxFrames, false) ||
         !arg_uint(c, "width", width, 64, kMaxSide, false) || !arg_uint(c, "height", height, 64, kMaxSide, false) ||
         !arg_uint(c, "top", top, 1, 64, false) || !arg_bool(c, "headless", headless) || !arg_bool(c, "software", software) ||
         !arg_target(c, target) || !arg_input(c, script) || !arg_convars(c, convars))
@@ -251,7 +326,10 @@ bool perf_run(ToolCall& c) {
     }
     Array<char> output;
     i32 code = 0;
-    if (!spawn_player(c, player.view(), args.span(), use_software, output, code)) return false;
+    PerfProgress pp{&c, total_frames, warmup};
+    phase_progress(c, 0, total_frames, "launching the player");
+    if (!spawn_player(c, player.view(), args.span(), use_software, output, code, on_player_line, &pp)) return false;
+    phase_progress(c, total_frames, total_frames, "reading the capture");
 
     perf::Capture cap;
     cook::String err;
@@ -269,6 +347,8 @@ bool perf_run(ToolCall& c) {
     JsonWriter& w = c.out;
     w.begin_object().key("file").str(out_rel.view()).key("scene_path").str(scene_rel).key("target").str(perf::target_name(target));
     w.key("headless").boolean(headless).key("software").boolean(use_software).key("exit_code").num_i(code);
+    if (s.frames < kNoisyFrames)
+        w.key("note").str("fewer than 30 frames were captured: the percentiles (p95, p99) are noisy; use frames of 30 or more for a verdict to trust");
     write_verdict(w, v);
     write_report(w, cap, s, top);
     w.end_object();

@@ -128,13 +128,16 @@ const ProjectAsset* EditorProject::find(asset::Guid g) const {
     return nullptr;
 }
 
-const cook::CookReport& EditorProject::cook(bool pack, bool adopt, Span<const cook::String> paths, bool skip_errors) {
+const cook::CookReport& EditorProject::cook(bool pack, bool adopt, Span<const cook::String> paths, bool skip_errors,
+                                            u32 max_texture_size, cook::TextureCompression textures) {
     if (!is_open()) return report_;
     rescan();
     cook::CookOptions opt;
     opt.pack = pack;
     opt.adopt = adopt;
     opt.skip_errors = skip_errors;
+    opt.max_texture_size = max_texture_size;
+    opt.textures = textures;
     for (const cook::String& p : paths) opt.paths.push_back(p);
     report_ = service_.cook(root_.view(), opt);
     if (adopt) rescan();  // the catalog picks up the sidecars the cook just wrote
@@ -176,7 +179,12 @@ void EditorProject::remount() {
     }
     if (is_file(cook::path_join(cooked.view(), "manifest.mce"))) {
         auto fresh = mem::make_unique<asset::AssetSystem>(mem::heap());
-        if (Result<void> r = fresh->mount(roots.span()); r) {
+        // The project's own cook may carry scripts; its base packs (a mod project's game) are not ours.
+        asset::MountOptions own;
+        own.allow_code = true;
+        Result<void> r = fresh->mount(Span<const StringView>(roots.data(), 1), own);
+        if (r && roots.size() > 1) r = fresh->mount(Span<const StringView>(roots.data() + 1, roots.size() - 1));
+        if (r) {
             mounted_ = std::move(fresh);
         } else {
             FixedString<512> msg;

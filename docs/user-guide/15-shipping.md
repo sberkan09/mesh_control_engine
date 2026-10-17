@@ -1,6 +1,22 @@
 # 15. Shipping
 
-One command builds, cooks, packages and zips a game:
+From the SDK, with the path of your project folder (`MyGame` below), build the project and zip it:
+
+```sh
+mce build MyGame                        # cooks the assets, builds the module and the pack
+mce ship MyGame                         # MyGame/dist/MyGame-<version>-<os>.zip
+mce ship MyGame --version 1.0.0 --out release
+mce ship MyGame --max-texture-size 512   # a smaller pack: textures capped at 512 pixels (re-cooks the pack)
+```
+
+`mce ship` zips the host, the game module, the engine library and the cooked pack, with `VERSION.txt`, `README.txt` and
+your `CREDITS.md`; it stops with "run `mce build` first" when the pack is missing, and a script project (no C++
+module) gets the stock player and a launcher script instead. `<os>` is `linux-x64`, `win64` or `macos`. It takes
+`--target web` and `--steam` (15.6 and 15.7); it has no `--preset`, `--smoke` for desktop or symbols zip.
+
+**From an engine checkout** (the repository, not the SDK) `scripts/ship.py` does the same with the full set of
+options and is what the rest of this chapter shows: it builds the CMake preset itself, strips and keeps the
+symbols, and runs a smoke test. Projects there live under `projects/`.
 
 ```sh
 python3 scripts/ship.py --project projects/MyGame
@@ -8,19 +24,22 @@ python3 scripts/ship.py --project projects/MyGame --version 1.0.0 --preset linux
 python3 scripts/ship.py --project projects/MyGame --smoke --smoke-headless   # run it once after packaging
 ```
 
-Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`, where
-`<os>` is `linux-x64`, `win64` or `macos`.
+Output: `dist/<Name>-<version>-<os>.zip` and, beside it, `<Name>-<version>-<os>-symbols.zip`.
 
-| Option | Meaning |
+| `ship.py` option | Meaning |
 |---|---|
 | `--preset` | the CMake preset to build (default: the platform's release preset) |
 | `--version` | default `<engine version>+<short commit>` |
 | `--out` | output directory (default `dist/`) |
+| `--textures rgba8\|bc` | desktop: the pack's texture storage; `bc` stores BC7/BC5/BC4/BC1 blocks, about a quarter of the size, and needs a GPU that samples BC textures (every desktop GPU). `--target android\|ios` always cooks ASTC and `--target web` stays `rgba8`, so they refuse `bc` (section 5.2) |
+| `--max-texture-size N` | (`mce ship` too) cap PNG/JPEG textures in the pack at N pixels on the longest side (a power of two, 1 to 16384), so the ship is smaller; a sidecar's smaller `max_size` wins; default no limit (section 5.2) |
 | `--no-build` | package what is already built |
 | `--keep-symbols` | do not strip the binaries (Linux, macOS) |
 | `--smoke`, `--smoke-headless` | run the packaged game once (headless needs no display) |
 
-The samples ship the same way: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
+`mce ship ... --max-texture-size N` cooks the project again with the cap, into `MyGame/assets.mce` and `MyGame/cooked/`, and zips that pack; the build tree's own pack is left as it was. The cook prints the size report (bytes by type and the five largest assets), which is the quickest way to see what a ship weighs.
+
+The samples ship the same way from a checkout: `python3 scripts/ship.py platformer` (Ember Step) or `diorama`.
 
 ## 15.1 What is in the zip
 
@@ -204,9 +223,11 @@ path as `steam_build_script`.
 
 ## 15.8 Checklist before shipping
 
-1. Every scene cooks clean (`my_game_cook projects/MyGame --pack` exits 0).
+1. Every scene cooks clean (`mce cook MyGame` exits 0; in a checkout `my_game_cook projects/MyGame --pack`).
 2. `my_game -headless 1 -ticks 3600` runs a minute without an error in the log.
 3. `CREDITS.md` names every third-party asset and licence (Kenney CC0 packs, fonts, sounds).
-4. `python3 scripts/ship.py --project projects/MyGame --smoke` starts and quits cleanly on the
-   target platform.
+4. The packaged game starts and quits cleanly on the target platform (unzip the `mce ship` zip and run it with
+   `-headless 1 -ticks 60`; in a checkout `python3 scripts/ship.py --project projects/MyGame --smoke`).
 5. Keep the symbols zip with the version.
+
+A desktop pack can store its textures block-compressed (about a quarter of the size, in the file and in GPU memory): cook it with `mce_cook MyGame --textures bc` (section 5.2, "Compress the pack with BC"). Phone packs use `--textures astc` and web packs stay `rgba8`, because those targets cannot sample BC textures. `mce ship MyGame --textures bc` re-cooks the pack with BC into `MyGame/assets.mce` and zips it (it combines with `--max-texture-size`); `mce ship --target web --textures bc` exits, and `scripts/ship.py --target android|ios --textures bc` is refused. A pack cooked for another target is not decoded at load: a device that cannot sample the format logs one error that names the fix ("re-cook for this target") and draws the texture as the magenta error checker. A grey (BC4) texture bound to a colour or normal slot logs a Kit3D warning that suggests `compress: bc7` or `bc5`.

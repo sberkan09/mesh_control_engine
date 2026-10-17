@@ -59,6 +59,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_vol_scale;      // x: local light scale, y: ambient scale
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
     vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
+    vec4 p_sky_rot;        // M-VISUAL3 4: x cos, y sin of the sky texture's yaw about +Y (y = 0: no rotation)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -71,7 +72,9 @@ vec3 sky_gradient(vec3 d) {
 // Sky radiance along d; `lod` blurs the texture path (roughness), the gradient is smooth already.
 vec3 sky_radiance(vec3 d, float lod) {
     if (p_sky_ground.w < 0.0) return sky_gradient(d);
-    vec3 tex = textureLod(u_sky, vec3(equirect_uv(d), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
+    vec3 dt = d;  // the direction in the texture's frame: yaw by -rotation, once, here (the gradient ignores it)
+    if (p_sky_rot.y != 0.0) dt = vec3(p_sky_rot.x * d.x - p_sky_rot.y * d.z, d.y, p_sky_rot.y * d.x + p_sky_rot.x * d.z);
+    vec3 tex = textureLod(u_sky, vec3(equirect_uv(dt), 0.0), min(lod, p_sky_ground.w)).rgb * p_sun.z;
     return p_sun.w > 0.5 ? sky_gradient(d) + tex : tex;  // additive: a star field over a gradient
 }
 )"
@@ -91,6 +94,7 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_coat;       // M-VISUAL2 4: x clear coat, y its alpha (roughness²), z anisotropy, w its rotation (radians)
     vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
     vec4 o_ext;        // x: any of the lobes above on, y: index of refraction (0 = 1.5), z: transmission
+    vec4 o_pom;        // M-VISUAL3 2: x parallax height scale (texture repeats; 0 = off), y/z min/max march steps, w fade-out view depth (m)
 };
 )"
 // clang-format on
@@ -114,6 +118,35 @@ void main() {
     vec4 w = o_model * vec4(a_pos.xyz, 1.0);
     v_world = w.xyz;
     v_normal = mat3(o_normal) * oct_decode(a_oct);
+    v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
+    gl_Position = u_view_proj * w;
+}
+)";
+
+// Automatic instancing (M-VISUAL3 5a): a run of draws of one rigid submesh with one material reads its
+// per-draw matrices from a transient storage block at bank 13 (Forward3D uploads it per pass); slot
+// o_skin.y + gl_InstanceID is this copy's. kMeshVS's math with o_model / o_normal read per instance, so a
+// run's pixels equal the single draws' bit for bit. Feeds kMeshFS and kAoPrepassFS (ObjectU carries the rest).
+constexpr const char* kDrawInstancedVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_OBJECT_U R"(
+struct DrawInst { mat4 model; mat4 normal; };
+layout(std430, binding = 13) readonly buffer DrawInstances { DrawInst d_inst[]; };
+layout(location = 0) in vec4 a_pos;
+layout(location = 1) in vec2 a_oct;
+layout(location = 2) in vec2 a_uv;
+layout(location = 0) out vec3 v_world;
+layout(location = 1) out vec3 v_normal;
+layout(location = 2) out vec2 v_uv;
+out gl_PerVertex { vec4 gl_Position; };
+vec3 oct_decode(vec2 e) {
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    return normalize(n);
+}
+void main() {
+    uint k = uint(o_skin.y) + uint(gl_InstanceID);
+    vec4 w = d_inst[k].model * vec4(a_pos.xyz, 1.0);
+    v_world = w.xyz;
+    v_normal = mat3(d_inst[k].normal) * oct_decode(a_oct);
     v_uv = o_uv_rect.xy + a_uv * o_uv_rect.zw;
     gl_Position = u_view_proj * w;
 }
@@ -416,6 +449,14 @@ vec3 env_brdf(vec3 f0, float rough, float NoV) {
     vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
     return f0 * ab.x + ab.y;
 }
+// Normal-map decode (M-CONTENT 1b). BC5 samples as (x, y, 0, 1): z is rebuilt from x and y. Only a texel with
+// b == 0.0 takes that path; RGBA8 maps (b >= 128 in practice) return t.xyz * 2 - 1 with the same bits as before. (That holds for blue > 0; a blue == 0 texel,
+// RGBA8 or BC5, gets its z rebuilt.)
+vec3 unpack_normal(vec4 t) {
+    vec3 n = t.xyz * 2.0 - 1.0;
+    if (t.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));
+    return n;
+}
 // Normal mapping without stored tangents: the cotangent frame from screen derivatives (Schüler).
 vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
     vec3 dp1 = dFdx(p), dp2 = dFdy(p);
@@ -553,15 +594,15 @@ vec4 terrain_fetch(sampler2DArray t, vec3 p, vec3 dx, vec3 dy, float layer, floa
 vec3 terrain_normal(vec3 p, vec3 dx, vec3 dy, float layer, float s, vec3 bw, vec3 n) {
     vec3 r = vec3(0.0);
     if (bw.y > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xz * s, layer), dx.xz * s, dy.xz * s));
         r += vec3(t.x + n.x, abs(t.z) * n.y, n.z - t.y) * bw.y;
     }
     if (bw.x > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.zy * s, layer), dx.zy * s, dy.zy * s));
         r += vec3(abs(t.z) * n.x, n.y - t.y, t.x + n.z) * bw.x;
     }
     if (bw.z > 0.0) {
-        vec3 t = textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s).xyz * 2.0 - 1.0;
+        vec3 t = unpack_normal(textureGrad(u_normal_map, vec3(p.xy * s, layer), dx.xy * s, dy.xy * s));
         r += vec3(t.x + n.x, n.y - t.y, abs(t.z) * n.z) * bw.z;
     }
     return r;
@@ -627,9 +668,90 @@ void terrain_surface(vec3 world, vec3 n, out vec3 albedo, out vec3 nrm, out floa
 }
 #endif
 
+// A material map at the surface's uv. Where parallax moved it, the uv steps from march layer to march layer, so
+// its own screen derivatives (what texture() takes) are noise: the maps there take the mesh uv's footprint, and
+// filter it anisotropically here rather than in the sampler. The sampler's anisotropic filter (max_aniso 4) is
+// implementation-defined: on the grazing, high-contrast surfaces parallax is for, llvmpipe and an RTX 3070 differed
+// by 1.8% of full scale (a 4x vs 16x setting moves llvmpipe as far). Up to 4 trilinear taps along the footprint's
+// major axis, at the level of its width over the tap count: the same shape, the same result on every GPU.
+// Elsewhere (no parallax, or faded out) texture() as ever; both are read so the implicit-derivative one stays in
+// uniform control flow.
+vec2 g_uv_dx, g_uv_dy;
+bool g_pom_moved = false;
+vec4 map_aniso(sampler2DArray s, vec2 at, vec2 dx, vec2 dy) {  // dx, dy: the uv's screen gradients
+    vec2 size = vec2(textureSize(s, 0).xy);
+    float lx = length(dx * size), ly = length(dy * size);
+    vec2 major = lx > ly ? dx : dy;
+    float lmaj = max(lx, ly), lmin = max(min(lx, ly), 1e-6);
+    float taps = clamp(ceil(lmaj / lmin), 1.0, 4.0);
+    float lod = max(0.0, log2(lmaj / taps));
+    vec4 sum = vec4(0.0);
+    for (int i = 0; i < 4; ++i) {
+        if (float(i) >= taps) break;
+        sum += textureLod(s, vec3(at + major * ((float(i) + 0.5) / taps - 0.5), 0.0), lod);
+    }
+    return sum / taps;
+}
+#define MCE_MAP(s, at) (o_pom.x > 0.0 ? mix(texture(s, vec3(at, 0.0)), map_aniso(s, at, g_uv_dx, g_uv_dy), bvec4(g_pom_moved)) : texture(s, vec3(at, 0.0)))
+
+#ifndef MCE_TERRAIN
+// Parallax occlusion mapping (M-VISUAL3 2): the height map is layer 1 of u_normal_map (white = high). The
+// view ray is marched through o_pom.y..z layers of the height field in the surface's uv frame, then the last
+// two layers are intersected linearly. The tangent frame solves the uv Jacobian from screen derivatives, so
+// anisotropic uv scales and mirrored uvs shift correctly. No self-shadowing, no depth offset.
+vec2 parallax_uv(vec3 p, vec3 n, vec2 uv, float view_depth) {
+    float scale = o_pom.x * (1.0 - smoothstep(0.75 * o_pom.w, o_pom.w, view_depth));
+    if (scale <= 0.0) return uv;
+    vec3 dp1 = dFdx(p), dp2 = dFdy(p);
+    vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);
+    float det = duv1.x * duv2.y - duv1.y * duv2.x;
+    if (abs(det) < 1e-20) return uv;
+    vec3 t = (dp1 * duv2.y - dp2 * duv1.y) / det;  // d p / d u
+    vec3 b = (dp2 * duv1.x - dp1 * duv2.x) / det;  // d p / d v
+    float tt = dot(t, t), bb = dot(b, b), tb = dot(t, b);
+    float gram = tt * bb - tb * tb;
+    if (gram < 1e-20) return uv;
+    vec3 v = normalize(u_camera_pos.xyz - p);
+    float vn = dot(v, n);
+    if (vn <= 0.0) return uv;
+    vec3 vt = v - n * vn;
+    float vu = dot(vt, t), vv = dot(vt, b);
+    vec2 dir = vec2(vu * bb - vv * tb, vv * tt - vu * tb) / gram;  // uv displacement per meter along the view's tangential part
+    float depth_m = scale * 0.5 * (sqrt(tt) + sqrt(bb));              // the deepest point, in meters
+    vec2 total = dir * depth_m / max(vn, 0.05);
+    float layers = floor(mix(o_pom.z, o_pom.y, vn) + 0.5);
+    vec2 step_uv = total / layers;
+    float step_d = 1.0 / layers;
+    // The height field at one isotropic level (the footprint's longer axis): textureGrad here took the sampler's
+    // anisotropic filter, which is the driver's own (see map_aniso), and costs taps in a loop of up to 64.
+    vec2 hsize = vec2(textureSize(u_normal_map, 0).xy);
+    float h_lod = max(0.0, log2(max(length(duv1 * hsize), length(duv2 * hsize))));
+    vec2 cur = uv, prev = uv;
+    float cur_d = 0.0, prev_d = 0.0;
+    float tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
+    float prev_tex_d = tex_d;
+    for (int i = 0; i < 64; ++i) {
+        if (cur_d >= tex_d || float(i) >= layers) break;
+        prev = cur;
+        prev_d = cur_d;
+        prev_tex_d = tex_d;
+        cur -= step_uv;
+        cur_d += step_d;
+        tex_d = 1.0 - textureLod(u_normal_map, vec3(cur, 1.0), h_lod).r;
+    }
+    float after = tex_d - cur_d, before = prev_tex_d - prev_d;
+    float w = (after - before) != 0.0 ? clamp(after / (after - before), 0.0, 1.0) : 0.0;
+    g_pom_moved = true;
+    return mix(cur, prev, w);
+}
+#endif
+
 void main() {
     vec3 n = normalize(v_normal);
     if (!gl_FrontFacing) n = -n;
+    vec2 uv = v_uv;
+    g_uv_dx = dFdx(v_uv);
+    g_uv_dy = dFdy(v_uv);
 #ifdef MCE_TERRAIN
     vec4 base = vec4(1.0);
     vec3 t_n;
@@ -637,7 +759,8 @@ void main() {
     terrain_surface(v_world, n, base.rgb, t_n, t_rough, t_metallic, t_ao);
     base *= o_base_color;
 #else
-    vec4 base = texture(u_albedo, vec3(v_uv, 0.0)) * o_base_color;
+    if (o_pom.x > 0.0) uv = parallax_uv(v_world, n, v_uv, -(u_view * vec4(v_world, 1.0)).z);  // uniform branch: it takes derivatives
+    vec4 base = MCE_MAP(u_albedo, uv) * o_base_color;
     if (o_params.x > 0.0 && base.a < o_params.x) discard;  // alpha mask
 #endif
     vec3 color;
@@ -655,7 +778,7 @@ void main() {
         float rough = o_params.z, metallic = o_params.w, ao = 1.0;
 #endif
         if (o_maps.y > 0.5) {
-            vec3 orm = texture(u_orm, vec3(v_uv, 0.0)).rgb;
+            vec3 orm = MCE_MAP(u_orm, uv).rgb;
             if (o_maps.z > 0.5) ao = orm.r;
             if (o_maps.w < 0.5) {
                 rough *= orm.g;
@@ -668,7 +791,7 @@ void main() {
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
-            vec3 nb = perturb_normal(n, v_world, v_uv, texture(u_normal_map, vec3(v_uv, 0.0)).xyz * 2.0 - 1.0);
+            vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(MCE_MAP(u_normal_map, uv)));
             n = normalize(mix(nb, n, fill));
         }
 #endif
@@ -796,7 +919,7 @@ void main() {
         }
     }
     vec3 emissive = o_emissive.rgb;
-    if (o_emissive.w > 0.5) emissive *= texture(u_emissive, vec3(v_uv, 0.0)).rgb;
+    if (o_emissive.w > 0.5) emissive *= MCE_MAP(u_emissive, uv).rgb;
     color += emissive + decal_emit;
     if (p_vol.x > 0.5) {  // volumetric fog in place of the exp² fog
         vec4 c = u_view_proj * vec4(v_world, 1.0);
@@ -826,6 +949,16 @@ layout(location = 0) in vec4 a_pos;
 )" MCE_GLSL_SKIN R"(
 out gl_PerVertex { vec4 gl_Position; };
 void main() { gl_Position = s_mvp * (skin_matrix(s_skin.x) * (s_dequant * vec4(a_pos.xyz, 1.0))); }
+)";
+
+// Automatic instancing (M-VISUAL3 5a): per copy the premultiplied cascade or tile MVP the CPU computes for
+// a single draw (not view_proj x model on the GPU), slot s_skin.y + gl_InstanceID, so the depth is the same.
+constexpr const char* kShadowInstancedVS = R"(#version 450 core
+layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; mat4 s_dequant; vec4 s_skin; };
+layout(std430, binding = 13) readonly buffer ShadowInstances { mat4 d_mvp[]; };
+layout(location = 0) in vec4 a_pos;
+out gl_PerVertex { vec4 gl_Position; };
+void main() { gl_Position = d_mvp[uint(s_skin.y) + uint(gl_InstanceID)] * vec4(a_pos.xyz, 1.0); }
 )";
 
 constexpr const char* kShadowFS = R"(#version 450 core
@@ -861,6 +994,19 @@ void main() {
     gl_Position = vp_jittered * w;
     v_current = vp_current * w;
     v_previous = vp_previous * (m_previous * (skin_matrix(m_skin.y) * p));
+}
+)";
+// Automatic instancing (M-VISUAL3 5a): the model of each copy at slot m_skin.z + gl_InstanceID. Runs never
+// hold a moving draw, so last frame's model is this frame's.
+constexpr const char* kVelocityInstancedVS = "#version 450 core\n" MCE_GLSL_VELOCITY_U R"(
+layout(std430, binding = 13) readonly buffer VelocityInstances { mat4 d_model[]; };
+void main() {
+    vec4 p = vec4(a_pos.xyz, 1.0);
+    mat4 m = d_model[uint(m_skin.z) + uint(gl_InstanceID)];
+    vec4 w = m * p;
+    gl_Position = vp_jittered * w;
+    v_current = vp_current * w;
+    v_previous = vp_previous * (m * p);
 }
 )";
 #undef MCE_GLSL_VELOCITY_U
@@ -1315,12 +1461,51 @@ void main() {
 // u_cluster here: x > 0.5 = auto exposure (times e_exposure), y = color-grade strength (0 = off),
 // z = color-vision mode (0 = off), w = its strength.
 constexpr const char* kTonemapFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_EXPOSURE("readonly") MCE_GLSL_CVD R"(
+layout(std140, binding = 1) uniform FilmU {
+    vec4 f_lens;   // x vignette, y vignette smoothness, z grain, w grain cell size (pixels)
+    vec4 f_lens2;  // x chromatic aberration, y lens dirt intensity, z tonemapper (0 ACES, 1 AgX, 2 Neutral), w grain seed
+};
 layout(binding = 6) uniform sampler2D u_hdr;
 layout(binding = 7) uniform sampler2D u_bloom;
 layout(binding = 8) uniform sampler2DArray u_lut;  // 256 × 16 strip (16³), display space
+layout(binding = 9) uniform sampler2DArray u_dirt;  // lens dirt mask (linear rgb)
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+// AgX base (Troy Sobotka's; this is the formulation three.js ships): Rec.2020 inset, log2 over 16.5 stops,
+// a sigmoid fit, outset, and back to linear sRGB.
+vec3 agx_contrast(vec3 x) {
+    vec3 x2 = x * x, x4 = x2 * x2;
+    return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + 0.4298 * x2 + 0.1191 * x - 0.00232;
+}
+vec3 agx(vec3 c) {
+    const mat3 to2020 = mat3(0.6274, 0.0691, 0.0164, 0.3293, 0.9195, 0.0880, 0.0433, 0.0113, 0.8956);
+    const mat3 from2020 = mat3(1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187);
+    // Column-major: each row of the matrix as a color transform sums to 1 (inset) / each column does (outset).
+    const mat3 inset = mat3(0.856627153315983, 0.137318972929847, 0.11189821299995,
+                            0.0951212405381588, 0.761241990602591, 0.0767994186031903,
+                            0.0482516061458583, 0.101439036467562, 0.811302368396859);
+    const mat3 outset = mat3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826,
+                             -0.11060664309660323, 1.157823702216272, -0.11060664309660294,
+                             -0.016493938717834573, -0.016493938717834257, 1.2519364065950405);
+    c = inset * (to2020 * c);
+    c = clamp((log2(max(c, 1e-10)) + 12.47393) / 16.5, 0.0, 1.0);
+    c = outset * agx_contrast(c);
+    return clamp(from2020 * pow(max(c, 0.0), vec3(2.2)), 0.0, 1.0);
+}
+// Khronos PBR Neutral: leaves in-gamut colors alone up to a knee, then rolls the peak off and desaturates.
+vec3 neutral(vec3 c) {
+    c = max(c, 0.0);
+    const float start = 0.8 - 0.04, desat = 0.15;
+    float x = min(c.r, min(c.g, c.b));
+    c -= x < 0.08 ? x - 6.25 * x * x : 0.04;
+    float peak = max(c.r, max(c.g, c.b));
+    if (peak < start) return c;
+    const float d = 1.0 - start;
+    float new_peak = 1.0 - d * d / (peak + d - start);
+    c *= new_peak / peak;
+    return mix(c, vec3(new_peak), 1.0 - 1.0 / (desat * (peak - new_peak) + 1.0));
+}
 vec3 linear_to_srgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
 vec3 srgb_to_linear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c)); }
 vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
@@ -1331,10 +1516,38 @@ vec3 grade(vec3 c) {  // as the 2D post pass (renderer.cpp)
     vec3 s1 = textureLod(u_lut, vec3(rg + vec2(b1 / 16.0, 0.0), 0.0), 0.0).rgb;
     return mix(s0, s1, c.b - b0);
 }
+float grain_hash(vec2 cell, float seed) {
+    uvec3 q = uvec3(uvec2(cell + 4096.0), uint(seed));
+    q = q * 1664525u + 1013904223u;
+    q.x += q.y * q.z;
+    q.y += q.z * q.x;
+    q.z += q.x * q.y;
+    q ^= q >> 16u;
+    q.x += q.y * q.z;
+    return float(q.x >> 8u) * (1.0 / 16777216.0);
+}
 void main() {
-    vec3 c = texture(u_hdr, v_uv).rgb * (u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0));
-    if (u_params.w > 0.5) c += textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
-    c = aces(c * 0.6);
+    float exposure = u_params.x * (u_cluster.x > 0.5 ? e_exposure : 1.0);
+    vec3 c;
+    vec3 bloom = vec3(0.0);
+    if (f_lens2.x > 0.0) {  // chromatic aberration: the red and blue taps slide along the radius (1 = 0.5 % of the width at the edge)
+        vec2 shift = (v_uv - 0.5) * (f_lens2.x * 0.01);
+        c = vec3(texture(u_hdr, v_uv + shift).r, texture(u_hdr, v_uv).g, texture(u_hdr, v_uv - shift).b) * exposure;
+        if (u_params.w > 0.5)
+            bloom = vec3(textureLod(u_bloom, v_uv + shift, 0.0).r, textureLod(u_bloom, v_uv, 0.0).g, textureLod(u_bloom, v_uv - shift, 0.0).b) * u_params.z;
+    } else {
+        c = texture(u_hdr, v_uv).rgb * exposure;
+        if (u_params.w > 0.5) bloom = textureLod(u_bloom, v_uv, 0.0).rgb * u_params.z;
+    }
+    c += bloom;
+    if (f_lens2.y > 0.0) c += bloom * textureLod(u_dirt, vec3(v_uv, 0.0), 0.0).rgb * f_lens2.y;  // bloom lights the dirt
+    if (f_lens.x > 0.0) {  // vignette in linear light: 0 at the centre, 1 at the corners
+        float r = length(v_uv - 0.5) * 1.41421356;
+        c *= 1.0 - f_lens.x * smoothstep(1.0 - f_lens.y, 1.0, r);
+    }
+    if (f_lens2.z > 1.5) c = neutral(c);
+    else if (f_lens2.z > 0.5) c = agx(c);
+    else c = aces(c * 0.6);
     c = u_params.y > 0.5 ? linear_to_srgb(c) : c;
     if (u_cluster.y > 0.0) {  // the LUT is authored on display (sRGB) values
         vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(c);
@@ -1346,7 +1559,21 @@ void main() {
         l = cvd_correct(int(u_cluster.z + 0.5), u_cluster.w, l);
         c = u_params.y > 0.5 ? linear_to_srgb(l) : l;
     }
-    o_color = vec4(c, dot(c, vec3(0.299, 0.587, 0.114)));
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));  // FXAA reads this: taken before the grain, which it would chase
+    if (f_lens.z > 0.0) {  // animated grain in display space, strongest in the mid tones
+        // On an sRGB target (u_params.y < 0.5) the hardware encodes on write and c is still linear: grain there
+        // is added to the encoded value so GL and SDL GPU agree.
+        vec3 d = u_params.y > 0.5 ? c : linear_to_srgb(clamp(c, 0.0, 1.0));
+        float dl = dot(d, vec3(0.299, 0.587, 0.114));
+        // The cell in integers, half-pixel cell sizes: with floats, (x + 0.5) / 1.5 lands on a cell edge every third
+        // pixel and the driver's rounding picked the cell (rows and columns of grain differed between GPUs).
+        uvec2 px = uvec2(v_uv * u_viewport.xy);
+        uint half_cells = uint(max(f_lens.w, 1.0) * 2.0 + 0.5);
+        float n = grain_hash(vec2((px * 2u + 1u) / half_cells), f_lens2.w) - 0.5;
+        d += n * f_lens.z * 0.3 * (4.0 * dl * (1.0 - dl));
+        c = u_params.y > 0.5 ? d : srgb_to_linear(clamp(d, 0.0, 1.0));
+    }
+    o_color = vec4(c, luma);
 }
 )";
 

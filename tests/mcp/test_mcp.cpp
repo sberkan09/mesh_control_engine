@@ -651,6 +651,38 @@ TEST_CASE("mcp tools: cook_run adopt gives new source files a sidecar") {
     CHECK(c.ok("cook_run").v().get("ok").as_bool());  // registered now: a plain cook is clean
 }
 
+TEST_CASE("mcp tools: cook_run max_texture_size and the sizes report") {
+    const std::string root = demo_project("mcp_cap");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    auto plain = c.ok("cook_run");
+    REQUIRE(plain.v().get("ok").as_bool());
+    const cook::JsonValue sizes = plain.v().get("sizes");
+    REQUIRE(sizes.valid());
+    CHECK(sizes.get("textures").as_number() > 0);
+    CHECK(sizes.get("total").as_number() >= sizes.get("textures").as_number());
+    CHECK(sizes.get("texture_count").as_number() >= 1);
+    CHECK(sizes.get("textures_downscaled").as_number() == 0);
+    CHECK(sizes.get("largest").is_array());
+    CHECK(sizes.get("largest").size() <= 5);
+    CHECK(sizes.get("largest").at(0).get("bytes").as_number() > 0);
+    CHECK(sizes.get("largest").at(0).get("path").is_string());
+    // the demo's textures are 4x4 (or so): a cap of 1 halves them all, and a bad cap is the cook's error
+    auto cut = c.ok("cook_run", R"({"max_texture_size":1})");
+    REQUIRE(cut.v().get("ok").as_bool());
+    CHECK(cut.v().get("sizes").get("textures_downscaled").as_number() >= 1);
+    CHECK(cut.v().get("sizes").get("textures").as_number() < sizes.get("textures").as_number());
+    auto bad = c.ok("cook_run", R"({"max_texture_size":100})");
+    CHECK_FALSE(bad.v().get("ok").as_bool());
+    CHECK(compact(bad.v().get("diagnostics")).find("power of two") != std::string::npos);
+    CHECK(c.fails("cook_run", R"({"max_texture_size":"big"})").find("max_texture_size") != std::string::npos);
+    // M-CONTENT 1b-iv: "textures" picks the storage; bc is accepted, anything else is an argument error
+    CHECK(c.ok("cook_run", R"({"textures":"bc"})").v().get("ok").as_bool());
+    CHECK(c.ok("cook_run", R"({"textures":"rgba8"})").v().get("ok").as_bool());
+    CHECK(c.fails("cook_run", R"({"textures":"astc"})").find("textures") != std::string::npos);
+}
+
 TEST_CASE("mcp tools: cook_run paths and skip_errors") {
     const std::string root = demo_project("mcp_cook_paths");
     std::filesystem::copy_file(root + "/assets/textures/ball.png", root + "/assets/textures/new_ball.png");
@@ -765,7 +797,7 @@ TEST_CASE("mcp tools: asset_create / asset_write / asset_read author every JSON 
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"texture":"guid:5ce4e000-0000-4000-8000-0000000000ff"}})")
               .find("missing reference") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"colour":[1,1,1,1]}})").find("colour") != std::string::npos);
-    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool") != std::string::npos);
+    CHECK(c.fails("asset_create", R"({"path":"made/b.mcpart","content":{"guid":"x"}})").find("set by the tool and kept from the file: leave them out of 'content'") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"made/b.mcscene"})").find("scene_new") != std::string::npos);
     CHECK(c.fails("asset_create", R"({"path":"../b.mcpart"})").find("under assets/") != std::string::npos);
     CHECK_FALSE(std::filesystem::exists(root + "/assets/made/b.mcpart"));
@@ -885,6 +917,9 @@ TEST_CASE("mcp tools: terrain_generate, terrain_sculpt, terrain_paint and terrai
     CHECK(num(g.v().get("height").get("max")) <= 12.05);
     CHECK(num(g.v().get("height").get("max")) > 8.0);
     CHECK(num(g.v().get("resolution")) == 65);
+    // The write rescans the project: the reply names the terrain from copies, not from a freed record.
+    CHECK(str(g.v().get("path")) == "terrain/valley.mcterrain");
+    CHECK(str(g.v().get("guid")).rfind("guid:", 0) == 0);
 
     // A valley floor levelled at 3 m along x; a strength-0 smooth only probes.
     auto f = c.ok("terrain_sculpt", R"({"path":"terrain/valley.mcterrain","op":"flatten","target":3,"strength":1,"hardness":1,)"
