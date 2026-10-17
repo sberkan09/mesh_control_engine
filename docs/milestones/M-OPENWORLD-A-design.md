@@ -165,9 +165,12 @@ At a few hundred metres a building is a box with a picture on it. The impostor b
 1. A chunk that streams in merges all its cells in its first extract (a hitch). The merge gets a per-frame budget
    (`Kit3DExtract::set_merge_budget(cells)`, default unlimited so existing scenes are unchanged; the player sets it
    from `r.merge_budget`): cells waiting for their turn draw their children one by one.
+   As built (merge budget PR): `r.merge_budget` / `set_merge_budget`, `Kit3DStats::merge_pending`.
 2. Many chunks each with their own `StaticMerge3D` root: the per-group hash walk runs every frame for every group.
    Groups whose children carry no change since the last frame skip the hash (a change counter per group fed by the
    ECS change ticks of the children's columns).
+   As built (#536): no change counter; the per-frame walk hashes the children's raw inputs word-wise and reads no mesh
+   views (24k children: 10 ms to 3 ms), so a counter fed by change ticks was not needed yet.
 
 ## A4. Render LOD per streamed chunk
 

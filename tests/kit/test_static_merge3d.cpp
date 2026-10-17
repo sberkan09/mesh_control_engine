@@ -409,3 +409,26 @@ TEST_CASE("static merge: a 4096-piece city block reaches the scene as its cells 
     f.frame();
     CHECK(f.extract.stats().merged_rebuilt == 0);
 }
+
+TEST_CASE("static merge: a merge budget spreads a block over frames, the waiting cells' children drawing on their own") {
+    Fixture f("static_merge_kit_budget");
+    const u32 side = 64;
+    for (u32 i = 0; i < side * side; ++i) {
+        const asset::Guid g = i % 3 == 0 ? kRedA : i % 3 == 1 ? kRedB : kGreen;
+        const u32 row = i / side, column = i % side;
+        f.child(g, {f32(column) * 6.0f - 192.0f, 0.0f, -f32(row) * 6.0f - 10.0f});
+    }
+    f.extract.set_merge_budget(50);
+    u32 cells = 0;
+    for (u32 frame = 1; frame <= 4; ++frame) {
+        f.frame();
+        const kit::Kit3DStats& st = f.extract.stats();
+        cells = st.merged_cells;
+        CHECK(st.merged_rebuilt == (frame == 1 ? 1u : 0u));
+        CHECK(cells == math::min(50u * frame, 169u));
+        CHECK(st.merge_pending == 169u - cells);
+        if (cells < 169u) CHECK(st.meshes > 0);  // the waiting cells' pieces, one by one (those in view)
+    }
+    CHECK(f.extract.stats().meshes == 0);
+    CHECK(f.extract.stats().merged_children == side * side);
+}
