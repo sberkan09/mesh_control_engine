@@ -25,7 +25,7 @@ Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` ("3-4 missions
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | starting | | |
+| 1 | implemented, awaiting CI | | `src/engine/kit/{include/mce/kit/missions.h,src/missions.cpp}`, `tests/kit/test_missions.cpp`, user guide 9.13. Objectives chain by `Objective.next` from `Mission.objective` (reflected components have no arrays); `Mission.actor` names who reaches / interacts; no pickup or interact event existed, so `collect` counts `TriggerEnter3D` of a `Trigger3D` and `interact` reads the Interact action |
 | 2 | planned | | needs 1 for the objective markers |
 | 3 | planned | | needs 1 and 2 |
 | 4 | planned | | |

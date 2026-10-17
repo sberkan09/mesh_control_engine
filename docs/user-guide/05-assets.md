@@ -13,9 +13,10 @@ formats, which is what keeps the shipped game small and safe.
 | Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
 | HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
-| Font | `.ttf`, `.otf` | glyph atlas plus metrics | `TextLabel` |
+| Font | `.ttf` (TrueType outlines; CFF `.otf` is refused) | glyph atlas plus metrics | `TextLabel` |
 | Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
 | Model (OBJ) | `.obj`, `.mtl` | mesh: quantized streams, nodes per `o` / `g`, inline materials from the `.mtl` (adopt both files; section 8.4) | 3D rendering (chapter 8) |
+| Model (FBX) | `.fbx` | mesh: quantized streams, node tree, inline materials (external textures), skins, animation clips sampled at a fixed rate (section 8.4) | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
 | Road network | `.mcroads` | lanes, junction connectors, right of way and signal phases from nodes and roads | traffic and crowds ([chapter 29](29-roads-and-traffic.md)) |
@@ -64,6 +65,7 @@ Settings per importer (every key is optional; the defaults are shown):
 | `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |
 | `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#86-rendering-a-frame-yourself)), `"lod_levels": 0` (1..3 generates that many coarser levels), `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4), `"ragdoll": {}` (per-bone ragdoll overrides by bone name; section 9.8) |
 | `obj` | `"up": "y"` (`"z"` for a +Z-up file), `"scale": 1.0`, `"max_triangles": 0`, `"lod_levels": 0`, `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4); the `.mtl` next to it is adopted with `"importer": "mtl"` (no settings) |
+| `fbx` | `"scale": 1.0`, `"sample_rate": 30`, `"max_triangles": 0`, `"lod_levels": 0`, `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4); no `"up"`: the file says |
 
 Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
 re-cooks the asset.
