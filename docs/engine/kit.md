@@ -307,7 +307,9 @@ together:
   `MeshRef`s with opaque or masked materials through `render::build_merged_mesh` (one submesh per material, each
   source's LOD levels kept), positions relative to the chunk entity; hidden, unloadable, skinned and non-opaque
   meshes count as `skipped`, those under `min_size` as `small`. `EditorSession::bake_hlod` writes the result as
-  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step.
+  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step. Its new sidecars carry
+  `"lod_levels": 2`: the `hlod` importer then adds meshopt levels (`generate_lods`, as the model importers) to the
+  submeshes that have none, leaving the sources' own levels and level 0 as baked.
 - StaticMerge3D per frame (M-OPENWORLD A3): an unchanged group costs a walk over its children and a word-wise hash of
   their raw inputs (entity, mesh, material, position, rotation, scale, tints, shadow flag, mesh generation); the mesh
   views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. Per-entity
