@@ -85,10 +85,7 @@ void kit_ui_flow(Frame& f) {
         hold = keep = false;  // the next scene starts from its own screens
     }
     f.world().set_held(hold);
-    if (audio::PauseMix* mix = f.world().try_resource<audio::PauseMix>()) {
-        mix->paused = hold;
-        mix->keep = keep;
-    }
+    if (audio::PauseMix* mix = f.world().try_resource<audio::PauseMix>()) mix->keep = keep;
 }
 
 }  // namespace

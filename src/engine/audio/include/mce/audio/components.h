@@ -239,11 +239,10 @@ struct AudioRef {
     u32 snapshot_count = 0;
 };
 
-// World resource the UI flow (kit::UiFlow, system kit_ui_flow) writes every tick: `paused` while a pause screen holds the
-// world, `keep` when that screen asked to keep the sound going (UiFlow::keep_audio). audio_bridge runs on held ticks
-// only when `keep` is set; without the resource, or without a pause, nothing changes.
+// World resource the UI flow (kit::UiFlow, system kit_ui_flow) writes every tick: `keep` is set while a pause screen
+// that asked to keep the sound going (UiFlow::keep_audio) holds the world. Under a pause hold (World::paused())
+// audio_bridge runs only when `keep` is set; without the resource a pause is silent, and without a pause nothing changes.
 struct PauseMix {
-    bool paused = false;
     bool keep = false;
 };
 

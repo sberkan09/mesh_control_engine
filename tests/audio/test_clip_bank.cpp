@@ -310,7 +310,6 @@ TEST_CASE("audio_bridge: a pause hold keeps the sound only with PauseMix::keep (
 
     const f64 dt = 1.0 / 60.0;
     w.set_held(true);
-    w.try_resource<PauseMix>()->paused = true;
     w.tick(dt, 1);
     CHECK(w.try_get<AudioSource>(e)->handle.is_null());  // paused: the source never started
 
@@ -318,7 +317,6 @@ TEST_CASE("audio_bridge: a pause hold keeps the sound only with PauseMix::keep (
     w.tick(dt, 2);
     CHECK(dev->is_playing(w.try_get<AudioSource>(e)->handle));  // keep: the bridge runs on the held tick
 
-    w.try_resource<PauseMix>()->paused = false;
     w.set_held(false);
     w.tick(dt, 3);
     CHECK(dev->is_playing(w.try_get<AudioSource>(e)->handle));

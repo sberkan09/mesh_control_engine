@@ -172,8 +172,9 @@ void kit_effects(Frame& f) {
     // Registered to run on held ticks for UiFlow::keep_audio: a pause screen that keeps the sound going lets the
     // Sfx triggers fire (and nothing else); any other pause holds the whole system as before.
     bool sfx_only = false;
-    if (const audio::PauseMix* pause = w.try_resource<audio::PauseMix>(); pause && pause->paused) {
-        if (!pause->keep) return;
+    if (w.paused()) {
+        const audio::PauseMix* pause = w.try_resource<audio::PauseMix>();
+        if (!pause || !pause->keep) return;
         sfx_only = true;
     }
     Named n;

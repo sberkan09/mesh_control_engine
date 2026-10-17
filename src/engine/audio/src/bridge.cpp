@@ -90,7 +90,10 @@ void install(World& world, AudioDevice& device, ClipBank* clips, const char* aft
 
 void audio_bridge(Frame& f) {
     // A pause screen holds the world; the bridge is registered to run on held ticks only to honour keep_audio.
-    if (const PauseMix* pause = f.world().try_resource<PauseMix>(); pause && pause->paused && !pause->keep) return;
+    if (f.world().paused()) {
+        const PauseMix* pause = f.world().try_resource<PauseMix>();
+        if (!pause || !pause->keep) return;
+    }
     AudioRef& ref = f.resource<AudioRef>();
     AudioDevice* dev = ref.device;
     if (!dev) return;
