@@ -584,6 +584,7 @@ TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints
         s.add(fl);
     });
     check_golden("parallax_cobble", f);
+}
 
 // ---- M-VISUAL3 4: HDR sky -----------------------------------------------------------------------
 
