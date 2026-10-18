@@ -26,6 +26,7 @@
 #include "mce/kit/map_markers.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/day_cycle.h"
+#include "mce/kit/timed_light.h"
 #include "mce/kit/world_clock.h"
 #include "mce/kit/wanted3d.h"
 #include "mce/kit/nav3d.h"
@@ -136,6 +137,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_missions(world, assets);
     install_world_clock(world, assets);
     install_day_cycle(world, assets);
+    install_timed_light(world, assets);
     install_map_markers(world, assets);
     install_wanted3d(world);
     install_sensors3d(world, assets);
