@@ -1,0 +1,1 @@
+- Open-world sample content set, M-OPENWORLD E1: `samples/09_openworld` now uses CC0 Kenney car, blocky-character and city-kit building models (added with `mce content add`, credits in the sample's `CREDITS.md`) instead of tinted boxes; the mesh golden records the 35 new models.

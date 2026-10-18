@@ -5,8 +5,8 @@ A 1 km x 1 km city slice (M-OPENWORLD E1): a 5 x 5 junction grid, 250 m apart, w
 (two lanes each way) crossing at the middle and one lane each way elsewhere, traffic lights at the
 nine inner junctions, blocks of boxes for buildings and parks, a player on foot with a gun and a
 parked car to take, a few police, traffic and a pedestrian crowd that gather around the player.
-Everything is placeholder geometry (one unit cube, tinted), so the sample is self-contained; the
-open-licence content set of the milestone file replaces the boxes (docs/milestones/M-OPENWORLD.md).
+Cars, characters and buildings are CC0 Kenney models (`mce content add`, see CREDITS.md); road, ground and trees are
+tinted boxes of one unit cube, so the rest of the sample stays self-contained.
 """
 import json
 import math
@@ -24,6 +24,34 @@ def guid(name):
 
 
 G_BOX = guid("models/box.glb")
+TP = "third_party/"
+CAR_MODELS = ["sedan", "sedan-sports", "taxi", "suv", "delivery", "police"]
+CHARACTERS = ["character-a", "character-b", "character-c", "character-d", "character-e", "character-f"]
+DOWNTOWN_MODELS = [("building-m", 3.15), ("building-n", 2.48), ("building-l", 2.27), ("building-skyscraper-a", 2.88),
+                   ("building-skyscraper-b", 4.48), ("building-skyscraper-c", 4.08)]
+SUBURB_MODELS = [("building-" + c, h) for c, h in (("a", 1.29), ("b", 1.29), ("d", 1.29), ("f", 1.69), ("g", 1.69), ("h", 1.29), ("i", 1.68))]
+RESIDENTIAL_MODELS = [("building-type-" + c, h) for c, h in (("a", 1.0), ("b", 1.14), ("c", 1.03), ("d", 1.24), ("e", 1.14), ("f", 1.14))]
+KIT = {"sedan": "kenney-car-kit", "sedan-sports": "kenney-car-kit", "taxi": "kenney-car-kit", "suv": "kenney-car-kit",
+       "delivery": "kenney-car-kit", "police": "kenney-car-kit"}
+
+
+def model_rel(name):
+    """Imported (mce content add) model path, relative to assets/."""
+    if name in KIT:
+        pack = KIT[name]
+    elif name.startswith("character"):
+        pack = "kenney-blocky-characters"
+    elif name.startswith("building-type"):
+        pack = "kenney-city-kit-suburban"
+    else:
+        pack = "kenney-city-kit-commercial"
+    return "%s%s/models/%s.glb" % (TP, pack, name)
+
+
+def model_guid(name):
+    return guid(model_rel(name))
+
+
 G_ROADS = guid("roads/city.mcroads")
 G_CAR = guid("prefabs/traffic_car.mcprefab")
 G_WALKER = guid("prefabs/pedestrian.mcprefab")
@@ -100,6 +128,10 @@ def box_glb():
 def models():
     write_bytes("models/box.glb", box_glb())
     write("models/box.glb.mceasset", {"guid": G_BOX, "importer": "gltf", "importer_version": 3, "settings": {}})
+    # The Kenney models come from `mce content add` (CC0, see CREDITS.md); only their sidecars are written here.
+    names = set(CAR_MODELS) | set(CHARACTERS) | {n for n, _ in DOWNTOWN_MODELS + SUBURB_MODELS + RESIDENTIAL_MODELS}
+    for n in sorted(names):
+        write(model_rel(n) + ".mceasset", {"guid": model_guid(n), "importer": "gltf", "importer_version": 3, "settings": {}})
 
 
 # --- input ----------------------------------------------------------------------------------------------
@@ -232,6 +264,13 @@ def tf(position, scale=None, yaw=None):
     return t
 
 
+def model_mesh(name, shadows=1):
+    m = {"mesh": "guid:" + model_guid(name)}
+    if not shadows:
+        m["cast_shadows"] = 0
+    return m
+
+
 def mesh(tint, shadows=1):
     m = {"mesh": "guid:" + G_BOX, "tint": [round(c, 3) for c in tint] + [1]}
     if not shadows:
@@ -338,14 +377,19 @@ def buildings(scene, rng):
                     centre = math.hypot(cx, cz)
                     if downtown:
                         h = 18 + 70 * math.exp(-(centre / 220.0) ** 2) * rng.uniform(0.5, 1.0) + rng.uniform(0, 14)
-                        tint = rng.choice(DOWNTOWN)
+                        model, top = rng.choice(DOWNTOWN_MODELS)
                     else:
                         h = rng.uniform(5, 13)
-                        tint = rng.choice(SUBURB)
-                    prop(scene, name, (cx + rng.uniform(-2, 2), h / 2, cz + rng.uniform(-2, 2)), (w, h, d), tint, collider=True)
-                    # A roof slab a shade darker, so the skyline has some edge.
-                    scene.add(name + " roof", {"LocalTransform": tf((cx, h + 0.4, cz), (w + 0.6, 0.8, d + 0.6)),
-                                               "MeshRef": mesh(tuple(c * 0.6 for c in tint))})
+                        model, top = rng.choice(SUBURB_MODELS + RESIDENTIAL_MODELS)
+                    bx, bz = cx + rng.uniform(-2, 2), cz + rng.uniform(-2, 2)
+                    # The collider is a box of the lot; the visual is a Kenney building stretched to the same box
+                    # (the model spans 0..top+1 in y, 2 x 2 in plan, so the scale is the box over the model).
+                    e = scene.add(name, {"LocalTransform": tf((bx, h / 2, bz)),
+                                         "BoxCollider3D": {"half": [round(w / 2, 3), round(h / 2, 3), round(d / 2, 3)]}})
+                    sy = h / (top + 1.0)
+                    scene.add(name + " mesh", {"ChildOf": {"parent": scene.ref(e)},
+                                               "LocalTransform": tf((0, -h / 2, 0), (w / 2, sy, d / 2)),
+                                               "MeshRef": model_mesh(model)})
                     count += 1
     return count
 
@@ -355,8 +399,12 @@ def buildings(scene, rng):
 CAR_COLORS = [(0.7, 0.1, 0.1), (0.1, 0.25, 0.6), (0.85, 0.85, 0.82), (0.12, 0.12, 0.14), (0.8, 0.6, 0.1), (0.15, 0.45, 0.25)]
 
 
-def car_entities(color, traffic):
-    """A sedan: a RigidBody3D/Vehicle3D root and boxes for body, cabin and wheels (children, not spun)."""
+CAR_SCALE = 0.95
+CHAR_SCALE = 0.3   # Blocky Characters are about 6 units tall; the capsule is 1.8 m
+
+
+def car_entities(model, traffic):
+    """A car: a RigidBody3D/Vehicle3D root and the Kenney model as its child."""
     root = {
         "LocalTransform": {},
         "RigidBody3D": {"half": [0.9, 0.4, 1.5], "density": 300},
@@ -369,27 +417,21 @@ def car_entities(color, traffic):
     else:
         root["VehicleSeat3D"]["enter_radius"] = 4.0
     ents = [{"name": "Car", "components": root}]
-    parts = [("Body", (0, 0, 0), (1.8, 0.8, 3.0), color), ("Cabin", (0, 0.65, 0.2), (1.6, 0.55, 1.6), tuple(c * 0.45 + 0.1 for c in color)),
-             ("Glass", (0, 0.68, 0.2), (1.62, 0.3, 1.2), (0.05, 0.08, 0.1))]
-    for n, p, s, c in parts:
-        ents.append({"name": n, "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf(p, s), "MeshRef": mesh(c)}})
-    for n, (x, z) in (("FL", (-0.95, -1.2)), ("FR", (0.95, -1.2)), ("RL", (-0.95, 1.2)), ("RR", (0.95, 1.2))):
-        ents.append({"name": "Wheel " + n, "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((x, -0.2, z), (0.25, 0.7, 0.7)),
-                                                           "MeshRef": mesh((0.04, 0.04, 0.04))}})
+    # One Kenney car (body and wheels in one model, wheels do not spin); the model's front faces +z, the car drives toward -z.
+    ents.append({"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
+                                                  "MeshRef": model_mesh(model)}})
     return ents
 
 
 def prefabs():
     write("prefabs/traffic_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_CAR, "name": "traffic_car",
-                                           "entities": car_entities(CAR_COLORS[0], True)})
+                                           "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
         "LocalTransform": {}, "Pedestrian3D": {},
         "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
         "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
-        {"name": "Body", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, 0, 0), (0.5, 1.1, 0.35)),
-                                        "MeshRef": mesh((0.25, 0.4, 0.7))}},
-        {"name": "Head", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, 0.78, 0), (0.28, 0.28, 0.28)),
-                                        "MeshRef": mesh((0.85, 0.65, 0.5))}}]
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                         "MeshRef": model_mesh("character-b")}}]
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
                                           "entities": walker})
 
@@ -416,10 +458,8 @@ def scene():
         "Wanted3D": {},
         "StreamingFocus": {},
     })
-    s.add("Player body", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, 0, 0), (0.55, 1.2, 0.4)),
-                          "MeshRef": mesh((0.9, 0.55, 0.15))})
-    s.add("Player head", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, 0.78, 0), (0.3, 0.3, 0.3)),
-                          "MeshRef": mesh((0.9, 0.72, 0.58))})
+    s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                           "MeshRef": model_mesh("character-a")})
     # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view.
     cam = s.add("Camera", {
         "LocalTransform": {},
@@ -434,10 +474,10 @@ def scene():
 
     # Parked cars on the avenue's sidewalk: take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
-        comps = {c: v for c, v in car_entities(CAR_COLORS[n % len(CAR_COLORS)], False)[0]["components"].items()}
+        comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
         car = s.add("Parked car %d" % (n + 1), comps)
-        for part in car_entities(CAR_COLORS[n % len(CAR_COLORS)], False)[1:]:
+        for part in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[1:]:
             p = dict(part["components"])
             p["ChildOf"] = {"parent": s.ref(car)}
             s.add("Parked car %d %s" % (n + 1, part["name"]), p)
@@ -454,10 +494,8 @@ def scene():
             "Police3D": {"min_level": 1, "attack_level": 2, "sight_range": 55, "attack_range": 28, "search_time": 12},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
         })
-        s.add("Police %d body" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, 0, 0), (0.55, 1.2, 0.4)),
-                                           "MeshRef": mesh((0.08, 0.15, 0.45))})
-        s.add("Police %d head" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, 0.78, 0), (0.3, 0.3, 0.3)),
-                                           "MeshRef": mesh((0.9, 0.72, 0.58))})
+        s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                            "MeshRef": model_mesh("character-d")})
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
     s.add("Navmesh", {"LocalTransform": tf((0, 0, 0)),
                       "NavMeshSurface3D": {"bounds_half": [260, 30, 260], "cell_size": 0.5, "cell_height": 0.25, "agent_radius": 0.4,
