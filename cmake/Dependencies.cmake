@@ -410,6 +410,7 @@ FetchContent_Declare(recastnavigation
     GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
     GIT_TAG        v1.6.0
     GIT_SHALLOW    TRUE
+    PATCH_COMMAND  ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_LIST_DIR}/patch_recast.cmake"  # simplifyContour guard (M-FUZZ)
     SOURCE_SUBDIR  _no_cmake_)  # its sources are compiled below with our flags
 FetchContent_MakeAvailable(recastnavigation)
 set(_mce_recast_dirs Recast Detour DetourCrowd DetourTileCache)

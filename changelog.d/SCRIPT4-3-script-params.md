@@ -1,0 +1,1 @@
+- `ScriptParams` and `mce.param(e, name, default?)`, M-SCRIPT4 step 3: named per-entity constants a scene sets and scripts read (EmberScript's enemy speeds use it).
