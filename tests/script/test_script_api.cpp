@@ -300,6 +300,35 @@ function update() mce.make_noise(vector.create(0, 0, 0)) end
     (void)e;
 }
 
+TEST_CASE("script api: a perceiver hears a script's mce.make_noise within loudness x hearing") {
+    Rig r(R"(
+function update()
+    if mce.tick() == 2 then mce.make_noise(vector.create(0, 0, 0), 10, nil, 2) end
+end
+)");
+    kit::install_perception(r.w);
+    auto listener = [&](float x, float hearing, u8 team) {
+        kit::Perceiver p;
+        p.hearing = hearing;
+        p.team = team;
+        LocalTransform t;
+        t.position = math::vec3(x, 0, 0);
+        return r.w.spawn_with(t, p);
+    };
+    const Entity near = listener(5, 1.0f, 1);
+    const Entity far = listener(30, 1.0f, 1);
+    const Entity sharp = listener(30, 4.0f, 1);
+    const Entity deaf = listener(1, 0.0f, 1);
+    const Entity mate = listener(2, 1.0f, 2);  // the noise's own team does not hear it
+    r.step(6);
+    CHECK(error_of(r.h()).empty());
+    CHECK(r.w.try_get<kit::Perceiver>(near)->hearings == 1);
+    CHECK(r.w.try_get<kit::Perceiver>(far)->hearings == 0);
+    CHECK(r.w.try_get<kit::Perceiver>(sharp)->hearings == 1);
+    CHECK(r.w.try_get<kit::Perceiver>(deaf)->hearings == 0);
+    CHECK(r.w.try_get<kit::Perceiver>(mate)->hearings == 0);
+}
+
 TEST_CASE("script api: mce.field names one element of an array field (ScriptVars slots)") {
     Rig r(R"(
 local COINS = mce.field("ScriptVars", "v", 1)

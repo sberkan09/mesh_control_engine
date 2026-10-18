@@ -12,10 +12,17 @@ Plan: this record (the coordinator adds the ROADMAP status row).
 
 | # | Step | Model | State |
 |---|---|---|---|
-| 1 | End-to-end test that a `Perceiver` hears a script's `mce.make_noise` (M-SCRIPT3 step 5 open work) | Sonnet | not started |
+| 1 | End-to-end test that a `Perceiver` hears a script's `mce.make_noise` (M-SCRIPT3 step 5 open work) | Sonnet | done in PR (this step) |
 | 2 | Slot-handle test for a Vec4 / Color array field, and the ScriptVars demo scripts moved onto named slots (M-SCRIPT3 step 10 open work) | Sonnet (Opus review if `script.cpp` changes) | not started |
 | 3 | Scene-editable per-script constants (a reflected component the script reads by name, instead of literals in the source) | Sonnet | not started |
 | 4 | `mce.overlap_circle2d` / a 2D overlap query without physics, next to `mce.near` | Sonnet | not started |
 | 5 | Script projects' ctest target calls `mce test` instead of `demo_gate.py` (M-SCRIPT3 step 9 open work) | Sonnet | not started |
 
 Each step ends with a "Step N as built" section here, a guide/`docs/engine/script.md` update and a `changelog.d/SCRIPT4-<n>-<slug>.md` fragment.
+
+## Step 1 as built (perceiver hears a script noise)
+
+- Test "a perceiver hears a script's mce.make_noise within loudness x hearing" in `test_script_api.cpp`: a script calls `mce.make_noise` at tick 2 from the real
+  `ai_perception` system (`install_perception`); a listener at 5 m hears it, one at 30 m does not, one at 30 m with `hearing` 4 does, a deaf one and one on the
+  noise's own team do not (`Perceiver.hearings`). No engine code changed; the gap was only the missing test.
+- Not done: a behavior tree reacting to `heard_at` after a script noise (the tree side is covered by `test_ai_perception.cpp`).
