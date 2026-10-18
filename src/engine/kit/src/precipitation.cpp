@@ -148,9 +148,16 @@ void kit_lightning(Frame& f) {
                 const f64 u = static_cast<f64>(hash_mix(l.seed, l.counter * 2u)) / 4294967296.0;
                 l.timer = static_cast<u32>(ticks_of(static_cast<f64>(lo) + static_cast<f64>(hi - lo) * u, dt));
             }
+            bool strike = false;
             if (l.remaining > 0) {
                 --l.remaining;
-            } else if (l.timer > 0 && --l.timer == 0) {
+            } else if (l.timer > 0) {
+                --l.timer;
+                if (l.timer == 0) {
+                    strike = true;
+                }
+            }
+            if (strike) {
                 l.remaining = l.flash_ticks;
                 const u32 delay = 30u + hash_mix(l.seed, l.counter * 2u + 1u) % 271u;
                 ++l.counter;
