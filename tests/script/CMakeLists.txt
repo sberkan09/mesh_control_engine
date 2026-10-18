@@ -6,13 +6,16 @@ mce_add_test(test_script UMBRELLA
         test_scene_scripts.cpp
         test_script_api.cpp
         test_script_missions.cpp
+        test_script_clock.cpp
+        test_daynight_demo.cpp
         test_script_state.cpp
         test_script_check.cpp
         test_script_crash.cpp
     DEPS
         mce::mce_script_compiler
+        mce::mce_scene
         mce::mce_asset_cook)
-target_compile_definitions(test_script PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp")
+target_compile_definitions(test_script PRIVATE MCE_TEST_TMP_DIR="${CMAKE_CURRENT_BINARY_DIR}/tmp" MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 target_include_directories(test_script PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 
 # The stock player runs a cooked scene's scripts from bytecode (M-SCRIPT 1).

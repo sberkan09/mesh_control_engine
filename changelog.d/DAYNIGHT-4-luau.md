@@ -1,0 +1,1 @@
+- Luau `clock` global, M-DAYNIGHT step 4a: `clock.hour()`, `clock.day()`, `clock.set(hour)`, `clock.pause(bool)`, `clock.speed(scale)` and `clock.paused()` over the first `WorldClock`, stateless like `mission`; a world without a clock raises a named error. Typed in `mce.d.luau`; user guide 27.3.
