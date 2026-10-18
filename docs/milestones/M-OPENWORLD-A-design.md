@@ -156,7 +156,7 @@ At a few hundred metres a building is a box with a picture on it. The impostor b
   alpha = coverage, so the bake runs in the CI container and is deterministic.
 - **Format:** a `.glb` (one mesh, one material with the atlas as base colour, alpha mask) that the existing glTF
   importer cooks like any model.
-- **As built (impostor PR):** `hlod_bake impostor=true` (not a `mode`: the impostor needs the proxy's chunk anyway).
+- **As built (#548):** `hlod_bake impostor=true` (not a `mode`: the impostor needs the proxy's chunk anyway).
   The glTF importer refuses embedded images, so the bake writes the atlas as `chunk_<id>_far.png` (a `texture`
   sidecar, sRGB, linear filter) and the mesh as `chunk_<id>_far.mchlod` (the `hlod` importer, no extra levels) whose
   material names the PNG's GUID. The rasteriser is `cook::bake_impostor` (the cook already has the BC decoder and the
