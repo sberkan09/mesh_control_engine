@@ -13,6 +13,7 @@ mce_add_test(test_kit UMBRELLA
         test_ai_budget.cpp
         test_audio_occlusion.cpp
         test_bodies3d.cpp
+        test_debug_lines.cpp
         test_origin3d.cpp
         test_chunk_lod3d.cpp
         test_coop.cpp
@@ -38,6 +39,7 @@ mce_add_test(test_kit UMBRELLA
         test_seats3d.cpp
         test_combat3d.cpp
         test_missions.cpp
+        test_padding.cpp
         test_world_clock.cpp
         test_day_cycle.cpp
         test_timed_light.cpp
