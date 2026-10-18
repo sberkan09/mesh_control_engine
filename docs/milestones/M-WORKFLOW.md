@@ -1,6 +1,6 @@
 # M-WORKFLOW — What blind test 3 found in agent authoring (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 to 6 done, steps 7 and 8 remain). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
+**Status:** active (added 2026-10-16; steps 1 to 8 done). Plan: ROADMAP §M-WORKFLOW; Linear SBA-180 … SBA-184.
 
 **Why:** blind test 3 had three agents build a game (Lantern Keep) over MCP from the SDK and filed GitHub #377 to
 #383. #377 to #381 are bugs and workflow holes in code and documents we own; #382 (Luau, UiFlow) belongs to
@@ -19,7 +19,7 @@ M-SCRIPT and M-UI-DATA2, #383 (content, texture compression, draw calls) to M-VI
 | 5 | Stale documents fixed (#381), the two-server test, the close | SBA-184 | Sonnet | done |
 | 6 | Perceiver forward documented and visible over MCP (`perception_debug_lines`), stale baked component defaults, test bots that crouch and act (#391) | not filed (Linear at its free limit; this table is the tracker) | Sonnet | done 2026-10-17 by the routine 3 thread: 6a #451, 6c #457, 6b (this PR) |
 | 7 | Luau entity lookup by name, UiFlow reacting to signals and `GameState`, `pause` keeping audio, cutscenes not holding scripts, UI scale, Retry not reloading the title (#382, added on Sami's word 2026-10-16) | not filed | Opus | done 2026-10-17 (routine 3 thread): PR 1 #465, 2 #477, 3 #481, 8 #468, 9 #473, 10 #486, PR 5 `UiFlowRules` #494, PR 6+7 `keep_audio` #517, PR 4a `console::set_defaults` + player `defaults.cfg` #527, PR 4b-1 `.mcdefaults` -> `CHNK_CVARS` #541, PR 4b-2 player loads the chunk, one `.mcdefaults` per project, Undertow ships `ui.reference_height = 720` (this PR); open: the sample split of the Undertow title scene (decision note item 6) was left out |
-| 8 | Animation clips play from a shared library on any skinned mesh with a matching skeleton (no merging into each glTF); a scene whose entities reference assets but render empty says why (#409) | not filed | Opus | in progress 2026-10-18 (routine 3 thread): design = sidecar `animations_from` binds a library's clips by bone name at cook (no run-time change); half 2 = Kit3D says once why a scene with MeshRefs draws none; PR: this one; open: PR number, review |
+| 8 | Animation clips play from a shared library on any skinned mesh with a matching skeleton (no merging into each glTF); a scene whose entities reference assets but render empty says why (#409) | not filed | Opus | done 2026-10-18 (routine 3 thread): #554 sidecar `animations_from` binds a shared library's clips by bone name at cook (no run-time change; guide 8.9); the same PR makes Kit3D say once why a scene with MeshRefs draws none; open: a hand-written scene that rendered empty was not reproduced, so the note covers the causes visible at run time (no mesh set, no Transform, mesh not loaded) |
 
 **Gates:** existing replay hashes unchanged; each fix has a regression test; `local_ci.sh` green on every step.
 
