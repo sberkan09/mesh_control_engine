@@ -49,6 +49,7 @@ mce_add_library(mce_gameplay_kit
         src/crowd.cpp
         src/ai_tasks.cpp
         src/perception.cpp
+        src/debug_lines.cpp
         src/cinematic.cpp
         src/video.cpp
         src/render_textures.cpp

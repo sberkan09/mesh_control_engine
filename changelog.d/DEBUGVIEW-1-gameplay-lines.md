@@ -1,0 +1,1 @@
+- Gameplay debug lines, M-DEBUGVIEW step 1: `mce/kit/debug_lines.h` `gameplay_debug_lines(world, mask, out)` turns box colliders, rigid bodies, triggers (green while occupied), joints, character capsules, vehicle wheels (red while skidding), waypoint chains, driver targets and nav agents into world-space line segments, read-only (the state hash is unchanged).
