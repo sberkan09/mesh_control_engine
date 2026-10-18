@@ -294,6 +294,14 @@ constexpr AssetKind kKinds[] = {
      R"json([
 {"name":"convars","type":"object","help":"convar name -> true/false, a number or text, e.g. {\"ui.reference_height\": 720}"}])json",
      R"json({"convars":{}})json"},
+    {"ItemCatalog", ".mcitems", "mce-items", 1,
+     "The project's items and loot tables (M-INVENTORY 1): item definitions (id, name, stack size, weight in kg, tags, named "
+     "numeric stats, icon and prefab) and weighted loot tables that roll items or other tables. Ids are 1-63 letters, digits, "
+     "'_', '-', '.'; tables may nest 8 deep and may not loop.",
+     R"json([
+{"name":"items","type":"array","help":"[{\"id\":\"medkit\",\"name\":\"Medkit\",\"stack\":5,\"weight\":0.4,\"tags\":[\"consumable\"],\"stats\":{\"heal\":25},\"icon\":\"guid:<texture>\",\"prefab\":\"guid:<prefab>\"}]"},
+{"name":"tables","type":"array","help":"[{\"id\":\"chest\",\"rolls\":[1,3],\"entries\":[{\"item\":\"medkit\",\"weight\":5,\"qty\":[1,2]},{\"table\":\"rare\",\"weight\":1},{\"item\":\"key\",\"guaranteed\":true}]}]"}])json",
+     R"json({"items":[],"tables":[]})json"},
 };
 
 const AssetKind* kind_for_extension(StringView path) {
@@ -719,8 +727,8 @@ const ToolDef kAssetTools[] = {
     {"asset_schema",
      "Describe a JSON source asset type: its fields (type, default, help) and the template asset_create starts from. "
      "Without 'type': the types asset_create/asset_write handle (.mcpart, .mcsound, .mcseq, .mctilemap, .mcsheet, .mcskel2d, .mcanim, .mcmat, "
-     ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig).",
-     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, ConvarDefaults, Terrain, RoadNetwork, or the extension"}}})json",
+     ".mcinput, .mcstore, .mcservices, .mcui, .mcconfig, .mcitems).",
+     R"json({"type":"object","properties":{"type":{"type":"string","description":"ParticlePreset, SoundSet, Sequence, Timeline, BehaviorTree, Tilemap, SpriteSheet, Skeleton2D, AnimGraph, Material, InputMap, StoreCatalog, GameServicesCatalog, UiDocument, UiTheme, RemoteConfig, ConvarDefaults, ItemCatalog, Terrain, RoadNetwork, or the extension"}}})json",
      asset_schema},
     {"asset_create",
      "Create a JSON source asset at 'path' (its extension picks the type) with a fresh GUID: the type's template with "

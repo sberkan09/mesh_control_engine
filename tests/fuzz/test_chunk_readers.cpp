@@ -22,6 +22,7 @@
 #include "mce/asset/container.h"
 #include "mce/asset/file_io.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/items_format.h"
 #include "mce/convar.h"
 #include "mce/input/input_map.h"
 #include "mce/liveops/game_services.h"
@@ -86,6 +87,7 @@ bool read_chunk(ChunkType t, Span<const byte> p) {
             fs::remove(path, ec);
             return ok;
         }
+        case ChunkType::ItemCatalog: { asset::ItemCatalog o; return static_cast<bool>(asset::decode_item_catalog(p, o)); }
         case ChunkType::ModInfo: return walked<ModInfoView>(p);
         case ChunkType::SpriteSheet: return walked<SpriteSheetView>(p);
         case ChunkType::StringTable: { loc::StringTable o; return static_cast<bool>(loc::decode_table(p, o)); }
@@ -127,7 +129,7 @@ bool has_reader(ChunkType t) {
         case ChunkType::Mesh: case ChunkType::Scene: case ChunkType::ModInfo: case ChunkType::SpriteSheet:
         case ChunkType::StringTable: case ChunkType::InputMap: case ChunkType::StoreCatalog: case ChunkType::RemoteConfig:
         case ChunkType::GameServicesCatalog: case ChunkType::UiTheme: case ChunkType::UiDocument: case ChunkType::NavMesh:
-        case ChunkType::Prefab: case ChunkType::RoadNetwork: case ChunkType::ConvarDefaults:
+        case ChunkType::Prefab: case ChunkType::RoadNetwork: case ChunkType::ConvarDefaults: case ChunkType::ItemCatalog:
             return true;
         default: return false;
     }

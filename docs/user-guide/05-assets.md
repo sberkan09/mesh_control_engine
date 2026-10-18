@@ -19,6 +19,7 @@ formats, which is what keeps the shipped game small and safe.
 | Model (FBX) | `.fbx` | mesh: quantized streams, node tree, inline materials (external textures), skins, animation clips sampled at a fixed rate (section 8.4) | 3D rendering (chapter 8) |
 | Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
 | Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
+| Item catalog | `.mcitems` | item definitions (stack size, weight, tags, named stats, icon, prefab) and weighted loot tables | the inventory and loot kit (M-INVENTORY; section 5.7) |
 | Road network | `.mcroads` | lanes, junction connectors, right of way and signal phases from nodes and roads | traffic and crowds ([chapter 29](29-roads-and-traffic.md)) |
 | Scene | `.mcscene` | columnar entity rows | the game, the editor |
 | Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
@@ -381,6 +382,30 @@ terrain whose layers follow `auto` rules re-applies them to the new shape.
 
 Give every layer's maps of one kind the same size and import settings: each kind is packed into one
 texture array, and a map that differs from the first layer's is left out with a warning.
+
+**Item catalog** (`.mcitems`, M-INVENTORY): the things a game's inventories hold and the loot tables that drop them. One file per
+project is typical; it is one asset with one GUID, and items and tables are named by id inside it.
+
+```json
+{ "format": "mce-items", "version": 1, "guid": "<uuid>",
+  "items": [ { "id": "medkit", "name": "Medkit", "stack": 5, "weight": 0.4, "tags": ["consumable"],
+               "stats": { "heal": 25 }, "icon": "guid:<texture uuid>", "prefab": "guid:<prefab uuid>" },
+             { "id": "key" } ],
+  "tables": [ { "id": "chest_common", "rolls": [1, 3], "entries": [
+                 { "item": "medkit", "weight": 5, "qty": [1, 2] },
+                 { "table": "chest_rare", "weight": 1 },
+                 { "item": "key", "guaranteed": true } ] },
+              { "id": "chest_rare", "entries": [ { "item": "medkit", "qty": 5 } ] } ] }
+```
+
+`stack` (default 1, up to 1,000,000) is how many fit in one slot; `weight` is kilograms per unit, stored as whole thousandths so
+sums never depend on float order; `stats` are free named numbers (`damage`, `heal`) that scripts and the kit read by name; `icon` is a
+texture and `prefab` the entity spawned when the item lies in the world, both optional and checked at cook. A loot table makes
+`rolls` (a number or `[min, max]`, default 1) weighted picks among its entries; a `guaranteed` entry is always added and does not
+count as a pick, and an entry that names a `table` rolls on that table in turn (tables nest 8 deep and may not loop, and may be
+listed in any order). `qty` is a number or `[min, max]`. Ids are 1 to 63 letters, digits, `_`, `-` and `.`; a stat or tag name up to
+31. Limits: 4096 items, 1024 tables, 256 entries a table, 32 stats and 16 tags an item. The cook names the file and line of every
+mistake. This step ships the data and its cook; the inventory components and the loot roller come with the next steps of the milestone.
 
 **Particle preset** (`.mcpart`, chapter 7):
 
