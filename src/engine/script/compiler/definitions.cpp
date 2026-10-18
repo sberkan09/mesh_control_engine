@@ -149,6 +149,20 @@ declare clock: {
     speed: (scale: number) -> (),
     paused: () -> boolean,
 }
+
+-- Weather (M-WEATHER): thin over the first Weather component.
+declare weather: {
+    -- the kind in effect: "clear" | "overcast" | "rain" | "storm" | "snow"
+    kind: () -> string,
+    -- the kind the weather is moving to
+    target: () -> string,
+    -- writes Weather.target; with seconds also Weather.transition_seconds (0..3600)
+    set: (kind: string, transition_seconds: number?) -> (),
+    -- 0..1 blend of the kind in effect
+    intensity: () -> number,
+    wind: () -> number,
+    wetness: () -> number,
+}
 )";
 
 const char* luau_type(const refl::FieldRecord& f) {
