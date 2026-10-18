@@ -44,16 +44,17 @@ struct Field {
         ground.friction = 1.0f;
         w.spawn_with(at(0, -0.5f, 0), ground);
         // The walkers: an 8 x 8 grid 3 m apart in the field's south-west quarter, clear of the loop.
-        for (u32 i = 0; i < kWalkers; ++i) {
-            CharacterController3D c;
-            c.acceleration = 30.0f;
-            c.deceleration = 40.0f;
-            c.coyote_time = 0.1f;
-            c.jump_buffer = 0.1f;
-            c.crouch_half_height = 0.3f;
-            c.layer = 1;
-            walkers[i] = w.spawn_with(at(-130.0f + 3.0f * static_cast<f32>(i % 8), 0.9f, 60.0f + 3.0f * static_cast<f32>(i / 8)), c);
-        }
+        for (u32 row = 0; row < 8; ++row)
+            for (u32 col = 0; col < 8; ++col) {
+                CharacterController3D c;
+                c.acceleration = 30.0f;
+                c.deceleration = 40.0f;
+                c.coyote_time = 0.1f;
+                c.jump_buffer = 0.1f;
+                c.crouch_half_height = 0.3f;
+                c.layer = 1;
+                walkers[row * 8 + col] = w.spawn_with(at(-130.0f + 3.0f * static_cast<f32>(col), 0.9f, 60.0f + 3.0f * static_cast<f32>(row)), c);
+            }
         // The cars: a 100 x 100 m loop of waypoints around the origin, two cars per side-start, staggered along it.
         const math::vec3 loop[4] = {{50, 0.3f, 50}, {-50, 0.3f, 50}, {-50, 0.3f, -50}, {50, 0.3f, -50}};
         Entity points[4];
