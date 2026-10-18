@@ -1,0 +1,1 @@
+- Bytecode trust, M-SCRIPT3 step 8 (M-FUZZ decision): `check_walls.py` now fails a new `allow_code = true` mount site or an `add_bytecode` caller outside the game's own pack, the editor's cook, the headless run and the script module; a test pins that a pack mounted without `allow_code` never runs its scripts. Mods, base packs, fetched config and user files stay data-only.

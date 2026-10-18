@@ -22,10 +22,11 @@ cannot yet say or check:
 | 1 | Rotation from Luau: Euler degrees as a vector (no quaternion type), `mce.rotation3d`, `set_rotation3d`, `look_rotation3d`, `teleport3d` with a rotation | Sonnet | done |
 | 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a and 2b done; 2c (static check widening) not started |
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | done |
-| 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | not started |
+| 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | done (PR for the guide fixes); open: see "Step 4 as built" |
 | 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | name lookup is M-WORKFLOW 7 PR 10 (`mce.find`, Rutin 3); `during_cutscenes` and multi-component `mce.get` / `mce.set` already shipped with M-WORKFLOW 7; `mce.make_noise` merged in #492 (open work: a running perceiver hearing a script noise is not tested end to end) |
 | 6 | Docs the same notes asked for: the Luau limits (no state between ticks, one component per `("Comp", "field")` call, `Perceiver.sees` is a number) in the guide itself, and `mce.d.luau` as a reference page in the SDK docs | Sonnet | done: `docs/engine/script.md` (surface, `mce.d.luau`, limits, gaps) and a limits note in guide 27.4; open: none |
 | 7 | The perf gate's `--seed` self-check catches nothing on Dungeon (so its baseline cannot be trusted yet): find why three textured sprites added to `walk.mcscene` do not change `sprites` / `sprite_batches`, fix it, and make `Dungeon_perf_counters` run the seeded variant too | Sonnet | done |
+| 8 | Bytecode trust (M-FUZZ decision, coordinator 2026-10-17): bytecode loads only from the game's own cooked pack; mods, base packs, fetched config and user files are data-only. Pin it so a new mount site or raw-bytecode caller cannot slip in | Sonnet | done in PR (see "Step 8 as built") |
 
 ## Step 3 as built
 
@@ -67,3 +68,30 @@ cannot yet say or check:
   (M-WORKFLOW 7 PR 8) and multi-component `mce.get` / `mce.set` (`test_script.cpp`, M-WORKFLOW 7) are in `dev_claude`.
 - Open: an end-to-end check of a perceiver hearing a script noise; step 6 should mention `mce.find` and `mce.make_noise`.
 - Linear: this milestone has no cards (the workspace is at its free limit), so this file is the tracker.
+
+## Step 8 as built (bytecode trust)
+
+- The rule was already in place since M-SCRIPT2 step 0 (`MountOptions::allow_code`, default false; Script entries of such a root are dropped at mount).
+  What was missing was a pin: `scripts/ci/check_walls.py` now has two walls. `allow_code = true` may appear only in the player's pack mount, the
+  editor project's cook, the headless run's pack and `tests/`; `add_bytecode(` may be called only inside `src/engine/script/` and `tests/`. A new
+  mount site or loader fails the walls stage until it is named there on purpose.
+- Test: `test_scene_scripts` "a pack mounted without allow_code never runs its scripts": a pack mounted with default options has no Script
+  entries and a `ScriptSystem` naming one does nothing.
+- Not built: accepting mod or network scripts as `.luau` source and compiling them at load. The shipped player has no compiler by design
+  (`player_no_luau_compiler`), so that is a separate decision; until then those sources cannot carry code at all.
+- No raw-bytecode API takes an external path today: `ScriptHost::add_bytecode` is reached only from scene scripts (mounted chunks) and `compile()`.
+
+## Step 4 as built (the blind test)
+
+A fresh Sonnet agent that could read only the user guide, `docs/engine/script.md` and its own cook's `mce.d.luau` built a 2D script-only
+game (a player, three coins, a chasing enemy, a following camera) with `mce_cook` and `mce_player` and got it cooked and running (the
+coin pickup logged, the state hash changed with input). It could not run its `.mctest`. Findings, most costly first:
+
+1. No way to run a `.mctest` without MCP (open: a command that plays a scenario through the player alone; the guide now says where scenarios run).
+2. Guide 27.1 said the cook writes the script's sidecar itself; the bare cook needs `--adopt` (fixed).
+3. Bootstrap order and a hand-written `.mceproj` for `"games": []` were undocumented (fixed: "By hand, without `mce new`" in 27.7).
+4. `ScriptVars` rows must list all 16 numbers in a scene (now stated); named slots instead of `v[16]` are a wish (open).
+5. No single script-only 2D scene example, the `$<index>` camera target, the +y-up `Move` axis and `mce.destroy` inside `mce.each` were unstated (fixed in the same section).
+6. Wished for and open: `mce.distance` / `mce.overlap_circle2d` without physics, a headless entity or component dump, scene-editable per-script constants.
+
+Not a true independent test of everything: the agent was handed the task, not asked to find its own, and it did not run the editor.
