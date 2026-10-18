@@ -29,6 +29,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_skeleton2d.cpp
         src/tools_timeline.cpp
         src/tools_bt.cpp
+        src/tools_debugview.cpp
         src/tools_friction.cpp
         src/tools_code.cpp
         src/tools_import.cpp
