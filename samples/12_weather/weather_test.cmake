@@ -1,0 +1,63 @@
+# 12_weather's headless gates (M-WEATHER step 4), run with cmake -P: mce_player plays the cooked pack and the script's
+# log lines pin the weather (the script's tick counts from 0 and runs after the weather system, so its line at
+# tick N shows the state after N + 1 system ticks; 10 s transitions are 600 ticks). The sun, emitter, lightning and
+# environment numbers are in tests/script/test_weather_demo.cpp. Gates:
+#   1. 600 ticks: clear, then rain from tick 60 (intensity (N - 60) / 600), the same state hash on two plays;
+#   2. 2700 ticks: rain 0.900 at tick 600, storm and snow arrive, clear again at tick 2400, and no problem logged.
+
+function(play out_var)
+    execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
+                    RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+    if(NOT rc EQUAL 0)
+        message(FATAL_ERROR "mce_player exited ${rc}\n${out}\n${err}")
+    endif()
+    set(${out_var} "${out}${err}" PARENT_SCOPE)
+endfunction()
+
+function(expect text pattern what)
+    if(NOT text MATCHES "${pattern}")
+        message(FATAL_ERROR "${what} (no match for '${pattern}'):\n${text}")
+    endif()
+endfunction()
+
+function(expect_not text pattern what)
+    if(text MATCHES "${pattern}")
+        message(FATAL_ERROR "${what} (unexpected '${pattern}'):\n${text}")
+    endif()
+endfunction()
+
+function(hash_of text out_var)
+    if(NOT text MATCHES "state_hash ([0-9a-f]+)")
+        message(FATAL_ERROR "no state hash:\n${text}")
+    endif()
+    set(${out_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+endfunction()
+
+file(REMOVE_RECURSE "${WORK_DIR}")
+file(MAKE_DIRECTORY "${WORK_DIR}")
+
+# 1. The first 600 ticks.
+play(first -ticks 600 -input "${INPUT}")
+play(second -ticks 600 -input "${INPUT}")
+expect("${first}" "600 ticks, 11 entities, state_hash" "the run did not end after 600 ticks with 11 entities")
+expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
+expect("${first}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.000 at tick 0\n" "the weather did not start clear")
+expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
+expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
+expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
+hash_of("${first}" hash_a)
+hash_of("${second}" hash_b)
+if(NOT hash_a STREQUAL hash_b)
+    message(FATAL_ERROR "two plays differ: ${hash_a} vs ${hash_b}")
+endif()
+
+# 2. The whole forecast.
+play(forecast -ticks 2700 -input "${INPUT}")
+expect("${forecast}" "script: weather: rain intensity 0.900 wind 0.460 wetness 0.068 at tick 600\n" "rain is not at 0.9 when the storm is called")
+expect("${forecast}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.133 at tick 1050\n" "rain did not fade out for the storm")
+expect("${forecast}" "script: weather: storm intensity 0.602 wind 0.641 wetness 0.165 at tick 1500\n" "the storm is not at 0.602 when snow is called")
+expect("${forecast}" "script: weather: snow intensity 0.400 wind 0.140 wetness 0.209 at tick 2100\n" "snow is not at 0.4 when clear is called")
+expect("${forecast}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.213 at tick 2400\n" "the weather did not clear")
+expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
+
+message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

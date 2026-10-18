@@ -1,6 +1,6 @@
 # ADR-0049 — MP3 and FLAC import over dr_libs (cook-only)
 
-**Status:** Proposed (2026-10-18), awaiting the coordinator's acceptance (a new third-party dependency). **Milestone:**
+**Status:** Accepted (2026-10-18, the coordinator: pinned commit, public domain/MIT-0, host cook only, independently reviewed). **Milestone:**
 M-IMPORTMEDIA step 2. **Plan:** [`docs/milestones/M-IMPORTMEDIA.md`](../milestones/M-IMPORTMEDIA.md). **Reference:**
 `cmake/Dependencies.cmake` (`mce_drlibs`), `src/engine/asset/cook/src/audio_decode.cpp`, `drlibs_impl.c`,
 `tests/asset/test_cook_audio_formats.cpp`.

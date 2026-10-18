@@ -58,6 +58,7 @@ mce_add_test(test_fuzz_importers UMBRELLA
         test_importers.cpp
         test_roads.cpp
         test_mesh_import.cpp
+        test_media_import.cpp
         test_defaults.cpp
         test_binary_import.cpp
     DEPS
