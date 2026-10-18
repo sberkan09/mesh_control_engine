@@ -60,6 +60,8 @@ u8* scratch_default(ScriptHost& host, const refl::TypeRecord& type, usize offset
 void register_world_api(lua_State* L);
 // The `mission` and `marker` globals (api_missions.cpp).
 void register_mission_api(lua_State* L);
+// The `clock` global (api_clock.cpp).
+void register_clock_api(lua_State* L);
 
 }  // namespace detail
 }  // namespace mce::script

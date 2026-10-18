@@ -47,6 +47,7 @@
 #include "mce/kit/world_clock.h"        // WorldClock (M-DAYNIGHT 1)
 #include "mce/kit/day_cycle.h"          // DayCycle (M-DAYNIGHT 2)
 #include "mce/kit/timed_light.h"       // TimedLight3D (M-DAYNIGHT 3)
+#include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
 #include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)
 #include "mce/kit/ui_flow.h"          // UiFlowRules (M-WORKFLOW 7)

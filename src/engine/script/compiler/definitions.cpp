@@ -134,6 +134,21 @@ declare marker: {
     add: (e: Entity, options: MarkerOptions?) -> (),
     remove: (e: Entity) -> (),
 }
+
+-- World clock (M-DAYNIGHT): thin over the first WorldClock component.
+declare clock: {
+    -- the hour of the day, 0..24
+    hour: () -> number,
+    -- whole days passed since the start
+    day: () -> number,
+    -- sets the hour (0..24); the clock re-seats itself on its next tick
+    set: (hour: number) -> (),
+    -- stops or resumes the clock
+    pause: (paused: boolean) -> (),
+    -- WorldClock.time_scale, clamped to 0..100
+    speed: (scale: number) -> (),
+    paused: () -> boolean,
+}
 )";
 
 const char* luau_type(const refl::FieldRecord& f) {

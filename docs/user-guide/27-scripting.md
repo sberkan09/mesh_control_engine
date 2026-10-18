@@ -199,6 +199,26 @@ function update()
 end
 ```
 
+**The world clock.** The `clock` global is thin over the first `WorldClock` (section 9.16) and keeps nothing: the hour, the day, the pause and the speed are the component's fields, so saves, replays and the editor see them. A scene without a `WorldClock` entity gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
+
+| Call | Does |
+|---|---|
+| `clock.hour()` | the hour of the day, 0 to 24 |
+| `clock.day()` | whole days passed since the start |
+| `clock.set(hour)` | writes `WorldClock.hour` (0 to 24); the clock re-seats on its next tick and carries on from there. `DuskStarted` / `DawnStarted` do not fire for a jump of more than 6 hours |
+| `clock.pause(paused)` | `WorldClock.paused` (a boolean) |
+| `clock.speed(scale)` | `WorldClock.time_scale`, clamped to 0 to 100 like the component |
+| `clock.paused()` | `true` while the clock stands still |
+
+```lua
+-- Skip to the morning when the player presses Interact at the bed.
+function update()
+    if mce.pressed("Interact") and clock.hour() > 20 then
+        clock.set(6)
+    end
+end
+```
+
 ## 27.4 The rules
 
 - **No state between ticks.** Everything a script remembers lives in components, so the state hash,

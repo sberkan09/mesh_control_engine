@@ -1,6 +1,6 @@
 # M-DAYNIGHT — A day/night cycle as data (milestone record)
 
-**Status:** planned 2026-10-18, step 1 starting (no Linear issues: the SBA workspace is at its free issue limit, this record is the tracker).
+**Status:** Done 2026-10-18 (step 4 implemented, not merged; no Linear issues: the SBA workspace is at its free issue limit, this record is the tracker).
 Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` ("3-4 missions with a script, day/night cycle"). `Environment3D.time_of_day` (hours, places the sun on a simple arc) already exists, but nothing moves it: a game has to write the field every tick from a script, and nothing else (ambient, fog, exposure, street lights, window emissives) follows the hour.
 
 **Goal.** A game author (or an agent over MCP) gets a deterministic world clock and a day cycle as components: set the day length, pick curves, place lights that turn on at dusk. No C++, no per-tick script.
@@ -27,5 +27,5 @@ Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` ("3-4 missions
 |---|---|---|---|
 | 1 | done | #559 | `WorldClock` in `world_clock.h/.cpp`, tests in `tests/kit/test_world_clock.cpp`, user guide 9.16 |
 | 2 | done | #563 | `DayCycle` in `day_cycle.h/.cpp` (8 key slots, default night/dawn/noon/dusk preset), tests in `tests/kit/test_day_cycle.cpp`, user guide 9.17 |
-| 3 | implemented (not merged) | | `TimedLight3D` in `timed_light.h/.cpp` (ramp over `fade_minutes`, intensity = base * ramp, `enabled` 0 when off, `MeshRef` emissive), events `DuskStarted`/`DawnStarted`, tests in `tests/kit/test_timed_light.cpp`, user guide 9.18 |
-| 4 | planned | | |
+| 3 | done | #565 | `TimedLight3D` in `timed_light.h/.cpp` (ramp over `fade_minutes`, intensity = base * ramp, `enabled` 0 when off, `MeshRef` emissive), events `DuskStarted`/`DawnStarted`, tests in `tests/kit/test_timed_light.cpp`, user guide 9.18 |
+| 4 | done | #571 | Luau `clock.hour/day/set/pause/speed/paused` in `api_clock.cpp` (typed in `mce.d.luau`, tests in `tests/script/test_script_clock.cpp`, user guide 27.3); `samples/11_daynight` (street, emissive windows, two lamps, `Jump` skips to noon) with `tests/script/test_daynight_demo.cpp` (sun at 06:00 and 18:00, lamps off at noon and on at 19:30, windows, midnight, state hash, `clock.set(12)`), `sample_daynight_headless_600` and a GPU smoke run capturing 06:00 (no goldens, `slow`: integration run only, it stalled under a loaded `--task`). MCP needs no code: the three components are reflected |
