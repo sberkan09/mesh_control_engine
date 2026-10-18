@@ -9,8 +9,9 @@ Scripting needs a build with `MCE_WITH_SCRIPT` (on in the desktop, phone and web
 
 ## 27.1 A script
 
-Put a `.luau` file anywhere under `assets/`. The cook writes its sidecar (`importer: "script"`) the
-first time it sees it and compiles it into a `Script` asset (a `CHNK_SCRIPT` chunk of Luau bytecode).
+Put a `.luau` file anywhere under `assets/`. Give it a sidecar (`importer: "script"`) the way any asset gets one: the
+editor and `mce build` / `mce play` do it for you, and the bare cook does it with `--adopt` (section 5.4; without it a
+file with no sidecar is a cook error). The cook compiles it into a `Script` asset (a `CHNK_SCRIPT` chunk of Luau bytecode).
 A syntax error fails the cook with the file, line and column, like any asset error:
 
 ```
@@ -315,6 +316,37 @@ and the same project builds from the engine checkout: copy it to `projects/MyGam
 from there). The engine's CMake gives such a project a host that is the stock player with the project's pack
 (`mce_add_script_project`), and the host build's `mce_cook` cooks the pack. The phone and web toolchains (the
 Android NDK, Xcode, the Emscripten SDK) are the ones the other projects use.
+
+
+### By hand, without `mce new`
+
+The smallest project is three files, and the commands below are the raw tools `mce` wraps (a build of the engine has
+`mce_cook` and `mce_player`).
+
+```
+Blind/Blind.mceproj
+Blind/assets/scripts/game.luau
+Blind/assets/scenes/main.mcscene
+```
+
+```json
+{ "format": "mce-project", "version": 1, "name": "Blind", "title": "Blind", "engine_version": "0.9.0",
+  "games": [], "start_scene": "11111111-2222-4333-8444-555555555555", "plugins": [] }
+```
+
+`start_scene` is the `guid` of the scene file (choose any GUID; the scene carries the same one). A scene needs its
+script's GUID in a `ScriptSystem` entity, and that GUID exists only once the script has a sidecar, so adopt first:
+
+    mce_cook Blind --adopt                      # writes the sidecars; copy the script's guid into the scene
+    mce_cook Blind --pack                       # cook and write Blind/assets.mce
+    mce_player -headless 1 -ticks 100 -pack Blind/assets.mce -input tests/run.input   # one "from-to Action=value" line per range, chapter 11.5
+
+A scene entity that holds script memory lists all 16 numbers of `ScriptVars.v` (the kind slot included); a coloured
+square is a `Sprite` with no texture and a `tint`; `CameraFollow2D.target` is `"$<index of the entity in the scene>"`.
+In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pickup without physics is a distance test
+(`vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
+prints `mce.log` lines and the state hash; it does not dump components, and `.mctest` scenarios run with `mce test MyGame`
+(chapter 14.3.1), not through `mce_player`.
 
 
 ## 27.8 Remembering things: `ScriptVars`

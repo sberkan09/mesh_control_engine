@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "mce/convar.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/kit3d_extract.h"
@@ -16,6 +17,11 @@
 namespace mce::kit {
 
 using namespace mce::math;
+
+// M-OPENWORLD A3: an area that streams in merges its cells over several frames instead of in one (a hitch).
+MCE_CVAR(cv_merge_budget, "r.merge_budget", 0,
+         "StaticMerge3D cells merged per frame at most; the children of the waiting cells draw on their own (0 = no limit)",
+         CVarFlags::None);
 
 namespace {
 
@@ -69,21 +75,18 @@ struct Hasher {
     }
 };
 
-// One child that merges.
-struct Candidate {
-    Entity entity;
-    mat4 world;
-    const MeshRef* ref = nullptr;
-    const render::MaterialOverride* material = nullptr;
-    asset::MeshView view;
-    vec3 center;  // the mesh's bounds centre in the world: picks the cell
-};
-
 // Children sharing a cell and a shadow flag: one merged mesh.
 struct Bucket {
     i32 cell[3] = {0, 0, 0};
     bool cast = true;
-    Array<u32> candidates;
+    Array<u32> candidates;  // into Group::planned
+};
+
+// A child picked to merge, kept until its cell is merged (the merge budget can spread a group over frames). Only
+// the entity and its placement: the MeshRef, the mesh view and the material are read again when the cell merges.
+struct Planned {
+    Entity entity;
+    mat4 world;
 };
 
 }  // namespace
@@ -105,12 +108,16 @@ struct Kit3DExtract::MergeState {
         bool rebased = false;  // a rebase moved the children: their next hash is taken as is, no re-merge
         u32 stamp = 0;  // the update that last saw the component
         Array<Cell> cells;
+        // Cells still to merge (Kit3DExtract::set_merge_budget): their children draw on their own meanwhile.
+        Array<Planned> planned;
+        Array<Bucket> buckets;
+        u32 next = 0;  // the first bucket not merged yet
     };
     Array<mem::UniquePtr<Group>> groups;
     u32 stamp = 0;
     Array<Entity> children;       // scratch: the children that may merge, in hierarchy order
-    Array<Candidate> candidates;  // scratch
-    Array<Bucket> buckets;
+    u32 merged_now = 0;  // cells merged in this update, against the budget
+    Array<asset::MeshView> views;  // scratch: one cell's sources
     Array<render::MergeSource> sources;
     Array<byte> blob;
     Array<Entity> stack;
@@ -158,6 +165,7 @@ void Kit3DExtract::shift_static_merges(const vec3& delta) {
     if (!merge_) return;
     for (auto& g : merge_->groups) {
         g->rebased = true;
+        if (g->next < g->buckets.size()) g->built = false;  // the planned placements predate the shift: plan again
         for (MergeState::Cell& c : g->cells) {
             c.center = c.center - delta;
             c.shift = c.shift + delta;
@@ -181,6 +189,8 @@ void Kit3DExtract::update_static_merges(World& world) {
         merge_ = mem::make_unique<MergeState>(mem::heap());
     }
     MergeState& st = *merge_;
+    st.merged_now = 0;
+    const u32 budget = merge_budget_ != 0 ? merge_budget_ : static_cast<u32>(max(cv_merge_budget.get_int(), 0));
     ++st.stamp;
     if (st.stamp == 0) st.stamp = 1;
     merge_stamp_ = merge_stamp_ + 1 == 0 ? 1 : merge_stamp_ + 1;
@@ -260,88 +270,103 @@ void Kit3DExtract::update_static_merges(World& world) {
             group->hash = h;
             group->built = true;
             ++stats_.merged_rebuilt;
-            // The candidates: the children whose cooked mesh reads and whose material is opaque or masked.
-            st.candidates.clear();
+            // The candidates: the children whose cooked mesh reads and whose material is opaque or masked, by cell.
+            group->planned.clear();
+            group->buckets.clear();
+            group->next = 0;
+            const f32 inv = 1.0f / max(m.cell_size, 0.5f);
             for (const Entity d : st.children) {
                 const MeshRef* r = world.try_get<MeshRef>(d);
                 vec3 pos, scale;
                 quat rot;
                 pose_of(world, d, pos, rot, scale);
                 const render::GpuMesh* mesh = meshes_->get(mesh_key(r->mesh.guid));
-                Candidate c;
-                if (!read_mesh_view(r->mesh.guid, c.view) || c.view.skinned()) continue;
+                asset::MeshView view;
+                if (!read_mesh_view(r->mesh.guid, view) || view.skinned()) continue;
                 // Opaque or masked only: blended and transmissive draws are sorted per draw, behind the opaques.
-                c.material = r->material.guid != asset::Guid{} ? material(r->material.guid) : nullptr;
+                const render::MaterialOverride* mat = r->material.guid != asset::Guid{} ? material(r->material.guid) : nullptr;
                 bool opaque = true;
-                if (c.material) {
-                    opaque = !(c.material->params.flags & asset::MaterialFlags::AlphaBlend) && c.material->ext.transmission <= 0.0f &&
-                             !c.material->parallax;
+                if (mat) {
+                    opaque = !(mat->params.flags & asset::MaterialFlags::AlphaBlend) && mat->ext.transmission <= 0.0f && !mat->parallax;
                 } else {
-                    for (u32 s = 0; s < c.view.submeshes.size() && opaque; ++s)
-                        opaque = !(c.view.submeshes[s].material.flags & asset::MaterialFlags::AlphaBlend) &&
-                                 c.view.material_ext(s).transmission <= 0.0f;
+                    for (u32 sub = 0; sub < view.submeshes.size() && opaque; ++sub)
+                        opaque = !(view.submeshes[sub].material.flags & asset::MaterialFlags::AlphaBlend) &&
+                                 view.material_ext(sub).transmission <= 0.0f;
                 }
                 if (!opaque) continue;
-                c.entity = d;
-                c.ref = r;
-                c.world = trs(pos, rot, scale);
-                c.center = transform_point(c.world, mesh->bounds.center());
-                st.candidates.push_back(c);
-            }
-            st.buckets.clear();
-            const f32 inv = 1.0f / max(m.cell_size, 0.5f);
-            for (u32 i = 0; i < st.candidates.size(); ++i) {
-                const Candidate& c = st.candidates[i];
+                Planned p;
+                p.entity = d;
+                p.world = trs(pos, rot, scale);
+                const vec3 center = transform_point(p.world, mesh->bounds.center());
                 Bucket key;
-                for (int k = 0; k < 3; ++k) key.cell[k] = static_cast<i32>(std::floor(clamp((&c.center.x)[k] * inv, -1.0e6f, 1.0e6f)));
-                key.cast = m.cast_shadows != 0 && c.ref->cast_shadows != 0;
+                for (int k = 0; k < 3; ++k) key.cell[k] = static_cast<i32>(std::floor(clamp((&center.x)[k] * inv, -1.0e6f, 1.0e6f)));
+                key.cast = m.cast_shadows != 0 && r->cast_shadows != 0;
                 Bucket* b = nullptr;
-                for (Bucket& o : st.buckets)
+                for (Bucket& o : group->buckets)
                     if (o.cell[0] == key.cell[0] && o.cell[1] == key.cell[1] && o.cell[2] == key.cell[2] && o.cast == key.cast) b = &o;
                 if (!b) {
-                    st.buckets.push_back(Bucket{});
-                    b = &st.buckets.back();
+                    group->buckets.push_back(Bucket{});
+                    b = &group->buckets.back();
                     for (int k = 0; k < 3; ++k) b->cell[k] = key.cell[k];
                     b->cast = key.cast;
                 }
-                b->candidates.push_back(i);
+                b->candidates.push_back(static_cast<u32>(group->planned.size()));
+                group->planned.push_back(p);
             }
-            for (const Bucket& b : st.buckets) {
-                st.sources.clear();
-                for (u32 i : b.candidates) {
-                    const Candidate& c = st.candidates[i];
-                    render::MergeSource s;
-                    s.mesh = &c.view;
-                    s.world = c.world;
-                    s.tint = c.ref->tint;
-                    s.emissive_tint = c.ref->emissive_tint;
-                    if (c.material) {
-                        s.material = &c.material->params;
-                        s.material_ext = &c.material->ext;
-                    }
-                    st.sources.push_back(s);
+        }
+
+        // ---- merge the planned cells, as many as the frame's budget allows ----------------------------------------
+        while (group->next < group->buckets.size() && (budget == 0 || st.merged_now < budget)) {
+            const Bucket& b = group->buckets[group->next++];
+            ++st.merged_now;
+            st.views.clear();
+            st.views.resize(b.candidates.size());
+            st.sources.clear();
+            bool whole = true;  // the hash held, so every child is still there as planned; a failed read skips the cell
+            for (u32 k = 0; k < b.candidates.size() && whole; ++k) {
+                const Planned& p = group->planned[b.candidates[k]];
+                const MeshRef* r = world.try_get<MeshRef>(p.entity);
+                whole = r && read_mesh_view(r->mesh.guid, st.views[k]);
+                if (!whole) break;
+                const render::MaterialOverride* mat = r->material.guid != asset::Guid{} ? material(r->material.guid) : nullptr;
+                render::MergeSource src;
+                src.mesh = &st.views[k];
+                src.world = p.world;
+                src.tint = r->tint;
+                src.emissive_tint = r->emissive_tint;
+                if (mat) {
+                    src.material = &mat->params;
+                    src.material_ext = &mat->ext;
                 }
-                render::MergeStats stats;
-                if (!render::build_merged_mesh(st.sources.span(), st.blob, &stats) || stats.skipped != 0) {
-                    MCE_LOG_WARN("kit3d: StaticMerge3D on entity {}: a cell of {} children did not merge; they draw on their own",
-                                 root.index, b.candidates.size());
-                    continue;
-                }
-                const u32 key = writable_->allocate_key();
-                if (!writable_->upload(key, 1, st.blob.span(), resolver)) {
-                    MCE_LOG_WARN("kit3d: StaticMerge3D on entity {}: the merged mesh did not upload; its children draw on their own",
-                                 root.index);
-                    continue;
-                }
-                const render::GpuMesh* mesh = writable_->get(key);
-                MergeState::Cell cell;
-                cell.key = key;
-                cell.center = mesh->bounds.center();
-                cell.radius = length(mesh->bounds.extents());
-                cell.cast = b.cast;
-                for (u32 i : b.candidates) cell.children.push_back(st.candidates[i].entity.index);
-                group->cells.push_back(static_cast<MergeState::Cell&&>(cell));
+                st.sources.push_back(src);
             }
+            render::MergeStats stats;
+            if (!whole || !render::build_merged_mesh(st.sources.span(), st.blob, &stats) || stats.skipped != 0) {
+                MCE_LOG_WARN("kit3d: StaticMerge3D on entity {}: a cell of {} children did not merge; they draw on their own",
+                             root.index, b.candidates.size());
+                continue;
+            }
+            const u32 key = writable_->allocate_key();
+            if (!writable_->upload(key, 1, st.blob.span(), resolver)) {
+                MCE_LOG_WARN("kit3d: StaticMerge3D on entity {}: the merged mesh did not upload; its children draw on their own",
+                             root.index);
+                continue;
+            }
+            const render::GpuMesh* mesh = writable_->get(key);
+            MergeState::Cell cell;
+            cell.key = key;
+            cell.center = mesh->bounds.center();
+            cell.radius = length(mesh->bounds.extents());
+            cell.cast = b.cast;
+            for (u32 k : b.candidates) cell.children.push_back(group->planned[k].entity.index);
+            group->cells.push_back(static_cast<MergeState::Cell&&>(cell));
+        }
+        if (group->next >= group->buckets.size()) {  // done: the plan is no longer needed
+            group->planned.clear();
+            group->buckets.clear();
+            group->next = 0;
+        } else {
+            stats_.merge_pending += static_cast<u32>(group->buckets.size() - group->next);
         }
 
         // ---- the children it replaces, and what to draw in their place --------------------------------------------

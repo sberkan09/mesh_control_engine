@@ -40,6 +40,10 @@ add_test(NAME cli_textures
 add_test(NAME cli_perf
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_perf.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_perf")
 
+# M-SCRIPT3 9: `mce test` plays a project's .mctest scenarios through its MCP server, no agent needed (fake server).
+add_test(NAME cli_test
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_cli_test.py" "${CMAKE_CURRENT_BINARY_DIR}/cli_test")
+
 # M-OPENWORLD D2 / D3: the open-licence content ledger (tools/mce_cli/mce_content.py, content/ledger.json) and the humanoid
 # retarget (tools/mce_cli/mce_retarget.py); with mce_cook the outputs are cooked for real.
 foreach(_mce_import_py content retarget)

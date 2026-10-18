@@ -155,7 +155,14 @@ At a few hundred metres a building is a box with a picture on it. The impostor b
   are rasterised on the CPU (cooked meshes, cooked textures decoded through the cook's BC decoder, base colour × tint),
   alpha = coverage, so the bake runs in the CI container and is deterministic.
 - **Format:** a `.glb` (one mesh, one material with the atlas as base colour, alpha mask) that the existing glTF
-  importer cooks like any model. No new shader and no new render path: impostors are ordinary masked meshes and get
+  importer cooks like any model.
+- **As built (#548):** `hlod_bake impostor=true` (not a `mode`: the impostor needs the proxy's chunk anyway).
+  The glTF importer refuses embedded images, so the bake writes the atlas as `chunk_<id>_far.png` (a `texture`
+  sidecar, sRGB, linear filter) and the mesh as `chunk_<id>_far.mchlod` (the `hlod` importer, no extra levels) whose
+  material names the PNG's GUID. The rasteriser is `cook::bake_impostor` (the cook already has the BC decoder and the
+  PNG encoder); the kit's `collect_chunk_sources` feeds it and `bake_chunk_hlod`. Defaults: 4 texels per metre, at
+  most 128 per side, cards for groups taller than 1.5 x their width and narrower than 8 m. Boxes are single-sided,
+  cards double-sided (two submeshes over the one atlas). No new shader and no new render path: impostors are ordinary masked meshes and get
   culling, instancing, shadows and the quality tiers for free.
 
 ### Building batching
@@ -165,9 +172,12 @@ At a few hundred metres a building is a box with a picture on it. The impostor b
 1. A chunk that streams in merges all its cells in its first extract (a hitch). The merge gets a per-frame budget
    (`Kit3DExtract::set_merge_budget(cells)`, default unlimited so existing scenes are unchanged; the player sets it
    from `r.merge_budget`): cells waiting for their turn draw their children one by one.
+   As built (#545): `r.merge_budget` / `set_merge_budget`, `Kit3DStats::merge_pending`.
 2. Many chunks each with their own `StaticMerge3D` root: the per-group hash walk runs every frame for every group.
    Groups whose children carry no change since the last frame skip the hash (a change counter per group fed by the
    ECS change ticks of the children's columns).
+   As built (#536): no change counter; the per-frame walk hashes the children's raw inputs word-wise and reads no mesh
+   views (24k children: 10 ms to 3 ms), so a counter fed by change ticks was not needed yet.
 
 ## A4. Render LOD per streamed chunk
 
@@ -199,7 +209,7 @@ off, gated in `local_ci.sh` by counters (not by GPU time, which only A1 measures
 | 2 | `WorldPoint` field flag | refl | seam: `refl/type.h` and `refl/macros.h` are wide headers |
 | 3+4 | `rebase_world`, `WorldOrigin`, `FloatingOrigin3D`, streaming offset; physics and kit listeners, extract, Forward3D history | ecs, scene, physics3d, kit, render | shipped as one PR (no audio change needed) |
 | 5 | `.mchlod` importer, `hlod_bake` (mesh), `ChunkLod3D` | cook, mcp, kit | A3 + A4 |
-| 6 | impostor bake | mcp (tools) | CPU rasteriser |
+| 6 | impostor bake | cook, kit, editor, mcp | CPU rasteriser (`cook::bake_impostor`) |
 | 7 | merge budget and change skip | kit | building batching |
 
 Each PR: `local_ci.sh --task`, a changelog.d fragment, the user guide page it changes (`08-3d.md`, `25-performance.md`),
