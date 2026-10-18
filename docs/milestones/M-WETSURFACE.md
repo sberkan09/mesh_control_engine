@@ -34,7 +34,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 5a | starting | | |
+| 5a | done, awaiting merge | | `WetSurfaces` POD + `set_wet_surfaces()`, `QualitySettings::wet_surfaces`/`wet_puddles`, `apply_quality(q, wet)`, cvar `r.wet_surfaces`, `tests/render/test_wet_quality.cpp` |
 | 5b | planned | | needs 5a; Opus review |
 | 5c | planned | | needs 5a |
 | 5d | planned | | needs 5b, 5c |
