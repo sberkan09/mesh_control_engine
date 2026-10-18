@@ -59,4 +59,3 @@ What a script cannot do, and what to do instead:
 - The static state check is a heuristic: it follows top-level locals, `local a = t.x` aliases made inside a function and writes into global
   tables, not helper parameters or `newproxy` metatables (those fail at run time).
 - A shipped game's window leaves the run-time state check off by default (`-script.state_check 1` turns it on).
-- No end-to-end test of a perceiver hearing a script's `mce.make_noise`.

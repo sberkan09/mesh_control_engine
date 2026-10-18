@@ -1,0 +1,1 @@
+- A test pins that a `Perceiver` hears a script's `mce.make_noise` (loudness x hearing, own team excluded), M-SCRIPT4 step 1; no engine change.
