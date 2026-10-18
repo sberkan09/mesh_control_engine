@@ -93,7 +93,7 @@ f64 frame_change(const Array<u8>& a, const Array<u8>& b) {
         const f64 lb = 0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2];
         s += std::fabs(la - lb);
     }
-    return s / (f64(a.size() / 4) * 255.0);
+    return s / (f64(a.size()) / 4.0 * 255.0);
 }
 
 const Array<u8>& draw_plaza(Fixture3D& f, const WetSurfaces& wet) {
