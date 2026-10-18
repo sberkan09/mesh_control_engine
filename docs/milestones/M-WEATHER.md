@@ -25,7 +25,7 @@ Sources: `M-DAYNIGHT.md` ("Not in scope: weather"), `assessments/gta-benzeri-oyu
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | starting | | |
+| 1 | implemented (not merged) | | |
 | 2 | planned | | needs 1 |
 | 3 | planned | | needs 1 |
 | 4 | planned | | |
