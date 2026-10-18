@@ -11,6 +11,8 @@ namespace {
 
 MCE_CVAR(cv_quality, "r.quality", "auto", "3D quality tier: auto, low, medium, high (auto = medium on phones)",
          CVarFlags::RequiresRestart | CVarFlags::Saved);
+MCE_CVAR(cv_wet_surfaces, "r.wet_surfaces", true,
+         "Wet surfaces from the weather (WetSurfaces; off = the dry frame)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -29,6 +31,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.terrain_height_blend = false;
             q.parallax_distance = 0.0f;
             q.parallax_max_steps = 0;
+            q.wet_puddles = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -92,6 +95,19 @@ void apply_quality(const QualitySettings& q, ContactShadows& c) { c.enabled = c.
 void apply_quality(const QualitySettings& q, ParallaxSettings& p) {
     p.distance = q.parallax_distance > 0.0f ? (p.distance < q.parallax_distance ? p.distance : q.parallax_distance) : 0.0f;
     p.max_steps = p.max_steps < q.parallax_max_steps ? p.max_steps : q.parallax_max_steps;
+}
+
+WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet) {
+    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
+    WetSurfaces out = wet;
+    out.wetness = q.wet_surfaces && cv_wet_surfaces.get_bool() ? unit(wet.wetness) : 0.0f;
+    out.darken = unit(wet.darken);
+    out.roughness = unit(wet.roughness);
+    out.puddles = unit(wet.puddles);
+    out.puddle_scale = wet.puddle_scale > 0.25f ? (wet.puddle_scale < 256.0f ? wet.puddle_scale : 256.0f) : 0.25f;
+    // Off with wet_surfaces (wetness 0 skips the whole shader branch, puddles included) whatever this says.
+    out.puddles_enabled = wet.puddles_enabled && q.wet_puddles;
+    return out;
 }
 
 void apply_quality(const QualitySettings& q, Volumetrics& v) {

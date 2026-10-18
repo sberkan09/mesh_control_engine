@@ -1,0 +1,1 @@
+- MCP `asset_thumbnail` (M-THUMBS step 2): a picture of one asset (a texture, a sound's waveform, a mesh) as PNG, or a contact sheet of a whole folder, drawn on the CPU. Read-only.

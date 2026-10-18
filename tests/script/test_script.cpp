@@ -4,6 +4,7 @@
 
 #include <cstring>
 
+#include "mce/log.h"
 #include "mce/refl/macros.h"
 #include "mce/script/compiler.h"
 
@@ -95,6 +96,66 @@ TEST_CASE("script: a Luau system moves entities through reflected fields") {
     REQUIRE(got);
     CHECK(got->position.x == doctest::Approx(6.0f).epsilon(0.001));
     CHECK(host.scripts()[0].last_steps > 0);
+}
+
+TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRIPTPROF 1)") {
+    World w;
+    w.register_components<Counter>();
+    ScriptHost host;
+    // Work grows with the tick: the loop runs `mce.tick()` times, so the peak is the last update's cost.
+    REQUIRE(script::add_source(host, "grow", "function update() for i = 1, mce.tick() do end end"));
+    host.install(w);
+    CHECK(host.scripts()[0].updates == 0);
+    for (u32 t = 1; t <= 10; ++t) w.tick(1.0 / 60, t);
+    const script::ScriptInfo& info = host.scripts()[0];
+    CHECK(info.updates == 10);
+    CHECK(info.peak_steps == info.last_steps);
+    CHECK(info.peak_steps > 0);
+    CHECK(info.total_steps > info.peak_steps);  // ten updates, the earlier ones cheaper
+    CHECK(host.budget().steps_per_tick == 200000u);
+
+    // A script that runs out of its budget shows the limit it hit, not the counter the error handler reset.
+    script::ScriptBudget small;
+    small.steps_per_tick = 500;
+    ScriptHost tight(small);
+    REQUIRE(script::add_source(tight, "spin", "function update() while true do end end"));
+    tight.install(w);
+    w.tick(1.0 / 60, 1);
+    const script::ScriptInfo& spun = tight.scripts()[0];
+    CHECK(spun.state == script::ScriptState::Failed);
+    CHECK(spun.updates == 1);
+    CHECK(spun.peak_steps == 501u);
+    CHECK(spun.total_steps == 501u);
+    // M-SCRIPTPROF 2: the error names the script line that spent the budget.
+    CHECK(StringView(spun.error.c_str()).starts_with("spin:1: step budget exceeded (500 per tick)"));
+
+    ScriptHost deeper(small);
+    REQUIRE(script::add_source(deeper, "deep", "local function burn()\n    while true do end\nend\nfunction update()\n    burn()\nend"));
+    deeper.install(w);
+    w.tick(1.0 / 60, 2);
+    CHECK(StringView(deeper.scripts()[0].error.c_str()).starts_with("deep:2: step budget exceeded"));
+}
+
+TEST_CASE("script: mce.log lines name the script that wrote them (M-SCRIPTPROF 3)") {
+    World w;
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "first", "function update() if mce.tick() == 1 then mce.log('hello from one') end end"));
+    REQUIRE(script::add_source(host, "second", "mce.log('loading two')\nfunction update() if mce.tick() == 1 then mce.log('hello from two') end end"));
+    host.install(w);
+    log::set_level(log::Level::Info);  // the test runner logs warnings and up
+    const u64 since = log::console_last_seq();
+    w.tick(1.0 / 60, 1);
+    Array<log::ConsoleLine> lines;
+    lines.resize(log::kConsoleRingSize);
+    lines.resize(log::read_console(since, lines.span()));
+    bool one = false, two = false;
+    for (const log::ConsoleLine& l : lines) {
+        one = one || StringView(l.text.c_str()).find("[first] script: hello from one") != StringView::npos;
+        two = two || StringView(l.text.c_str()).find("[second] script: hello from two") != StringView::npos;
+    }
+    log::set_level(log::Level::Warn);
+    CHECK(one);
+    CHECK(two);
 }
 
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {

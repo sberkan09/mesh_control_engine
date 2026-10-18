@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M-SCRIPT3 9 and 12: `mce test <project> [path]` plays a project's .mctest scenarios without an agent; `mce inspect` prints live components.
+"""M-SCRIPT3 9 and 12: `mce test <project> [path]` plays a project's .mctest scenarios without an agent; `mce inspect` prints live components; M-SCRIPTPROF 1: `mce profile`.
 
     test_cli_test.py <work dir>
 
@@ -33,8 +33,16 @@ for line in sys.stdin:
         res = {"protocolVersion": "2025-06-18", "capabilities": {}, "serverInfo": {"name": "fake", "version": "1"}}
     elif req["params"]["name"] == "run_headless":
         a = req["params"]["arguments"]
+        if a.get("scene") != "scenes/main.mcscene":  # the real tool refuses a run with no saved scene
+            res = {"content": [{"type": "text", "text": "the scene was never saved"}], "isError": True}
+            sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": res}) + "\n")
+            sys.stdout.flush()
+            continue
         sc = {"state_hash": "00000000deadbeef", "asked": a, "inspect": {"count": 1, "truncated": False, "entities": [
               {"id": 7, "name": "Hero", "alive": True, "components": {"ScriptVars": {"v": [1, 2]}}}]}}
+        if a.get("inspect") is None:
+            sc["scripts"] = [{"script": "scripts/a.luau", "failed": False, "updates": 300, "peak_steps": 50, "budget_steps": 1000, "avg_steps": 12.5},
+                             {"script": "scripts/b.luau", "failed": mode == "scripterr", "updates": 3, "peak_steps": 1000, "budget_steps": 1000, "avg_steps": 900.0}]
         if mode == "scripterr":
             sc["script_errors"] = [{"script": "scripts/x.luau", "error": "x.luau:3: boom"}]
         res = {"content": [{"type": "text", "text": "ok"}], "structuredContent": sc, "isError": False}
@@ -76,7 +84,9 @@ def main(work):
     shutil.rmtree(work, ignore_errors=True)
     proj = pathlib.Path(work) / "Game"
     (proj / "tests").mkdir(parents=True)
-    (proj / "Game.mceproj").write_text(json.dumps({"format": "mce-project", "version": 1, "name": "Game", "games": []}))
+    (proj / "Game.mceproj").write_text(json.dumps({"format": "mce-project", "version": 1, "name": "Game", "games": [], "start_scene": "4a0d"}))
+    (proj / "assets" / "scenes").mkdir(parents=True)
+    (proj / "assets" / "scenes" / "main.mcscene").write_text('{"guid": "4a0d"}')
     bin_dir = pathlib.Path(work) / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "mce_mcp"
@@ -115,6 +125,14 @@ def main(work):
     os.environ["MODE"] = "scripterr"
     code, _ = run(["inspect", str(proj), "--component", "ScriptVars"])
     check(code == 3, "a failed script makes inspect exit 3, as mce_player -headless does")
+
+    # M-SCRIPTPROF 1: `mce profile` prints the per-script step table.
+    os.environ["MODE"] = "pass"
+    code, text = run(["profile", str(proj), "--ticks", "300"])
+    check(code == 0 and "scripts/a.luau" in text and "5.0%" in text and "12.5" in text, "profile prints each script's steps against its budget")
+    os.environ["MODE"] = "scripterr"
+    code, text = run(["profile", str(proj)])
+    check(code == 3 and "FAILED" in text and "100.0%" in text, "a failed script shows FAILED and exits 3")
 
     if failures:
         print(f"{len(failures)} check(s) failed")

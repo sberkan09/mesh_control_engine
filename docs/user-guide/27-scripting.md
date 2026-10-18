@@ -123,6 +123,7 @@ map does not define reads as not pressed and zero.
 | `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
 | `mce.near(center, radius, component?, skip?)` | the entities with a `LocalTransform` within `radius` of `center` (and with `component`, if given), nearest first; no physics world needed, so a pickup, an aggro range or a touch test is one call (a 2D game has z = 0) |
+| `mce.within(min, max, component?, skip?)` | the entities with a `LocalTransform` inside the box from `min` to `max` (edges included; a 2D game has z = 0, so give `min.z <= 0 <= max.z`), optionally with `component`, in storage order; no physics world needed. `min` above `max` is an error |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
 | `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
 | `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v, point?)` | a 2D body's velocity, and pushes; with a world-space `point` the impulse spins the body |
@@ -171,7 +172,7 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `mce.random()` | a number in [0, 1) that depends only on the seed, the tick, the script and the call |
 | `mce.load_scene(target)` | switches scene after this tick (a source path or `"guid:<uuid>"`; section 4.5) |
 | `mce.quit()` | ends the run after this tick, like the window's close button |
-| `mce.log(msg)` | an info line in the engine log, `script: <msg>` |
+| `mce.log(msg)` | an info line in the engine log, `[<name>] script: <msg>` (the name of the script that wrote it) |
 
 **Missions and map markers.** Two more global tables, `mission` and `marker`, are thin over the mission kit (section 9.13) and the map markers (9.15). They keep nothing: the state is the `Mission` and `MapMarker` components and the `MissionSignal` event, so saves, replays and the editor see it. A world without the kit pieces gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
 
@@ -284,7 +285,8 @@ end
   to use instead (`'print' is not available in scripts; use mce.log`).
 - **Budgets.** Each script gets a step budget per tick and the VM a memory cap. A script that errors or
   runs over is disabled, its error logged as `script <name>: <file>:<line>: message`, and the other
-  scripts keep running.
+  scripts keep running. A step-budget failure names the line that spent it (`dungeon:41: step budget exceeded
+  (200000 per tick)`); `mce profile` (27.7b) shows how close each script runs to the limit.
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
 
@@ -394,6 +396,13 @@ entity with that component, at most 64) or `--entity <id or name>`, add `--show 
 `--ticks N` for the run length: it prints the live values as JSON, `ScriptVars.v` included. `.mctest` scenarios run with `mce test MyGame`
 (chapter 14.3.1), not through `mce_player`.
 
+
+## 27.7b Seeing what a script costs: `mce profile`
+
+`mce profile MyGame [--ticks N]` plays the scene headless and prints, for each scene script, its updates, the average and peak **steps**
+per update and the share of the per-update budget the peak used (200000 steps by default). A step is a call or a loop pass, counted
+the same on every machine, so the table is a fixed number you can compare between changes, not a timing. A script close to its budget
+will be disabled by one more loop; exit code 3 if a script failed. `run_headless` returns the same list as `scripts`.
 
 ## 27.8 Remembering things: `ScriptVars`
 

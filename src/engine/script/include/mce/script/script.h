@@ -73,6 +73,9 @@ struct ScriptInfo {
     FixedString<64> name;
     ScriptState state = ScriptState::Running;
     u32 last_steps = 0;      // interrupts counted in the last update()
+    u32 peak_steps = 0;      // the most any update() counted (M-SCRIPTPROF 1)
+    u64 total_steps = 0;     // summed over every update() that ran
+    u64 updates = 0;         // update() calls that ran
     FixedString<256> error;  // "<name>:<line>: message" once Failed
 };
 
@@ -103,6 +106,7 @@ public:
 
     Span<const ScriptInfo> scripts() const { return infos_.span(); }
     usize memory_used() const { return mem_used_; }
+    const ScriptBudget& budget() const { return budget_; }
 
 private:
     friend struct HostAccess;

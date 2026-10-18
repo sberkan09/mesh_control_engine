@@ -37,7 +37,8 @@ if(MCE_BUILD_TESTS)
         # (build/.../weather_1500.ppm).
         add_test(NAME sample_weather_gpu
                  COMMAND mce_player -pack "${pack}" -capture_tick 1500
-                         -capture "${CMAKE_CURRENT_BINARY_DIR}/weather_1500.ppm" -platform.error_box 0 -r.vsync 0)
+                         -capture "${CMAKE_CURRENT_BINARY_DIR}/weather_1500.ppm" -platform.error_box 0 -r.vsync 0
+                         -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
         set_tests_properties(sample_weather_gpu PROPERTIES LABELS gpu TIMEOUT 120)
         # Same as sample_daynight_gpu: windowed GPU captures stalled past their timeout in other threads' loaded --task
         # runs although they take seconds alone (cause not found, see M-GPU-VERIFY.md): it runs in the integration run

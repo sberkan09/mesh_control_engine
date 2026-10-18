@@ -1,0 +1,1 @@
+- `mce.within(min, max, component?, exclude?)`, M-SCRIPT4 step 4: the entities inside a box with no physics world, next to `mce.near`.

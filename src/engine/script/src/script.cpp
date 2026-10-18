@@ -3,6 +3,7 @@
 
 #include "mce/script/script.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -527,7 +528,11 @@ int l_random(lua_State* L) {
 
 int l_log(lua_State* L) {
     const char* msg = luaL_checkstring(L, 1);
-    MCE_LOG_INFO("script: {}", msg);
+    // "[<name>] script: <msg>": the name leads and "script: <msg>" stays intact, because the sample and SDK tests match on it.
+    ScriptHost& host = HostAccess::host(L);
+    const u32 current = HostAccess::current(host);
+    const StringView name = current < host.scripts().size() ? host.scripts()[current].name.view() : StringView("?");
+    MCE_LOG_INFO("[{}] script: {}", name, msg);
     return 0;
 }
 
@@ -678,6 +683,14 @@ void ScriptHost::interrupt_fn(lua_State* L, int gc) {
     auto* h = static_cast<ScriptHost*>(lua_callbacks(L)->userdata);
     if (++h->steps_ > h->budget_.steps_per_tick) {
         h->steps_ = 0;  // the error handler itself may hit safepoints
+        // The interrupt runs inside the Lua function that spent the budget (level 0): name its line like any script error.
+        lua_Debug ar;
+        if (lua_getinfo(L, 0, "sl", &ar) && ar.currentline > 0) {
+            // lua_error, not luaL_error: that would prefix the caller's position too ("deep:5: deep:2: ...").
+            lua_pushfstring(L, "%s:%d: step budget exceeded (%d per tick)", ar.short_src, ar.currentline,
+                            static_cast<int>(h->budget_.steps_per_tick));
+            lua_error(L);
+        }
         luaL_error(L, "step budget exceeded (%u per tick)", h->budget_.steps_per_tick);
     }
 }
@@ -1077,7 +1090,14 @@ void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
         in_update_ = true;
         const int rc = lua_pcall(L_, 0, 0, 0);
         in_update_ = false;
-        infos_[i].last_steps = steps_;
+        // interrupt_fn zeroes steps_ when it raises the budget error, so an over-budget tick is recorded as the limit plus one.
+        const char* error_text = rc != 0 ? lua_tostring(L_, -1) : nullptr;
+        const bool over_budget = error_text && StringView(error_text).find("step budget exceeded") != StringView::npos;
+        const u32 used = over_budget ? budget_.steps_per_tick + 1 : steps_;
+        infos_[i].last_steps = used;
+        infos_[i].peak_steps = std::max(infos_[i].peak_steps, used);
+        infos_[i].total_steps += used;
+        ++infos_[i].updates;
         if (rc != 0) {
             // A write into a table the state check froze: say why it is frozen.
             const char* msg = lua_tostring(L_, -1);

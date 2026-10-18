@@ -149,7 +149,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
-| `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
@@ -281,8 +281,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `bt_set` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `perception_debug_lines` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
-| `debug_lines` | `tools_debugview.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
-| `debug_view` | `tools_debugview.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `debug_lines` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
+| `debug_view` | `tools_debugview.cpp` | docs/user-guide/03-editor.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
 | `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
 | `roads_info` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
@@ -298,6 +298,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `asset_thumbnail` | `tools_thumbs.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |

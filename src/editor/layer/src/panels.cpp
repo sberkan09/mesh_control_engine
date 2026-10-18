@@ -14,6 +14,7 @@
 #include "mce/editor/asset_browser.h"
 #include "mce/editor/console_model.h"
 #include "mce/editor/gizmo.h"
+#include "mce/kit/debug_lines.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/sprite_extract.h"
@@ -110,6 +111,7 @@ public:
                 }
                 if (view.show_roads) road_lines_3d(*play.world(), cam3, v.size);
                 if (view.show_perception) perception_lines_3d(*play.world(), cam3, v.size);
+                if (view.show_gameplay) gameplay_lines_3d(*play.world(), cam3, v.size);
                 shell.preview().record_3d(cmd, *play.world(), v.target, v.size, cam3, lines_.span(), kClear3D);
                 return;
             }
@@ -331,6 +333,20 @@ private:
             math::vec2 a, b;
             if (!project_segment(view3d, Segment3D{l.a, l.b, l.color}, a, b)) continue;
             lines_.push_back({{a.x - half.x, half.y - a.y}, {b.x - half.x, half.y - b.y}, l.color, 1.5f});
+        }
+    }
+
+    // Colliders, triggers, joints, characters, vehicles and paths (kit::gameplay_debug_lines, M-DEBUGVIEW).
+    void gameplay_lines_3d(World& world, const render::Camera3D& cam, rhi::Extent2D size) {
+        gameplay_.clear();
+        kit::gameplay_debug_lines(world, kit::kDebugAll, gameplay_);
+        if (gameplay_.empty()) return;
+        const render::View3D view3d = render::compute_view_3d(cam, size);
+        const math::vec2 half{0.5f * static_cast<f32>(size.width), 0.5f * static_cast<f32>(size.height)};
+        for (const kit::GameplayLine& l : gameplay_) {
+            math::vec2 a, b;
+            if (!project_segment(view3d, Segment3D{l.a, l.b, l.color}, a, b)) continue;
+            lines_.push_back({{a.x - half.x, half.y - a.y}, {b.x - half.x, half.y - b.y}, l.color, 1.0f});
         }
     }
 
@@ -563,6 +579,7 @@ private:
     Array<OverlayLine> lines_;
     Array<kit::PerceptionLine> perception_;
     Array<kit::RoadLine> roads_;
+    Array<kit::GameplayLine> gameplay_;
     Array<Segment3D> segments_;
     Array<math::vec3> rim_;
     bool brush_hover_ = false;

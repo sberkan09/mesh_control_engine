@@ -1,0 +1,1 @@
+- M-SCRIPT4 closed: step 5 (ctest through `mce test`) dropped, `demo_gate.py` keeps running script projects' `.mctest` scenarios from a fresh copy.

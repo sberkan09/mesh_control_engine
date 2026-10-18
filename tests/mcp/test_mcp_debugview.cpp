@@ -54,7 +54,13 @@ TEST_CASE("debug_lines and debug_view: exact counts, a lit trigger, filters and 
     CHECK(c.ok("debug_lines", R"({"ticks":120})").text == all.text);  // the same run reads the same
     CHECK(c.fails("debug_lines", R"({"categories":["nope"]})").find("category") != std::string::npos);
 
-    for (const char* view : {"top", "front", "side"}) {
+    // The picture is a golden by count: the pixels that are not background, per view (a repeatable rasteriser).
+    const struct {
+        const char* view;
+        u32 expected;
+    } kViews[] = {{"top", 2002}, {"front", 2000}, {"side", 1888}};
+    for (const auto& kv : kViews) {
+        const char* view = kv.view;
         const auto v = c.ok("debug_view", std::string(R"({"ticks":120,"width":256,"height":192,"view":")") + view + R"("})");
         REQUIRE(v.images.size() == 1);
         CHECK(v.images[0].width == 256);
@@ -63,6 +69,6 @@ TEST_CASE("debug_lines and debug_view: exact counts, a lit trigger, filters and 
         u32 drawn = 0;
         for (usize p = 0; p + 3 < v.images[0].rgba.size(); p += 4)
             if (v.images[0].rgba[p] != 0x20 || v.images[0].rgba[p + 1] != 0x20) ++drawn;
-        CHECK(drawn > 200);
+        CHECK(drawn == kv.expected);
     }
 }

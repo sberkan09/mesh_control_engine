@@ -226,8 +226,11 @@ Result<HeadlessRun> run_headless(StringView pack, asset::Guid scene, u64 ticks, 
         if (inspect) inspect(app.world(), app.hook_entities(), inspect_user);
 #if MCE_HAS_SCRIPT
         if (const script::ScriptHost* host = script::scene_script_host(app.world()))
-            for (const script::ScriptInfo& s : host->scripts())
+            for (const script::ScriptInfo& s : host->scripts()) {
                 if (s.state == script::ScriptState::Failed) out.script_errors.push_back(ScriptFailure{s.name, s.error});
+                out.scripts.push_back(ScriptProfile{s.name, s.state == script::ScriptState::Failed, s.peak_steps, s.total_steps, s.updates,
+                                                    host->budget().steps_per_tick});
+            }
 #endif
     }
     return out;

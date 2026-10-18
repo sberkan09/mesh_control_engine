@@ -1,6 +1,6 @@
 # M-SCRIPT4 — Closing the open ends of M-SCRIPT3 (milestone record)
 
-**Status:** active (added 2026-10-18; device-free; no Linear issues: the workspace is at its free limit, this record is the tracker).
+**Status:** done (steps 1 to 4 shipped, step 5 dropped; added 2026-10-18; device-free; no Linear issues: the workspace is at its free limit, this record is the tracker).
 Plan: this record (the coordinator adds the ROADMAP status row).
 
 **Why.** M-SCRIPT3 ended with a list of things it wished for or did not test (see "Wished for and open" and each "Step N as built" in
@@ -15,8 +15,8 @@ Plan: this record (the coordinator adds the ROADMAP status row).
 | 1 | End-to-end test that a `Perceiver` hears a script's `mce.make_noise` (M-SCRIPT3 step 5 open work) | Sonnet | done in PR (this step) |
 | 2 | Slot-handle test for a Vec4 / Color array field (done); the ScriptVars demo scripts moved onto named slots (dropped, see "Step 2 as built") | Sonnet | done in PR (this step) |
 | 3 | Scene-editable per-script constants (a reflected component the script reads by name, instead of literals in the source) | Sonnet | done in PR (this step) |
-| 4 | `mce.overlap_circle2d` / a 2D overlap query without physics, next to `mce.near` | Sonnet | not started |
-| 5 | Script projects' ctest target calls `mce test` instead of `demo_gate.py` (M-SCRIPT3 step 9 open work) | Sonnet | not started |
+| 4 | A box overlap query without physics, next to `mce.near` (`mce.within`; a circle is `mce.near` already) | Sonnet | done in PR (this step) |
+| 5 | Script projects' ctest target calls `mce test` instead of `demo_gate.py` (M-SCRIPT3 step 9 open work) | Sonnet | dropped (see "Step 5 dropped") |
 
 Each step ends with a "Step N as built" section here, a guide/`docs/engine/script.md` update and a `changelog.d/SCRIPT4-<n>-<slug>.md` fragment.
 
@@ -44,3 +44,17 @@ Each step ends with a "Step N as built" section here, a guide/`docs/engine/scrip
 - Shown in `projects/EmberScript`: the enemy's patrol and chase speeds come from a `ScriptParams` on the enemy with the old values as defaults, so behaviour is unchanged
   (the sample coverage gate needs a sample that names the component).
 - Not done: a compile-time check of the name literal against the entity's list (it is per entity, so only the run time knows); more than eight values per entity.
+
+## Step 4 as built (`mce.within`)
+
+- `mce.circle` was dropped: `mce.near(center, radius)` is the circle test (z = 0 in 2D). The missing shape was the box, so `mce.within(min, max, component?, exclude?)` in
+  `api_world.cpp` returns the entities with a `LocalTransform` inside the box (edges included), optionally with `component`, in storage order (no sort: a box has no nearest).
+  `min` above `max` on any axis is a named error. A query over `LocalTransform` only; no component, ECS or header change. Declared in `mce.d.luau`, guide 27.3 row.
+- Test: "mce.within is a box test without physics (filter, exclude, inclusive edges)".
+- Not done: rotated boxes, and a box test on world-space (parented) positions: like `mce.near` it reads `LocalTransform.position`.
+
+## Step 5 dropped (ctest keeps `demo_gate.py`)
+
+- `demo_gate.py --tests` already plays each project from a fresh copy in a work folder, so the source tree never gets `cooked/` or `.mce/`; `mce test` runs in the project folder
+  itself (it is the author's command, not a gate). The same script also serves the module demo games and the `--goldens` gate, so switching one caller would leave two ways to run
+  `.mctest` in CI for no gain. M-SCRIPT3 step 9's "could call `mce test`" is closed as not worth it; `mce test` stays the command for people.
