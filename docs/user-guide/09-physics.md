@@ -497,6 +497,23 @@ The widget is `"kind": "Minimap"` with a `"minimap"` object (`UiMinimap`):
   function behind it, from a world position, the tracked position, the heading, the radius and the widget rect to
   a widget-space point with `inside` and `on_rim`; `minimap_project_full` is the full-map one.
 
+## 9.16 World clock (M-DAYNIGHT)
+
+`mce/kit/world_clock.h` is a clock for the time of day. One `WorldClock` entity per scene holds it; a scene
+without one is unchanged. The sun follows it with no script: while `drive_environment` is 1 (the default) the
+system writes the game's `Environment3D.time_of_day` every tick (the field the 3D extract reads; set the scene's
+`Environment3D` as usual, `time_of_day` there is then replaced at run time).
+
+- **Fields.** `hour` (0..24) is the start value and then the current hour; write it to set the time. `day_length_seconds`
+  (default 1200) is the real time for 24 hours, `time_scale` multiplies the speed (1 = as set, 0 stops it, a
+  negative value counts as 0), `paused` stands still, and `day` counts the midnights passed (read-only).
+- **Exact time.** The day is a whole number of ticks and the clock adds an integer number of sub-steps per tick, so
+  the hour after N ticks has no float drift: at 60 Hz a 60 s day shows 6.0 after exactly 900 ticks, and a 1200 s day
+  moves one hour every 3000 ticks. The state is in the component (`phase`, `phase_den`), so a save mid-day resumes
+  on the same tick and the same inputs give the same state hash. Changing `day_length_seconds` keeps the time of day.
+- **Events.** `HourPassed {hour}` (the hour that began, 0..23) once per hour boundary and `DayPassed {day}` at
+  midnight, in time order, pushed in the fixed update before the 3D extract reads the environment.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,
