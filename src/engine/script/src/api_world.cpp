@@ -21,6 +21,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/components.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
@@ -68,6 +69,44 @@ int l_has(lua_State* L) {
     const ecs::ComponentId c = w.find_component(type.type_hash);
     lua_pushboolean(L, c != ecs::kInvalidComponent && w.alive(e) && w.has(e, c));
     return 1;
+}
+
+// mce.param(e, name, default?) -> number: the entity's ScriptParams value for `name` (the scene's per-entity tuning).
+// Without a default, a missing component or name is a named error, never a silent zero.
+int l_param(lua_State* L) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    size_t len = 0;
+    const char* name = luaL_checklstring(L, 2, &len);
+    const bool has_default = !lua_isnoneornil(L, 3);
+    const double fallback = has_default ? luaL_checknumber(L, 3) : 0.0;
+    const kit::ScriptParams* p = w.alive(e) ? w.try_get<kit::ScriptParams>(e) : nullptr;
+    if (p) {
+        const StringView names = p->names.view();
+        usize i = 0, slot = 0;
+        while (i < names.size() && slot < 8) {
+            while (i < names.size() && (names[i] == ' ' || names[i] == ',')) ++i;
+            const usize start = i;
+            while (i < names.size() && names[i] != ' ' && names[i] != ',') ++i;
+            if (i == start) break;
+            if (names.substr(start, i - start) == StringView(name, len)) {
+                lua_pushnumber(L, static_cast<double>(p->v[slot]));
+                return 1;
+            }
+            ++slot;
+        }
+    }
+    if (has_default) {
+        lua_pushnumber(L, fallback);
+        return 1;
+    }
+    if (!p) {
+        luaL_error(L, "mce.param: the entity has no ScriptParams (and no default was given)");
+        return 0;
+    }
+    const StringView listed = p->names.view();
+    luaL_error(L, "mce.param: no parameter '%s' in this entity's ScriptParams names \"%.*s\"", name, static_cast<int>(listed.size()), listed.data());
+    return 0;
 }
 
 int l_alive(lua_State* L) {
@@ -1086,6 +1125,7 @@ int l_find_path3d(lua_State* L) {
 
 const luaL_Reg kWorldLib[] = {
     {"has", l_has},
+    {"param", l_param},
     {"alive", l_alive},
     {"find", l_find},
     {"spawn", l_spawn},

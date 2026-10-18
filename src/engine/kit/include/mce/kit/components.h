@@ -377,4 +377,15 @@ struct ScriptVars {
 };
 MCE_COMPONENT(ScriptVars, (v, Save, Help{"16 numbers a script uses as its per-entity memory"}))
 
+// Named constants a scene sets per entity for its scripts (M-SCRIPT4 3): `names` lists the name of v[0],
+// v[1], ... separated by spaces or commas ("speed jump_height gravity"), and mce.param(e, "speed")
+// reads the matching number. Authored in the scene (the editor, MCP or the scene file), never written
+// by a script, so one script serves many entities with different tuning.
+struct ScriptParams {
+    FixedString<96> names{};
+    f32 v[8] = {};
+};
+MCE_COMPONENT(ScriptParams, (names, Help{"parameter names, space or comma separated: the name of v[0], v[1], ..."}),
+              (v, Help{"the values of the named parameters (at most 8)"}))
+
 }  // namespace mce::kit
