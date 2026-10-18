@@ -209,7 +209,11 @@ too, so the 3D gameplay components read like a debugger: a `NavAgent3D`'s `state
 `torque` and `broken`; a `Ragdoll3D`'s `parts`, `root_position` and `settled`; a `Vehicle3D`'s
 `speed`, `rpm`, `gear` and `wheels_on_ground`; a sensor's `hit`, `count` and `enters`.
 `tests/mcp/test_mcp_gameplay3d.cpp` builds `samples/07_gameplay3d` this way, from an empty
-project, and checks it with `inspect`.
+project, and checks it with `inspect`. `tests/mcp/test_mcp_movement.cpp` does the same for `samples/08_movement`:
+a lift (a `Joint3D` slider with a velocity motor), a course read back through `CharacterController3D.crouched`
+and `CameraFollow3D.arm`, and a race of `VehicleDriver3D` karts read through `laps_done` and the `fired` count of a
+`ShakeTrigger` with `"on": "Skid"`. A waypoint chain is easiest created last to first, so each `Waypoint3D.next`
+names an entity that exists; close the loop with `component_set`.
 
 `trace` samples fields while the run goes, as series: `{"trace": {"every": 10, "fields":
 [{"entity": "Player", "field": "LocalTransform.position"}, {"entity": "Player", "field":

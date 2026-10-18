@@ -17,6 +17,7 @@ mce_add_test(test_kit UMBRELLA
         test_chunk_lod3d.cpp
         test_coop.cpp
         test_move3d.cpp
+        test_move3d_budget.cpp
         test_captions.cpp
         test_presence.cpp
         test_proclevel.cpp
