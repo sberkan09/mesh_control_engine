@@ -41,6 +41,11 @@ struct Probe {
 };
 MCE_COMPONENT(Probe, value, n, flag)
 
+struct Palette {
+    math::vec4 c[3];
+};
+MCE_COMPONENT(Palette, c)
+
 struct Saved {
     i32 n = 0;
 };
@@ -298,6 +303,60 @@ function update() mce.make_noise(vector.create(0, 0, 0)) end
     none.step();
     CHECK(error_of(none.h()).find("no perception") != std::string::npos);
     (void)e;
+}
+
+TEST_CASE("script api: a perceiver hears a script's mce.make_noise within loudness x hearing") {
+    Rig r(R"(
+function update()
+    if mce.tick() == 2 then mce.make_noise(vector.create(0, 0, 0), 10, nil, 2) end
+end
+)");
+    kit::install_perception(r.w);
+    auto listener = [&](float x, float hearing, u8 team) {
+        kit::Perceiver p;
+        p.hearing = hearing;
+        p.team = team;
+        LocalTransform t;
+        t.position = math::vec3(x, 0, 0);
+        return r.w.spawn_with(t, p);
+    };
+    const Entity near = listener(5, 1.0f, 1);
+    const Entity far = listener(30, 1.0f, 1);
+    const Entity sharp = listener(30, 4.0f, 1);
+    const Entity deaf = listener(1, 0.0f, 1);
+    const Entity mate = listener(2, 1.0f, 2);  // the noise's own team does not hear it
+    r.step(6);
+    CHECK(error_of(r.h()).empty());
+    CHECK(r.w.try_get<kit::Perceiver>(near)->hearings == 1);
+    CHECK(r.w.try_get<kit::Perceiver>(far)->hearings == 0);
+    CHECK(r.w.try_get<kit::Perceiver>(sharp)->hearings == 1);
+    CHECK(r.w.try_get<kit::Perceiver>(deaf)->hearings == 0);
+    CHECK(r.w.try_get<kit::Perceiver>(mate)->hearings == 0);
+}
+
+TEST_CASE("script api: a slot handle on a four-number array field reads and writes that element") {
+    Rig r(R"(
+local SECOND = mce.field("Palette", "c", 2)
+function update()
+    mce.each("Palette", function(e)
+        local x, y, z, w = mce.get(e, SECOND)
+        mce.set(e, SECOND, x + 1, y + 2, z + 3, w + 4)
+    end)
+end
+)");
+    r.w.register_components<scapi::Palette>();
+    scapi::Palette p{};
+    p.c[0] = math::vec4(9, 9, 9, 9);
+    p.c[1] = math::vec4(1, 2, 3, 4);
+    const Entity e = r.w.spawn_with(p);
+    r.step(2);
+    CHECK(error_of(r.h()).empty());
+    const scapi::Palette* got = r.w.try_get<scapi::Palette>(e);
+    REQUIRE(got != nullptr);
+    CHECK(got->c[1].x == doctest::Approx(3.0f));
+    CHECK(got->c[1].w == doctest::Approx(12.0f));
+    CHECK(got->c[0].x == doctest::Approx(9.0f));  // the neighbours are untouched
+    CHECK(got->c[2].x == doctest::Approx(0.0f));
 }
 
 TEST_CASE("script api: mce.field names one element of an array field (ScriptVars slots)") {
