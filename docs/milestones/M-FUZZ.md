@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 to 3 done, step 4 in review). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** active (added 2026-10-16; steps 1 to 5 done; open: the Detour guard and a long run with validation on). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
@@ -184,7 +184,24 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   allows this file for the encoder.
 - **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
 - **Milestone state.** Steps 1 to 4 are done. Still open: the Detour guard
-  and a long run with validation on (below), and corpora for the five exempt importers.
+  and a long run with validation on (below). The corpora for the `.mcenv`, `.mchlod` and `.glsl` importers came after
+  (step 5, below); `Atlas` and `AudioPacket` stay exempt as reserved types.
+
+## Step 5 — Corpora for the three exempt importers (no Linear card; the record is the tracker)
+
+`tests/fuzz/test_binary_import.cpp` (in `test_fuzz_importers`) builds what no sample ships:
+
+- **`.mcenv`:** an 8 x 4 x 2 RGBM environment from `write_envmap`, mutated byte-wise (600 mutants by default).
+- **`.mchlod`:** the mesh chunk a tent OBJ cooks to, wrapped by `write_hlod_file`. Half of the mutants have their trailing
+  hash recomputed so the damaged payload reaches `MeshView::read` instead of stopping at the hash check.
+- **`.glsl`:** a fragment stage with a variant, a uniform block and a sampler. Byte mutants (almost none stay valid) and line
+  mutants (a dropped or repeated line, changed binding or location digits; about 40% still cook), so glslang and the
+  binding-bank check see damaged source.
+- The three entries left `FUZZ_IMPORTER_EXEMPT` in `check_walls.py`, which is now empty.
+
+**Finding (fixed):** UBSan, `shader_importer.cpp`: a stage that binds nothing has an empty resource list, and `memcpy` from
+its null `data()` (zero bytes) is undefined; the copies now check for empty. Found by the first ASan run of the line
+mutants. A long run (`MCE_FUZZ_ITERS=4000`, 18,000 mutants) is clean under ASan with UBSan fatal.
 
 ### Open items from step 3
 

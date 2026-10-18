@@ -337,9 +337,11 @@ public:
             v.first_resource = first;
             v.resource_count = static_cast<u32>(c.resources.size());
             std::memcpy(payload.data() + variants_at + i * sizeof(ShaderVariant), &v, sizeof(v));
-            std::memcpy(payload.data() + resources_at + first * sizeof(ShaderResource), c.resources.data(),
-                        c.resources.size() * sizeof(ShaderResource));
-            std::memcpy(payload.data() + spirv_at, c.spirv.data(), c.spirv.size() * sizeof(u32));
+            // A stage that binds nothing has empty vectors, whose data() may be null: memcpy of 0 bytes from it is undefined.
+            if (!c.resources.empty())
+                std::memcpy(payload.data() + resources_at + first * sizeof(ShaderResource), c.resources.data(),
+                            c.resources.size() * sizeof(ShaderResource));
+            if (!c.spirv.empty()) std::memcpy(payload.data() + spirv_at, c.spirv.data(), c.spirv.size() * sizeof(u32));
             first += v.resource_count;
             spirv_at += c.spirv.size() * sizeof(u32);
         }

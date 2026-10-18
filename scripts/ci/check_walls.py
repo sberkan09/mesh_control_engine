@@ -264,11 +264,7 @@ FUZZ_CHUNK_EXEMPT = {
     "Atlas": "reserved type: no reader, no importer writes it",
     "AudioPacket": "reserved type: no reader, no importer writes it",
 }
-FUZZ_IMPORTER_EXEMPT = {
-    "envmap_importer.cpp": "no committed .mcenv source yet; needs a corpus",
-    "hlod_importer.cpp": "no committed .mchlod source yet; needs a corpus",
-    "shader_importer.cpp": "no committed .glsl source; goes through the shader compiler, needs a corpus",
-}
+FUZZ_IMPORTER_EXEMPT: dict = {}
 FUZZ_SOURCE_DIRS = ["samples", "projects", "templates", "games"]
 
 
