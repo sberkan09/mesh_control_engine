@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 to 5 done; open: the Detour guard and a long run with validation on). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** active (added 2026-10-16; steps 1 to 6 done; nothing open). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
@@ -183,9 +183,8 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   `count` / `byteStride` / `mode` / `filter` fields. 12,000 mutants of each under ASan: no finding. The "meshopt wall"
   allows this file for the encoder.
 - **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
-- **Milestone state.** Steps 1 to 4 are done. Still open: the Detour guard
-  and a long run with validation on (below). The corpora for the `.mcenv`, `.mchlod` and `.glsl` importers came after
-  (step 5, below); `Atlas` and `AudioPacket` stay exempt as reserved types.
+- **Milestone state.** Steps 1 to 4 are done. The corpora for the `.mcenv`, `.mchlod` and `.glsl` importers came after
+  (step 5, below), then the Detour guard and a long run (step 6); `Atlas` and `AudioPacket` stay exempt as reserved types.
 
 ## Step 5 — Corpora for the three exempt importers (no Linear card; the record is the tracker)
 
@@ -210,12 +209,20 @@ mutants. A long run (`MCE_FUZZ_ITERS=4000`, 18,000 mutants) is clean under ASan 
   caller outside the trusted places, and mods, base packs, fetched config and user files stay data-only. The loader itself
   is not hardened, so the `MCE_FUZZ_BYTECODE` case stays off by default (it calls `add_bytecode` as a trusted caller would).
 
-### Planned: Detour defense in depth (separate item)
+### Step 6 — Detour defense in depth (done)
 
-`simplifyContour` in Detour divides by `nverts`/`npoly`; step 2b stops bad layers before them, but a guard that
-does not depend on our validation (`nverts < 2`, `npoly == 0`) should exist too, by a method that survives a
-cache-cleaned FetchContent (vendored copy of the file or a wrapper pre-check). After it: a fuzz long run with the
-validation switched on.
+`simplifyContour` in DetourTileCache takes `% cont.nverts` and `% cont.npoly` and reads vertex 0 without checking
+how many vertices the contour walk made. Step 2b's `layer_valid` stops the layers that cause a contour of fewer than
+two points; the second line does not depend on it: `cmake/patch_recast.cmake`, a FetchContent `PATCH_COMMAND` in
+`Dependencies.cmake` (the pl_mpeg precedent), makes `simplifyContour` return an empty contour (`nverts = 0`, which
+the caller already stores) when it has fewer than two points. A patch rather than a wrapper survives a
+cache-cleaned FetchContent and the dependency cache key (the hash of `Dependencies.cmake`), and it fails loudly when
+the anchor text changes with a Recast upgrade.
+
+**Checked both ways.** With `layer_valid` reduced to its decode (every connection and area check removed) and an
+unpatched Recast, `test_fuzz` at 4,000 iterations dies with SIGFPE in the nav mutants; with the patch the same run
+passes. With the checks back (the committed code) a long run (`MCE_FUZZ_ITERS=40000`: 69,432 mutants over 733 packs)
+is clean. The patch covers the division only: a connection that leaves the grid is still `layer_valid`'s to refuse.
 
 ### Survey: parsers of untrusted bytes
 
