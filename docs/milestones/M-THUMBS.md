@@ -23,7 +23,7 @@ Source: `assessments/unreal-kiyaslama-2026-10-16.md` (Editor row: "çoklu sahne 
 ## Step status
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | done (this PR) | | `mce/editor/asset_thumb.h`: `thumb_from_image` / `thumb_from_pcm` / `thumb_from_mesh` / `thumb_tile` and `render_thumbnail(project, asset, size, out)`; exact-pixel tests. Textures read the source PNG, audio the source WAV (Ogg and the other kinds show the tile for now), meshes the mounted cooked chunk |
-| 2 | planned | | needs 1 |
+| 1 | done | #601 | `mce/editor/asset_thumb.h`: `thumb_from_image` / `thumb_from_pcm` / `thumb_from_mesh` / `thumb_tile` and `render_thumbnail(project, asset, size, out)`; exact-pixel tests. Textures read the source PNG, audio the source WAV (Ogg and the other kinds show the tile for now), meshes the mounted cooked chunk |
+| 2 | done (this PR) | | `asset_thumbnail` (`tools_thumbs.cpp`): one asset as a size x size PNG, or `folder` for a contact sheet (ceil(sqrt n) columns, 2 px gap, `type` filter, up to 64 tiles); JSON lists each tile and whether it is `real` |
 | 3 | planned | | needs 1 |
 | 4 | planned | | |
