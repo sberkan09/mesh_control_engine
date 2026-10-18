@@ -37,7 +37,8 @@ if(MCE_BUILD_TESTS)
         # written for a look (build/.../daynight_150.ppm).
         add_test(NAME sample_daynight_gpu
                  COMMAND mce_player -pack "${pack}" -capture_tick 150
-                         -capture "${CMAKE_CURRENT_BINARY_DIR}/daynight_150.ppm" -platform.error_box 0 -r.vsync 0)
+                         -capture "${CMAKE_CURRENT_BINARY_DIR}/daynight_150.ppm" -platform.error_box 0 -r.vsync 0
+                         -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
         set_tests_properties(sample_daynight_gpu PROPERTIES LABELS gpu TIMEOUT 120)
         # Stalled past its timeout in other threads' loaded --task runs although it takes 4 s alone (cause not found,
         # see M-GPU-VERIFY.md): it runs in the integration run only (`slow`); --task has the headless gates.
