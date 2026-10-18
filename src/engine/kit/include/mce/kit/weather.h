@@ -45,6 +45,8 @@
 // At intensity 0 the base is written back, so a scene at clear is bit-identical to one without a Weather, and
 // clearing the weather returns the authored bits. `env_valid` is 0 until the first tick. The 15 slots are:
 // sun_intensity, exposure, fog_density, sun_color, ambient_sky, ambient_ground, fog_color (the vec3s as 3 floats).
+// Lightning (step 3): after the table, sun_intensity, ambient_sky and ambient_ground are multiplied by `flash_mul`
+// (1 = no flash, bit-exact). It is part of the written value (env_applied), so the base logic above is unchanged.
 // Wind is not applied to Foliage3D here: it is exposed as Weather.wind for scripts and step 3.
 //
 // System: "kit_weather" (FixedUpdate_Pre, after "kit_timed_light"); install_weather installs timed lights.
@@ -81,6 +83,7 @@ struct Weather {
     u32 fade = 0;                              // engine-written: intensity numerator
     u32 fade_den = 0;                          // engine-written: intensity denominator (ticks of a transition)
     u32 wet_q = 0;                             // engine-written: wetness numerator out of 2^24
+    f32 flash_mul = 1.0f;                      // written by the Lightning system (precipitation.h): x on sun and ambient
     u8 env_valid = 0;                          // engine-written: 1 once env_base holds values
     u8 pad2_[3] = {};
     f32 env_base[15] = {};                     // engine-written: the environment before weather (see above)
@@ -94,7 +97,8 @@ MCE_COMPONENT(Weather, (target, Save, Help{"weather to move to: clear, overcast,
               (auto_change_seconds, Save, Range{0, 86400}, Help{"0: off; else pick a new weather by seed every this many seconds"}),
               (seed, Save, Help{"seed of the random schedule"}),
               (counter, Save, ReadOnly), (timer, Save, ReadOnly), (fade, Save, ReadOnly), (fade_den, Save, ReadOnly),
-              (wet_q, Save, ReadOnly), (env_valid, Save, ReadOnly), (env_base, Save, ReadOnly),
+              (wet_q, Save, ReadOnly), (flash_mul, Save, ReadOnly, Help{"lightning flash multiplier on sun and ambient; 1 = none"}),
+              (env_valid, Save, ReadOnly), (env_base, Save, ReadOnly),
               (env_applied, Save, ReadOnly))
 
 // Event (producer FixedUpdate_Pre): `current` changed.

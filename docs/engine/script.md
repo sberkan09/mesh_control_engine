@@ -38,6 +38,7 @@ What a script cannot do, and what to do instead:
 
 | Limit | Why | Instead |
 |---|---|---|
+| Per-entity tuning the scene sets (`ScriptParams`, read with `mce.param`; see guide 27.8) | a constant in the source cannot differ per entity | author it in the scene, never write it from a script |
 | No state between ticks: no counters in top-level locals, tables or closures | the state hash, saves and replays must cover everything a script remembers | keep it in a reflected component (`ScriptVars` for a script's own numbers). The cook rejects the visible cases; at run time frozen tables and compared upvalues and buffers catch the rest (`script.state_check`) |
 | `for k, v in t` over a table keyed by tables or functions is not caught | iteration order follows addresses, and Luau runs that loop inside the VM | key by entity, number or string |
 | One component per field pair, or one handle per field | `mce.get` / `mce.set` name each field (`mce.get(e, "A", "x", "B", "y")` spans components) | resolve handles with `mce.field` at the top level |

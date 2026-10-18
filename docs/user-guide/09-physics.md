@@ -591,6 +591,33 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   bit-identical to no `Weather`, and clearing the weather restores the authored values. Wind is exposed as
   `Weather.wind` for scripts and the precipitation step; `Foliage3D` wind is not changed here.
 
+## 9.20 Precipitation and lightning (M-WEATHER)
+
+`mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
+components are opt-in; scenes without them are unchanged.
+
+- **Rain and snow.** Put `Precipitation3D` on an entity that also has a `ParticleEmitter3D` and a transform. Each tick
+  the system `kit_precipitation` sets the emitter from the first `Weather`'s `current`, `intensity` and `wind`: rain
+  `rate = rain_rate * intensity` (a storm x1.6; default `rain_rate` 3000), fast thin bluish streaks falling with
+  `rain_speed` (18), slanted by the wind; snow `rate = snow_rate * intensity` (800), slow large white flakes drifting
+  sideways with the wind. Clear and overcast set `emitting` 0 and `rate` 0 (live particles play out). The values are
+  pure functions of the weather and the component, written only when they change, so a quiet scene is untouched; the
+  fields it sets (rate, gravity, direction, speeds, lifetimes, colours, sizes, box, `max_particles`, `additive` 0)
+  replace the authored ones. The exact table is in the header. Without a `Weather` nothing is written.
+- **Following the camera.** With `follow_camera` 1 (default) the entity moves to `height` (12) metres above the primary
+  camera, so the spawn box (`area` 14 m half extent) always surrounds the player. With no camera the transform is left
+  alone. Keep the entity out of any hierarchy.
+- **Lightning.** One `Lightning` per scene (the first drives). Only while the weather is a storm it picks a gap between
+  `min_gap_seconds` (6) and `max_gap_seconds` (20) from a deterministic hash of (`seed`, `counter`), then strikes:
+  the sun and ambient light are multiplied by a boost that falls linearly from `flash_boost` (4) to 1 over
+  `flash_ticks` (8). The boost is a field of the `Weather` (`flash_mul`) applied by `kit_weather` on top of the
+  weathered environment, so nothing drifts: after the flash the environment is bit-identical to a run without
+  lightning. It reaches the environment one tick after the strike. Outside a storm there are no strikes.
+- **Event.** `LightningStruck {thunder_delay_ticks}` once per strike, 30 to 300 ticks (from the hash), so audio can play
+  thunder after the delay.
+- **Determinism.** `counter`, `timer` and `remaining` are saved; a save mid-storm resumes on the same strikes and the
+  state hash is stable.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,
