@@ -39,7 +39,8 @@ struct QualitySettings {
     bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
     bool contact_shadows = true; // ContactShadows::enabled is honored (M-VISUAL2 3)
     // M-WETSURFACE 5a: WetSurfaces is honored (off: wetness 0) and, separately, its puddles. Low keeps the
-    // darkening and the lower roughness but drops puddles.
+    // darkening and the lower roughness but drops puddles. wet_puddles has no effect while wet_surfaces is off
+    // (wetness 0 draws the dry frame, puddles included).
     bool wet_surfaces = true;
     bool wet_puddles = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
@@ -76,7 +77,10 @@ void apply_quality(const QualitySettings& q, ContactShadows& c);
 // Parallax occlusion mapping: its distance and step cap (off on Low).
 void apply_quality(const QualitySettings& q, ParallaxSettings& p);
 // Wet surfaces: the weather's wetness, zeroed when the tier or `r.wet_surfaces 0` switches them off;
-// puddles_enabled follows the tier. Returns the WetSurfaces to hand to Scene3D::set_wet_surfaces.
+// puddles_enabled follows the tier (and means nothing at wetness 0). wetness, puddles, darken and roughness are
+// clamped to 0..1 (NaN to 0) and puddle_scale to 0.25..256 m. Unlike the in-place overloads above it returns a
+// copy: the extract builds the value from kit data and hands it straight to Scene3D::set_wet_surfaces, which
+// exposes no mutable reference to apply it to.
 WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet);
 
 }  // namespace mce::render

@@ -99,7 +99,7 @@ struct Fixture3D {
 
     // `setup` runs after the defaults (sun, fog, ground, box) and before build().
     void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
-        camera = orbit_camera({0, 0.5f, 0}, 0.0f, math::radians(pitch_deg), 7.0f);
+        camera = orbit_camera(vec3{0, 0.5f, 0} + world_offset, 0.0f, math::radians(pitch_deg), 7.0f);
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -113,11 +113,14 @@ struct Fixture3D {
         ShadowSettings ss;
         ss.resolution = 1024;  // = Forward3DDesc::shadow_size below
         scene.set_shadows(ss);
+        const bool offset = world_offset.x != 0.0f || world_offset.y != 0.0f || world_offset.z != 0.0f;
         MeshInstance ground;
         ground.mesh = 2;
+        if (offset) ground.world = math::translation(world_offset);
         scene.add(ground);
         MeshInstance box;
         box.mesh = 1;
+        if (offset) box.world = math::translation(world_offset);
         scene.add(box);
         if (setup) setup(scene);
         scene.build();
@@ -156,6 +159,7 @@ struct Fixture3D {
     rhi::TextureHandle target;
     Array<u8> pixels;
     f32 pitch_deg = 35.0f;
+    vec3 world_offset{0.0f, 0.0f, 0.0f};  // moves the camera, the ground and the box (M-WETSURFACE 5b: a rebased world)
     Camera3D camera;
     View3D view;
     rhi::FrameStats gpu;
@@ -560,6 +564,58 @@ inline void add_merge_kit(Scene3D& s, const MergeKit& kit, bool merged) {
         m.world = math::trs(p.at, math::quat_from_axis_angle({0, 1, 0}, p.yaw), {1, 1, 1});
         s.add(m);
     }
+}
+
+
+// ---- M-WETSURFACE 5b: wet surfaces ------------------------------------------------------------------------------
+
+// The wet plaza: the fixture's rough (0.8) grey ground and its box, a white metal sphere (mesh 50, roughness 0.25)
+// beside the box and a rough stone wall (mesh 51) on the left whose +x face looks across the ground. A low sun from
+// behind the box puts its reflection on the open ground in front of it; a gradient sky lights everything through IBL.
+inline constexpr vec3 kWetSphere{1.7f, 0.7f, -0.4f};
+inline constexpr f32 kWetSphereRadius = 0.7f;
+
+inline void upload_wet_plaza(Fixture3D& f) {
+    upload_sphere(f, 50, kWetSphere, kWetSphereRadius, 1.0f, 0.25f);
+    mesh_fixture::Builder wall;
+    wall.add_node(-1);
+    mesh_fixture::Box w;
+    w.center = {-2.6f, 1.0f, -0.8f};
+    w.half = {0.15f, 1.0f, 1.6f};
+    w.color[0] = 0.62f;
+    w.color[1] = 0.56f;
+    w.color[2] = 0.5f;
+    wall.add_box(w);
+    REQUIRE(f.renderer.meshes().upload(51, 1, wall.build().span()).has_value());
+}
+
+inline WetSurfaces wet_plaza_wet(f32 wetness, f32 puddles) {
+    WetSurfaces w;
+    w.wetness = wetness;
+    w.puddles = puddles;
+    return w;
+}
+
+// `world_offset`: as Fixture3D::world_offset (the sphere and the wall move with the rest).
+inline void wet_plaza_scene(Scene3D& s, const WetSurfaces& wet, vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    DirectionalLight sun;
+    sun.direction = {0.16f, -0.72f, 0.676f};
+    s.set_light(sun);
+    s.set_exposure(0.55f);  // the dry ground mid-grey, not near white: the darkening is measured in 8 bits
+    Sky sky;
+    sky.zenith = {0.2f, 0.35f, 0.8f};
+    sky.horizon = {0.75f, 0.7f, 0.65f};
+    sky.ground = {0.35f, 0.34f, 0.32f};
+    sky.ibl = true;
+    s.set_sky(sky);
+    const bool offset = world_offset.x != 0.0f || world_offset.y != 0.0f || world_offset.z != 0.0f;
+    for (u32 mesh : {50u, 51u}) {
+        MeshInstance m;
+        m.mesh = mesh;
+        if (offset) m.world = math::translation(world_offset);
+        s.add(m);
+    }
+    s.set_wet_surfaces(wet);
 }
 
 }  // namespace mce::render_test

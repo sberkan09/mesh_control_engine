@@ -98,8 +98,14 @@ void apply_quality(const QualitySettings& q, ParallaxSettings& p) {
 }
 
 WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet) {
+    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
     WetSurfaces out = wet;
-    if (!q.wet_surfaces || !cv_wet_surfaces.get_bool()) out.wetness = 0.0f;
+    out.wetness = q.wet_surfaces && cv_wet_surfaces.get_bool() ? unit(wet.wetness) : 0.0f;
+    out.darken = unit(wet.darken);
+    out.roughness = unit(wet.roughness);
+    out.puddles = unit(wet.puddles);
+    out.puddle_scale = wet.puddle_scale > 0.25f ? (wet.puddle_scale < 256.0f ? wet.puddle_scale : 256.0f) : 0.25f;
+    // Off with wet_surfaces (wetness 0 skips the whole shader branch, puddles included) whatever this says.
     out.puddles_enabled = wet.puddles_enabled && q.wet_puddles;
     return out;
 }

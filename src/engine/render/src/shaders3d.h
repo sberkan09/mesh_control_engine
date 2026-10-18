@@ -60,6 +60,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_decals;         // x: decals to apply (M-VISUAL 9)
     vec4 p_ssr;            // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
     vec4 p_sky_rot;        // M-VISUAL3 4: x cos, y sin of the sky texture's yaw about +Y (y = 0: no rotation)
+    vec4 p_wet;            // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
+    vec4 p_wet2;           // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on (0 on Low)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -577,6 +579,59 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
     }
 }
 
+// ---- wet surfaces (M-WETSURFACE 5b), behind p_wet.x > 0. Value noise on integer lattice hashes (no sin():
+// its precision differs across GPUs), periodic over 256 m: each octave fits a whole number of cells into that
+// span, so the floating origin enters mod 256 m and the puddles stay put across a rebase.
+uint wet_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v.x;
+}
+float wet_lattice(uvec2 c, uint seed) { return float(wet_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
+// q: meters in 0..256; `cells`: lattice cells across 256 m (a whole number, >= 1).
+float wet_value(vec2 q, float cells, uint seed) {
+    vec2 g = max(q * (cells / 256.0), vec2(0.0));
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uint m = uint(cells);
+    uvec2 c0 = uvec2(i) % m;  // g may round up to `cells`: it wraps to cell 0
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = wet_lattice(c0, seed), b = wet_lattice(uvec2(c1.x, c0.y), seed);
+    float c = wet_lattice(uvec2(c0.x, c1.y), seed), d = wet_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// Puddle cover 0..1 at world point p: two octaves (1 and 2.03 per puddle cell, each rounded to whole cells per
+// 256 m), crevices (low ao) fill first,
+// only on up-facing surfaces (`ng`: the geometric normal). The threshold falls as wetness and coverage rise.
+float wet_puddle(vec3 p, vec3 ng, float ao) {
+    float up = smoothstep(0.9, 0.98, ng.y);
+    if (up <= 0.0) return 0.0;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_wet.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_wet.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0u) * 0.65 + wet_value(q, c2, 0x9E3779B9u) * 0.35 + (1.0 - ao) * 0.25;
+    float t = 1.0 - 0.8 * p_wet.y * p_wet.x;
+    return smoothstep(t - 0.03, t + 0.03, h) * up;
+}
+// Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
+// more, take roughness 0.03 and flatten the normal map (`fill`). Metals neither darken (their albedo is their F0)
+// nor smooth: water beads on them, and the gate holds a wet metal sphere's look within 1%.
+void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
+    float w = p_wet.x;
+    float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
+    float dielectric = 1.0 - clamp(metallic, 0.0, 1.0);
+    float porosity = dielectric * clamp(rough * 1.25, 0.0, 1.0);
+    albedo *= mix(1.0, 1.0 - p_wet.w, w * porosity) * mix(1.0, 1.0 - p_wet.w, pud * dielectric);
+    rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
+    rough = mix(rough, 0.03, pud);
+    fill = max(fill, pud);
+}
+
 #ifdef MCE_TERRAIN
 // ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
 // u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
@@ -794,6 +849,7 @@ void main() {
         }
         float fill = 0.0;
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
+        if (p_wet.x > 0.0) apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
 #ifdef MCE_TERRAIN
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
