@@ -185,7 +185,33 @@ exactly.
 Not yet: pedestrians do not avoid each other, react to the player, or follow terrain height (flat networks), and cars
 do not yet slow for them (traffic, B2).
 
-## 29.7 Mistakes the cook catches
+## 29.7 A whole city: samples/09_openworld
+
+`samples/09_openworld` puts a road network, traffic, a crowd, getting into cars, a gun and the police together in one
+scene (`assets/scenes/city.mcscene`, written by `gen_assets.py`). Its pieces, as a recipe for your own city:
+
+- **The network** is `assets/roads/city.mcroads`: a 5 × 5 grid of junctions 250 m apart (1 km²), the middle row and column
+  are avenues (two lanes each way, faster, higher `priority`), the nine inner junctions are `signal` with the avenues'
+  green longer and the lights offset for a wave. One `RoadNetwork3D` entity places it at the origin. The road surface you
+  see is ordinary tinted boxes: the network is data for cars and walkers, it draws nothing.
+- **Traffic** is one `TrafficSpawner3D` (`focus` = the player, a car prefab with `Vehicle3D` + `TrafficDriver3D`, 24 cars,
+  45-170 m from the player). **The crowd** is one `CrowdSpawner3D` (70 walkers, a prefab with `Pedestrian3D`, a kinematic
+  capsule and `Health3D` team 3, so the police can see a shot walker as a crime).
+- **The player** is a `CharacterController3D` with `Rider3D` (E gets in the parked car and out again), `Health3D` team 1 and
+  `Wanted3D`. The camera is an orbit `CameraFollow3D` that also carries the `Weapon3D` (owner = the player): shots leave
+  along the view, and the camera follows the car while the player sits in it.
+- **Police** are four `Police3D` characters with a `NavAgent3D` and a `Weapon3D` on the plaza, on a `NavMeshSurface3D`
+  baked at start-up around the middle blocks (cell 0.5 m). They stay idle until a witnessed crime gives the player a
+  wanted level; then they pursue, and from level 2 shoot.
+- `drive.input` is the headless script (walk to the car, get in, drive, brake with `TriggerL`, get out); the input map
+  `assets/input/openworld.mcinput` adds `Interact`, `Reload`, `Sprint` and `TriggerL` to the stock actions.
+
+Not in the sample yet: missions and the minimap ([M-MISSION](../milestones/M-MISSION.md)), baked HLOD for the skyline
+(the render-scale thread), traffic-light visuals that follow the light state, police cars, a skinned character and audio
+(the open-licence content set in the milestone file has the models; the engine, gun and siren sounds still need ledger
+entries). Dead pedestrians vanish after a fraction of a second: the crowd does not look at `Health3D` yet.
+
+## 29.8 Mistakes the cook catches
 
 The cook stops, naming the file, line and column, on: an unknown node or road name, a road from a node to
 itself, two nodes or roads with one name, `lanes` outside 0-8 (or both 0), more than 16 roads at a node, a
