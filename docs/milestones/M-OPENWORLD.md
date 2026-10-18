@@ -27,8 +27,32 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 | A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
 | A3 | done: instancing past the budget, the HLOD bake (`hlod_bake`) with simplified far levels, the cheap StaticMerge3D change check, the merge budget and the impostor bake (`hlod_bake impostor=true`); GPU frame time re-measured in A1 | #522 instancing, #534 HLOD bake, #536 city CPU, #540 far levels, #545 merge budget, #548 impostors | same design |
 | A4 | done: ChunkLod3D, the .mchlod importer, the city counter gate (4096 pieces as cells) and the HLOD city sample (`samples/hlod_city`: 0.21x the draws, 0.12x the CPU) | #529 ChunkLod3D, #536 city CPU, #553 city sample | same design |
+| E1 | in review (E1 thread, 2026-10-17) | see the E1 PR | `samples/09_openworld`; see "Track E progress" below |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
+
+## Track E progress (E1 thread, 2026-10-17)
+
+`samples/09_openworld` (data only, `gen_assets.py` writes `assets/`): a 1 km² slice with a 5 x 5 junction grid (two avenues,
+nine signalled junctions), 121 box buildings and parks, `TrafficSpawner3D` (24 cars) and `CrowdSpawner3D` (70 walkers) around the
+player, a parked car (`VehicleSeat3D` + `Rider3D`), a `Weapon3D` on the orbit camera, four `Police3D` on a runtime-baked navmesh
+and `Wanted3D` on the player. Gates: `openworld_sample_player` (headless, log clean, two plays one hash) and
+`test_mcp_openworld` (traffic >= 10 cars, crowd >= 20, enter/exit and a drive west, a shot raises the wanted level and the police
+pursue). User guide 29.7 and 18. Engine fix found on the way: the scene cook did not know the `RoadNetwork` asset type, so a scene
+could not reference a `.mcroads` (scene_importer.cpp, inspector.cpp; part of the E1 PR).
+Linear: the SBA workspace is at its free issue limit (save_issue refused the E1 issue), so this record is the tracker.
+
+Open items and risks (E1):
+- Placeholder art: one tinted unit cube for everything, no wheels that spin, no skinned characters, no audio. The ledger set in
+  "E1 content set" replaces boxes with Kenney city/car/character models once a follow-up wires `mce content add` into the sample.
+- Not wired yet, on purpose (other threads): HLOD/`ChunkLod3D` proxies for the skyline (render-scale thread), missions and the
+  minimap (M-MISSION). `FloatingOrigin3D` is not set: 1 km² never reaches its 1024 m threshold.
+- The whole city is one scene (buildings are not streamed in chunks yet); the navmesh covers only the middle blocks (police stay
+  there). Police are on foot; no police cars, roadblocks or arrests (C3 open items).
+- Traffic-light visuals do not follow the light state; a dead pedestrian vanishes after 0.2 s (`Pedestrian3D` ignores `Health3D`):
+  a small kit PR (stop and ragdoll) is the fix.
+- The player does not face its movement (the engine has no facing component for `use_input` characters); the camera carries the gun.
+- Budget counters in `local_ci.sh` are not added: the sample has entity and cars/walkers counts in the MCP test only.
 
 ## Gates
 - Every step: `local_ci.sh --task` green, headless test with numbers, replay hash stable, existing scenes unchanged (opt-in per component).
