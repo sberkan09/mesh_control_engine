@@ -121,6 +121,7 @@ map does not define reads as not pressed and zero.
 |---|---|
 | `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
+| `mce.near(center, radius, component?, skip?)` | the entities with a `LocalTransform` within `radius` of `center` (and with `component`, if given), nearest first; no physics world needed, so a pickup, an aggro range or a touch test is one call (a 2D game has z = 0) |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
 | `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
 | `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v, point?)` | a 2D body's velocity, and pushes; with a world-space `point` the impulse spins the body |
@@ -343,8 +344,8 @@ script's GUID in a `ScriptSystem` entity, and that GUID exists only once the scr
 
 A scene entity that holds script memory lists all 16 numbers of `ScriptVars.v` (the kind slot included); a coloured
 square is a `Sprite` with no texture and a `tint`; `CameraFollow2D.target` is `"$<index of the entity in the scene>"`.
-In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pickup without physics is a distance test
-(`vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
+In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pickup without physics is `mce.near(position, radius, "Coin")`
+(or `vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
 prints `mce.log` lines and the state hash; it does not dump components, and `.mctest` scenarios run with `mce test MyGame`
 (chapter 14.3.1), not through `mce_player`.
 
