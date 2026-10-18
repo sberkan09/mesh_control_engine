@@ -14,6 +14,7 @@
 
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/impostor.h"
 #include "mce/cook/scene_text.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/script.h"
@@ -815,10 +816,21 @@ bool hlod_bake(ToolCall& c) {
             return arg_missing(c, "min_size", "a number of metres from 0 to 10000");
         settings.min_size = static_cast<f32>(v.as_number());
     }
+    cook::ImpostorSettings impostor;
+    bool with_impostor = false;
+    if (const cook::JsonValue v = arg(c, "impostor"); v.valid()) {
+        if (!v.is_bool()) return arg_missing(c, "impostor", "true or false");
+        with_impostor = v.as_bool();
+    }
+    if (const cook::JsonValue v = arg(c, "texels_per_metre"); v.valid()) {
+        if (!v.is_number() || v.as_number() < 0.25 || v.as_number() > 64.0)
+            return arg_missing(c, "texels_per_metre", "a number from 0.25 to 64");
+        impostor.texels_per_metre = static_cast<f32>(v.as_number());
+    }
     editor::EntityId only = editor::kNoEntity;
     if (arg(c, "entity").valid() && !arg_entity(c, "entity", only)) return false;
     editor::EditorSession& session = c.server.session();
-    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only);
+    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only, with_impostor ? &impostor : nullptr);
     if (!r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -849,6 +861,24 @@ bool hlod_bake(ToolCall& c) {
         c.out.key("submeshes").num_u(st.submeshes);
         c.out.key("triangles").num_u(st.triangles);
         c.out.key("lod_levels").num_u(st.lod_levels);
+        if (!row.impostor.is_null()) {
+            const cook::ImpostorStats& is = row.impostor_stats;
+            c.out.key("impostor").begin_object();
+            c.out.key("mesh").str(asset::to_string(row.impostor).view());
+            if (const editor::ProjectAsset* a = session.project().find(row.impostor)) {
+                cook::String path("assets/");
+                path += a->path.view();
+                c.out.key("path").str(path.view());
+            }
+            c.out.key("bytes").num_u(row.impostor_bytes);
+            c.out.key("groups").num_u(is.groups);
+            c.out.key("boxes").num_u(is.boxes);
+            c.out.key("cards").num_u(is.cards);
+            c.out.key("quads").num_u(is.quads);
+            c.out.key("untextured").num_u(is.untextured);
+            c.out.key("atlas").begin_array().num_u(is.atlas_width).num_u(is.atlas_height).end_array();
+            c.out.end_object();
+        }
         c.out.end_object();
     }
     c.out.end_array();
@@ -1665,9 +1695,14 @@ const ToolDef kTools[] = {
      "ChunkLod3D `proxy` points at it (the component is added when missing; scene_save keeps it). The proxy draws "
      "while the area is not loaded. Meshes smaller than min_size metres (default 1) are left out. Re-baking keeps the "
      "file and GUID; the same scene bakes byte-identical (content_hash). Returns per chunk the mesh counts (merged, "
-     "small, skipped), submeshes, triangles and LOD levels.",
+     "small, skipped), submeshes, triangles and LOD levels. impostor: also bake the far stand-in (a box per root "
+     "entity with orthographic albedo captures on its sides and top, cross cards for tall thin groups such as trees) "
+     "into chunk_<entity id>_far.png + _far.mchlod and point ChunkLod3D `impostor` at it; the row then has an "
+     "impostor object (groups, boxes, cards, quads, untextured, atlas size).",
      R"j({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)j"
-     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"}},"additionalProperties":false})j",
+     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"},)j"
+     R"j("impostor":{"type":"boolean","description":"also bake the impostor (default false)"},)j"
+     R"j("texels_per_metre":{"type":"number","description":"impostor capture resolution, 0.25..64 (default 4)"}},"additionalProperties":false})j",
      hlod_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
