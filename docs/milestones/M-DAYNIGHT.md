@@ -25,7 +25,7 @@ Source: `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` ("3-4 missions
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | starting | | |
+| 1 | implemented (not merged) | | `WorldClock` in `world_clock.h/.cpp`, tests in `tests/kit/test_world_clock.cpp`, user guide 9.16 |
 | 2 | planned | | needs 1 |
 | 3 | planned | | needs 1, 2 |
 | 4 | planned | | |
