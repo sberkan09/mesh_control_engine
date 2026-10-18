@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "mce/asset/formats.h"
+#include "mce/asset/roads_format.h"
 #include "mce/asset/vorbis.h"
 
 namespace mce::fuzz {
@@ -229,6 +230,29 @@ inline void walk(Sink& s, const SceneView& v) {
         const SceneColumn& col = v.columns[f.column];
         s.eat(v.data(f.column).subspan(usize(f.row) * col.type_size + f.byte_offset, sizeof(u32)));
     }
+}
+
+// Roads: every polyline, successor, conflict and phase range a lane, node, road or signal names.
+inline void walk(Sink& s, const RoadView& v) {
+    s.eat(v.name());
+    for (const RoadNode& n : v.nodes) {
+        for (u32 c = 0; c < n.connector_count; ++c) s.eat(v.lanes[n.first_connector + c].length > 0.f);
+        if (n.signal != kRoadNone16) s.eat(v.signals[n.signal].cycle > 0.f);
+    }
+    for (const RoadRoad& r : v.roads) {
+        s.eat(v.nodes[r.from].position[0] > 0.f);
+        s.eat(v.nodes[r.to].position[0] > 0.f);
+        for (u32 i = 0; i < r.point_count; ++i) s.eat(v.points[r.first_point + i].s > 0.f);
+        for (u32 i = 0; i < u32(r.forward) + r.backward; ++i) s.eat(v.lanes[r.first_lane + i].width > 0.f);
+    }
+    for (const RoadLane& l : v.lanes) {
+        for (u32 i = 0; i < l.point_count; ++i) s.eat(v.points[l.first_point + i].x > 0.f);
+        for (u32 i = 0; i < l.next_count; ++i) s.eat(v.lanes[l.first_next + i].length > 0.f);
+        if (l.prev != kRoadNone) s.eat(v.lanes[l.prev].length > 0.f);
+        for (u32 i = 0; i < l.conflict_count; ++i) s.eat(v.lanes[v.conflicts[l.first_conflict + i]].length > 0.f);
+    }
+    for (const RoadSignal& g : v.signals)
+        for (u32 i = 0; i < g.phase_count; ++i) s.eat(v.phases[g.first_phase + i].seconds > 0.f);
 }
 
 }  // namespace mce::fuzz
