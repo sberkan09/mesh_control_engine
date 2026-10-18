@@ -161,6 +161,8 @@ bool cheats_allowed();
 // values, Cheat convars while cheats are locked and ReadOnly convars are warned about and skipped; a missing file is
 // no error.
 Result<void> set_defaults(StringView path);
+// The same lines from memory (the convar-defaults chunk of a pack); the rules above hold.
+void set_defaults_text(StringView text);
 Result<void> load_settings(StringView path);
 Result<void> save_settings(StringView path);
 // Bumped whenever a Saved convar changes: a host writes the settings file when it moves.
