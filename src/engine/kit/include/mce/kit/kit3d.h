@@ -238,6 +238,7 @@ struct Environment3D {
     f32 shadow_blend = 0.1f;
     u32 sky_ibl = 0;  // 1: the sky lights the scene (image-based lighting, M-VISUAL 2)
     f32 ibl_texture_intensity = 1.0f;
+    u32 ibl_pad_ = 0;  // explicit: the AssetRef below is 8-byte aligned (state_hash reads every byte)
     asset::AssetRef<asset::Texture> ibl_texture;  // equirect the IBL bakes from; null = the visible sky
     // M-VISUAL 7. The physically based sky: it replaces the gradient and the sky texture, tints the sun
     // (sun_color is then the light above the air) and sets the ambient from the sky and the lit ground.
@@ -413,6 +414,7 @@ struct Foliage3D {
     f32 wind_height = 0.0f;    // metres where the sway reaches wind_amplitude; 0 = amplitude x h^2 (h in metres)
     f32 wind_gust = 0.0f;      // 0..1: slow gusts travelling along wind_direction across the field
     f32 wind_flutter = 0.0f;   // metres of fast per-vertex leaf jitter at wind_height
+    u32 mesh_pad_ = 0;         // explicit: mesh_1.. below are 8-byte aligned
     // More kinds in one scatter: each point picks mesh, mesh_1, mesh_2 or mesh_3 by a hash weighted by mesh_weights
     // (relative shares; an unbound mesh gets none).
     asset::AssetRef<asset::Mesh> mesh_1, mesh_2, mesh_3;
@@ -489,6 +491,7 @@ struct TerrainFoliage3D {
     f32 wind_height = 0.0f;
     f32 wind_gust = 0.0f;
     f32 wind_flutter = 0.0f;
+    u32 pad2_ = 0;
 };
 MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
               (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
@@ -560,6 +563,7 @@ struct ParticleEmitter3D {
     u32 additive = 1;
     u32 emitting = 1;
     u32 pad_ = 0;
+    u32 pad2_ = 0;  // explicit tail: the struct is 8-byte aligned (state_hash reads every byte)
 };
 MCE_COMPONENT(ParticleEmitter3D, texture, (color_start, Help{"linear, HDR allowed; a opacity"}), color_end,
               (offset, Help{"entity space"}), (box, Help{"spawn volume half extents"}), (direction, Help{"entity space"}),
