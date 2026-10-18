@@ -1,6 +1,6 @@
 # M-MOVE3D — 3D movement that feels shipped (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1–5 done). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
+**Status:** done (added 2026-10-16; steps 1–6 done, PR #562 for step 6). Plan: ROADMAP §M-MOVE3D; Linear SBA-134 … SBA-139.
 
 **Why:** M-GAMEPLAY3D gave 3D games their systems: navmesh agents, joints, ragdolls, vehicles and sensors.
 What a player feels is still raw:
@@ -26,7 +26,7 @@ It needs no device. Every step gates on headless runs and replay hashes in `loca
 | 3 | Vehicle feel: anti-roll, downforce, wheel slip and skid events, self-righting, gears as data | SBA-136 | done |
 | 4 | AI drivers: `VehicleDriver3D` on a waypoint path, laps; agents with acceleration | SBA-137 | done |
 | 5 | Animation from movement: `Locomotion3D`, foot IK on slopes and stairs | SBA-138 | done |
-| 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | PR open (no Linear card; the tracker is this file) |
+| 6 | MCP and docs; the demo `samples/08_movement` | SBA-139 | done (#562; no Linear card, the tracker is this file) |
 
 **Demo:** `samples/08_movement`, built over MCP alone. A humanoid runs an obstacle course, and a cart races
 two AI karts. A scripted input replays to the same hash in Debug and Release.
