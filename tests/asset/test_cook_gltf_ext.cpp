@@ -14,7 +14,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <string>
 #include <vector>
 
@@ -1173,25 +1172,23 @@ TEST_CASE("gltf ext: truncated and flipped meshopt streams are errors or valid m
 // ---- budgets, hardening and nits (review round) ---------------------------------------------------------------------
 
 TEST_CASE("gltf ext: a morph-bake flood is refused by the work budget before any delta is read") {
-    // Millions of vertices (no bufferView: zeros) and 512 targets of weight 1 would be ~1024 reads of 15M+ floats (11M: 0.6 s to refuse).
+    // Millions of vertices and 512 targets of weight 1 would be ~1024 reads of 15M+ floats (tens of CPU seconds) if the deltas were read
+    // first. No clock: the target accessors point at a bufferView that does not exist, so reading even one delta ends in a different
+    // error ("bufferView index out of range"). The budget error and no bufferView error prove the order on any box, loaded or not.
     Doc d;
     const int ap = d.acc(-1, kFloat, 5000000, "VEC3");
+    const int unreadable = d.acc(99, kFloat, 5000000, "VEC3");
     std::string targets, weights;
     for (int i = 0; i < 512; ++i) {
-        targets += (i ? "," : "") + std::string("{\"POSITION\":") + std::to_string(ap) + "}";
+        targets += (i ? "," : "") + std::string("{\"POSITION\":") + std::to_string(unreadable) + "}";
         weights += (i ? "," : "") + std::string("1");
     }
     const std::string glb = d.glb(cube_rest(ap, -1, -1, -1, ",\"weights\":[" + weights + "]", "", "", ",\"targets\":[" + targets + "]"));
-    // CPU time, not wall-clock: a loaded CI box stretches the wall time of a 0.6 s refusal past any tight limit, but not the CPU time.
-    // Reading the deltas first would be ~1024 passes over 15M floats (tens of CPU seconds), so the generous limit still catches it.
-    const std::clock_t c0 = std::clock();
     const Cooked res = cook_once(glb);
-    const double secs = static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
     INFO(res.text());
-    INFO("cpu seconds: " << secs);
     CHECK(!res.ok);
     CHECK(res.has_error("/meshes/0/primitives/0: baking the default morph weights is over the importer's budget"));
-    CHECK(secs < 5.0);
+    CHECK(!res.has_error("bufferView index out of range"));
 }
 
 TEST_CASE("gltf ext: the morph warning is once per file, not per instance") {

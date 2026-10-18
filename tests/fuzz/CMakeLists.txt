@@ -56,8 +56,12 @@ endif()
 mce_add_test(test_fuzz_importers UMBRELLA
     SOURCES
         test_importers.cpp
+        test_roads.cpp
+        test_mesh_import.cpp
+        test_defaults.cpp
     DEPS
-        mce::mce_asset_cook)
+        mce::mce_asset_cook
+        mce_meshopt)  # test_mesh_import.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
 target_include_directories(test_fuzz_importers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(test_fuzz_importers PRIVATE MCE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
@@ -82,3 +86,19 @@ mce_add_test(test_fuzz_scene UMBRELLA
         mce::mce_gameplay_kit)
 target_include_directories(test_fuzz_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_tests_properties(test_fuzz_scene PROPERTIES ENVIRONMENT "MCE_FUZZ_ROOT=${CMAKE_BINARY_DIR}")
+
+# The ASan stage's gate: a sanitizer report inside a fuzz test is a failure (UBSan reports are only printed by default),
+# and a run has a time budget. Iteration counts are fixed by each test's default (MCE_FUZZ_ITERS overrides them for a long
+# run by hand); the timeout stops a hang a mutant caused and keeps the whole group inside the stage's budget. Labelled
+# `fuzz` so `ctest -L fuzz` runs just these.
+set(MCE_FUZZ_TESTS test_fuzz test_fuzz_player_data test_fuzz_net test_fuzz_script test_fuzz_importers
+    test_fuzz_websocket test_fuzz_misc test_fuzz_scene)
+foreach(_t IN LISTS MCE_FUZZ_TESTS)
+    if(TEST ${_t})
+        set_tests_properties(${_t} PROPERTIES LABELS "fuzz" TIMEOUT 600)
+        if(MCE_ASAN)
+            set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION
+                "UBSAN_OPTIONS=set:halt_on_error=1:print_stacktrace=1:suppressions=${PROJECT_SOURCE_DIR}/cmake/ubsan.supp")
+        endif()
+    endif()
+endforeach()
