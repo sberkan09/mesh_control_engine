@@ -1,6 +1,8 @@
 #include "mce/kit/weather.h"
 
+#include <bit>
 #include <cmath>
+#include <cstring>
 
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
@@ -83,12 +85,77 @@ void tick_weather(Frame& f, Weather& c) {
     c.wetness = static_cast<f32>(static_cast<f64>(c.wet_q) / static_cast<f64>(kWetMax));
 }
 
+struct KindEnv {
+    f32 sun_mul, sun_desat, amb_mul, amb_desat;
+    f32 amb_tint[3];
+    f32 exp_mul, fog_add;
+    f32 fog_to[3];
+    f32 fog_mix;
+};
+constexpr KindEnv kKindEnv[kKinds] = {
+    {1.0f, 0.0f, 1.0f, 0.0f, {1, 1, 1}, 1.0f, 0.0f, {0, 0, 0}, 0.0f},                                    // clear
+    {0.35f, 0.4f, 0.85f, 0.5f, {1, 1, 1}, 1.0f, 0.002f, {0.60f, 0.60f, 0.62f}, 0.4f},                    // overcast
+    {0.2f, 0.5f, 0.7f, 0.6f, {1, 1, 1}, 1.1f, 0.006f, {0.50f, 0.52f, 0.55f}, 0.6f},                      // rain
+    {0.08f, 0.5f, 0.5f, 0.5f, {0.85f, 0.9f, 1.05f}, 1.2f, 0.012f, {0.30f, 0.32f, 0.36f}, 0.7f},          // storm
+    {0.4f, 0.3f, 1.05f, 0.3f, {0.95f, 1.0f, 1.08f}, 1.0f, 0.008f, {0.85f, 0.88f, 0.92f}, 0.7f},          // snow
+};
+enum Slot : u32 { kSun = 0, kExp = 1, kFogD = 2, kSunC = 3, kSky = 6, kGround = 9, kFogC = 12, kSlots = 15 };
+
+f32 lerpf(f32 a, f32 b, f32 t) { return a + (b - a) * t; }
+f32 luma(const f32* c) { return 0.2126f * c[0] + 0.7152f * c[1] + 0.0722f * c[2]; }
+
+// The kind's target at intensity 1 for the base values.
+void kind_target(const KindEnv& k, const f32* b, f32* t) {
+    t[kSun] = b[kSun] * k.sun_mul;
+    t[kExp] = b[kExp] * k.exp_mul;
+    t[kFogD] = b[kFogD] + k.fog_add;
+    const f32 ls = luma(b + kSunC);
+    for (u32 i = 0; i < 3; ++i) t[kSunC + i] = lerpf(b[kSunC + i], ls, k.sun_desat);
+    for (u32 base : {static_cast<u32>(kSky), static_cast<u32>(kGround)}) {
+        const f32 l = luma(b + base);
+        for (u32 i = 0; i < 3; ++i) t[base + i] = lerpf(b[base + i], l, k.amb_desat) * k.amb_mul * k.amb_tint[i];
+    }
+    for (u32 i = 0; i < 3; ++i) t[kFogC + i] = lerpf(b[kFogC + i], k.fog_to[i], k.fog_mix);
+}
+
+bool same_bits(f32 a, f32 b) { return std::bit_cast<u32>(a) == std::bit_cast<u32>(b); }
+
+void env_slots(Environment3D& e, f32* out_ptrs[kSlots]) {
+    out_ptrs[kSun] = &e.sun_intensity;
+    out_ptrs[kExp] = &e.exposure;
+    out_ptrs[kFogD] = &e.fog_density;
+    f32* v3[4] = {&e.sun_color.x, &e.ambient_sky.x, &e.ambient_ground.x, &e.fog_color.x};
+    for (u32 g = 0; g < 4; ++g)
+        for (u32 i = 0; i < 3; ++i) out_ptrs[kSunC + g * 3 + i] = v3[g] + i;
+}
+
+void apply_environment(Frame& f, Weather& c) {
+    Environment3D* env = f.world().try_resource<Environment3D>();
+    if (!env) return;
+    f32* p[kSlots];
+    env_slots(*env, p);
+    // A field that is not what this system wrote last tick was rewritten (DayCycle, edit): it is the new base.
+    for (u32 i = 0; i < kSlots; ++i)
+        if (!c.env_valid || !same_bits(*p[i], c.env_applied[i])) c.env_base[i] = *p[i];
+    c.env_valid = 1;
+    const u32 kind = static_cast<u32>(c.current);
+    f32 t[kSlots];
+    kind_target(kKindEnv[kind], c.env_base, t);
+    const bool off = !(c.intensity > 0.0f) || c.current == WeatherKind::Clear;
+    for (u32 i = 0; i < kSlots; ++i) {
+        const f32 v = off ? c.env_base[i] : lerpf(c.env_base[i], t[i], c.intensity);
+        *p[i] = v;
+        c.env_applied[i] = v;
+    }
+}
+
 void kit_weather(Frame& f) {
     bool first = true;  // one Weather per scene: the first in ECS order drives
     f.query<Weather>().each([&](Entity, Weather& c) {
         if (!first) return;
         first = false;
         tick_weather(f, c);
+        apply_environment(f, c);
     });
 }
 
