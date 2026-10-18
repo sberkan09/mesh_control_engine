@@ -295,6 +295,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `terrain_paint` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_import` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
 | `terrain_generate` | `tools_terrain.cpp` | docs/user-guide/05-assets.md |
+| `asset_thumbnail` | `tools_thumbs.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `timeline_create` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_track` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `timeline_add_key` | `tools_timeline.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
