@@ -78,6 +78,8 @@ declare mce: {
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
     -- the entities with a LocalTransform within radius of center (and the component, if given), nearest first; no physics needed
     near: (center: vector, radius: number, component: string?, exclude: Entity?) -> { Entity },
+    -- the entities with a LocalTransform inside the box from min to max (inclusive; a 2D game has z = 0), in storage order; no physics needed
+    within: (min: vector, max: vector, component: string?, exclude: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
     teleport2d: (e: Entity, position: vector) -> (),
     find_path: (from: vector, to: vector, options: PathOptions?) -> { vector }?,
