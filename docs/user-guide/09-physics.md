@@ -553,6 +553,27 @@ follows the hour of the first `WorldClock`. Without a clock, or without the comp
   the clock passes that hour. The first `TimedLight3D` in ECS order stands for the scene (it remembers the last clock
   hour in `last_hour`). Setting the clock by more than 6 hours is a jump, not a crossing, and fires nothing.
 
+## 9.19 Weather state (M-WEATHER)
+
+`mce/kit/weather.h` keeps the weather as data. One `Weather` entity per scene (the first in ECS order drives; installing
+it also installs the timed lights, day cycle and world clock); a scene without one is unchanged. This step only
+maintains the component and an event; it writes nothing to `Environment3D` (the next step does).
+
+- **Setting it.** `target` is `clear`, `overcast`, `rain`, `storm` or `snow`; write it at run time to change the
+  weather. `current` is the kind in effect (read-only). `transition_seconds` (default 30) is one fade.
+- **Blending.** `intensity` (0..1, read-only) is `fade / fade_den`, an exact ratio of ticks: a 30 s transition at
+  60 Hz is 1800 ticks, so intensity is 0.5 after 900. Clear has intensity 0. A change of kind fades the old kind
+  out to 0, switches `current` (and pushes the event) and fades the new kind in; a change to clear only fades out.
+- **Wind.** `wind` = 0.1 + (kind wind - 0.1) * intensity, with the kind wind of `current`: clear 0.1, overcast 0.3,
+  rain 0.5, storm 1.0, snow 0.2.
+- **Wetness.** While `current` is rain, storm or snow, `wetness` rises with the intensity (fully wet after 60 s at
+  intensity 1); otherwise it falls to 0 over `dry_seconds` (default 120).
+- **Random schedule.** `auto_change_seconds` > 0 writes `target` every that many seconds from a deterministic
+  integer hash of (`seed`, `counter`) modulo 5 and counts `counter`. No float RNG state, no wall clock; the
+  counter and the timer are saved, so a save mid-run resumes on the same pick.
+- **Event.** `WeatherChanged {from, to}` (kinds as numbers 0..4) once when `current` changes.
+- **Determinism.** All state is in the component in integer ratios, so replays, saves and the state hash are exact.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,
