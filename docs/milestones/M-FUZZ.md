@@ -224,6 +224,15 @@ unpatched Recast, `test_fuzz` at 4,000 iterations dies with SIGFPE in the nav mu
 passes. With the checks back (the committed code) a long run (`MCE_FUZZ_ITERS=40000`: 69,432 mutants over 733 packs)
 is clean. The patch covers the division only: a connection that leaves the grid is still `layer_valid`'s to refuse.
 
+### Step 7 — TGA, BMP, MP3 and FLAC seeds (M-IMPORTMEDIA 3, done)
+
+`tests/fuzz/test_media_import.cpp` (in `test_fuzz_importers`): the samples ship none of these formats, so the corpus is
+a raw, an RLE and a 32-bit TGA and a 24-bit BMP built in the test, plus `tests/asset/data/audio/tone.mp3` and `tone.flac`.
+Each seed gets (a) a header sweep: each of its first 48 bytes set to 0x00, 0x01, 0x7f, 0x80 and 0xff, which reaches the
+dimension, bit depth, sample rate, channel count and frame-size fields and so the 16384-a-side and frame caps; (b) every
+prefix up to 56 bytes, the truncation cases; (c) byte mutants (300 by default, `MCE_FUZZ_ITERS`). No finding: 4,000
+iterations (25,800 mutants) are clean in the debug build. The ASan stage runs it with the rest of the importers.
+
 ### Survey: parsers of untrusted bytes
 
 | Entry point | Where | Input comes from | Mutation coverage today | Step |
@@ -237,6 +246,7 @@ is clean. The patch covers the division only: a connection that leaves the grid 
 | OBJ, FBX, MTL, glTF with meshopt streams | `obj_importer.cpp`, `fbx_importer.cpp` (ufbx), `gltf_importer.cpp` | importing source files | mutated (`test_fuzz_importers` seeds from `samples/import_demo`, `test_mesh_import.cpp`) | done |
 | Road network | `asset/roads_format.h` `RoadView::read`; `.mcroads` importer | packs, mods, project sources | mutated source and chunk (`test_roads.cpp`); every range followed | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | mutated scene chunks of every cooked pack, spawned (`test_fuzz_scene`) | done |
+| TGA, BMP, MP3, FLAC | `texture_importer.cpp` (stb_image), `audio_decode.cpp` (dr_mp3, dr_flac) | importing source files | built seeds (raw, RLE and 32-bit TGA, 24-bit BMP) and the committed tone clips; header-byte sweep, every short prefix, byte mutants (`test_media_import.cpp`, in `test_fuzz_importers`) | done |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
 | glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |
 | Text assets (`.mcscene`, `.mcprefab`, `.mcanim`, `.mcskel2d`, `.mcterrain`, `.mcbt`, `.mcui`, timelines, `.mcsound`, ...) | cook JSON reader and per-type validators | project sources, agents | mutated text and valid JSON with one value swapped (`test_fuzz_importers`) | done |
