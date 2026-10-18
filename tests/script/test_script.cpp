@@ -97,6 +97,36 @@ TEST_CASE("script: a Luau system moves entities through reflected fields") {
     CHECK(host.scripts()[0].last_steps > 0);
 }
 
+TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRIPTPROF 1)") {
+    World w;
+    w.register_components<Counter>();
+    ScriptHost host;
+    // Work grows with the tick: the loop runs `mce.tick()` times, so the peak is the last update's cost.
+    REQUIRE(script::add_source(host, "grow", "function update() for i = 1, mce.tick() do end end"));
+    host.install(w);
+    CHECK(host.scripts()[0].updates == 0);
+    for (u32 t = 1; t <= 10; ++t) w.tick(1.0 / 60, t);
+    const script::ScriptInfo& info = host.scripts()[0];
+    CHECK(info.updates == 10);
+    CHECK(info.peak_steps == info.last_steps);
+    CHECK(info.peak_steps > 0);
+    CHECK(info.total_steps > info.peak_steps);  // ten updates, the earlier ones cheaper
+    CHECK(host.budget().steps_per_tick == 200000u);
+
+    // A script that runs out of its budget shows the limit it hit, not the counter the error handler reset.
+    script::ScriptBudget small;
+    small.steps_per_tick = 500;
+    ScriptHost tight(small);
+    REQUIRE(script::add_source(tight, "spin", "function update() while true do end end"));
+    tight.install(w);
+    w.tick(1.0 / 60, 1);
+    const script::ScriptInfo& spun = tight.scripts()[0];
+    CHECK(spun.state == script::ScriptState::Failed);
+    CHECK(spun.updates == 1);
+    CHECK(spun.peak_steps == 501u);
+    CHECK(spun.total_steps == 501u);
+}
+
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
     const u64 a = run_movers(600);
     const u64 b = run_movers(600);
