@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 
 #include "mce/convar.h"
@@ -87,7 +88,13 @@ struct Forward3DPassU {
     vec4 decals;      // x: decals to apply (M-VISUAL 9)
     vec4 ssr;         // x: screen-space reflections on (M-VISUAL2 1), y: max roughness, z: roughness fade, w: intensity
     vec4 sky_rot;     // M-VISUAL3 4: x cos, y sin of the sky texture's yaw (y = 0: no rotation)
+    vec4 wet;         // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
+    vec4 wet2;        // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on
 };
+static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
+static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
+                  offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16,
+              "PassU: p_wet / p_wet2 follow p_sky_rot as in MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -313,6 +320,21 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
         pu.sky_rot = vec4(1.0f, 0.0f, 0.0f, 0.0f);
     }
     return sky_tex;
+}
+
+// The main pass's wet-surface members (M-WETSURFACE 5b). Wetness 0 leaves them zero: the shader skips its branch
+// and the frame is the dry one bit for bit. The puddle noise is periodic over 256 m (the shader fits whole cells
+// into that span), so the floating origin goes in mod 256 m, in f64, and float precision does not depend on how
+// far the world has rebased. The values are clamped again here: a caller may skip apply_quality.
+void wet_params(const WetSurfaces& w, const f64 origin[3], PassU& pu) {
+    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
+    const f32 wetness = unit(w.wetness);
+    if (wetness <= 0.0f) return;
+    const f32 scale = w.puddle_scale > 0.25f ? (w.puddle_scale < 256.0f ? w.puddle_scale : 256.0f) : 0.25f;
+    const bool puddles = w.puddles_enabled && unit(w.puddles) > 0.0f;
+    const auto wrap = [](f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); };
+    pu.wet = vec4(wetness, puddles ? unit(w.puddles) : 0.0f, 1.0f / scale, unit(w.darken));
+    pu.wet2 = vec4(wrap(origin[0]), wrap(origin[2]), unit(w.roughness), puddles ? 1.0f : 0.0f);
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -1797,6 +1819,9 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
+    // Wet surfaces: the main pass (and the fog injection, which does not read them). Probe and volume captures
+    // stay dry: they are cached across frames while the wetness changes.
+    wet_params(scene.wet_surfaces(), origin_, pu);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);

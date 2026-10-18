@@ -616,6 +616,19 @@ TEST_CASE("golden: parallax_cobble: a grazing view of a brick floor whose joints
     check_golden("parallax_cobble", f);
 }
 
+// ---- M-WETSURFACE 5b: wet surfaces ----------------------------------------------------------------
+
+TEST_CASE("golden: wet_plaza: rain-darkened rough ground with puddles, a metal sphere and a wall under a low sun") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        wet_plaza_scene(s, w);
+    });
+    check_golden("wet_plaza", f);
+}
+
 // ---- M-VISUAL3 4: HDR sky -----------------------------------------------------------------------
 
 TEST_CASE("golden: a cooked .hdr sky with a 200x hot spot lights a white sphere, a box and the ground") {
