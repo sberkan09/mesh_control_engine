@@ -30,7 +30,7 @@ cannot yet say or check:
 | 9 | Blind-test gap 1: `mce test <project> [path]` plays `.mctest` scenarios without an agent (the MCP server over stdio) | Sonnet | done in PR (this step) |
 | 10 | Blind-test gap 2: named `ScriptVars` slots instead of `v[16]` | Sonnet (touches the field-handle layer in `script.cpp`) | done in PR (this step) |
 | 11 | Blind-test gap 3: a distance / overlap query without physics (`mce.near`) | Sonnet | done in PR (this step) |
-| 12 | Blind-test gap 4: a headless entity and component dump | Sonnet | not started |
+| 12 | Blind-test gap 4: a headless entity and component dump | Sonnet | done in PR (this step) |
 
 ## Step 3 as built
 
@@ -125,3 +125,12 @@ Not a true independent test of everything: the agent was handed the task, not as
 - Chosen over a bare `mce.distance(a, b)`: `vector.magnitude(a - b)` already is that, and the real gap was "who is near this point" without a physics world.
   Linear in the entities with a `LocalTransform`; use `mce.overlap2d` / the casts when a physics world exists and the set is large.
 - Test: "mce.near is a distance test without physics"; declared in `mce.d.luau`; guide 27.3 and 27.7.
+
+## Step 12 as built (`mce inspect`)
+
+- The dump already existed as the MCP `run_headless` tool's `inspect` (live values via `cook::write_scene_component_state`, Transient fields included), but only
+  an agent could call it. `mce inspect <project> [--component Type] [--entity id|name]... [--show A,B] [--ticks N] [--scene path]` calls it over stdio
+  (`mcp_call` in `tools/mce_cli/mce.py`, shared with `mce test`) and prints the JSON; the state hash and script errors go to stderr, exit 3 on a failed script.
+- Chosen over a new `mce_player` flag: the shipped player does not link the cook-side scene writer, and a second runtime JSON writer would drift from this one.
+- Test: `cli_test` (fake server) covers the arguments, the output and exit codes; NOT run against the real `mce_mcp` (its binary was not executable in this session), so the `inspect` argument shape is checked only against the tool schema. Docs: guides 14.3.1, 16 and 27.7.
+- Not done: dumping a running windowed game; more than 64 entities per call.

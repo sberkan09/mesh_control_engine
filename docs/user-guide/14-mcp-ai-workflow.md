@@ -396,6 +396,11 @@ bots play from the actor's position through the game's input actions.
 `test_run`, prints each scenario as pass or FAIL with the failed checks and any script errors, and exits 1 on a failure or when
 there are none).
 
+`mce inspect <project> --component Type` is the `run_headless` tool's `inspect` for a terminal: it plays the scene (`--ticks`, default 300)
+and prints the live component values of every entity with that component and/or of `--entity` ids or names as JSON (Transient runtime fields
+such as `ScriptVars.v` included; `--show A,B` picks the components). The state hash goes to stderr; it exits 3 when a script failed, as
+`mce_player -headless` does.
+
 A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
 
 ```json
