@@ -1,1 +1,1 @@
-- `mce.log` lines read `script <name>: <message>`, naming the script that wrote them, M-SCRIPTPROF step 3.
+- `mce.log` lines read `[<name>] script: <message>`, naming the script that wrote them, M-SCRIPTPROF step 3.

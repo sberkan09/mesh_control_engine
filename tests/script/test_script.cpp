@@ -150,8 +150,8 @@ TEST_CASE("script: mce.log lines name the script that wrote them (M-SCRIPTPROF 3
     lines.resize(log::read_console(since, lines.span()));
     bool one = false, two = false;
     for (const log::ConsoleLine& l : lines) {
-        one = one || StringView(l.text.c_str()).find("script first: hello from one") != StringView::npos;
-        two = two || StringView(l.text.c_str()).find("script second: hello from two") != StringView::npos;
+        one = one || StringView(l.text.c_str()).find("[first] script: hello from one") != StringView::npos;
+        two = two || StringView(l.text.c_str()).find("[second] script: hello from two") != StringView::npos;
     }
     log::set_level(log::Level::Warn);
     CHECK(one);

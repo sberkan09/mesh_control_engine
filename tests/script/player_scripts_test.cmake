@@ -57,7 +57,7 @@ endif()
 set(PLAY "${MCE_PLAYER}" -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID} -headless 1 -ticks 12 -platform.error_box 0)
 # A script that failed makes the headless run exit 3 (M-SCRIPT3 2b), after printing the state hash.
 run(3 ${PLAY})
-if(NOT LAST_OUTPUT MATCHES "script [^:\n]*: crate x=11")
+if(NOT LAST_OUTPUT MATCHES "script: crate x=11")
     message(FATAL_ERROR "the scene's script did not run in the player:\n${LAST_OUTPUT}")
 endif()
 if(NOT LAST_OUTPUT MATCHES "scripts/fail.luau:3: ")
