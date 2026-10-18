@@ -27,6 +27,10 @@ cannot yet say or check:
 | 6 | Docs the same notes asked for: the Luau limits (no state between ticks, one component per `("Comp", "field")` call, `Perceiver.sees` is a number) in the guide itself, and `mce.d.luau` as a reference page in the SDK docs | Sonnet | done: `docs/engine/script.md` (surface, `mce.d.luau`, limits, gaps) and a limits note in guide 27.4; open: none |
 | 7 | The perf gate's `--seed` self-check catches nothing on Dungeon (so its baseline cannot be trusted yet): find why three textured sprites added to `walk.mcscene` do not change `sprites` / `sprite_batches`, fix it, and make `Dungeon_perf_counters` run the seeded variant too | Sonnet | done |
 | 8 | Bytecode trust (M-FUZZ decision, coordinator 2026-10-17): bytecode loads only from the game's own cooked pack; mods, base packs, fetched config and user files are data-only. Pin it so a new mount site or raw-bytecode caller cannot slip in | Sonnet | done in PR (see "Step 8 as built") |
+| 9 | Blind-test gap 1: `mce test <project> [path]` plays `.mctest` scenarios without an agent (the MCP server over stdio) | Sonnet | done in PR (this step) |
+| 10 | Blind-test gap 2: named `ScriptVars` slots instead of `v[16]` | Sonnet | not started |
+| 11 | Blind-test gap 3: `mce.distance` / a 2D overlap query without physics | Sonnet | not started |
+| 12 | Blind-test gap 4: a headless entity and component dump | Sonnet | not started |
 
 ## Step 3 as built
 
@@ -95,3 +99,11 @@ coin pickup logged, the state hash changed with input). It could not run its `.m
 6. Wished for and open: `mce.distance` / `mce.overlap_circle2d` without physics, a headless entity or component dump, scene-editable per-script constants.
 
 Not a true independent test of everything: the agent was handed the task, not asked to find its own, and it did not run the editor.
+
+## Step 9 as built (`mce test`)
+
+- `mce test <project> [path]` in `tools/mce_cli/mce.py`: spawns the project's `mce_mcp` (with `--module` for a game project), calls `test_run` once
+  (`path` is a `.mctest` file or a folder) and prints each scenario as `pass` or `FAIL <checks>` with script errors; exit 0 only when every
+  scenario passed and there was at least one. Run by hand against `projects/Pursuit` with the real server (`tests/collects.mctest` passes).
+- `tests/import/test_cli_test.py` (`cli_test`) pins the client, report and exit codes against a fake server; documented in guides 14.3.1, 16 and 27.7.
+- Not done: the ctest target of a script project still calls `demo_gate.py`; it could call `mce test`, left alone to keep this PR small.

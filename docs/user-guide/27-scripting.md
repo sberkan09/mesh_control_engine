@@ -345,8 +345,8 @@ A scene entity that holds script memory lists all 16 numbers of `ScriptVars.v` (
 square is a `Sprite` with no texture and a `tint`; `CameraFollow2D.target` is `"$<index of the entity in the scene>"`.
 In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pickup without physics is a distance test
 (`vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
-prints `mce.log` lines and the state hash; it does not dump components, and `.mctest` scenarios run through the MCP tool
-`test_run` (chapter 14.3.1) or a project's ctest target, not through `mce_player`.
+prints `mce.log` lines and the state hash; it does not dump components, and `.mctest` scenarios run with `mce test MyGame`
+(chapter 14.3.1), not through `mce_player`.
 
 
 ## 27.8 Remembering things: `ScriptVars`
