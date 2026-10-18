@@ -393,7 +393,8 @@ In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pick
 (or `vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
 prints `mce.log` lines and the state hash; to see component values after a run use `mce inspect MyGame --component Coin` (every live
 entity with that component, at most 64) or `--entity <id or name>`, add `--show ScriptVars,LocalTransform` to pick the components and
-`--ticks N` for the run length: it prints the live values as JSON, `ScriptVars.v` included. `.mctest` scenarios run with `mce test MyGame`
+`--ticks N` for the run length: it prints the live values as JSON, `ScriptVars.v` included. To see how a value moved over the run, `--trace Hero:ScriptVars.v` (or
+`--trace 7:LocalTransform.position.x`, repeatable, `--every N` ticks, default 10) prints one row per sampled tick. `.mctest` scenarios run with `mce test MyGame`
 (chapter 14.3.1), not through `mce_player`.
 
 

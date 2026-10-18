@@ -1,0 +1,1 @@
+- `mce inspect --trace <entity>:<Component.path>` (with `--every N`) samples fields during the headless run and prints them as a table, M-SCRIPTPROF step 4.
