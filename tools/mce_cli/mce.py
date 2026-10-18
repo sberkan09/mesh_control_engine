@@ -361,9 +361,9 @@ def cmd_mcp(args):
     return run([tool("mce_mcp")] + module + ["--project", p.dir] + args.rest, exec_=True)
 
 
-def mcp_test_run(cmd, path):
-    """Play the project's .mctest scenarios through its MCP server (the `test_run` tool) without an agent: spawn the
-    server on stdio, call the tool once and return its structured result."""
+def mcp_call(cmd, tool_name, arguments):
+    """Call one tool of the project's MCP server without an agent: spawn the server on stdio, call the tool once and
+    return its structured result (used by `mce test` and `mce inspect`)."""
     srv = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     n = 0
 
@@ -378,13 +378,13 @@ def mcp_test_run(cmd, path):
         return json.loads(line)
 
     try:
-        request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "mce test", "version": "1"}})
-        r = request("tools/call", {"name": "test_run", "arguments": {"path": path} if path else {}}).get("result", {})
+        request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "mce", "version": "1"}})
+        r = request("tools/call", {"name": tool_name, "arguments": arguments}).get("result", {})
     finally:
         srv.stdin.close()
         srv.wait(timeout=60)
     if r.get("isError") or r.get("structuredContent") is None:
-        sys.exit("mce: test_run failed: " + (r.get("content") or [{}])[0].get("text", "")[:400])
+        sys.exit(f"mce: {tool_name} failed: " + (r.get("content") or [{}])[0].get("text", "")[:400])
     return r["structuredContent"]
 
 
@@ -392,7 +392,7 @@ def cmd_test(args):
     p = Project(args.project)
     p.built(host=False)
     module = [] if p.script else ["--module", p.module]
-    out = mcp_test_run([tool("mce_mcp")] + module + ["--project", p.dir], args.path)
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "test_run", {"path": args.path} if args.path else {})
     results = out.get("results", [])
     for r in results:
         name = r.get("file") or r.get("name")
@@ -408,6 +408,32 @@ def cmd_test(args):
         print("mce: no .mctest found (scenarios live under the project's tests/ folder)")
         return 1
     return 1 if out.get("failed", 0) else 0
+
+
+def cmd_inspect(args):
+    """Run the game headless and print the live component values of entities (the `run_headless` tool's inspect)."""
+    if not (args.entity or args.component):
+        sys.exit("mce: inspect needs --component <Type> (every entity with it) and/or --entity <id or name>")
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    insp = {}
+    if args.entity:
+        insp["entities"] = [int(e) if e.isdigit() else e for e in args.entity]
+    if args.component:
+        insp["component"] = args.component
+    if args.show:
+        insp["show"] = [t for t in args.show.split(",") if t]
+    arguments = {"ticks": args.ticks, "inspect": insp, "log_lines": 0}
+    if args.scene:
+        arguments["scene"] = args.scene
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
+    print(json.dumps(out.get("inspect", {}), indent=2))
+    print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}", file=sys.stderr)
+    errs = out.get("script_errors") or []
+    for e in errs:
+        print(f"script {e.get('script')}: {e.get('error')}", file=sys.stderr)
+    return 3 if errs else 0
 
 
 def cmd_cook(args):
@@ -956,6 +982,15 @@ def main(argv):
     s.add_argument("project")
     s.add_argument("path", nargs="?", help="one .mctest file or a folder under the project (default: tests/)")
     s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("inspect", help="run the game headless and print the live component values of entities as JSON")
+    s.add_argument("project")
+    s.add_argument("--ticks", type=int, default=300)
+    s.add_argument("--component", help="every live entity with this component (at most 64)")
+    s.add_argument("--entity", action="append", help="a scene entity id or name (repeatable)")
+    s.add_argument("--show", help="comma-separated components to print (default: the entity's own, or the --component plus LocalTransform)")
+    s.add_argument("--scene", help="play this saved scene (path under assets/)")
+    s.set_defaults(fn=cmd_inspect)
 
     s = sub.add_parser("ship", help="zip the host, module, engine library and pack (--target web: the browser build)")
     s.add_argument("project")
