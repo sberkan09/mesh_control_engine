@@ -159,17 +159,97 @@ TEST_CASE("damaged MP3 and FLAC files never crash: an error or a clip") {
     CHECK_FALSE(cook::decode_mp3(span_of(junk), c, why));
 }
 
-TEST_CASE("a FLAC that claims billions of frames is read for the frames it has") {
-    std::string flac = fixture("tone.flac");
-    REQUIRE(flac.size() > 42);
-    // STREAMINFO (after "fLaC" and the 4-byte block header): the 36-bit total sample count sits in bytes 13..17 of the
-    // block; set it to its maximum.
-    const size_t info = 8;
-    flac[info + 13] = char(flac[info + 13] | 0x0F);
-    for (size_t i = 14; i <= 17; ++i) flac[info + i] = char(0xFF);
+namespace {
+
+u8 crc8(const std::string& s) {
+    u8 c = 0;
+    for (unsigned char ch : s) {
+        c ^= ch;
+        for (int k = 0; k < 8; ++k) c = u8((c & 0x80) ? ((c << 1) ^ 0x07) : (c << 1));
+    }
+    return c;
+}
+u16 crc16(const std::string& s) {
+    u16 c = 0;
+    for (unsigned char ch : s) {
+        c = u16(c ^ (u16(ch) << 8));
+        for (int k = 0; k < 8; ++k) c = u16((c & 0x8000) ? ((c << 1) ^ 0x8005) : (c << 1));
+    }
+    return c;
+}
+
+// A FLAC whose frames are all CONSTANT subframes (a few bytes of file per 65535 frames): `blocks` blocks of 65535 frames,
+// mono 8-bit at `rate`, or with `channels` declared in STREAMINFO. Only the first frame header carries channels = 1.
+std::string tiny_flac(u32 rate, u32 channels, u32 blocks) {
+    constexpr u32 kBlock = 65535;
+    std::string s = "fLaC";
+    s.push_back(char(0x80));  // last metadata block, STREAMINFO
+    s.push_back(0), s.push_back(0), s.push_back(34);
+    s.push_back(char(kBlock >> 8)), s.push_back(char(kBlock & 255));  // min block
+    s.push_back(char(kBlock >> 8)), s.push_back(char(kBlock & 255));  // max block
+    for (int i = 0; i < 6; ++i) s.push_back(0);                       // frame sizes unknown
+    const u64 total = u64(blocks) * kBlock;
+    const u64 packed = (u64(rate) << 44) | (u64(channels - 1) << 41) | (u64(7) << 36) | (total & 0xFFFFFFFFFull);
+    for (int i = 7; i >= 0; --i) s.push_back(char((packed >> (i * 8)) & 255));
+    for (int i = 0; i < 16; ++i) s.push_back(0);  // MD5 unknown
+    for (u32 n = 0; n < blocks; ++n) {
+        std::string f;
+        f.push_back(char(0xFF)), f.push_back(char(0xF8));  // sync, fixed block size
+        f.push_back(char(0x70));                           // block size: 16-bit value follows; rate from STREAMINFO
+        f.push_back(0);                                    // mono, size from STREAMINFO
+        if (n < 128) f.push_back(char(n));
+        else if (n < 2048) f.push_back(char(0xC0 | (n >> 6))), f.push_back(char(0x80 | (n & 63)));
+        else f.push_back(char(0xE0 | (n >> 12))), f.push_back(char(0x80 | ((n >> 6) & 63))), f.push_back(char(0x80 | (n & 63)));
+        f.push_back(char((kBlock - 1) >> 8)), f.push_back(char((kBlock - 1) & 255));
+        f.push_back(char(crc8(f)));
+        f.push_back(0);  // subframe: CONSTANT, no wasted bits
+        f.push_back(char(0x11));
+        const u16 c = crc16(f);
+        f.push_back(char(c >> 8)), f.push_back(char(c & 255));
+        s += f;
+    }
+    return s;
+}
+
+}  // namespace
+
+TEST_CASE("the tiny FLAC writer makes a stream the decoder reads") {
     PcmClip c;
     FixedString<128> why;
-    if (cook::decode_flac(span_of(flac), c, why)) CHECK(c.frames() <= cook::kAudioMaxFrames);
+    const std::string f = tiny_flac(8000, 1, 3);
+    INFO(why.c_str());
+    REQUIRE(cook::decode_flac(span_of(f), c, why));
+    CHECK(c.frames() == 3 * 65535);
+    CHECK(c.channels == 1);
+}
+
+TEST_CASE("a 1 kHz FLAC of a few KB is refused: the cap counts the clip after the resample to 48 kHz") {
+    // 2,048 blocks x 65,535 frames = 134M source frames at 1 kHz would be 6.4G samples at 48 kHz (and 37 hours).
+    const std::string f = tiny_flac(1000, 1, 2048);
+    CHECK(f.size() < 64 * 1024);
+    PcmClip c;
+    FixedString<128> why;
+    CHECK_FALSE(cook::decode_flac(span_of(f), c, why));
+    CHECK(c.samples.size() <= cook::kAudioMaxSamples);
+    const Cooked cooked = cook_clip("aud_flac_slow", "t.flac", f);
+    CHECK_FALSE(cooked.ok);
+}
+
+TEST_CASE("a long clip at 48 kHz is refused at the sample cap, a clip just under it is read") {
+    PcmClip c;
+    FixedString<128> why;
+    const std::string under = tiny_flac(48000, 1, 4);
+    CHECK(cook::decode_flac(span_of(under), c, why));
+    // 2,049 blocks of 65,535 frames = 134.3M frames at 48 kHz: just over 128 Mi samples (2,048 blocks is 2,048 frames under)
+    const std::string over = tiny_flac(48000, 1, 2049);
+    CHECK_FALSE(cook::decode_flac(span_of(over), c, why));
+}
+
+TEST_CASE("channel counts and sample rates outside what the cook takes are refused") {
+    PcmClip c;
+    FixedString<128> why;
+    CHECK_FALSE(cook::decode_flac(span_of(tiny_flac(44100, 3, 1)), c, why));
+    CHECK_FALSE(cook::decode_flac(span_of(tiny_flac(500, 1, 1)), c, why));
 }
 
 TEST_CASE("an unreadable clip is a cook error naming the file") {

@@ -30,10 +30,13 @@ already plays the cooked `CHNK_SFX` (PCM or Vorbis) and gets no new code. Source
    `audio_decode.cpp` and `drlibs_impl.c`; the "dr_libs link wall" keeps `mce_drlibs` in CMake files under
    `src/engine/asset/cook/`. Nothing under `include/` names dr_libs; the importer factories live in the cook-private
    `audio_decode.h`, not `importer.h`.
-4. **Untrusted input.** Both decoders run on a budgeted allocator (256 MiB outstanding; the callbacks refuse past it), the
-   decoder is driven frame by frame into the clip instead of trusting a frame count in the header (a FLAC header can claim
-   2^36 frames), decoding stops and the cook fails at one hour or 128 Mi samples, only mono and stereo are accepted
-   (1000..384000 Hz), and the stream must produce at least one frame. `tests/asset/test_cook_audio_formats.cpp`
+4. **Untrusted input.** Both decoders run on a budgeted allocator (256 MiB outstanding; the callbacks refuse past it; in
+   practice dr_mp3 in memory mode allocates nothing and dr_flac one block under about 26 MB, so the budget is a backstop). The
+   growth that matters is the clip itself, so the decoder is driven frame by frame into the clip instead of trusting a
+   frame count in the header (a FLAC header can claim 2^36 frames), the clip grows geometrically, and decoding fails at one
+   hour, at 128 Mi samples, or at 128 Mi samples after the resample to 48 kHz (a 1 kHz file is 48 times longer once resampled),
+   non-finite samples are refused, only mono and stereo are accepted (1000..384000 Hz), and the stream must produce at least
+   one frame. `tests/asset/test_cook_audio_formats.cpp`
    truncates and byte-flips both fixtures and runs the empty and junk cases; the M-IMPORTMEDIA step 3 fuzz seeds extend
    this under ASan.
 5. **Defaults.** An `.mp3` is already lossy, so it is stored as Ogg Vorbis (`"compress": "vorbis"`); a `.flac` is stored as

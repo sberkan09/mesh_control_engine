@@ -6,6 +6,7 @@
 #include "audio_decode.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -61,23 +62,36 @@ bool fail(FixedString<128>& why, const char* msg) {
 }
 
 // Reads frames through `read(buf, n)` until it returns 0, into out.samples. Both libraries return the frames read.
+// The caps (all on source frames): one hour, the importer's sample cap, and the same cap after the resample to 48 kHz
+// (a 1 kHz clip grows 48 times on the way to the clip, so its source may be 48 times shorter than a 48 kHz one's).
 template <class Read>
-bool drain(Read&& read, u32 channels, PcmClip& out, FixedString<128>& why) {
+bool drain(Read&& read, u32 channels, u32 rate, PcmClip& out, FixedString<128>& why) {
     constexpr u32 kChunk = 4096;
     f32 buf[kChunk * 2];
-    const u64 max_frames = std::min<u64>(kAudioMaxFrames, kAudioMaxSamples / channels);
+    const u64 per_channel = kAudioMaxSamples / channels;
+    const u64 max_frames = std::min({kAudioMaxFrames > u64(rate) * 3600 ? u64(rate) * 3600 : kAudioMaxFrames, per_channel,
+                                     per_channel * rate / kCookSampleRate});
     u64 frames = 0;
+    usize cap = 0;
     while (frames < max_frames) {
         const u64 want = std::min<u64>(kChunk, max_frames - frames);
         const u64 got = read(buf, want);
         if (got == 0) break;
         const usize at = out.samples.size();
-        out.samples.resize(at + usize(got) * channels);
-        std::memcpy(out.samples.data() + at, buf, usize(got) * channels * sizeof(f32));
+        const usize need = at + usize(got) * channels;
+        if (need > cap) {  // Array::resize allocates exactly: grow geometrically ourselves
+            cap = std::max(need, cap + cap / 2);
+            out.samples.reserve(cap);
+        }
+        out.samples.resize_uninitialized(need);
+        for (usize k = 0; k < usize(got) * channels; ++k) {
+            if (!std::isfinite(buf[k])) return fail(why, "non-finite sample");
+            out.samples[at + k] = buf[k];
+        }
         frames += got;
     }
     if (frames == 0) return fail(why, "no audio frames could be decoded");
-    if (frames >= max_frames) return fail(why, "the clip is longer than the cook accepts (one hour, or 128M samples)");
+    if (frames >= max_frames && read(buf, 1) != 0) return fail(why, "the clip is too long for the cook (one hour, or 128M samples once at 48 kHz)");
     return true;
 }
 
@@ -96,7 +110,7 @@ bool decode_mp3(Span<const byte> bytes, PcmClip& out, FixedString<128>& why) {
     else {
         out.channels = mp3.channels;
         out.sample_rate = mp3.sampleRate;
-        ok = drain([&](f32* buf, u64 n) { return u64(drmp3_read_pcm_frames_f32(&mp3, n, buf)); }, out.channels, out, why);
+        ok = drain([&](f32* buf, u64 n) { return u64(drmp3_read_pcm_frames_f32(&mp3, n, buf)); }, out.channels, out.sample_rate, out, why);
     }
     drmp3_uninit(&mp3);
     return ok;
@@ -115,7 +129,7 @@ bool decode_flac(Span<const byte> bytes, PcmClip& out, FixedString<128>& why) {
     else {
         out.channels = flac->channels;
         out.sample_rate = flac->sampleRate;
-        ok = drain([&](f32* buf, u64 n) { return u64(drflac_read_pcm_frames_f32(flac, n, buf)); }, out.channels, out, why);
+        ok = drain([&](f32* buf, u64 n) { return u64(drflac_read_pcm_frames_f32(flac, n, buf)); }, out.channels, out.sample_rate, out, why);
     }
     drflac_close(flac);
     return ok;
