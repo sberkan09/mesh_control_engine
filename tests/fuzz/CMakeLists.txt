@@ -59,6 +59,7 @@ mce_add_test(test_fuzz_importers UMBRELLA
         test_roads.cpp
         test_mesh_import.cpp
         test_defaults.cpp
+        test_binary_import.cpp
     DEPS
         mce::mce_asset_cook
         mce_meshopt)  # test_mesh_import.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
