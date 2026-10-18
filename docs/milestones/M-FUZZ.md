@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 to 6 done; nothing open). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** done (added 2026-10-16; steps 1 to 6 done). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
