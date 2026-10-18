@@ -27,7 +27,7 @@ Source: `assessments/unreal-kiyaslama-2026-10-16.md` ("Hata ayıklama ve ölçü
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | in progress | | |
+| 1 | done (this PR) | | `gameplay_debug_lines` draws box colliders, rigid bodies, triggers, joints, character capsules, vehicle wheels, waypoint chains, driver targets and nav agents. `MeshCollider3D` and crouched capsule height are not drawn yet (follow-ups for step 2/4) |
 | 2 | planned | | needs 1 |
 | 3 | planned | | needs 1 |
 | 4 | planned | | |
