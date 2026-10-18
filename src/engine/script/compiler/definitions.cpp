@@ -164,6 +164,14 @@ declare weather: {
     intensity: () -> number,
     wind: () -> number,
     wetness: () -> number,
+    -- WetSurfaces (M-WETSURFACE), the first one in the scene; the getters raise when there is none
+    wet_strength: () -> number,
+    wet_darken: () -> number,
+    wet_puddles: () -> number,
+    wet_puddle_scale: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..4, darken 0..1, puddles 0..1,
+    -- puddle_scale 0.1..100 metres); an unknown key or a non-number raises
+    set_wet: (settings: { strength: number?, darken: number?, puddles: number?, puddle_scale: number? }) -> (),
 }
 )";
 

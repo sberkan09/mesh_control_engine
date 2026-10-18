@@ -230,6 +230,8 @@ end
 | `weather.intensity()` | 0 to 1, the blend of the kind in effect |
 | `weather.wind()` | 0 to 1 |
 | `weather.wetness()` | 0 to 1 |
+| `weather.wet_strength()`, `weather.wet_darken()`, `weather.wet_puddles()`, `weather.wet_puddle_scale()` | read the first `WetSurfaces` (section 9.19): `strength`, `darken`, `puddles` and `puddle_scale_m`. A scene without a `WetSurfaces` raises an error that names the call |
+| `weather.set_wet{strength=, darken=, puddles=, puddle_scale=}` | writes those fields of the first `WetSurfaces`; every key is optional and each value is clamped to the field's range (strength 0 to 4, darken 0 to 1, puddles 0 to 1, puddle_scale 0.1 to 100 m). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
 
 ```lua
 -- A storm rolls in when the player enters the harbour.
