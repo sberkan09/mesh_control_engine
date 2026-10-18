@@ -1,0 +1,1 @@
+- A test pins `mce.field(component, field, element)` on an array of four-number fields (Vec4, Color), M-SCRIPT4 step 2; no engine change.

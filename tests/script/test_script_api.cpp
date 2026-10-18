@@ -41,6 +41,11 @@ struct Probe {
 };
 MCE_COMPONENT(Probe, value, n, flag)
 
+struct Palette {
+    math::vec4 c[3];
+};
+MCE_COMPONENT(Palette, c)
+
 struct Saved {
     i32 n = 0;
 };
@@ -327,6 +332,31 @@ end
     CHECK(r.w.try_get<kit::Perceiver>(sharp)->hearings == 1);
     CHECK(r.w.try_get<kit::Perceiver>(deaf)->hearings == 0);
     CHECK(r.w.try_get<kit::Perceiver>(mate)->hearings == 0);
+}
+
+TEST_CASE("script api: a slot handle on a four-number array field reads and writes that element") {
+    Rig r(R"(
+local SECOND = mce.field("Palette", "c", 2)
+function update()
+    mce.each("Palette", function(e)
+        local x, y, z, w = mce.get(e, SECOND)
+        mce.set(e, SECOND, x + 1, y + 2, z + 3, w + 4)
+    end)
+end
+)");
+    r.w.register_components<scapi::Palette>();
+    scapi::Palette p{};
+    p.c[0] = math::vec4(9, 9, 9, 9);
+    p.c[1] = math::vec4(1, 2, 3, 4);
+    const Entity e = r.w.spawn_with(p);
+    r.step(2);
+    CHECK(error_of(r.h()).empty());
+    const scapi::Palette* got = r.w.try_get<scapi::Palette>(e);
+    REQUIRE(got != nullptr);
+    CHECK(got->c[1].x == doctest::Approx(3.0f));
+    CHECK(got->c[1].w == doctest::Approx(12.0f));
+    CHECK(got->c[0].x == doctest::Approx(9.0f));  // the neighbours are untouched
+    CHECK(got->c[2].x == doctest::Approx(0.0f));
 }
 
 TEST_CASE("script api: mce.field names one element of an array field (ScriptVars slots)") {
