@@ -84,7 +84,7 @@ bool is_text_asset(StringView rel) {
 // Media that needs a credits row (code-made data files do not).
 bool is_media(StringView rel) {
     const cook::String ext = cook::lower_extension(rel);
-    for (const char* e : {".png", ".jpg", ".jpeg", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".obj", ".fbx", ".hdr", ".exr"})
+    for (const char* e : {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".wav", ".ogg", ".mp3", ".flac", ".ttf", ".otf", ".glb", ".gltf", ".obj", ".fbx", ".hdr", ".exr"})
         if (ext.view() == e) return true;
     return false;
 }
@@ -680,7 +680,7 @@ bool project_check(ToolCall& c) {
         if (opt.budget.texture_size > 0)
             for (const cook::String& f : files) {
                 const cook::String ext = cook::lower_extension(f.view());
-                if (ext.view() != ".png" && ext.view() != ".jpg" && ext.view() != ".jpeg") continue;
+                if (ext.view() != ".png" && ext.view() != ".jpg" && ext.view() != ".jpeg" && ext.view() != ".tga" && ext.view() != ".bmp") continue;
                 cook::String bytes;
                 u32 w = 0, h = 0;
                 if (!cook::fs::read_text(project.asset_path(f.view()).view(), bytes) ||
