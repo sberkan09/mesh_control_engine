@@ -258,6 +258,16 @@ for two simplified far levels (`"lod_levels": 2`, as for a glTF) where the sourc
 distant proxy draws a fraction of its triangles; edit the sidecar's `lod_levels`, `lod_ratio` and `lod_error` to
 change that (0 keeps the proxy as baked).
 
+Past a few hundred metres even the proxy is more than the eye needs. `hlod_bake` with `impostor: true` also bakes an
+impostor per chunk: every root entity of the area (a building and its children) becomes a box whose four sides and top
+carry a picture of it taken from that side, and tall, thin groups such as trees and poles become two crossed cards. The
+pictures are rendered on the CPU from the cooked meshes and textures (base colour and tint, no lighting: the box is lit
+like any mesh) into one atlas, `chunk_<id>_far.png`, next to the mesh `chunk_<id>_far.mchlod`, and the chunk's
+`ChunkLod3D.impostor` points at the mesh, so beyond `impostor_distance` the chunk draws a handful of quads.
+`texels_per_metre` (default 4, at most 128 texels per side) sets their sharpness. Blended and transmissive materials
+are left out, as in the proxy; a texture the CPU cannot read (ASTC, half-float) is drawn white and counted in
+`untextured`.
+
 `mce_player`, play-in-editor and the MCP headless run stream with no game code. The windowed
 player reads area files on a background thread and instantiates at most one area per tick; headless
 runs and play-in-editor load an area in the tick that wants it, so their state hashes stay

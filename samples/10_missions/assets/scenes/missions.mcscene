@@ -1,0 +1,293 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "10a10000-0000-4000-8000-000000000001",
+ "name": "missions",
+ "entities": [
+  {
+   "name": "Ground",
+   "components": {
+    "BoxCollider3D": {
+     "half": [
+      30,
+      0.5,
+      30
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.5,
+      0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:26df0098-b9d4-492c-8452-d7627e9fc8e6"
+    }
+   }
+  },
+  {
+   "name": "Player",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      0.9,
+      0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094"
+    },
+    "CharacterController3D": {
+     "use_input": true,
+     "speed": 8,
+     "layer": 1
+    },
+    "Health3D": {
+     "team": 1
+    },
+    "Weapon3D": {
+     "use_input": 1,
+     "automatic": 1,
+     "damage": 50,
+     "rate": 5,
+     "range": 60,
+     "infinite_ammo": 1
+    },
+    "SaveKey": {
+     "key": 1
+    }
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {},
+    "CameraFollow3D": {
+     "target": "$1",
+     "distance": 14,
+     "pitch": 0.9
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Sky",
+   "components": {
+    "Environment3D": {},
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Start Pad",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.45,
+      0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+    },
+    "SaveKey": {
+     "key": 2
+    }
+   }
+  },
+  {
+   "name": "Zone A",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.45,
+      -8
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+    },
+    "SaveKey": {
+     "key": 3
+    }
+   }
+  },
+  {
+   "name": "Target",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      0.9,
+      -16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094"
+    },
+    "CharacterController3D": {
+     "layer": 2
+    },
+    "Health3D": {
+     "team": 2
+    },
+    "SaveKey": {
+     "key": 4
+    }
+   }
+  },
+  {
+   "name": "Zone B",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      10,
+      -0.45,
+      -8
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+    },
+    "SaveKey": {
+     "key": 5
+    }
+   }
+  },
+  {
+   "name": "Reach A",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$5",
+     "radius": 2.5
+    },
+    "SaveKey": {
+     "key": 6
+    }
+   }
+  },
+  {
+   "name": "Kill the target",
+   "components": {
+    "Objective": {
+     "kind": "Kill",
+     "target": "$6",
+     "count": 1
+    },
+    "SaveKey": {
+     "key": 7
+    }
+   }
+  },
+  {
+   "name": "Reach B",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$7",
+     "radius": 2.5
+    },
+    "SaveKey": {
+     "key": 8
+    }
+   }
+  },
+  {
+   "name": "Mission 1",
+   "components": {
+    "Mission": {
+     "id": "reach",
+     "objective": "$8",
+     "actor": "$1"
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Go here"
+    },
+    "SaveKey": {
+     "key": 9
+    }
+   }
+  },
+  {
+   "name": "Mission 2",
+   "components": {
+    "Mission": {
+     "id": "kill",
+     "objective": "$9",
+     "actor": "$1",
+     "fail_on_death": "$1"
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.2,
+      0.2,
+      1
+     ],
+     "label": "Target",
+     "always_visible": 1
+    },
+    "SaveKey": {
+     "key": 10
+    }
+   }
+  },
+  {
+   "name": "Mission 3",
+   "components": {
+    "Mission": {
+     "id": "deliver",
+     "objective": "$10",
+     "actor": "$1",
+     "time_limit": 2.5
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.2,
+      1,
+      0.4,
+      1
+     ],
+     "label": "Deliver"
+    },
+    "SaveKey": {
+     "key": 11
+    }
+   }
+  },
+  {
+   "name": "Hud",
+   "components": {
+    "UiScreen": {
+     "document": "guid:10a10000-0000-4000-8000-000000000002"
+    }
+   }
+  },
+  {
+   "name": "Script: missions",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:10a10000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    },
+    "ScriptVars": {},
+    "SaveKey": {
+     "key": 12
+    }
+   }
+  }
+ ]
+}
