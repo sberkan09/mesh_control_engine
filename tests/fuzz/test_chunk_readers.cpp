@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@
 #include "mce/asset/container.h"
 #include "mce/asset/file_io.h"
 #include "mce/asset/formats.h"
+#include "mce/convar.h"
 #include "mce/input/input_map.h"
 #include "mce/liveops/game_services.h"
 #include "mce/hash.h"
@@ -73,6 +75,17 @@ bool read_chunk(ChunkType t, Span<const byte> p) {
         case ChunkType::Mesh: return walked<MeshView>(p);
         case ChunkType::Scene: case ChunkType::Prefab: return walked<SceneView>(p);  // a prefab has the scene's layout
         case ChunkType::RoadNetwork: return walked<RoadView>(p);
+        case ChunkType::ConvarDefaults: {  // "name value" lines, read by console::set_defaults from a file
+            const std::string path = (fs::temp_directory_path() / "mce_fuzz_chunk_defaults.txt").string();
+            {
+                std::ofstream f(path, std::ios::binary | std::ios::trunc);
+                f.write(reinterpret_cast<const char*>(p.data()), static_cast<std::streamsize>(p.size()));
+            }
+            const bool ok = static_cast<bool>(console::set_defaults(StringView(path.c_str(), path.size())));
+            std::error_code ec;
+            fs::remove(path, ec);
+            return ok;
+        }
         case ChunkType::ModInfo: return walked<ModInfoView>(p);
         case ChunkType::SpriteSheet: return walked<SpriteSheetView>(p);
         case ChunkType::StringTable: { loc::StringTable o; return static_cast<bool>(loc::decode_table(p, o)); }
@@ -114,7 +127,7 @@ bool has_reader(ChunkType t) {
         case ChunkType::Mesh: case ChunkType::Scene: case ChunkType::ModInfo: case ChunkType::SpriteSheet:
         case ChunkType::StringTable: case ChunkType::InputMap: case ChunkType::StoreCatalog: case ChunkType::RemoteConfig:
         case ChunkType::GameServicesCatalog: case ChunkType::UiTheme: case ChunkType::UiDocument: case ChunkType::NavMesh:
-        case ChunkType::Prefab: case ChunkType::RoadNetwork:
+        case ChunkType::Prefab: case ChunkType::RoadNetwork: case ChunkType::ConvarDefaults:
             return true;
         default: return false;
     }

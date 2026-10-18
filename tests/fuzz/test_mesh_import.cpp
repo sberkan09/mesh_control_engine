@@ -16,6 +16,7 @@
 #include "meshoptimizer.h"
 #include "mce/asset/container.h"
 #include "mce/cook/importer.h"
+#include "import_support.h"
 #include "mce/log.h"
 #include "mutator.h"
 #include "test_support.h"
@@ -23,28 +24,6 @@
 using namespace mce;
 
 namespace {
-
-class NoLookup final : public cook::IAssetLookup {
-public:
-    bool type_of(cook::Guid, cook::ChunkType&) const override { return false; }
-    bool guid_for_path(StringView, cook::Guid&) const override { return false; }
-};
-
-bool import_bytes(const cook::IImporter& imp, const std::string& rel, Span<const byte> bytes) {
-    cook::ImportInput in;
-    const std::string disp = "assets/" + rel;
-    in.display_path = StringView(disp.c_str(), disp.size());
-    in.source_path = StringView(rel.c_str(), rel.size());
-    in.source = bytes;
-    static const NoLookup lookup;
-    in.lookup = &lookup;
-    cook::DiagList diags;
-    Array<cook::DepRef> deps;
-    imp.scan_dependencies(in, deps, diags);
-    if (diags.error_count() != 0) return false;
-    asset::ContainerWriter w;
-    return imp.cook(in, w, diags) && diags.error_count() == 0;
-}
 
 u32 iterations() {
     const char* e = std::getenv("MCE_FUZZ_ITERS");
@@ -149,7 +128,7 @@ void fuzz_corpus(const char* label, const std::string& ext, const std::string& r
     const cook::IImporter* imp = reg.for_extension(StringView(ext.c_str(), ext.size()));
     REQUIRE(imp != nullptr);
     const Span<const byte> src(reinterpret_cast<const byte*>(good.data()), good.size());
-    REQUIRE_MESSAGE(import_bytes(*imp, rel, src), label << " must cook untouched");
+    REQUIRE_MESSAGE(fuzz::import_bytes(*imp, rel, src), label << " must cook untouched");
 
     fuzz::Mutator m(0x6d657368u ^ static_cast<std::uint32_t>(good.size()));
     std::vector<std::uint64_t> storage;
@@ -172,7 +151,7 @@ void fuzz_corpus(const char* label, const std::string& ext, const std::string& r
             std::memcpy(storage.data(), t.data(), len);
         }
         INFO("replay: " << label << " iteration " << it);
-        accepted += import_bytes(*imp, rel, Span<const byte>(reinterpret_cast<const byte*>(storage.data()), len));
+        accepted += fuzz::import_bytes(*imp, rel, Span<const byte>(reinterpret_cast<const byte*>(storage.data()), len));
     }
     std::printf("fuzz: %-22s %6u mutants, %6llu accepted\n", label, n, static_cast<unsigned long long>(accepted));
 }

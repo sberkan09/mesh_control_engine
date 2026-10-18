@@ -174,6 +174,7 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
   reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only. My first
   fix (copy the two fields it needs) collided with the M-OPENWORLD one for GH-538, and I took theirs. Regression: the roads
   case under the ASan stage (a plain build does not see it).
+- **Convar defaults (`ConvarDefaults`, M-WORKFLOW 7).** The new wall failed on this chunk type and its importer the first time it ran after merging `dev_claude`, which is what it is for. `read_chunk` now reads it through `console::set_defaults` from a temp file, and `tests/fuzz/test_defaults.cpp` mutates a `.mcdefaults` source (raw and value-swapped) and the cooked chunk (3,000 and 6,000 mutants under ASan, no finding). `import_support.h` holds the importer helper shared with the mesh cases.
 - **Mesh importers (M-IMPORT3D's, added at the coordinator's request).** The ASCII FBX (`quad.fbx`, ufbx), the MTL and the glTF of
   `samples/import_demo` are picked up by the importers test as seeds with no change (300 mutants each under ASan, clean).
   `tent.obj` was git-ignored at first, so a clean clone failed `import_demo_reimport` (fixed concurrently, GH-399, which tracks it); it is an importers seed too. `tests/fuzz/test_mesh_import.cpp` builds a corpus of its own as well: a tent OBJ with a material
