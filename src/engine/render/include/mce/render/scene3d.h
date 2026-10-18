@@ -348,6 +348,20 @@ struct ParallaxSettings {
     u32 max_steps = 32;
 };
 
+// Wet surfaces (M-WETSURFACE 5a; the weather drives it, the quality tiers gate it): `wetness` 0..1 darkens
+// porous (rough, non-metal) albedo by `darken`, pulls roughness toward `roughness`, and with
+// `puddles_enabled` collects puddles on up-facing surfaces (`puddles` 0..1 coverage, `puddle_scale` the
+// noise cell in meters). wetness 0 = off: the frame is the dry one.
+struct WetSurfaces {
+    f32 wetness = 0.0f;
+    f32 darken = 0.5f;
+    f32 roughness = 0.15f;
+    f32 puddles = 0.5f;
+    f32 puddle_scale = 4.0f;
+    bool puddles_enabled = true;  // false on the Low tier (apply_quality)
+    u8 pad_[3] = {};
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -659,6 +673,7 @@ public:
     void set_reflections(const ScreenSpaceReflections& ssr) { ssr_ = ssr; }
     void set_contact_shadows(const ContactShadows& c) { contact_ = c; }
     void set_parallax(const ParallaxSettings& p) { parallax_ = p; }
+    void set_wet_surfaces(const WetSurfaces& w) { wet_ = w; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -722,6 +737,7 @@ public:
     const ScreenSpaceReflections& reflections() const { return ssr_; }
     const ContactShadows& contact_shadows() const { return contact_; }
     const ParallaxSettings& parallax() const { return parallax_; }
+    const WetSurfaces& wet_surfaces() const { return wet_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -810,6 +826,7 @@ private:
     ScreenSpaceReflections ssr_;
     ContactShadows contact_;
     ParallaxSettings parallax_;
+    WetSurfaces wet_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
