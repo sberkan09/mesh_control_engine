@@ -70,13 +70,13 @@ if(first STREQUAL "" OR NOT first STREQUAL second)
     message(FATAL_ERROR "two runs differ: '${first}' vs '${second}'")
 endif()
 
-# Hidden state the cook's static check misses (an alias of a top-level table) fails at run time (M-SCRIPT3 2): a headless run checks by
+# Hidden state the cook's static check misses (a top-level table passed to a helper) fails at run time (M-SCRIPT3 2): a headless run checks by
 # default, and -script.state_check 0 turns it off.
-file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local t = { n = 0 }\nfunction update()\n    local a = t\n    a.n += 1\nend\n")
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local t = { n = 0 }\nlocal function bump(x)\n    x.n += 1\nend\nfunction update() bump(t) end\n")
 run(0 "${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
 run(3 ${PLAY})
-if(NOT LAST_OUTPUT MATCHES "push.luau:4: [^\n]*readonly table")
-    message(FATAL_ERROR "the run-time state check did not fail the aliasing script at its line:\n${LAST_OUTPUT}")
+if(NOT LAST_OUTPUT MATCHES "push.luau:3: [^\n]*readonly table")
+    message(FATAL_ERROR "the run-time state check did not fail the helper script at its line:\n${LAST_OUTPUT}")
 endif()
 run(3 ${PLAY} -script.state_check 0)
 if(LAST_OUTPUT MATCHES "readonly table")
@@ -95,6 +95,13 @@ file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local count = 0\nfunctio
 run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
 if(NOT LAST_OUTPUT MATCHES "push.luau:3:5: [^\n]*top-level local 'count'")
     message(FATAL_ERROR "the cook does not reject hidden state at file:line:col:\n${LAST_OUTPUT}")
+endif()
+
+# ... while a local that points into a top-level table is rejected by the cook itself (M-SCRIPT3 2c).
+file(WRITE "${WORK_DIR}/game/assets/scripts/push.luau" "local t = { n = 0 }\nfunction update()\n    local a = t\n    a.n += 1\nend\n")
+run(1 "${MCE_COOK}" "${WORK_DIR}/game" --pack)
+if(NOT LAST_OUTPUT MATCHES "push.luau:4:5: [^\n]*points into, which belongs to top-level local 't'")
+    message(FATAL_ERROR "the cook does not reject the alias at file:line:col:\n${LAST_OUTPUT}")
 endif()
 
 # Names are checked against the registry and every problem is reported, each at file:line:col.
