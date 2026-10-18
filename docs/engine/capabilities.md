@@ -48,13 +48,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
-<<<<<<< HEAD
 | `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
-=======
-| `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
-| `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
->>>>>>> origin/dev_claude
 | `Projectile3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/import_demo/assets/scenes/main.mcscene |
@@ -95,11 +90,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
-<<<<<<< HEAD
 | `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
-=======
-| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/10_missions/assets/scenes/missions.mcscene |
->>>>>>> origin/dev_claude
 | `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
