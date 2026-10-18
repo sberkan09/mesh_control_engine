@@ -38,6 +38,10 @@ struct QualitySettings {
     bool dof_motion_blur = true; // PostFx::dof and PostFx::motion_blur are honored
     bool ssr = true;             // ScreenSpaceReflections::enabled is honored (M-VISUAL2 1)
     bool contact_shadows = true; // ContactShadows::enabled is honored (M-VISUAL2 3)
+    // M-WETSURFACE 5a: WetSurfaces is honored (off: wetness 0) and, separately, its puddles. Low keeps the
+    // darkening and the lower roughness but drops puddles.
+    bool wet_surfaces = true;
+    bool wet_puddles = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -71,5 +75,8 @@ void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr);
 void apply_quality(const QualitySettings& q, ContactShadows& c);
 // Parallax occlusion mapping: its distance and step cap (off on Low).
 void apply_quality(const QualitySettings& q, ParallaxSettings& p);
+// Wet surfaces: the weather's wetness, zeroed when the tier or `r.wet_surfaces 0` switches them off;
+// puddles_enabled follows the tier. Returns the WetSurfaces to hand to Scene3D::set_wet_surfaces.
+WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet);
 
 }  // namespace mce::render
