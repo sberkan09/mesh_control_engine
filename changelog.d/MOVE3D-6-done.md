@@ -1,1 +1,0 @@
-- M-MOVE3D is done (SBA-134 … SBA-139): the milestone record in `docs/milestones/M-MOVE3D.md` lists all six steps as done; the demo is `samples/08_movement`.
