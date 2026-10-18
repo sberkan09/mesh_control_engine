@@ -16,7 +16,8 @@ world's seeded stream, never wall-clock time.
 
 | # | Step | Modules | Model | State |
 |---|---|---|---|---|
-| 1 | `.mcitems` item definitions (id, name, stack limit, weight, tags, free numeric stats, icon and prefab by GUID): JSON source, cooked to a new `CHNK_ITEMS`, reader in `asset/formats.h`, cook validation (duplicate ids, bad GUIDs, limits), fuzz target, guide chapter stub | asset, asset/cook | Sonnet (Opus review: new chunk, untrusted-input reader) | planned |
+| 1a | Seam: `ChunkType::ItemCatalog` (`container.h`, `handle.h`, `container.cpp`) alone, because `container.h` reaches about 400 translation units; a temporary `FUZZ_CHUNK_EXEMPT` entry until 1b | asset | Sonnet | done (GH-406) |
+| 1b | `.mcitems` item definitions (id, name, stack limit, weight, tags, free numeric stats, icon and prefab by GUID): JSON source, cooked to a new `CHNK_ITEMS`, reader in `asset/formats.h`, cook validation (duplicate ids, bad GUIDs, limits), fuzz target, guide chapter stub | asset, asset/cook | Sonnet (Opus review: new chunk, untrusted-input reader) | planned |
 | 2 | `Inventory` (slots, stacks, weight cap), `Equipment` (named slots, tags that fit), `ItemPickup3D`/`ItemPickup2D`, events `ItemAdded` / `ItemRemoved` / `ItemEquipped` / `ItemUsed`; the add/remove/move/split/merge rules as pure functions with a test table | kit | Opus for the rules (determinism, overflow), Sonnet for the components | planned |
 | 3 | Loot tables in `.mcitems` (weighted entries, nested tables, guaranteed drops, level ranges), a `LootDrop` component and `Container` (chest) that rolls on the world's seeded RNG; a golden-hash test that two runs drop the same items | kit, asset/cook | Opus (determinism) | planned |
 | 4 | Luau surface (`inventory.add/remove/count/has`, `equip`, `use`, `drop`), `UiFlow`/widget binding (a `ItemGrid` bound to an entity's inventory), save/load of inventories through the existing save path with a version | kit, script, ui | Sonnet | planned |

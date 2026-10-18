@@ -1,0 +1,1 @@
+- Seam for M-INVENTORY (GH-406): the `ChunkType::ItemCatalog` value (CHNK_ITEMS), its name and handle tag. No importer or reader yet; the next PR adds them.

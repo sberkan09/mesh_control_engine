@@ -269,6 +269,7 @@ def umbrella_violations() -> list:
 FUZZ_CHUNK_EXEMPT = {
     "Atlas": "reserved type: no reader, no importer writes it",
     "AudioPacket": "reserved type: no reader, no importer writes it",
+    "ItemCatalog": "M-INVENTORY 1: the seam PR adds the type; its reader and fuzz case land in the next PR",
 }
 FUZZ_IMPORTER_EXEMPT: dict = {}
 FUZZ_SOURCE_DIRS = ["samples", "projects", "templates", "games"]
