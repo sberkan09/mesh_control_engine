@@ -156,6 +156,7 @@ the Cook panel.
 F5 cooks the open document in memory (unsaved changes included) and instantiates it into a fresh
 play world with the same systems the player installs, plus your game's `install()`. The viewport
 switches to the scene's primary game camera (View > "Game camera while playing" toggles that).
+View > "Gameplay debug (while playing)" (off by default) draws a 3D game's colliders, triggers (green while occupied), joints, character capsules, vehicle wheels and waypoint paths over the viewport, the same lines the MCP `debug_lines` and `debug_view` tools return.
 
 - **Pause (F6), Step (F10), speed.** The Play panel has a speed slider from 0.05x to 4x and preset
   buttons. Pause, step and speed change how much simulated time flows per real second; the fixed

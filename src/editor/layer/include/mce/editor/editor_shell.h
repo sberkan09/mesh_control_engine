@@ -75,6 +75,7 @@ struct ViewSettings {
     bool terrain_sculpt = false;  // the orbit view sculpts the selected Terrain3D (Terrain panel)
     bool show_perception = true;  // while playing, the viewport draws each Perceiver's cone and target (Behavior Tree panel)
     bool show_roads = true;       // while a 3D game plays, the viewport draws its road networks' lanes, connectors by light
+    bool show_gameplay = false;   // while a 3D game plays, the viewport draws colliders, triggers, joints, vehicles and paths (M-DEBUGVIEW)
 };
 
 class EditorShell {
