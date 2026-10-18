@@ -41,7 +41,7 @@ Array<byte> cube_payload(const asset::MaterialChunk& material) {
             q.uv[1] = c[1] > 0 ? 0 : 65535;
             v.push_back(q);
         }
-        for (u16 i : {0, 1, 2, 0, 2, 3}) idx.push_back(static_cast<u16>(base + i));
+        for (const int i : {0, 1, 2, 0, 2, 3}) idx.push_back(static_cast<u16>(base + i));
     }
     asset::MeshSubmesh sm{};
     sm.index_count = static_cast<u32>(idx.size());
