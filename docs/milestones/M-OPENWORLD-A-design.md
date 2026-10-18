@@ -201,6 +201,14 @@ Tests: `test_kit3d` cases for the proxy shown and hidden by chunk state, the imp
 scene without `ChunkLod3D`; a headless city sample (procedural blocks) reporting draws and triangles with HLOD on and
 off, gated in `local_ci.sh` by counters (not by GPU time, which only A1 measures).
 
+As built (city sample PR): `samples/hlod_city` (`sample_hlod_city`, ctest `sample_hlod_city`) builds 8 x 8 areas of
+16 lots (9829 pieces: floors with sills and a body-only far level, roofs, props under `min_size`). With every area
+loaded it submits 693 draws over 576 merged cells (6.5 ms extract + build in the debug build); with the four areas
+around the camera loaded and proxies for the rest, 143 draws (0.21x) in 0.8 ms (0.12x); at 16 x 16 areas, 0.15x the
+draws and 0.06x the CPU. Triangles go up about 10%: a proxy is culled as one 96 m area while a loaded area culls per
+32 m cell. The gate is on draws and entities; the cook's simplified far levels (`lod_levels`) are what bring a real
+proxy's triangles down, and GPU frame time stays A1's measurement.
+
 ## PR plan
 
 | # | PR | Modules | Notes |
