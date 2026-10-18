@@ -528,7 +528,11 @@ int l_random(lua_State* L) {
 
 int l_log(lua_State* L) {
     const char* msg = luaL_checkstring(L, 1);
-    MCE_LOG_INFO("script: {}", msg);
+    // "[<name>] script: <msg>": the name leads and "script: <msg>" stays intact, because the sample and SDK tests match on it.
+    ScriptHost& host = HostAccess::host(L);
+    const u32 current = HostAccess::current(host);
+    const StringView name = current < host.scripts().size() ? host.scripts()[current].name.view() : StringView("?");
+    MCE_LOG_INFO("[{}] script: {}", name, msg);
     return 0;
 }
 

@@ -4,6 +4,7 @@
 
 #include <cstring>
 
+#include "mce/log.h"
 #include "mce/refl/macros.h"
 #include "mce/script/compiler.h"
 
@@ -133,6 +134,28 @@ TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRI
     deeper.install(w);
     w.tick(1.0 / 60, 2);
     CHECK(StringView(deeper.scripts()[0].error.c_str()).starts_with("deep:2: step budget exceeded"));
+}
+
+TEST_CASE("script: mce.log lines name the script that wrote them (M-SCRIPTPROF 3)") {
+    World w;
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "first", "function update() if mce.tick() == 1 then mce.log('hello from one') end end"));
+    REQUIRE(script::add_source(host, "second", "mce.log('loading two')\nfunction update() if mce.tick() == 1 then mce.log('hello from two') end end"));
+    host.install(w);
+    log::set_level(log::Level::Info);  // the test runner logs warnings and up
+    const u64 since = log::console_last_seq();
+    w.tick(1.0 / 60, 1);
+    Array<log::ConsoleLine> lines;
+    lines.resize(log::kConsoleRingSize);
+    lines.resize(log::read_console(since, lines.span()));
+    bool one = false, two = false;
+    for (const log::ConsoleLine& l : lines) {
+        one = one || StringView(l.text.c_str()).find("[first] script: hello from one") != StringView::npos;
+        two = two || StringView(l.text.c_str()).find("[second] script: hello from two") != StringView::npos;
+    }
+    log::set_level(log::Level::Warn);
+    CHECK(one);
+    CHECK(two);
 }
 
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
