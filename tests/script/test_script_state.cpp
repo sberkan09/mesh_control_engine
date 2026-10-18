@@ -80,6 +80,27 @@ TEST_CASE("script state: a function may not change a table a top-level local hol
           std::string::npos);
 }
 
+TEST_CASE("script state: a local bound to part of a top-level table is the same table (M-SCRIPT3 2c)") {
+    CHECK(compile_error("local grid = {{}}\nfunction update() local row = grid[1] row.x = 1 end").message.find(
+              "points into, which belongs to top-level local 'grid'") != std::string::npos);
+    CHECK_FALSE(compiles("local cfg = {a = {}}\nfunction update() local a = cfg.a table.insert(a, 1) end"));
+    CHECK_FALSE(compiles("local cfg = {a = {b = {}}}\nfunction update() local a = cfg.a local b = a.b b.n = 1 end"));
+    // a call's result and a read are not writes through the table
+    CHECK(compiles("local cfg = {a = 1}\nfunction update() local a = cfg.a local b = a + 1 local t = {} t.x = b end"));
+    CHECK(compiles("local cfg = {}\nlocal function make() return {} end\nfunction update() local t = make() t.x = 1 end"));
+}
+
+TEST_CASE("script state: a function may not write into a global table (M-SCRIPT3 2c)") {
+    CHECK(compile_error("Seen = {}\nfunction update() Seen.x = 1 end").message.find("writes into the global 'Seen'") !=
+          std::string::npos);
+    CHECK_FALSE(compiles("Seen = {}\nfunction update() table.insert(Seen, 1) end"));
+    CHECK_FALSE(compiles("STATE = { n = 0 }\nfunction update() STATE.n += 1 end"));
+    CHECK_FALSE(compiles("B = buffer.create(4)\nfunction update() buffer.writei32(B, 0, mce.tick()) end"));
+    // a plain alias of a top-level table (these two were run-time-only catches before 2c)
+    CHECK_FALSE(compiles("local t = { n = 0 }\nfunction update()\n    local a = t\n    a.n += 1\nend"));
+    CHECK(compiles("Seen = {}\nSeen.x = 1\nfunction update() local n = Seen.x end"));
+}
+
 TEST_CASE("script state: what stays allowed") {
     // Top-level code runs once, at load: constants, handles, tables it fills.
     CHECK(compiles(R"(
@@ -208,14 +229,6 @@ std::string first_tick_error(const char* name, const char* source, const script:
 }
 
 const Hidden kHidden[] = {
-    {"alias", R"(local t = { n = 0 }
-function update()
-    local a = t
-    a.n += 1
-end
-)",
-     "alias:4: attempt to modify a readonly table (tables reachable from update() are frozen after the top level; keep state in a "
-     "component)"},
     {"param", R"(local t = { n = 0 }
 local function fill(x) x.n += 1 end
 function update() fill(t) end
@@ -234,10 +247,6 @@ end
 )",
      "factory:3: update() kept state between ticks: upvalue 'n' of the function defined at line 3 changed (reached from upvalue 'inc' of "
      "update()); keep it in a component"},
-    {"global", R"(STATE = { n = 0 }
-function update() STATE.n += 1 end
-)",
-     "global:2: attempt to modify a readonly table (tables reachable"},
     {"proxy", R"(local P = newproxy(true)
 function update()
     local mt = getmetatable(P)
@@ -245,10 +254,6 @@ function update()
 end
 )",
      "proxy:4: attempt to modify a readonly table (tables reachable"},
-    {"buffer", R"(B = buffer.create(4)
-function update() buffer.writei32(B, 0, mce.tick()) end
-)",
-     "buffer:2: update() kept state between ticks: a buffer reached from global 'B' changed; keep it in a component"},
     {"gmatch", R"(local words = string.gmatch("a b c d", "%a")
 function update() local w = words() end
 )",
