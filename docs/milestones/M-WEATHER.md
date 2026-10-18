@@ -1,6 +1,6 @@
 # M-WEATHER — Weather as data (milestone record)
 
-**Status:** planned 2026-10-18. **Owner: routine 2 thread (the M-VISUAL line).** Taken after M-DAYNIGHT, which listed weather as out of scope. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done 2026-10-18 (step 4 implemented, not merged). **Owner: routine 2 thread (the M-VISUAL line).** Taken after M-DAYNIGHT, which listed weather as out of scope. No Linear issues (free issue limit); this record is the tracker.
 Sources: `M-DAYNIGHT.md` ("Not in scope: weather"), `assessments/gta-benzeri-oyun-fizibilitesi-2026-10-17.md` (open-world feel), `assessments/3d-gorsellik-degerlendirmesi.md`.
 
 **Goal.** A game author (or an agent over MCP) sets a weather state and gets the sky, fog, light, wind, rain or snow and lightning that go with it, deterministically and saved with the scene. No per-tick script.
@@ -27,9 +27,9 @@ Sources: `M-DAYNIGHT.md` ("Not in scope: weather"), `assessments/gta-benzeri-oyu
 |---|---|---|---|
 | 1 | done | #575 | |
 | 2 | done | #577 | |
-| 3 | implemented (not merged) | | needs 1; `Precipitation3D` + `Lightning` in `precipitation.h`, `LightningStruck` event (named `PrecipitationEmitter3D` and `ThunderStruck` in the plan) |
-| 4 | planned | | |
+| 3 | done | #581 | needs 1; `Precipitation3D` + `Lightning` in `precipitation.h`, `LightningStruck` event (named `PrecipitationEmitter3D` and `ThunderStruck` in the plan) |
+| 4 | implemented (not merged) | | `weather.*` in Luau (`api_weather.cpp`); `samples/12_weather` (tests `test_weather_demo.cpp`, `sample_weather_headless_600`, slow `sample_weather_gpu` at tick 1500: a storm at tick 700 does not exist with 10 s transitions, the rain fades out first); `Weather`, `Precipitation3D` and `Lightning` left `sample_coverage.allow`. The demo's emitter is spawned from the cooked scene and its state hash is stable (checked over repeated player runs) |
 
 ## Open items
 
-- **`ParticleEmitter3D` tail padding is uninitialised** (found in step 3): the struct in `kit3d.h` has 4 bytes of tail padding that stay uninitialised when an emitter is spawned from a temporary, and `World::state_hash` reads them, so a scene holding an emitter can get a flaky state hash. The weather tests spawn the emitter over zeroed storage. The fix is an explicit `u32 pad2_ = 0;` in `kit3d.h`, a 116-TU header, so it ships as its own seam PR (not part of M-WEATHER).
+- **`ParticleEmitter3D` tail padding was uninitialised** (found in step 3): fixed in #583, which gave `Environment3D`, `Foliage3D`, `TerrainFoliage3D` and `ParticleEmitter3D` explicit pad fields and added `tests/kit/test_padding.cpp`, an audit of every `kit3d.h` component.

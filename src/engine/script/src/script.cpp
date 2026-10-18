@@ -621,6 +621,7 @@ ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), 
     lua_setglobal(L_, "mce");
     detail::register_mission_api(L_);
     detail::register_clock_api(L_);
+    detail::register_weather_api(L_);
 
     lua_callbacks(L_)->interrupt = &ScriptHost::interrupt_fn;
     luaL_sandbox(L_);  // every built-in table and the globals become read-only
