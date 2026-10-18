@@ -43,6 +43,7 @@ mce_add_test(test_kit UMBRELLA
         test_timed_light.cpp
         test_weather.cpp
         test_weather_env.cpp
+        test_precipitation.cpp
         test_map_markers.cpp
         test_wanted3d.cpp
         test_particles.cpp

@@ -143,7 +143,8 @@ void apply_environment(Frame& f, Weather& c) {
     kind_target(kKindEnv[kind], c.env_base, t);
     const bool off = !(c.intensity > 0.0f) || c.current == WeatherKind::Clear;
     for (u32 i = 0; i < kSlots; ++i) {
-        const f32 v = off ? c.env_base[i] : lerpf(c.env_base[i], t[i], c.intensity);
+        f32 v = off ? c.env_base[i] : lerpf(c.env_base[i], t[i], c.intensity);
+        if (c.flash_mul != 1.0f && (i == kSun || (i >= kSky && i < kFogC))) v *= c.flash_mul;  // lightning flash
         *p[i] = v;
         c.env_applied[i] = v;
     }

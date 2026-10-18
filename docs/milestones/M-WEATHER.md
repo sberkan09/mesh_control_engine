@@ -26,6 +26,6 @@ Sources: `M-DAYNIGHT.md` ("Not in scope: weather"), `assessments/gta-benzeri-oyu
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 1 | done | #575 | |
-| 2 | implemented (not merged) | | needs 1 |
-| 3 | planned | | needs 1 |
+| 2 | done | #577 | |
+| 3 | implemented (not merged) | | needs 1; `Precipitation3D` + `Lightning` in `precipitation.h`, `LightningStruck` event (named `PrecipitationEmitter3D` and `ThunderStruck` in the plan) |
 | 4 | planned | | |
