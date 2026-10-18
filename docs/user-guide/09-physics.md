@@ -434,12 +434,23 @@ unchanged, and everything lives in components, so a save in the middle of a miss
 - **One at a time.** A mission has one active objective (`Mission.current`). When it is done the next one
   goes active and is looked at from the next tick; the last one completes the mission.
 - **Events.** `MissionStarted`, `ObjectiveDone` (with the objective and its index), `MissionCompleted`,
-  `MissionFailed` (`reason` 0 time limit, 1 `fail_on_death`, 2 an objective went missing). Use them to show
+  `MissionFailed` (`reason` 0 time limit, 1 `fail_on_death`, 2 an objective went missing, 3 a script called `mission.fail`). Use them to show
   text, play a sound or give a reward.
 
 Time is counted in ticks, so the same run gives the same state hash. Entity references in a save are the
 handles of the base scene a load rebuilds: give the entities a mission uses a `SaveKey` and spawn them from the
 same scene.
+
+**Example: `samples/10_missions`.** A flat field, a player (`CharacterController3D` with input, a `Health3D` and a
+hitscan `Weapon3D` that the Fire action drives) and three one-objective `Mission` entities, each with a bare
+`MapMarker` so the active goal shows on the HUD's `Minimap`: reach `Zone A`, kill the `Target` (a `Health3D`), then
+reach `Zone B` within 2.5 s (`time_limit`). `assets/scripts/missions.luau` starts mission 1 after a short briefing and
+starts mission 2 and 3 when `mission.status` says the one before is `complete`; a script cannot read the mission
+events, so it polls the state (and so sees a completion up to a tick after the kit did). It keeps what it has seen in
+`ScriptVars` and logs `mission 2 complete at tick 82`, which `ctest -R sample_missions` pins: the three completions,
+a delivery that runs out of time (`MissionFailed`), a save written in the middle of mission 3 that resumes at the
+same tick, and the same state hash on a second play. The scene is data and a script: no C++.
+
 ## 9.15 Map markers and the minimap (M-MISSION)
 
 `mce/kit/map_markers.h` puts things on a map, and a `Minimap` widget in a `.mcui` document draws it. Scenes
