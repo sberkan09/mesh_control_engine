@@ -3,10 +3,10 @@
 
 #include "mce/script/script.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cmath>
 #include <cstring>
 
 #include "api.h"
@@ -402,11 +402,12 @@ int l_field(lua_State* L) {
     if (!f) luaL_error(L, "component '%s' has no field '%s'", type.name, field_name);
     u32 element = 0;
     if (!lua_isnoneornil(L, 3)) {
-        if (!f->is_array()) luaL_error(L, "'%s.%s' is not an array, so it has no elements to name", type.name, f->name_str);
+        if (!f->is_array())
+            luaL_error(L, "'%s.%s' is not an array, so it has no elements to name", type.name, f->name_str);
         const double e = luaL_checknumber(L, 3);
         if (!(e >= 1.0 && e <= double(f->count)) || e != std::floor(e))
-            luaL_error(L, "'%s.%s' has %u elements; the element must be a whole number from 1 to %u", type.name, f->name_str,
-                       f->count, f->count);
+            luaL_error(L, "'%s.%s' has %u elements; the element must be a whole number from 1 to %u", type.name,
+                       f->name_str, f->count, f->count);
         element = static_cast<u32>(e);
     }
     Array<HostAccess::FieldHandle>& hs = HostAccess::handles(host);

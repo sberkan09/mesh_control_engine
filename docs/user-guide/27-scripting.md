@@ -61,7 +61,7 @@ numbers, and `nil` is the null entity.
 
 | Call | Does |
 |---|---|
-| `mce.field("Comp", "field", element?)` | a handle to one field, looked up once; call it at the script's top level. For an array field such as `ScriptVars.v`, `element` (1-based) makes a handle to that one slot, so `mce.get` returns a number |
+| `mce.field("Comp", "field", element?)` | a handle to one field, looked up once; call it at the script's top level. For an array field such as `ScriptVars.v`, `element` (1-based) makes a handle to that one slot, so `mce.get` returns that element's value (a number for `ScriptVars`) |
 | `mce.get(e, h, ...)` | the values of one or more fields (handles, or `"Comp", "field"` pairs) in one call |
 | `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |

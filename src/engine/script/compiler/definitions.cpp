@@ -35,7 +35,7 @@ type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceil
 declare mce: {
     -- the fixed step in seconds
     dt: number,
-    -- element: for an array field such as ScriptVars.v, a handle to one slot (1-based): mce.get(e, h) is then a number
+    -- element: for an array field such as ScriptVars.v, a handle to one slot (1-based): mce.get(e, h) is then that element's value
     field: (component: string, field: string, element: number?) -> FieldHandle,
     -- mce.get(e, handle, ...) or mce.get(e, "Comp", "field"): one value per field
     get: (e: Entity, ...any) -> ...any,
