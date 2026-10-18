@@ -142,6 +142,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-DAYNIGHT 1: tested in tests/kit/test_world_clock.cpp; the step 4 demo (samples/11_daynight) shows it |
+| `DayCycle` | `mce/kit/day_cycle.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-DAYNIGHT 2: tested in tests/kit/test_day_cycle.cpp; the step 4 demo (samples/11_daynight) shows it |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `StagePart` | `mce/kit/novel_components.h` | yes | yes | yes | docs/user-guide/21-novels-and-dialogue.md | projects/Undelivered/assets/scenes/main.mcscene |

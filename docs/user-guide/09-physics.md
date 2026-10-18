@@ -514,6 +514,26 @@ system writes the game's `Environment3D.time_of_day` every tick (the field the 3
 - **Events.** `HourPassed {hour}` (the hour that began, 0..23) once per hour boundary and `DayPassed {day}` at
   midnight, in time order, pushed in the fixed update before the 3D extract reads the environment.
 
+## 9.17 Day cycle (M-DAYNIGHT)
+
+`mce/kit/day_cycle.h` colours the day. One `DayCycle` entity per scene (next to the `WorldClock` of 9.16, which
+installing it also installs) holds keyed curves over the hour; a scene without one is unchanged. Every tick the
+system reads `Environment3D.time_of_day` (the clock writes it) and writes the game's `Environment3D`: `sun_color`,
+`sun_intensity`, `ambient_sky`, `ambient_ground`, `fog_color`, `fog_density` and `exposure`. With no clock
+(`time_of_day` below 0) or `enabled` 0 it writes nothing.
+
+- **Keys.** Reflected components have no arrays, so a `DayCycle` has 8 key slots as plain fields, `k0_*` to `k7_*`,
+  and `key_count` (default 5) says how many are used. A slot holds its hour (`kN_hour`, 0..24) and the value of
+  every curve at that hour: `kN_sun`, `kN_sun_i`, `kN_sky`, `kN_ground`, `kN_fog`, `kN_fog_d`, `kN_exp`. Slots
+  may be in any order; the system sorts them by hour.
+- **Default preset.** An empty `DayCycle` has five keys that already look right: night at 0:00, dawn at 6:00
+  (warm sun, intensity 1.0), noon at 12:00 (the stock environment: intensity 2.0, white sun), dusk at 18:00 (orange sun,
+  intensity 1.0) and night at 21:00 (blue moonlight, intensity 0.05, exposure 1.2).
+- **Interpolation.** Linear between neighbouring keys; the curve wraps at midnight (after the last key it runs to
+  the first key a day later). At a key's hour the values are exactly the key's. One key is a constant.
+- **Determinism.** The same hour gives the same values, and the system only writes the resource, so replays and the
+  state hash are stable. `evaluate_day_cycle(cycle, hour)` is the pure function behind it.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,

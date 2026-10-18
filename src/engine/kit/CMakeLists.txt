@@ -23,6 +23,7 @@ mce_add_library(mce_gameplay_kit
         src/map_markers.cpp
         src/missions.cpp
         src/world_clock.cpp
+        src/day_cycle.cpp
         src/wanted3d.cpp
         src/sensors3d.cpp
         src/particles.cpp
