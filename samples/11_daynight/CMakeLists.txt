@@ -31,11 +31,11 @@ if(MCE_BUILD_TESTS)
                      -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/input.txt -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/headless
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/daynight_test.cmake)
     if(MCE_GPU_TESTS)
-        # Windowed: one frame at 06:00, 12:00, 19:00 and 23:00 (ticks 150, 1050, 2100, 2700 at the 05:00 start).
+        # Windowed: one frame at 06:00, 12:00 and 19:00 (ticks 150, 1050, 2100 at the 05:00 start; 23:00 is left out: it adds 10 s of real time).
         # No goldens: it is a smoke run, the frames are written for a look (build/.../daynight_<tick>.ppm).
         add_test(NAME sample_daynight_gpu
-                 COMMAND mce_player -pack "${pack}" -capture_ticks 150,1050,2100,2700
+                 COMMAND mce_player -pack "${pack}" -capture_ticks 150,1050,2100
                          -capture "${CMAKE_CURRENT_BINARY_DIR}/daynight_{tick}.ppm" -platform.error_box 0 -r.vsync 0)
-        set_tests_properties(sample_daynight_gpu PROPERTIES LABELS gpu)
+        set_tests_properties(sample_daynight_gpu PROPERTIES LABELS gpu TIMEOUT 240)
     endif()
 endif()
