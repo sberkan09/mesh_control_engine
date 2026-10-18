@@ -164,7 +164,8 @@ public:
                     error(diags, file, it, "every item needs a non-empty \"id\"");
                     continue;
                 }
-                bool good = read_text(it, "id", d.id, file, diags) & read_text(it, "name", d.name, file, diags);
+                bool good = read_text(it, "id", d.id, file, diags);
+                good &= read_text(it, "name", d.name, file, diags);
                 if (d.name.empty()) d.name = d.id.view();
                 good &= read_whole(it, "stack", 1, asset::kItemMaxStack, d.stack_max, file, diags);
                 const JsonValue w = it.get("weight");
