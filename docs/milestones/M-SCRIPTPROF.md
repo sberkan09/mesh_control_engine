@@ -13,7 +13,7 @@ not how they moved. A game author (or an agent) writing Luau needs the same tool
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | Per-script step profile: `ScriptInfo` keeps peak, total and ticks run; `run_headless` returns it as `scripts`; `mce profile <project> [--ticks N]` prints a table with the budget share | Sonnet (Opus review: touches the update loop in `script.cpp`) | done in PR (this step) |
-| 2 | A budget or memory failure names the script line it stopped at (`file:line`), like any other script error | Sonnet (Opus review: VM interrupt) | not started |
+| 2 | A step-budget failure names the script line it stopped at (`file:line`), like any other script error (memory failures cannot: the allocator has no Lua frame) | Sonnet (Opus review: VM interrupt) | done in PR (this step) |
 | 3 | `mce.log` lines carry the script name (`script <name>: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | not started |
 | 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | not started |
 
@@ -27,3 +27,11 @@ Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/sc
 - Tests: "the step profile counts updates, peak and total steps" in `test_script.cpp`; `cli_test` covers the table and the exit code (fake server).
 - Not done: wall-clock time per script (non-deterministic; the Tracy zone `MCE_SCRIPT_ZONE` already exists for that); `mce profile` and `mce inspect` were run by hand against the real `mce_mcp` on a copy of `projects/Pursuit` (Pursuit's `arena.luau`: 59 steps on average, peak 62 of 200000).
 - Also fixed here: `run_headless` wants a scene path under assets/, so `mce profile` and `mce inspect` (M-SCRIPT3 step 12, which had only been checked against a fake server) now default to the scene the project's `start_scene` guid names, found by scanning `assets/**/*.mcscene`; without it the real tool said "the scene was never saved".
+
+## Step 2 as built (located budget errors)
+
+- `ScriptHost::interrupt_fn` builds the error from `lua_getinfo(L, 0, "sl")`: `spin:1: step budget exceeded (500 per tick)`, the line inside the function that spent the budget (a
+  nested call reports the inner loop, not its caller). It uses `lua_pushfstring` + `lua_error` because `luaL_error` would add the caller's position as well ("deep:5: deep:2: ...").
+  Without line info the old text is used. The profile's over-budget detection still matches "step budget exceeded".
+- Tests: in "the step profile counts updates, peak and total steps" (a one-line loop and a loop in a called function).
+- Not done: "not enough memory" stays unlocated (the allocator callback has no Lua frame to ask).

@@ -285,7 +285,8 @@ end
   to use instead (`'print' is not available in scripts; use mce.log`).
 - **Budgets.** Each script gets a step budget per tick and the VM a memory cap. A script that errors or
   runs over is disabled, its error logged as `script <name>: <file>:<line>: message`, and the other
-  scripts keep running.
+  scripts keep running. A step-budget failure names the line that spent it (`dungeon:41: step budget exceeded
+  (200000 per tick)`); `mce profile` (27.7b) shows how close each script runs to the limit.
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
 
