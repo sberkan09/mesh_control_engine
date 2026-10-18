@@ -163,6 +163,27 @@ add_library(mce_stb_headers INTERFACE)
 target_include_directories(mce_stb_headers SYSTEM INTERFACE "${stb_SOURCE_DIR}")
 add_library(mce::stb_headers ALIAS mce_stb_headers)
 
+# ---- dr_libs (cook-time only: MP3 and FLAC decoding of audio clips, M-IMPORTMEDIA step 2; ADR-0049) ----
+# dr_mp3.h and dr_flac.h, single-header C decoders (public domain / MIT-0, David Reid), pinned by commit. Compiled into
+# mce_drlibs through src/drlibs_impl.c (warnings off, no stdio, no Ogg-FLAC); confined to the cook's audio_decode.cpp by the "dr_libs wall" and "dr_libs link wall" in
+# scripts/ci/check_walls.py. Input is untrusted: audio_decode.cpp gives both decoders a budgeted allocator and caps
+# the decoded frames. Host builds only, like the cook itself. Licenses: docs/ARCHITECTURE.md section 7.
+if(NOT CMAKE_CROSSCOMPILING)
+    FetchContent_Declare(dr_libs
+        GIT_REPOSITORY https://github.com/mackron/dr_libs.git
+        GIT_TAG        dfe8377631000664666519fdb83da193fd8037f4
+        SOURCE_SUBDIR  _no_cmake_)
+    FetchContent_MakeAvailable(dr_libs)
+    add_library(mce_drlibs STATIC "${PROJECT_SOURCE_DIR}/src/engine/asset/cook/src/drlibs_impl.c")
+    target_include_directories(mce_drlibs SYSTEM PUBLIC "${dr_libs_SOURCE_DIR}")
+    set_target_properties(mce_drlibs PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    if(MSVC)
+        target_compile_options(mce_drlibs PRIVATE /W0 /fp:precise)
+    else()
+        target_compile_options(mce_drlibs PRIVATE -w -ffp-contract=off)
+    endif()
+endif()
+
 # ---- meshoptimizer (cook-time only: vertex cache / fetch optimization of glTF meshes) ----
 # Confined to mce_asset_cook by the "meshopt wall" in scripts/ci/check_walls.py (FR-AST-010):
 # runtimes read the already-optimized CHNK_MESH. Only the sources the cook calls are compiled (the vertex / index

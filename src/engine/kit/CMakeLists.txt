@@ -26,6 +26,7 @@ mce_add_library(mce_gameplay_kit
         src/day_cycle.cpp
         src/timed_light.cpp
         src/weather.cpp
+        src/precipitation.cpp
         src/wanted3d.cpp
         src/sensors3d.cpp
         src/particles.cpp
@@ -48,6 +49,7 @@ mce_add_library(mce_gameplay_kit
         src/crowd.cpp
         src/ai_tasks.cpp
         src/perception.cpp
+        src/debug_lines.cpp
         src/cinematic.cpp
         src/video.cpp
         src/render_textures.cpp

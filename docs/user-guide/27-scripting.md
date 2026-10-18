@@ -220,6 +220,26 @@ function update()
 end
 ```
 
+**The weather.** The `weather` global is thin over the first `Weather` (section 9.19) and keeps nothing: the target, the transition length and the blend are the component's fields, so saves, replays and the editor see them. A scene without a `Weather` entity gets an error that says so; an unknown kind or a NaN is a Luau error that names the call, and it disables only that script.
+
+| Call | Does |
+|---|---|
+| `weather.kind()` | the kind in effect: `"clear"`, `"overcast"`, `"rain"`, `"storm"` or `"snow"` |
+| `weather.target()` | the kind the weather is moving to |
+| `weather.set(kind, seconds?)` | writes `Weather.target`; with `seconds` it also writes `transition_seconds` (clamped to 0 to 3600). The old kind fades out, then the new one fades in |
+| `weather.intensity()` | 0 to 1, the blend of the kind in effect |
+| `weather.wind()` | 0 to 1 |
+| `weather.wetness()` | 0 to 1 |
+
+```lua
+-- A storm rolls in when the player enters the harbour.
+function update()
+    if mce.pressed("Interact") and weather.target() ~= "storm" then
+        weather.set("storm", 20)
+    end
+end
+```
+
 ## 27.4 The rules
 
 - **No state between ticks.** Everything a script remembers lives in components, so the state hash,
