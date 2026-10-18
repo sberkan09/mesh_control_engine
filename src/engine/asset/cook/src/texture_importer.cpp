@@ -466,6 +466,32 @@ bool choose_auto(const u8* rgba, u32 w, u32 h, bool srgb, BcFormat& fmt, bool& n
     return true;
 }
 
+// Targa and BMP files whose pixel data is stored raw: the size the header promises. stb_image does not notice a file cut
+// short in the middle of raw TGA pixels (the rest of its buffer is never written), so the cook refuses it here. RLE and
+// compressed variants read byte by byte and treat the end of the file as zeros, which is deterministic.
+bool raw_pixels_truncated(StringView ext, const u8* b, usize n) {
+    auto u16 = [&](usize at) { return u32(b[at]) | (u32(b[at + 1]) << 8); };
+    auto u32le = [&](usize at) { return u16(at) | (u16(at + 2) << 16); };
+    if (ext == ".tga") {
+        if (n < 18) return true;
+        const u32 type = b[2];
+        if (type != 2 && type != 3) return false;
+        const u64 cmap = b[1] ? u64(u16(5)) * ((b[7] + 7u) / 8u) : 0;
+        const u64 need = 18u + b[0] + cmap + u64(u16(12)) * u16(14) * ((b[16] + 7u) / 8u);
+        return n < need;
+    }
+    if (ext == ".bmp") {
+        if (n < 54) return true;
+        const u32 comp = u32le(30);
+        if (comp != 0 && comp != 3) return false;
+        const i64 hh = i32(u32le(22));
+        const u64 rows = u64(hh < 0 ? -hh : hh);
+        const u64 stride = ((u64(u32le(18)) * u16(28) + 31) / 32) * 4;
+        return n < u64(u32le(10)) + stride * rows;
+    }
+    return false;
+}
+
 class TextureImporter final : public IImporter {
 public:
     StringView id() const override { return "texture"; }
@@ -473,7 +499,7 @@ public:
     ChunkType type() const override { return ChunkType::Texture; }
     bool native() const override { return false; }
     bool handles_extension(StringView ext) const override {
-        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".hdr" || ext == ".exr";
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp" || ext == ".hdr" || ext == ".exr";
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& out, DiagList& diags) const override {
@@ -537,6 +563,23 @@ public:
             return false;
         }
         int w = 0, h = 0, comp = 0;
+        // Header first: a TGA or BMP can claim dimensions far past anything the cook accepts, and stb allocates the whole
+        // image before it reads a pixel.
+        if (!stbi_info_from_memory(reinterpret_cast<const stbi_uc*>(in.source.data()), static_cast<int>(in.source.size()), &w, &h,
+                                   &comp)) {
+            String msg("image decode failed: ");
+            msg += stbi_failure_reason();
+            diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, msg);
+            return false;
+        }
+        if (w <= 0 || h <= 0 || w > 16384 || h > 16384) {
+            diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "image dimensions out of range (1..16384)");
+            return false;
+        }
+        if (raw_pixels_truncated(ext.view(), reinterpret_cast<const u8*>(in.source.data()), in.source.size())) {
+            diags.error(Errc::ImportFailed, in.display_path, 0, 0, kStage, "image decode failed: the file is shorter than its header says (cut off?)");
+            return false;
+        }
         stbi_uc* px = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(in.source.data()), static_cast<int>(in.source.size()), &w, &h,
                                             &comp, 4);
         if (!px) {

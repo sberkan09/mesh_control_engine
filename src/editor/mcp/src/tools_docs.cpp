@@ -725,7 +725,7 @@ bool engine_capabilities(ToolCall& c) {
         cook::ImporterRegistry reg;
         cook::ImporterRegistry::add_builtins(reg);
         c.out.key("asset_types").begin_array();
-        for (const char* ext : {"png", "jpg", "ttf", "otf", "wav", "ogg", "mcsound", "gltf", "glb", "obj", "mtl", "fbx", "mcscene", "mcprefab", "mcmat", "mcenv", "mcnav", "mcpart",
+        for (const char* ext : {"png", "jpg", "tga", "bmp", "ttf", "otf", "wav", "ogg", "mcsound", "gltf", "glb", "obj", "mtl", "fbx", "mcscene", "mcprefab", "mcmat", "mcenv", "mcnav", "mcpart",
                                 "mcseq", "mctilemap", "mcinput", "mcstore", "mcservices", "mcconfig", "mcui", "csv", "glsl"}) {
             cook::String dotted(".");
             dotted += ext;

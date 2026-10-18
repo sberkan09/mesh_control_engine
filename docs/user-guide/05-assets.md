@@ -10,7 +10,7 @@ formats, which is what keeps the shipped game small and safe.
 
 | You author | Extension | Cooked into | Used by |
 |---|---|---|---|
-| Image | `.png`, `.jpg`, `.jpeg` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
+| Image | `.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
 | HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
 | Sound | `.wav` | 48 kHz float clip with loop points | `AudioSource`, `PlaySfx`, sequences |
 | Font | `.ttf` (TrueType outlines; CFF `.otf` is refused) | glyph atlas plus metrics | `TextLabel` |
@@ -35,6 +35,8 @@ formats, which is what keeps the shipped game small and safe.
 | Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
 | UI document | `.mcui` | a widget tree: anchors, per-state styles, layouts, the skin by reference | `ui::build_document` (chapter 12.2) |
 | Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |
+
+Images up to 16384 pixels a side cook; a `.tga` (uncompressed or RLE, 8 to 32 bit, either origin) or `.bmp` (24 or 32 bit, palettes) takes the same sidecar settings as a PNG, and one cut short in the middle of its pixels is a cook error. Layered or animated formats (`.psd`, `.gif`) are not imported: export a flat PNG.
 
 ## 5.2 Sidecars
 
