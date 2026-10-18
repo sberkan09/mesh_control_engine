@@ -75,6 +75,7 @@ Span<const ToolDef> timeline_tool_table();
 // tools_bt.cpp (M-AI step 6): bt_create, bt_add_node, bt_set, bt_trace.
 Span<const ToolDef> bt_tool_table();
 Span<const ToolDef> debugview_tool_table();
+Span<const ToolDef> thumb_tool_table();
 // tools_script.cpp (M-SCRIPT 4): script_check; empty where the build has no scripting.
 Span<const ToolDef> script_tool_table();
 // tools_skeleton2d.cpp (M-ANIM2D step 5): skel2d_create, skel2d_add_bone, skel2d_add_slot, skel2d_add_ik, skel2d_key, skel2d_preview.

@@ -122,6 +122,7 @@ mce_add_test(test_mcp_movement UMBRELLA
     SOURCES
         test_mcp_movement.cpp
         test_mcp_debugview.cpp
+        test_mcp_thumbs.cpp
     DEPS
         mce::mce_mcp_core
         mce::mce_platform)
