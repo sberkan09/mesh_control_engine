@@ -53,6 +53,12 @@
 //                                            by skin joint node name: no body (the bone rides with its
 //                                            parent), a body however short, capsule radius (m), swing
 //                                            and twist limits (degrees), a weight on its mass share
+//                   { "animations_from": ["models/ual.glb", ...] }
+//                                            glTF files (paths relative to assets/) whose clips play on
+//                                            this mesh too, bound to its nodes by bone name (a shared
+//                                            animation library for every mesh with the same skeleton);
+//                                            the mesh's own clip wins a name clash; the file is a
+//                                            dependency, so changing it re-cooks this mesh
 //
 // Authored LODs: a node named `<name>_LOD<n>` (n = 1..3) is not drawn; its primitives become level
 // n of node `<name>`'s primitives (by index), quantized with their bounds. A primitive with
@@ -1615,7 +1621,18 @@ bool attach_authored_lods(Ctx& cx, const Gltf& g, const Array<AuthoredLod>& auth
     return true;
 }
 
-bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 import_scale, Output& out) {
+// A clip already in `out` under `name` (a library's clip of the same name is skipped: the mesh's own wins).
+bool has_clip(const Output& out, StringView name) {
+    for (const asset::MeshClip& c : out.clips)
+        if (StringView(out.strings.data() + c.name_offset, c.name_size) == name) return true;
+    return false;
+}
+
+// `library` is set for a sidecar "animations_from" file: its clips bind to this mesh's nodes by name (`remap` maps
+// the file's nodes), a channel for a bone the mesh lacks is counted in `unmatched` instead of warned about, and a
+// clip the mesh already has is skipped. `added` counts the channels bound.
+bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 import_scale, Output& out, bool library = false,
+                       u32* unmatched = nullptr, u32* added = nullptr) {
     const JsonValue anims = g.root.get("animations");
     if (!anims.is_array()) return true;
     for (u32 ai = 0; ai < anims.size(); ++ai) {
@@ -1627,6 +1644,8 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
         String name;
         if (a.get("name").is_string()) name = a.get("name").as_string();
         else appendf(name, "animation%u", ai);
+        if (library && has_clip(out, name.view())) continue;
+        const usize strings_before = out.strings.size();
         clip.name_offset = add_string(out.strings, name, clip.name_size);
         const JsonValue channels = a.get("channels"), samplers = a.get("samplers");
         for (u32 ci = 0; channels.is_array() && ci < channels.size(); ++ci) {
@@ -1648,7 +1667,11 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
             }
             const JsonValue node_v = target.get("node");
             if (!nonneg(node_v) || node_v.as_number() >= static_cast<f64>(remap.size()) || remap[static_cast<usize>(node_v.as_number())] < 0) {
-                cx.warning(ch, "animation channel targets a node outside the imported scene; ignored");
+                if (library) {
+                    if (unmatched) ++*unmatched;
+                } else {
+                    cx.warning(ch, "animation channel targets a node outside the imported scene; ignored");
+                }
                 continue;
             }
             mc.node = static_cast<u32>(remap[static_cast<usize>(node_v.as_number())]);
@@ -1693,9 +1716,129 @@ bool import_animations(Ctx& cx, const Gltf& g, const Array<i32>& remap, f32 impo
                 }
             clip.duration = math::max(clip.duration, times[keys - 1]);
             out.channels.push_back(mc);
+            if (added) ++*added;
         }
         clip.channel_count = static_cast<u32>(out.channels.size()) - clip.first_channel;
+        if (library && clip.channel_count == 0) {  // nothing of it binds: not a clip, and a later library may have the name
+            out.strings.resize(strings_before);
+            continue;
+        }
         out.clips.push_back(clip);
+    }
+    return true;
+}
+
+// The nodes `import_nodes` reaches: the active scene's roots and everything under them (every parentless node
+// without a scene). A library is read through the same set, so the library's own cooked output reflects all that a
+// dependent mesh takes from it and an edit elsewhere in the file cannot leave a mesh stale.
+void reachable_nodes(const Gltf& g, Array<bool>& reach) {
+    const JsonValue nodes = g.root.get("nodes");
+    const u32 count = nodes.is_array() ? nodes.size() : 0;
+    reach.clear();
+    reach.resize(count, false);
+    Array<u32> stack;
+    const JsonValue scenes = g.root.get("scenes");
+    if (scenes.is_array() && scenes.size() > 0) {
+        u32 si = nonneg(g.root.get("scene")) ? static_cast<u32>(g.root.get("scene").as_number()) : 0;
+        if (si >= scenes.size()) return;
+        const JsonValue sn = scenes.at(si).get("nodes");
+        for (u32 i = 0; sn.is_array() && i < sn.size(); ++i)
+            if (nonneg(sn.at(i)) && sn.at(i).as_number() < count) stack.push_back(static_cast<u32>(sn.at(i).as_number()));
+    } else {
+        Array<bool> child;
+        child.resize(count, false);
+        for (u32 i = 0; i < count; ++i)
+            if (const JsonValue ch = nodes.at(i).get("children"); ch.is_array())
+                for (u32 k = 0; k < ch.size(); ++k)
+                    if (nonneg(ch.at(k)) && ch.at(k).as_number() < count) child[static_cast<usize>(ch.at(k).as_number())] = true;
+        for (u32 i = 0; i < count; ++i)
+            if (!child[i]) stack.push_back(i);
+    }
+    while (!stack.empty()) {
+        const u32 n = stack.back();
+        stack.pop_back();
+        if (reach[n]) continue;
+        reach[n] = true;
+        const JsonValue ch = nodes.at(n).get("children");
+        for (u32 k = 0; ch.is_array() && k < ch.size(); ++k)
+            if (nonneg(ch.at(k)) && ch.at(k).as_number() < count) stack.push_back(static_cast<u32>(ch.at(k).as_number()));
+    }
+}
+
+// The sidecar's "animations_from": glTF/GLB files (paths relative to assets/) whose animation clips play on this mesh
+// too, bound to its nodes by name. One shared library of clips thus serves every character with the same skeleton,
+// with no merging into each glTF. Returns false after an error.
+bool import_libraries(const ImportInput& in, f32 import_scale, Output& out, DiagList& diags) {
+    const JsonValue libs = in.settings.valid() ? in.settings.get("animations_from") : JsonValue();
+    if (!libs.valid()) return true;
+    if (!libs.is_array()) {
+        detail::error_at(diags, Errc::ParseError, in.display_path, libs, kStage, "'animations_from' must be an array of glTF paths");
+        return false;
+    }
+    u32 total_added = 0, total_unmatched = 0;
+    for (u32 li = 0; li < libs.size(); ++li) {
+        const JsonValue pv = libs.at(li);
+        if (!pv.is_string()) {
+            detail::error_at(diags, Errc::ParseError, in.display_path, pv, kStage, "'animations_from' entries are paths relative to assets/");
+            return false;
+        }
+        const String path(pv.as_string());
+        const bool gltf_ext = path.view().size() > 4 && (path.view().substr(path.view().size() - 4) == ".glb" ||
+                                                          (path.view().size() > 5 && path.view().substr(path.view().size() - 5) == ".gltf"));
+        if (!gltf_ext) {
+            String msg;
+            appendf(msg, "'animations_from' reads glTF/GLB files; '%s' is another format", path.c_str());
+            detail::error_at(diags, Errc::InvalidArgument, in.display_path, pv, kStage, msg);
+            return false;
+        }
+        Guid guid;
+        Span<const byte> bytes;
+        StringView source_path;
+        if (!in.lookup || !in.lookup->guid_for_path(path.view(), guid) || !in.lookup->source_bytes(guid, bytes, source_path)) {
+            String msg;
+            appendf(msg, "'animations_from' names '%s', which is no asset of this project (a path relative to assets/)", path.c_str());
+            detail::error_at(diags, Errc::MissingRef, in.display_path, pv, kStage, msg);
+            return false;
+        }
+        String disp("assets/");
+        disp += source_path;
+        ImportInput lin = in;
+        lin.source = bytes;
+        lin.source_path = source_path;
+        lin.display_path = disp.view();
+        lin.settings = JsonValue();
+        Ctx lcx(lin, diags);
+        Gltf lg;
+        if (!parse_container(lcx, lg) || !load_buffers(lcx, lg) || !decode_meshopt_views(lcx, lg)) return false;
+        const JsonValue lnodes = lg.root.get("nodes");
+        Array<i32> remap;
+        remap.resize(lnodes.is_array() ? lnodes.size() : 0, -1);
+        Array<bool> reach;
+        reachable_nodes(lg, reach);
+        for (u32 n = 0; n < remap.size(); ++n) {
+            const JsonValue nm = lnodes.at(n).get("name");
+            if (!reach[n] || !nm.is_string() || nm.as_string().empty()) continue;
+            for (usize t = 0; t < out.nodes.size(); ++t)
+                if (StringView(out.strings.data() + out.nodes[t].name_offset, out.nodes[t].name_size) == nm.as_string()) {
+                    remap[n] = static_cast<i32>(t);
+                    break;
+                }
+        }
+        u32 unmatched = 0, added = 0;
+        if (!import_animations(lcx, lg, remap, import_scale, out, true, &unmatched, &added)) return false;
+        total_added += added;
+        total_unmatched += unmatched;
+        if (unmatched > 0) {
+            String msg;
+            appendf(msg, "%u channel%s of %s target bones this mesh lacks; skipped", unmatched, unmatched == 1 ? "" : "s", disp.c_str());
+            diags.warning(in.display_path, pv.line(), pv.col(), kStage, msg);
+        }
+    }
+    if (total_added == 0 && total_unmatched > 0) {
+        detail::error_at(diags, Errc::InvalidArgument, in.display_path, libs, kStage,
+                         "no bone of the 'animations_from' libraries matches a node of this mesh (bone names must be equal): their clips would "
+                         "not move anything");
+        return false;
     }
     return true;
 }
@@ -1854,6 +1997,18 @@ public:
 
     // Image URIs -> texture GUIDs. Problems are left to cook() to report (once).
     void scan_dependencies(const ImportInput& in, Array<DepRef>& out, DiagList&) const override {
+        const JsonValue libs = in.settings.valid() ? in.settings.get("animations_from") : JsonValue();
+        for (u32 i = 0; in.lookup && libs.is_array() && i < libs.size(); ++i) {
+            Guid lg;
+            if (!libs.at(i).is_string() || !in.lookup->guid_for_path(libs.at(i).as_string(), lg)) continue;  // cook() reports it
+            DepRef d;
+            d.guid = lg;
+            d.expected = ChunkType::Mesh;
+            d.line = libs.at(i).line();
+            d.col = libs.at(i).col();
+            d.where.assign("animations_from");
+            out.push_back(d);
+        }
         DiagList scratch;
         Ctx cx(in, scratch);
         Gltf g;
@@ -1878,7 +2033,7 @@ public:
     }
 
     bool cook(const ImportInput& in, asset::ContainerWriter& writer, DiagList& diags) const override {
-        if (!detail::check_keys(in.settings, {"scale", "max_triangles", "skinning", "lod_levels", "lod_ratio", "lod_error", "ragdoll"},
+        if (!detail::check_keys(in.settings, {"scale", "max_triangles", "skinning", "lod_levels", "lod_ratio", "lod_error", "ragdoll", "animations_from"},
                                 in.display_path, kStage, diags))
             return false;
         f64 scale = 1.0, max_triangles = 0.0, lod_levels = 0.0, lod_ratio = 0.35, lod_error = 0.05;
@@ -1918,6 +2073,7 @@ public:
         if (!attach_authored_lods(cx, g, authored, out)) return false;
         if (lod_levels > 0.0) detail::generate_lods(out.geo, static_cast<u32>(lod_levels), static_cast<f32>(lod_ratio), static_cast<f32>(lod_error));
         if (!import_animations(cx, g, remap, static_cast<f32>(scale), out)) return false;
+        if (!import_libraries(in, static_cast<f32>(scale), out, diags)) return false;
         SkinTables skin_out;
         if (!import_skins(cx, g, remap, out.geo, skin_out)) return false;
         bool ragdoll = false;

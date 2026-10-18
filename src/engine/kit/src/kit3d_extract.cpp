@@ -1,3 +1,4 @@
+#include <atomic>
 #include "mce/kit/kit3d_extract.h"
 
 #include <cmath>
@@ -973,22 +974,38 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     // StaticMerge3D (M-VISUAL3 5b): merged once per frame, the later views of the frame reuse it.
     if (!extra_view_) update_static_merges(world);
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
+    // Why a scene with MeshRefs draws none (a hand-written scene that renders empty): counted per reason, said once.
+    u32 refs = 0, hidden = 0, no_mesh = 0, no_pose = 0, culled = 0, merged = 0, not_loaded = 0;
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
-        if (!m.visible) return;
-        if (merge_stamp_ != 0 && e.index < merged_stamp_.size() && merged_stamp_[e.index] == merge_stamp_) return;  // drawn merged
+        ++refs;
+        if (!m.visible) {
+            ++hidden;
+            return;
+        }
+        if (merge_stamp_ != 0 && e.index < merged_stamp_.size() && merged_stamp_[e.index] == merge_stamp_) {  // drawn merged
+            ++merged;
+            return;
+        }
         vec3 pos, scale;
         quat rot;
-        if (!pose_of(world, e, pos, rot, scale)) return;
+        if (!pose_of(world, e, pos, rot, scale)) {
+            ++no_pose;
+            return;
+        }
         if (m.interpolate) {
             track(e, pos, rot, scale, tick);
             interpolated(e, alpha, pos, rot, scale);
         }
-        if (!bake_mode_ && m.cull_radius > 0.0f && !in_view(pos, m.cull_radius * max(scale.x, max(scale.y, scale.z))))
+        if (!bake_mode_ && m.cull_radius > 0.0f && !in_view(pos, m.cull_radius * max(scale.x, max(scale.y, scale.z)))) {
+            ++culled;
             return;
+        }
         const u32 key = mesh_key(m.mesh.guid);
         const render::GpuMesh* mesh = key != ~0u && meshes_ ? meshes_->get(key) : nullptr;
         if (!mesh) {
             ++stats_.missing;
+            if (m.mesh.guid == asset::Guid{}) ++no_mesh;
+            else ++not_loaded;
             return;
         }
         render::MeshInstance inst;
@@ -1060,6 +1077,16 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pending_entity_.push_back(e.index);
         ++stats_.meshes;
     });
+    // Only for causes a scene's author can fix (no mesh set, no Transform, a mesh that did not load): hidden or culled
+    // meshes are ordinary (a cutscene start, a minimap view).
+    if (refs > 0 && stats_.meshes == 0 && merged == 0 && !bake_mode_ && !extra_view_ && no_mesh + no_pose + not_loaded > 0) {
+        static std::atomic<bool> said{false};  // once per process: a scene that stays empty would repeat it every frame
+        if (!said.exchange(true)) {
+            MCE_LOG_WARN("kit3d: {} MeshRef entities and none drawn: {} with no mesh set, {} with no Transform, {} whose mesh is not "
+                         "loaded (see the 'mesh ... not in the mounted content / not resident / failed to load' lines), {} hidden, {} culled",
+                         refs, no_mesh, no_pose, not_loaded, hidden, culled);
+        }
+    }
     for (usize i = 0; i + 2 < pose_first_.size(); i += 3)
         pending_[pose_first_[i + 2]].pose = Span<const mat4>(poses_.data() + pose_first_[i], pose_first_[i + 1]);
     for (usize i = 0; i < pending_.size(); ++i) {

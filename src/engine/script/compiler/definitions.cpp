@@ -74,6 +74,8 @@ declare mce: {
 
     raycast2d: (origin: vector, dir: vector, max: number, skip: Entity?) -> RayHit?,
     overlap2d: (min: vector, max: vector, skip: Entity?) -> { Entity },
+    -- the entities with a LocalTransform within radius of center (and the component, if given), nearest first; no physics needed
+    near: (center: vector, radius: number, component: string?, exclude: Entity?) -> { Entity },
     move_and_collide: (e: Entity, delta: vector) -> MoveResult2D,
     teleport2d: (e: Entity, position: vector) -> (),
     find_path: (from: vector, to: vector, options: PathOptions?) -> { vector }?,
