@@ -14,9 +14,9 @@ struct WorldClockInstalled {};
 
 constexpr u64 kSub = 1024;  // sub-steps per tick at time_scale 1
 
-__extension__ typedef unsigned __int128 u128;
-
-u64 mul_div(u64 a, u64 b, u64 c) { return static_cast<u64>(static_cast<u128>(a) * b / c); }
+// a * b / c without a wider type: the remainder (< c) times b stays far below 2^64 because c is a day's worth of
+// sub-steps (a day length of years still gives c < 2^40) and b is at most c.
+u64 mul_div(u64 a, u64 b, u64 c) { return (a / c) * b + (a % c) * b / c; }
 
 // The hour 0..24 of `phase` out of `den`.
 f32 hour_of(u64 phase, u64 den) {
