@@ -514,6 +514,45 @@ system writes the game's `Environment3D.time_of_day` every tick (the field the 3
 - **Events.** `HourPassed {hour}` (the hour that began, 0..23) once per hour boundary and `DayPassed {day}` at
   midnight, in time order, pushed in the fixed update before the 3D extract reads the environment.
 
+## 9.17 Day cycle (M-DAYNIGHT)
+
+`mce/kit/day_cycle.h` colours the day. One `DayCycle` entity per scene (next to the `WorldClock` of 9.16, which
+installing it also installs) holds keyed curves over the hour; a scene without one is unchanged. Every tick the
+system reads `Environment3D.time_of_day` (the clock writes it) and writes the game's `Environment3D`: `sun_color`,
+`sun_intensity`, `ambient_sky`, `ambient_ground`, `fog_color`, `fog_density` and `exposure`. With no clock
+(`time_of_day` below 0) or `enabled` 0 it writes nothing.
+
+- **Keys.** Reflected components have no arrays, so a `DayCycle` has 8 key slots as plain fields, `k0_*` to `k7_*`,
+  and `key_count` (default 5) says how many are used. A slot holds its hour (`kN_hour`, 0..24) and the value of
+  every curve at that hour: `kN_sun`, `kN_sun_i`, `kN_sky`, `kN_ground`, `kN_fog`, `kN_fog_d`, `kN_exp`. Slots
+  may be in any order; the system sorts them by hour.
+- **Default preset.** An empty `DayCycle` has five keys that already look right: night at 0:00, dawn at 6:00
+  (warm sun, intensity 1.0), noon at 12:00 (the stock environment: intensity 2.0, white sun), dusk at 18:00 (orange sun,
+  intensity 1.0) and night at 21:00 (blue moonlight, intensity 0.05, exposure 1.2).
+- **Interpolation.** Linear between neighbouring keys; the curve wraps at midnight (after the last key it runs to
+  the first key a day later). At a key's hour the values are exactly the key's. One key is a constant.
+- **Determinism.** The same hour gives the same values, and the system only writes the resource, so replays and the
+  state hash are stable. `evaluate_day_cycle(cycle, hour)` is the pure function behind it.
+
+## 9.18 Timed lights (M-DAYNIGHT)
+
+`mce/kit/timed_light.h` switches lamps and lit windows with the clock. Put a `TimedLight3D` on an entity that has a
+`PointLight3D`, a `SpotLight3D` and/or a `MeshRef` (installing it also installs the world clock and day cycle); it
+follows the hour of the first `WorldClock`. Without a clock, or without the component, nothing is written.
+
+- **Window.** `on_hour` (default 18.5) and `off_hour` (default 6) may wrap midnight. `fade_minutes` (default 20) is
+  in game time. The ramp (0..1) rises linearly from `on_hour` to `on_hour + fade`, stays 1 until `off_hour`, then
+  falls linearly to 0 at `off_hour + fade`. `on_hour == off_hour` means always on. With the defaults a lamp is off at
+  noon, half on at 18:40, fully on at 19:30 and off again at 06:20.
+- **What is written.** Light `intensity` is the authored value times the ramp (the authored value is captured at
+  the first tick into the read-only `light_scale` / `spot_scale`, saved with the scene, so it never drifts), and
+  `enabled` is 0 while the ramp is 0, so an off lamp costs nothing. `MeshRef.emissive_tint` becomes
+  `emissive_off + (emissive_on - emissive_off) * ramp` (defaults 0 and 1) on all three channels; use `emissive_on`
+  above 1 to feed bloom. Colours and the rest of the `MeshRef` are not touched.
+- **Events.** `DuskStarted` (payload `hour`: the `on_hour`) and `DawnStarted` (the `off_hour`) are pushed once when
+  the clock passes that hour. The first `TimedLight3D` in ECS order stands for the scene (it remembers the last clock
+  hour in `last_hour`). Setting the clock by more than 6 hours is a jump, not a crossing, and fires nothing.
+
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,

@@ -43,8 +43,15 @@ could not reference a `.mcroads` (scene_importer.cpp, inspector.cpp; part of the
 Linear: the SBA workspace is at its free issue limit (save_issue refused the E1 issue), so this record is the tracker.
 
 Open items and risks (E1):
-- Placeholder art: one tinted unit cube for everything, no wheels that spin, no skinned characters, no audio. The ledger set in
-  "E1 content set" replaces boxes with Kenney city/car/character models once a follow-up wires `mce content add` into the sample.
+- Art (E1 content set, 2026-10-18): cars, characters and the 120 lot buildings are now Kenney CC0 models from the ledger
+  (`mce content add` with `--only`; `CREDITS.md`, `third_party_content.json` beside the sample). Roads, ground, kerbs and the
+  tree crowns stay tinted boxes. Still open: spinning wheels, animated or skinned characters (blocky node clips are not
+  played yet), road and signal models from `kenney-city-kit-roads`, ground PBR sets, a sky HDRI, audio, a night HDRI.
+  The drive test threshold moved from x < -95 to x < -85: traced, it is not the buildings or the traffic (with the crowd off
+  the car reaches x = -122 on the current layout; traffic alone changes nothing) but a crowd walker on the sidewalk side of the
+  avenue that the car (parked at x = -72, z = -9.2) hits; walkers are solid kinematic capsules, so where one spawns decides
+  how far the drive gets (x = -92 to -105). Expected behaviour; the test says so. A cleaner drive (start on the lane) is a
+  possible follow-up.
 - Not wired yet, on purpose (other threads): HLOD/`ChunkLod3D` proxies for the skyline (render-scale thread), missions and the
   minimap (M-MISSION). `FloatingOrigin3D` is not set: 1 km² never reaches its 1024 m threshold.
 - The whole city is one scene (buildings are not streamed in chunks yet); the navmesh covers only the middle blocks (police stay

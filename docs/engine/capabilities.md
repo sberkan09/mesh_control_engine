@@ -74,6 +74,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
 | `Pedestrian3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `CrowdSpawner3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `DayCycle` | `mce/kit/day_cycle.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-DAYNIGHT 2: tested in tests/kit/test_day_cycle.cpp; the step 4 demo (samples/11_daynight) shows it |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/course.mcscene |
@@ -128,6 +129,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
+| `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-DAYNIGHT 3: tested in tests/kit/test_timed_light.cpp; the step 4 demo (samples/11_daynight) shows it |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `TrafficDriver3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TrafficSpawner3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
