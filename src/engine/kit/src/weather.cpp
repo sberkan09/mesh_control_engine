@@ -1,5 +1,6 @@
 #include "mce/kit/weather.h"
 
+#include <bit>
 #include <cmath>
 #include <cstring>
 
@@ -117,7 +118,7 @@ void kind_target(const KindEnv& k, const f32* b, f32* t) {
     for (u32 i = 0; i < 3; ++i) t[kFogC + i] = lerpf(b[kFogC + i], k.fog_to[i], k.fog_mix);
 }
 
-bool same_bits(f32 a, f32 b) { return std::memcmp(&a, &b, sizeof(f32)) == 0; }
+bool same_bits(f32 a, f32 b) { return std::bit_cast<u32>(a) == std::bit_cast<u32>(b); }
 
 void env_slots(Environment3D& e, f32* out_ptrs[kSlots]) {
     out_ptrs[kSun] = &e.sun_intensity;
