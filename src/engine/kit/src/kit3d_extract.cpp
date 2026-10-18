@@ -12,6 +12,8 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/kit/weather.h"
+#include "mce/kit/wet_surfaces.h"
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/refl/property_path.h"
@@ -806,6 +808,26 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     vol.max_distance = env.volumetric_distance;
     render::apply_quality(quality_, vol);
     scene.set_volumetrics(vol);
+    {  // wet surfaces (M-WETSURFACE 5c): only a scene with both a Weather and a WetSurfaces gets wet
+        const Weather* weather = nullptr;
+        const WetSurfaces* wetc = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const WetSurfaces&>().each([&](const WetSurfaces& c) {
+            if (!wetc) wetc = &c;
+        });
+        render::WetSurfaces wet;  // dry by default
+        if (weather && wetc) {
+            wet.wetness = weather->wetness * wetc->strength;
+            wet.darken = wetc->darken;
+            wet.roughness = wetc->wet_roughness;
+            wet.puddles = wetc->puddles;
+            wet.puddle_scale = wetc->puddle_scale_m;
+            wet.puddles_enabled = true;
+        }
+        scene.set_wet_surfaces(render::apply_quality(quality_, wet));
+    }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
     post.bloom = env.bloom != 0 && quality_.bloom;

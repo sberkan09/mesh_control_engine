@@ -49,6 +49,8 @@
 // (1 = no flash, bit-exact). It is part of the written value (env_applied), so the base logic above is unchanged.
 // Wind is not applied to Foliage3D here: it is exposed as Weather.wind for scripts and step 3.
 //
+// WetSurfaces (wet_surfaces.h, M-WETSURFACE 5c) is a separate component, so Weather's bytes stay as they are.
+//
 // System: "kit_weather" (FixedUpdate_Pre, after "kit_timed_light"); install_weather installs timed lights.
 
 #include "mce/math/math.h"

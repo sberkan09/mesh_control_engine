@@ -34,7 +34,15 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 5a | done, awaiting review | #599 | `WetSurfaces` POD + `set_wet_surfaces()`, `QualitySettings::wet_surfaces`/`wet_puddles`, `apply_quality(q, wet)`, cvar `r.wet_surfaces`, `tests/render/test_wet_quality.cpp` |
-| 5b | done, awaiting Opus review | #602 | `p_wet` / `p_wet2` after `p_sky_rot` in `Forward3DPassU` and `MCE_GLSL_PASS_U` (main pass only; captures stay dry), `apply_wet` in `MCE_GLSL_MESH_FS` behind `p_wet.x > 0` (pcg2d value noise, 256 m period, origin from `Forward3D::origin_`), golden `wet_plaza` + `tests/render_gl/test_render3d_wet_gl.cpp`. Measured: ground drop 24.35% (asked 25-40%, pinned ±2 pt), metal sphere 0.15%, highlight rise 0.8 -> 101 (raw peak saturates 196 -> 255), puddle coverage 21.4%, origin shift 0.085% (dry frame 0.094%). Deviations: roughness pull and puddle darkening weighted by `1 - metallic`; puddle roughness 0.03 is clamped to 0.045 by the existing clamp. 5a review items folded in (clamps in `apply_quality`, comments). |
-| 5c | planned | | needs 5a |
+| 5a | merged | #599 | `WetSurfaces` POD + `set_wet_surfaces()`, `QualitySettings::wet_surfaces`/`wet_puddles`, `apply_quality(q, wet)`, cvar `r.wet_surfaces`, `tests/render/test_wet_quality.cpp` |
+| 5b | merged | #602 | `p_wet` / `p_wet2` after `p_sky_rot` in `Forward3DPassU` and `MCE_GLSL_PASS_U` (main pass only; captures stay dry), `apply_wet` in `MCE_GLSL_MESH_FS` behind `p_wet.x > 0` (pcg2d value noise, 256 m period, origin from `Forward3D::origin_`), golden `wet_plaza` + `tests/render_gl/test_render3d_wet_gl.cpp`. Measured: ground drop 24.35% (asked 25-40%, pinned ±2 pt), metal sphere 0.15%, highlight rise 0.8 -> 101 (raw peak saturates 196 -> 255), puddle coverage 21.4%, origin shift 0.085% (dry frame 0.094%). Deviations: roughness pull and puddle darkening weighted by `1 - metallic`; puddle roughness 0.03 is clamped to 0.045 by the existing clamp. 5a review items folded in (clamps in `apply_quality`, comments). |
+| 5c | done, awaiting review | | `mce/kit/wet_surfaces.h` (new header, `Weather` unchanged), registered by `install_weather`, `Kit3DExtract::apply_environment` builds the scene wetness, `tests/kit/test_wet_surfaces.cpp`, `test_padding.cpp` |
 | 5d | planned | | needs 5b, 5c |
+
+## Follow-ups from the 5b review (coordinator, non-blocking)
+- Measure `kMeshFS` register pressure with `perf_run` before 5d.
+- `apply_wet` comment says puddle roughness 0.03 but the existing clamp gives 0.045: fix the comment or the clamp.
+- The interpolated vertex normal stands in for the geometric normal, so sphere tops (n.y > 0.9) can puddle; document it, or use derivative face normals later.
+- `Forward3D::origin_` starts at 0 when the renderer is created after a rebase: open a follow-up.
+- The `unit()` clamp lambda is duplicated in `quality.cpp` and `forward3d.cpp`: share it.
+- The Weather row in `capabilities.md` moved its doc link from 09-physics to 08-3d in #602 (the generator takes the first page that mentions it); check it is intended.

@@ -49,6 +49,7 @@
 #include "mce/kit/timed_light.h"       // TimedLight3D (M-DAYNIGHT 3)
 #include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)
 #include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
+#include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
 #include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)
 #include "mce/kit/ui_flow.h"          // UiFlowRules (M-WORKFLOW 7)
