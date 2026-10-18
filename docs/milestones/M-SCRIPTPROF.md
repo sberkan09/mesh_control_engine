@@ -14,7 +14,7 @@ not how they moved. A game author (or an agent) writing Luau needs the same tool
 |---|---|---|---|
 | 1 | Per-script step profile: `ScriptInfo` keeps peak, total and ticks run; `run_headless` returns it as `scripts`; `mce profile <project> [--ticks N]` prints a table with the budget share | Sonnet (Opus review: touches the update loop in `script.cpp`) | done in PR (this step) |
 | 2 | A step-budget failure names the script line it stopped at (`file:line`), like any other script error (memory failures cannot: the allocator has no Lua frame) | Sonnet (Opus review: VM interrupt) | done in PR (this step) |
-| 3 | `mce.log` lines carry the script name (`script <name>: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | not started |
+| 3 | `mce.log` lines carry the script name (`script <name>: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | done in PR (this step) |
 | 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | not started |
 
 Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/script.md` updated, and a `changelog.d/SCRIPTPROF-<n>-<slug>.md` fragment.
@@ -35,3 +35,9 @@ Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/sc
   Without line info the old text is used. The profile's over-budget detection still matches "step budget exceeded".
 - Tests: in "the step profile counts updates, peak and total steps" (a one-line loop and a loop in a called function).
 - Not done: "not enough memory" stays unlocated (the allocator callback has no Lua frame to ask).
+
+## Step 3 as built (log source)
+
+- `mce.log(msg)` writes `script <name>: <msg>` (it was `script: <msg>`), the same shape as the failure lines, taking the name from the running script (`?` if none is running).
+  `player_scripts_test.cmake` matches the new shape. Test: "mce.log lines name the script that wrote them" reads the console ring with two scripts.
+- Not done: a log level argument (`mce.log` stays info) and a per-script mute.
