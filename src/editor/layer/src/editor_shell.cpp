@@ -721,6 +721,7 @@ void EditorShell::draw_menu_bar() {
         ImGui::MenuItem("Grid", nullptr, &view_.show_grid, scene_mode());
         ImGui::MenuItem("Perception (while playing)", nullptr, &view_.show_perception, scene_mode());
         ImGui::MenuItem("Roads (while playing)", nullptr, &view_.show_roads, scene_mode());
+        ImGui::MenuItem("Gameplay debug (while playing)", nullptr, &view_.show_gameplay, scene_mode());
         ImGui::MenuItem("Game camera while playing", nullptr, &view_.play_camera, scene_mode());
         if (ImGui::MenuItem("3D orbit view", "O", &view_.orbit_view, scene_mode()) && view_.orbit_view) frame_scene();
         ImGui::MenuItem("Orbit camera collision", nullptr, &view_.orbit_collision, scene_mode() && view_.orbit_view);
