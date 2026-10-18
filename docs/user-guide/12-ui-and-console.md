@@ -341,8 +341,9 @@ and aligned columns are fine, `#` starts a comment line), and makes each the con
 before the saved options load. A value given on the command line and a saved option still win, and `reset` goes
 back to the project's default; a default is never written to `settings.cfg`. A missing file is no error. An unknown
 name, a value the convar rejects, a `ReadOnly` convar and a `Cheat` convar in a build that locks cheats are warned
-about and skipped. Convars read before the game starts (`headless`, the window and platform switches, `r.gl_debug`)
-do not see the file, and `-help` lists the built-in defaults.
+about and skipped. Convars read before the game starts (`headless`, the window and platform switches, `r.gl_debug`,
+`pack`, `mods`, `scene`, `save_dir`, `language`, `liveops*`, `monetize*`, `steam.*`, and what a game module
+reads in `install()`) do not see the file, and `-help` lists the built-in defaults.
 
 Better, put the defaults in the pack so every platform carries them: a `.mcdefaults` file in the project's assets
 (`asset_create` makes one),
@@ -352,10 +353,12 @@ Better, put the defaults in the pack so every platform carries them: a `.mcdefau
   "convars": { "ui.reference_height": 720, "access.captions": true, "audio.music_db": -6 } }
 ```
 
-cooks to a convar-defaults chunk. The chunk is cook-side only for now: the player applies it (before `defaults.cfg`,
-which overrides it, for a developer's tweak) once the loader lands in the next step of M-WORKFLOW 7. A text value is
-1-128 bytes without leading or trailing spaces. A name is checked when the game runs: the cook does not know a
-game module's convars.
+cooks to a convar-defaults chunk that the player applies on every platform (desktop, web, phone) at the same point,
+before `defaults.cfg`, which overrides it for a developer's tweak. Only the game's own pack counts: a mod's pack is data, and its defaults are ignored with a warning.
+A project has one `.mcdefaults` file: with two the
+cook stops and names both. A text value is 1-128 bytes without leading or trailing spaces. A name is checked when the
+game runs: the cook does not know a game module's convars. A pack cooked without the file has no such chunk and starts
+exactly as before. Undertow ships `ui.reference_height = 720` this way.
 
 Every convar can be set on the command line as `-name value`, including a game module's own
 boot-time switches (`MCE_CVAR` in the module: the player applies them once the module loads and

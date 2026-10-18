@@ -281,6 +281,12 @@ Result<void> AssetSystem::mount_one(StringView root, MountOptions opt) {
                          root);
             continue;
         }
+        if (e.type == ChunkType::ConvarDefaults && !opt.allow_code) {
+            // The same trust line: convars include file paths the player opens, so a mod cannot set defaults.
+            MCE_LOG_WARN("asset {}: {} carries convar defaults, which only the game's own pack may do; ignored",
+                         asset::to_string(e.guid()).view(), root);
+            continue;
+        }
         if (const AssetKey* k = by_guid_.find(e.guid())) {
             // Earlier roots win (a mod over the game), but only with the same type: an override
             // that changes it would break every reference the later root's content makes, so the

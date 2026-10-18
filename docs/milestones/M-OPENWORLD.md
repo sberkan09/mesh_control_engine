@@ -25,8 +25,8 @@ Dependencies: C and B1 need nothing from A. B2/B3 need B1. C3 needs C2 and B3. E
 |---|---|---|---|
 | A1 | in progress (RunPod GPU thread) | | budgets per target |
 | A2 | done | #495 design, #502 seam, #516 floating origin | [M-OPENWORLD-A-design.md](M-OPENWORLD-A-design.md); open: net sessions, saves after a rebase, Luau positions |
-| A3 | in progress: instancing past the budget and the HLOD bake (`hlod_bake`) with simplified far levels and the cheap StaticMerge3D change check done; the merge budget and the impostor bake (`hlod_bake impostor=true`) done | #522 instancing, #534 HLOD bake, #536 city CPU, #540 far levels, #545 merge budget, #548 impostors | same design |
-| A4 | in progress: ChunkLod3D, the .mchlod importer and the city counter gate (4096 pieces as cells) | #529 ChunkLod3D, #536 city CPU | same design; next: the city sample |
+| A3 | done: instancing past the budget, the HLOD bake (`hlod_bake`) with simplified far levels, the cheap StaticMerge3D change check, the merge budget and the impostor bake (`hlod_bake impostor=true`); GPU frame time re-measured in A1 | #522 instancing, #534 HLOD bake, #536 city CPU, #540 far levels, #545 merge budget, #548 impostors | same design |
+| A4 | done: ChunkLod3D, the .mchlod importer, the city counter gate (4096 pieces as cells) and the HLOD city sample (`samples/hlod_city`: 0.21x the draws, 0.12x the CPU) | #529 ChunkLod3D, #536 city CPU, #553 city sample | same design |
 | E1 | in review (E1 thread, 2026-10-17) | see the E1 PR | `samples/09_openworld`; see "Track E progress" below |
 
 Linear: the SBA workspace is at its free issue limit (save_issue refuses new issues, 2026-10-17), so track A steps are recorded here only.
