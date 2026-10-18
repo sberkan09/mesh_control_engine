@@ -63,6 +63,7 @@ enum class ChunkType : u16 {  // closed set, appended only
     Script,          // CHNK_SCRIPT: one Luau script's bytecode (M-SCRIPT 1; mce/script/script.h)
     RoadNetwork,     // CHNK_ROADS: a road network, lanes, junctions and signals (M-OPENWORLD B1; mce/asset/roads_format.h)
     ConvarDefaults,  // CHNK_CVARS: a project's convar defaults, "name value" lines (M-WORKFLOW 7; console::set_defaults)
+    ItemCatalog,     // CHNK_ITEMS: a project's item definitions and loot tables (M-INVENTORY 1; mce/asset/items_format.h)
 };
 
 const char* chunk_type_name(ChunkType t);

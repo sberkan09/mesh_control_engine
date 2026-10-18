@@ -147,6 +147,7 @@ mem::UniquePtr<IImporter> make_store_importer();     // .mcstore -> CHNK_STORE (
 mem::UniquePtr<IImporter> make_services_importer();  // .mcservices -> CHNK_GSVC (M-LIVEOPS game services)
 mem::UniquePtr<IImporter> make_ui_importer();        // .mcui -> CHNK_UIDOC (M-UI-DATA 1)
 mem::UniquePtr<IImporter> make_ui_theme_importer();  // .mcuitheme -> CHNK_UITHEME (M-UI-DATA 3)
+mem::UniquePtr<IImporter> make_items_importer();  // .mcitems -> CHNK_ITEMS (M-INVENTORY 1)
 mem::UniquePtr<IImporter> make_convar_defaults_importer();  // .mcdefaults -> CHNK_CVARS (M-WORKFLOW 7)
 mem::UniquePtr<IImporter> make_config_importer();    // .mcconfig -> CHNK_RCFG (M-LIVEOPS remote config)
 mem::UniquePtr<IImporter> make_string_importer();    // assets/loc/<locale>.csv -> CHNK_STR (M-MOBILE 11a)
