@@ -127,6 +127,23 @@ TEST_CASE("scene scripts: a syntax error fails the cook at file:line:col") {
     CHECK(std::strstr(bad.error().path.c_str(), "broken.luau:2:13:") != nullptr);
 }
 
+TEST_CASE("scene scripts: a pack mounted without allow_code never runs its scripts (bytecode is trusted from the game's own pack only)") {
+    Cooked c;
+    cook_scripts(c);
+    asset::AssetSystem plain;  // default MountOptions: data only
+    const StringView roots[] = {StringView(c.dir.c_str())};
+    REQUIRE(plain.mount(Span<const StringView>(roots, 1)));
+    CHECK(plain.find(guid(kPush)) == asset::kInvalidAssetKey);  // the Script entries were dropped at mount
+
+    World w;
+    w.register_components<LocalTransform, kit::ScriptSystem>();
+    const Entity mover = w.spawn_with(LocalTransform{});
+    add_script(w, kPush, 0);
+    script::install_scene_scripts(w, &plain);
+    w.tick(1.0 / 60, 1);
+    CHECK(x_of(w, mover) == doctest::Approx(0.0f));  // nothing from that pack ran
+}
+
 TEST_CASE("scene scripts: ScriptSystems run by phase and order, and swap when the set changes") {
     Cooked c;
     cook_scripts(c);

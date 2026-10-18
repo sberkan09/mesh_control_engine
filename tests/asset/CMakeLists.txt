@@ -26,6 +26,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_input.cpp
         test_cook_navmesh.cpp
         test_cook_hlod.cpp
+        test_cook_impostor.cpp
         test_cook_font_damage.cpp
         test_cook_json_audio.cpp
         test_cook_mod.cpp
@@ -34,6 +35,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_shader.cpp
         test_cook_store.cpp
         test_cook_config.cpp
+        test_cook_defaults.cpp
         test_cook_roads.cpp
         test_cook_terrain.cpp
         test_cook_texture_cap.cpp

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 #include "cook_db.h"
 #include "mce/cook/fs.h"
@@ -190,6 +191,48 @@ bool texture_was_downscaled(const AssetRecord& rec, StringView cooked_file) {
     auto tex = asset::TextureView::read(view.value().payload(c));
     if (!tex || !tex.value().header) return false;
     return tex.value().header->width < u32(sw) || tex.value().header->height < u32(sh);
+}
+
+// The import summary of a cooked mesh container, or false when it cannot be read.
+bool summarize_mesh(StringView cooked_file, MeshSummary& out) {
+    Array<byte> bytes;
+    if (!asset::read_file(cooked_file, bytes)) return false;
+    auto view = asset::ContainerView::open(bytes.span(), cooked_file);
+    if (!view) return false;
+    const u32 c = view.value().find(ChunkType::Mesh);
+    if (c >= view.value().chunk_count()) return false;
+    auto mesh = asset::MeshView::read(view.value().payload(c));
+    if (!mesh) return false;
+    const asset::MeshView& m = mesh.value();
+    u64 index_count = 0;
+    u32 lods = 1;
+    for (u32 s = 0; s < m.submeshes.size(); ++s) {
+        index_count += m.submeshes[s].index_count;
+        lods = std::max(lods, 1u + u32(m.submesh_lods(s).size()));
+    }
+    // Distinct materials: submeshes whose inline material (and extension) bytes are equal share one.
+    u32 distinct = 0;
+    for (u32 s = 0; s < m.submeshes.size(); ++s) {
+        bool seen = false;
+        const asset::MaterialExt es = m.material_ext(s);
+        for (u32 t = 0; t < s && !seen; ++t) {
+            const asset::MaterialExt et = m.material_ext(t);
+            // Byte equality on purpose (the cooked bytes decide what is shared); the byte pointers keep tidy's
+            // object-representation check quiet for structs of floats.
+            seen = std::memcmp(reinterpret_cast<const unsigned char*>(&m.submeshes[s].material),
+                               reinterpret_cast<const unsigned char*>(&m.submeshes[t].material), sizeof(asset::MaterialChunk)) == 0 &&
+                   std::memcmp(reinterpret_cast<const unsigned char*>(&es), reinterpret_cast<const unsigned char*>(&et),
+                               sizeof(asset::MaterialExt)) == 0;
+        }
+        if (!seen) ++distinct;
+    }
+    out.triangles = u32(std::min<u64>(index_count / 3, 0xFFFFFFFFu));
+    out.submeshes = u32(m.submeshes.size());
+    out.materials = distinct;
+    out.joints = u32(m.joints.size());
+    out.clips = u32(m.clips.size());
+    out.lod_levels = lods;
+    return true;
 }
 
 void add_to_size_report(SizeReport& s, const AssetRecord& rec, u64 bytes, bool downscaled) {
@@ -617,6 +660,14 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
                 const bool capped = opt.max_texture_size != 0 || rec.settings().get("max_size").valid();
                 const bool down = capped && rec.importer->type() == ChunkType::Texture && texture_was_downscaled(rec, out_file.view());
                 add_to_size_report(report.sizes, rec, bytes, down);
+                if (rec.importer->type() == ChunkType::Mesh && (node.status == AssetStatus::Cooked || node.status == AssetStatus::UpToDate)) {
+                    MeshSummary ms;
+                    if (summarize_mesh(out_file.view(), ms)) {
+                        ms.path = rec.source_path;
+                        if (node.status == AssetStatus::Cooked) ms.warnings = node.diags.warning_count();
+                        report.meshes.push_back(std::move(ms));
+                    }
+                }
             }
         }
         if (manifest_hash != 0) items.push_back(asset::ManifestItem{rec.guid, manifest_hash, rec.importer->type(), rec.source_path});

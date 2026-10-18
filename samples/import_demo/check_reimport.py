@@ -6,6 +6,7 @@ byte (M-IMPORT gate: a converter is a pure function of its input and keeps GUIDs
 """
 
 import filecmp
+import json
 import os
 import shutil
 import subprocess
@@ -24,14 +25,24 @@ def main():
         print(r.stdout + r.stderr)
         return 1
     bad = []
-    for base, _dirs, names in os.walk(os.path.join(HERE, "assets")):
-        for n in names:
-            a = os.path.join(base, n)
-            b = os.path.join(scratch, os.path.relpath(a, HERE))
-            if not os.path.isfile(b) or not filecmp.cmp(a, b, shallow=False):
-                bad.append(os.path.relpath(a, HERE))
-    extra = [os.path.relpath(os.path.join(b, n), scratch) for b, _d, ns in os.walk(os.path.join(scratch, "assets")) for n in ns
-             if not os.path.isfile(os.path.join(HERE, os.path.relpath(os.path.join(b, n), scratch)))]
+    extra = []
+    for tree in ("assets", "import"):
+        for base, _dirs, names in os.walk(os.path.join(HERE, tree)):
+            for n in names:
+                a = os.path.join(base, n)
+                b = os.path.join(scratch, os.path.relpath(a, HERE))
+                if not os.path.isfile(b) or not filecmp.cmp(a, b, shallow=False):
+                    bad.append(os.path.relpath(a, HERE))
+        extra += [os.path.relpath(os.path.join(b, n), scratch) for b, _d, ns in os.walk(os.path.join(scratch, tree)) for n in ns
+                  if not os.path.isfile(os.path.join(HERE, os.path.relpath(os.path.join(b, n), scratch)))]
+    # The glTF prefab path (step 4a): a light and a camera as children of a MeshRef root.
+    try:
+        with open(os.path.join(HERE, "assets", "prefabs", "lamp.mcprefab"), encoding="utf-8") as f:
+            comps = [set(e["components"]) for e in json.load(f)["entities"]]
+        if not ({"MeshRef"} <= comps[0] and any("PointLight3D" in c for c in comps) and any("Camera3DComponent" in c for c in comps)):
+            bad.append("assets/prefabs/lamp.mcprefab (no MeshRef root, light and camera)")
+    except (OSError, ValueError, KeyError, IndexError) as e:
+        bad.append(f"assets/prefabs/lamp.mcprefab ({e})")
     if bad or extra:
         print("re-importing changed the sample's assets:", sorted(bad), "new:", sorted(extra))
         return 1

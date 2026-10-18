@@ -9,8 +9,9 @@ Scripting needs a build with `MCE_WITH_SCRIPT` (on in the desktop, phone and web
 
 ## 27.1 A script
 
-Put a `.luau` file anywhere under `assets/`. The cook writes its sidecar (`importer: "script"`) the
-first time it sees it and compiles it into a `Script` asset (a `CHNK_SCRIPT` chunk of Luau bytecode).
+Put a `.luau` file anywhere under `assets/`. Give it a sidecar (`importer: "script"`) the way any asset gets one: the
+editor and `mce build` / `mce play` do it for you, and the bare cook does it with `--adopt` (section 5.4; without it a
+file with no sidecar is a cook error). The cook compiles it into a `Script` asset (a `CHNK_SCRIPT` chunk of Luau bytecode).
 A syntax error fails the cook with the file, line and column, like any asset error:
 
 ```
@@ -170,6 +171,32 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `mce.quit()` | ends the run after this tick, like the window's close button |
 | `mce.log(msg)` | an info line in the engine log, `script: <msg>` |
 
+**Missions and map markers.** Two more global tables, `mission` and `marker`, are thin over the mission kit (section 9.13) and the map markers (9.15). They keep nothing: the state is the `Mission` and `MapMarker` components and the `MissionSignal` event, so saves, replays and the editor see it. A world without the kit pieces gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
+
+| Call | Does |
+|---|---|
+| `mission.start(e)` | an idle mission starts on the next tick (sets `Mission.start`); `true`, or `false` when it is already active, complete or failed |
+| `mission.fail(e)` | fails an active mission now and sends `MissionFailed` with `reason` 3 (a script; 0 is the time limit, 1 `fail_on_death`, 2 a vanished objective); `true`, or `false` in any other state |
+| `mission.status(e)` | `state, objective, elapsed, done`: `"idle"`, `"active"`, `"complete"` or `"failed"`; the active objective entity (`nil` unless active); seconds since it started; how many objectives are done |
+| `mission.signal(name, amount?)` | a `MissionSignal` for the active `signal` objectives (`amount` a whole number from 1, default 1; `name` up to 31 characters). The script runs after the kit's mission system in a tick, so the signal counts two ticks later |
+| `marker.add(e, {icon?, color?, layer?, label?, always_visible?, follow?})` | puts a `MapMarker` on the entity at the next sync point. `color` is `{r, g, b}`, `{r, g, b, a}` or a vector (`colour` works too); `layer` 0 to 31; `label` up to 31 characters; `follow` an `Objective` or `Mission` entity. Fields left out keep the current marker's, or the defaults; an unknown field is an error |
+| `marker.remove(e)` | takes the `MapMarker` off at the next sync point (nothing happens without one) |
+
+```lua
+-- Start the mission when the player presses Interact, and mark the depot on the map.
+function update()
+    mce.each("Mission", function(m)
+        local state, objective, elapsed = mission.status(m)
+        if state == "idle" and mce.pressed("Interact") then
+            mission.start(m)
+            marker.add(m, { icon = 2, color = { 1, 0.8, 0.1 } })   -- a bare marker on a mission follows its active objective
+        elseif state == "active" and elapsed > 120 then
+            mission.fail(m)
+        end
+    end)
+end
+```
+
 ## 27.4 The rules
 
 - **No state between ticks.** Everything a script remembers lives in components, so the state hash,
@@ -289,6 +316,37 @@ and the same project builds from the engine checkout: copy it to `projects/MyGam
 from there). The engine's CMake gives such a project a host that is the stock player with the project's pack
 (`mce_add_script_project`), and the host build's `mce_cook` cooks the pack. The phone and web toolchains (the
 Android NDK, Xcode, the Emscripten SDK) are the ones the other projects use.
+
+
+### By hand, without `mce new`
+
+The smallest project is three files, and the commands below are the raw tools `mce` wraps (a build of the engine has
+`mce_cook` and `mce_player`).
+
+```
+Blind/Blind.mceproj
+Blind/assets/scripts/game.luau
+Blind/assets/scenes/main.mcscene
+```
+
+```json
+{ "format": "mce-project", "version": 1, "name": "Blind", "title": "Blind", "engine_version": "0.9.0",
+  "games": [], "start_scene": "11111111-2222-4333-8444-555555555555", "plugins": [] }
+```
+
+`start_scene` is the `guid` of the scene file (choose any GUID; the scene carries the same one). A scene needs its
+script's GUID in a `ScriptSystem` entity, and that GUID exists only once the script has a sidecar, so adopt first:
+
+    mce_cook Blind --adopt                      # writes the sidecars; copy the script's guid into the scene
+    mce_cook Blind --pack                       # cook and write Blind/assets.mce
+    mce_player -headless 1 -ticks 100 -pack Blind/assets.mce -input tests/run.input   # one "from-to Action=value" line per range, chapter 11.5
+
+A scene entity that holds script memory lists all 16 numbers of `ScriptVars.v` (the kind slot included); a coloured
+square is a `Sprite` with no texture and a `tint`; `CameraFollow2D.target` is `"$<index of the entity in the scene>"`.
+In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pickup without physics is a distance test
+(`vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
+prints `mce.log` lines and the state hash; it does not dump components, and `.mctest` scenarios run with `mce test MyGame`
+(chapter 14.3.1), not through `mce_player`.
 
 
 ## 27.8 Remembering things: `ScriptVars`

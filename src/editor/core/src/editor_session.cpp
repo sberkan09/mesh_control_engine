@@ -7,6 +7,7 @@
 #include "mce/cook/envmap.h"
 #include "mce/cook/fs.h"
 #include "mce/cook/hlod.h"
+#include "mce/cook/image.h"
 #include "mce/cook/json.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
@@ -41,9 +42,9 @@ StringView scene_stem(StringView path) {
     return stem;
 }
 
-// Writes a bake's sidecar next to `abs` unless one is there (a re-bake keeps its GUID) and creates
-// the folder. `guid` receives the sidecar's GUID.
-Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::Guid& guid) {
+// Writes a bake's sidecar next to `abs` unless one is there (a re-bake keeps its GUID and its settings) and creates
+// the folder. `guid` receives the sidecar's GUID; `settings` is the new sidecar's settings object.
+Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::Guid& guid, StringView settings = "{}") {
     cook::String sidecar_abs = abs;
     sidecar_abs += ".mceasset";
     guid = {};
@@ -63,7 +64,9 @@ Result<void> bake_sidecar(const cook::String& abs, StringView importer, asset::G
         text += asset::to_string(guid).view();
         text += "\", \"importer\": \"";
         text += importer;
-        text += "\", \"importer_version\": 1, \"settings\": {} }\n";
+        text += "\", \"importer_version\": 1, \"settings\": ";
+        text += settings;
+        text += " }\n";
         MCE_TRY(cook::fs::write_file_atomic(sidecar_abs.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.size())));
     }
     return ok();
@@ -222,7 +225,80 @@ Result<physics::NavBakeStats3D> EditorSession::bake_navmesh() {
     return stats;
 }
 
-Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::HlodBakeSettings3D& settings, EntityId only) {
+namespace {
+
+// The impostor half of bake_hlod: the chunk's sources (kit::collect_chunk_sources, as the proxy saw them) captured by
+// cook::bake_impostor, written as <stem>_far.png (the atlas, a "texture" sidecar) and <stem>_far.mchlod.
+Result<void> bake_chunk_impostor(EditorProject& project, asset::Guid scene, const math::vec3& origin,
+                                 const kit::HlodBakeSettings3D& settings, const cook::ImpostorSettings& impostor,
+                                 const cook::String& stem, EditorSession::HlodBakeRow& row, Array<cook::String>& written) {
+    cook::String png_rel = stem, mesh_rel = stem;
+    png_rel += "_far.png";
+    mesh_rel += "_far.mchlod";
+    const cook::String png_abs = project.asset_path(png_rel.view()), mesh_abs = project.asset_path(mesh_rel.view());
+    const bool had_png = cook::fs::exists(png_abs.view());
+    asset::Guid atlas;
+    MCE_TRY(bake_sidecar(png_abs, "texture", atlas, "{ \"srgb\": true, \"filter\": \"linear\" }"));
+
+    struct Ctx {
+        asset::AssetSystem* assets;
+        const cook::ImpostorSettings* settings;
+        asset::Guid atlas;
+        Array<asset::AnyHandle> held;  // the textures the capture read
+        cook::ImpostorBake bake;
+        bool ok = false;
+    } ctx{project.mounted(), &impostor, atlas, {}, {}, false};
+    kit::collect_chunk_sources(
+        *project.mounted(), scene, origin, settings,
+        [](Span<const kit::ChunkSource3D> sources, void* user) {
+            Ctx& c = *static_cast<Ctx*>(user);
+            Array<cook::ImpostorSource> in;
+            in.reserve(sources.size());
+            for (const kit::ChunkSource3D& s : sources) {
+                cook::ImpostorSource src;
+                src.mesh = s.mesh;
+                src.world = s.world;
+                src.tint = s.tint;
+                src.material = s.material;
+                src.group = s.group;
+                in.push_back(src);
+            }
+            const auto texture = [](asset::Guid g, void* u) -> Span<const byte> {
+                Ctx& t = *static_cast<Ctx*>(u);
+                const Result<asset::AssetHandle<asset::Texture>> h = t.assets->load_sync<asset::Texture>(g);
+                if (!h) return {};
+                t.held.push_back(h.value());
+                return t.assets->resolve(h.value());
+            };
+            c.ok = cook::bake_impostor(in.span(), texture, &c, c.atlas, *c.settings, c.bake);
+        },
+        &ctx);
+    for (const asset::AnyHandle& h : ctx.held) ctx.assets->release(h);
+    row.impostor_stats = ctx.bake.stats;
+    if (!ctx.ok) {
+        if (!had_png) {  // nothing to capture: no stray sidecar
+            cook::String sidecar = png_abs;
+            sidecar += ".mceasset";
+            cook::fs::remove(sidecar.view());
+        }
+        return ok();
+    }
+    Array<byte> png, file;
+    MCE_TRY(cook::encode_png(ctx.bake.atlas_width, ctx.bake.atlas_height, ctx.bake.atlas.span(), png));
+    MCE_TRY(cook::fs::write_file_atomic(png_abs.view(), png.span()));
+    MCE_TRY(bake_sidecar(mesh_abs, "hlod", row.impostor));
+    cook::write_hlod_file(ctx.bake.mesh.span(), file);
+    MCE_TRY(cook::fs::write_file_atomic(mesh_abs.view(), file.span()));
+    row.impostor_bytes = static_cast<u32>(file.size());
+    written.push_back(png_rel);
+    written.push_back(mesh_rel);
+    return ok();
+}
+
+}  // namespace
+
+Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::HlodBakeSettings3D& settings, EntityId only,
+                                                                   const cook::ImpostorSettings* impostor) {
     constexpr const char* kWhere = "editor.bake_hlod";
     if (!project_.is_open() || !project_.mounted()) return Error(Errc::InvalidArgument, kWhere, "no project is open");
     World& world = scene_.world();
@@ -248,19 +324,22 @@ Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::Hl
         Array<byte> mesh, file;
         if (kit::bake_chunk_hlod(*project_.mounted(), c.scene, c.origin, settings, mesh, &row.stats)) {
             // assets/hlod/<scene file stem>/chunk_<id>.mchlod: stable per chunk, so re-bakes overwrite.
-            cook::String rel("hlod/");
-            rel += scene_stem(scene_.path());
-            rel += "/chunk_";
+            cook::String stem("hlod/");
+            stem += scene_stem(scene_.path());
+            stem += "/chunk_";
             char num[16];
             std::snprintf(num, sizeof(num), "%u", c.id);
-            rel += StringView(num);
+            stem += StringView(num);
+            cook::String rel = stem;
             rel += ".mchlod";
             const cook::String abs = project_.asset_path(rel.view());
-            MCE_TRY(bake_sidecar(abs, "hlod", row.proxy));
+            // Two simplified far levels for the parts whose sources had none (the hlod importer's lod_levels).
+            MCE_TRY(bake_sidecar(abs, "hlod", row.proxy, "{ \"lod_levels\": 2 }"));
             cook::write_hlod_file(mesh.span(), file);
             MCE_TRY(cook::fs::write_file_atomic(abs.view(), file.span()));
             row.bytes = static_cast<u32>(file.size());
             written.push_back(rel);
+            if (impostor) MCE_TRY(bake_chunk_impostor(project_, c.scene, c.origin, settings, *impostor, stem, row, written));
         }
         rows.push_back(row);
     }
@@ -274,7 +353,7 @@ Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::Hl
     for (const HlodBakeRow& row : rows) {
         if (row.proxy.is_null()) continue;
         const kit::ChunkLod3D* cur = scene_.get<kit::ChunkLod3D>(row.chunk);
-        if (cur && cur->proxy.guid == row.proxy) continue;
+        if (cur && cur->proxy.guid == row.proxy && (row.impostor.is_null() || cur->impostor.guid == row.impostor)) continue;
         if (!editing) {
             scene_.begin_edit("Bake HLOD");
             editing = true;
@@ -282,6 +361,7 @@ Result<Array<EditorSession::HlodBakeRow>> EditorSession::bake_hlod(const kit::Hl
         if (!cur) scene_.add_component(row.chunk, refl::type_of<kit::ChunkLod3D>());
         kit::ChunkLod3D lod = *scene_.get<kit::ChunkLod3D>(row.chunk);
         lod.proxy.guid = row.proxy;
+        if (!row.impostor.is_null()) lod.impostor.guid = row.impostor;
         scene_.set(row.chunk, lod);
     }
     if (editing) scene_.end_edit();

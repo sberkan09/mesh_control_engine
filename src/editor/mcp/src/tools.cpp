@@ -14,6 +14,7 @@
 
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/cook/impostor.h"
 #include "mce/cook/scene_text.h"
 #include "mce/ecs/transform.h"
 #include "mce/input/script.h"
@@ -815,10 +816,21 @@ bool hlod_bake(ToolCall& c) {
             return arg_missing(c, "min_size", "a number of metres from 0 to 10000");
         settings.min_size = static_cast<f32>(v.as_number());
     }
+    cook::ImpostorSettings impostor;
+    bool with_impostor = false;
+    if (const cook::JsonValue v = arg(c, "impostor"); v.valid()) {
+        if (!v.is_bool()) return arg_missing(c, "impostor", "true or false");
+        with_impostor = v.as_bool();
+    }
+    if (const cook::JsonValue v = arg(c, "texels_per_metre"); v.valid()) {
+        if (!v.is_number() || v.as_number() < 0.25 || v.as_number() > 64.0)
+            return arg_missing(c, "texels_per_metre", "a number from 0.25 to 64");
+        impostor.texels_per_metre = static_cast<f32>(v.as_number());
+    }
     editor::EntityId only = editor::kNoEntity;
     if (arg(c, "entity").valid() && !arg_entity(c, "entity", only)) return false;
     editor::EditorSession& session = c.server.session();
-    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only);
+    const Result<Array<editor::EditorSession::HlodBakeRow>> r = session.bake_hlod(settings, only, with_impostor ? &impostor : nullptr);
     if (!r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -849,6 +861,24 @@ bool hlod_bake(ToolCall& c) {
         c.out.key("submeshes").num_u(st.submeshes);
         c.out.key("triangles").num_u(st.triangles);
         c.out.key("lod_levels").num_u(st.lod_levels);
+        if (!row.impostor.is_null()) {
+            const cook::ImpostorStats& is = row.impostor_stats;
+            c.out.key("impostor").begin_object();
+            c.out.key("mesh").str(asset::to_string(row.impostor).view());
+            if (const editor::ProjectAsset* a = session.project().find(row.impostor)) {
+                cook::String path("assets/");
+                path += a->path.view();
+                c.out.key("path").str(path.view());
+            }
+            c.out.key("bytes").num_u(row.impostor_bytes);
+            c.out.key("groups").num_u(is.groups);
+            c.out.key("boxes").num_u(is.boxes);
+            c.out.key("cards").num_u(is.cards);
+            c.out.key("quads").num_u(is.quads);
+            c.out.key("untextured").num_u(is.untextured);
+            c.out.key("atlas").begin_array().num_u(is.atlas_width).num_u(is.atlas_height).end_array();
+            c.out.end_object();
+        }
         c.out.end_object();
     }
     c.out.end_array();
@@ -917,6 +947,22 @@ bool cook_run(ToolCall& c) {
         }
         c.out.end_array();
         c.out.end_object();
+    }
+    {  // the import summary: one entry per mesh model (cached models report the same numbers; warnings count this run's only)
+        c.out.key("meshes").begin_array();
+        for (const cook::MeshSummary& m : r.meshes) {
+            c.out.begin_object();
+            c.out.key("path").str(m.path.view());
+            c.out.key("triangles").num_u(m.triangles);
+            c.out.key("submeshes").num_u(m.submeshes);
+            c.out.key("materials").num_u(m.materials);
+            c.out.key("joints").num_u(m.joints);
+            c.out.key("clips").num_u(m.clips);
+            c.out.key("lod_levels").num_u(m.lod_levels);
+            c.out.key("warnings").num_u(m.warnings);
+            c.out.end_object();
+        }
+        c.out.end_array();
     }
     if (r.subset) {
         c.out.key("skipped").num_u(r.skipped);
@@ -1649,9 +1695,14 @@ const ToolDef kTools[] = {
      "ChunkLod3D `proxy` points at it (the component is added when missing; scene_save keeps it). The proxy draws "
      "while the area is not loaded. Meshes smaller than min_size metres (default 1) are left out. Re-baking keeps the "
      "file and GUID; the same scene bakes byte-identical (content_hash). Returns per chunk the mesh counts (merged, "
-     "small, skipped), submeshes, triangles and LOD levels.",
+     "small, skipped), submeshes, triangles and LOD levels. impostor: also bake the far stand-in (a box per root "
+     "entity with orthographic albedo captures on its sides and top, cross cards for tall thin groups such as trees) "
+     "into chunk_<entity id>_far.png + _far.mchlod and point ChunkLod3D `impostor` at it; the row then has an "
+     "impostor object (groups, boxes, cards, quads, untextured, atlas size).",
      R"j({"type":"object","properties":{"entity":{"description":"a SceneChunk entity id or name; default every chunk"},)j"
-     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"}},"additionalProperties":false})j",
+     R"j("min_size":{"type":"number","description":"metres; smaller meshes are left out (default 1)"},)j"
+     R"j("impostor":{"type":"boolean","description":"also bake the impostor (default false)"},)j"
+     R"j("texels_per_metre":{"type":"number","description":"impostor capture resolution, 0.25..64 (default 4)"}},"additionalProperties":false})j",
      hlod_bake},
     {"scene_undo", "Undo the last scene edit (one tools/call is one step; editor edits share the history).", kNoArgs,
      scene_undo},
@@ -1674,7 +1725,8 @@ const ToolDef kTools[] = {
      "ones are box-halved before their mips, a sidecar \"max_size\" (asset_set_import_settings) smaller than it wins; "
      "changing it re-cooks the textures. textures: \"rgba8\" (default) or \"bc\" to store color textures as BC7/BC5/BC4/BC1 blocks (about a quarter of the size; desktop packs only, phones and the web need their own cook) per the sidecar \"compress\" key; switching it re-cooks everything. Returns counts, diagnostics with "
      "file:line, the output paths (relative to the project folder) and sizes: cooked bytes by type (textures, meshes, "
-     "audio, scenes, other), the five largest assets, and how many textures the cap downscaled.",
+     "audio, scenes, other), the five largest assets, and how many textures the cap downscaled; meshes: one entry per 3D model "
+     "(path, triangles, submeshes, materials, joints, clips, lod_levels, warnings; the numbers are read from the cooked file, so a cached model reports them too, but warnings counts this run's only).",
      R"({"type":"object","properties":{"pack":{"type":"boolean","default":false},"adopt":{"type":"boolean","default":false},"paths":{"type":"array","items":{"type":"string"}},"skip_errors":{"type":"boolean","default":false},"max_texture_size":{"type":"integer","minimum":1,"maximum":16384,"description":"Cap on a PNG/JPG texture's largest side, a power of two; default no limit"},"textures":{"type":"string","enum":["rgba8","bc"],"default":"rgba8","description":"Texture storage: rgba8, or bc for BC7/BC5/BC4/BC1 blocks in desktop packs"}}})",
      cook_run},
     {"cook_errors", "Diagnostics of the last cook (file, line, col, stage, message).", kNoArgs, cook_errors},

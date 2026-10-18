@@ -29,6 +29,7 @@ type RayHit = { entity: Entity, point: vector, normal: vector, distance: number 
 type PathOptions = { cell: number?, radius: number?, diagonal: boolean?, smooth: boolean? }
 type ShapeHit = { entity: Entity, point: vector, normal: vector, fraction: number }
 type SphereHit = { entity: Entity, point: vector, normal: vector, position: vector, fraction: number }
+type MarkerOptions = { icon: number?, color: { number } | vector?, colour: { number } | vector?, layer: number?, label: string?, always_visible: boolean?, follow: Entity? }
 type MoveResult2D = { position: vector, grounded: boolean, ground: Entity?, ceiling: boolean, wall_left: boolean, wall_right: boolean }
 
 declare mce: {
@@ -109,6 +110,24 @@ declare mce: {
     set_rotation3d: (e: Entity, rotation: vector) -> (),
     look_rotation3d: (from: vector, to: vector) -> vector,
     find_path3d: (from: vector, to: vector) -> ({ vector }?, boolean?),
+}
+
+-- Missions (M-MISSION): thin over the Mission component and the MissionSignal event.
+declare mission: {
+    -- the idle mission starts on the next tick; false when it already ran
+    start: (e: Entity) -> boolean,
+    -- an active mission fails now (MissionFailed, reason 3); false in any other state
+    fail: (e: Entity) -> boolean,
+    -- state ("idle" | "active" | "complete" | "failed"), the active objective (nil unless active), seconds since it started, objectives done
+    status: (e: Entity) -> (string, Entity?, number, number),
+    -- the named signal that `signal` objectives count (amount: a whole number, default 1)
+    signal: (name: string, amount: number?) -> (),
+}
+
+-- Map markers (M-MISSION): the MapMarker component, written at the next sync point.
+declare marker: {
+    add: (e: Entity, options: MarkerOptions?) -> (),
+    remove: (e: Entity) -> (),
 }
 )";
 

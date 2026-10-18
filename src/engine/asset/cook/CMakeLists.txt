@@ -16,6 +16,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/envmap_importer.cpp
         src/navmesh_importer.cpp
         src/hlod_importer.cpp
+        src/impostor.cpp
         src/roads_importer.cpp
         src/font_importer.cpp
         src/fs_util.cpp
@@ -43,6 +44,7 @@ mce_add_library(mce_asset_cook UMBRELLA
         src/shader_importer.cpp
         src/store_importer.cpp
         src/config_importer.cpp
+        src/convar_defaults_importer.cpp
         src/services_importer.cpp
         src/string_importer.cpp
         src/string.cpp

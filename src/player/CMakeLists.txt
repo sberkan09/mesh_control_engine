@@ -7,7 +7,7 @@
 # The runtime itself is mce_player_runtime (mce/player/player.h), which project hosts made from the
 # project template link too. Where game modules are supported it links the mce_engine umbrella,
 # so a module loaded with -module shares the host's engine; elsewhere it links the libraries.
-add_library(mce_player_runtime STATIC src/player.cpp src/ui_screens.cpp)
+add_library(mce_player_runtime STATIC src/player.cpp src/ui_screens.cpp src/minimap_feed.cpp)
 add_library(mce::mce_player_runtime ALIAS mce_player_runtime)
 target_include_directories(mce_player_runtime
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"

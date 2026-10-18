@@ -387,6 +387,9 @@ const Golden kGolden[] = {
     {"samples/07_gameplay3d/models/platform.glb", 0x9f74288193d02af7ull},
     {"samples/07_gameplay3d/models/wall.glb", 0xe2306426c5ca4c54ull},
     {"samples/09_openworld/models/box.glb", 0xf9aa709a08c4fe96ull},
+    {"samples/10_missions/models/floor.glb", 0xa593f3ca5b7db3f2ull},
+    {"samples/10_missions/models/grunt.glb", 0x3ddbd5cb30dea27eull},
+    {"samples/10_missions/models/platform.glb", 0x9f74288193d02af7ull},
     {"samples/cinema_demo/models/crate.glb", 0x75071bac877d3561ull},
     {"samples/cinema_demo/models/floor.glb", 0xc1a71f9c9bc7ef7eull},
     {"samples/cinema_demo/models/hero.glb", 0x4af44d6ba68f71b7ull},
@@ -396,6 +399,7 @@ const Golden kGolden[] = {
     {"samples/kit3d_tour/models/cart.glb", 0xc13f4d832988eb19ull},
     {"samples/kit3d_tour/models/grunt.glb", 0x3ddbd5cb30dea27eull},
     {"samples/kit3d_tour/models/platform.glb", 0x9f74288193d02af7ull},
+    {"samples/import_demo/models/lamp.gltf", 0x2c1c7e56b23e617full},  // M-IMPORT3D 4b: the demo's glTF triangle
 };
 
 u64 fnv1a64(const std::vector<byte>& b) {

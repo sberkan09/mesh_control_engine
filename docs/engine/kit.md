@@ -307,10 +307,24 @@ together:
   `MeshRef`s with opaque or masked materials through `render::build_merged_mesh` (one submesh per material, each
   source's LOD levels kept), positions relative to the chunk entity; hidden, unloadable, skinned and non-opaque
   meshes count as `skipped`, those under `min_size` as `small`. `EditorSession::bake_hlod` writes the result as
-  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step.
+  `.mchlod` (`cook::write_hlod_file`) and sets `ChunkLod3D.proxy` as one undo step. Its new sidecars carry
+  `"lod_levels": 2`: the `hlod` importer then adds meshopt levels (`generate_lods`, as the model importers) to the
+  submeshes that have none, leaving the sources' own levels and level 0 as baked. `collect_chunk_sources` is the
+  gathering half (one callback with every source; a child's world matrix composes its `LocalTransform`s up the
+  `ChildOf` chain when the scratch world has no `WorldTransform`), and gives each source a `group`: its root entity's
+  ordinal. The impostor bake (`cook::bake_impostor`, `mce/cook/impostor.h`, M-OPENWORLD A3) takes those groups: a
+  box (four sides and the top) or, for a group taller than `card_ratio` x its width and narrower than `card_size`, two
+  crossed cards, each quad an orthographic albedo capture rasterised on the CPU (cooked BC/RGBA8 textures decoded,
+  sRGB through one table, alpha-masked materials cut, uncovered texels dilated) packed into one atlas by shelves.
+  `EditorSession::bake_hlod(settings, only, &impostor)` writes `chunk_<id>_far.png` (a `texture` sidecar) and
+  `chunk_<id>_far.mchlod` and sets `ChunkLod3D.impostor` in the same undo step as the proxy.
 - StaticMerge3D per frame (M-OPENWORLD A3): an unchanged group costs a walk over its children and a word-wise hash of
   their raw inputs (entity, mesh, material, position, rotation, scale, tints, shadow flag, mesh generation); the mesh
-  views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. Per-entity
+  views and material checks run only when that hash changes, counted in `Kit3DStats::merged_rebuilt`. The change
+  plans the cells (children by cell, kept as entity and placement on the group); `r.merge_budget` /
+  `set_merge_budget` then merges at most that many cells per frame, re-reading each child's MeshRef, mesh view and
+  material when its cell merges, while the unmerged children draw on their own (`merge_pending`). A rebase while
+  cells wait plans the group again. Per-entity
   arrays of the extract (`world_stamp_`, `worlds_`, `lod_states_`, `tracked_`, `merged_stamp_`) grow by half their
   capacity, not to `e.index + 1`: 24k entities arriving in one frame cost 16 ms instead of 2.7 s.
 - Floating origin (M-OPENWORLD A2, `mce/ecs/origin.h`): `install_kit3d`, `install_bodies3d`,
@@ -333,9 +347,12 @@ ctest `test_kit` (no GPU), `tests/kit/`:
 - `test_chunk_lod3d.cpp`: "chunk lod: the proxy near, the impostor far, nothing past max_distance, hidden while
   loaded" (and kept while loading) and "chunk lod: a world without ChunkLod3D draws exactly as before".
   The bake is tested in `tests/editor/test_hlod_bake.cpp` (`test_editor`, "editor hlod bake*": counts, undo,
-  byte-identical re-bake, `min_size`).
+  byte-identical re-bake, `min_size`; the impostor's files, GUIDs and byte-identical re-bake). The capture itself is
+  `tests/asset/test_cook_impostor.cpp` (`test_cook`: boxes and cards, colours in the atlas, every quad's window
+  covered, blended sources left out, same bytes twice).
 - `test_static_merge3d.cpp` also gates the city path by counts: "static merge: a 4096-piece city block reaches the
-  scene as its cells and merges again only on a change".
+  scene as its cells and merges again only on a change" and "static merge: a merge budget spreads a block over
+  frames, the waiting cells' children drawing on their own".
 - `test_origin3d.cpp`: "origin3d: a world rebased mid-run matches the same run without the rebase" (a box
   stack, a character, a hinged door and a nav agent, rebased by cells {-4, 0, 3} after 31 ticks, then 600
   more ticks compared in absolute coordinates within 5 cm) and "origin3d: two rebased runs hash alike".

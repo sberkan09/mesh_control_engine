@@ -48,13 +48,18 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
+<<<<<<< HEAD
 | `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+=======
+| `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+>>>>>>> origin/dev_claude
 | `Projectile3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/import_demo/assets/scenes/main.mcscene |
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/scene_demo/assets/scenes/demo.mcscene |
-| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/ui_screens/assets/scenes/main.mcscene |
+| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `UiFlow` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | projects/Kindle/assets/scenes/main.mcscene |
 | `Camera2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `Post2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
@@ -65,8 +70,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SequencePlayer` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `PathAgent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
-| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/Dungeon/assets/scenes/caves.mcscene |
+| `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |
@@ -90,7 +95,11 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
+<<<<<<< HEAD
 | `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
+=======
+| `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/10_missions/assets/scenes/missions.mcscene |
+>>>>>>> origin/dev_claude
 | `BoxCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
 | `Foliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -99,9 +108,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 2: tested in tests/kit/test_map_markers.cpp; the three-mission demo (step 4) shows it |
-| `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
-| `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSION 1: tested in tests/kit/test_missions.cpp; the three-mission demo (step 4) shows it |
+| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `NavLink3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -185,6 +194,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | Skeleton2D | `.mcskel2d` (JSON) | `asset_create` / `asset_write` | yes | docs/user-guide/05-assets.md |
 | Script | .luau (Luau source, compiled at cook; MCE_WITH_SCRIPT) | `asset_list`, `asset_set_import_settings` | yes | docs/user-guide/27-scripting.md |
 | RoadNetwork | `.mcroads` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/05-assets.md |
+| ConvarDefaults | `.mcdefaults` (JSON) | `asset_create` / `asset_write` | no | docs/user-guide/12-ui-and-console.md |
 
 ## MCP tools
 

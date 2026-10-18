@@ -109,7 +109,7 @@ WALLS = [
     # Cook-time-only third-party code (FR-AST-010): stb lives in the cook library, never in a
     # runtime target; runtime code never includes the cook library.
     ("stb wall", re.compile(r"\bstb(i|tt|rp)_\w*\s*\(|[<\"]stb_\w+\.h"), ["src/engine/asset/cook/"], ["src/", "samples/", "games/", "tests/", "tools/"]),
-    ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/", "tests/asset/test_cook_gltf_ext.cpp"], ["src/", "samples/", "games/", "tests/", "tools/"]),
+    ("meshopt wall", re.compile(r"\bmeshopt_\w*\s*\(|[<\"]meshoptimizer\.h"), ["src/engine/asset/cook/", "tests/asset/test_cook_gltf_ext.cpp", "tests/fuzz/test_mesh_import.cpp"], ["src/", "samples/", "games/", "tests/", "tools/"]),
     # Ogg Vorbis (ADR-0044): stb_vorbis decodes, private to mce_asset's VorbisReader (cook and runtime
     # alike); libvorbis encodes, private to the cook's vorbis_encode.cpp. Everything else goes through
     # asset::VorbisReader / cook::encode_vorbis.
@@ -167,6 +167,22 @@ WALLS = [
         "Luau compiler wall",
         re.compile(r"#\s*include\s*[<\"](luacode\.h|Luau/)"),
         ["src/engine/script/compiler/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    # Bytecode trust (M-SCRIPT2 step 0, SBA-198): Luau's loader trusts its input, so only the game's own cooked pack may be
+    # mounted with allow_code (the player's pack, the editor project's cook, the headless run's pack), and raw bytecode
+    # reaches a ScriptHost only through the script module (scene scripts load it from those mounts, compile() makes it
+    # from source). A mod, a base pack, fetched config or any user file is data-only; to add a mount site, name it here.
+    (
+        "bytecode trust wall (allow_code)",
+        re.compile(r"\ballow_code\s*=\s*true\b"),
+        ["src/player/src/player.cpp", "src/editor/core/src/project.cpp", "src/editor/mcp/src/headless_run.cpp", "tests/"],
+        ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
+    ),
+    (
+        "bytecode trust wall (add_bytecode)",
+        re.compile(r"\badd_bytecode\s*\("),
+        ["src/engine/script/", "tests/"],
         ["src/", "samples/", "games/", "projects/", "templates/", "tests/", "tools/"],
     ),
     # Editor MCP server (ADR-0027, N7): stdio is its only transport, no socket API in its code.
@@ -240,6 +256,69 @@ def umbrella_violations() -> list:
     return out
 
 
+# M-FUZZ 4: a parser of untrusted bytes without a fuzz target is a hole. Every ChunkType must be named in
+# tests/fuzz/test_chunk_readers.cpp (its reader walks mutated payloads), and every importer must have a source
+# the importers fuzz test reads (a committed sample, project, template or game file with one of its extensions)
+# or a corpus of its own under tests/fuzz/. The allow-lists carry the reason; a stale entry is a violation too.
+FUZZ_CHUNK_EXEMPT = {
+    "Atlas": "reserved type: no reader, no importer writes it",
+    "AudioPacket": "reserved type: no reader, no importer writes it",
+}
+FUZZ_IMPORTER_EXEMPT = {
+    "envmap_importer.cpp": "no committed .mcenv source yet; needs a corpus",
+    "hlod_importer.cpp": "no committed .mchlod source yet; needs a corpus",
+    "shader_importer.cpp": "no committed .glsl source; goes through the shader compiler, needs a corpus",
+}
+FUZZ_SOURCE_DIRS = ["samples", "projects", "templates", "games"]
+
+
+def fuzz_coverage_violations() -> list:
+    out = []
+    header = (ROOT / "src/engine/asset/include/mce/asset/container.h").read_text(encoding="utf-8")
+    m = re.search(r"enum class ChunkType\s*:\s*\w+\s*\{(.*?)\};", header, re.S)
+    names = []
+    if m:
+        for line in m.group(1).splitlines():
+            mm = re.match(r"\s*([A-Z]\w*)\s*(=\s*\d+)?\s*,", line)
+            if mm:
+                names.append(mm.group(1))
+    readers = (ROOT / "tests/fuzz/test_chunk_readers.cpp").read_text(encoding="utf-8")
+    for n in names:
+        covered = re.search(r"ChunkType::%s\b" % n, readers) is not None
+        if n in FUZZ_CHUNK_EXEMPT:
+            if covered:
+                out.append(f"tests/fuzz: fuzz wall: ChunkType::{n} is covered; drop it from FUZZ_CHUNK_EXEMPT in check_walls.py")
+        elif not covered:
+            out.append(f"tests/fuzz/test_chunk_readers.cpp: fuzz wall: ChunkType::{n} has no reader in the fuzz test "
+                       "(add a case to read_chunk and has_reader, or an entry with a reason to FUZZ_CHUNK_EXEMPT)")
+    for n in FUZZ_CHUNK_EXEMPT:
+        if n not in names:
+            out.append(f"scripts/ci/check_walls.py: fuzz wall: FUZZ_CHUNK_EXEMPT names {n}, which is not a ChunkType")
+
+    have = set()
+    for d in FUZZ_SOURCE_DIRS:
+        base = ROOT / d
+        if base.exists():
+            have |= {f.suffix for f in base.rglob("*") if f.is_file()}
+    fuzz_text = "".join(p.read_text(encoding="utf-8", errors="replace") for p in (ROOT / "tests/fuzz").glob("*.cpp"))
+    cook = ROOT / "src/engine/asset/cook/src"
+    files = sorted(p.name for p in cook.glob("*_importer.cpp"))
+    for name in files:
+        exts = set(re.findall(r'"(\.[a-z0-9]+)"', (cook / name).read_text(encoding="utf-8", errors="replace")))
+        covered = any(e in have or f'"{e}"' in fuzz_text for e in exts)
+        if name in FUZZ_IMPORTER_EXEMPT:
+            if covered:
+                out.append(f"scripts/ci/check_walls.py: fuzz wall: {name} is covered; drop it from FUZZ_IMPORTER_EXEMPT")
+        elif not covered:
+            out.append(f"src/engine/asset/cook/src/{name}: fuzz wall: no source of its extensions "
+                       f"({', '.join(sorted(exts)) or 'none found'}) in {', '.join(FUZZ_SOURCE_DIRS)} and no corpus in "
+                       "tests/fuzz (add one, or an entry with a reason to FUZZ_IMPORTER_EXEMPT)")
+    for name in FUZZ_IMPORTER_EXEMPT:
+        if name not in files:
+            out.append(f"scripts/ci/check_walls.py: fuzz wall: FUZZ_IMPORTER_EXEMPT names {name}, which does not exist")
+    return out
+
+
 def link_violations() -> list:
     out = []
     for d in SCAN_DIRS:
@@ -259,7 +338,7 @@ def link_violations() -> list:
 
 
 def main() -> int:
-    violations = link_violations() + umbrella_violations()
+    violations = link_violations() + umbrella_violations() + fuzz_coverage_violations()
     for d in SCAN_DIRS:
         base = ROOT / d
         if not base.exists():

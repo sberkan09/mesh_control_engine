@@ -164,6 +164,11 @@ the tileset or sheet PNG its sidecar, so no adoption is needed for those. A glTF
 cannot live in its mesh asset: `mce import gltf|fbx` (or `asset_import` with `tool` `gltf` / `fbx`) writes them as a
 `.mcprefab` next to the model and creates the model's sidecar if it has none (section 8.4, "Lights and cameras").
 
+After a cook, `mce_cook` prints one `mesh assets/...: N tris, N submeshes, N materials, N joints, N clips, N LODs` line per
+3D model (and MCP's `cook_run` returns `meshes`), the quickest check that an import came in as expected (section 8.4,
+"The import summary"). `samples/import_demo` carries a small OBJ + MTL, an ASCII FBX and a glTF with a light and a camera
+as examples, all written by its `gen_art.py`.
+
 ### Open-licence content packs (`mce content`)
 
 The engine keeps one list of third-party packs it knows how to bring in: the **ledger**, `content/ledger.json` in the
@@ -410,3 +415,21 @@ swaps to the new version. A shipped game has no watcher; the player reloads noth
   not imported yet (see 7.3 for the animation recipe).
 - Large tiled areas: a `TilemapLayer` over a tileset, or one `Sprite` per tile. A single stretched
   sprite smears the texture.
+
+## 5.10 Damaged and hostile files
+
+Packs, mods, saves, replays, input recordings and every importable source file may come from somewhere
+you do not control, so the engine reads them as untrusted. A bad file is refused with an error naming
+it (the cook prints it as a diagnostic; the player logs it); it must never crash, hang or read outside
+its buffer. Each reader and importer is tested against thousands of deterministic byte mutations of real
+files (`tests/fuzz/`, milestone record `docs/milestones/M-FUZZ.md`), and the ASan stage of `local_ci.sh`
+runs them with the sanitizers on, a sanitizer report counting as a failure.
+
+- If a file does crash the engine, keep it and report it: the test names (`fuzz: importers ... file F
+  iteration N`) replay one mutant, and `MCE_FUZZ_ITERS=<n>` runs a longer search by hand.
+- Adding a chunk type or an importer: `scripts/ci/check_walls.py` fails until the new chunk type has a
+  reader in `tests/fuzz/test_chunk_readers.cpp` and the new importer has a source file the fuzz test
+  reads (or an entry with a reason in the wall's allow-list).
+- Not covered: Luau bytecode (the loader trusts it, so only the game's own pack may carry it; a mod's is dropped, see
+  19.4, and `check_walls.py` pins the mount sites), and the GPU drivers, the OS and third-party libraries beyond the
+  calls the engine makes into them.
