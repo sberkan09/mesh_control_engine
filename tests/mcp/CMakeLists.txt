@@ -121,6 +121,7 @@ target_compile_definitions(test_mcp_gameplay3d PRIVATE MCE_TEST_TMP_DIR="${CMAKE
 mce_add_test(test_mcp_movement UMBRELLA
     SOURCES
         test_mcp_movement.cpp
+        test_mcp_debugview.cpp
     DEPS
         mce::mce_mcp_core
         mce::mce_platform)

@@ -278,6 +278,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `bt_set` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `perception_debug_lines` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_trace` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
+| `debug_lines` | `tools_debugview.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `debug_view` | `tools_debugview.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_import` | `tools_import.cpp` | docs/user-guide/05-assets.md |
 | `procgen_run` | `tools_procgen.cpp` | docs/user-guide/28-procedural-levels.md |
 | `roads_info` | `tools_roads.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
