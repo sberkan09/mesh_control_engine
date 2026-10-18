@@ -1,6 +1,6 @@
 # M-DEBUGVIEW — Seeing the gameplay systems: one debug-line layer (milestone record)
 
-**Status:** planned 2026-10-18. **Owner: the "Geliştirme rutini 3" thread** (taken after M-FUZZ, at the coordinator's request: pick an unowned, device-free gap from the assessments). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
+**Status:** done 2026-10-18 (steps 1-4). **Owner: the "Geliştirme rutini 3" thread** (taken after M-FUZZ, at the coordinator's request: pick an unowned, device-free gap from the assessments). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
 Source: `assessments/unreal-kiyaslama-2026-10-16.md` ("Hata ayıklama ve ölçüm: Kısmen — Unreal Insights, Gameplay Debugger"). The AI-agent side is the engine's edge, and an agent cannot see a collider, a joint, a waypoint chain or a nav path: `run_headless` `inspect` gives numbers and `render_frame` draws the meshes, not the systems.
 
 **What exists.** Three unrelated line producers: `perception_debug_lines` (`kit/perception.h`, the editor overlay and an MCP tool), `road_debug_lines` (`kit/roads.h`, the editor overlay), and `debug_draw_grid` / `debug_draw_agents` (`kit/pathfinding.h`, 2D, into a physics `DebugDrawSink`). 3D physics (colliders, joints, vehicles, characters, nav agents, waypoint paths) has none.
@@ -27,7 +27,7 @@ Source: `assessments/unreal-kiyaslama-2026-10-16.md` ("Hata ayıklama ve ölçü
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | done (this PR) | | `gameplay_debug_lines` draws box colliders, rigid bodies, triggers, joints, character capsules, vehicle wheels, waypoint chains, driver targets and nav agents. `MeshCollider3D` and crouched capsule height are not drawn yet (follow-ups for step 2/4) |
-| 2 | planned | | needs 1 |
-| 3 | planned | | needs 1 |
-| 4 | planned | | |
+| 1 | done | #584 | `gameplay_debug_lines` draws box colliders, rigid bodies, triggers, joints, character capsules, vehicle wheels, waypoint chains, driver targets and nav agents. `MeshCollider3D` and crouched capsule height are not drawn yet (follow-ups for step 2/4) |
+| 2 | done | #590 | MCP tools `debug_lines` (data, counts per category) and `debug_view` (CPU PNG from top, front or side); the transcript golden and capabilities were regenerated because the tool list grew |
+| 3 | done | #596 | View > "Gameplay debug (while playing)" draws the lines over the 3D play viewport (off by default). The player has no 3D line pass, so `-r.debug_gameplay` is dropped: `debug_view` covers headless and player-side inspection |
+| 4 | done (this PR) | | The `debug_view` picture is pinned by exact non-background pixel counts per view (top 2002, front 2000, side 1888) in `tests/mcp/test_mcp_debugview.cpp`; that test found the rasteriser's background had the wrong channel order, fixed here. Guide 14 and 03 describe the tools and the overlay. Open follow-ups: `MeshCollider3D` hulls and crouched capsule height are not drawn; a player-side line pass would need a render change (out of scope) |

@@ -1,0 +1,1 @@
+- Gameplay debug MCP tools, M-DEBUGVIEW step 2: `debug_lines` plays the saved scene headless and returns the gameplay debugger's world-space lines with per-category counts; `debug_view` draws them with a CPU rasteriser from the top, front or side and returns a PNG. Read-only.

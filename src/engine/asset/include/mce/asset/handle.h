@@ -45,6 +45,7 @@ struct ParticlePreset { static constexpr ChunkType chunk = ChunkType::ParticlePr
 struct StringTable { static constexpr ChunkType chunk = ChunkType::StringTable; static constexpr const char* name = "StringTable"; };
 struct StoreCatalog { static constexpr ChunkType chunk = ChunkType::StoreCatalog; static constexpr const char* name = "StoreCatalog"; };
 struct GameServicesCatalogChunk { static constexpr ChunkType chunk = ChunkType::GameServicesCatalog; static constexpr const char* name = "GameServicesCatalog"; };
+struct ItemCatalogChunk { static constexpr ChunkType chunk = ChunkType::ItemCatalog; static constexpr const char* name = "ItemCatalog"; };
 struct ConvarDefaultsChunk { static constexpr ChunkType chunk = ChunkType::ConvarDefaults; static constexpr const char* name = "ConvarDefaults"; };
 struct RemoteConfigChunk { static constexpr ChunkType chunk = ChunkType::RemoteConfig; static constexpr const char* name = "RemoteConfig"; };
 // clang-format on

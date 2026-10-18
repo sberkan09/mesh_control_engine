@@ -501,6 +501,44 @@ function update() mce.near(vector.create(0, 0, 0), -1) end
     CHECK(error_of(bad.h()).find("radius must be 0 or more") != std::string::npos);
 }
 
+TEST_CASE("script api: mce.within is a box test without physics (filter, exclude, inclusive edges)") {
+    Rig r(R"(
+function update()
+    local lo, hi = vector.create(0, -1, -1), vector.create(3, 1, 1)
+    local boxed = mce.within(lo, hi)
+    local tagged = mce.within(lo, hi, "Tagged")
+    local without_first = mce.within(lo, hi, nil, boxed[1])
+    mce.each("Probe", function(e)
+        if mce.get(e, "Probe", "flag") then
+            mce.set(e, "Probe", "n", #boxed * 100 + #tagged * 10 + #without_first)
+        end
+    end)
+end
+)");
+    r.w.register_components<LocalTransform, Tagged>();
+    auto at = [&](float x, float y) {
+        LocalTransform t;
+        t.position = vec3{x, y, 0};
+        return t;
+    };
+    r.w.spawn_with(at(3.0f, 0.0f), Probe{}, Tagged{});  // on the edge: inside
+    r.w.spawn_with(at(3.01f, 0.0f), Probe{});           // just outside
+    r.w.spawn_with(at(1.0f, 2.0f), Probe{});            // above the box
+    r.w.spawn_with(at(1.0f, -1.0f), Probe{});           // bottom edge: inside
+    Probe reporter;
+    reporter.flag = true;
+    const Entity rep = r.w.spawn_with(at(0.0f, 0.0f), reporter);  // corner of the box: inside
+    r.step();
+    CHECK(error_of(r.h()).empty());
+    CHECK(r.w.try_get<Probe>(rep)->n == 3 * 100 + 1 * 10 + 2);
+
+    Rig bad(R"(
+function update() mce.within(vector.create(1, 0, 0), vector.create(0, 0, 0)) end
+)", false);
+    bad.step();
+    CHECK(error_of(bad.h()).find("min must be at most max") != std::string::npos);
+}
+
 TEST_CASE("script api: input actions by name") {
     Rig r(R"(
 function update()

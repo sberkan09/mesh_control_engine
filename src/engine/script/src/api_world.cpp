@@ -602,6 +602,42 @@ int l_near(lua_State* L) {
     return 1;
 }
 
+// mce.within(min, max, component?, exclude?) -> the entities with a LocalTransform inside the box from `min` to `max`
+// (inclusive), optionally holding `component`, in the order the world stores them. The box twin of mce.near, with no physics
+// world: a trigger area or a screen-space pickup zone. A 2D game has z = 0, so give min.z <= 0 <= max.z.
+int l_within(lua_State* L) {
+    ScriptHost& host = HostAccess::host(L);
+    World& w = world_of(L);
+    const math::vec3 lo = check_vec3(L, 1);
+    const math::vec3 hi = check_vec3(L, 2);
+    if (!(lo.x <= hi.x && lo.y <= hi.y && lo.z <= hi.z)) luaL_error(L, "mce.within: min must be at most max on every axis");
+    ecs::ComponentId need = ecs::kInvalidComponent;
+    bool filter = false;
+    if (!lua_isnoneornil(L, 3)) {
+        const refl::TypeRecord& type = check_type(L, 3, refl::TypeFlags::Component);
+        need = w.find_component(type.type_hash);
+        filter = true;
+    }
+    const Entity exclude = opt_entity(L, 4);
+    Array<Entity>& out = HostAccess::entities(host);
+    out.clear();
+    if (!filter || need != ecs::kInvalidComponent) {
+        w.query<LocalTransform>().each([&](Entity e, LocalTransform& t) {
+            if (e == exclude) return;
+            const math::vec3& p = t.position;
+            if (p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y || p.z < lo.z || p.z > hi.z) return;
+            if (filter && !w.has(e, need)) return;
+            out.push_back(e);
+        });
+    }
+    lua_createtable(L, static_cast<int>(out.size()), 0);
+    for (usize i = 0; i < out.size(); ++i) {
+        push_entity(L, out[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
 // mce.move_and_collide(e, delta) -> {position, grounded, ground, ceiling, wall_left, wall_right}
 int l_move_and_collide(lua_State* L) {
     physics::World2D& pw = physics2d(L);
@@ -1149,6 +1185,7 @@ const luaL_Reg kWorldLib[] = {
     {"raycast2d", l_raycast2d},
     {"overlap2d", l_overlap2d},
     {"near", l_near},
+    {"within", l_within},
     {"move_and_collide", l_move_and_collide},
     {"teleport2d", l_teleport2d},
     {"find_path", l_find_path},

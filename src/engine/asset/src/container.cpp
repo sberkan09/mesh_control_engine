@@ -39,6 +39,7 @@ const char* chunk_type_name(ChunkType t) {
         case ChunkType::Script: return "Script";
         case ChunkType::RoadNetwork: return "RoadNetwork";
         case ChunkType::ConvarDefaults: return "ConvarDefaults";
+        case ChunkType::ItemCatalog: return "ItemCatalog";
     }
     return "ChunkType(?)";
 }

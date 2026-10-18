@@ -123,6 +123,7 @@ map does not define reads as not pressed and zero.
 | `mce.raycast2d(origin, dir, max, skip?)` | the first hit, `{entity, point, normal, distance}`, or `nil`; `skip` is an entity to ignore |
 | `mce.overlap2d(min, max, skip?)` | the entities whose shapes' boxes overlap the box |
 | `mce.near(center, radius, component?, skip?)` | the entities with a `LocalTransform` within `radius` of `center` (and with `component`, if given), nearest first; no physics world needed, so a pickup, an aggro range or a touch test is one call (a 2D game has z = 0) |
+| `mce.within(min, max, component?, skip?)` | the entities with a `LocalTransform` inside the box from `min` to `max` (edges included; a 2D game has z = 0, so give `min.z <= 0 <= max.z`), optionally with `component`, in storage order; no physics world needed. `min` above `max` is an error |
 | `mce.move_and_collide(e, delta)` | moves a character body; `{position, grounded, ground, ceiling, wall_left, wall_right}` |
 | `mce.teleport2d(e, position)` | puts a 2D body at `position` with no sweep (a respawn, a level's start); writing `LocalTransform.position` does not move a body, the physics step writes the body's position back over it |
 | `mce.velocity2d(e)`, `mce.set_velocity2d(e, v)`, `mce.impulse2d(e, v, point?)` | a 2D body's velocity, and pushes; with a world-space `point` the impulse spins the body |

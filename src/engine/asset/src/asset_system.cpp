@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "mce/asset/file_io.h"
+#include "mce/asset/items_format.h"
 #include "mce/asset/roads_format.h"
 #include "mce/asset/xxhash.h"
 #include "mce/log.h"
@@ -87,6 +88,7 @@ u8 supported_major(ChunkType t) {
         case ChunkType::Script: return SCRIPT_VERSION;
         case ChunkType::RoadNetwork: return ROAD_NETWORK_VERSION;
         case ChunkType::ConvarDefaults: return CONVAR_DEFAULTS_VERSION;
+        case ChunkType::ItemCatalog: return ITEM_CATALOG_VERSION;
         default: return 0;
     }
 }
