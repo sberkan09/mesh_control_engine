@@ -1,0 +1,4 @@
+# 08_movement, scenes/race: the cart goes straight, then a handbrake turn (skid events); the two AI karts drive their own laps.
+1-70 Move=0,1
+71-120 Move=1,1
+71-120 Jump
