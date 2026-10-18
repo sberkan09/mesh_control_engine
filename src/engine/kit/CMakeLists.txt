@@ -22,6 +22,7 @@ mce_add_library(mce_gameplay_kit
         src/combat3d.cpp
         src/map_markers.cpp
         src/missions.cpp
+        src/inventory.cpp
         src/world_clock.cpp
         src/day_cycle.cpp
         src/timed_light.cpp
