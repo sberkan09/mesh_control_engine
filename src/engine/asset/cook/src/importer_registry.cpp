@@ -1,3 +1,4 @@
+#include "audio_decode.h"
 #include "fbx_importer.h"
 #include "importer_common.h"
 #include "obj_importer.h"
@@ -37,6 +38,8 @@ void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
     reg.add(make_texture_importer());
     reg.add(make_wav_importer());
     reg.add(make_ogg_importer());
+    reg.add(make_mp3_importer());
+    reg.add(make_flac_importer());
     reg.add(make_sound_set_importer());
     reg.add(make_video_importer());
     reg.add(make_font_importer());

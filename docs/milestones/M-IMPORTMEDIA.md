@@ -14,7 +14,7 @@ follow-up. Stay off render, script VM and perf files.
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | `.tga` and `.bmp` textures through the existing stb_image decoder (no new dependency), a dimension pre-check before any pixel allocation, tests, guide | Sonnet | done (this PR, GH-401): `STBI_ONLY_TGA` / `STBI_ONLY_BMP` in `stb_impl.c`; the texture importer reads the header first and refuses over 16384 a side; `raw_pixels_truncated` refuses raw TGA and BMP files cut short (stb leaves the rest of its buffer unwritten); `tests/asset/test_cook_texture_formats.cpp` |
-| 2 | `.mp3` and `.flac` audio decoded at cook time into the existing `CHNK_SFX` / music chunk (a public-domain single-header decoder, pinned, cook-only, walled, ADR; sidecar settings as for WAV), tests, guide | Sonnet (Opus: the new dependency and its untrusted-input limits) | planned |
+| 2 | `.mp3` and `.flac` audio decoded at cook time into the existing `CHNK_SFX` / music chunk (a public-domain single-header decoder, pinned, cook-only, walled, ADR; sidecar settings as for WAV), tests, guide | Sonnet (Opus: the new dependency and its untrusted-input limits) | built, in review (ADR-0049 Proposed: the coordinator accepts the dependency) |
 | 3 | Fuzz seeds for both in `tests/fuzz/test_importers.cpp`, M-FUZZ survey rows, the close | Sonnet | planned |
 
 ## Decisions

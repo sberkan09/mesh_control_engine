@@ -46,7 +46,7 @@ SOURCE_KINDS = ("http", "manual")
 IMPORTER_BY_EXT = {
     ".glb": "gltf", ".gltf": "gltf",
     ".png": "texture", ".jpg": "texture", ".jpeg": "texture", ".tga": "texture", ".bmp": "texture", ".hdr": "texture", ".exr": "texture",
-    ".wav": "wav", ".ogg": "ogg",
+    ".wav": "wav", ".ogg": "ogg", ".mp3": "mp3", ".flac": "flac",
 }
 LOCK_NAME = "third_party_content.json"
 THIRD_PARTY = "assets/third_party"
