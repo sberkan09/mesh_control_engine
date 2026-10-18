@@ -172,7 +172,7 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `mce.random()` | a number in [0, 1) that depends only on the seed, the tick, the script and the call |
 | `mce.load_scene(target)` | switches scene after this tick (a source path or `"guid:<uuid>"`; section 4.5) |
 | `mce.quit()` | ends the run after this tick, like the window's close button |
-| `mce.log(msg)` | an info line in the engine log, `script: <msg>` |
+| `mce.log(msg)` | an info line in the engine log, `[<name>] script: <msg>` (the name of the script that wrote it) |
 
 **Missions and map markers.** Two more global tables, `mission` and `marker`, are thin over the mission kit (section 9.13) and the map markers (9.15). They keep nothing: the state is the `Mission` and `MapMarker` components and the `MissionSignal` event, so saves, replays and the editor see it. A world without the kit pieces gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
 
@@ -285,7 +285,8 @@ end
   to use instead (`'print' is not available in scripts; use mce.log`).
 - **Budgets.** Each script gets a step budget per tick and the VM a memory cap. A script that errors or
   runs over is disabled, its error logged as `script <name>: <file>:<line>: message`, and the other
-  scripts keep running.
+  scripts keep running. A step-budget failure names the line that spent it (`dungeon:41: step budget exceeded
+  (200000 per tick)`); `mce profile` (27.7b) shows how close each script runs to the limit.
 - **Deterministic.** The same scene and input give the same state hash on every run, in Debug and
   Release.
 
