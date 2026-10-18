@@ -66,6 +66,11 @@ WALLS = [
      ["src/engine/asset/cook/src/fbx_importer.cpp", "src/engine/asset/cook/src/ufbx_impl.c",
       "tests/asset/test_ufbx_smoke.cpp"],
      ["src/", "samples/", "games/", "tests/", "tools/"]),
+    # dr_libs (M-IMPORTMEDIA step 2) is cook-time only: audio_decode.cpp turns .mp3 and .flac into PCM for the audio
+    # importer, runtimes load the cooked CHNK_SFX. drlibs_impl.c compiles the decoders.
+    ("dr_libs wall", re.compile(r"[<\"]dr_(mp3|flac|wav)\.h|\bdr(mp3|flac)_\w+\s*\("),
+     ["src/engine/asset/cook/src/audio_decode.cpp", "src/engine/asset/cook/src/drlibs_impl.c"],
+     ["src/", "samples/", "games/", "tests/", "tools/"]),
     # tinyexr (M-VISUAL3 step 4) is cook-time only: the texture importer reads .exr into RGBA16F, runtimes upload it.
     ("tinyexr wall", re.compile(r"[<\"]tinyexr\.h|\b(Load|Parse|Free|Init|Is)EXR\w*\s*\("),
      ["src/engine/asset/cook/src/texture_importer.cpp", "src/engine/asset/cook/src/tinyexr_impl.cpp"],
@@ -222,6 +227,7 @@ LINK_WALLS = [
     ("libdatachannel link wall", re.compile(r"\b(datachannel-static|juice-static|usrsctp)\b"), ["src/engine/net/"]),
     ("bc7enc link wall", re.compile(r"\bmce_bc7enc\b"), ["src/engine/asset/cook/", "tests/asset/"]),
     ("ufbx link wall", re.compile(r"\bmce_ufbx\b"), ["src/engine/asset/cook/", "tests/asset/"]),
+    ("dr_libs link wall", re.compile(r"\bmce_drlibs\b"), ["src/engine/asset/cook/"]),
     ("libvorbis link wall", re.compile(r"\bmce_vorbisenc\b"), ["src/engine/asset/cook/"]),
     # Luau scripting (ADR-0041, M-SCRIPT) is opt-in: no engine library links mce_script (it is not
     # in MCE_ENGINE_LIBS); the stock hosts (player, editor, mce_mcp), its sample and tests do. The
