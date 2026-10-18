@@ -740,3 +740,118 @@ TEST_CASE("gltf: skinning is optional per asset; bad skins fail with the JSON po
         CHECK(has_error(r, "/skins/0: skin joint is not a node of the imported scene"));
     }
 }
+
+namespace {
+
+constexpr const char* kLibGuid = "6a1d9c58-0f4b-4b8e-9d1b-1c2a3b4c5d11";
+constexpr const char* kLib2Guid = "6a1d9c58-0f4b-4b8e-9d1b-1c2a3b4c5d12";
+
+// A glTF with a skeleton and no mesh: the nodes `names`, one clip `clip` of `duration` seconds turning the first bone
+// and (when `extra_bone`) moving a bone the character lacks.
+std::string library_doc(const char* clip, float duration, bool extra_bone, const char* first_bone = "hip") {
+    std::string bin;
+    put_f32(bin, 0.0f);
+    put_f32(bin, duration);  // times
+    for (float x : {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.70710678f, 0.0f, 0.70710678f}) put_f32(bin, x);  // rotations
+    for (float x : {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}) put_f32(bin, x);                             // translations
+    std::string s = "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" + std::to_string(bin.size()) +
+                    ",\"uri\":\"data:application/octet-stream;base64," + base64(bin) + "\"}],";
+    s += "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":8},{\"buffer\":0,\"byteOffset\":8,\"byteLength\":32},"
+         "{\"buffer\":0,\"byteOffset\":40,\"byteLength\":24}],";
+    s += "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":2,\"type\":\"SCALAR\"},"
+         "{\"bufferView\":1,\"componentType\":5126,\"count\":2,\"type\":\"VEC4\"},"
+         "{\"bufferView\":2,\"componentType\":5126,\"count\":2,\"type\":\"VEC3\"}],";
+    s += "\"nodes\":[{\"name\":\"armature\",\"children\":[1,2,3]},{\"name\":\"" + std::string(first_bone) +
+         "\"},{\"name\":\"knee\"},{\"name\":\"ik_target\"}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0,";
+    s += "\"animations\":[{\"name\":\"" + std::string(clip) +
+         "\",\"samplers\":[{\"input\":0,\"output\":1},{\"input\":0,\"output\":2}],\"channels\":[{\"sampler\":0,\"target\":{"
+         "\"node\":1,\"path\":\"rotation\"}}" +
+         std::string(extra_bone ? ",{\"sampler\":1,\"target\":{\"node\":3,\"path\":\"translation\"}}" : "") + "]}]}";
+    return s;
+}
+
+std::string clip_name(const MeshView& m, const MeshClip& c) {
+    return std::string(m.strings.data() + c.name_offset, c.name_size);
+}
+
+}  // namespace
+
+TEST_CASE("gltf: a sidecar's animations_from plays a shared library's clips on the mesh by bone name") {
+    CookService svc;
+    SUBCASE("clips bind to the mesh's nodes; bones it lacks are skipped with one warning") {
+        const std::string root = make_project("gltf_library", skinned_doc(), false);
+        write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, true));
+        write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
+        write_file(root + "/assets/models/crate.gltf.mceasset",
+                   sidecar(kGltfGuid, "gltf", "{ \"animations_from\": [\"models/lib.gltf\"] }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        CHECK(diag_text(r).find("1 channel of assets/models/lib.gltf target bones this mesh lacks") != std::string::npos);
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        REQUIRE(m.clips.size() == 1);
+        CHECK(clip_name(m, m.clips[0]) == "wave");
+        CHECK(m.clips[0].duration == doctest::Approx(2.0f));
+        REQUIRE(m.clips[0].channel_count == 1);
+        const MeshNode& n = m.nodes[m.channels[m.clips[0].first_channel].node];
+        CHECK(std::string(m.strings.data() + n.name_offset, n.name_size) == "hip");
+    }
+    SUBCASE("without the setting the mesh has no clips; the first library wins a name clash") {
+        const std::string plain = make_project("gltf_library_none", skinned_doc(), false);
+        const CookReport r0 = svc.cook(plain.c_str(), CookOptions{});
+        REQUIRE(r0.ok());
+        const std::vector<byte> p = cooked_mesh(plain, kGltfGuid);
+        CHECK(MeshView::read(Span<const byte>(p.data(), p.size())).value().clips.size() == 0);
+
+        const std::string root = make_project("gltf_library_two", skinned_doc(), false);
+        write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, false));
+        write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
+        write_file(root + "/assets/models/lib2.gltf", library_doc("wave", 5.0f, false));
+        write_file(root + "/assets/models/lib2.gltf.mceasset", sidecar(kLib2Guid, "gltf"));
+        write_file(root + "/assets/models/crate.gltf.mceasset",
+                   sidecar(kGltfGuid, "gltf", "{ \"animations_from\": [\"models/lib.gltf\", \"models/lib2.gltf\"] }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        REQUIRE(m.clips.size() == 1);
+        CHECK(m.clips[0].duration == doctest::Approx(2.0f));
+    }
+    SUBCASE("a clip that binds nothing is not added, so a later library's clip of that name is") {
+        const std::string root = make_project("gltf_library_empty", skinned_doc(), false);
+        write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, false, "pelvis"));  // no bone matches
+        write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
+        write_file(root + "/assets/models/lib2.gltf", library_doc("wave", 5.0f, false));
+        write_file(root + "/assets/models/lib2.gltf.mceasset", sidecar(kLib2Guid, "gltf"));
+        write_file(root + "/assets/models/crate.gltf.mceasset",
+                   sidecar(kGltfGuid, "gltf", "{ \"animations_from\": [\"models/lib.gltf\", \"models/lib2.gltf\"] }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        REQUIRE(m.clips.size() == 1);
+        CHECK(m.clips[0].duration == doctest::Approx(5.0f));
+    }
+    SUBCASE("a library whose bones do not match, a missing file and a bad value are cook errors") {
+        const std::string root = make_project("gltf_library_bad", skinned_doc(), false);
+        write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, false, "pelvis"));
+        write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
+        const char* cases[][2] = {
+            {"{ \"animations_from\": [\"models/lib.gltf\"] }", "no bone of the 'animations_from' libraries matches a node of this mesh"},
+            {"{ \"animations_from\": [\"models/nope.gltf\"] }", "'animations_from' names 'models/nope.gltf', which is no asset"},
+            {"{ \"animations_from\": \"models/lib.gltf\" }", "'animations_from' must be an array"},
+            {"{ \"animations_from\": [3] }", "entries are paths relative to assets/"},
+            {"{ \"animations_from\": [\"models/lib.fbx\"] }", "reads glTF/GLB files"},
+        };
+        for (const auto& c : cases) {
+            write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", c[0]));
+            const CookReport r = svc.cook(root.c_str(), CookOptions{});
+            INFO(c[0]);
+            INFO(diag_text(r));
+            CHECK(has_error(r, c[1]));
+        }
+    }
+}
