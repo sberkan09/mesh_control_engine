@@ -133,7 +133,7 @@ bool debug_lines_tool(ToolCall& c) {
 }
 
 u32 pack(const math::Color& col) {
-    auto ch = [](f32 v) { return static_cast<u32>(std::fmin(std::fmax(v, 0.0f), 1.0f) * 255.0f + 0.5f); };
+    auto ch = [](f32 v) { return static_cast<u32>(std::lround(std::fmin(std::fmax(v, 0.0f), 1.0f) * 255.0f)); };
     return ch(col.r) | (ch(col.g) << 8) | (ch(col.b) << 16) | 0xFF000000u;
 }
 
