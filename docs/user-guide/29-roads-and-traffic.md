@@ -206,10 +206,16 @@ scene (`assets/scenes/city.mcscene`, written by `gen_assets.py`). Its pieces, as
 - `drive.input` is the headless script (walk to the car, get in, drive, brake with `TriggerL`, get out); the input map
   `assets/input/openworld.mcinput` adds `Interact`, `Reload`, `Sprint` and `TriggerL` to the stock actions.
 
+The art is the ledger's content set: `kenney-car-kit` (sedan, sports sedan, taxi, SUV, delivery van and police car for the
+parked cars; the traffic prefab uses the sedan), `kenney-blocky-characters` (player, police, crowd) and
+`kenney-city-kit-commercial` / `-suburban` (the lot buildings, stretched to each lot's box). `mce content add <pack>
+samples/09_openworld --only <glob>` copied only the files in use, so the sample stays small; `gen_assets.py` writes their
+`.mceasset` sidecars and the scene points at them by GUID. The collision boxes are still plain boxes: the models are
+visual only, and the car wheels do not spin and the characters do not animate yet.
+
 Not in the sample yet: missions and the minimap ([M-MISSION](../milestones/M-MISSION.md)), baked HLOD for the skyline
-(the render-scale thread), traffic-light visuals that follow the light state, police cars, a skinned character and audio
-(the open-licence content set in the milestone file has the models; the engine, gun and siren sounds still need ledger
-entries). Dead pedestrians vanish after a fraction of a second: the crowd does not look at `Health3D` yet.
+(the render-scale thread), traffic-light visuals that follow the light state, police cars, a skinned or animated character and audio
+(engine, gun and siren sounds still need ledger entries). Dead pedestrians vanish after a fraction of a second: the crowd does not look at `Health3D` yet.
 
 ## 29.8 Mistakes the cook catches
 
