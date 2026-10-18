@@ -359,6 +359,68 @@ end
     CHECK(got->c[2].x == doctest::Approx(0.0f));
 }
 
+TEST_CASE("script api: mce.param reads the scene's named per-entity constants") {
+    Rig r(R"(
+function update()
+    mce.each("ScriptParams", function(e)
+        mce.set(e, "Probe", "n", mce.param(e, "speed") * 10 + mce.param(e, "jump_height"))
+    end)
+end
+)");
+    r.w.register_components<kit::ScriptParams>();
+    kit::ScriptParams a;
+    a.names = "speed, jump_height  gravity";
+    a.v[0] = 3.0f;
+    a.v[1] = 4.0f;
+    a.v[2] = 20.0f;
+    const Entity ea = r.w.spawn_with(Probe{}, a);
+    kit::ScriptParams b;
+    b.names = "jump_height speed";
+    b.v[0] = 1.0f;
+    b.v[1] = 7.0f;
+    const Entity eb = r.w.spawn_with(Probe{}, b);
+    r.step(2);
+    CHECK(error_of(r.h()).empty());
+    CHECK(r.w.try_get<Probe>(ea)->n == 34);  // one script, different tuning per entity
+    CHECK(r.w.try_get<Probe>(eb)->n == 71);
+
+    Rig d(R"(
+function update()
+    mce.each("Probe", function(e)
+        mce.set(e, "Probe", "n", mce.param(e, "gravity", 9) + mce.param(e, "speed", 1))
+    end)
+end
+)");
+    d.w.register_components<kit::ScriptParams>();
+    const Entity plain = d.w.spawn_with(Probe{});
+    kit::ScriptParams only_speed;
+    only_speed.names = "speed";
+    only_speed.v[0] = 5.0f;
+    const Entity partial = d.w.spawn_with(Probe{}, only_speed);
+    d.step(2);
+    CHECK(error_of(d.h()).empty());
+    CHECK(d.w.try_get<Probe>(plain)->n == 10);    // no component: both defaults
+    CHECK(d.w.try_get<Probe>(partial)->n == 14);  // 9 + 5
+
+    Rig missing(R"(
+function update() mce.each("Probe", function(e) mce.param(e, "speed") end) end
+)");
+    missing.w.register_components<kit::ScriptParams>();
+    missing.w.spawn_with(Probe{});
+    missing.step();
+    CHECK(error_of(missing.h()).find("has no ScriptParams") != std::string::npos);
+
+    Rig unnamed(R"(
+function update() mce.each("Probe", function(e) mce.param(e, "speeed") end) end
+)");
+    unnamed.w.register_components<kit::ScriptParams>();
+    kit::ScriptParams c;
+    c.names = "speed";
+    unnamed.w.spawn_with(Probe{}, c);
+    unnamed.step();
+    CHECK(error_of(unnamed.h()).find("no parameter 'speeed'") != std::string::npos);
+}
+
 TEST_CASE("script api: mce.field names one element of an array field (ScriptVars slots)") {
     Rig r(R"(
 local COINS = mce.field("ScriptVars", "v", 1)

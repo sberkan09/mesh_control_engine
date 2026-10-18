@@ -98,6 +98,7 @@ the new entity is alive at once, its components appear after the phase.
 | `mce.remove(e, "Comp")`, `mce.destroy(e)` | removes a component, destroys the entity |
 | `mce.has(e, "Comp")`, `mce.alive(e)` | what the entity has now |
 | `mce.find(name)` | the entity a scene gave that name (`"name"` in the `.mcscene`), or `nil`; the first live one in scene order if several share it. Entities spawned at run time have no name, and a scene change forgets the old names |
+| `mce.param(e, name, default?)` | the number the scene gave this entity for `name` in its `ScriptParams` (chapter 27.8), or `default` when it has none; without a default a missing component or name is an error |
 | `mce.instantiate("guid:<prefab>", pos?)` | spawns a prefab, its root at `pos`; the root entity, or `nil` (logged) |
 
 **Events and signals.** Events are readable from the tick after they were pushed.
@@ -411,6 +412,21 @@ the whole-array handle in one call. A number outside 1..16, or an `element` on a
 The scene gives the first values (`"ScriptVars": { "v": [0, 1, 38, 3, 4, 0, ...] }`). A convention that scales
 to several kinds of entity: keep the kind in the last slot (`v[16]`: 1 = player, 2 = enemy, 3 = goal) and let
 each script skip the entities that are not its own.
+
+**Tuning that belongs to the scene: `ScriptParams`.** `ScriptVars` is memory a script writes; constants an author sets per
+entity (a walker's speed, a door's delay) live in `ScriptParams`, which a script only reads. `names` lists the name of
+each number (space or comma separated) and `v` holds up to eight values:
+
+```json
+"ScriptParams": { "names": "patrol_speed chase_speed", "v": [1.6, 3.4, 0, 0, 0, 0, 0, 0] }
+```
+
+```lua
+local speed = mce.param(e, "patrol_speed", 1.6)   -- the scene's value, or 1.6 on an entity with none
+```
+
+One script then serves many entities with different tuning, and the values are plain scene data an agent or the editor changes
+(`entity_set_component`) without touching the script. A name that is not in the list is an error unless you gave a default.
 
 **Example: `projects/EmberScript`.** Ember Step's controller and an enemy state machine in Luau, with no
 C++ at all: `player.luau` (run, coyote time, jump buffer, a shorter hop when Jump is let go, respawn),
