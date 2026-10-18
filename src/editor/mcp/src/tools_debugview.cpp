@@ -212,7 +212,7 @@ bool debug_view_tool(ToolCall& c) {
     const f64 span = std::fmax(std::fmax(max_u - min_u, max_v - min_v), 1.0);
     const f64 pad = 16.0;
     const f64 scale = (static_cast<f64>(std::fmin(static_cast<f64>(width), static_cast<f64>(height))) - 2.0 * pad) / span;
-    cook::Image img = make_image(static_cast<u32>(width), static_cast<u32>(height), 0xFF202020u);
+    cook::Image img = make_image(static_cast<u32>(width), static_cast<u32>(height), 0x202020FFu);
     auto px = [&](math::vec3 p, i32& x, i32& y) {
         f64 u, v;
         project(p, u, v);
