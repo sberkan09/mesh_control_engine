@@ -146,6 +146,7 @@ private:
         const refl::FieldRecord* field = nullptr;
         const World* world = nullptr;  // the World `comp` was resolved in
         ecs::ComponentId comp = ecs::kInvalidComponent;
+        u32 element = 0;  // an array field's element, 1-based (0: the whole field)
     };
     Array<FieldHandle> handles_;
     Array<u8> scratch_;  // component bytes for spawn/add/emit (no destructors across Luau errors)

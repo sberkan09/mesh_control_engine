@@ -13,6 +13,7 @@
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/components.h"
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
@@ -297,6 +298,42 @@ function update() mce.make_noise(vector.create(0, 0, 0)) end
     none.step();
     CHECK(error_of(none.h()).find("no perception") != std::string::npos);
     (void)e;
+}
+
+TEST_CASE("script api: mce.field names one element of an array field (ScriptVars slots)") {
+    Rig r(R"(
+local COINS = mce.field("ScriptVars", "v", 1)
+local KIND = mce.field("ScriptVars", "v", 16)
+local ALL = mce.field("ScriptVars", "v")
+function update()
+    mce.each("ScriptVars", function(e)
+        mce.set(e, COINS, mce.get(e, COINS) + 1, KIND, 7)
+        local v = mce.get(e, ALL)
+        mce.set(e, "Probe", "n", v[1] * 100 + v[16])
+    end)
+end
+)");
+    r.w.register_components<kit::ScriptVars>();
+    const Entity e = r.w.spawn_with(Probe{}, kit::ScriptVars{});
+    r.step(3);
+    CHECK(error_of(r.h()).empty());
+    CHECK(r.w.try_get<kit::ScriptVars>(e)->v[0] == doctest::Approx(3.0f));  // slot 1 is v[0]
+    CHECK(r.w.try_get<kit::ScriptVars>(e)->v[15] == doctest::Approx(7.0f));
+    CHECK(r.w.try_get<kit::ScriptVars>(e)->v[1] == doctest::Approx(0.0f));
+    CHECK(r.w.try_get<Probe>(e)->n == 307);
+
+    Rig bad1(R"(
+function update() mce.field("ScriptVars", "v", 17) end
+)", false);
+    bad1.w.register_components<kit::ScriptVars>();
+    bad1.step();
+    CHECK(error_of(bad1.h()).find("has 16 elements") != std::string::npos);
+
+    Rig bad2(R"(
+function update() mce.field("Probe", "n", 1) end
+)", false);
+    bad2.step();
+    CHECK(error_of(bad2.h()).find("is not an array") != std::string::npos);
 }
 
 TEST_CASE("script api: input actions by name") {
