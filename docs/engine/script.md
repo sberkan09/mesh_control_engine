@@ -55,6 +55,11 @@ What a script cannot do, and what to do instead:
 - Script-only projects (`"games": []`; Dungeon, Pursuit) add `<Name>_mctests`, `<Name>_perf_counters` and a seeded
   perf variant through `mce_add_script_project`; the determinism stage plays their autopilot input.
 
+## Profile
+
+`ScriptInfo` keeps `peak_steps`, `total_steps` and `updates` besides `last_steps`; `mce profile <project>` (the MCP `run_headless` result's `scripts`) prints them against
+`ScriptBudget::steps_per_tick`. Steps are interrupt counts (calls and loop back edges), deterministic, not wall-clock time.
+
 ## Known gaps
 
 - The static state check is a heuristic: it follows top-level locals, `local a = t.x` aliases made inside a function and writes into global

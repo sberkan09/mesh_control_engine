@@ -103,6 +103,19 @@ class Project:
         self.build = self.dir / "build"
         self.start_scene = str(self.meta.get("start_scene") or "").removeprefix("guid:")
 
+    def start_scene_path(self):
+        """The path under assets/ of the scene `start_scene` names (the MCP run_headless tool wants a path, not a guid), or None."""
+        if not self.start_scene:
+            return None
+        assets = self.dir / "assets"
+        for f in sorted(assets.rglob("*.mcscene")):
+            try:
+                if self.start_scene in f.read_text(encoding="utf-8", errors="replace"):
+                    return f.relative_to(assets).as_posix()
+            except OSError:
+                pass
+        return None
+
     @property
     def host(self):
         if self.script:
@@ -425,8 +438,9 @@ def cmd_inspect(args):
     if args.show:
         insp["show"] = [t for t in args.show.split(",") if t]
     arguments = {"ticks": args.ticks, "inspect": insp, "log_lines": 0}
-    if args.scene:
-        arguments["scene"] = args.scene
+    scene = args.scene or p.start_scene_path()
+    if scene:
+        arguments["scene"] = scene
     out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
     print(json.dumps(out.get("inspect", {}), indent=2))
     print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}", file=sys.stderr)
@@ -434,6 +448,31 @@ def cmd_inspect(args):
     for e in errs:
         print(f"script {e.get('script')}: {e.get('error')}", file=sys.stderr)
     return 3 if errs else 0
+
+
+def cmd_profile(args):
+    """Run the game headless and print what each scene script cost (the `run_headless` tool's `scripts`)."""
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    arguments = {"ticks": args.ticks, "log_lines": 0}
+    scene = p.start_scene_path()
+    if scene:
+        arguments["scene"] = scene
+    out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
+    scripts = out.get("scripts") or []
+    if not scripts:
+        print("mce: the scene runs no scripts")
+        return 1
+    width = max(len(s["script"]) for s in scripts)
+    print(f"{'script'.ljust(width)}  {'updates':>8}  {'avg steps':>10}  {'peak steps':>10}  {'budget':>8}  {'peak/budget':>11}")
+    for s in scripts:
+        budget = s.get("budget_steps") or 0
+        share = f"{100.0 * s['peak_steps'] / budget:.1f}%" if budget else "-"
+        print(f"{s['script'].ljust(width)}  {s['updates']:>8}  {s['avg_steps']:>10.1f}  {s['peak_steps']:>10}  {budget:>8}  {share:>11}"
+              + ("  FAILED" if s.get("failed") else ""))
+    print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}")
+    return 3 if any(s.get("failed") for s in scripts) else 0
 
 
 def cmd_cook(args):
@@ -991,6 +1030,11 @@ def main(argv):
     s.add_argument("--show", help="comma-separated components to print (default: the entity's own, or the --component plus LocalTransform)")
     s.add_argument("--scene", help="play this saved scene (path under assets/)")
     s.set_defaults(fn=cmd_inspect)
+
+    s = sub.add_parser("profile", help="run the game headless and print each scene script's step cost against its budget")
+    s.add_argument("project")
+    s.add_argument("--ticks", type=int, default=300)
+    s.set_defaults(fn=cmd_profile)
 
     s = sub.add_parser("ship", help="zip the host, module, engine library and pack (--target web: the browser build)")
     s.add_argument("project")

@@ -3,6 +3,7 @@
 
 #include "mce/script/script.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -1078,6 +1079,9 @@ void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
         const int rc = lua_pcall(L_, 0, 0, 0);
         in_update_ = false;
         infos_[i].last_steps = steps_;
+        infos_[i].peak_steps = std::max(infos_[i].peak_steps, steps_);
+        infos_[i].total_steps += steps_;
+        ++infos_[i].updates;
         if (rc != 0) {
             // A write into a table the state check froze: say why it is frozen.
             const char* msg = lua_tostring(L_, -1);

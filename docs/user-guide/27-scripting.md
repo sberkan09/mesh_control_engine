@@ -396,6 +396,13 @@ entity with that component, at most 64) or `--entity <id or name>`, add `--show 
 (chapter 14.3.1), not through `mce_player`.
 
 
+## 27.7b Seeing what a script costs: `mce profile`
+
+`mce profile MyGame [--ticks N]` plays the scene headless and prints, for each scene script, its updates, the average and peak **steps**
+per update and the share of the per-update budget the peak used (200000 steps by default). A step is a call or a loop pass, counted
+the same on every machine, so the table is a fixed number you can compare between changes, not a timing. A script close to its budget
+will be disabled by one more loop; exit code 3 if a script failed. `run_headless` returns the same list as `scripts`.
+
 ## 27.8 Remembering things: `ScriptVars`
 
 A script keeps nothing between ticks, and a game with no C++ cannot define its own components, so the kit

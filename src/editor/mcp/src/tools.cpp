@@ -247,6 +247,18 @@ void write_script_errors(JsonWriter& w, const HeadlessRun& run) {
     w.end_array();
 }
 
+void write_script_profile(JsonWriter& w, const HeadlessRun& run) {
+    if (run.scripts.empty()) return;
+    w.key("scripts").begin_array();
+    for (const ScriptProfile& s : run.scripts) {
+        w.begin_object().key("script").str(s.name.view()).key("failed").boolean(s.failed);
+        w.key("updates").num_u(s.updates).key("peak_steps").num_u(s.peak_steps).key("budget_steps").num_u(s.budget_steps);
+        w.key("avg_steps").num_f(s.updates ? static_cast<double>(s.total_steps) / static_cast<double>(s.updates) : 0.0);
+        w.end_object();
+    }
+    w.end_array();
+}
+
 namespace {
 
 void write_component_object(JsonWriter& w, const DocComponent& c) {
@@ -1508,6 +1520,7 @@ bool run_headless_tool(ToolCall& c) {
     write_log_lines(c.out, lines.span(), static_cast<usize>(log_lines));
     c.out.end_object();
     write_script_errors(c.out, h);
+    write_script_profile(c.out, h);
     if (inspecting) c.out.key("inspect").raw(inspect.json.view());
     if (trace.active()) {
         c.out.key("trace");
