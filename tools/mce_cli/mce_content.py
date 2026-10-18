@@ -45,7 +45,7 @@ KINDS = ("models", "textures", "audio", "animations", "hdri", "mixed")
 SOURCE_KINDS = ("http", "manual")
 IMPORTER_BY_EXT = {
     ".glb": "gltf", ".gltf": "gltf",
-    ".png": "texture", ".jpg": "texture", ".jpeg": "texture", ".hdr": "texture", ".exr": "texture",
+    ".png": "texture", ".jpg": "texture", ".jpeg": "texture", ".tga": "texture", ".bmp": "texture", ".hdr": "texture", ".exr": "texture",
     ".wav": "wav", ".ogg": "ogg",
 }
 LOCK_NAME = "third_party_content.json"

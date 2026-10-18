@@ -49,7 +49,7 @@ INTERNAL_CHUNKS = {
 # Asset types imported from a file format (a sidecar picks the importer) rather than a JSON source.
 IMPORTED = {
     "Mesh": ".gltf / .glb",
-    "Texture": ".png / .jpg",
+    "Texture": ".png / .jpg / .tga / .bmp",
     "Sfx": ".wav / .ogg / .mcsound (sound set)",
     "Font": ".ttf",
     "Scene": ".mcscene (scene_* tools)",
