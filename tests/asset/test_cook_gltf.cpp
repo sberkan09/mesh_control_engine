@@ -819,15 +819,32 @@ TEST_CASE("gltf: a sidecar's animations_from plays a shared library's clips on t
         REQUIRE(m.clips.size() == 1);
         CHECK(m.clips[0].duration == doctest::Approx(2.0f));
     }
+    SUBCASE("a clip that binds nothing is not added, so a later library's clip of that name is") {
+        const std::string root = make_project("gltf_library_empty", skinned_doc(), false);
+        write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, false, "pelvis"));  // no bone matches
+        write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
+        write_file(root + "/assets/models/lib2.gltf", library_doc("wave", 5.0f, false));
+        write_file(root + "/assets/models/lib2.gltf.mceasset", sidecar(kLib2Guid, "gltf"));
+        write_file(root + "/assets/models/crate.gltf.mceasset",
+                   sidecar(kGltfGuid, "gltf", "{ \"animations_from\": [\"models/lib.gltf\", \"models/lib2.gltf\"] }"));
+        const CookReport r = svc.cook(root.c_str(), CookOptions{});
+        INFO(diag_text(r));
+        REQUIRE(r.ok());
+        const std::vector<byte> a = cooked_mesh(root, kGltfGuid);
+        const MeshView m = MeshView::read(Span<const byte>(a.data(), a.size())).value();
+        REQUIRE(m.clips.size() == 1);
+        CHECK(m.clips[0].duration == doctest::Approx(5.0f));
+    }
     SUBCASE("a library whose bones do not match, a missing file and a bad value are cook errors") {
         const std::string root = make_project("gltf_library_bad", skinned_doc(), false);
         write_file(root + "/assets/models/lib.gltf", library_doc("wave", 2.0f, false, "pelvis"));
         write_file(root + "/assets/models/lib.gltf.mceasset", sidecar(kLibGuid, "gltf"));
         const char* cases[][2] = {
-            {"{ \"animations_from\": [\"models/lib.gltf\"] }", "no bone of assets/models/lib.gltf matches a node of this mesh"},
+            {"{ \"animations_from\": [\"models/lib.gltf\"] }", "no bone of the 'animations_from' libraries matches a node of this mesh"},
             {"{ \"animations_from\": [\"models/nope.gltf\"] }", "'animations_from' names 'models/nope.gltf', which is no asset"},
             {"{ \"animations_from\": \"models/lib.gltf\" }", "'animations_from' must be an array"},
             {"{ \"animations_from\": [3] }", "entries are paths relative to assets/"},
+            {"{ \"animations_from\": [\"models/lib.fbx\"] }", "reads glTF/GLB files"},
         };
         for (const auto& c : cases) {
             write_file(root + "/assets/models/crate.gltf.mceasset", sidecar(kGltfGuid, "gltf", c[0]));
