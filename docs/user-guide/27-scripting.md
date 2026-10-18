@@ -214,10 +214,12 @@ end
   loads), and the locals of `update()` and the closures inside it are fine, since they live for one call.
   Globals are read-only after the top level runs.
 
+  The cook also follows a local that points into a top-level table (`local row = grid[i]; row.x = 1`,
+  `local a = t; a.n += 1`) and writes into a global table (`STATE.n += 1`, `table.insert(STATE, 1)`).
+
   What the cook cannot see is caught when the game runs. Once the top level has run, every table that
-  `update()` and the script's globals reach is frozen, so writing into it through an alias
-  (`local a = t; a.n += 1`), a helper's parameter (`fill(t)`), a global table (`STATE.n += 1`) or a
-  `newproxy` metatable fails at that line with `attempt to modify a readonly table (tables reachable
+  `update()` and the script's globals reach is frozen, so writing into it through a helper's parameter
+  (`fill(t)`) or a `newproxy` metatable fails at that line with `attempt to modify a readonly table (tables reachable
   from update() are frozen after the top level; keep state in a component)`. Upvalues (a closure made
   by a factory, `local inc = counter()`) and buffers it reaches are compared after each `update()`; a
   change disables the script on that tick with `update() kept state between ticks: upvalue 'n' of the

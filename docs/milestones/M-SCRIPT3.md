@@ -20,7 +20,7 @@ cannot yet say or check:
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | Rotation from Luau: Euler degrees as a vector (no quaternion type), `mce.rotation3d`, `set_rotation3d`, `look_rotation3d`, `teleport3d` with a rotation | Sonnet | done |
-| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a and 2b done; 2c (static check widening) not started |
+| 2 | Hidden-state checks: freeze reachable tables after load and watch upvalues and buffers per tick ([design note](M-SCRIPT3-step2-design.md)) | Opus (touches the VM; design note approved) | 2a, 2b and 2c done (2c in PR: aliases and global tables, see "Step 2c as built") |
 | 3 | Dungeon `perf_gate` counter baseline | Sonnet | done |
 | 4 | A real blind test: a fresh agent with only the guide builds a small script-only game; friction goes to `report_friction` | Sonnet | done (PR for the guide fixes); open: see "Step 4 as built" |
 | 5 | Gaps the blind test 3 friction notes found (2026-10-16): an entity lookup by name in `mce` (screens and markers are found by comparing a document guid today); a way for Luau to raise a perceivable noise (`kit::Noise` is not a reflected event, so a trap script needed a C++ component); whether `ScriptSystem` runs while a cutscene holds gameplay (it does not, and chapter 13.6 does not say); `mce.get` / `mce.set` over several components in one call | Sonnet | name lookup is M-WORKFLOW 7 PR 10 (`mce.find`, Rutin 3); `during_cutscenes` and multi-component `mce.get` / `mce.set` already shipped with M-WORKFLOW 7; `mce.make_noise` merged in #492 (open work: a running perceiver hearing a script noise is not tested end to end) |
@@ -134,3 +134,14 @@ Not a true independent test of everything: the agent was handed the task, not as
 - Chosen over a new `mce_player` flag: the shipped player does not link the cook-side scene writer, and a second runtime JSON writer would drift from this one.
 - Test: `cli_test` (fake server) covers the arguments, the output and exit codes; NOT run against the real `mce_mcp` (its binary was not executable in this session), so the `inspect` argument shape is checked only against the tool schema. Docs: guides 14.3.1, 16 and 27.7.
 - Not done: dumping a running windowed game; more than 64 entities per call.
+
+## Step 2c as built (static state check widened)
+
+- `compiler/state_check.cpp`: a `local` made inside a function from an index chain rooted at a top-level local (`local row = grid[i]`, `local a = t`) is an alias;
+  a write or a mutating call (`table.insert`, `buffer.write*`, ...) through it fails in the cook at `file:line:col`. A write through an index chain rooted at a
+  global (`STATE.n += 1`, `table.insert(STATE, 1)`, `buffer.writei32(B, ...)`) fails the same way. A call's result is not an alias (unchanged), and assigning a plain
+  global was already refused by the sandbox.
+- Tests: two new cases in `test_script_state.cpp`; the "alias", "global" and "buffer" entries moved out of `kHidden` (the list of things the cook misses) into
+  those static checks. Guide 27.4 and `docs/engine/script.md` say which cases the cook sees now.
+- Not done: parameters passed to helpers and `newproxy` metatables stay run-time catches. False positives are possible only for a script that writes into a
+  global it also made at load; nothing shipped does (`--task` cooks every demo).
