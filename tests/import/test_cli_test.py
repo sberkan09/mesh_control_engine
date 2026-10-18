@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M-SCRIPT3 9: `mce test <project> [path]` plays a project's .mctest scenarios without an agent.
+"""M-SCRIPT3 9 and 12: `mce test <project> [path]` plays a project's .mctest scenarios without an agent; `mce inspect` prints live components.
 
     test_cli_test.py <work dir>
 
@@ -31,6 +31,13 @@ for line in sys.stdin:
     req = json.loads(line)
     if req["method"] == "initialize":
         res = {"protocolVersion": "2025-06-18", "capabilities": {}, "serverInfo": {"name": "fake", "version": "1"}}
+    elif req["params"]["name"] == "run_headless":
+        a = req["params"]["arguments"]
+        sc = {"state_hash": "00000000deadbeef", "asked": a, "inspect": {"count": 1, "truncated": False, "entities": [
+              {"id": 7, "name": "Hero", "alive": True, "components": {"ScriptVars": {"v": [1, 2]}}}]}}
+        if mode == "scripterr":
+            sc["script_errors"] = [{"script": "scripts/x.luau", "error": "x.luau:3: boom"}]
+        res = {"content": [{"type": "text", "text": "ok"}], "structuredContent": sc, "isError": False}
     else:
         asked.append(req["params"]["arguments"])
         results = {
@@ -96,6 +103,18 @@ def main(work):
     os.environ["MODE"] = "error"
     code, _ = run(["test", str(proj)])
     check(code not in (0, 1) and code is not None, "a tool error exits with a message")
+
+    # M-SCRIPT3 12: `mce inspect` is run_headless's inspect, printed as JSON.
+    os.environ["MODE"] = "pass"
+    code, text = run(["inspect", str(proj)])
+    check(code not in (0, None) and "needs --component" in str(code), "inspect without a filter explains itself")
+    code, text = run(["inspect", str(proj), "--component", "ScriptVars", "--entity", "7", "--entity", "Hero", "--show", "ScriptVars,LocalTransform", "--ticks", "50"])
+    check(code == 0, "inspect: exit 0")
+    doc = json.loads(text)
+    check(doc["entities"][0]["components"]["ScriptVars"]["v"] == [1, 2], "inspect prints the live component values as JSON")
+    os.environ["MODE"] = "scripterr"
+    code, _ = run(["inspect", str(proj), "--component", "ScriptVars"])
+    check(code == 3, "a failed script makes inspect exit 3, as mce_player -headless does")
 
     if failures:
         print(f"{len(failures)} check(s) failed")
