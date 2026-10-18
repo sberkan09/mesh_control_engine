@@ -74,5 +74,7 @@ TEST_CASE("padding: ParticleEmitter3D copied from a dirty stack hashes the same 
     auto* c = new (clean) ParticleEmitter3D;
     d->rate = 123.0f;
     c->rate = 123.0f;
-    CHECK(std::memcmp(d, c, sizeof(ParticleEmitter3D)) == 0);
+    usize differing = 0;
+    for (usize i = 0; i < sizeof(ParticleEmitter3D); ++i) differing += dirty[i] != clean[i] ? 1u : 0u;
+    CHECK(differing == 0);
 }
