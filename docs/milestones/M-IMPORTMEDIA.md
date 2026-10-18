@@ -1,6 +1,6 @@
 # M-IMPORTMEDIA — The texture and audio formats artists actually have (milestone record)
 
-**Status:** active (added 2026-10-18; **owner: the routine 1 thread (M-IMPORT3D's), claimed 2026-10-18**; no Linear issues: the workspace is at its free limit, this record is the tracker).
+**Status:** done (2026-10-18; steps 1–2 merged, step 3 in the closing PR; added 2026-10-18; **owner: the routine 1 thread (M-IMPORT3D's), claimed 2026-10-18**; no Linear issues: the workspace is at its free limit, this record is the tracker).
 
 **Why.** After M-IMPORT3D the 3D path takes glTF, OBJ and FBX, but 2D and audio import still stop at PNG/JPEG/HDR/EXR
 and WAV/Ogg. `is_media` (the credits check) already lists `.mp3` and `.flac`, yet no importer cooks them. Artists and
@@ -14,8 +14,8 @@ follow-up. Stay off render, script VM and perf files.
 | # | Step | Model | State |
 |---|---|---|---|
 | 1 | `.tga` and `.bmp` textures through the existing stb_image decoder (no new dependency), a dimension pre-check before any pixel allocation, tests, guide | Sonnet | done (this PR, GH-401): `STBI_ONLY_TGA` / `STBI_ONLY_BMP` in `stb_impl.c`; the texture importer reads the header first and refuses over 16384 a side; `raw_pixels_truncated` refuses raw TGA and BMP files cut short (stb leaves the rest of its buffer unwritten); `tests/asset/test_cook_texture_formats.cpp` |
-| 2 | `.mp3` and `.flac` audio decoded at cook time into the existing `CHNK_SFX` / music chunk (a public-domain single-header decoder, pinned, cook-only, walled, ADR; sidecar settings as for WAV), tests, guide | Sonnet (Opus: the new dependency and its untrusted-input limits) | built, in review (ADR-0049 Proposed: the coordinator accepts the dependency) |
-| 3 | Fuzz seeds for both in `tests/fuzz/test_importers.cpp`, M-FUZZ survey rows, the close | Sonnet | planned |
+| 2 | `.mp3` and `.flac` audio decoded at cook time into the existing `CHNK_SFX` / music chunk (a public-domain single-header decoder, pinned, cook-only, walled, ADR; sidecar settings as for WAV), tests, guide | Sonnet (Opus: the new dependency and its untrusted-input limits) | done (#582, GH-402): dr_mp3 and dr_flac (dr_libs, pinned) behind cook-private `audio_decode.h`, budgeted allocator, frame cap counted after the resample, mono/stereo only; two walls; ADR-0049 Accepted (coordinator, 2026-10-18) |
+| 3 | Fuzz seeds for both in `tests/fuzz/test_importers.cpp`, M-FUZZ survey rows, the close | Sonnet | done (GH-403): `tests/fuzz/test_media_import.cpp` (header sweep, prefixes, byte mutants; 4,000 iterations clean); M-FUZZ step 7 and a survey row |
 
 ## Decisions
 
@@ -29,3 +29,9 @@ follow-up. Stay off render, script VM and perf files.
 - stb_image decodes a raw TGA cut short without an error and leaves part of the buffer unwritten (not zeroed): the importer
   checks the promised size itself. RLE and compressed BMP read to zeros at the end of the file, deterministically, and are accepted.
 - Real artist files (Photoshop TGA with extension area, RLE TGA, 16-bit BMP, BMP v4/v5 headers) have not been tried.
+- Real artist audio (VBR MP3 with ID3v2 and Xing headers, 24-bit or 8-bit FLAC with embedded cuesheets, MP3 with a mid-stream
+  sample-rate change) has not been tried; only the committed tone clips and the hand-built FLAC writer in the tests.
+- MP3 decoding is deterministic on one host; byte equality across compilers or CPUs is not claimed (the fuzz and unit tests
+  check tolerance, not bytes). A cooked MP3 clip is therefore not part of any cross-host determinism subject.
+- Left out on purpose: GPU texture containers (KTX2, DDS, Basis), tracker and MIDI music, Opus/AAC/M4A (patent and
+  container work). Each would be its own milestone.
