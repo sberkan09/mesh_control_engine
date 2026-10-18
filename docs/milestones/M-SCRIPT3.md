@@ -29,7 +29,7 @@ cannot yet say or check:
 | 8 | Bytecode trust (M-FUZZ decision, coordinator 2026-10-17): bytecode loads only from the game's own cooked pack; mods, base packs, fetched config and user files are data-only. Pin it so a new mount site or raw-bytecode caller cannot slip in | Sonnet | done in PR (see "Step 8 as built") |
 | 9 | Blind-test gap 1: `mce test <project> [path]` plays `.mctest` scenarios without an agent (the MCP server over stdio) | Sonnet | done in PR (this step) |
 | 10 | Blind-test gap 2: named `ScriptVars` slots instead of `v[16]` | Sonnet (touches the field-handle layer in `script.cpp`) | done in PR (this step) |
-| 11 | Blind-test gap 3: `mce.distance` / a 2D overlap query without physics | Sonnet | not started |
+| 11 | Blind-test gap 3: a distance / overlap query without physics (`mce.near`) | Sonnet | done in PR (this step) |
 | 12 | Blind-test gap 4: a headless entity and component dump | Sonnet | not started |
 
 ## Step 3 as built
@@ -116,3 +116,12 @@ Not a true independent test of everything: the agent was handed the task, not as
   state guard take the existing paths. A bad `element` or a non-array field is a named error; `mce.d.luau` declares the third argument.
 - The compile-time name check needs no change (it reads the first two arguments). Test: "mce.field names one element of an array field".
 - Not done: moving Dungeon and the other demos onto named slots (it would not change behaviour, only readability); a per-script named-constants table (separate wish).
+
+## Step 11 as built (`mce.near`)
+
+- `mce.near(center, radius, component?, exclude?)` in `api_world.cpp`: the entities with a `LocalTransform` within `radius` of `center` (3D distance; a 2D
+  game has z = 0), optionally also holding `component`, nearest first with ties in world storage order (a stable sort), minus `exclude`. A negative radius is
+  a named error; an unregistered component matches nothing. It reads `LocalTransform.position`, so a parented entity answers with its local position.
+- Chosen over a bare `mce.distance(a, b)`: `vector.magnitude(a - b)` already is that, and the real gap was "who is near this point" without a physics world.
+  Linear in the entities with a `LocalTransform`; use `mce.overlap2d` / the casts when a physics world exists and the set is large.
+- Test: "mce.near is a distance test without physics"; declared in `mce.d.luau`; guide 27.3 and 27.7.

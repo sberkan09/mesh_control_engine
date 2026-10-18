@@ -5,6 +5,7 @@
 // Every function may raise (LUA_USE_LONGJMP): engine calls whose results own memory run in a
 // scope that ends before the next luaL_* call, and lists go through the host's scratch arrays.
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -511,6 +512,49 @@ int l_overlap2d(lua_State* L) {
     Array<Entity>& out = HostAccess::entities(host);
     out.clear();
     pw.overlap_aabb(box, out, ex.filter2d());
+    lua_createtable(L, static_cast<int>(out.size()), 0);
+    for (usize i = 0; i < out.size(); ++i) {
+        push_entity(L, out[i]);
+        lua_rawseti(L, -2, static_cast<int>(i + 1));
+    }
+    return 1;
+}
+
+// mce.near(center, radius, component?, exclude?) -> the entities with a LocalTransform within `radius` of `center`
+// (and, when given, a `component`), nearest first, ties in the order the world stores them. No physics world needed:
+// a pickup, a chaser touching its target or an aggro range is a distance test. A 2D game has z = 0, so it is a circle.
+int l_near(lua_State* L) {
+    ScriptHost& host = HostAccess::host(L);
+    World& w = world_of(L);
+    const math::vec3 center = check_vec3(L, 1);
+    const double radius = luaL_checknumber(L, 2);
+    if (!(radius >= 0.0)) luaL_error(L, "mce.near: radius must be 0 or more");
+    ecs::ComponentId need = ecs::kInvalidComponent;
+    bool filter = false;
+    if (!lua_isnoneornil(L, 3)) {
+        const refl::TypeRecord& type = check_type(L, 3, refl::TypeFlags::Component);
+        need = w.find_component(type.type_hash);
+        filter = true;
+    }
+    const Entity exclude = opt_entity(L, 4);
+    Array<Entity>& out = HostAccess::entities(host);
+    out.clear();
+    if (!filter || need != ecs::kInvalidComponent) {  // an unregistered component: no entity has it
+        const f32 r2 = static_cast<f32>(radius * radius);
+        w.query<LocalTransform>().each([&](Entity e, LocalTransform& t) {
+            if (e == exclude) return;
+            const math::vec3 d{t.position.x - center.x, t.position.y - center.y, t.position.z - center.z};
+            if (d.x * d.x + d.y * d.y + d.z * d.z > r2) return;
+            if (filter && !w.has(e, need)) return;
+            out.push_back(e);
+        });
+        auto dist2 = [&](Entity e) {
+            const LocalTransform* t = w.try_get<LocalTransform>(e);
+            const math::vec3 d{t->position.x - center.x, t->position.y - center.y, t->position.z - center.z};
+            return d.x * d.x + d.y * d.y + d.z * d.z;
+        };
+        std::stable_sort(out.begin(), out.end(), [&](Entity a, Entity b) { return dist2(a) < dist2(b); });
+    }
     lua_createtable(L, static_cast<int>(out.size()), 0);
     for (usize i = 0; i < out.size(); ++i) {
         push_entity(L, out[i]);
@@ -1064,6 +1108,7 @@ const luaL_Reg kWorldLib[] = {
     {"quit", l_quit},
     {"raycast2d", l_raycast2d},
     {"overlap2d", l_overlap2d},
+    {"near", l_near},
     {"move_and_collide", l_move_and_collide},
     {"teleport2d", l_teleport2d},
     {"find_path", l_find_path},

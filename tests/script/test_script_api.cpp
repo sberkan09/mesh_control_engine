@@ -336,6 +336,50 @@ function update() mce.field("Probe", "n", 1) end
     CHECK(error_of(bad2.h()).find("is not an array") != std::string::npos);
 }
 
+TEST_CASE("script api: mce.near is a distance test without physics (nearest first, filter, exclude)") {
+    Rig r(R"(
+function update()
+    local origin = vector.create(0, 0, 0)
+    local hits = mce.near(origin, 4.5)
+    local tagged = mce.near(origin, 100, "Tagged")
+    local without_first = mce.near(origin, 4.5, nil, hits[1])
+    local none = mce.near(vector.create(50, 50, 0), 1)
+    mce.each("Probe", function(e)
+        if mce.get(e, "Probe", "flag") then
+            mce.set(e, "Probe", "n", #hits * 1000 + #tagged * 100 + #without_first * 10 + #none)
+            mce.set(e, "Probe", "value", mce.get(hits[1], "LocalTransform", "position"))
+        end
+    end)
+end
+)");
+    r.w.register_components<LocalTransform, Tagged>();
+    auto at = [&](float x) {
+        LocalTransform t;
+        t.position = vec3{x, 0, 0};
+        return t;
+    };
+    const Entity far_one = r.w.spawn_with(at(9.0f), Probe{});
+    const Entity mid = r.w.spawn_with(at(3.0f), Probe{}, Tagged{});
+    const Entity near_one = r.w.spawn_with(at(1.0f), Probe{});
+    Probe reporter;
+    reporter.flag = true;
+    const Entity rep = r.w.spawn_with(at(2.0f), reporter);
+    (void)far_one;
+    (void)mid;
+    r.step();
+    CHECK(error_of(r.h()).empty());
+    // within 4.5: x = 1, 2, 3 (three), Tagged anywhere: one, without the nearest: two, nothing near (50,50): zero.
+    CHECK(r.w.try_get<Probe>(rep)->n == 3 * 1000 + 1 * 100 + 2 * 10 + 0);
+    CHECK(r.w.try_get<Probe>(rep)->value.x == doctest::Approx(1.0f));  // the nearest first
+    (void)near_one;
+
+    Rig bad(R"(
+function update() mce.near(vector.create(0, 0, 0), -1) end
+)", false);
+    bad.step();
+    CHECK(error_of(bad.h()).find("radius must be 0 or more") != std::string::npos);
+}
+
 TEST_CASE("script api: input actions by name") {
     Rig r(R"(
 function update()
