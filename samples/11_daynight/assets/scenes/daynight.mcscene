@@ -1,0 +1,933 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "11d11000-0000-4000-8000-000000000001",
+ "name": "daynight",
+ "entities": [
+  {
+   "name": "Ground",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.5,
+      0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000005",
+     "tint": [
+      0.55,
+      0.58,
+      0.5,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Sky",
+   "components": {
+    "Environment3D": {
+     "atmosphere": 0,
+     "sky_enabled": 0,
+     "bloom": 1,
+     "bloom_intensity": 0.12,
+     "bloom_threshold": 1.0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Clock",
+   "components": {
+    "WorldClock": {
+     "hour": 5,
+     "day_length_seconds": 60
+    },
+    "DayCycle": {},
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      8,
+      34
+     ],
+     "rotation": [
+      -0.104528,
+      0,
+      0,
+      0.994522
+     ]
+    }
+   }
+  },
+  {
+   "name": "Building Tower",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -13,
+      8.0,
+      -12
+     ],
+     "scale": [
+      1.6,
+      16,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "tint": [
+      0.55,
+      0.45,
+      0.4,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Window Tower 00",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -15.688,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 01",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -13.0,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 02",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.312,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 10",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -15.688,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 20.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 11",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -13.0,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 21.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 12",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.312,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 20",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -15.688,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 21",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -13.0,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Tower 22",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10.312,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 20.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Building Hall",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      5.0,
+      -12
+     ],
+     "scale": [
+      2.2,
+      10,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "tint": [
+      0.5,
+      0.52,
+      0.58,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Window Hall 00",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -3.696,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 21.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Hall 01",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0.0,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Hall 02",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.696,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Hall 10",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -3.696,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Hall 11",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0.0,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 20.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Hall 12",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      3.696,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 21.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Building Block",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      13,
+      6.5,
+      -12
+     ],
+     "scale": [
+      1.8,
+      13,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "tint": [
+      0.6,
+      0.55,
+      0.45,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Window Block 00",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.976,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 01",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      13.0,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 02",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      16.024,
+      3.0,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 10",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.976,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 20.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 11",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      13.0,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 21.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 12",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      16.024,
+      6.2,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 20",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      9.976,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 21",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      13.0,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 19.5,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Window Block 22",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      16.024,
+      9.4,
+      -7.95
+     ],
+     "scale": [
+      0.14,
+      0.3,
+      0.02
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004",
+     "cast_shadows": 0
+    },
+    "TimedLight3D": {
+     "on_hour": 20.0,
+     "off_hour": 5.5,
+     "fade_minutes": 15
+    }
+   }
+  },
+  {
+   "name": "Lamp Post 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6,
+      2.5,
+      4
+     ],
+     "scale": [
+      0.04,
+      5,
+      0.04
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Lamp 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6,
+      5.1,
+      4
+     ],
+     "scale": [
+      0.1,
+      0.06,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004"
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.7,
+      0.4,
+      1
+     ],
+     "intensity": 9,
+     "radius": 16
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 6,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "name": "Lamp Post 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6,
+      2.5,
+      4
+     ],
+     "scale": [
+      0.04,
+      5,
+      0.04
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Lamp 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6,
+      5.1,
+      4
+     ],
+     "scale": [
+      0.1,
+      0.06,
+      0.1
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:11d11000-0000-4000-8000-000000000006",
+     "material": "guid:11d11000-0000-4000-8000-000000000004"
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.7,
+      0.4,
+      1
+     ],
+     "intensity": 9,
+     "radius": 16
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 6,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "name": "Script: daynight",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:11d11000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    }
+   }
+  }
+ ]
+}
