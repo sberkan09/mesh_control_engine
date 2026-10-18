@@ -67,6 +67,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WorldSettings` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/02-projects.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ScriptSystem` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `ScriptVars` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `ScriptParams` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/27-scripting.md | projects/EmberScript/assets/scenes/main.mcscene |
 | `CoopGame` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `PlayerSpawn` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |

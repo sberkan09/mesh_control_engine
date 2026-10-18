@@ -48,6 +48,8 @@ declare mce: {
     log: (message: string) -> (),
 
     has: (e: Entity, component: string) -> boolean,
+    -- the number the scene gave this entity for `name` in its ScriptParams (names: "speed jump", v: [5, 8]); default when it has none
+    param: (e: Entity, name: string, default: number?) -> number,
     alive: (e: Entity) -> boolean,
     find: (name: string) -> Entity?,
     spawn: (components: Fields) -> Entity,
