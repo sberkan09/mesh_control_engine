@@ -125,6 +125,14 @@ TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRI
     CHECK(spun.updates == 1);
     CHECK(spun.peak_steps == 501u);
     CHECK(spun.total_steps == 501u);
+    // M-SCRIPTPROF 2: the error names the script line that spent the budget.
+    CHECK(StringView(spun.error.c_str()).starts_with("spin:1: step budget exceeded (500 per tick)"));
+
+    ScriptHost deeper(small);
+    REQUIRE(script::add_source(deeper, "deep", "local function burn()\n    while true do end\nend\nfunction update()\n    burn()\nend"));
+    deeper.install(w);
+    w.tick(1.0 / 60, 2);
+    CHECK(StringView(deeper.scripts()[0].error.c_str()).starts_with("deep:2: step budget exceeded"));
 }
 
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
