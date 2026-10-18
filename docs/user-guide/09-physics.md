@@ -556,8 +556,8 @@ follows the hour of the first `WorldClock`. Without a clock, or without the comp
 ## 9.19 Weather state (M-WEATHER)
 
 `mce/kit/weather.h` keeps the weather as data. One `Weather` entity per scene (the first in ECS order drives; installing
-it also installs the timed lights, day cycle and world clock); a scene without one is unchanged. This step only
-maintains the component and an event; it writes nothing to `Environment3D` (the next step does).
+it also installs the timed lights, day cycle and world clock); a scene without one is unchanged. It maintains the
+component and an event, and modulates the `Environment3D` resource (see "Environment" below).
 
 - **Setting it.** `target` is `clear`, `overcast`, `rain`, `storm` or `snow`; write it at run time to change the
   weather. `current` is the kind in effect (read-only). `transition_seconds` (default 30) is one fade.
@@ -573,6 +573,23 @@ maintains the component and an event; it writes nothing to `Environment3D` (the 
   counter and the timer are saved, so a save mid-run resumes on the same pick.
 - **Event.** `WeatherChanged {from, to}` (kinds as numbers 0..4) once when `current` changes.
 - **Determinism.** All state is in the component in integer ratios, so replays, saves and the state hash are exact.
+- **Environment.** After the state advances, `kit_weather` sets `sun_intensity`, `sun_color`, `ambient_sky`,
+  `ambient_ground`, `exposure`, `fog_density` and `fog_color` from the base (the day cycle's value, or the authored one)
+  to the kind's target by `intensity`: `env = base + (target - base) * intensity`. At intensity 1:
+
+  | kind | sun_intensity | sun_color | ambient (x, to grey, tint) | exposure | fog_density | fog_color (to, mix) |
+  |---|---|---|---|---|---|---|
+  | clear | x1 | - | x1 | x1 | +0 | - |
+  | overcast | x0.35 | 0.4 to grey | x0.85, 0.5 | x1.0 | +0.002 | (0.60, 0.60, 0.62), 0.4 |
+  | rain | x0.2 | 0.5 to grey | x0.7, 0.6 | x1.1 | +0.006 | (0.50, 0.52, 0.55), 0.6 |
+  | storm | x0.08 | 0.5 to grey | x0.5, 0.5, tint (0.85, 0.9, 1.05) | x1.2 | +0.012 | (0.30, 0.32, 0.36), 0.7 |
+  | snow | x0.4 | 0.3 to grey | x1.05, 0.3, tint (0.95, 1.0, 1.08) | x1.0 | +0.008 | (0.85, 0.88, 0.92), 0.7 |
+
+  "To grey" mixes the colour toward its luminance. The component remembers what it wrote (`env_applied`) and the
+  base (`env_base`, both read-only): a field that differs from what was written was rewritten by a day cycle or an
+  edit, and becomes the new base, so nothing compounds. At intensity 0 the base is written back: clear weather is
+  bit-identical to no `Weather`, and clearing the weather restores the authored values. Wind is exposed as
+  `Weather.wind` for scripts and the precipitation step; `Foliage3D` wind is not changed here.
 
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
