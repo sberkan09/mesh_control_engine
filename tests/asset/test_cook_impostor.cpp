@@ -10,9 +10,6 @@
 #include "mce/cook/impostor.h"
 
 using namespace mce;
-using math::mat4;
-using math::vec3;
-using math::vec4;
 
 namespace {
 
