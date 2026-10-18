@@ -7,6 +7,7 @@
     mce example [<Name>] [--dest dir]           copy an example project out of the SDK (no name: list them)
     mce build <project> [--config Debug|Release] [-D<var>=<v>...]  configure (find_package(MCE)) + build
     mce play <project> [player flags...]        run the game (its host) from the build
+    mce test <project> [path]                   play the project's .mctest scenarios (no agent needed)
     mce headless <project> [--ticks N] [flags]  run it without a window; prints the state hash
     mce editor <project> [editor flags...]      the editor with the game module loaded
     mce mcp <project> [--allow-cheats]          the MCP server over stdio with the module loaded
@@ -358,6 +359,55 @@ def cmd_mcp(args):
     p.built(host=False)
     module = [] if p.script else ["--module", p.module]
     return run([tool("mce_mcp")] + module + ["--project", p.dir] + args.rest, exec_=True)
+
+
+def mcp_test_run(cmd, path):
+    """Play the project's .mctest scenarios through its MCP server (the `test_run` tool) without an agent: spawn the
+    server on stdio, call the tool once and return its structured result."""
+    srv = subprocess.Popen([str(c) for c in cmd], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    n = 0
+
+    def request(method, params):
+        nonlocal n
+        n += 1
+        srv.stdin.write(json.dumps({"jsonrpc": "2.0", "id": n, "method": method, "params": params}) + "\n")
+        srv.stdin.flush()
+        line = srv.stdout.readline()
+        if not line:
+            sys.exit("mce: the MCP server closed its output before answering")
+        return json.loads(line)
+
+    try:
+        request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "mce test", "version": "1"}})
+        r = request("tools/call", {"name": "test_run", "arguments": {"path": path} if path else {}}).get("result", {})
+    finally:
+        srv.stdin.close()
+        srv.wait(timeout=60)
+    if r.get("isError") or r.get("structuredContent") is None:
+        sys.exit("mce: test_run failed: " + (r.get("content") or [{}])[0].get("text", "")[:400])
+    return r["structuredContent"]
+
+
+def cmd_test(args):
+    p = Project(args.project)
+    p.built(host=False)
+    module = [] if p.script else ["--module", p.module]
+    out = mcp_test_run([tool("mce_mcp")] + module + ["--project", p.dir], args.path)
+    results = out.get("results", [])
+    for r in results:
+        name = r.get("file") or r.get("name")
+        if r.get("ok"):
+            print(f"  pass  {name}")
+            continue
+        bad = [c.get("check", "?") for c in r.get("checks", []) if not c.get("ok")]
+        print(f"  FAIL  {name}: {r.get('error') or ', '.join(bad)}")
+        for e in r.get("script_errors", []) or []:
+            print(f"        script {e.get('script')}: {e.get('error')}")
+    print(f"tests: {out.get('passed', 0)} passed, {out.get('failed', 0)} failed")
+    if not results:
+        print("mce: no .mctest found (scenarios live under the project's tests/ folder)")
+        return 1
+    return 1 if out.get("failed", 0) else 0
 
 
 def cmd_cook(args):
@@ -901,6 +951,11 @@ def main(argv):
     s.add_argument("--ticks", type=int, default=600)
     s.add_argument("rest", nargs=argparse.REMAINDER)
     s.set_defaults(fn=cmd_headless)
+
+    s = sub.add_parser("test", help="play a project's .mctest scenarios (tests/) headless and print pass or fail; exit 1 on a failure")
+    s.add_argument("project")
+    s.add_argument("path", nargs="?", help="one .mctest file or a folder under the project (default: tests/)")
+    s.set_defaults(fn=cmd_test)
 
     s = sub.add_parser("ship", help="zip the host, module, engine library and pack (--target web: the browser build)")
     s.add_argument("project")

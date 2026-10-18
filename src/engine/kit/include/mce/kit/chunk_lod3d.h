@@ -23,7 +23,9 @@
 
 namespace mce::asset {
 class AssetSystem;
-}
+struct MeshView;
+struct MaterialChunk;
+}  // namespace mce::asset
 
 namespace mce::kit {
 
@@ -67,5 +69,24 @@ struct HlodBakeStats3D {
 // not load or nothing qualifies. Deterministic: the same scene and settings give the same bytes.
 bool bake_chunk_hlod(asset::AssetSystem& assets, asset::Guid scene, const math::vec3& origin, const HlodBakeSettings3D& settings,
                      Array<byte>& out, HlodBakeStats3D* stats = nullptr);
+
+// One mesh of an area scene as the bakes see it: the cooked mesh, its world matrix relative to the chunk entity, the
+// MeshRef's tints and material override, and its group: the index of its root entity among the area's roots in load
+// order, so a building of several MeshRefs under one root is one group (the impostor bake's unit).
+struct ChunkSource3D {
+    const asset::MeshView* mesh = nullptr;
+    math::mat4 world = math::mat4::identity();
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vec3 emissive_tint{1.0f, 1.0f, 1.0f};
+    const asset::MaterialChunk* material = nullptr;
+    u32 group = 0;
+};
+using ChunkSourcesFn = void (*)(Span<const ChunkSource3D> sources, void* user);
+
+// The gathering half of bake_chunk_hlod: loads the area scene and calls `fn` once with every visible rigid MeshRef
+// that min_size keeps (the views and materials are valid during the call only). `stats` gets meshes, small and
+// skipped. False when the scene does not load (fn is not called).
+bool collect_chunk_sources(asset::AssetSystem& assets, asset::Guid scene, const math::vec3& origin,
+                           const HlodBakeSettings3D& settings, ChunkSourcesFn fn, void* user, HlodBakeStats3D* stats = nullptr);
 
 }  // namespace mce::kit

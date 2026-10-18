@@ -131,3 +131,62 @@ TEST_CASE("editor hlod bake: .mchlod + sidecar relative to the chunk, ChunkLod3D
     CHECK(none.value()[0].stats.small == 3);
     CHECK(s.get<kit::ChunkLod3D>(chunk)->proxy.guid == row.proxy);
 }
+
+TEST_CASE("editor hlod bake: impostor atlas + mesh next to the proxy, ChunkLod3D impostor pointed at it, re-bakes identical") {
+    EditorSession session;
+    const std::string root = hlod_project();
+    REQUIRE(session.open_project(root).has_value());
+    EditorScene& s = session.scene();
+    const EntityId chunk = s.create_entity("Block");
+    LocalTransform t;
+    t.position = {105, 0, 0};
+    s.set(chunk, t);
+    s.add_component(chunk, refl::type_of<scene::SceneChunk>());
+    scene::SceneChunk sc = *s.get<scene::SceneChunk>(chunk);
+    sc.scene.guid = asset::parse_guid(kAreaGuid).value();
+    sc.half_extents = {20, 10, 20};
+    s.set(chunk, sc);
+
+    const cook::ImpostorSettings imp;
+    Result<Array<EditorSession::HlodBakeRow>> baked = session.bake_hlod({}, kNoEntity, &imp);
+    if (!baked) MESSAGE(baked.error().stage, " ", baked.error().path.c_str());
+    REQUIRE(baked);
+    const EditorSession::HlodBakeRow& row = baked.value()[0];
+    REQUIRE(row.proxy != asset::Guid{});
+    REQUIRE(row.impostor != asset::Guid{});
+    CHECK(row.impostor_stats.groups == 2);  // the two floors (Tiny is below min_size, Hidden is hidden)
+    CHECK(row.impostor_stats.boxes == 2);
+    CHECK(row.impostor_stats.quads >= 2);
+    CHECK(row.impostor_stats.untextured == 0);
+    const std::string base = root + "/assets/hlod/untitled/chunk_" + std::to_string(chunk);
+    REQUIRE(fs::exists(base + "_far.png"));
+    REQUIRE(fs::exists(base + "_far.png.mceasset"));
+    CHECK(read_all(base + "_far.png.mceasset").find("\"importer\": \"texture\"") != std::string::npos);
+    REQUIRE(fs::exists(base + "_far.mchlod"));
+    CHECK(fs::file_size(base + "_far.mchlod") == row.impostor_bytes);
+    const kit::ChunkLod3D* lod = s.get<kit::ChunkLod3D>(chunk);
+    REQUIRE(lod);
+    CHECK(lod->proxy.guid == row.proxy);
+    CHECK(lod->impostor.guid == row.impostor);
+
+    // The impostor is an ordinary mesh whose material names the cooked atlas.
+    asset::AssetSystem& assets = *session.project().mounted();
+    const Result<asset::AssetHandle<asset::Mesh>> h = assets.load_sync<asset::Mesh>(row.impostor);
+    REQUIRE(h);
+    const Result<asset::MeshView> v = asset::MeshView::read(assets.resolve(h.value()));
+    REQUIRE(v);
+    const asset::Guid atlas = v.value().submeshes[0].material.texture(asset::MaterialSlot::BaseColor);
+    assets.release(h.value());
+    const Result<asset::AssetHandle<asset::Texture>> th = assets.load_sync<asset::Texture>(atlas);
+    REQUIRE(th);
+    CHECK(asset::TextureView::read(assets.resolve(th.value())).has_value());
+    assets.release(th.value());
+
+    // A re-bake keeps both GUIDs and both files' bytes.
+    const std::string png = read_all(base + "_far.png"), mesh = read_all(base + "_far.mchlod");
+    Result<Array<EditorSession::HlodBakeRow>> again = session.bake_hlod({}, kNoEntity, &imp);
+    REQUIRE(again);
+    CHECK(again.value()[0].impostor == row.impostor);
+    CHECK(read_all(base + "_far.png") == png);
+    CHECK(read_all(base + "_far.mchlod") == mesh);
+}
