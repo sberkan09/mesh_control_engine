@@ -1,0 +1,5 @@
+# 10_missions scripted run (60 ticks a second; the player walks 8 m/s, the camera looks down -Z).
+# Mission 1: north (-Z) onto Zone A. Mission 2: hold Fire at the target, 8 m on. Mission 3: east (+X) onto Zone B.
+15-60 Move=0,1
+70-100 Fire
+110-200 Move=1,0

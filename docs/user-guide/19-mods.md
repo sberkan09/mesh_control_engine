@@ -120,6 +120,8 @@ game's pack.
   what data already drives (sequences, prefabs, particle presets, tilemaps, materials, shaders).
   A Luau script inside a mod pack is dropped at load with a warning, whether it is new or tries to
   replace one of the game's: script bytecode is trusted only from the game's own pack.
+- A damaged or hand-edited mod pack is refused with a message in the log; it must not crash the game. If one
+  does, that is a bug: keep the pack and report it (see 5.10).
 - A mod pack is read twice at start (its identity, then the mount), so very large mods add boot
   time.
 - Saves do not record which mods were loaded.

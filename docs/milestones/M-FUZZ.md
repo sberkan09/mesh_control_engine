@@ -1,6 +1,6 @@
 # M-FUZZ — Hostile input: loaders and parsers never crash (milestone record)
 
-**Status:** active (added 2026-10-16; steps 1 and 2 done). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
+**Status:** active (added 2026-10-16; steps 1 to 3 done, step 4 in review). Plan: ROADMAP §M-FUZZ; Linear SBA-185 … SBA-188.
 
 **Why:** a shipped game opens packs, saves, recordings and downloaded mods it did not write, and the editor and
 MCP server open files agents wrote. Today two parsers have a mutation test (the `.mce` container, 1,000 byte
@@ -20,7 +20,7 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 | 1 | The mutator and a survey of every parser of untrusted bytes; the asset module's 19 chunk readers over mutated payloads of every cooked sample chunk | SBA-185 | done |
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
 | 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | done (3a #424, 3b #501 and #520, 3c #533) |
-| 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | not started |
+| 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | done (#552) |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
 
@@ -151,9 +151,47 @@ with damaged layer bytes passed `navmesh_blob_valid` (header and sizes) and then
 - **Step 3 is complete.** The `.mpg` case runs by default again (the pl_mpeg overflow was fixed in #521). The Luau
   bytecode loader decision and the Detour guard below remain open.
 
+## Step 4 — The gate and the close (SBA-188)
+
+- **ASan stage.** The fuzz tests are ordinary ctest tests, so the `linux-asan` stage of `local_ci.sh` already ran them; what
+  was missing was a failure on a UBSan report (it only printed) and a bound on time. `tests/fuzz/CMakeLists.txt` now labels
+  all of them `fuzz` (`ctest -L fuzz`), gives each a 600 s timeout, and in an ASan build sets
+  `UBSAN_OPTIONS=halt_on_error=1` with `cmake/ubsan.supp`. The only entry is pl_mpeg's left shift of negative values
+  (third-party; every compiler we use gives the arithmetic shift the decoder wants). The default iteration counts are
+  fixed per test and keep the whole group near 30 s under ASan on the CI machine; `MCE_FUZZ_ITERS` is for long runs by hand.
+  Checked: without the suppression the importers test fails on the first shift.
+- **Walls.** `check_walls.py` fails when a `ChunkType` is not named in `tests/fuzz/test_chunk_readers.cpp` and when an
+  `*_importer.cpp` has no source of any of its extensions in `samples/`, `projects/`, `templates/`, `games/` and no corpus
+  in `tests/fuzz/`. Allow-lists (`FUZZ_CHUNK_EXEMPT`, `FUZZ_IMPORTER_EXEMPT`) carry the reason, and a stale entry fails
+  too. First run: `Prefab` (the scene's layout, now read as a `SceneView`) and `RoadNetwork` had no reader in the test.
+  Exempt for now, each with a reason: chunk types `Atlas` and `AudioPacket` (reserved, nothing reads them); importers for
+  `.mcenv`, `.mchlod` and `.glsl` (no committed source; they need an embedded corpus, a follow-up).
+- **Roads case** (`tests/fuzz/test_roads.cpp`, part of `test_fuzz_importers`). A crossroads with a signal is cooked
+  from mutated source text (raw and value-swapped) and the `RoadNetwork` chunk is mutated byte-wise and read through
+  `RoadView` with every lane, successor, conflict and phase range followed (`fuzz::walk`).
+- **Finding: heap use-after-free in the road cook on a valid network (fixed concurrently, GH-538).** `roads_importer.cpp` kept
+  `RoadLane& src = lanes[...]` across the loop that `push_back`s the connector lanes, so the second connector read a
+  reference into a freed buffer (found by the first ASan run of the untouched crossroads). Cook-side only. My first
+  fix (copy the two fields it needs) collided with the M-OPENWORLD one for GH-538, and I took theirs. Regression: the roads
+  case under the ASan stage (a plain build does not see it).
+- **Convar defaults (`ConvarDefaults`, M-WORKFLOW 7).** The new wall failed on this chunk type and its importer the first time it ran after merging `dev_claude`, which is what it is for. `read_chunk` now reads it through `console::set_defaults` from a temp file, and `tests/fuzz/test_defaults.cpp` mutates a `.mcdefaults` source (raw and value-swapped) and the cooked chunk (3,000 and 6,000 mutants under ASan, no finding). `import_support.h` holds the importer helper shared with the mesh cases.
+- **Mesh importers (M-IMPORT3D's, added at the coordinator's request).** The ASCII FBX (`quad.fbx`, ufbx), the MTL and the glTF of
+  `samples/import_demo` are picked up by the importers test as seeds with no change (300 mutants each under ASan, clean).
+  `tent.obj` was git-ignored at first, so a clean clone failed `import_demo_reimport` (fixed concurrently, GH-399, which tracks it); it is an importers seed too. `tests/fuzz/test_mesh_import.cpp` builds a corpus of its own as well: a tent OBJ with a material
+  library (byte damage and swapped lines), and two GLB grids whose position and index buffers are `EXT_meshopt_compression`
+  streams (one with the EXPONENTIAL filter) mutated byte-wise, which reaches the damaged streams and the damaged
+  `count` / `byteStride` / `mode` / `filter` fields. 12,000 mutants of each under ASan: no finding. The "meshopt wall"
+  allows this file for the encoder.
+- **User guide.** 5.10 "Damaged and hostile files" (`docs/user-guide/05-assets.md`) and a limit in 19.4.
+- **Milestone state.** Steps 1 to 4 are done. Still open: the Detour guard
+  and a long run with validation on (below), and corpora for the five exempt importers.
+
 ### Open items from step 3
 
-- Luau bytecode loader trusts its input (3a); decision with the M-SCRIPT owner.
+- Luau bytecode loader trusts its input (3a). Decided and pinned (coordinator 2026-10-17; M-SCRIPT3 step 8): bytecode loads
+  only from the game's own cooked pack, `check_walls.py` fails a new mount site that allows code or an `add_bytecode`
+  caller outside the trusted places, and mods, base packs, fetched config and user files stay data-only. The loader itself
+  is not hardened, so the `MCE_FUZZ_BYTECODE` case stays off by default (it calls `add_bytecode` as a trusted caller would).
 
 ### Planned: Detour defense in depth (separate item)
 
@@ -172,6 +210,8 @@ validation switched on.
 | String tables | `loc/string_table.h` `decode_table` | packs, mods | mutated (no sample pack has one yet; `test_fuzz` reads it when present) | done |
 | Store, remote config, game services catalogs; input map | `monetize/catalog.h`, `liveops/remote_config.h`, `liveops/game_services.h`, `input/input_map.h` | packs | mutated (`test_fuzz`) | done |
 | Nav mesh | `physics3d` `.mcnav` bytes | packs | mutated, `load` and queries, half re-hashed (`test_fuzz`); damage refused by the hash, layers by the layer checks | done |
+| OBJ, FBX, MTL, glTF with meshopt streams | `obj_importer.cpp`, `fbx_importer.cpp` (ufbx), `gltf_importer.cpp` | importing source files | mutated (`test_fuzz_importers` seeds from `samples/import_demo`, `test_mesh_import.cpp`) | done |
+| Road network | `asset/roads_format.h` `RoadView::read`; `.mcroads` importer | packs, mods, project sources | mutated source and chunk (`test_roads.cpp`); every range followed | done |
 | Scene instantiate | `scene/scene.h` `instantiate` over a `SceneView` | packs, mods | mutated scene chunks of every cooked pack, spawned (`test_fuzz_scene`) | done |
 | PNG, WAV, MPEG-1, Vorbis stream | importers of `cook/`; `asset/vorbis.h` `decode_vorbis` | importing source files | mutated bytes (`test_fuzz_importers`); Vorbis also inside a sound chunk | done |
 | glTF, TrueType fonts | `gltf_importer.cpp`, `font_importer.cpp` (stb_truetype) | importing source files | mutated (`test_fuzz_importers`, `test_cook_font_damage`); both findings fixed | done |
@@ -181,6 +221,6 @@ validation switched on.
 | `.mcperf` captures | `editor/core/perf_file.h` | tools | mutated text and JSON with one value swapped, then summarized (`test_fuzz_misc`) | done |
 | Replication, rollback and relay packets | `net/replication.h` `read_ack`, `apply`; rollback; `net/relay.h`; `net/bytes.h` `ByteReader` | the network | mutated snapshots, acks, rollback and relay messages (`test_fuzz_net`) | done |
 | Luau source | `script/` `check`, `compile` | project scripts | mutated (`test_fuzz_script`) | done |
-| Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default | open |
+| Luau bytecode | `ScriptHost::add_bytecode` (`luau_load`) | packs, mods | **finding, see step 3a**; test off by default; only the game's own pack may carry bytecode (M-SCRIPT3 8, wall) | closed by policy |
 | MCP requests | `mcp/server.h` | agents | mutated and random requests (`test_mcp`) | done |
 | Console and command line | `core/convar.cpp` | the player | random argv and console lines over every registered name (`test_fuzz_misc`) | done |
