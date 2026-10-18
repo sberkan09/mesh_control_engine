@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include <cstring>
 
 #include "api.h"
@@ -348,7 +349,19 @@ struct FieldAt {
     const refl::FieldRecord* field;
     ecs::ComponentId comp;
     const char* comp_name;
+    u32 element = 0;  // a handle to one element of an array field (mce.field("C", "f", 3)); 0: the whole field
 };
+
+// The record and byte offset a get / set works on: the field, or its one element as a non-array field.
+refl::FieldRecord field_view(const FieldAt& at, usize& offset) {
+    refl::FieldRecord f = *at.field;
+    offset = f.offset;
+    if (at.element != 0) {
+        f.count = 1;
+        offset += usize(at.element - 1) * f.size;
+    }
+    return f;
+}
 
 // mce.field handles are light userdata with this tag holding index + 1: opaque to scripts, and
 // told apart from other values in one call.
@@ -369,7 +382,7 @@ FieldAt check_field(lua_State* L, World& w, int arg, int& next) {
             luaL_error(L, "component '%s' is not registered in this world", h.type->name);
         }
         next = arg + 1;
-        return FieldAt{h.field, h.comp, h.type->name};
+        return FieldAt{h.field, h.comp, h.type->name, h.element};
     }
     const refl::TypeRecord& type = check_type(L, arg, refl::TypeFlags::Component);
     const char* field_name = luaL_checkstring(L, arg + 1);
@@ -387,13 +400,23 @@ int l_field(lua_State* L) {
     const char* field_name = luaL_checkstring(L, 2);
     const refl::FieldRecord* f = type.find_field(StringId(field_name));
     if (!f) luaL_error(L, "component '%s' has no field '%s'", type.name, field_name);
+    u32 element = 0;
+    if (!lua_isnoneornil(L, 3)) {
+        if (!f->is_array()) luaL_error(L, "'%s.%s' is not an array, so it has no elements to name", type.name, f->name_str);
+        const double e = luaL_checknumber(L, 3);
+        if (!(e >= 1.0 && e <= double(f->count)) || e != std::floor(e))
+            luaL_error(L, "'%s.%s' has %u elements; the element must be a whole number from 1 to %u", type.name, f->name_str,
+                       f->count, f->count);
+        element = static_cast<u32>(e);
+    }
     Array<HostAccess::FieldHandle>& hs = HostAccess::handles(host);
     usize index = 0;
-    while (index < hs.size() && hs[index].field != f) ++index;
+    while (index < hs.size() && !(hs[index].field == f && hs[index].element == element)) ++index;
     if (index == hs.size()) {
         HostAccess::FieldHandle h;
         h.type = &type;
         h.field = f;
+        h.element = element;
         hs.push_back(h);
     }
     lua_pushlightuserdatatagged(L, reinterpret_cast<void*>(static_cast<uintptr_t>(index + 1)), kFieldHandleTag);
@@ -418,7 +441,9 @@ int l_get(lua_State* L) {
             row_comp = at.comp;
         }
         if (!row) luaL_error(L, "entity has no '%s'", at.comp_name);
-        pushed += push_value(L, *at.field, static_cast<const u8*>(row) + at.field->offset);
+        usize offset = 0;
+        const refl::FieldRecord view = field_view(at, offset);
+        pushed += push_value(L, view, static_cast<const u8*>(row) + offset);
         arg = next;
     } while (arg <= top);
     return pushed;
@@ -450,8 +475,10 @@ int l_set(lua_State* L) {
             if (row) w.touch(e, at.comp);  // marked before the write: a raised error leaves it marked, harmlessly
         }
         if (!row) luaL_error(L, "entity has no '%s'", at.comp_name);
-        write_value(L, *at.field, static_cast<u8*>(row) + at.field->offset, next);
-        arg = next + value_args(L, *at.field, next);
+        usize offset = 0;
+        const refl::FieldRecord view = field_view(at, offset);
+        write_value(L, view, static_cast<u8*>(row) + offset, next);
+        arg = next + value_args(L, view, next);
     } while (arg <= top);
     return 0;
 }

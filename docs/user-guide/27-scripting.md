@@ -61,7 +61,7 @@ numbers, and `nil` is the null entity.
 
 | Call | Does |
 |---|---|
-| `mce.field("Comp", "field")` | a handle to one field, looked up once; call it at the script's top level |
+| `mce.field("Comp", "field", element?)` | a handle to one field, looked up once; call it at the script's top level. For an array field such as `ScriptVars.v`, `element` (1-based) makes a handle to that one slot, so `mce.get` returns a number |
 | `mce.get(e, h, ...)` | the values of one or more fields (handles, or `"Comp", "field"` pairs) in one call |
 | `mce.set(e, h, v, ...)` | writes one or more fields (`h, v, h2, v2, ...`) and marks the components changed |
 | `mce.each("A", "B", ..., fn)` | calls `fn(e)` for every entity with all the components, in the order a Query visits |
@@ -366,6 +366,22 @@ function update()
     end)
 end
 ```
+
+**Named slots.** A handle can name one slot, so the layout lives in the names and not in `v[3]` comments:
+
+```lua
+local COINS = mce.field("ScriptVars", "v", 1)
+local KIND  = mce.field("ScriptVars", "v", 16)
+
+function update()
+    mce.each("ScriptVars", function(e)
+        if mce.get(e, KIND) == 1 then mce.set(e, COINS, mce.get(e, COINS) + 1) end
+    end)
+end
+```
+
+`mce.get(e, COINS, KIND)` reads several, `mce.set(e, COINS, 5, KIND, 1)` writes several, and a slot handle mixes with
+the whole-array handle in one call. A number outside 1..16, or an `element` on a field that is not an array, is an error.
 
 The scene gives the first values (`"ScriptVars": { "v": [0, 1, 38, 3, 4, 0, ...] }`). A convention that scales
 to several kinds of entity: keep the kind in the last slot (`v[16]`: 1 = player, 2 = enemy, 3 = goal) and let

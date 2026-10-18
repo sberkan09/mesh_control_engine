@@ -28,7 +28,7 @@ cannot yet say or check:
 | 7 | The perf gate's `--seed` self-check catches nothing on Dungeon (so its baseline cannot be trusted yet): find why three textured sprites added to `walk.mcscene` do not change `sprites` / `sprite_batches`, fix it, and make `Dungeon_perf_counters` run the seeded variant too | Sonnet | done |
 | 8 | Bytecode trust (M-FUZZ decision, coordinator 2026-10-17): bytecode loads only from the game's own cooked pack; mods, base packs, fetched config and user files are data-only. Pin it so a new mount site or raw-bytecode caller cannot slip in | Sonnet | done in PR (see "Step 8 as built") |
 | 9 | Blind-test gap 1: `mce test <project> [path]` plays `.mctest` scenarios without an agent (the MCP server over stdio) | Sonnet | done in PR (this step) |
-| 10 | Blind-test gap 2: named `ScriptVars` slots instead of `v[16]` | Sonnet | not started |
+| 10 | Blind-test gap 2: named `ScriptVars` slots instead of `v[16]` | Sonnet (touches the field-handle layer in `script.cpp`) | done in PR (this step) |
 | 11 | Blind-test gap 3: `mce.distance` / a 2D overlap query without physics | Sonnet | not started |
 | 12 | Blind-test gap 4: a headless entity and component dump | Sonnet | not started |
 
@@ -107,3 +107,12 @@ Not a true independent test of everything: the agent was handed the task, not as
   scenario passed and there was at least one. Run by hand against `projects/Pursuit` with the real server (`tests/collects.mctest` passes).
 - `tests/import/test_cli_test.py` (`cli_test`) pins the client, report and exit codes against a fake server; documented in guides 14.3.1, 16 and 27.7.
 - Not done: the ctest target of a script project still calls `demo_gate.py`; it could call `mce test`, left alone to keep this PR small.
+
+## Step 10 as built (named `ScriptVars` slots)
+
+- `mce.field("ScriptVars", "v", 3)`: an optional 1-based `element` makes a handle to one slot of an array field, so `mce.get(e, COINS)` is a number and
+  `mce.set(e, COINS, n)` writes it, mixed freely with whole-field handles and `("Comp", "field")` pairs. No new component: the scene still lists the
+  16 numbers. `FieldHandle` gets an `element` (0 = the whole field); `get` / `set` view the element as a one-element field, so reads, writes and the
+  state guard take the existing paths. A bad `element` or a non-array field is a named error; `mce.d.luau` declares the third argument.
+- The compile-time name check needs no change (it reads the first two arguments). Test: "mce.field names one element of an array field".
+- Not done: moving Dungeon and the other demos onto named slots (it would not change behaviour, only readability); a per-script named-constants table (separate wish).
