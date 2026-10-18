@@ -1078,9 +1078,13 @@ void ScriptHost::run_scripts(Frame& f, bool all, u8 group) {
         in_update_ = true;
         const int rc = lua_pcall(L_, 0, 0, 0);
         in_update_ = false;
-        infos_[i].last_steps = steps_;
-        infos_[i].peak_steps = std::max(infos_[i].peak_steps, steps_);
-        infos_[i].total_steps += steps_;
+        // interrupt_fn zeroes steps_ when it raises the budget error, so an over-budget tick is recorded as the limit plus one.
+        const char* error_text = rc != 0 ? lua_tostring(L_, -1) : nullptr;
+        const bool over_budget = error_text && StringView(error_text).find("step budget exceeded") != StringView::npos;
+        const u32 used = over_budget ? budget_.steps_per_tick + 1 : steps_;
+        infos_[i].last_steps = used;
+        infos_[i].peak_steps = std::max(infos_[i].peak_steps, used);
+        infos_[i].total_steps += used;
         ++infos_[i].updates;
         if (rc != 0) {
             // A write into a table the state check froze: say why it is frozen.

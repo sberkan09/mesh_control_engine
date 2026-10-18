@@ -112,6 +112,19 @@ TEST_CASE("script: the step profile counts updates, peak and total steps (M-SCRI
     CHECK(info.peak_steps > 0);
     CHECK(info.total_steps > info.peak_steps);  // ten updates, the earlier ones cheaper
     CHECK(host.budget().steps_per_tick == 200000u);
+
+    // A script that runs out of its budget shows the limit it hit, not the counter the error handler reset.
+    script::ScriptBudget small;
+    small.steps_per_tick = 500;
+    ScriptHost tight(small);
+    REQUIRE(script::add_source(tight, "spin", "function update() while true do end end"));
+    tight.install(w);
+    w.tick(1.0 / 60, 1);
+    const script::ScriptInfo& spun = tight.scripts()[0];
+    CHECK(spun.state == script::ScriptState::Failed);
+    CHECK(spun.updates == 1);
+    CHECK(spun.peak_steps == 501u);
+    CHECK(spun.total_steps == 501u);
 }
 
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
