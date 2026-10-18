@@ -258,8 +258,8 @@ Counters run(asset::AssetSystem& assets, const Array<Piece>& pieces, const Array
     for (const Piece& p : pieces) views.push_back(asset::MeshView::read(p.blob.span()).value());
     u32 next_key = 100000;
     for (u32 i = 0; i < city.size(); ++i) {
-        const vec3 centre{(static_cast<f32>(i % side) + 0.5f) * kArea - half_city, 0.0f,
-                          (static_cast<f32>(i / side) + 0.5f) * kArea - half_city};
+        const u32 column = i % side, row = i / side;
+        const vec3 centre{(static_cast<f32>(column) + 0.5f) * kArea - half_city, 0.0f, (static_cast<f32>(row) + 0.5f) * kArea - half_city};
         const bool loaded = !hlod || math::length(vec3{centre.x - eye.x, 0.0f, centre.z - eye.z}) <= near;
         scene::SceneChunk sc;
         sc.half_extents = {kArea * 0.5f, 30.0f, kArea * 0.5f};
