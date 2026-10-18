@@ -26,6 +26,10 @@ Sources: `M-DAYNIGHT.md` ("Not in scope: weather"), `assessments/gta-benzeri-oyu
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 1 | done | #575 | |
-| 2 | implemented (not merged) | | needs 1 |
-| 3 | planned | | needs 1 |
+| 2 | done | #577 | |
+| 3 | implemented (not merged) | | needs 1; `Precipitation3D` + `Lightning` in `precipitation.h`, `LightningStruck` event (named `PrecipitationEmitter3D` and `ThunderStruck` in the plan) |
 | 4 | planned | | |
+
+## Open items
+
+- **`ParticleEmitter3D` tail padding is uninitialised** (found in step 3): the struct in `kit3d.h` has 4 bytes of tail padding that stay uninitialised when an emitter is spawned from a temporary, and `World::state_hash` reads them, so a scene holding an emitter can get a flaky state hash. The weather tests spawn the emitter over zeroed storage. The fix is an explicit `u32 pad2_ = 0;` in `kit3d.h`, a 116-TU header, so it ships as its own seam PR (not part of M-WEATHER).

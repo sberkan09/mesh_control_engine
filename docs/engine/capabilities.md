@@ -111,6 +111,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Perceiver` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
+| `Precipitation3D` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WEATHER 3: tested in tests/kit/test_precipitation.cpp; the step 4 demo (samples/12_weather) shows it |
+| `Lightning` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WEATHER 3: tested in tests/kit/test_precipitation.cpp; the step 4 demo (samples/12_weather) shows it |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
 | `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
