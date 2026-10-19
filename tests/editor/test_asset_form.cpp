@@ -114,3 +114,86 @@ TEST_CASE("save_material_form: the cook checks the text first; a refused save le
     CHECK(form.swatch().metallic == 1.0f);
     CHECK(form.swatch().roughness == doctest::Approx(0.75f));
 }
+
+namespace {
+
+constexpr const char* kEmbers = R"({
+  "format": "mce-particles",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000000c2",
+  "name": "embers",
+  "rate": 30,
+  "lifetime": [1.2, 2.2],
+  "direction": 90,
+  "blend": "additive"
+}
+)";
+
+}  // namespace
+
+TEST_CASE("ParticleForm: round trip keeps unknown members, converts nothing, adds no defaults") {
+    ParticleForm f;
+    cook::String err;
+    REQUIRE(particle_form_from_text(kEmbers, f, err));
+    CHECK(f.rate == 30.0f);
+    CHECK(f.lifetime[1] == doctest::Approx(2.2f));
+    CHECK(f.additive);
+    CHECK(f.direction == 90.0f);
+    CHECK(f.swatch().direction == doctest::Approx(1.5707963f));  // degrees in the file, radians in the swatch
+
+    f.rate = 45;
+    f.spread = 25;
+    f.burst = 8;
+    f.texture = cook::String("guid:5ce4e000-0000-4000-8000-00000000dead");
+    cook::String out;
+    REQUIRE(particle_form_to_text(kEmbers, f, out, err));
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    REQUIRE(doc.parse(out.view(), je));
+    const cook::JsonValue root = doc.root();
+    CHECK(root.get("name").as_string() == "embers");
+    CHECK(root.get("rate").as_number() == 45.0);
+    CHECK(root.get("burst").as_number() == 8.0);
+    CHECK(root.get("blend").as_string() == "additive");
+    CHECK_FALSE(root.get("drag").valid());
+    CHECK_FALSE(root.get("max_particles").valid());
+    CHECK(root.key_at(3) == "name");
+    CHECK(root.key_at(4) == "rate");
+
+    ParticleForm again;
+    REQUIRE(particle_form_from_text(out.view(), again, err));
+    CHECK(again.spread == 25.0f);
+    CHECK(again.burst == 8);
+    CHECK_FALSE(particle_form_from_text(R"({"format": "mce-material"})", f, err));
+}
+
+TEST_CASE("save_particle_form: a refused cook writes nothing, a good save reads back") {
+    const std::string root = cook_test::fresh_dir("asset_form_part");
+    std::filesystem::create_directories(root + "/assets/fx");
+    std::ofstream(root + "/assets/fx/embers.mcpart") << kEmbers;
+    EditorProject project;
+    REQUIRE(project.open(root));
+    const ProjectAsset* found = nullptr;
+    for (const ProjectAsset& a : project.assets())
+        if (a.path.view() == "fx/embers.mcpart") found = &a;
+    REQUIRE(found);
+    const ProjectAsset asset = *found;
+    ParticleForm form;
+    cook::String err;
+    REQUIRE(load_particle_form(project, asset, form, err));
+    form.drag = 0.6f;
+    REQUIRE(save_particle_form(project, asset, form, err));
+    ParticleForm back;
+    REQUIRE(load_particle_form(project, asset, back, err));
+    CHECK(back.drag == doctest::Approx(0.6f));
+
+    cook::String before;
+    REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), before));
+    form.lifetime[0] = 5;  // min > max: the cook refuses
+    err = cook::String();
+    CHECK_FALSE(save_particle_form(project, asset, form, err));
+    CHECK(err.view().find("nothing was written") != StringView::npos);
+    cook::String after;
+    REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), after));
+    CHECK(before.view() == after.view());
+}

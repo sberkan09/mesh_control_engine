@@ -147,15 +147,19 @@ bool material_form_from_text(StringView text, MaterialForm& out, cook::String& e
     return true;
 }
 
-bool material_form_to_text(StringView old_text, const MaterialForm& form, cook::String& out, cook::String& err) {
+namespace {
+
+// Rewrites `old_text` (a JSON object) with the owned members replaced in place, the rest kept in order; an owned
+// member the file lacks is appended only when it is not the default.
+bool rewrite_members(StringView old_text, const Array<Owned>& owned, const char* what, cook::String& out, cook::String& err) {
     cook::JsonDoc doc;
     cook::JsonError je;
     if (!doc.parse(old_text, je) || !doc.root().is_object()) {
-        err += "the material file is not a JSON object";
+        err += "the ";
+        err += what;
+        err += " file is not a JSON object";
         return false;
     }
-    Array<Owned> owned;
-    owned_members(form, owned);
     const cook::JsonValue root = doc.root();
     cook::String text("{\n");
     bool first = true;
@@ -182,6 +186,14 @@ bool material_form_to_text(StringView old_text, const MaterialForm& form, cook::
     text += "\n}\n";
     out = static_cast<cook::String&&>(text);
     return true;
+}
+
+}  // namespace
+
+bool material_form_to_text(StringView old_text, const MaterialForm& form, cook::String& out, cook::String& err) {
+    Array<Owned> owned;
+    owned_members(form, owned);
+    return rewrite_members(old_text, owned, "material", out, err);
 }
 
 bool load_material_form(const EditorProject& project, const ProjectAsset& asset, MaterialForm& out, cook::String& err) {
@@ -240,6 +252,159 @@ bool save_material_form(EditorProject& project, const ProjectAsset& asset, const
     }
     cook::String text;
     if (!material_form_to_text(old_text.view(), form, text, err)) return false;
+    return validate_and_save_source(project, asset, text.view(), err);
+}
+
+// ---- ParticleForm --------------------------------------------------------------------------------------------
+
+ParticleSwatch ParticleForm::swatch() const {
+    constexpr f32 kDeg = 0.017453292519943295f;
+    ParticleSwatch p;
+    p.rate = rate;
+    p.burst = burst;
+    p.max_particles = max_particles;
+    p.duration = duration;
+    for (u32 i = 0; i < 2; ++i) {
+        p.lifetime[i] = lifetime[i];
+        p.speed[i] = speed[i];
+        p.gravity[i] = gravity[i];
+        p.size[i] = size[i];
+        p.area[i] = area[i];
+    }
+    p.direction = direction * kDeg;
+    p.spread = spread * kDeg;
+    p.drag = drag;
+    for (u32 i = 0; i < 4; ++i) {
+        p.color_start[i] = color_start[i];
+        p.color_end[i] = color_end[i];
+    }
+    p.additive = additive;
+    return p;
+}
+
+bool particle_form_from_text(StringView text, ParticleForm& out, cook::String& err) {
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    if (!doc.parse(text, je) || !doc.root().is_object()) {
+        err += "the particle file is not a JSON object";
+        return false;
+    }
+    const cook::JsonValue root = doc.root();
+    const cook::JsonValue fmt = root.get("format");
+    if (!fmt.valid() || !fmt.is_string() || fmt.as_string() != "mce-particles") {
+        err += "the file is not an mce-particles document";
+        return false;
+    }
+    ParticleForm f;
+    auto number = [&](const char* key, f32& v) {
+        const cook::JsonValue n = root.get(key);
+        if (n.valid() && n.is_number()) v = static_cast<f32>(n.as_number());
+    };
+    auto whole = [&](const char* key, u32& v) {
+        const cook::JsonValue n = root.get(key);
+        if (n.valid() && n.is_number() && n.as_number() >= 0) v = static_cast<u32>(n.as_number());
+    };
+    auto vec = [&](const char* key, f32* v, u32 n) {
+        const cook::JsonValue a = root.get(key);
+        if (!a.valid() || !a.is_array() || a.size() != n) return;
+        for (u32 i = 0; i < n; ++i)
+            if (a.at(i).is_number()) v[i] = static_cast<f32>(a.at(i).as_number());
+    };
+    number("rate", f.rate);
+    whole("burst", f.burst);
+    whole("max_particles", f.max_particles);
+    number("duration", f.duration);
+    vec("lifetime", f.lifetime, 2);
+    vec("speed", f.speed, 2);
+    number("direction", f.direction);
+    number("spread", f.spread);
+    vec("gravity", f.gravity, 2);
+    number("drag", f.drag);
+    vec("size", f.size, 2);
+    vec("spin", f.spin, 2);
+    vec("area", f.area, 2);
+    vec("color_start", f.color_start, 4);
+    vec("color_end", f.color_end, 4);
+    if (const cook::JsonValue b = root.get("blend"); b.valid() && b.is_string()) f.additive = b.as_string() == "additive";
+    if (const cook::JsonValue t = root.get("texture"); t.valid() && t.is_string()) f.texture = cook::String(t.as_string());
+    out = static_cast<ParticleForm&&>(f);
+    return true;
+}
+
+bool particle_form_to_text(StringView old_text, const ParticleForm& form, cook::String& out, cook::String& err) {
+    const ParticleForm d;
+    Array<Owned> owned;
+    auto add = [&](const char* key, cook::String text, bool is_default) { owned.push_back(Owned{key, static_cast<cook::String&&>(text), is_default}); };
+    auto num = [&](const char* key, f32 v, f32 def) {
+        cook::String t;
+        put_number(t, v);
+        add(key, static_cast<cook::String&&>(t), v == def);
+    };
+    auto count = [&](const char* key, u32 v, u32 def) {
+        cook::String t;
+        cook::appendf(t, "%u", v);
+        add(key, static_cast<cook::String&&>(t), v == def);
+    };
+    auto arr = [&](const char* key, const f32* v, const f32* def, u32 n) {
+        cook::String t;
+        put_array(t, v, n);
+        add(key, static_cast<cook::String&&>(t), same(v, def, n));
+    };
+    if (form.texture.empty()) {
+        add("texture", cook::String("null"), true);
+    } else {
+        cook::String t;
+        cook::append_json_string(t, form.texture.view());
+        add("texture", static_cast<cook::String&&>(t), false);
+    }
+    num("rate", form.rate, d.rate);
+    count("burst", form.burst, d.burst);
+    count("max_particles", form.max_particles, d.max_particles);
+    num("duration", form.duration, d.duration);
+    arr("lifetime", form.lifetime, d.lifetime, 2);
+    arr("speed", form.speed, d.speed, 2);
+    num("direction", form.direction, d.direction);
+    num("spread", form.spread, d.spread);
+    arr("gravity", form.gravity, d.gravity, 2);
+    num("drag", form.drag, d.drag);
+    arr("size", form.size, d.size, 2);
+    arr("spin", form.spin, d.spin, 2);
+    arr("area", form.area, d.area, 2);
+    arr("color_start", form.color_start, d.color_start, 4);
+    arr("color_end", form.color_end, d.color_end, 4);
+    {
+        cook::String t;
+        cook::append_json_string(t, form.additive ? "additive" : "alpha");
+        add("blend", static_cast<cook::String&&>(t), form.additive == d.additive);
+    }
+    return rewrite_members(old_text, owned, "particle", out, err);
+}
+
+bool load_particle_form(const EditorProject& project, const ProjectAsset& asset, ParticleForm& out, cook::String& err) {
+    if (asset.type != asset::ChunkType::ParticlePreset) {
+        err += "the asset is not a particle preset";
+        return false;
+    }
+    cook::String text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), text)) {
+        err += "could not read the particle file";
+        return false;
+    }
+    return particle_form_from_text(text.view(), out, err);
+}
+
+bool save_particle_form(EditorProject& project, const ProjectAsset& asset, const ParticleForm& form, cook::String& err) {
+    if (asset.type != asset::ChunkType::ParticlePreset) {
+        err += "the asset is not a particle preset";
+        return false;
+    }
+    cook::String old_text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), old_text)) {
+        err += "could not read the particle file";
+        return false;
+    }
+    cook::String text;
+    if (!particle_form_to_text(old_text.view(), form, text, err)) return false;
     return validate_and_save_source(project, asset, text.view(), err);
 }
 

@@ -42,6 +42,7 @@ SDK); without `-module` it knows engine components only.
 | **Profiler** | **Live**: editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings. **Capture**: a `.mcperf` from the player or MCP `perf_run`, with its budget verdict, a frame strip, a per-frame breakdown, spikes, systems, and a compare with a second capture (chapter 14, "Is it fast enough?") |
 
 | **Material** | opens on a double click on a material in Assets: a live lit-sphere swatch, the base colour, metallic, roughness, emissive, alpha mode, UV scale, the varnish, glass and height lobes, and the five texture slots (pick from the list or drop an image from Assets). **Save** cooks the text first and writes nothing if the cook would fail; **Revert** reloads; a dirty material saves when you open another |
+| **Particle** | opens on a double click on a particle preset in Assets: a live swatch (the emitter run for 1.5 s), emission (rate, burst, cap, duration, area), motion (lifetime, speed, direction, spread, gravity, drag, spin), look (size and colour over life, additive blend) and the texture (list or drop). **Save** and **Revert** work as in the Material panel; a range keeps min below max because the cook refuses the other order |
 
 Panels dock anywhere; View > Reset layout restores the default. The layout persists in
 `mce_editor.ini`.

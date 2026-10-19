@@ -798,6 +798,7 @@ void add_default_panels(EditorShell& shell) {
     add_bt_panel(shell);
     add_skeleton_panel(shell);
     add_material_panel(shell);
+    add_particle_panel(shell);
     add_project_settings_panel(shell);
 }
 
