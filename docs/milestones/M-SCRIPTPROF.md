@@ -1,6 +1,6 @@
 # M-SCRIPTPROF — Seeing what scripts do: profile, budget errors, log source, traces (milestone record)
 
-**Status:** done 2026-10-18 (steps 1-4: PRs #603, #605, #606 and the step 4 PR) (added 2026-10-18; owner: the M-SCRIPT thread; device-free; no Linear issues: free limit, this record is the tracker).
+**Status:** done 2026-10-18 (steps 1-4: PRs #603, #605, #606, #612) (added 2026-10-18; owner: the M-SCRIPT thread; device-free; no Linear issues: free limit, this record is the tracker).
 
 **Why.** A script that is slow, runs out of its step budget or prints into a crowded log is hard to diagnose today: `ScriptInfo.last_steps` is the only number, the budget
 error says "step budget exceeded (10000 per tick)" with no line, `mce.log` lines do not say which script wrote them, and `mce inspect` shows values after a run but
@@ -15,7 +15,7 @@ not how they moved. A game author (or an agent) writing Luau needs the same tool
 | 1 | Per-script step profile: `ScriptInfo` keeps peak, total and ticks run; `run_headless` returns it as `scripts`; `mce profile <project> [--ticks N]` prints a table with the budget share | Sonnet (Opus review: touches the update loop in `script.cpp`) | done in PR #603 |
 | 2 | A step-budget failure names the script line it stopped at (`file:line`), like any other script error (memory failures cannot: the allocator has no Lua frame) | Sonnet (Opus review: VM interrupt) | done in PR #605 |
 | 3 | `mce.log` lines carry the script name (`[<name>] script: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | done in PR #606 |
-| 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | done in PR (this step) |
+| 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | done in PR #612 |
 
 Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/script.md` updated, and a `changelog.d/SCRIPTPROF-<n>-<slug>.md` fragment.
 
