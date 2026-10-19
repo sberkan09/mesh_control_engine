@@ -589,7 +589,7 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   base (`env_base`, both read-only): a field that differs from what was written was rewritten by a day cycle or an
   edit, and becomes the new base, so nothing compounds. At intensity 0 the base is written back: clear weather is
   bit-identical to no `Weather`, and clearing the weather restores the authored values. Wind is exposed as
-  `Weather.wind` for scripts and the precipitation step; `Foliage3D` wind is not changed here.
+  `Weather.wind` for scripts and the precipitation step; `Foliage3D` wind is not changed by the weather itself (see "Wind sway").
 - **Wet surfaces.** `mce/kit/wet_surfaces.h` adds an optional `WetSurfaces` entity (one per scene, registered with
   the weather) that decides how the wet world looks. When the scene has both a `Weather` and a `WetSurfaces`, the
   renderer gets the wetness `Weather.wetness * strength` (default strength 1) with `darken` (0.5, the albedo a
@@ -597,6 +597,12 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   puddles at full wetness) and `puddle_scale_m` (4 m). A scene without a `WetSurfaces` (or without a `Weather`)
   stays dry and renders exactly as before; `strength` 0 is dry too. The Low quality tier keeps the darkening but
   drops the puddles, and `r.wet_surfaces 0` switches wet surfaces off.
+- **Wind sway.** `mce/kit/wind_sway.h` adds an optional `WindSway` entity (one per scene, registered with the weather)
+  that makes foliage sway with `Weather.wind`. When the scene has both a `Weather` and a `WindSway`, every `Foliage3D`
+  and `TerrainFoliage3D` is drawn with `wind_amplitude` and `wind_flutter` times `1 + (gain - 1) * wind`
+  (`amplitude_gain` 4, `flutter_gain` 3), `wind_frequency` times `1 + (frequency_gain - 1) * wind` (1.5), and
+  `wind_gust` plus `gust_gain * wind` (0.6, clamped to 0..1). At wind 0 the authored look is unchanged, the foliage
+  components are never written, and a scene without a `WindSway` (or without a `Weather`) renders exactly as before.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 

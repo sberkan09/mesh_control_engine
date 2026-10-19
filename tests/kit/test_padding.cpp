@@ -15,6 +15,7 @@
 
 #include "mce/kit/kit3d.h"
 #include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_sway.h"
 #include "mce/refl/field_traits.h"
 
 using namespace mce;
@@ -64,6 +65,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Decal3D>("Decal3D", 0);
     expect_pad<ParticleEmitter3D>("ParticleEmitter3D", sizeof(ParticleEmitter3D::pad_) + sizeof(ParticleEmitter3D::pad2_));
     expect_pad<WetSurfaces>("WetSurfaces", sizeof(WetSurfaces::pad_));  // wet_surfaces.h (M-WETSURFACE 5c)
+    expect_pad<WindSway>("WindSway", sizeof(WindSway::pad_));  // wind_sway.h (M-WINDSWAY 1)
 }
 
 TEST_CASE("padding: ParticleEmitter3D copied from a dirty stack hashes the same as from a clean one") {
