@@ -590,6 +590,13 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   edit, and becomes the new base, so nothing compounds. At intensity 0 the base is written back: clear weather is
   bit-identical to no `Weather`, and clearing the weather restores the authored values. Wind is exposed as
   `Weather.wind` for scripts and the precipitation step; `Foliage3D` wind is not changed here.
+- **Wet surfaces.** `mce/kit/wet_surfaces.h` adds an optional `WetSurfaces` entity (one per scene, registered with
+  the weather) that decides how the wet world looks. When the scene has both a `Weather` and a `WetSurfaces`, the
+  renderer gets the wetness `Weather.wetness * strength` (default strength 1) with `darken` (0.5, the albedo a
+  fully wet dielectric loses), `wet_roughness` (0.15), `puddles` (0.5, the share of up-facing ground that collects
+  puddles at full wetness) and `puddle_scale_m` (4 m). A scene without a `WetSurfaces` (or without a `Weather`)
+  stays dry and renders exactly as before; `strength` 0 is dry too. The Low quality tier keeps the darkening but
+  drops the puddles, and `r.wet_surfaces 0` switches wet surfaces off.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 

@@ -10,6 +10,7 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wet_surfaces.h"
 #include "mce/script/compiler.h"
 
 using namespace mce;
@@ -24,9 +25,10 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, probe;
+    Entity wx_e, wet_e, probe;
 
-    explicit WRig(const char* source, bool with_weather = true, bool install = true) {
+    explicit WRig(const char* source, bool with_weather = true, bool install = true,
+                  bool with_wet = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -41,10 +43,12 @@ struct WRig {
             c.transition_seconds = 10.0f;
             wx_e = w.spawn_with(c);
         }
+        if (with_wet) wet_e = w.spawn_with(kit::WetSurfaces{});
     }
     void step(u32 n = 1) {
         for (u32 i = 0; i < n; ++i) w.tick(1.0 / 60, ++tick);
     }
+    kit::WetSurfaces& wet() { return *w.try_get_mut<kit::WetSurfaces>(wet_e); }
     kit::Weather& wx() { return *w.try_get_mut<kit::Weather>(wx_e); }
     const LocalTransform& p() { return *w.try_get<LocalTransform>(probe); }
     const ScriptHost& h() const { return host; }
@@ -53,9 +57,10 @@ struct WRig {
 std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 
 // A script that runs `body` once on tick 1 and must fail with `needle`.
-void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true) {
+void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
+                  bool with_wet = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install);
+    WRig r(src.c_str(), with_weather, install, with_wet);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -164,4 +169,82 @@ TEST_CASE("weather api: bad arguments raise an error that names the call") {
     expect_error("weather.set(3)", "weather.set: unknown weather '3'");
     expect_error("weather.set('rain', 'slow')", "number expected");
     expect_error("weather.set()", "string expected");
+}
+
+TEST_CASE("weather api: the wet getters read the first WetSurfaces, set_wet writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.wet_strength() == 1 and weather.wet_darken() == 0.5)
+        assert(weather.wet_puddles() == 0.5 and weather.wet_puddle_scale() == 4)
+        weather.set_wet{darken = 0.25}
+    end
+    if t == 2 then
+        assert(weather.wet_darken() == 0.25 and weather.wet_strength() == 1)  -- only the given key changed
+        weather.set_wet{strength = 9, darken = -3, puddles = 2, puddle_scale = 0}
+    end
+    if t == 3 then
+        assert(weather.wet_strength() == 4 and weather.wet_darken() == 0)
+        assert(weather.wet_puddles() == 1 and math.abs(weather.wet_puddle_scale() - 0.1) < 1e-6)  -- f32 0.1
+        weather.set_wet{puddle_scale = 1000}
+    end
+    if t == 4 then
+        assert(weather.wet_puddle_scale() == 100)
+        weather.set_wet{}  -- nothing given, nothing changes
+        weather.set_wet{strength = 2, darken = 0.8, puddles = 0.125, puddle_scale = 6}
+    end
+end
+)",
+           true, true, true);
+    r.step(1);
+    CHECK(r.wet().darken == 0.25f);
+    r.step(1);
+    CHECK(r.wet().strength == 4.0f);
+    CHECK(r.wet().darken == 0.0f);
+    CHECK(r.wet().puddles == 1.0f);
+    CHECK(r.wet().puddle_scale_m == 0.1f);
+    r.step(1);
+    CHECK(r.wet().puddle_scale_m == 100.0f);
+    r.step(1);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.wet().strength == 2.0f);
+    CHECK(r.wet().darken == 0.8f);
+    CHECK(r.wet().puddles == 0.125f);
+    CHECK(r.wet().puddle_scale_m == 6.0f);
+    CHECK(r.wet().wet_roughness == 0.15f);  // not reachable from Luau
+}
+
+TEST_CASE("weather api: a world without a WetSurfaces raises a named error") {
+    expect_error("weather.wet_strength()", "weather.wet_strength: the scene has no WetSurfaces entity");
+    expect_error("weather.wet_darken()", "weather.wet_darken: the scene has no WetSurfaces entity");
+    expect_error("weather.wet_puddles()", "weather.wet_puddles: the scene has no WetSurfaces entity");
+    expect_error("weather.wet_puddle_scale()", "weather.wet_puddle_scale: the scene has no WetSurfaces entity");
+    expect_error("weather.set_wet{strength = 1}", "weather.set_wet: the scene has no WetSurfaces entity");
+    expect_error("weather.set_wet{}", "weather.set_wet: the scene has no WetSurfaces entity");
+    expect_error("weather.wet_strength()", "weather.wet_strength: this world has no weather", false, false);
+    // A Weather alone is not enough.
+    expect_error("weather.wet_darken()", "weather.wet_darken: the scene has no WetSurfaces entity", true, true, false);
+}
+
+TEST_CASE("weather api: set_wet bad arguments raise an error that names the call and write nothing") {
+    expect_error("weather.set_wet{bogus = 1}", "weather.set_wet: unknown key 'bogus'", true, true, true);
+    expect_error("weather.set_wet{Strength = 1}", "weather.set_wet: unknown key 'Strength'", true, true, true);
+    expect_error("weather.set_wet{puddles = 'lots'}", "weather.set_wet: 'puddles' is not a number", true, true, true);
+    expect_error("weather.set_wet{darken = 0/0}", "weather.set_wet: 'darken' is not a number", true, true, true);
+    expect_error("weather.set_wet{[1] = 0.5}", "weather.set_wet: the keys are names", true, true, true);
+    expect_error("weather.set_wet(0.5)", "table expected", true, true, true);
+    expect_error("weather.set_wet()", "table expected", true, true, true);
+    // A bad key after a good one: the good one is not written.
+    WRig r(R"(
+function update()
+    if mce.tick() == 1 then weather.set_wet{strength = 3, puddle_scale = 'big'} end
+end
+)",
+           true, true, true);
+    r.step(2);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(r.wet().strength == 1.0f);
+    CHECK(r.wet().puddle_scale_m == 4.0f);
 }
