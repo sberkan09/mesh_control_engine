@@ -532,7 +532,11 @@ int l_log(lua_State* L) {
     ScriptHost& host = HostAccess::host(L);
     const u32 current = HostAccess::current(host);
     const StringView name = current < host.scripts().size() ? host.scripts()[current].name.view() : StringView("?");
-    MCE_LOG_INFO("[{}] script: {}", name, msg);
+    const char* level = luaL_optstring(L, 2, "info");
+    if (std::strcmp(level, "info") == 0) MCE_LOG_INFO("[{}] script: {}", name, msg);
+    else if (std::strcmp(level, "warn") == 0) MCE_LOG_WARN("[{}] script: {}", name, msg);
+    else if (std::strcmp(level, "error") == 0) MCE_LOG_ERROR("[{}] script: {}", name, msg);
+    else luaL_error(L, "mce.log level is \"info\", \"warn\" or \"error\", not '%s'", level);
     return 0;
 }
 

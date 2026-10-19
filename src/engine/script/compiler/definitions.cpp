@@ -45,7 +45,8 @@ declare mce: {
     each: (...any) -> (),
     tick: () -> number,
     random: () -> number,
-    log: (message: string) -> (),
+    -- level: "info" (default), "warn" or "error"; a warn or error line counts in a .mctest's log_warnings / log_errors checks
+    log: (message: string, level: string?) -> (),
 
     has: (e: Entity, component: string) -> boolean,
     -- the number the scene gave this entity for `name` in its ScriptParams (names: "speed jump", v: [5, 8]); default when it has none

@@ -158,6 +158,35 @@ TEST_CASE("script: mce.log lines name the script that wrote them (M-SCRIPTPROF 3
     CHECK(two);
 }
 
+TEST_CASE("script: mce.log takes a level; an unknown level is a script error (M-SCRIPTLOG 1)") {
+    World w;
+    ScriptHost host;
+    REQUIRE(script::add_source(host, "loud", "function update() if mce.tick() == 1 then mce.log('careful', 'warn') mce.log('broken', 'error') end end"));
+    host.install(w);
+    const u64 since = log::console_last_seq();
+    w.tick(1.0 / 60, 1);
+    Array<log::ConsoleLine> lines;
+    lines.resize(log::kConsoleRingSize);
+    lines.resize(log::read_console(since, lines.span()));
+    bool warn = false, error = false;
+    for (const log::ConsoleLine& l : lines) {
+        const bool has = StringView(l.text.c_str()).find("[loud] script: careful") != StringView::npos;
+        warn = warn || (has && l.level == log::Level::Warn);
+        const bool has_e = StringView(l.text.c_str()).find("[loud] script: broken") != StringView::npos;
+        error = error || (has_e && l.level == log::Level::Error);
+    }
+    CHECK(warn);
+    CHECK(error);
+
+    World w2;
+    ScriptHost bad;
+    REQUIRE(script::add_source(bad, "bad", "function update() mce.log('x', 'loud') end"));
+    bad.install(w2);
+    w2.tick(1.0 / 60, 1);
+    REQUIRE_FALSE(bad.scripts()[0].error.empty());
+    CHECK(StringView(bad.scripts()[0].error.c_str()).find("level is \"info\", \"warn\" or \"error\"") != StringView::npos);
+}
+
 TEST_CASE("script: the same inputs give the same state hash (FR-RUN-040)") {
     const u64 a = run_movers(600);
     const u64 b = run_movers(600);
