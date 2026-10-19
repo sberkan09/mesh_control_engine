@@ -2,7 +2,8 @@
 # A small street under a changing sky: a ground box, three buildings, a camera. One WorldClock (noon, a 600 s day)
 # with a default DayCycle gives the base light; a Weather (10 s transitions) modulates sun, ambient, exposure and fog
 # from it; a Precipitation3D on a ParticleEmitter3D makes rain and snow around the camera; a Lightning flashes in
-# storms. assets/scripts/weather.luau is the forecast (weather.set at ticks 60, 600, 1500, 2100) and logs the
+# storms; the Weather entity also carries a WetSurfaces (M-WETSURFACE 5d) that darkens and puddles the street as
+# Weather.wetness rises. assets/scripts/weather.luau is the forecast (weather.set at ticks 60, 600, 1500, 2100) and logs the
 # weather every 150 ticks. The meshes are 10_missions' two boxes (same bytes), scaled. input.txt is empty.
 # `mce_player -pack <build>/samples/12_weather/project/assets.mce -input samples/12_weather/input.txt`
 if(NOT TARGET mce_cook OR NOT MCE_WITH_SCRIPT)
