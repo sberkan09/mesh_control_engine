@@ -43,6 +43,7 @@ SDK); without `-module` it knows engine components only.
 
 | **Material** | opens on a double click on a material in Assets: a live lit-sphere swatch, the base colour, metallic, roughness, emissive, alpha mode, UV scale, the varnish, glass and height lobes, and the five texture slots (pick from the list or drop an image from Assets). **Save** cooks the text first and writes nothing if the cook would fail; **Revert** reloads; a dirty material saves when you open another |
 | **Particle** | opens on a double click on a particle preset in Assets: a live swatch (the emitter run for 1.5 s), emission (rate, burst, cap, duration, area), motion (lifetime, speed, direction, spread, gravity, drag, spin), look (size and colour over life, additive blend) and the texture (list or drop). **Save** and **Revert** work as in the Material panel; a range keeps min below max because the cook refuses the other order |
+| **Scenes** | one tab per open scene file. Opening another scene (Assets, the File menu's Open entry) keeps the one that was open: its unsaved changes are parked in the same autosave file crash recovery uses and come back, still unsaved, when you click its tab (a switch starts a fresh undo history). A `*` marks unsaved changes; the close button on a tab with changes asks before dropping them. A scene with no file yet (untitled) cannot be parked: the usual "unsaved changes" prompt stays for it, and Quit asks while any tab has changes |
 
 Panels dock anywhere; View > Reset layout restores the default. The layout persists in
 `mce_editor.ini`.

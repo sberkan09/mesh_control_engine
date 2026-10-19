@@ -25,6 +25,11 @@ public:
     bool dirty(const EditorSession& session, u32 index) const;
     bool any_dirty(const EditorSession& session) const;
 
+    // Forgets every tab (a project was opened); parked autosave files stay where they are.
+    void clear() {
+        tabs_.clear();
+        active_ = -1;
+    }
     // Brings the list in line with the session after something else opened or saved a scene (File > Open, Save
     // As, a rename): the session's scene becomes the active tab, added when it has a file and was not listed.
     void sync(const EditorSession& session);

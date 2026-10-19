@@ -1,6 +1,6 @@
 # M-SCENETABS — Several scenes open at once in the editor (milestone record)
 
-**Status:** in progress 2026-10-19. **Owner: the "Geliştirme rutini 3" thread** (a gap taken from the assessments at the coordinator's request: no unowned milestone was left). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
+**Status:** done 2026-10-19 (steps 1–2). **Owner: the "Geliştirme rutini 3" thread** (a gap taken from the assessments at the coordinator's request: no unowned milestone was left). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
 Source: `assessments/unreal-kiyaslama-2026-10-16.md`, Editor row ("çoklu sahne sekmesi ... kesilmişti"); the M8 editor milestone cut multi-scene tabs (ROADMAP, M8 row). Opening a second scene today asks to discard the first one's changes, so moving between a level and its sub-scenes loses work or forces a save at every switch.
 
 **Goal.** The editor keeps a row of scene tabs. Switching tabs never loses changes: a dirty scene is parked in the autosave file the editor already writes (crash recovery uses the same file) and comes back dirty, as it was left. Nothing changes for MCP or the headless session: they still see one open scene.
@@ -22,4 +22,4 @@ Source: `assessments/unreal-kiyaslama-2026-10-16.md`, Editor row ("çoklu sahne 
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 1 | done (this PR) | | `SceneTabs` (`mce/editor/scene_tabs.h`): `sync`, `open`, `activate`, `close`, `dirty`, `any_dirty`. A dirty scene parks in the session's autosave file (`EditorSession::autosave`) and returns through `recover()`; `EditorSession::autosave_path_for(path)` lets a parked tab's autosave be dropped without opening it. 3 tests |
-| 2 | planned | | needs 1 |
+| 2 | done (this PR) | | `Scenes` panel (`scenes_panel.cpp`): a tab bar with a `*` for unsaved changes and a close button that asks first for a dirty tab. `EditorShell::open_scene` goes through `SceneTabs::open` (so Assets, File > Open Scene and the Open Scene list park instead of asking; the discard prompt is kept for an untitled dirty scene), `open_project` clears the tabs, Quit asks while any tab is dirty. `SceneTabs::clear()` added. Build-checked only here (no display) |

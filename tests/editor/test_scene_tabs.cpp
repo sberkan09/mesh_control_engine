@@ -112,6 +112,14 @@ TEST_CASE("SceneTabs: closing tabs keeps or drops parked edits as asked") {
     CHECK(f.session.scene().path().find("b.mcscene") != StringView::npos);
     CHECK_FALSE(f.session.scene().dirty());
 
+    // clear() forgets the list without touching the open scene.
+    f.tabs.sync(f.session);
+    f.tabs.clear();
+    CHECK(f.tabs.tabs().size() == 0);
+    CHECK(f.tabs.active() == -1);
+    f.tabs.sync(f.session);
+    CHECK(f.tabs.tabs().size() == 1);
+
     // The last tab closes into an untitled scene.
     REQUIRE(f.tabs.close(f.session, 0, false, err));
     CHECK(f.tabs.tabs().size() == 0);
