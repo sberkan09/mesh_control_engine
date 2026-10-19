@@ -30,5 +30,5 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 1 | starting | | |
+| 1 | done, awaiting merge | | `WindSway` + the scaling at both batch sites in `Kit3DExtract`; `tests/kit/test_wind_sway.cpp` |
 | 2 | planned | | needs 1 |

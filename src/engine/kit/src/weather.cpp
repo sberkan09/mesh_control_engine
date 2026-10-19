@@ -8,6 +8,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/timed_light.h"
 #include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_sway.h"
 
 namespace mce::kit {
 namespace {
@@ -168,6 +169,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     if (world.try_resource<WeatherInstalled>()) return;
     world.set_resource(WeatherInstalled{});
     world.register_components<Weather>();
+    world.register_components<WindSway>();     // read by Kit3DExtract (M-WINDSWAY 1); no system
     world.register_components<WetSurfaces>();  // read by Kit3DExtract (M-WETSURFACE 5c); no system
     world.register_event<WeatherChanged>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit_weather", &kit_weather, "kit_timed_light");
