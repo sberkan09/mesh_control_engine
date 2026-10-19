@@ -12,6 +12,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/asset_browser.cpp
         src/asset_thumb.cpp
         src/asset_form.cpp
+        src/scene_tabs.cpp
         src/thumb_cache.cpp
         src/bt_editor.cpp
         src/console_model.cpp

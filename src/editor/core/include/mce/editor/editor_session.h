@@ -51,6 +51,8 @@ public:
     // untitled scene uses "untitled.mcscene"), or "<scene file>.autosave" outside a project.
     // Empty when there is nowhere to put it (no project and never saved).
     cook::String autosave_path() const;
+    // The same for any scene file (M-SCENETABS: a parked tab's autosave).
+    cook::String autosave_path_for(StringView scene_path) const;
     // Writes the autosave (atomic) when the scene changed since the last one. True if written.
     bool autosave();
     // Autosaves once `interval` seconds have passed since the last autosave (or since the scene
