@@ -232,6 +232,8 @@ end
 | `weather.wetness()` | 0 to 1 |
 | `weather.wet_strength()`, `weather.wet_darken()`, `weather.wet_puddles()`, `weather.wet_puddle_scale()` | read the first `WetSurfaces` (section 9.19): `strength`, `darken`, `puddles` and `puddle_scale_m`. A scene without a `WetSurfaces` raises an error that names the call |
 | `weather.set_wet{strength=, darken=, puddles=, puddle_scale=}` | writes those fields of the first `WetSurfaces`; every key is optional and each value is clamped to the field's range (strength 0 to 4, darken 0 to 1, puddles 0 to 1, puddle_scale 0.1 to 100 m). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
+| `weather.sway_amplitude()`, `weather.sway_frequency()`, `weather.sway_gust()`, `weather.sway_flutter()` | read the four gains of the first `WindSway` (the foliage sway at `weather.wind()` 1, section 9.19): `amplitude_gain`, `frequency_gain`, `gust_gain` and `flutter_gain`. A scene without a `WindSway` raises an error that names the call |
+| `weather.set_sway{amplitude=, frequency=, gust=, flutter=}` | writes those gains of the first `WindSway`; every key is optional and each value is clamped to the field's range (amplitude 0 to 50, frequency 0 to 10, gust -1 to 1, flutter 0 to 50). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
 
 ```lua
 -- A storm rolls in when the player enters the harbour.

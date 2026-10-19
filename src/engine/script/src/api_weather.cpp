@@ -21,6 +21,17 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Wind sway (M-WINDSWAY step 2) is the same kind of binding over the first kit::WindSway (mce/kit/wind_sway.h): the
+// gains Kit3DExtract scales the foliage wind by (factor 1 + (gain - 1) * Weather.wind). Named errors as above.
+//
+//   weather.sway_amplitude() -> number    WindSway.amplitude_gain (0..50)
+//   weather.sway_frequency() -> number    WindSway.frequency_gain (0..10)
+//   weather.sway_gust() -> number         WindSway.gust_gain (-1..1)
+//   weather.sway_flutter() -> number      WindSway.flutter_gain (0..50)
+//   weather.set_sway{amplitude=, frequency=, gust=, flutter=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -28,6 +39,7 @@
 
 #include "api.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 
 namespace mce::script::detail {
@@ -67,6 +79,20 @@ kit::WetSurfaces& check_wet(lua_State* L, const char* fn) {
         if (!found) found = &c;
     });
     if (!found) luaL_error(L, "%s: the scene has no WetSurfaces entity", fn);
+    return *found;
+}
+
+// The first WindSway, or a Luau error that names the call.
+kit::WindSway& check_sway(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const refl::TypeRecord* type = refl::find_type(StringId("WindSway"));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent)
+        luaL_error(L, "%s: this world has no weather (install_weather)", fn);
+    kit::WindSway* found = nullptr;
+    w.query<kit::WindSway>().each([&](Entity, kit::WindSway& c) {
+        if (!found) found = &c;
+    });
+    if (!found) luaL_error(L, "%s: the scene has no WindSway entity", fn);
     return *found;
 }
 
@@ -172,6 +198,59 @@ int l_weather_set_wet(lua_State* L) {
     return 0;
 }
 
+int l_weather_sway_amplitude(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_sway(L, "weather.sway_amplitude").amplitude_gain));
+    return 1;
+}
+
+int l_weather_sway_frequency(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_sway(L, "weather.sway_frequency").frequency_gain));
+    return 1;
+}
+
+int l_weather_sway_gust(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_sway(L, "weather.sway_gust").gust_gain));
+    return 1;
+}
+
+int l_weather_sway_flutter(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_sway(L, "weather.sway_flutter").flutter_gain));
+    return 1;
+}
+
+// weather.set_sway{amplitude=, frequency=, gust=, flutter=}: like set_wet, validated before anything is written.
+int l_weather_set_sway(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    // Slots: 0 amplitude, 1 frequency, 2 gust, 3 flutter.
+    static const char* const kKeys[4] = {"amplitude", "frequency", "gust", "flutter"};
+    f64 value[4] = {0, 0, 0, 0};
+    bool given[4] = {false, false, false, false};
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0) {
+        if (lua_type(L, -2) != LUA_TSTRING)
+            luaL_error(L, "weather.set_sway: the keys are names (amplitude, frequency, gust, flutter)");
+        const char* key = lua_tostring(L, -2);
+        int slot = -1;
+        for (int i = 0; i < 4; ++i) {
+            if (std::strcmp(key, kKeys[i]) == 0) slot = i;
+        }
+        if (slot < 0)
+            luaL_error(L, "weather.set_sway: unknown key '%s' (amplitude, frequency, gust, flutter)", key);
+        if (lua_type(L, -1) != LUA_TNUMBER) luaL_error(L, "weather.set_sway: '%s' is not a number", key);
+        const f64 v = lua_tonumber(L, -1);
+        if (std::isnan(v)) luaL_error(L, "weather.set_sway: '%s' is not a number", key);
+        value[slot] = v;
+        given[slot] = true;
+        lua_pop(L, 1);
+    }
+    kit::WindSway& ws = check_sway(L, "weather.set_sway");
+    if (given[0]) ws.amplitude_gain = static_cast<f32>(clamp_range(value[0], 0.0, 50.0));
+    if (given[1]) ws.frequency_gain = static_cast<f32>(clamp_range(value[1], 0.0, 10.0));
+    if (given[2]) ws.gust_gain = static_cast<f32>(clamp_range(value[2], -1.0, 1.0));
+    if (given[3]) ws.flutter_gain = static_cast<f32>(clamp_range(value[3], 0.0, 50.0));
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -184,6 +263,11 @@ const luaL_Reg kWeatherLib[] = {
     {"wet_puddles", l_weather_wet_puddles},
     {"wet_puddle_scale", l_weather_wet_puddle_scale},
     {"set_wet", l_weather_set_wet},
+    {"sway_amplitude", l_weather_sway_amplitude},
+    {"sway_frequency", l_weather_sway_frequency},
+    {"sway_gust", l_weather_sway_gust},
+    {"sway_flutter", l_weather_sway_flutter},
+    {"set_sway", l_weather_set_sway},
     {nullptr, nullptr},
 };
 

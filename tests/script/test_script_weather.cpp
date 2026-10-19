@@ -10,6 +10,7 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/script/compiler.h"
 
@@ -25,10 +26,10 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, probe;
+    Entity wx_e, wet_e, sway_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
-                  bool with_wet = false) {
+                  bool with_wet = false, bool with_sway = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -44,7 +45,9 @@ struct WRig {
             wx_e = w.spawn_with(c);
         }
         if (with_wet) wet_e = w.spawn_with(kit::WetSurfaces{});
+        if (with_sway) sway_e = w.spawn_with(kit::WindSway{});
     }
+    kit::WindSway& sway() { return *w.try_get_mut<kit::WindSway>(sway_e); }
     void step(u32 n = 1) {
         for (u32 i = 0; i < n; ++i) w.tick(1.0 / 60, ++tick);
     }
@@ -58,9 +61,9 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
-                  bool with_wet = false) {
+                  bool with_wet = false, bool with_sway = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -247,4 +250,84 @@ end
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
     CHECK(r.wet().strength == 1.0f);
     CHECK(r.wet().puddle_scale_m == 4.0f);
+}
+
+TEST_CASE("weather api: the sway getters read the first WindSway, set_sway writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.sway_amplitude() == 4 and weather.sway_frequency() == 1.5)
+        assert(math.abs(weather.sway_gust() - 0.6) < 1e-6 and weather.sway_flutter() == 3)
+        weather.set_sway{gust = 0.25}
+    end
+    if t == 2 then
+        assert(weather.sway_gust() == 0.25 and weather.sway_amplitude() == 4)  -- only the given key changed
+        weather.set_sway{amplitude = 99, frequency = -3, gust = -7, flutter = 51}
+    end
+    if t == 3 then
+        assert(weather.sway_amplitude() == 50 and weather.sway_frequency() == 0)
+        assert(weather.sway_gust() == -1 and weather.sway_flutter() == 50)
+        weather.set_sway{frequency = 99, gust = 7}
+    end
+    if t == 4 then
+        assert(weather.sway_frequency() == 10 and weather.sway_gust() == 1)
+        weather.set_sway{}  -- nothing given, nothing changes
+        weather.set_sway{amplitude = 2, frequency = 0.5, gust = 0.125, flutter = 6}
+    end
+end
+)",
+           true, true, false, true);
+    r.step(1);
+    CHECK(r.sway().gust_gain == 0.25f);
+    r.step(1);
+    CHECK(r.sway().amplitude_gain == 50.0f);
+    CHECK(r.sway().frequency_gain == 0.0f);
+    CHECK(r.sway().gust_gain == -1.0f);
+    CHECK(r.sway().flutter_gain == 50.0f);
+    r.step(1);
+    CHECK(r.sway().frequency_gain == 10.0f);
+    CHECK(r.sway().gust_gain == 1.0f);
+    r.step(1);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.sway().amplitude_gain == 2.0f);
+    CHECK(r.sway().frequency_gain == 0.5f);
+    CHECK(r.sway().gust_gain == 0.125f);
+    CHECK(r.sway().flutter_gain == 6.0f);
+}
+
+TEST_CASE("weather api: a world without a WindSway raises a named error") {
+    expect_error("weather.sway_amplitude()", "weather.sway_amplitude: the scene has no WindSway entity");
+    expect_error("weather.sway_frequency()", "weather.sway_frequency: the scene has no WindSway entity");
+    expect_error("weather.sway_gust()", "weather.sway_gust: the scene has no WindSway entity");
+    expect_error("weather.sway_flutter()", "weather.sway_flutter: the scene has no WindSway entity");
+    expect_error("weather.set_sway{amplitude = 1}", "weather.set_sway: the scene has no WindSway entity");
+    expect_error("weather.set_sway{}", "weather.set_sway: the scene has no WindSway entity");
+    expect_error("weather.sway_amplitude()", "weather.sway_amplitude: this world has no weather", false, false);
+    expect_error("weather.set_sway{}", "weather.set_sway: this world has no weather", false, false);
+    // A Weather and a WetSurfaces alone are not enough.
+    expect_error("weather.sway_gust()", "weather.sway_gust: the scene has no WindSway entity", true, true, true);
+}
+
+TEST_CASE("weather api: set_sway bad arguments raise an error that names the call and write nothing") {
+    expect_error("weather.set_sway{bogus = 1}", "weather.set_sway: unknown key 'bogus'", true, true, false, true);
+    expect_error("weather.set_sway{Gust = 1}", "weather.set_sway: unknown key 'Gust'", true, true, false, true);
+    expect_error("weather.set_sway{gust = 'lots'}", "weather.set_sway: 'gust' is not a number", true, true, false, true);
+    expect_error("weather.set_sway{flutter = 0/0}", "weather.set_sway: 'flutter' is not a number", true, true, false, true);
+    expect_error("weather.set_sway{[1] = 0.5}", "weather.set_sway: the keys are names", true, true, false, true);
+    expect_error("weather.set_sway(0.5)", "table expected", true, true, false, true);
+    expect_error("weather.set_sway()", "table expected", true, true, false, true);
+    // A bad key after a good one: the good one is not written (and the order of the table does not matter).
+    for (const char* body : {"weather.set_sway{amplitude = 3, flutter = 'big'}",
+                             "weather.set_sway{flutter = 'big', amplitude = 3}",
+                             "weather.set_sway{amplitude = 3, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.sway().amplitude_gain == 4.0f);
+        CHECK(r.sway().flutter_gain == 3.0f);
+    }
 }
