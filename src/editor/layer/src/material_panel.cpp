@@ -82,12 +82,12 @@ private:
     }
 
     void do_save(EditorSession& session, const ProjectAsset& asset) {
-        const ProjectAsset copy = asset;  // the save rescans the catalog
+        const cook::String path = asset.path;  // the save rescans the catalog, `asset` dangles after
         cook::String err;
-        if (save_material_form(session.project(), copy, form_, err)) {
+        if (save_material_form(session.project(), asset, form_, err)) {
             error_ = cook::String();
             dirty_ = false;
-            MCE_LOG_INFO("editor: saved {}", copy.path.view());
+            MCE_LOG_INFO("editor: saved {}", path.view());
         } else {
             error_ = err;
         }
