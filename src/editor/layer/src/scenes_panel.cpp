@@ -38,12 +38,12 @@ public:
                 cook::String label(slash == StringView::npos ? p : p.substr(slash + 1));
                 if (tabs.dirty(session, i)) label += '*';
                 cook::appendf(label, "###tab%u", i);
-                bool open = true;
+                bool tab_open = true;
                 const bool is_active = static_cast<int>(i) == tabs.active();
-                if (ImGui::BeginTabItem(label.c_str(), &open, is_active ? ImGuiTabItemFlags_SetSelected : 0)) ImGui::EndTabItem();
+                if (ImGui::BeginTabItem(label.c_str(), &tab_open, is_active ? ImGuiTabItemFlags_SetSelected : 0)) ImGui::EndTabItem();
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", t.path.c_str());
                 if (!is_active && ImGui::IsItemClicked()) want_activate = static_cast<int>(i);
-                if (!open) want_close = static_cast<int>(i);
+                if (!tab_open) want_close = static_cast<int>(i);
             }
             ImGui::EndTabBar();
         }
