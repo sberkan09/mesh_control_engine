@@ -536,8 +536,9 @@ const cook::CookReport& EditorSession::cook(bool pack, bool adopt, Span<const co
     return report;
 }
 
-cook::String EditorSession::autosave_path() const {
-    const StringView path = scene_.path();
+cook::String EditorSession::autosave_path() const { return autosave_path_for(scene_.path()); }
+
+cook::String EditorSession::autosave_path_for(StringView path) const {
     cook::String rel;
     if (project_.is_open()) {
         if (path.empty()) rel = "untitled.mcscene";
