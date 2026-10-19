@@ -29,7 +29,7 @@ SDK); without `-module` it knows engine components only.
 | **Viewport** | the scene, rendered the way the game renders it, plus gizmos, grid, selection and physics overlays. In play mode it shows the running play world |
 | **Hierarchy** | the entities as a parent/child tree, siblings in file order. Select, multi-select, create, rename, delete, drag to reparent |
 | **Inspector** | the selected entity's components, one widget per reflected field, with `Add Component` and per-component removal. Prefab instances show override marks with Revert and Apply to prefab |
-| **Assets** | the project catalog as a folder tree plus a filtered list; the **Grid** checkbox switches the list to thumbnails (32–128 px, drawn on the CPU a few per frame: textures, a sound's waveform, meshes once cooked, a coloured tile for other kinds, redrawn when the file changes). Drag assets into the viewport, the hierarchy or an inspector field; rename and move keep GUIDs; File > "Rescan assets" after adding files outside the editor |
+| **Assets** | the project catalog as a folder tree plus a filtered list; the **Grid** checkbox switches the list to thumbnails (32–128 px, drawn on the CPU a few per frame: textures, a sound's waveform, meshes once cooked, materials as a lit sphere, particle presets as a burst of their particles, a coloured tile for other kinds, redrawn when the file changes). Drag assets into the viewport, the hierarchy or an inspector field; rename and move keep GUIDs; File > "Rescan assets" after adding files outside the editor |
 | **Cook** | the last cook's result and every diagnostic as `file:line:col`; Cook and Cook + Pack buttons |
 | **Play** | play-in-editor controls, the tick count and state hash, the live values of the selected entity, and the event-flow monitor |
 | **Tilemap** | gives the selected entity a tilemap layer, picks the brush from a tileset, toggles the paint tool |
@@ -40,6 +40,8 @@ SDK); without `-module` it knows engine components only.
 | **Console** | the engine log and a command line for convars and confuncs |
 | **Stats** | editor frame rate, sim ticks, viewport size |
 | **Profiler** | **Live**: editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings. **Capture**: a `.mcperf` from the player or MCP `perf_run`, with its budget verdict, a frame strip, a per-frame breakdown, spikes, systems, and a compare with a second capture (chapter 14, "Is it fast enough?") |
+
+| **Material** | opens on a double click on a material in Assets: a live lit-sphere swatch, the base colour, metallic, roughness, emissive, alpha mode, UV scale, the varnish, glass and height lobes, and the five texture slots (pick from the list or drop an image from Assets). **Save** cooks the text first and writes nothing if the cook would fail; **Revert** reloads; a dirty material saves when you open another |
 
 Panels dock anywhere; View > Reset layout restores the default. The layout persists in
 `mce_editor.ini`.
