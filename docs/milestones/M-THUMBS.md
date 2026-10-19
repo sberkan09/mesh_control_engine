@@ -25,5 +25,5 @@ Source: `assessments/unreal-kiyaslama-2026-10-16.md` (Editor row: "çoklu sahne 
 |---|---|---|---|
 | 1 | done | #601 | `mce/editor/asset_thumb.h`: `thumb_from_image` / `thumb_from_pcm` / `thumb_from_mesh` / `thumb_tile` and `render_thumbnail(project, asset, size, out)`; exact-pixel tests. Textures read the source PNG, audio the source WAV (Ogg and the other kinds show the tile for now), meshes the mounted cooked chunk |
 | 2 | done (this PR) | | `asset_thumbnail` (`tools_thumbs.cpp`): one asset as a size x size PNG, or `folder` for a contact sheet (ceil(sqrt n) columns, 2 px gap, `type` filter, up to 64 tiles); JSON lists each tile and whether it is `real` |
-| 3 | planned | | needs 1 |
+| 3 | done (this PR) | | `mce/editor/thumb_cache.h`: `ThumbCache` (budget of 4 renders per frame, an entry per GUID at one size, a stamp of the source file's size and last-write time looked at again every 60 frames so an edit redraws, cap 512, removed assets dropped; a stat rather than a content hash, the cook keeps the content hashes) and the Assets panel's **Grid** mode (cells select, open, drag and have the menu like rows; pictures are ImGui user textures uploaded again when an entry's revision moves). Headless tests; the on-screen look needs a display check |
 | 4 | planned | | |

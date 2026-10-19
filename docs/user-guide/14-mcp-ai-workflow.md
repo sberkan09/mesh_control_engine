@@ -402,7 +402,8 @@ there are none).
 `mce inspect <project> --component Type` is the `run_headless` tool's `inspect` for a terminal: it plays the scene (`--ticks`, default 300)
 and prints the live component values of every entity with that component and/or of `--entity` ids or names as JSON (Transient runtime fields
 such as `ScriptVars.v` included; `--show A,B` picks the components). The state hash goes to stderr; it exits 3 when a script failed, as
-`mce_player -headless` does.
+`mce_player -headless` does. `--trace Hero:LocalTransform.position.x` (repeatable, at most 16; `--every N`, default 10) samples a field while the
+run plays and prints one row per sampled tick (at most 1000), so you see how a value moved, not only where it ended; with only `--trace` no entity dump is printed.
 
 A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
 
