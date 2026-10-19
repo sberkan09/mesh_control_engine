@@ -24,6 +24,6 @@ Source: `assessments/motor-erisim-bosluklari.md`, section 11 (Editor): "Edit√∂r√
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 1 | done (this PR) | | `MaterialSwatch` and `thumb_from_material` in `mce/editor/asset_thumb.h`: a sphere of radius 0.42 of the picture, one key light, Blinn-Phong with a GGX-like exponent from the roughness, F0 from the metallic, a sky and ground ambient, emissive added, `unlit` shows the base colour; the base colour texture's average multiplies the base colour; `"alpha_mode": "blend"` lets the checker through. `render_thumbnail` reads the `.mcmat` source |
-| 2 | planned | | needs 1 |
+| 2 | done (this PR) | | `ParticleSwatch` and `thumb_from_particles`: the preset run for 90 fixed steps of 1/60 s from a fixed xorshift seed (burst at t = 0, rate until `duration`, area, direction and spread, speed, gravity, drag, `max_particles`), the live particles drawn as squares at ten instants with older ones fainter, size and colour over life, `additive` adds; fitted to the extent (at least 0.5 m across). It is a small copy of the kit simulation (editor core cannot use the ECS `ParticleSystem`); spin, textures and the real PRNG stream are not reproduced, so it shows the effect's shape and colour, not its exact frames |
 | 3 | planned | | needs 1 |
 | 4 | planned | | |

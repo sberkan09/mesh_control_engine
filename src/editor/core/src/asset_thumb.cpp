@@ -231,6 +231,128 @@ void thumb_from_material(const MaterialSwatch& m, u32 size, cook::Image& out) {
         }
 }
 
+namespace {
+
+// xorshift32: a fixed stream, so the same preset always draws the same picture.
+struct Rng {
+    u32 s = 0x9E3779B9u;
+    f32 next() {
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        return static_cast<f32>(s >> 8) / 16777216.0f;
+    }
+    f32 range(f32 lo, f32 hi) { return lo + (hi - lo) * next(); }
+};
+
+struct Spark {
+    f32 x, y, vx, vy, age, life;
+};
+
+}  // namespace
+
+void thumb_from_particles(const ParticleSwatch& p, u32 size, cook::Image& out) {
+    size = clamp_size(size);
+    fill(out, size, 40, 40, 40);
+    constexpr u32 kTicks = 90, kSnapshotEvery = 9;  // ten snapshots
+    constexpr f32 kDt = 1.0f / 60.0f;
+    struct Dot {
+        f32 x, y, half, rgba[4];
+        u32 snapshot;
+    };
+    Array<Dot> dots;
+    Array<Spark> live;
+    Rng rng;
+    const u32 cap = std::max<u32>(p.max_particles, 1);
+    auto spawn = [&](u32 n) {
+        for (u32 i = 0; i < n && live.size() < cap; ++i) {
+            Spark s;
+            s.x = p.area[0] > 0.0f ? rng.range(-p.area[0], p.area[0]) : 0.0f;
+            s.y = p.area[1] > 0.0f ? rng.range(-p.area[1], p.area[1]) : 0.0f;
+            const f32 angle = p.direction + (p.spread > 0.0f ? rng.range(-p.spread, p.spread) : 0.0f);
+            const f32 speed = rng.range(p.speed[0], p.speed[1]);
+            s.vx = std::cos(angle) * speed;
+            s.vy = std::sin(angle) * speed;
+            s.age = 0.0f;
+            s.life = std::fmax(rng.range(p.lifetime[0], p.lifetime[1]), kDt);
+            live.push_back(s);
+        }
+    };
+    spawn(p.burst);
+    f32 owed = 0.0f;
+    for (u32 tick = 0; tick < kTicks; ++tick) {
+        const f32 t = static_cast<f32>(tick) * kDt;
+        if (p.rate > 0.0f && (p.duration <= 0.0f || t < p.duration)) {
+            owed += p.rate * kDt;
+            const u32 n = static_cast<u32>(owed);
+            owed -= static_cast<f32>(n);
+            spawn(n);
+        }
+        for (usize i = live.size(); i-- > 0;) {
+            Spark& s = live[i];
+            s.vx += p.gravity[0] * kDt;
+            s.vy += p.gravity[1] * kDt;
+            const f32 damp = std::fmax(1.0f - p.drag * kDt, 0.0f);
+            s.vx *= damp;
+            s.vy *= damp;
+            s.x += s.vx * kDt;
+            s.y += s.vy * kDt;
+            s.age += kDt;
+            if (s.age >= s.life) live.erase_swap(i);
+        }
+        if ((tick + 1) % kSnapshotEvery != 0) continue;
+        for (const Spark& s : live) {
+            const f32 u = saturate(s.age / s.life);
+            Dot d;
+            d.x = s.x;
+            d.y = s.y;
+            d.half = 0.5f * (p.size[0] + (p.size[1] - p.size[0]) * u);
+            for (u32 k = 0; k < 4; ++k) d.rgba[k] = p.color_start[k] + (p.color_end[k] - p.color_start[k]) * u;
+            d.snapshot = (tick + 1) / kSnapshotEvery;
+            dots.push_back(d);
+        }
+    }
+    if (dots.empty()) return;
+    f32 x0 = dots[0].x, x1 = x0, y0 = dots[0].y, y1 = y0;
+    for (const Dot& d : dots) {
+        x0 = std::fmin(x0, d.x - d.half);
+        x1 = std::fmax(x1, d.x + d.half);
+        y0 = std::fmin(y0, d.y - d.half);
+        y1 = std::fmax(y1, d.y + d.half);
+    }
+    const f32 span = std::fmax(std::fmax(x1 - x0, y1 - y0), 0.5f);
+    const f32 scale = static_cast<f32>(size) * 0.84f / span;
+    const f32 cx = 0.5f * (x0 + x1), cy = 0.5f * (y0 + y1);
+    const f32 centre = static_cast<f32>(size) * 0.5f;
+    // Float accumulation per pixel, so overlapping dots add up in additive mode and blend in alpha mode.
+    Array<f32> acc;
+    acc.resize(static_cast<usize>(size) * size * 3);
+    for (usize i = 0; i < acc.size(); i += 3) acc[i] = acc[i + 1] = acc[i + 2] = 40.0f / 255.0f;
+    for (const Dot& d : dots) {  // oldest snapshot first, so newer particles draw on top
+        const f32 fade = 0.25f + 0.75f * static_cast<f32>(d.snapshot) / 10.0f;
+        const f32 a = saturate(d.rgba[3]) * fade;
+        const f32 half_px = std::fmax(d.half * scale, 0.5f);
+        const i32 px0 = static_cast<i32>(std::lround(centre + (d.x - cx) * scale - half_px));
+        const i32 px1 = std::max(px0, static_cast<i32>(std::lround(centre + (d.x - cx) * scale + half_px)) - 1);
+        const i32 py0 = static_cast<i32>(std::lround(centre - (d.y - cy) * scale - half_px));
+        const i32 py1 = std::max(py0, static_cast<i32>(std::lround(centre - (d.y - cy) * scale + half_px)) - 1);
+        for (i32 y = std::max(py0, 0); y <= std::min(py1, static_cast<i32>(size) - 1); ++y)
+            for (i32 x = std::max(px0, 0); x <= std::min(px1, static_cast<i32>(size) - 1); ++x) {
+                f32* c = &acc[(static_cast<usize>(y) * size + static_cast<usize>(x)) * 3];
+                for (u32 k = 0; k < 3; ++k) {
+                    const f32 src = saturate(d.rgba[k]);
+                    c[k] = p.additive ? c[k] + src * a : c[k] * (1.0f - a) + src * a;
+                }
+            }
+    }
+    for (u32 y = 0; y < size; ++y)
+        for (u32 x = 0; x < size; ++x) {
+            const f32* c = &acc[(static_cast<usize>(y) * size + x) * 3];
+            put(out, x, y, static_cast<u8>(std::lround(saturate(c[0]) * 255.0f)), static_cast<u8>(std::lround(saturate(c[1]) * 255.0f)),
+                static_cast<u8>(std::lround(saturate(c[2]) * 255.0f)));
+        }
+}
+
 void thumb_tile(asset::ChunkType type, u32 size, cook::Image& out) {
     size = clamp_size(size);
     const u32 t = static_cast<u32>(type);
@@ -307,6 +429,49 @@ bool read_material_swatch(EditorProject& project, const ProjectAsset& asset, Mat
     return true;
 }
 
+// Reads a .mcpart source file (angles in degrees there, radians in the swatch).
+bool read_particle_swatch(EditorProject& project, const ProjectAsset& asset, ParticleSwatch& p) {
+    cook::String text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), text)) return false;
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    if (!doc.parse(text.view(), err) || !doc.root().is_object()) return false;
+    const cook::JsonValue root = doc.root();
+    constexpr f32 kDeg = 0.017453292519943295f;
+    auto number = [&](const char* key, f32& out) {
+        const cook::JsonValue v = root.get(key);
+        if (v.valid() && v.is_number()) out = static_cast<f32>(v.as_number());
+    };
+    auto vec = [&](const char* key, f32* out, u32 n) {
+        const cook::JsonValue v = root.get(key);
+        if (!v.valid() || !v.is_array() || v.size() != n) return;
+        for (u32 i = 0; i < n; ++i)
+            if (v.at(i).is_number()) out[i] = static_cast<f32>(v.at(i).as_number());
+    };
+    f32 burst = 0, max_particles = 256, direction = 90, spread = 0;
+    number("rate", p.rate);
+    number("burst", burst);
+    number("max_particles", max_particles);
+    number("duration", p.duration);
+    number("direction", direction);
+    number("spread", spread);
+    number("drag", p.drag);
+    vec("lifetime", p.lifetime, 2);
+    vec("speed", p.speed, 2);
+    vec("gravity", p.gravity, 2);
+    vec("size", p.size, 2);
+    vec("area", p.area, 2);
+    vec("color_start", p.color_start, 4);
+    vec("color_end", p.color_end, 4);
+    p.burst = static_cast<u32>(std::fmin(std::fmax(burst, 0.0f), 65536.0f));
+    p.max_particles = static_cast<u32>(std::fmin(std::fmax(max_particles, 1.0f), 65536.0f));
+    p.direction = direction * kDeg;
+    p.spread = spread * kDeg;
+    const cook::JsonValue blend = root.get("blend");
+    p.additive = blend.valid() && blend.is_string() && blend.as_string() == "additive";
+    return true;
+}
+
 }  // namespace
 
 bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 size, cook::Image& out) {
@@ -328,6 +493,12 @@ bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 siz
                     return true;
                 }
             }
+        }
+    } else if (asset.type == asset::ChunkType::ParticlePreset) {
+        ParticleSwatch swatch;
+        if (read_particle_swatch(project, asset, swatch)) {
+            thumb_from_particles(swatch, size, out);
+            return true;
         }
     } else if (asset.type == asset::ChunkType::Material) {
         MaterialSwatch swatch;
