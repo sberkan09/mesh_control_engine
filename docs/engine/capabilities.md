@@ -131,6 +131,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Skeleton2DSlots` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `Skeleton2DIK` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `SnowCover` | `mce/kit/snow_cover.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: wired in 6d (samples/12_weather) |
 | `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
 | `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |

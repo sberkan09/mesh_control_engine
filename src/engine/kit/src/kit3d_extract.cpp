@@ -12,6 +12,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_sway.h"
@@ -837,6 +838,23 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             wet.puddles_enabled = true;
         }
         scene.set_wet_surfaces(render::apply_quality(quality_, wet));
+    }
+    {  // snow cover (M-SNOWCOVER 6c): only a scene with both a Weather and a SnowCover can whiten
+        bool has_weather = false;
+        const SnowCover* snowc = nullptr;
+        world.query<const Weather&>().each([&](const Weather&) { has_weather = true; });
+        world.query<const SnowCover&>().each([&](const SnowCover& c) {
+            if (!snowc) snowc = &c;
+        });
+        render::SnowCover snow;  // bare by default (cover 0)
+        if (has_weather && snowc) {
+            snow.cover = snowc->cover * snowc->strength;
+            snow.coverage = snowc->coverage;
+            snow.noise_scale = snowc->noise_scale_m;
+            snow.wind_bias = snowc->wind_bias;
+            snow.noise_enabled = true;
+        }
+        scene.set_snow_cover(render::apply_quality(quality_, snow));
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;

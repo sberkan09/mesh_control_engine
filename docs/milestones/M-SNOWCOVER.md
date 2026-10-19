@@ -37,5 +37,5 @@
 |---|---|---|---|
 | 6a | done | #622 | `render::SnowCover`, `r.snow_cover`, tier fields, `apply_quality` overload |
 | 6b | planned | | needs 6a; Opus writes, coordinator review |
-| 6c | planned | | needs 6a (for `render::SnowCover` in the extract) |
+| 6c | done | #623 | `SnowCover` component, `kit_snow_cover`, extract, tests/kit/test_snow_cover.cpp |
 | 6d | planned | | needs 6b, 6c |
