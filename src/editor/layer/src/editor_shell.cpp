@@ -187,7 +187,7 @@ void EditorShell::build_ui(f64 frame_dt) {
 // ---- file commands ------------------------------------------------------------------------------
 
 void EditorShell::request_quit() {
-    if (scene_mode() && scene().dirty() && !quit_requested_) {
+    if (scene_mode() && (scene().dirty() || tabs_.any_dirty(session_)) && !quit_requested_) {
         popup_ = Popup::ConfirmQuit;
         return;
     }
@@ -208,6 +208,7 @@ bool EditorShell::open_project(StringView root) {
     skeleton2d_.close();
     material_request_ = asset::Guid{};
     particle_request_ = asset::Guid{};
+    tabs_.clear();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -283,11 +284,14 @@ void EditorShell::open_skeleton2d(asset::Guid guid) {
 }
 
 bool EditorShell::open_scene(StringView path) {
-    if (!session_.open_scene(path)) {
+    cook::String why;
+    if (!tabs_.open(session_, path, why)) {
+        MCE_LOG_ERROR("editor: cannot open {}: {}", path, why.view());
         focus_panel("Cook");
         return false;
     }
-    if (session_.has_recovery()) popup_ = Popup::Recover;
+    // Parked changes come back dirty on their own; an autosave of an earlier session is still offered.
+    if (!session_.scene().dirty() && session_.has_recovery()) popup_ = Popup::Recover;
     frame_scene();
     return true;
 }
@@ -500,7 +504,7 @@ void EditorShell::handle_shortcuts() {
 }
 
 void EditorShell::request_open_scene(StringView path) {
-    if (scene().dirty()) {
+    if (scene().dirty() && scene().path().empty()) {  // a scene with a file parks in its tab; this one has none
         pending_open_.assign(path);
         popup_ = Popup::ConfirmOpen;
         return;
@@ -533,7 +537,7 @@ void EditorShell::draw_popups() {
             if (a.type == asset::ChunkType::Prefab) scenes.push_back(&a);
         for (const ProjectAsset* a : scenes) {
             if (ImGui::Selectable(a->path.c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups)) {
-                if (scene().dirty()) {
+                if (scene().dirty() && scene().path().empty()) {
                     pending_open_.assign(a->path.view());
                     close();
                     popup_ = Popup::ConfirmOpen;
@@ -583,7 +587,8 @@ void EditorShell::draw_popups() {
     for (int which = 3; which <= 5; ++which) {
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         if (!ImGui::BeginPopupModal(kIds[which], nullptr, ImGuiWindowFlags_AlwaysAutoResize)) continue;
-        ImGui::Text("'%s' has unsaved changes.", scene().doc().name().data());
+        if (scene().dirty()) ImGui::Text("'%s' has unsaved changes.", scene().doc().name().data());
+        else ImGui::TextUnformatted("Other open scenes have unsaved changes (kept in their autosave files).");
         const auto proceed = [&] {
             const Popup p = popup_;
             close();
@@ -592,7 +597,10 @@ void EditorShell::draw_popups() {
                 session_.new_scene("untitled");
                 frame_scene();
             }
-            if (p == Popup::ConfirmOpen) open_scene(pending_open_.view());
+            if (p == Popup::ConfirmOpen) {
+                if (scene().path().empty()) session_.new_scene("untitled");  // the untitled draft was saved or discarded
+                open_scene(pending_open_.view());
+            }
         };
         if (ImGui::Button("Save")) {
             if (save_scene()) {

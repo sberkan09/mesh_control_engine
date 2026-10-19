@@ -22,6 +22,7 @@
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/perf_monitor.h"
 #include "mce/editor/preview_renderer.h"
+#include "mce/editor/scene_tabs.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
 #include "mce/platform/window.h"
@@ -147,7 +148,9 @@ public:
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
     bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
-    void request_open_scene(StringView path);  // asks first when the open scene is dirty
+    void request_open_scene(StringView path);  // asks first only when the open scene is dirty and has no file yet
+    // The open scene files (M-SCENETABS): opening one parks the dirty scene in its autosave file instead of asking.
+    SceneTabs& scene_tabs() { return tabs_; }
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);
@@ -231,6 +234,7 @@ private:
     BtEditor bt_;
     Skeleton2DEditor skeleton2d_;
     asset::Guid material_request_;
+    SceneTabs tabs_;
     asset::Guid particle_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
