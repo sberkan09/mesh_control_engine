@@ -211,7 +211,7 @@ bool run_spec(ToolCall& c, TestSpec& t, StringView cooked, bool& passed) {
     }
     passed = true;
     for (Condition& cond : t.checks) {
-        if (cond.tick == 0) eval_after(cond, lines.span(), &feel);
+        if (cond.tick == 0) eval_after(cond, lines.span(), &feel, run.value().scripts.span());
         passed = passed && cond.checked && cond.ok;
     }
     const HeadlessRun& h = run.value();

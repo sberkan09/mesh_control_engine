@@ -422,6 +422,7 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
     { "entity": "Score", "field": "ScoreBoard.coins", "value": 3 },
     { "event": "CoinCollected", ">=": 3 },
     { "count": "Enemy", "<=": 3 },
+    { "script": "enemy.luau", "metric": "peak_steps", "<=": 400 },
     { "log_errors": 0 },
     { "log_contains": "level complete" }
   ],
@@ -445,6 +446,8 @@ name `my_game::CoinCollected`, or `CoinCollected` when one event type has that n
 name fails the check with a note listing the game's events),
 `scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
 `count` (how many live entities have that component, ones the run spawned included: `{"count": "Enemy", "<=": 3}`; it needs a comparison and a known component type),
+`script` (a scene script's step profile, `mce profile`'s numbers: `{"script": "enemy.luau", "metric": "peak_steps", "<=": 400}`; the script by its path or the end of it, `metric` is
+`peak_steps`, `avg_steps`, `total_steps` or `updates`; an unknown script name fails the check with the scripts that ran listed; steps are deterministic, so a budget regression fails a test),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
 is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with
