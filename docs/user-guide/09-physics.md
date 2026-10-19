@@ -603,6 +603,14 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   (`amplitude_gain` 4, `flutter_gain` 3), `wind_frequency` times `1 + (frequency_gain - 1) * wind` (1.5), and
   `wind_gust` plus `gust_gain * wind` (0.6, clamped to 0..1). At wind 0 the authored look is unchanged, the foliage
   components are never written, and a scene without a `WindSway` (or without a `Weather`) renders exactly as before.
+- **Snow cover.** `mce/kit/snow_cover.h` adds an optional `SnowCover` entity (one per scene, registered with the
+  weather) that lets snow settle on up-facing surfaces. While `Weather.current` is snow its saved, read-only `cover`
+  (0..1, kept as the integer `snow_q` out of 2^24) rises by the snow intensity, reaching full cover after
+  `build_seconds` (90) at full intensity; in any other weather it melts away over `melt_seconds` (120). When the scene
+  has both a `Weather` and a `SnowCover`, the renderer gets `cover * strength` (default strength 1) with `coverage`
+  (0.8, the share of up-facing ground that whitens at full cover), `noise_scale_m` (3 m) and `wind_bias` (0.5). A scene
+  without a `SnowCover` (or without a `Weather`) stays bare and renders exactly as before. The Low quality tier
+  keeps the whitening but drops the noise breakup, and `r.snow_cover 0` switches snow off.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
