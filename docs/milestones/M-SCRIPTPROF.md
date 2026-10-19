@@ -1,6 +1,6 @@
 # M-SCRIPTPROF — Seeing what scripts do: profile, budget errors, log source, traces (milestone record)
 
-**Status:** active (added 2026-10-18; owner: the M-SCRIPT thread; device-free; no Linear issues: free limit, this record is the tracker).
+**Status:** done 2026-10-18 (steps 1-4: PRs #603, #605, #606 and the step 4 PR) (added 2026-10-18; owner: the M-SCRIPT thread; device-free; no Linear issues: free limit, this record is the tracker).
 
 **Why.** A script that is slow, runs out of its step budget or prints into a crowded log is hard to diagnose today: `ScriptInfo.last_steps` is the only number, the budget
 error says "step budget exceeded (10000 per tick)" with no line, `mce.log` lines do not say which script wrote them, and `mce inspect` shows values after a run but
@@ -12,10 +12,10 @@ not how they moved. A game author (or an agent) writing Luau needs the same tool
 
 | # | Step | Model | State |
 |---|---|---|---|
-| 1 | Per-script step profile: `ScriptInfo` keeps peak, total and ticks run; `run_headless` returns it as `scripts`; `mce profile <project> [--ticks N]` prints a table with the budget share | Sonnet (Opus review: touches the update loop in `script.cpp`) | done in PR (this step) |
-| 2 | A step-budget failure names the script line it stopped at (`file:line`), like any other script error (memory failures cannot: the allocator has no Lua frame) | Sonnet (Opus review: VM interrupt) | done in PR (this step) |
-| 3 | `mce.log` lines carry the script name (`[<name>] script: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | done in PR (this step) |
-| 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | not started |
+| 1 | Per-script step profile: `ScriptInfo` keeps peak, total and ticks run; `run_headless` returns it as `scripts`; `mce profile <project> [--ticks N]` prints a table with the budget share | Sonnet (Opus review: touches the update loop in `script.cpp`) | done in PR #603 |
+| 2 | A step-budget failure names the script line it stopped at (`file:line`), like any other script error (memory failures cannot: the allocator has no Lua frame) | Sonnet (Opus review: VM interrupt) | done in PR #605 |
+| 3 | `mce.log` lines carry the script name (`[<name>] script: ...`) so a console filter and `run_headless`'s log tail show the source | Sonnet | done in PR #606 |
+| 4 | `mce inspect --trace`: sample entity fields every N ticks through `run_headless`'s `trace`, printed as series | Sonnet | done in PR (this step) |
 
 Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/script.md` updated, and a `changelog.d/SCRIPTPROF-<n>-<slug>.md` fragment.
 
@@ -41,3 +41,11 @@ Each step ends with a "Step N as built" section here, guide 27 / `docs/engine/sc
 - `mce.log(msg)` writes `[<name>] script: <msg>` (it was `script: <msg>`), the name of the running script first (`?` if none is running). The name leads and the old
   `script: <msg>` text stays intact on purpose: the SDK, weather, missions and day/night sample tests (other threads') match on it, and changing it would break them. Test: "mce.log lines name the script that wrote them" reads the console ring with two scripts.
 - Not done: a log level argument (`mce.log` stays info) and a per-script mute.
+
+## Step 4 as built (inspect --trace)
+
+- `mce inspect <project> --trace <entity>:<Component.path>` (repeatable, at most 16; `--every N`, default 10) passes `run_headless`'s existing `trace` (`{every, fields}`) and prints
+  the series as a table, one row per sampled tick and one column per field (vectors as `(x, y, z)`). `--trace` alone needs no `--component`/`--entity` and prints no entity dump.
+  No engine change: the tool already sampled and returned `trace`; the CLI only exposed it.
+- Test: `test_cli_test.py` (fake server returns a two-row trace; checks the table, that no entity dump is printed, and the `--trace Hero` error). Not run by hand against the real `mce_mcp`.
+- Not done: plotting, CSV export, or tracing a field of an entity the run spawns (the tool takes scene entities only).
