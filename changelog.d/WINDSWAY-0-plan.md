@@ -1,0 +1,1 @@
+- M-WINDSWAY milestone record (foliage sway follows `Weather.wind`, opt-in, applied at extract), planned in `docs/milestones/M-WINDSWAY.md`.
