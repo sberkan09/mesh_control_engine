@@ -9,7 +9,7 @@ when this was checked (2026-10-19: 71 `mce.*` members and 23 in the other tables
 
 | # | Step | Model | State |
 |---|---|---|---|
-| 1 | `check_docs.py` kind `luauapi` (walls stage): every member of a `declare` table appears as `table.member` in `docs/user-guide/27-scripting.md` or `docs/engine/script.md`; misses go in `scripts/ci/docs.allow` | Sonnet | done in PR (this step) |
+| 1 | `check_docs.py` kind `luauapi` (walls stage): every member of a `declare` table appears as `table.member` in `docs/user-guide/27-scripting.md` or `docs/engine/script.md`; misses go in `scripts/ci/docs.allow` | Sonnet | done in PR #617 |
 
 ## Step 1 as built
 
