@@ -207,6 +207,7 @@ private:
             if (a->type == asset::ChunkType::Skeleton2D) shell.open_skeleton2d(a->guid);
             // A material opens in the Material panel.
             if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
+            if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
         if (ImGui::BeginDragDropSource()) {
