@@ -206,6 +206,7 @@ bool EditorShell::open_project(StringView root) {
     bt_.close();
     if (skeleton2d_.dirty()) (void)skeleton2d_.save(session_);
     skeleton2d_.close();
+    material_request_ = asset::Guid{};
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
         format_error(r.error(), msg);
@@ -256,6 +257,12 @@ void EditorShell::open_bt(asset::Guid guid) {
     }
     if (IEditorPanel* p = find_panel("Behavior Tree")) p->open = true;
     focus_panel("Behavior Tree");
+}
+
+void EditorShell::open_material(asset::Guid guid) {
+    material_request_ = guid;
+    if (IEditorPanel* p = find_panel("Material")) p->open = true;
+    focus_panel("Material");
 }
 
 void EditorShell::open_skeleton2d(asset::Guid guid) {

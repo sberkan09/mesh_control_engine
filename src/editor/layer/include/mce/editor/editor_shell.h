@@ -136,6 +136,10 @@ public:
     // viewport draws its bones, in the panel's previewed pose, on the selected entities that play it.
     Skeleton2DEditor& skeleton2d() { return skeleton2d_; }
     void open_skeleton2d(asset::Guid guid);
+    // The material the Material panel edits (open_material: a double click in Assets). The panel loads the file
+    // itself (a MaterialForm) and saves it with its own button; the shell only carries the request.
+    asset::Guid material_request() const { return material_request_; }
+    void open_material(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -223,6 +227,7 @@ private:
     AnimGraphEditor anim_graph_;
     BtEditor bt_;
     Skeleton2DEditor skeleton2d_;
+    asset::Guid material_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

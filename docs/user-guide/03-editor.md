@@ -41,6 +41,8 @@ SDK); without `-module` it knows engine components only.
 | **Stats** | editor frame rate, sim ticks, viewport size |
 | **Profiler** | **Live**: editor frame-time history against the 16.6 ms budget, per-stage times, per-system ECS timings. **Capture**: a `.mcperf` from the player or MCP `perf_run`, with its budget verdict, a frame strip, a per-frame breakdown, spikes, systems, and a compare with a second capture (chapter 14, "Is it fast enough?") |
 
+| **Material** | opens on a double click on a `.mcmat` in Assets: a live lit-sphere swatch, the base colour, metallic, roughness, emissive, alpha mode, UV scale, the varnish, glass and height lobes, and the five texture slots (pick from the list or drop a Texture from Assets). **Save** cooks the text first and writes nothing if the cook would fail; **Revert** reloads; a dirty material saves when you open another |
+
 Panels dock anywhere; View > Reset layout restores the default. The layout persists in
 `mce_editor.ini`.
 
