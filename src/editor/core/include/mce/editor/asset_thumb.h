@@ -8,6 +8,9 @@
 //   Mesh     flat-shaded triangles from a fixed three-quarter view, z-buffered, scaled to fit
 //   Material a lit sphere (M-ASSETLOOK 1): base colour (times the base colour texture's average), metallic,
 //            roughness, emissive; a see-through base colour or "blend" shows the checker through it
+//   Particles the preset's emitter run for 1.5 s from a fixed seed (burst, rate, area, direction, spread, speed,
+//            gravity, drag, size and colour over life), the live particles at ten instants drawn as squares, older
+//            ones fainter (M-ASSETLOOK 2)
 //   Other    a plain tile in a colour taken from the asset type
 //
 // Every thumbnail is exactly `size` x `size` pixels.
@@ -47,6 +50,28 @@ struct MaterialSwatch {
 // A sphere lit by one key light and a sky/ground ambient, over a dark checker. Plain Blinn-Phong with a GGX-like
 // exponent from the roughness, a Fresnel-ish F0 from the metallic: it tells materials apart, it is not the renderer.
 void thumb_from_material(const MaterialSwatch& m, u32 size, cook::Image& out);
+
+// A particle preset's emitter parameters, in the units of the .mcpart file (angles in radians here).
+struct ParticleSwatch {
+    f32 rate = 0;
+    u32 burst = 0;
+    u32 max_particles = 256;
+    f32 duration = 0;  // seconds of emission; 0 = emit for as long as `rate` is positive
+    f32 lifetime[2] = {1, 1};
+    f32 speed[2] = {1, 1};
+    f32 direction = 1.5707963f;  // radians, 0 = +X, counter-clockwise (y up)
+    f32 spread = 0;
+    f32 gravity[2] = {0, 0};
+    f32 drag = 0;
+    f32 size[2] = {0.25f, 0.25f};  // start, end (metres)
+    f32 area[2] = {0, 0};          // half extents of the emission box
+    f32 color_start[4] = {1, 1, 1, 1};
+    f32 color_end[4] = {1, 1, 1, 1};
+    bool additive = false;
+};
+// A pure function of the parameters (a fixed seed, 90 fixed steps of 1/60 s). The picture is fitted to the particles'
+// extent, at least half a metre across, y up; a preset that emits nothing gives the dark background.
+void thumb_from_particles(const ParticleSwatch& p, u32 size, cook::Image& out);
 
 // The thumbnail of a catalog asset: textures from the source PNG, audio from the source WAV, meshes
 // from the mounted cooked chunk; everything else (or anything that does not read) a plain tile.

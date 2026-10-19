@@ -218,3 +218,85 @@ TEST_CASE("render_thumbnail: a .mcmat file draws its sphere, other kinds the pla
     CHECK(center(out)[0] > center(out)[1]);
     CHECK(sphere_pixels(out) > 2000);
 }
+
+TEST_CASE("thumb_from_particles: a straight jet is one column, an empty preset is the background, the cap and the colours show") {
+    ParticleSwatch jet;  // 20 particles straight up at 1 to 3 m/s, lasting 5 s, 0.1 m wide
+    jet.burst = 20;
+    jet.lifetime[0] = jet.lifetime[1] = 5.0f;
+    jet.speed[0] = 1.0f;
+    jet.speed[1] = 3.0f;
+    jet.size[0] = jet.size[1] = 0.1f;
+    jet.color_start[0] = jet.color_end[0] = 1.0f;
+    jet.color_start[1] = jet.color_end[1] = 0.0f;
+    jet.color_start[2] = jet.color_end[2] = 0.0f;
+    cook::Image out;
+    thumb_from_particles(jet, 64, out);
+    REQUIRE(out.width == 64);
+    REQUIRE(out.height == 64);
+    const u32 lit = sphere_pixels(out);
+    CHECK(lit > 0);
+    // Every lit pixel is in the same few columns (the jet has no spread and no sideways velocity).
+    u32 min_x = 64, max_x = 0, min_y = 64, max_y = 0;
+    for (u32 y = 0; y < 64; ++y)
+        for (u32 x = 0; x < 64; ++x) {
+            const u8* px = &out.rgba[(static_cast<usize>(y) * 64 + x) * 4];
+            if (px[0] == 40 && px[1] == 40 && px[2] == 40) continue;
+            min_x = std::min(min_x, x);
+            max_x = std::max(max_x, x);
+            min_y = std::min(min_y, y);
+            max_y = std::max(max_y, y);
+            CHECK(px[0] > px[1]);  // red dominates
+        }
+    CHECK(max_x - min_x <= 4);
+    CHECK(max_y - min_y > 20);  // and it runs up the picture
+    cook::Image again;
+    thumb_from_particles(jet, 64, again);
+    CHECK(same(out, again));
+
+    ParticleSwatch nothing;
+    thumb_from_particles(nothing, 64, out);
+    CHECK(sphere_pixels(out) == 0);
+
+    ParticleSwatch capped = jet;
+    capped.max_particles = 1;
+    cook::Image one;
+    thumb_from_particles(capped, 64, one);
+    CHECK(sphere_pixels(one) > 0);
+    CHECK(sphere_pixels(one) < lit);
+
+    ParticleSwatch fountain;  // rate-driven, spread and gravity: a wider picture than the jet
+    fountain.rate = 60;
+    fountain.spread = 0.6f;
+    fountain.lifetime[0] = fountain.lifetime[1] = 1.0f;
+    fountain.speed[0] = 2.0f;
+    fountain.speed[1] = 3.0f;
+    fountain.gravity[1] = -9.8f;
+    fountain.size[0] = fountain.size[1] = 0.05f;
+    thumb_from_particles(fountain, 64, out);
+    u32 fx0 = 64, fx1 = 0;
+    for (u32 y = 0; y < 64; ++y)
+        for (u32 x = 0; x < 64; ++x)
+            if (out.rgba[(static_cast<usize>(y) * 64 + x) * 4] != 40) {
+                fx0 = std::min(fx0, x);
+                fx1 = std::max(fx1, x);
+            }
+    CHECK(fx1 - fx0 > 10);
+}
+
+TEST_CASE("render_thumbnail: a .mcpart file draws its particles") {
+    const std::string root = cook_test::fresh_dir("thumb_particles");
+    std::filesystem::create_directories(root + "/assets/fx");
+    std::ofstream(root + "/assets/fx/jet.mcpart") << R"({ "format": "mce-particles", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000b1",
+  "burst": 20, "lifetime": [5, 5], "speed": [2, 2], "direction": 90, "size": [0.1, 0.1], "color_start": [1, 0, 0, 1], "color_end": [1, 0, 0, 1] })";
+    EditorProject project;
+    REQUIRE(project.open(root));
+    const ProjectAsset* jet = nullptr;
+    for (const ProjectAsset& a : project.assets())
+        if (a.path.view() == "fx/jet.mcpart") jet = &a;
+    REQUIRE(jet);
+    CHECK(jet->type == asset::ChunkType::ParticlePreset);
+    cook::Image out;
+    CHECK(render_thumbnail(project, *jet, 64, out));
+    CHECK(sphere_pixels(out) > 0);
+    CHECK(sphere_pixels(out) < 400);
+}
