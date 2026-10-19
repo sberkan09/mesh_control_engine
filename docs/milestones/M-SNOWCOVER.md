@@ -35,7 +35,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 6a | starting | | |
+| 6a | done | #622 | `render::SnowCover`, `r.snow_cover`, tier fields, `apply_quality` overload |
 | 6b | planned | | needs 6a; Opus writes, coordinator review |
 | 6c | planned | | needs 6a (for `render::SnowCover` in the extract) |
 | 6d | planned | | needs 6b, 6c |
