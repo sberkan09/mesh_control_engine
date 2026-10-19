@@ -173,6 +173,15 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength 0..4, darken 0..1, puddles 0..1,
     -- puddle_scale 0.1..100 metres); an unknown key or a non-number raises
     set_wet: (settings: { strength: number?, darken: number?, puddles: number?, puddle_scale: number? }) -> (),
+    -- WindSway (M-WINDSWAY), the first one in the scene; the getters raise when there is none. The foliage wind
+    -- is scaled by 1 + (gain - 1) * weather.wind()
+    sway_amplitude: () -> number,
+    sway_frequency: () -> number,
+    sway_gust: () -> number,
+    sway_flutter: () -> number,
+    -- every key optional, each value clamped to the field's range (amplitude 0..50, frequency 0..10, gust -1..1,
+    -- flutter 0..50); an unknown key or a non-number raises
+    set_sway: (settings: { amplitude: number?, frequency: number?, gust: number?, flutter: number? }) -> (),
 }
 )";
 
