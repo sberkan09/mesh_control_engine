@@ -254,7 +254,7 @@ struct Spark {
 void thumb_from_particles(const ParticleSwatch& p, u32 size, cook::Image& out) {
     size = clamp_size(size);
     fill(out, size, 40, 40, 40);
-    constexpr u32 kTicks = 90, kSnapshotEvery = 9;
+    constexpr u32 kTicks = 90, kSnapshotEvery = 9;  // ten snapshots
     constexpr f32 kDt = 1.0f / 60.0f;
     struct Dot {
         f32 x, y, half, rgba[4];
@@ -329,7 +329,7 @@ void thumb_from_particles(const ParticleSwatch& p, u32 size, cook::Image& out) {
     acc.resize(static_cast<usize>(size) * size * 3);
     for (usize i = 0; i < acc.size(); i += 3) acc[i] = acc[i + 1] = acc[i + 2] = 40.0f / 255.0f;
     for (const Dot& d : dots) {  // oldest snapshot first, so newer particles draw on top
-        const f32 fade = 0.25f + 0.75f * static_cast<f32>(d.snapshot) / static_cast<f32>(kTicks / kSnapshotEvery);
+        const f32 fade = 0.25f + 0.75f * static_cast<f32>(d.snapshot) / 10.0f;
         const f32 a = saturate(d.rgba[3]) * fade;
         const f32 half_px = std::fmax(d.half * scale, 0.5f);
         const i32 px0 = static_cast<i32>(std::lround(centre + (d.x - cx) * scale - half_px));
