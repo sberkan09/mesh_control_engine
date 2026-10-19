@@ -421,6 +421,7 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
     { "entity": "Player", "field": "LocalTransform.position.x", ">": 10, "tick": 600 },
     { "entity": "Score", "field": "ScoreBoard.coins", "value": 3 },
     { "event": "CoinCollected", ">=": 3 },
+    { "count": "Enemy", "<=": 3 },
     { "log_errors": 0 },
     { "log_contains": "level complete" }
   ],
@@ -443,6 +444,7 @@ A check names one thing and compares it: `{"entity", "field"}` (a component fiel
 name `my_game::CoinCollected`, or `CoinCollected` when one event type has that name; an unknown
 name fails the check with a note listing the game's events),
 `scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
+`count` (how many live entities have that component, ones the run spawned included: `{"count": "Enemy", "<=": 3}`; it needs a comparison and a known component type),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
 is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with

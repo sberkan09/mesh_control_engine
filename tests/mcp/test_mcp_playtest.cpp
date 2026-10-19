@@ -196,6 +196,24 @@ TEST_CASE("playtest: side view jumps the wall; without Jump it reports the stuck
     CHECK(num(counted.v().get("feel").get("deaths")) >= 1);
 }
 
+TEST_CASE("playtest: a count check reads how many live entities have a component") {
+    GameGuard game;
+    const std::string root = project("mcp_playtest_count");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/play.mcscene"));
+    c.init();
+    auto r = c.ok("playtest", R"({"bot":{"kind":"walk_to","actor":"Player","target":"Post"},"ticks":30,"assert":[)"
+                              R"({"count":"LocalTransform",">=":2},{"count":"LocalTransform","<=":0},{"count":"Health3D","==":0}]})");
+    const cook::JsonValue checks = r.v().get("checks");
+    CHECK(checks.at(0).get("ok").as_bool());
+    CHECK(num(checks.at(0).get("actual")) >= 2);
+    CHECK_FALSE(checks.at(1).get("ok").as_bool());
+    CHECK(checks.at(2).get("ok").as_bool());
+    CHECK(str(checks.at(0).get("check")) == "count LocalTransform");
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"explore","actor":"Player"},"assert":[{"count":"NoSuchThing",">":0}]})").find("component type name") != std::string::npos);
+    CHECK(c.fails("playtest", R"({"bot":{"kind":"explore","actor":"Player"},"assert":[{"count":"LocalTransform"}]})").find("needs a comparison") != std::string::npos);
+}
+
 TEST_CASE("playtest: walk_to through waypoints, air jumps, and the game's reaction to the arrival") {
     GameGuard game;
     const std::string root = project("mcp_playtest_through");

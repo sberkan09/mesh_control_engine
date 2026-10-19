@@ -1,5 +1,6 @@
 #include "agent_sim.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -431,7 +432,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
     }
     const cook::JsonValue field = v.get("field"), alive = v.get("alive"), event = v.get("event"), log_has = v.get("log_contains"),
                           log_err = v.get("log_errors"), log_warn = v.get("log_warnings"), feel = v.get("feel"),
-                          scene = v.get("scene"), reachable = v.get("reachable");
+                          scene = v.get("scene"), reachable = v.get("reachable"), count = v.get("count");
     if (field.valid()) {
         out.what = Condition::What::Field;
         if (!field.is_string()) return err_out(err, "'field' is 'Component.path'");
@@ -450,6 +451,14 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
             out.op = CompareOp::Ge;
             number(out.expected, 1);
         }
+    } else if (count.valid()) {
+        // Live entities with a component, spawned ones included ("the spawner made 3 enemies").
+        out.what = Condition::What::Count;
+        const refl::TypeRecord* t = count.is_string() ? refl::find_type(StringId(count.as_string())) : nullptr;
+        if (!t || !t->is_component()) return err_out(err, "'count' is a component type name, e.g. {\"count\": \"Enemy\", \"<=\": 3} (refl_list_components lists them)");
+        if (!have_value) return err_out(err, "a count check needs a comparison: \"value\" (==), or {\">=\": 1} etc.");
+        out.probe.type = t;
+        out.text = cook::String(count.as_string());
     } else if (scene.valid()) {
         // The scene the run is in (scene::request_change moves it), by source path.
         out.what = Condition::What::Scene;
@@ -489,7 +498,7 @@ bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v,
         out.text = cook::String(feel.as_string());
         if (!have_value) return err_out(err, "a feel check needs a comparison, e.g. {\"feel\": \"deaths\", \"<=\": 0}");
     } else {
-        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, log_contains, log_errors, log_warnings, feel, reachable");
+        return err_out(err, "a check names one of: field (+ entity), alive, event, scene, count, log_contains, log_errors, log_warnings, feel, reachable");
     }
     return true;
 }
@@ -536,6 +545,19 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
                     c.note += e.name;
                 }
             }
+            break;
+        }
+        case Condition::What::Count: {
+            u64 n = 0;
+            const ecs::ComponentId cid = world.find_component(c.probe.type->type_hash);
+            if (cid != ecs::kInvalidComponent) {
+                for (const auto& table : world.tables()) {
+                    const Span<const ecs::ComponentId> ids = table->ids();
+                    if (std::find(ids.begin(), ids.end(), cid) != ids.end()) n += table->entities().size();
+                }
+            }
+            c.actual = Value{};
+            number(c.actual, static_cast<f64>(n));
             break;
         }
         case Condition::What::Scene: {
@@ -615,6 +637,10 @@ void write_condition(JsonWriter& w, const Condition& c) {
             break;
         case Condition::What::Event:
             what += "event ";
+            what += c.text.view();
+            break;
+        case Condition::What::Count:
+            what += "count ";
             what += c.text.view();
             break;
         case Condition::What::Scene: what += "scene"; break;

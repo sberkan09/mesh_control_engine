@@ -105,9 +105,9 @@ enum class CompareOp : u8 { Eq, Ne, Lt, Le, Gt, Ge };
 // One check of a test: a component field, whether an entity is alive, how many events of a type
 // were pushed, the log, or a feel metric; at the end of the run or after tick `tick`.
 struct Condition {
-    enum class What : u8 { Field, Alive, Event, Scene, LogContains, LogErrors, LogWarnings, Feel, Reachable };
+    enum class What : u8 { Field, Alive, Event, Scene, Count, LogContains, LogErrors, LogWarnings, Feel, Reachable };
     What what = What::Field;
-    FieldProbe probe;          // Field, Alive (index only)
+    FieldProbe probe;          // Field, Alive (index only), Count (type only)
     CompareOp op = CompareOp::Eq;
     Value expected;
     f64 tolerance = 1e-4;      // numbers compare equal within this
@@ -120,10 +120,11 @@ struct Condition {
     Value actual;
     cook::String note;  // why the check could not read what it names (an unknown event type)
 };
-// Field, Alive, Event and Scene: read from the world during the run (the rest after it; Reachable needs
+// Field, Alive, Event, Scene and Count: read from the world during the run (the rest after it; Reachable needs
 // neither: it generates its levels when evaluated).
 inline bool is_world_check(Condition::What w) {
-    return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene;
+    return w == Condition::What::Field || w == Condition::What::Alive || w == Condition::What::Event || w == Condition::What::Scene ||
+           w == Condition::What::Count;
 }
 bool parse_condition(const editor::SceneDocument& doc, const cook::JsonValue& v, Condition& out, cook::String& err);
 // The world checks (false for the others: they need the log or the feel report).
