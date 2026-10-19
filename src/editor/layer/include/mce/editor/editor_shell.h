@@ -140,6 +140,9 @@ public:
     // itself (a MaterialForm) and saves it with its own button; the shell only carries the request.
     asset::Guid material_request() const { return material_request_; }
     void open_material(asset::Guid guid);
+    // The same for the Particle panel (a double click on a particle preset).
+    asset::Guid particle_request() const { return particle_request_; }
+    void open_particle(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -228,6 +231,7 @@ private:
     BtEditor bt_;
     Skeleton2DEditor skeleton2d_;
     asset::Guid material_request_;
+    asset::Guid particle_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

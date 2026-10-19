@@ -14,6 +14,7 @@
 #include "mce/editor/editor_shell.h"
 #include "mce/log.h"
 #include "scene_panels.h"
+#include "swatch_texture.h"
 
 namespace mce::editor {
 namespace {
@@ -102,15 +103,7 @@ private:
         if (swatch_stale_) {
             cook::Image img;
             thumb_from_material(form_.swatch(), kSwatchPx, img);
-            if (!tex_) {
-                tex_ = IM_NEW(ImTextureData)();
-                tex_->Create(ImTextureFormat_RGBA32, static_cast<int>(kSwatchPx), static_cast<int>(kSwatchPx));
-                std::memcpy(tex_->GetPixels(), img.rgba.data(), img.rgba.size());
-                ImGui::RegisterUserTexture(tex_);  // lives as long as the editor
-            } else if (tex_->Status == ImTextureStatus_OK || tex_->Status == ImTextureStatus_WantUpdates) {
-                std::memcpy(tex_->GetPixels(), img.rgba.data(), img.rgba.size());
-                ImTextureDataQueueUpload(tex_, 0, 0, static_cast<int>(kSwatchPx), static_cast<int>(kSwatchPx));
-            }
+            upload_swatch(tex_, img, kSwatchPx);
             swatch_stale_ = false;
         }
         if (tex_) ImGui::Image(tex_->GetTexRef(), ImVec2(static_cast<f32>(kSwatchPx), static_cast<f32>(kSwatchPx)));

@@ -48,6 +48,33 @@ bool material_form_to_text(StringView old_text, const MaterialForm& form, cook::
 bool load_material_form(const EditorProject& project, const ProjectAsset& asset, MaterialForm& out, cook::String& err);
 bool save_material_form(EditorProject& project, const ProjectAsset& asset, const MaterialForm& form, cook::String& err);
 
+// The .mcpart twin (M-ASSETLOOK 4): the same rules, the preset's own members. Angles are degrees as in the file.
+struct ParticleForm {
+    f32 rate = 0;
+    u32 burst = 0;
+    u32 max_particles = 256;
+    f32 duration = 0;
+    f32 lifetime[2] = {1, 1};
+    f32 speed[2] = {1, 1};
+    f32 direction = 90;  // degrees
+    f32 spread = 0;      // degrees
+    f32 gravity[2] = {0, 0};
+    f32 drag = 0;
+    f32 size[2] = {0.25f, 0.25f};
+    f32 spin[2] = {0, 0};  // degrees per second
+    f32 area[2] = {0, 0};
+    f32 color_start[4] = {1, 1, 1, 1};
+    f32 color_end[4] = {1, 1, 1, 1};
+    bool additive = false;
+    cook::String texture;  // "guid:<uuid>", empty = none
+
+    ParticleSwatch swatch() const;
+};
+bool particle_form_from_text(StringView text, ParticleForm& out, cook::String& err);
+bool particle_form_to_text(StringView old_text, const ParticleForm& form, cook::String& out, cook::String& err);
+bool load_particle_form(const EditorProject& project, const ProjectAsset& asset, ParticleForm& out, cook::String& err);
+bool save_particle_form(EditorProject& project, const ProjectAsset& asset, const ParticleForm& form, cook::String& err);
+
 // Cooks `text` in memory as the asset at `asset.path` would cook, then writes it atomically and rescans the
 // catalog. Nothing is written when the cook refuses it. False with `err` set.
 bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset, StringView text, cook::String& err);

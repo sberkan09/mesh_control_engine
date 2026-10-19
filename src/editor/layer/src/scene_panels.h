@@ -33,6 +33,9 @@ inline constexpr const char* kSkeletonPanel = "Skeleton";
 // The Material panel (material_panel.cpp): a .mcmat's parameters and texture slots beside a live CPU swatch.
 void add_material_panel(EditorShell& shell);
 inline constexpr const char* kMaterialPanel = "Material";
+// The Particle panel (particle_panel.cpp): a .mcpart's emitter parameters beside a live CPU swatch.
+void add_particle_panel(EditorShell& shell);
+inline constexpr const char* kParticlePanel = "Particle";
 // Drag-drop payload of the asset browser: the asset's Guid.
 inline constexpr const char* kAssetPayload = "MCE_ASSET";
 // Destroys every selected entity (Del in the Hierarchy and the Viewport).
