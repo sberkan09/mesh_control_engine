@@ -6,6 +6,8 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/asset/file_io.h"
+#include "mce/cook/fs.h"
+#include "mce/cook/json.h"
 #include "mce/editor/project.h"
 #include "mce/math/math.h"
 
@@ -176,6 +178,59 @@ bool thumb_from_mesh(const asset::MeshView& mesh, u32 size, cook::Image& out) {
     return true;
 }
 
+namespace {
+
+f32 saturate(f32 v) { return std::fmin(std::fmax(v, 0.0f), 1.0f); }
+
+u8 to_srgb8(f32 linear) { return static_cast<u8>(std::lround(std::pow(saturate(linear), 1.0f / 2.2f) * 255.0f)); }
+
+}  // namespace
+
+void thumb_from_material(const MaterialSwatch& m, u32 size, cook::Image& out) {
+    size = clamp_size(size);
+    fill(out, size, 40, 40, 40);
+    const f32 half = static_cast<f32>(size) * 0.5f;
+    const f32 radius = static_cast<f32>(size) * 0.42f;
+    const f32 roughness = std::fmax(saturate(m.roughness), 0.045f);
+    const f32 metallic = saturate(m.metallic);
+    const math::vec3 light = math::normalize(math::vec3(-0.5f, 0.6f, 0.62f));
+    const math::vec3 view(0.0f, 0.0f, 1.0f);
+    const math::vec3 half_v = math::normalize(light + view);
+    const f32 shininess = std::fmin(std::fmax(2.0f / (roughness * roughness * roughness * roughness) - 2.0f, 2.0f), 2000.0f);
+    const f32 spec_norm = (shininess + 8.0f) / 25.1327f;  // (n + 8) / 8 pi
+    const f32 alpha = m.blend ? saturate(m.base[3]) : 1.0f;
+    for (u32 y = 0; y < size; ++y)
+        for (u32 x = 0; x < size; ++x) {
+            const f32 dx = (static_cast<f32>(x) + 0.5f - half) / radius;
+            const f32 dy = (half - static_cast<f32>(y) - 0.5f) / radius;
+            const f32 r2 = dx * dx + dy * dy;
+            if (r2 > 1.0f) continue;
+            const math::vec3 n(dx, dy, std::sqrt(1.0f - r2));
+            const f32 ndl = std::fmax(math::dot(n, light), 0.0f);
+            const f32 ndh = std::fmax(math::dot(n, half_v), 0.0f);
+            const f32 ndv = std::fmax(n.z, 0.0f);
+            f32 c[3];
+            for (u32 k = 0; k < 3; ++k) {
+                const f32 base = m.base[k];
+                if (m.unlit) {
+                    c[k] = base;
+                    continue;
+                }
+                const f32 f0 = 0.04f + (base - 0.04f) * metallic;
+                const f32 fres = f0 + (1.0f - f0) * std::pow(1.0f - ndv, 5.0f) * (1.0f - roughness);
+                const f32 diffuse = base * (1.0f - metallic) * (ndl * 1.1f + 0.12f);
+                const f32 spec = fres * std::pow(ndh, shininess) * spec_norm * ndl;
+                // A tinted sky above, a dark ground below, reflected more by smooth and by metallic surfaces.
+                const f32 sky = n.y * 0.5f + 0.5f;
+                const f32 env = (0.18f + 0.55f * sky) * fres * (1.0f - roughness * 0.8f);
+                c[k] = diffuse + spec * 2.0f + env + m.emissive[k];
+            }
+            const u32 check = (((x / 8) + (y / 8)) & 1u) ? 150 : 100;
+            const u32 a = static_cast<u32>(std::lround(alpha * 255.0f));
+            put(out, x, y, mix(to_srgb8(c[0]), check, a), mix(to_srgb8(c[1]), check, a), mix(to_srgb8(c[2]), check, a));
+        }
+}
+
 void thumb_tile(asset::ChunkType type, u32 size, cook::Image& out) {
     size = clamp_size(size);
     const u32 t = static_cast<u32>(type);
@@ -188,6 +243,71 @@ void thumb_tile(asset::ChunkType type, u32 size, cook::Image& out) {
         put(out, size - 1, i, 20, 20, 20);
     }
 }
+
+namespace {
+
+// The average colour of a texture's source PNG (alpha-weighted), in 0..1 sRGB; false when it does not read.
+bool texture_average(EditorProject& project, asset::Guid guid, f32 out[3]) {
+    const ProjectAsset* tex = project.find(guid);
+    if (!tex || tex->type != asset::ChunkType::Texture) return false;
+    Array<byte> bytes;
+    if (!asset::read_file(project.asset_path(tex->path.view()).view(), bytes)) return false;
+    Result<cook::Image> img = cook::decode_png(bytes.span());
+    if (!img || img.value().width == 0 || img.value().height == 0) return false;
+    f64 acc[3] = {};
+    f64 weight = 0;
+    const cook::Image& im = img.value();
+    for (usize i = 0; i + 3 < im.rgba.size(); i += 4) {
+        const f64 a = im.rgba[i + 3];
+        for (u32 k = 0; k < 3; ++k) acc[k] += a * im.rgba[i + k];
+        weight += a;
+    }
+    if (weight <= 0) return false;
+    for (u32 k = 0; k < 3; ++k) out[k] = static_cast<f32>(acc[k] / weight / 255.0);
+    return true;
+}
+
+f32 srgb_to_linear(f32 v) { return std::pow(saturate(v), 2.2f); }
+
+// Reads the scalar look of a .mcmat source file; the base colour texture's average colour multiplies the base colour.
+bool read_material_swatch(EditorProject& project, const ProjectAsset& asset, MaterialSwatch& m) {
+    cook::String text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), text)) return false;
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    if (!doc.parse(text.view(), err) || !doc.root().is_object()) return false;
+    const cook::JsonValue root = doc.root();
+    auto number = [&](const char* key, f32& out) {
+        const cook::JsonValue v = root.get(key);
+        if (v.valid() && v.is_number()) out = static_cast<f32>(v.as_number());
+    };
+    auto vec = [&](const char* key, f32* out, u32 n) {
+        const cook::JsonValue v = root.get(key);
+        if (!v.valid() || !v.is_array() || v.size() != n) return;
+        for (u32 i = 0; i < n; ++i)
+            if (v.at(i).is_number()) out[i] = static_cast<f32>(v.at(i).as_number());
+    };
+    vec("base_color", m.base, 4);
+    vec("emissive", m.emissive, 3);
+    number("metallic", m.metallic);
+    number("roughness", m.roughness);
+    const cook::JsonValue mode = root.get("alpha_mode");
+    m.blend = mode.valid() && mode.is_string() && mode.as_string() == "blend";
+    const cook::JsonValue unlit = root.get("unlit");
+    m.unlit = unlit.valid() && unlit.is_bool() && unlit.as_bool();
+    const cook::JsonValue tex = root.get("textures").get("base_color");
+    if (tex.valid() && tex.is_string()) {
+        StringView ref = tex.as_string();
+        if (ref.size() > 5 && ref.substr(0, 5) == "guid:") ref = ref.substr(5);
+        const Result<asset::Guid> g = asset::parse_guid(ref);
+        f32 avg[3];
+        if (g && texture_average(project, g.value(), avg))
+            for (u32 k = 0; k < 3; ++k) m.base[k] *= srgb_to_linear(avg[k]);
+    }
+    return true;
+}
+
+}  // namespace
 
 bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 size, cook::Image& out) {
     size = clamp_size(size);
@@ -208,6 +328,12 @@ bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 siz
                     return true;
                 }
             }
+        }
+    } else if (asset.type == asset::ChunkType::Material) {
+        MaterialSwatch swatch;
+        if (read_material_swatch(project, asset, swatch)) {
+            thumb_from_material(swatch, size, out);
+            return true;
         }
     } else if (asset.type == asset::ChunkType::Mesh) {
         asset::AssetSystem* assets = project.mounted();

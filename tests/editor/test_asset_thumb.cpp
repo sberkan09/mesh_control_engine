@@ -4,10 +4,15 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 
+#include "cook_test_util.h"
 #include "mce/asset/formats.h"
 #include "mce/editor/asset_thumb.h"
+#include "mce/editor/project.h"
 
 using namespace mce;
 using namespace mce::editor;
@@ -118,4 +123,98 @@ TEST_CASE("thumb_tile: the colour follows the type, the size is exact") {
     CHECK(a.height == 16);
     CHECK(a.rgba.size() == 16u * 16u * 4u);
     CHECK_FALSE(same(a, b));
+}
+
+namespace {
+
+u32 sphere_pixels(const cook::Image& img) {
+    u32 n = 0;
+    for (usize i = 0; i < img.rgba.size(); i += 4)
+        n += (img.rgba[i] == 40 && img.rgba[i + 1] == 40 && img.rgba[i + 2] == 40) ? 0u : 1u;
+    return n;
+}
+
+u32 brightest(const cook::Image& img) {
+    u32 best = 0;
+    for (usize i = 0; i < img.rgba.size(); i += 4) best = std::max<u32>(best, std::max<u32>(img.rgba[i], std::max<u32>(img.rgba[i + 1], img.rgba[i + 2])));
+    return best;
+}
+
+const u8* center(const cook::Image& img) { return &img.rgba[(static_cast<usize>(img.height / 2) * img.width + img.width / 2) * 4]; }
+
+}  // namespace
+
+TEST_CASE("thumb_from_material: a lit sphere, smooth is shinier than rough, metal tints, emissive glows, blend shows the checker") {
+    cook::Image out;
+    MaterialSwatch m;
+    thumb_from_material(m, 64, out);
+    REQUIRE(out.width == 64);
+    REQUIRE(out.height == 64);
+    const u32 covered = sphere_pixels(out);
+    CHECK(covered > 2000);  // a disc of radius 0.42 * 64 covers about 2270 of 4096
+    CHECK(covered < 2500);
+    CHECK(out.rgba[0] == 40);  // the corner is the background
+
+    MaterialSwatch smooth, rough;
+    smooth.roughness = 0.1f;
+    rough.roughness = 0.9f;
+    smooth.base[0] = smooth.base[1] = smooth.base[2] = rough.base[0] = rough.base[1] = rough.base[2] = 0.1f;  // dark, so nothing clips
+    cook::Image a, b;
+    thumb_from_material(smooth, 64, a);
+    thumb_from_material(rough, 64, b);
+    CHECK(brightest(a) > brightest(b));
+    CHECK(sphere_pixels(a) == covered);  // the silhouette does not depend on the material
+
+    MaterialSwatch gold;  // a red metal reflects red only
+    gold.base[0] = 1.0f;
+    gold.base[1] = 0.0f;
+    gold.base[2] = 0.0f;
+    gold.metallic = 1.0f;
+    gold.roughness = 0.3f;
+    thumb_from_material(gold, 64, a);
+    CHECK(center(a)[0] > center(a)[1]);
+    CHECK(center(a)[0] > center(a)[2]);
+
+    MaterialSwatch glow;
+    glow.base[0] = glow.base[1] = glow.base[2] = 0.0f;
+    glow.emissive[1] = 1.0f;
+    thumb_from_material(glow, 64, a);
+    CHECK(center(a)[1] > 200);
+    CHECK(center(a)[0] < 60);
+
+    MaterialSwatch unlit;
+    unlit.unlit = true;
+    unlit.base[0] = 0.0f;
+    unlit.base[1] = 0.0f;
+    unlit.base[2] = 1.0f;
+    thumb_from_material(unlit, 64, a);
+    CHECK(center(a)[2] == 255);
+    CHECK(center(a)[0] == 0);
+
+    MaterialSwatch glass;
+    glass.blend = true;
+    glass.base[3] = 0.0f;
+    thumb_from_material(glass, 64, a);
+    CHECK(count(a, 100, 100, 100) + count(a, 150, 150, 150) + count(a, 40, 40, 40) == 64u * 64u);  // only the checker shows
+    thumb_from_material(m, 64, b);
+    CHECK(same(b, out));  // deterministic
+}
+
+TEST_CASE("render_thumbnail: a .mcmat file draws its sphere, other kinds the plain tile") {
+    const std::string root = cook_test::fresh_dir("thumb_material");
+    std::filesystem::create_directories(root + "/assets/mat");
+    std::ofstream(root + "/assets/mat/gold.mcmat") << R"({ "format": "mce-material", "version": 1, "guid": "5ce4e000-0000-4000-8000-0000000000a1",
+  "base_color": [1.0, 0.0, 0.0, 1.0], "metallic": 1.0, "roughness": 0.3 })";
+    EditorProject project;
+    REQUIRE(project.open(root));
+    const ProjectAsset* gold = nullptr;
+    for (const ProjectAsset& a : project.assets()) {
+        if (a.path.view() == "mat/gold.mcmat") gold = &a;
+    }
+    REQUIRE(gold);
+    CHECK(gold->type == asset::ChunkType::Material);
+    cook::Image out;
+    CHECK(render_thumbnail(project, *gold, 64, out));
+    CHECK(center(out)[0] > center(out)[1]);
+    CHECK(sphere_pixels(out) > 2000);
 }

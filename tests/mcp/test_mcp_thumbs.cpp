@@ -38,6 +38,7 @@ TEST_CASE("asset_thumbnail: one asset, a contact sheet, the plain tile, filters 
     c.ok("gen_texture", R"({"kind":"worley","width":32,"height":16,"colors":["#000000","#ffffff"],"save":"art/rock.png"})");
     c.ok("gen_sfx", R"({"seed":3,"preset":"laser","save":"sfx/zap.wav"})");
     c.ok("gen_mesh", R"({"shape":"box","size":[1,1,1],"color":"#d03020","save":"art/crate.glb"})");
+    c.ok("asset_create", R"({"path":"mats/gold.mcmat","content":{"base_color":[1,0.7,0.1,1],"metallic":1,"roughness":0.25}})");
     c.ok("scene_new", R"({"name":"empty"})");
     c.ok("scene_save", R"({"path":"scenes/empty.mcscene"})");
     REQUIRE(c.ok("cook_run").v().get("ok").as_bool());
@@ -60,6 +61,11 @@ TEST_CASE("asset_thumbnail: one asset, a contact sheet, the plain tile, filters 
     REQUIRE(mesh.images.size() == 1);
     CHECK(mesh.v().get("real").as_bool());
     CHECK(distinct_pixels(mesh.images[0]) > 300);
+
+    const auto mat = c.ok("asset_thumbnail", R"({"path":"mats/gold.mcmat","size":64})");
+    REQUIRE(mat.images.size() == 1);
+    CHECK(mat.v().get("real").as_bool());
+    CHECK(distinct_pixels(mat.images[0]) > 1500);  // the lit sphere on the dark background
 
     const auto tile = c.ok("asset_thumbnail", R"({"path":"scenes/empty.mcscene","size":32})");
     CHECK_FALSE(tile.v().get("real").as_bool());

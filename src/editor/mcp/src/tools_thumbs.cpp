@@ -88,7 +88,7 @@ const ToolDef kThumbTools[] = {
     {"asset_thumbnail",
      "A picture of an asset, drawn on the CPU from its own bytes (no GPU, no cook for textures and audio): a texture "
      "scaled to fit over a checker, an audio clip as its waveform, a mesh as a flat-shaded three-quarter view (cook "
-     "first), any other asset a plain tile coloured by type. Give 'path' or 'guid' for one PNG of 'size' x 'size' "
+     "first), a material as a lit sphere (base colour, metallic, roughness, emissive), any other asset a plain tile coloured by type. Give 'path' or 'guid' for one PNG of 'size' x 'size' "
      "(16..512, default 128), or 'folder' (a path prefix under assets/, \"\" for all) for a contact sheet PNG of the "
      "assets under it in catalog order, row by row (tile 'size' default 64, 'limit' up to 64 tiles, optional 'type' "
      "such as Texture or Mesh); the JSON lists each tile's index, column, row and whether it shows the asset itself "
