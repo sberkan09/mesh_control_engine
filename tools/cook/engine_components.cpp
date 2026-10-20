@@ -23,6 +23,7 @@
 #include "mce/kit/views.h"            // CameraView (M-VIEWS)
 #include "mce/kit/inventory.h"        // Inventory, Equipment, ItemPickup3D (M-INVENTORY 2)
 #include "mce/kit/loot.h"              // LootDrop, Container (M-INVENTORY 3)
+#include "mce/kit/craft.h"              // CraftingStation (M-CRAFT 2)
 #include "mce/kit/coop.h"             // CoopGame, PlayerSpawn, LocalPlayer, PlayerCamera, SharedCamera2D (M-VIEWS 5)
 #include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
                                       // PhysicsEvents, NavGridSource
