@@ -6,6 +6,7 @@ mce_add_test(test_editor UMBRELLA
         test_asset_thumb.cpp
         test_asset_form.cpp
         test_scene_tabs.cpp
+        test_mixer_model.cpp
         test_strings_grid.cpp
         test_thumb_cache.cpp
         test_bt_editor.cpp
