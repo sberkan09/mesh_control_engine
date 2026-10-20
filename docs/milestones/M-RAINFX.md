@@ -38,7 +38,7 @@
 |---|---|---|---|
 | 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | done | #645 | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
-| 7c | part 1 in review | | `RainRipples` + extract only (7e carries splash and thunder) |
+| 7c | part 1 in review | #648 | `RainRipples` + extract only (7e carries splash and thunder) |
 | 7d | planned | | needs 7b, 7c |
 | 7e | planned | | `RainSplash` + `ThunderDelay` (kit), needs 7c |
 
