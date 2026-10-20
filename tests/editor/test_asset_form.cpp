@@ -197,3 +197,92 @@ TEST_CASE("save_particle_form: a refused cook writes nothing, a good save reads 
     REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), after));
     CHECK(before.view() == after.view());
 }
+
+namespace {
+
+constexpr const char* kIntro = R"({
+  "format": "mce-sequence",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-0000000000c3",
+  "name": "intro",
+  "steps": [
+    {"wait": 0.5},
+    {"move_to": [4, 2], "speed": 3, "relative": true},
+    {"emit": "beat_done"}
+  ]
+}
+)";
+
+}  // namespace
+
+TEST_CASE("SequenceForm: steps round trip, extras only when not default, other members kept") {
+    SequenceForm f;
+    cook::String err;
+    REQUIRE(sequence_form_from_text(kIntro, f, err));
+    REQUIRE(f.steps.size() == 3);
+    CHECK(f.name.view() == "intro");
+    CHECK_FALSE(f.loop);
+    CHECK(f.steps[0].kind == SequenceStepForm::Wait);
+    CHECK(f.steps[0].seconds == doctest::Approx(0.5f));
+    CHECK(f.steps[1].kind == SequenceStepForm::MoveTo);
+    CHECK(f.steps[1].speed == 3.0f);
+    CHECK(f.steps[1].relative);
+    CHECK(f.steps[1].pos[0] == 4.0f);
+    CHECK(f.steps[2].text.view() == "beat_done");
+    CHECK(SequenceForm::describe(f.steps[0]).view() == "wait 0.5 s");
+
+    SequenceStepForm extra;
+    extra.kind = SequenceStepForm::Destroy;
+    f.steps.push_back(static_cast<SequenceStepForm&&>(extra));
+    f.loop = true;
+    cook::String out;
+    REQUIRE(sequence_form_to_text(kIntro, f, out, err));
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    REQUIRE(doc.parse(out.view(), je));
+    const cook::JsonValue root = doc.root();
+    CHECK(root.get("guid").is_string());
+    CHECK(root.get("loop").as_bool());
+    REQUIRE(root.get("steps").size() == 4);
+    const cook::JsonValue mv = root.get("steps").at(1);
+    CHECK(mv.get("speed").as_number() == 3.0);
+    CHECK(mv.get("relative").as_bool());
+    CHECK_FALSE(mv.get("tolerance").valid());  // the default is not written
+    CHECK(root.get("steps").at(3).get("destroy").as_bool());
+
+    SequenceForm again;
+    REQUIRE(sequence_form_from_text(out.view(), again, err));
+    CHECK(again.steps.size() == 4);
+    CHECK_FALSE(sequence_form_from_text(R"({"format": "mce-material"})", f, err));
+}
+
+TEST_CASE("save_sequence_form: a refused cook writes nothing, a good save reads back") {
+    const std::string root = cook_test::fresh_dir("asset_form_seq");
+    std::filesystem::create_directories(root + "/assets/seq");
+    std::ofstream(root + "/assets/seq/intro.mcseq") << kIntro;
+    EditorProject project;
+    REQUIRE(project.open(root));
+    const ProjectAsset* found = nullptr;
+    for (const ProjectAsset& a : project.assets())
+        if (a.path.view() == "seq/intro.mcseq") found = &a;
+    REQUIRE(found);
+    const ProjectAsset asset = *found;
+    SequenceForm form;
+    cook::String err;
+    REQUIRE(load_sequence_form(project, asset, form, err));
+    form.steps[0].seconds = 1.25f;
+    REQUIRE(save_sequence_form(project, asset, form, err));
+    SequenceForm back;
+    REQUIRE(load_sequence_form(project, asset, back, err));
+    CHECK(back.steps[0].seconds == doctest::Approx(1.25f));
+
+    cook::String before;
+    REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), before));
+    form.steps[0].seconds = -1;  // the cook wants seconds >= 0
+    err = cook::String();
+    CHECK_FALSE(save_sequence_form(project, asset, form, err));
+    CHECK(err.view().find("nothing was written") != StringView::npos);
+    cook::String after;
+    REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), after));
+    CHECK(before.view() == after.view());
+}

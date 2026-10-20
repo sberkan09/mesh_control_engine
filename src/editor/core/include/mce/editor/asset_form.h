@@ -75,6 +75,33 @@ bool particle_form_to_text(StringView old_text, const ParticleForm& form, cook::
 bool load_particle_form(const EditorProject& project, const ProjectAsset& asset, ParticleForm& out, cook::String& err);
 bool save_particle_form(EditorProject& project, const ProjectAsset& asset, const ParticleForm& form, cook::String& err);
 
+// The .mcseq twin (M-SEQEDIT): an action list. A save rewrites the "steps" array from the form (every step is one
+// action key plus its extras, which is all the cook accepts) and "name" / "loop"; the other members stay in place.
+struct SequenceStepForm {
+    enum Kind { Wait, WaitEvent, MoveTo, Anim, Sound, StopSound, Emit, Call, Spawn, Destroy, kKinds };
+    static const char* kind_name(int kind);  // the action key: "wait", "move_to", ...
+    int kind = Wait;
+    f32 seconds = 0;           // Wait
+    cook::String text;         // WaitEvent / Anim / Emit / Call: the name; Sound / Spawn: "guid:<uuid>"
+    f32 pos[3] = {0, 0, 0};    // MoveTo target, Spawn "at"
+    bool has_z = false;        // the position had a third number
+    bool relative = false;     // MoveTo / Spawn
+    f32 speed = 1;             // MoveTo
+    f32 tolerance = 0.01f;     // MoveTo
+    f32 gain_db = 0;           // Sound
+};
+struct SequenceForm {
+    cook::String name;
+    bool loop = false;
+    Array<SequenceStepForm> steps;
+    // A one-line description of a step for lists ("wait 0.5 s", "move_to [4, 2] at 3 m/s").
+    static cook::String describe(const SequenceStepForm& step);
+};
+bool sequence_form_from_text(StringView text, SequenceForm& out, cook::String& err);
+bool sequence_form_to_text(StringView old_text, const SequenceForm& form, cook::String& out, cook::String& err);
+bool load_sequence_form(const EditorProject& project, const ProjectAsset& asset, SequenceForm& out, cook::String& err);
+bool save_sequence_form(EditorProject& project, const ProjectAsset& asset, const SequenceForm& form, cook::String& err);
+
 // Cooks `text` in memory as the asset at `asset.path` would cook, then writes it atomically and rescans the
 // catalog. Nothing is written when the cook refuses it. False with `err` set.
 bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset, StringView text, cook::String& err);
