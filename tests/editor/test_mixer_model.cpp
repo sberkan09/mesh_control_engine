@@ -1,0 +1,82 @@
+// M-MIXEDIT 1: the mixer model over a scene's audio components. A setter creates the "Mixer ..." entity, a second
+// setter rewrites the same one, a clear removes the component and the empty entity, and every change is one undo entry.
+
+#include <doctest/doctest.h>
+
+#include "mce/editor/mixer_model.h"
+
+using namespace mce;
+using namespace mce::editor;
+using mce::audio::AudioBus;
+
+TEST_CASE("MixerModel: a setter creates the mixer entity, the next one rewrites it, a clear removes both") {
+    EditorScene scene;
+    scene.new_scene("mix");
+    MixerModel mix(scene);
+
+    audio::AudioBusEffects fx;
+    CHECK_FALSE(mix.bus_effects(AudioBus::Music, fx));  // dry by default
+    CHECK(fx.lowpass_hz == 0.f);
+    CHECK(fx.bus == AudioBus::Music);
+
+    fx.lowpass_hz = 1200.f;
+    CHECK(mix.set_bus_effects(AudioBus::Music, fx));
+    REQUIRE(scene.doc().size() == 1);
+    CHECK(scene.doc().at(0).name.view() == "Mixer Music");
+
+    audio::AudioBusEffects got;
+    CHECK(mix.bus_effects(AudioBus::Music, got));
+    CHECK(got.lowpass_hz == 1200.f);
+
+    fx.lowpass_hz = 800.f;
+    CHECK(mix.set_bus_effects(AudioBus::Music, fx));
+    CHECK(scene.doc().size() == 1);  // the same entity
+    CHECK_FALSE(mix.set_bus_effects(AudioBus::Music, fx));  // unchanged: no-op
+
+    CHECK(mix.set_bus_effects(AudioBus::SFX, audio::AudioBusEffects()));
+    CHECK(scene.doc().size() == 2);  // another bus, another entity
+
+    CHECK(mix.clear_bus_effects(AudioBus::Music));
+    CHECK(scene.doc().size() == 1);
+    CHECK_FALSE(mix.clear_bus_effects(AudioBus::Music));
+    CHECK_FALSE(mix.bus_effects(AudioBus::Music, got));
+}
+
+TEST_CASE("MixerModel: reverb units, the limiter and ducks are independent and undoable") {
+    EditorScene scene;
+    scene.new_scene("mix");
+    MixerModel mix(scene);
+
+    audio::AudioReverb rv;
+    rv.room_size = 0.9f;
+    CHECK(mix.set_reverb(1, rv));
+    audio::AudioReverb back;
+    CHECK_FALSE(mix.reverb(0, back));
+    CHECK(mix.reverb(1, back));
+    CHECK(back.unit == 1);
+    CHECK(back.room_size == doctest::Approx(0.9f));
+
+    audio::AudioLimiter lim;
+    lim.ceiling_db = -3.f;
+    CHECK(mix.set_limiter(lim));
+    audio::AudioLimiter lb;
+    CHECK(mix.limiter(lb));
+    CHECK(lb.ceiling_db == -3.f);
+
+    audio::AudioDuck d;
+    d.depth_db = -18.f;
+    CHECK(mix.set_duck(AudioBus::Music, d));
+    audio::AudioDuck db;
+    CHECK(mix.duck(AudioBus::Music, db));
+    CHECK(db.depth_db == -18.f);
+    CHECK_FALSE(mix.duck(AudioBus::SFX, db));
+
+    CHECK(scene.doc().size() == 3);
+    // One undo entry per change: undoing the duck leaves the limiter and the reverb.
+    REQUIRE(scene.undo());
+    CHECK_FALSE(mix.duck(AudioBus::Music, db));
+    CHECK(mix.limiter(lb));
+    CHECK(scene.doc().size() == 2);
+    REQUIRE(scene.redo());
+    CHECK(mix.duck(AudioBus::Music, db));
+}
