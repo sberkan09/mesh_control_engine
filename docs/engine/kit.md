@@ -399,3 +399,23 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
   yet (#152).
 - No gameplay starter components (controller, pickups; the follow camera and effects are in `effects.h`); see "Building a 2D game on
   the kit" above (M9).
+
+## Inventory, equipment and pickups (M-INVENTORY 2)
+
+`mce/kit/inventory.h`, installed by `install_stock`. The items are a project's `.mcitems` catalog (`ItemCatalog`).
+
+- `Inventory`: 24 slots of (`item`, `qty`), the catalog it indexes, an optional `max_weight_milli` (thousandths of a kilogram, 0: none).
+  `item` is the catalog index plus one, 0 meaning empty. All arithmetic is whole numbers, so the same inputs give the same state hash.
+- `Equipment`: one catalog index per `EquipSlot` (Head, Body, Hands, Feet, Weapon, Offhand, Accessory1, Accessory2). An item fits a
+  slot when it carries the tag `equip.<slot>` (`equip.weapon`, `equip.head`, ...). Equipping moves one unit out of an inventory slot;
+  a unit already in the slot goes back first, and nothing changes if it has nowhere to go.
+- `ItemPickup3D` on an entity with a `Trigger3D`: whatever with an `Inventory` enters takes it; it is destroyed when all of it fits,
+  otherwise `qty` shrinks to what is left.
+- Rules as plain functions (`inventory_add`, `inventory_remove`, `inventory_count`, `inventory_move`, `inventory_split`,
+  `equipment_equip`, `equipment_unequip`): add fills existing stacks and then empty slots and stops at the weight limit (an item that
+  weighs nothing is never limited by weight); move onto an empty slot moves, onto the same item merges up to the stack, onto another
+  item swaps; split moves part of a stack to the first empty slot.
+- Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
+  `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
+  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit.
+- Not yet: the loot roller and `Container` (step 3), Luau and the `ItemGrid` widget (step 4), a sample (step 5).
