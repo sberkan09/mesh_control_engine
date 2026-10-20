@@ -40,6 +40,7 @@
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
 #include "mce/kit/combat3d.h"          // Health3D, Weapon3D, Projectile3D (M-OPENWORLD C2)
+#include "mce/kit/inventory.h"         // Inventory, Equipment, ItemPickup3D (M-INVENTORY 2)
 #include "mce/kit/missions.h"          // Mission, Objective (M-MISSION 1)
 #include "mce/kit/world_clock.h"        // WorldClock (M-DAYNIGHT 1)
 #include "mce/kit/day_cycle.h"          // DayCycle (M-DAYNIGHT 2)
