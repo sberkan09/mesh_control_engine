@@ -89,7 +89,7 @@ const char* asset_type_name(StringId id) {
                                              asset::Shader::name,  asset::Sfx::name,  asset::Font::name,
                                              asset::Atlas::name,   asset::Scene::name, asset::InputMap::name,
                                              asset::Video::name, asset::BehaviorTree::name, asset::Script::name,
-                                             asset::RoadNetwork::name};
+                                             asset::RoadNetwork::name, asset::ItemCatalogChunk::name};
     for (const char* n : kNames)
         if (StringId(n) == id) return n;
     return "";

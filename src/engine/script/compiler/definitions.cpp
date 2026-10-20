@@ -132,6 +132,25 @@ declare mission: {
     signal: (name: string, amount: number?) -> (),
 }
 
+-- Inventories (M-INVENTORY): thin over Inventory, Equipment and Container. Slots count from 1 (1 to 24); `where` is
+-- "head", "body", "hands", "feet", "weapon", "offhand", "accessory1" or "accessory2". The queued calls land a few ticks later.
+declare inventory: {
+    add: (e: Entity, id: string, qty: number?) -> (),
+    remove: (e: Entity, id: string, qty: number?) -> (),
+    count: (e: Entity, id: string) -> number,
+    has: (e: Entity, id: string, qty: number?) -> boolean,
+    -- carried weight in thousandths of a kilogram
+    weight: (e: Entity) -> number,
+    -- the item id and quantity in the slot (nil, 0 when empty)
+    slot: (e: Entity, i: number) -> (string?, number),
+    equip: (e: Entity, i: number, where: string?) -> (),
+    unequip: (e: Entity, where: string) -> (),
+    use: (e: Entity, i: number) -> (),
+    -- takes qty (default the whole stack) out of the slot now and spawns an ItemPickup3D; returns how many
+    drop: (e: Entity, i: number, qty: number?) -> number,
+    open: (container: Entity, opener: Entity) -> (),
+}
+
 -- Map markers (M-MISSION): the MapMarker component, written at the next sync point.
 declare marker: {
     add: (e: Entity, options: MarkerOptions?) -> (),

@@ -398,6 +398,12 @@ project is typical; it is one asset with one GUID, and items and tables are name
               { "id": "chest_rare", "entries": [ { "item": "medkit", "qty": 5 } ] } ] }
 ```
 
+Using it: give an entity an `Inventory` (and an `Equipment` to wear things) whose `catalog` is the file's GUID. A table is rolled
+by a `LootDrop` (drops its table as pickups when its `Health3D` entity dies) or a `Container` (a chest: put an `Inventory` on the
+same entity, name the `table`, and send `OpenContainer`); set `seed` on either for loot that is the same on every run, leave it 0 for a
+seed derived from the table and the entity. A catalog may only grow at the end: saves keep item numbers, not ids. The `inventory`
+Luau global (section 27), the `slot_N` Text widgets (section 12) and `samples/12_loot` show it working.
+
 `stack` (default 1, up to 1,000,000) is how many fit in one slot; `weight` is kilograms per unit, stored as whole thousandths so
 sums never depend on float order; `stats` are free named numbers (`damage`, `heal`) that scripts and the kit read by name; `icon` is a
 texture and `prefab` the entity spawned when the item lies in the world, both optional and checked at cook. A loot table makes
