@@ -15,4 +15,3 @@ Equipment | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_
 ItemPickup3D | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp
 LootDrop | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_loot.cpp
 Container | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_loot.cpp
-SnowCover | wired in 6d (samples/12_weather)

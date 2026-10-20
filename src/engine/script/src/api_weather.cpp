@@ -32,12 +32,27 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Snow cover (M-SNOWCOVER step 6d) is the same kind of binding over the first kit::SnowCover (mce/kit/snow_cover.h).
+// Named errors as above.
+//
+//   weather.snow_cover() -> number        SnowCover.cover (0..1), engine-written by kit_snow_cover; read-only
+//   weather.snow_strength() -> number     SnowCover.strength (0..4)
+//   weather.snow_build() -> number        SnowCover.build_seconds (0..86400)
+//   weather.snow_melt() -> number         SnowCover.melt_seconds (0..86400)
+//   weather.snow_coverage() -> number     SnowCover.coverage (0..1)
+//   weather.snow_scale() -> number        SnowCover.noise_scale_m (0.1..100)
+//   weather.snow_wind() -> number         SnowCover.wind_bias (0..1)
+//   weather.set_snow{strength=, build=, melt=, coverage=, scale=, wind=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
 #include <cstring>
 
 #include "api.h"
+#include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -93,6 +108,20 @@ kit::WindSway& check_sway(lua_State* L, const char* fn) {
         if (!found) found = &c;
     });
     if (!found) luaL_error(L, "%s: the scene has no WindSway entity", fn);
+    return *found;
+}
+
+// The first SnowCover, or a Luau error that names the call.
+kit::SnowCover& check_snow(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const refl::TypeRecord* type = refl::find_type(StringId("SnowCover"));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent)
+        luaL_error(L, "%s: this world has no weather (install_weather)", fn);
+    kit::SnowCover* found = nullptr;
+    w.query<kit::SnowCover>().each([&](Entity, kit::SnowCover& c) {
+        if (!found) found = &c;
+    });
+    if (!found) luaL_error(L, "%s: the scene has no SnowCover entity", fn);
     return *found;
 }
 
@@ -251,6 +280,77 @@ int l_weather_set_sway(lua_State* L) {
     return 0;
 }
 
+int l_weather_snow_cover(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_cover").cover));
+    return 1;
+}
+
+int l_weather_snow_strength(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_strength").strength));
+    return 1;
+}
+
+int l_weather_snow_build(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_build").build_seconds));
+    return 1;
+}
+
+int l_weather_snow_melt(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_melt").melt_seconds));
+    return 1;
+}
+
+int l_weather_snow_coverage(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_coverage").coverage));
+    return 1;
+}
+
+int l_weather_snow_scale(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_scale").noise_scale_m));
+    return 1;
+}
+
+int l_weather_snow_wind(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_snow(L, "weather.snow_wind").wind_bias));
+    return 1;
+}
+
+// weather.set_snow{strength=, build=, melt=, coverage=, scale=, wind=}: like set_wet, validated before anything is
+// written. (`cover` and `snow_q` are engine-written and not settable.)
+int l_weather_set_snow(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    // Slots: 0 strength, 1 build, 2 melt, 3 coverage, 4 scale, 5 wind.
+    static const char* const kKeys[6] = {"strength", "build", "melt", "coverage", "scale", "wind"};
+    f64 value[6] = {0, 0, 0, 0, 0, 0};
+    bool given[6] = {false, false, false, false, false, false};
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0) {
+        if (lua_type(L, -2) != LUA_TSTRING)
+            luaL_error(L, "weather.set_snow: the keys are names (strength, build, melt, coverage, scale, wind)");
+        const char* key = lua_tostring(L, -2);
+        int slot = -1;
+        for (int i = 0; i < 6; ++i) {
+            if (std::strcmp(key, kKeys[i]) == 0) slot = i;
+        }
+        if (slot < 0)
+            luaL_error(L, "weather.set_snow: unknown key '%s' (strength, build, melt, coverage, scale, wind)", key);
+        if (lua_type(L, -1) != LUA_TNUMBER) luaL_error(L, "weather.set_snow: '%s' is not a number", key);
+        const f64 v = lua_tonumber(L, -1);
+        if (std::isnan(v)) luaL_error(L, "weather.set_snow: '%s' is not a number", key);
+        value[slot] = v;
+        given[slot] = true;
+        lua_pop(L, 1);
+    }
+    kit::SnowCover& sc = check_snow(L, "weather.set_snow");
+    if (given[0]) sc.strength = static_cast<f32>(clamp_range(value[0], 0.0, 4.0));
+    if (given[1]) sc.build_seconds = static_cast<f32>(clamp_range(value[1], 0.0, 86400.0));
+    if (given[2]) sc.melt_seconds = static_cast<f32>(clamp_range(value[2], 0.0, 86400.0));
+    if (given[3]) sc.coverage = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) sc.noise_scale_m = static_cast<f32>(clamp_range(value[4], 0.1, 100.0));
+    if (given[5]) sc.wind_bias = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -268,6 +368,14 @@ const luaL_Reg kWeatherLib[] = {
     {"sway_gust", l_weather_sway_gust},
     {"sway_flutter", l_weather_sway_flutter},
     {"set_sway", l_weather_set_sway},
+    {"snow_cover", l_weather_snow_cover},
+    {"snow_strength", l_weather_snow_strength},
+    {"snow_build", l_weather_snow_build},
+    {"snow_melt", l_weather_snow_melt},
+    {"snow_coverage", l_weather_snow_coverage},
+    {"snow_scale", l_weather_snow_scale},
+    {"snow_wind", l_weather_snow_wind},
+    {"set_snow", l_weather_set_snow},
     {nullptr, nullptr},
 };
 

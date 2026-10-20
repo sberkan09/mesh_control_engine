@@ -83,6 +83,10 @@
      "puddles": 0.6
     },
     "WindSway": {},
+    "SnowCover": {
+     "build_seconds": 4,
+     "melt_seconds": 10
+    },
     "Foliage3D": {
      "mesh": "guid:12d12000-0000-4000-8000-000000000006",
      "tint": [

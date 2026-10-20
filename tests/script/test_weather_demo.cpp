@@ -25,6 +25,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
+#include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_sway.h"
@@ -98,6 +99,7 @@ struct Demo {
             }
         }
     }
+    const kit::SnowCover& snow() { return *world.try_get<kit::SnowCover>(e[kWeather]); }
     const kit::Weather& wx() { return *world.try_get<kit::Weather>(e[kWeather]); }
     const kit::Environment3D& env() { return *world.try_resource<kit::Environment3D>(); }
     const kit::ParticleEmitter3D& em() { return *world.try_get<kit::ParticleEmitter3D>(e[kPrecip]); }
@@ -133,6 +135,13 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     REQUIRE(foliage != nullptr);
     CHECK(foliage->count == 60);
     CHECK(foliage->wind_amplitude == 0.08f);
+    // M-SNOWCOVER 6d: ... and a SnowCover that builds in 4 s and melts in 10 s (the weather is only snow for 8 s).
+    const kit::SnowCover* snow = d.world.try_get<kit::SnowCover>(d.e[kWeather]);
+    REQUIRE(snow != nullptr);
+    CHECK(snow->build_seconds == 4.0f);
+    CHECK(snow->melt_seconds == 10.0f);
+    CHECK(snow->strength == 1.0f);
+    CHECK(snow->cover == 0.0f);
     // Tick 0: nothing has run, the resource is the authored Environment3D.
     CHECK(bits(d.env().sun_intensity) == bits(2.0f));
     CHECK(d.em().emitting == 0);  // as authored: dry until the weather says otherwise
@@ -242,4 +251,25 @@ TEST_CASE("weather demo: the same run twice has the same state hash") {
     const u64 a = run();
     const u64 b = run();
     CHECK(a == b);
+}
+
+TEST_CASE("weather demo: the snow cover stays 0 until the snow is in effect, builds while it snows and melts after") {
+    Demo d, c(false);
+    d.run_to(1860);
+    CHECK(d.snow().snow_q == 0u);
+    CHECK(d.snow().cover == 0.0f);
+    d.run_to(2100);
+    const f32 at_2100 = d.snow().cover;
+    CHECK(at_2100 > 0.05f);
+    CHECK(at_2100 < 0.3f);
+    d.run_to(2340);  // the last tick of snow
+    const f32 peak = d.snow().cover;
+    CHECK(peak > at_2100);
+    CHECK(peak <= 1.0f);
+    d.run_to(2700);
+    CHECK(d.snow().cover < peak);
+    CHECK(d.snow().cover >= 0.0f);
+    // The control without the forecast never snows.
+    c.run_to(2700);
+    CHECK(c.snow().cover == 0.0f);
 }

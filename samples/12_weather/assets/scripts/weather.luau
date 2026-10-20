@@ -1,7 +1,8 @@
 -- 12_weather: a fixed forecast, then a log line every 150 ticks. weather.set only writes Weather.target; the kit
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
--- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind).
+-- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -20,5 +21,7 @@ function update()
         mce.log(string.format("sway: amplitude x%.3f frequency x%.3f at tick %d",
             1 + (weather.sway_amplitude() - 1) * weather.wind(),
             1 + (weather.sway_frequency() - 1) * weather.wind(), t))
+        -- M-SNOWCOVER: kit_snow_cover writes the cover; the renderer whitens up-facing surfaces by cover * strength.
+        mce.log(string.format("snow: cover %.3f at tick %d", weather.snow_cover(), t))
     end
 end

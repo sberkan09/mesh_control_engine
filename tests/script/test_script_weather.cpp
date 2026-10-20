@@ -9,6 +9,7 @@
 #include <string>
 
 #include "mce/ecs/transform.h"
+#include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -26,10 +27,10 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -46,7 +47,9 @@ struct WRig {
         }
         if (with_wet) wet_e = w.spawn_with(kit::WetSurfaces{});
         if (with_sway) sway_e = w.spawn_with(kit::WindSway{});
+        if (with_snow) snow_e = w.spawn_with(kit::SnowCover{});
     }
+    kit::SnowCover& snow() { return *w.try_get_mut<kit::SnowCover>(snow_e); }
     kit::WindSway& sway() { return *w.try_get_mut<kit::WindSway>(sway_e); }
     void step(u32 n = 1) {
         for (u32 i = 0; i < n; ++i) w.tick(1.0 / 60, ++tick);
@@ -61,9 +64,9 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet, with_sway);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -329,5 +332,112 @@ TEST_CASE("weather api: set_sway bad arguments raise an error that names the cal
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.sway().amplitude_gain == 4.0f);
         CHECK(r.sway().flutter_gain == 3.0f);
+    }
+}
+
+TEST_CASE("weather api: the snow getters read the first SnowCover, set_snow writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.snow_cover() == 0 and weather.snow_strength() == 1)
+        assert(weather.snow_build() == 90 and weather.snow_melt() == 120)
+        assert(math.abs(weather.snow_coverage() - 0.8) < 1e-6 and weather.snow_scale() == 3)
+        assert(weather.snow_wind() == 0.5)
+        weather.set_snow{coverage = 0.25}
+    end
+    if t == 2 then
+        assert(weather.snow_coverage() == 0.25 and weather.snow_build() == 90)  -- only the given key changed
+        weather.set_snow{strength = 9, build = -5, melt = 1e9, coverage = 7, scale = 0.01, wind = -2}
+    end
+    if t == 3 then
+        assert(weather.snow_strength() == 4 and weather.snow_build() == 0 and weather.snow_melt() == 86400)
+        assert(weather.snow_coverage() == 1 and math.abs(weather.snow_scale() - 0.1) < 1e-6 and weather.snow_wind() == 0)
+        weather.set_snow{scale = 1e6, wind = 9, strength = -1, melt = -1, build = 1e9, coverage = -1}
+    end
+    if t == 4 then
+        assert(weather.snow_scale() == 100 and weather.snow_wind() == 1 and weather.snow_strength() == 0)
+        assert(weather.snow_melt() == 0 and weather.snow_build() == 86400 and weather.snow_coverage() == 0)
+        weather.set_snow{}  -- nothing given, nothing changes
+        weather.set_snow{strength = 2, build = 30, melt = 60, coverage = 0.5, scale = 6, wind = 0.25}
+    end
+end
+)",
+           true, true, false, false, true);
+    r.step(1);
+    CHECK(r.snow().coverage == 0.25f);
+    r.step(1);
+    CHECK(r.snow().strength == 4.0f);
+    CHECK(r.snow().build_seconds == 0.0f);
+    CHECK(r.snow().melt_seconds == 86400.0f);
+    CHECK(r.snow().coverage == 1.0f);
+    CHECK(r.snow().noise_scale_m == 0.1f);
+    CHECK(r.snow().wind_bias == 0.0f);
+    r.step(1);
+    CHECK(r.snow().noise_scale_m == 100.0f);
+    CHECK(r.snow().wind_bias == 1.0f);
+    r.step(1);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.snow().strength == 2.0f);
+    CHECK(r.snow().build_seconds == 30.0f);
+    CHECK(r.snow().melt_seconds == 60.0f);
+    CHECK(r.snow().coverage == 0.5f);
+    CHECK(r.snow().noise_scale_m == 6.0f);
+    CHECK(r.snow().wind_bias == 0.25f);
+}
+
+TEST_CASE("weather api: snow_cover is the engine-written cover and rises while it snows") {
+    WRig r(R"(
+function update()
+    if mce.tick() == 1 then
+        weather.set_snow{build = 1}
+        weather.set("snow", 0)
+    end
+end
+)",
+           true, true, false, false, true);
+    r.step(1);
+    CHECK(r.snow().cover == 0.0f);  // the script has not run yet on tick 1's weather pass
+    r.step(121);
+    INFO("cover " << r.snow().cover);
+    CHECK(r.snow().cover > 0.5f);
+}
+
+TEST_CASE("weather api: a world without a SnowCover raises a named error") {
+    expect_error("weather.snow_cover()", "weather.snow_cover: the scene has no SnowCover entity");
+    expect_error("weather.snow_strength()", "weather.snow_strength: the scene has no SnowCover entity");
+    expect_error("weather.snow_build()", "weather.snow_build: the scene has no SnowCover entity");
+    expect_error("weather.snow_melt()", "weather.snow_melt: the scene has no SnowCover entity");
+    expect_error("weather.snow_coverage()", "weather.snow_coverage: the scene has no SnowCover entity");
+    expect_error("weather.snow_scale()", "weather.snow_scale: the scene has no SnowCover entity");
+    expect_error("weather.snow_wind()", "weather.snow_wind: the scene has no SnowCover entity");
+    expect_error("weather.set_snow{strength = 1}", "weather.set_snow: the scene has no SnowCover entity");
+    expect_error("weather.set_snow{}", "weather.set_snow: the scene has no SnowCover entity");
+    expect_error("weather.snow_cover()", "weather.snow_cover: this world has no weather", false, false);
+    expect_error("weather.set_snow{}", "weather.set_snow: this world has no weather", false, false);
+    // A Weather, a WetSurfaces and a WindSway alone are not enough.
+    expect_error("weather.snow_cover()", "weather.snow_cover: the scene has no SnowCover entity", true, true, true, true);
+}
+
+TEST_CASE("weather api: set_snow bad arguments raise an error that names the call and write nothing") {
+    expect_error("weather.set_snow{bogus = 1}", "weather.set_snow: unknown key 'bogus'", true, true, false, false, true);
+    expect_error("weather.set_snow{cover = 1}", "weather.set_snow: unknown key 'cover'", true, true, false, false, true);
+    expect_error("weather.set_snow{Wind = 1}", "weather.set_snow: unknown key 'Wind'", true, true, false, false, true);
+    expect_error("weather.set_snow{wind = 'lots'}", "weather.set_snow: 'wind' is not a number", true, true, false, false, true);
+    expect_error("weather.set_snow{scale = 0/0}", "weather.set_snow: 'scale' is not a number", true, true, false, false, true);
+    expect_error("weather.set_snow{[1] = 0.5}", "weather.set_snow: the keys are names", true, true, false, false, true);
+    expect_error("weather.set_snow(0.5)", "table expected", true, true, false, false, true);
+    expect_error("weather.set_snow()", "table expected", true, true, false, false, true);
+    for (const char* body : {"weather.set_snow{strength = 3, scale = 'big'}",
+                             "weather.set_snow{scale = 'big', strength = 3}",
+                             "weather.set_snow{strength = 3, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.snow().strength == 1.0f);
+        CHECK(r.snow().noise_scale_m == 3.0f);
     }
 }
