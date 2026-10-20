@@ -1,5 +1,7 @@
 #include "mce/kit/inventory.h"
 
+#include <cmath>
+
 #include "kit3d_internal.h"
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/world.h"
@@ -224,6 +226,8 @@ const asset::ItemCatalog* ItemRegistry::resolve(const asset::AssetRef<asset::Ite
 
 namespace {
 
+void apply_equipment_stats(World& w, ItemRegistry& reg);
+
 Inventory* inventory_of(World& w, Entity e) { return e.is_null() || !w.alive(e) ? nullptr : w.try_get_mut<Inventory>(e); }
 
 void kit_inventory(Frame& f) {
@@ -294,6 +298,7 @@ void kit_inventory(Frame& f) {
         const bool known = valid_item(*c, item - 1u);
         if (equipment_unequip(*inv, *eq, *c, q.equip_slot) && known) ev.push(ItemUnequipped{q.owner, c->items()[item - 1u].id, q.equip_slot});
     }
+    apply_equipment_stats(w, reg);  // heals are judged against the max the worn items give right now
     for (const UseItem& u : ev.read<UseItem>()) {
         Inventory* inv = inventory_of(w, u.owner);
         const asset::ItemCatalog* c = inv ? reg.resolve(inv->catalog) : nullptr;
@@ -324,6 +329,38 @@ void kit_inventory(Frame& f) {
         }
         ev.push(ItemUsed{u.owner, d.id, u.slot, consumed});
     }
+    apply_equipment_stats(w, reg);
+}
+
+// Brings Health3D in line with what the worn items' stats say, applying only the change since last tick.
+void apply_equipment_stats(World& w, ItemRegistry& reg) {
+    w.query<Equipment, Health3D>().each([&](Entity, Equipment& eq, Health3D& hp) {
+        f32 armor = 0.0f;
+        f32 max_health = 0.0f;
+        bool any = false;
+        const asset::ItemCatalog* c = reg.resolve(eq.catalog);
+        if (!c && (eq.armor_applied != 0.0f || eq.max_applied != 0.0f)) return;  // catalog not loaded: keep what is applied
+        if (c) {
+            for (u32 s = 0; s < kEquipSlots; ++s) {
+                if (eq.item[s] == 0 || !valid_item(*c, eq.item[s] - 1u)) continue;
+                const asset::ItemDef& d = c->items()[eq.item[s] - 1u];
+                armor += c->stat(d, "armor", 0.0f);
+                max_health += c->stat(d, "max_health", 0.0f);
+                any = true;
+            }
+        }
+        if (!std::isfinite(armor) || !std::isfinite(max_health)) return;  // a catalog built in code with a hostile stat
+        if (!any && eq.armor_applied == 0.0f && eq.max_applied == 0.0f) return;
+        const f32 armor_now = hp.armor + (armor - eq.armor_applied);
+        const f32 armor_new = armor_now < 0.0f ? 0.0f : (armor_now > 1.0f ? 1.0f : armor_now);
+        eq.armor_applied += armor_new - hp.armor;  // what actually changed, so a clamp is not remembered as added
+        hp.armor = armor_new;
+        const f32 max_now = hp.max + (max_health - eq.max_applied);
+        const f32 max_new = max_now < 1.0f ? 1.0f : max_now;
+        eq.max_applied += max_new - hp.max;
+        hp.max = max_new;
+        if (hp.current > hp.max) hp.current = hp.max;
+    });
 }
 
 }  // namespace

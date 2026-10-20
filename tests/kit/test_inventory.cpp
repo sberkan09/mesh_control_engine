@@ -417,3 +417,149 @@ TEST_CASE("inventory: a consumable with a heal stat heals the user and is refuse
     CHECK(r.inv().qty[slot] == 2);
     CHECK(r.w.try_get<Health3D>(r.hero)->current == 0.0f);
 }
+
+TEST_CASE("inventory: worn items add their armor and max_health to Health3D and give it back (M-ITEMFX 2)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    auto gear = [&](const char* id, const char* tag, std::initializer_list<std::pair<const char*, f32>> stats) {
+        asset::ItemDef d;
+        d.id = id;
+        d.name = id;
+        d.stack_max = 1;
+        const FixedString<32> t(tag);
+        Array<asset::ItemStat> st;
+        for (const auto& kv : stats) {
+            asset::ItemStat s;
+            s.key = kv.first;
+            s.value = kv.second;
+            st.push_back(s);
+        }
+        REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st.data(), st.size()), Span<const FixedString<32>>(&t, 1)));
+    };
+    gear("plate", "equip.body", {{"armor", 0.25f}, {"max_health", 20.0f}});
+    gear("cap", "equip.head", {{"armor", 0.5f}});
+    gear("ring", "equip.accessory1", {{"max_health", 10.0f}});
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 100.0f;
+    hp.armor = 0.125f;
+    r.w.set(r.hero, hp);
+    auto health = [&]() -> const Health3D& { return *r.w.try_get<Health3D>(r.hero); };
+    auto equip = [&](const char* id) {
+        r.give(id, 1);
+        EquipItem q;
+        q.owner = r.hero;
+        q.slot = 0;
+        EventAccess(r.w).push(q);
+        r.tick(3);
+    };
+    equip("plate");
+    CHECK(health().armor == doctest::Approx(0.375f));
+    CHECK(health().max == doctest::Approx(120.0f));
+    r.tick(30);  // idempotent: nothing accumulates tick after tick
+    CHECK(health().armor == doctest::Approx(0.375f));
+    CHECK(health().max == doctest::Approx(120.0f));
+    equip("cap");  // armor 0.125 + 0.25 + 0.5 = 0.875
+    CHECK(health().armor == doctest::Approx(0.875f));
+    equip("ring");
+    CHECK(health().max == doctest::Approx(130.0f));
+    // another system (a level-up) changes the base: the bonus stays on top of it
+    r.w.try_get_mut<Health3D>(r.hero)->max += 50.0f;
+    r.tick(2);
+    CHECK(health().max == doctest::Approx(180.0f));
+    // a base raised so the total passes 1: armor clamps to 1, the clamp is not remembered as added, and the base comes back
+    r.w.try_get_mut<Health3D>(r.hero)->armor = 1.25f;  // as if the base were 0.5 with 0.75 worn
+    r.tick(2);
+    CHECK(health().armor == doctest::Approx(1.0f));
+    // take everything off: the base comes back
+    for (u32 slot : {static_cast<u32>(EquipSlot::Body), static_cast<u32>(EquipSlot::Head), static_cast<u32>(EquipSlot::Accessory1)}) {
+        UnequipItem u;
+        u.owner = r.hero;
+        u.equip_slot = slot;
+        EventAccess(r.w).push(u);
+        r.tick(3);
+    }
+    CHECK(health().max == doctest::Approx(150.0f));
+    CHECK(health().armor == doctest::Approx(0.5f).epsilon(0.001));  // the raised base, not 0.125
+    CHECK(r.w.try_get<Equipment>(r.hero)->max_applied == doctest::Approx(0.0f));
+    CHECK(health().current <= health().max);
+}
+
+TEST_CASE("inventory: losing max_health clamps current, and an entity without Health3D is left alone (M-ITEMFX 2)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    asset::ItemDef d;
+    d.id = "amulet";
+    d.name = "amulet";
+    d.stack_max = 1;
+    const FixedString<32> t("equip.accessory1");
+    asset::ItemStat s;
+    s.key = "max_health";
+    s.value = 50.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(&s, 1), Span<const FixedString<32>>(&t, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("amulet", 1);
+    EquipItem q;
+    q.owner = r.hero;
+    q.slot = 0;
+    EventAccess(r.w).push(q);
+    r.tick(3);  // no Health3D: nothing happens, nothing is remembered
+    CHECK(r.w.try_get<Equipment>(r.hero)->max_applied == 0.0f);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 100.0f;
+    r.w.set(r.hero, hp);
+    r.tick(2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->max == doctest::Approx(150.0f));
+    r.w.try_get_mut<Health3D>(r.hero)->current = 150.0f;
+    UnequipItem u;
+    u.owner = r.hero;
+    u.equip_slot = static_cast<u32>(EquipSlot::Accessory1);
+    EventAccess(r.w).push(u);
+    r.tick(3);
+    CHECK(r.w.try_get<Health3D>(r.hero)->max == doctest::Approx(100.0f));
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(100.0f));
+}
+
+TEST_CASE("inventory: equipping and drinking in the same tick judges the heal against the new max (M-ITEMFX 2)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    asset::ItemDef ring;
+    ring.id = "ring";
+    ring.name = "ring";
+    ring.stack_max = 1;
+    const FixedString<32> rtag("equip.accessory1");
+    asset::ItemStat ms;
+    ms.key = "max_health";
+    ms.value = 50.0f;
+    REQUIRE(c.add_item(ring, Span<const asset::ItemStat>(&ms, 1), Span<const FixedString<32>>(&rtag, 1)));
+    asset::ItemDef tonic;
+    tonic.id = "tonic";
+    tonic.name = "tonic";
+    tonic.stack_max = 5;
+    const FixedString<32> ctag("consumable");
+    asset::ItemStat hs;
+    hs.key = "heal";
+    hs.value = 30.0f;
+    REQUIRE(c.add_item(tonic, Span<const asset::ItemStat>(&hs, 1), Span<const FixedString<32>>(&ctag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 100.0f;
+    r.w.set(r.hero, hp);
+    r.give("ring", 1);
+    r.give("tonic", 1);
+    EquipItem q;
+    q.owner = r.hero;
+    q.slot = 0;
+    UseItem u;
+    u.owner = r.hero;
+    u.slot = 1;
+    EventAccess(r.w).push(q);
+    EventAccess(r.w).push(u);
+    r.tick(3);
+    CHECK(r.w.try_get<Health3D>(r.hero)->max == doctest::Approx(150.0f));
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(130.0f));
+    CHECK(inventory_count(r.inv(), r.id("tonic")) == 0);
+}
