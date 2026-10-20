@@ -80,6 +80,7 @@ Result<void> UiScreens::add(Entity e, asset::AssetSystem& assets, asset::Guid gu
             return r;
         }
         sc.minimap.bind(*sc.doc);
+        sc.items.bind(*sc.doc);
         if (input_) {
             sc.options = new ui::OptionsPanel();
             if (!sc.options->attach(*sc.doc, *input_)) {
@@ -201,6 +202,7 @@ void UiScreens::update(World& world, const ui::UpdateContext& ctx) {
             c.pointer_down = c.pointer_pressed = c.pointer_released = false;
             c.wheel = 0.0f;
         }
+        if (s.visible && !s.items.empty()) s.items.feed(world, *s.doc, s.entity);  // M-INVENTORY 4b
         if (s.visible && !s.minimap.empty()) s.minimap.feed(world, *s.doc);  // M-MISSION 3b: before the document draws
         s.doc->update(c);
         if (s.options && s.visible) s.options->update();
