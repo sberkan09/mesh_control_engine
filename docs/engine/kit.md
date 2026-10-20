@@ -417,7 +417,7 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
   item swaps; split moves part of a stack to the first empty slot.
 - Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
   `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
-  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit.
+  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit; if the item has a `heal` stat it also heals the user's `Health3D` (capped at `max`, `ItemHealed{owner, item, amount}` out), and a heal at full health or on a dead body is refused: nothing is consumed and `ItemUsed.consumed` is 0 (M-ITEMFX 1). Without a `Health3D` the item is consumed as before.
 - Loot tables and chests: see the next section. Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
 
 ## Loot tables, drops and chests (M-INVENTORY 3)
@@ -458,4 +458,4 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
   are taken and the outputs added when the time is up, as one atomic step, so the inventory stays usable meanwhile and a craft that
   no longer fits fails with its reason. `recipe`, `left_us` and `crafter` are saved, so a craft in progress survives a save. Destroying a station drops its queued craft without
   an event (nothing was taken); the station tag is checked again when the time is up. A recipe without a station tag is always made by hand, even when a station is named.
-- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: the next step.
+- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: `inventory.can_craft(e, recipe, station?)` and `inventory.craft(e, recipe, station?)` (`docs/user-guide/27-scripting.md`); `samples/12_loot` crafts a tonic by hand and a pack at a workbench.

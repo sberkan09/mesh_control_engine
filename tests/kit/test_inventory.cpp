@@ -7,6 +7,7 @@
 #include "mce/ecs/save.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/inventory.h"
 
 using namespace mce;
@@ -357,4 +358,62 @@ TEST_CASE("equipment: a swap that cannot return the old unit changes nothing; au
     const Equipment eq_before = eq;
     CHECK_FALSE(equipment_unequip(inv, eq, c, static_cast<u32>(EquipSlot::Weapon)));
     CHECK(eq.item[static_cast<u32>(EquipSlot::Weapon)] == eq_before.item[static_cast<u32>(EquipSlot::Weapon)]);
+}
+
+TEST_CASE("inventory: a consumable with a heal stat heals the user and is refused at full health (M-ITEMFX 1)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    asset::ItemDef d;
+    d.id = "tonic";
+    d.name = "tonic";
+    d.stack_max = 5;
+    const FixedString<32> tag("consumable");
+    asset::ItemStat heal;
+    heal.key = "heal";
+    heal.value = 30.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(&heal, 1), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("tonic", 3);
+    const u32 slot = 0;
+    auto use = [&] {
+        UseItem u;
+        u.owner = r.hero;
+        u.slot = slot;
+        EventAccess(r.w).push(u);
+        r.tick(2);
+    };
+    auto healed = [&] {
+        f32 amount = -1.0f;
+        for (const ItemHealed& h : EventAccess(r.w).read<ItemHealed>()) amount = h.amount;
+        return amount;
+    };
+    auto used = [&] {
+        u32 consumed = 99;
+        for (const ItemUsed& e : EventAccess(r.w).read<ItemUsed>()) consumed = e.consumed;
+        return consumed;
+    };
+    use();  // no Health3D: consumed as before, nothing heals
+    CHECK(r.inv().qty[slot] == 2);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 50.0f;
+    r.w.set(r.hero, hp);
+    use();
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == 80.0f);
+    CHECK(r.inv().qty[slot] == 1);
+    CHECK(healed() == 30.0f);
+    r.w.try_get_mut<Health3D>(r.hero)->current = 90.0f;
+    use();  // only 10 missing: heals 10
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == 100.0f);
+    CHECK(healed() == 10.0f);
+    CHECK(r.inv().qty[slot] == 0);
+    r.give("tonic", 2);
+    use();  // full health: refused, nothing consumed
+    CHECK(r.inv().qty[slot] == 2);
+    CHECK(used() == 0);
+    r.w.try_get_mut<Health3D>(r.hero)->current = 0.0f;
+    r.w.try_get_mut<Health3D>(r.hero)->dead = 1;
+    use();  // dead: refused
+    CHECK(r.inv().qty[slot] == 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == 0.0f);
 }

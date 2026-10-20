@@ -1,6 +1,6 @@
 -- 12_loot: M-INVENTORY's demo. The hero gets items, equips the sword, drinks a potion, opens the chest (the table rolls
 -- into the chest on the first open, the hero takes what fits), the goblin dies (a scripted Died3D; a real game's
--- Weapon3D does the same) and drops its table as pickups, and the hero drops two potions. The script keeps nothing:
+-- Weapon3D does the same) and drops its table as pickups, and the hero drops two potions, then crafts a tonic by hand and a potion pack at the workbench (M-CRAFT). The script keeps nothing:
 -- everything is the Inventory, Equipment, Container and LootDrop components. Events land a few ticks after the call, so
 -- each step waits for the previous one. The "inv:" lines are what samples/12_loot/loot_test.cmake pins.
 local function report(label, hero)
@@ -33,5 +33,17 @@ function update()
         mce.log(string.format("inv: goblin dropped %d pickups", pickups))
         mce.log(string.format("inv: dropped %d potions", inventory.drop(hero, 1, 2)))
         report("dropped", hero)
+    elseif t == 30 then
+        -- M-CRAFT: a tonic by hand (1 potion + 5 coin); the pack needs the workbench, so it is not craftable by hand
+        local bench = mce.find("Workbench")
+        mce.log(string.format("inv: can tonic %s, pack by hand %s, pack at bench %s", tostring(inventory.can_craft(hero, "tonic")),
+            tostring(inventory.can_craft(hero, "pack")), tostring(inventory.can_craft(hero, "pack", bench))))
+        inventory.craft(hero, "tonic")
+    elseif t == 36 then
+        report("crafted tonic", hero)
+        inventory.craft(hero, "pack", mce.find("Workbench"))
+    elseif t == 54 then
+        mce.log(string.format("inv: tonic %d potion_pack %d", inventory.count(hero, "tonic"), inventory.count(hero, "potion_pack")))
+        report("crafted pack", hero)
     end
 end

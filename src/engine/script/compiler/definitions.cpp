@@ -149,6 +149,10 @@ declare inventory: {
     -- takes qty (default the whole stack) out of the slot now and spawns an ItemPickup3D; returns how many
     drop: (e: Entity, i: number, qty: number?) -> number,
     open: (container: Entity, opener: Entity) -> (),
+    -- whether the recipe could be made now: inputs present, room for the outputs, and the station when the recipe names one
+    can_craft: (e: Entity, recipe: string, station: Entity?) -> boolean,
+    -- queues a craft (M-CRAFT); `station` is an entity with a CraftingStation, nil to craft by hand
+    craft: (e: Entity, recipe: string, station: Entity?) -> (),
 }
 
 -- Map markers (M-MISSION): the MapMarker component, written at the next sync point.

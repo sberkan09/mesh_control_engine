@@ -7,6 +7,7 @@
 #include <string>
 
 #include "mce/ecs/transform.h"
+#include "mce/kit/craft.h"
 #include "mce/kit/inventory.h"
 #include "mce/kit/loot.h"
 #include "mce/script/compiler.h"
@@ -43,6 +44,16 @@ asset::ItemCatalog make_catalog() {
     e.weight = 1;
     e.qty_min = e.qty_max = 9;
     REQUIRE(c.add_table(t, Span<const asset::LootEntry>(&e, 1)));
+    auto recipe = [&](const char* id, const char* station, u32 ms, asset::RecipeIngredient in, asset::RecipeIngredient out) {
+        asset::Recipe r;
+        r.id = id;
+        r.name = id;
+        r.station = station;
+        r.time_ms = ms;
+        REQUIRE(c.add_recipe(r, Span<const asset::RecipeIngredient>(&in, 1), Span<const asset::RecipeIngredient>(&out, 1)));
+    };
+    recipe("brew", "", 0, {0, 2}, {1, 1});         // 2 coin -> 1 potion, by hand
+    recipe("forge", "anvil", 200, {0, 3}, {2, 1});  // 3 coin -> 1 sword at an anvil, 0.2 s
     return c;
 }
 
@@ -50,13 +61,13 @@ struct IRig {
     World w;
     ScriptHost host;
     asset::ItemCatalog cat = make_catalog();
-    Entity hero, box;
+    Entity hero, box, anvil;
     u64 tick = 0;
 
     explicit IRig(const char* source, bool install_kit = true) {
         w.register_components<LocalTransform>();
         if (install_kit) {
-            kit::install_loot(w, nullptr);
+            kit::install_crafting(w, nullptr);
             w.resource<kit::ItemRegistry>().define(kCat, cat);
         } else {
             w.register_components<kit::Inventory>();
@@ -77,6 +88,9 @@ struct IRig {
             c.table = "chest";
             c.seed = 3;
             box = w.spawn_with(inv, c);
+            kit::CraftingStation st;
+            st.station = "anvil";
+            anvil = w.spawn_with(st);
         }
     }
     void step(u32 n = 1) {
@@ -171,4 +185,41 @@ TEST_CASE("inventory api: bad arguments raise an error that names the call") {
     expect_error("inventory.use(e, 0)", "inventory.use");
     expect_error("inventory.count(e, 'coin')", "this world has no inventories", false);
     expect_error("inventory.open(e, e)", "inventory.open: the first entity has no Container component");
+}
+
+TEST_CASE("inventory api: can_craft reads now, craft queues by hand and at a station") {
+    IRig r(R"(
+function update()
+    local t = mce.tick()
+    mce.each("Equipment", function(e)
+        mce.each("CraftingStation", function(anvil)
+            if t == 1 then
+                inventory.add(e, "coin", 5)
+            elseif t == 6 then
+                mce.log(string.format("c: brew %s forge %s forge_at_anvil %s nope %s", tostring(inventory.can_craft(e, "brew")),
+                    tostring(inventory.can_craft(e, "forge")), tostring(inventory.can_craft(e, "forge", anvil)), tostring(inventory.can_craft(e, "nope"))))
+                inventory.craft(e, "brew")
+            elseif t == 12 then
+                mce.log(string.format("c: after brew potion %d coin %d forge_at_anvil %s", inventory.count(e, "potion"), inventory.count(e, "coin"),
+                    tostring(inventory.can_craft(e, "forge", anvil))))
+                inventory.craft(e, "forge", anvil)
+            elseif t == 40 then
+                mce.log(string.format("c: after forge sword %d coin %d", inventory.count(e, "sword"), inventory.count(e, "coin")))
+            end
+        end)
+    end)
+end
+)");
+    r.step(45);
+    REQUIRE(r.host.scripts()[0].state == ScriptState::Running);
+    CHECK(r.count("potion") == 1);
+    CHECK(r.count("sword") == 1);
+    CHECK(r.count("coin") == 0);
+}
+
+TEST_CASE("inventory api: craft argument errors name the call") {
+    expect_error("inventory.craft(e, '')", "inventory.craft: the item id is empty");
+    expect_error("inventory.craft(e, 'forge', e)", "inventory.craft: the station entity has no CraftingStation component");
+    expect_error("inventory.can_craft(e, 'brew', e)", "inventory.can_craft: the station entity has no CraftingStation component");
+    expect_error("inventory.can_craft(e, 'brew')", "this world has no inventories", false);
 }
