@@ -24,6 +24,7 @@ mce_add_library(mce_gameplay_kit
         src/missions.cpp
         src/inventory.cpp
         src/loot.cpp
+        src/craft.cpp
         src/world_clock.cpp
         src/day_cycle.cpp
         src/timed_light.cpp

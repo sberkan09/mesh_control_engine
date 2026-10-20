@@ -73,6 +73,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `LocalPlayer` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/prefabs/player.mcprefab |
 | `PlayerCamera` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `SharedCamera2D` | `mce/kit/coop.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: tested in tests/kit/test_coop.cpp; 09_coop uses one camera per player (PlayerCamera), the shared frame is the other co-op style |
+| `CraftingStation` | `mce/kit/craft.h` | yes | yes | yes | docs/engine/kit.md | allowed: a station is placed by a game; the sample gets a workbench in M-CRAFT 3 |
 | `Pedestrian3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `CrowdSpawner3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `DayCycle` | `mce/kit/day_cycle.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
