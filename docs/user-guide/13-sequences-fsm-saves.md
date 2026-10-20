@@ -7,7 +7,7 @@ behavior trees for AI as data (13.8), and save games and replays built on reflec
 ## 13.1 Sequences
 
 A sequence is an action list an entity plays step by step on the fixed tick. Author it as a
-`.mcseq` asset and attach it with `SequencePlayer`:
+`.mcseq` asset and attach it with `SequencePlayer`. In the editor, a double click on a sequence in Assets opens the Sequence panel (chapter 3): the steps as a list you can add to, reorder and edit, saved only if the cook accepts them. The file format is:
 
 ```json
 { "format": "mce-sequence", "version": 1, "guid": "<uuid>", "name": "intro", "loop": false,

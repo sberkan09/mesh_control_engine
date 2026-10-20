@@ -18,6 +18,7 @@ mce_add_library(mce_editor_layer UMBRELLA
         src/material_panel.cpp
         src/particle_panel.cpp
         src/scenes_panel.cpp
+        src/sequence_panel.cpp
         src/draw_clip.cpp
         src/editor_shell.cpp
         src/imgui_draw_ctx.cpp

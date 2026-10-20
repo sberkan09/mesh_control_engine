@@ -1,6 +1,6 @@
 # M-SEQEDIT — Editing action sequences in the editor (milestone record)
 
-**Status:** in progress 2026-10-20. **Owner: the "Geliştirme rutini 3" thread** (a gap taken from the assessments at the coordinator's request: no unowned milestone was left). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
+**Status:** done 2026-10-20 (steps 1–2). **Owner: the "Geliştirme rutini 3" thread** (a gap taken from the assessments at the coordinator's request: no unowned milestone was left). No Linear issues (Linear is unreachable and the workspace is at its free issue limit); this record is the tracker.
 Source: `assessments/motor-erisim-bosluklari.md`, section 11 (Editor): "Editörü olmayanlar: ... sekans ...". M-ASSETLOOK gave materials and particle presets a form panel; a `.mcseq` action list (wait, move, play a sound, spawn a prefab, emit a signal, ...) is still hand-written JSON for a human, and a wrong step only shows up at cook.
 
 **Goal.** A `Sequence` panel opened by a double click on a sequence in Assets: the steps as a list that can be added to, removed, reordered and edited field by field, the `loop` flag and the name, saved through the same cook-first write as the other forms (`validate_and_save_source`), so a document the cook refuses (a negative wait, a looping sequence that never waits, a missing sound) is not written and the panel says why.
@@ -22,4 +22,4 @@ Source: `assessments/motor-erisim-bosluklari.md`, section 11 (Editor): "Editör�
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 1 | done (this PR) | | `SequenceForm` / `SequenceStepForm` with `describe`, `sequence_form_from_text/to_text`, `load/save_sequence_form`: the steps array is rewritten from the form (one action key, extras only when not default: `speed` 1, `tolerance` 0.01, `gain_db` 0, `relative` false, Spawn `at`), `name` and `loop` too, every other member stays; 2 tests |
-| 2 | planned | | needs 1 |
+| 2 | done (this PR) | | `Sequence` panel (`sequence_panel.cpp`): step list with Add / Remove / Up / Down, per-kind fields, sound and prefab pickers with drag and drop, name, loop, Save / Revert; `EditorShell::open_sequence` from the Assets double click. Build-checked only here (no display) |
