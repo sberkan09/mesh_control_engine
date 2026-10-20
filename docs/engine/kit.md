@@ -417,7 +417,7 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
   item swaps; split moves part of a stack to the first empty slot.
 - Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
   `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
-  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit.
+  not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit; if the item has a `heal` stat it also heals the user's `Health3D` (capped at `max`, `ItemHealed{owner, item, amount}` out), and a heal at full health or on a dead body is refused: nothing is consumed and `ItemUsed.consumed` is 0 (M-ITEMFX 1). Without a `Health3D` the item is consumed as before.
 - Loot tables and chests: see the next section. Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
 
 ## Loot tables, drops and chests (M-INVENTORY 3)
