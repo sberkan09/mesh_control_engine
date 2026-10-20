@@ -62,6 +62,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sky_rot;        // M-VISUAL3 4: x cos, y sin of the sky texture's yaw about +Y (y = 0: no rotation)
     vec4 p_wet;            // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
     vec4 p_wet2;           // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on (0 on Low)
+    vec4 p_snow;           // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise, Low), w wind bias
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -619,8 +620,9 @@ float wet_puddle(vec3 p, vec3 ng, float ao) {
     return smoothstep(t - 0.03, t + 0.03, h) * up;
 }
 // Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
-// more, take roughness 0.03 and flatten the normal map (`fill`). Metals neither darken (their albedo is their F0)
-// nor smooth: water beads on them, and the gate holds a wet metal sphere's look within 1%.
+// more, ask for roughness 0.03 (the lighting's clamp to 0.045 below wins, so they draw at 0.045) and flatten the
+// normal map (`fill`). Metals neither darken (their albedo is their F0) nor smooth: water beads on them, and the
+// gate holds a wet metal sphere's look within 1%.
 void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
     float w = p_wet.x;
     float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
@@ -630,6 +632,41 @@ void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, 
     rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
     rough = mix(rough, 0.03, pud);
     fill = max(fill, pud);
+}
+
+// ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
+// water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
+// normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
+//   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
+//   c   = clamp(cover * coverage * (1 + wind_bias * ng.x), 0, 1)
+//         the share of the surface to whiten; the weather's wind blows toward +x (Precipitation3D drifts the snow
+//         that way), so +x-facing (lee) slopes take up to 1 + wind_bias times the share and -x-facing (windward)
+//         ones down to 1 - wind_bias; flat ground (ng.x = 0) is unchanged.
+//   noise (p_snow.z > 0): h = the two-octave value noise of the puddles (1 and 2.03 per cell, other seeds),
+//         s = c - 0.5, t = 0.5 - s (0.48 + 2.55 s^4) (a fit of the noise's quantiles: about the share c of points
+//         has h > t), mask = smoothstep(t - 0.04, t + 0.04, h) * min(4 c, 1) (the factor fades the last
+//         percent in from cover 0) * up
+//   no noise (Low): mask = c * up, an even layer of the same mean whiteness.
+float snow_mask(vec3 p, vec3 ng) {
+    float up = smoothstep(0.55, 0.85, ng.y);
+    if (up <= 0.0) return 0.0;
+    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * ng.x), 0.0, 1.0);
+    if (p_snow.z <= 0.0) return c * up;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_snow.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_snow.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0x85EBCA6Bu) * 0.65 + wet_value(q, c2, 0xC2B2AE35u) * 0.35;
+    float s = c - 0.5;
+    float t = 0.5 - s * (0.48 + 2.55 * s * s * s * s);
+    return smoothstep(t - 0.04, t + 0.04, h) * min(4.0 * c, 1.0) * up;
+}
+// Under the mask: albedo toward 0.9 white, roughness toward 0.8, metallic toward 0 (snow on metal is snow), and
+// the normal map flattens (`fill`: the layer hides the surface's relief).
+void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill) {
+    float m = snow_mask(p, ng);
+    albedo = mix(albedo, vec3(0.9), m);
+    rough = mix(rough, 0.8, m);
+    metallic = mix(metallic, 0.0, m);
+    fill = max(fill, m);
 }
 
 #ifdef MCE_TERRAIN
@@ -850,6 +887,7 @@ void main() {
         float fill = 0.0;
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
         if (p_wet.x > 0.0) apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
+        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill);  // after the water: snow wins
 #ifdef MCE_TERRAIN
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else

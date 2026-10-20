@@ -90,11 +90,13 @@ struct Forward3DPassU {
     vec4 sky_rot;     // M-VISUAL3 4: x cos, y sin of the sky texture's yaw (y = 0: no rotation)
     vec4 wet;         // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
     vec4 wet2;        // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on
+    vec4 snow;        // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise), w wind bias
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
-                  offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16,
-              "PassU: p_wet / p_wet2 follow p_sky_rot as in MCE_GLSL_PASS_U");
+                  offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
+                  offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16,
+              "PassU: p_wet / p_wet2 / p_snow follow p_sky_rot as in MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -322,19 +324,34 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
     return sky_tex;
 }
 
+// 0..1, NaN -> 0 (the wet and snow members are clamped again here: a caller may skip apply_quality).
+f32 unit01(f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; }
+// A noise cell in meters, 0.25..256 (NaN -> 0.25).
+f32 noise_cell(f32 m) { return m > 0.25f ? (m < 256.0f ? m : 256.0f) : 0.25f; }
+// The floating origin mod 256 m, in f64: the wet and snow noise is periodic over 256 m (the shader fits whole cells
+// into that span), so float precision does not depend on how far the world has rebased.
+f32 wrap256(f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); }
+
 // The main pass's wet-surface members (M-WETSURFACE 5b). Wetness 0 leaves them zero: the shader skips its branch
-// and the frame is the dry one bit for bit. The puddle noise is periodic over 256 m (the shader fits whole cells
-// into that span), so the floating origin goes in mod 256 m, in f64, and float precision does not depend on how
-// far the world has rebased. The values are clamped again here: a caller may skip apply_quality.
+// and the frame is the dry one bit for bit.
 void wet_params(const WetSurfaces& w, const f64 origin[3], PassU& pu) {
-    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
-    const f32 wetness = unit(w.wetness);
+    const f32 wetness = unit01(w.wetness);
     if (wetness <= 0.0f) return;
-    const f32 scale = w.puddle_scale > 0.25f ? (w.puddle_scale < 256.0f ? w.puddle_scale : 256.0f) : 0.25f;
-    const bool puddles = w.puddles_enabled && unit(w.puddles) > 0.0f;
-    const auto wrap = [](f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); };
-    pu.wet = vec4(wetness, puddles ? unit(w.puddles) : 0.0f, 1.0f / scale, unit(w.darken));
-    pu.wet2 = vec4(wrap(origin[0]), wrap(origin[2]), unit(w.roughness), puddles ? 1.0f : 0.0f);
+    const bool puddles = w.puddles_enabled && unit01(w.puddles) > 0.0f;
+    pu.wet = vec4(wetness, puddles ? unit01(w.puddles) : 0.0f, 1.0f / noise_cell(w.puddle_scale), unit01(w.darken));
+    pu.wet2 = vec4(wrap256(origin[0]), wrap256(origin[2]), unit01(w.roughness), puddles ? 1.0f : 0.0f);
+}
+
+// The main pass's snow members (M-SNOWCOVER 6b). Cover 0 leaves p_snow zero: the shader skips its branch and the
+// frame is the snowless one bit for bit. The noise shares the wet origin (p_wet2.xy), written here too when the
+// scene is dry; without noise (Low) z is 0 and the shader draws an even layer.
+void snow_params(const SnowCover& s, const f64 origin[3], PassU& pu) {
+    const f32 cover = unit01(s.cover);
+    if (cover <= 0.0f) return;
+    pu.snow = vec4(cover, unit01(s.coverage), s.noise_enabled ? 1.0f / noise_cell(s.noise_scale) : 0.0f,
+                   unit01(s.wind_bias));
+    pu.wet2.x = wrap256(origin[0]);
+    pu.wet2.y = wrap256(origin[2]);
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -1819,9 +1836,10 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
-    // Wet surfaces: the main pass (and the fog injection, which does not read them). Probe and volume captures
-    // stay dry: they are cached across frames while the wetness changes.
+    // Wet surfaces and snow: the main pass (and the fog injection, which does not read them). Probe and volume
+    // captures stay dry and snowless: they are cached across frames while the wetness and the cover change.
     wet_params(scene.wet_surfaces(), origin_, pu);
+    snow_params(scene.snow_cover(), origin_, pu);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
