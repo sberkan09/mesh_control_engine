@@ -4,6 +4,9 @@
 
 #include <doctest/doctest.h>
 
+#include <cfloat>
+#include <limits>
+
 #include "mce/containers/array.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/world.h"
@@ -217,4 +220,22 @@ TEST_CASE("weather: the same run twice has the same state hash, and no Weather c
     plain.spawn_with(SaveKey{1});
     for (u64 i = 0; i < 100; ++i) plain.tick(kDt, i);
     CHECK(plain.state_hash() == n.w.state_hash());
+}
+
+TEST_CASE("weather: an infinite or huge transition_seconds does not crash and never completes a fade") {
+    const f32 huge[] = {std::numeric_limits<f32>::infinity(), FLT_MAX};
+    for (f32 v : huge) {
+        Wx x(WeatherKind::Snow);
+        x.wx().transition_seconds = v;
+        x.run(600);  // snowing: the wet rise divides by fade_den * ticks, which must not wrap to 0
+        const Weather& c = x.wx();
+        CHECK(c.fade_den != 0);
+        CHECK(c.intensity >= 0.0f);
+        CHECK(c.intensity <= 1.0f);
+        CHECK(c.wetness >= 0.0f);
+        CHECK(c.wetness <= 1.0f);
+        x.wx().target = WeatherKind::Clear;
+        x.run(600);
+        CHECK(x.wx().intensity <= 1.0f);
+    }
 }
