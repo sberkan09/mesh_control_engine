@@ -16,7 +16,7 @@ integer rules only, no RNG unless a recipe has a chance field (then it draws fro
 | # | Step | Modules | Model | State |
 |---|---|---|---|---|
 | 1 | `recipes` in `.mcitems`: id, name, inputs (item, qty), outputs (item, qty), required station tag, craft time; cook validation (unknown items, empty sides, quantities, duplicate ids, limits), a chunk minor bump (the recipes section is appended only when a catalog has recipes, so a catalog without them stays byte-identical to v1.0), `item_catalog_problem` checks, fuzz seed, `asset_schema` text | asset, asset/cook | Opus (untrusted-input reader, format bump) | built (GH-406), Opus-reviewed (no blocker, see the notes below): `items_format.h/.cpp` (`Recipe`, `RecipeIngredient`, `add_recipe`, codec), `items_importer.cpp` (importer version 2), tests in `test_cook_items.cpp` (3 cases) and the fuzz corpus |
-| 2 | `craft_check` / `craft_apply` rules (pure functions of an Inventory: all inputs present, room for the outputs, nothing changes on failure), events `CraftItem` in and `ItemCrafted` / `CraftFailed` (reason) out, `CraftingStation` component (station tag, optional queue of one with `seconds`) | kit | Opus for the rules (atomicity, overflow, weight cap), Sonnet for the component | planned |
+| 2 | `craft_check` / `craft_apply` rules (pure functions of an Inventory: all inputs present, room for the outputs, nothing changes on failure), events `CraftItem` in and `ItemCrafted` / `CraftFailed` (reason) out, `CraftingStation` component (station tag, optional queue of one with `seconds`) | kit | Opus for the rules (atomicity, overflow, weight cap), Sonnet for the component | built (GH-406), review below: `kit/craft.h`, `src/craft.cpp` (`craft_check`, `craft_apply`, `CraftingStation`, `CraftItem` / `ItemCrafted` / `CraftFailed`, system `kit_craft`), `tests/kit/test_craft.cpp` (9 cases) |
 | 3 | Luau `inventory.craft(e, recipe, station?)` and `inventory.can_craft`, typed definitions with a check test, `samples/12_loot` gets a recipe and a gate line, user-guide text, close | script, samples, docs | Sonnet | planned |
 
 ## Decisions
@@ -40,3 +40,11 @@ integer rules only, no RNG unless a recipe has a chance field (then it draws fro
   mount could load a catalog cut after its tables as recipe-less); recipe errors found by `item_catalog_problem` point at the
   document root, not the recipe's JSON node; a cook warning when an output quantity is at least the input's (item duplication
   loops) is a step 2 candidate. Recipes whose output is also an input are allowed on purpose (a tool used and returned).
+
+## Review notes (step 2)
+
+- Opus review: no blocker (atomic on a trial copy, overflow-safe, queue arithmetic bounded). Fixed: the crafter is saved with the station
+  (a craft in progress survives a save), the station tag is checked again at completion, a recipe without a station is always by hand.
+  Left: destroying a station drops its queued craft without an event; the step is rounded to whole microseconds so a one-hour craft
+  ends a few ticks early.
+

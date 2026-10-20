@@ -440,3 +440,22 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
 - Luau: the `inventory` global (`docs/user-guide/27-scripting.md`). UI: Text widgets named `slot_N`, `equip_<where>` and `inventory_weight` are filled by the stock player (`docs/user-guide/12-ui-and-console.md`).
 - Saves: `Inventory`, `Equipment`, `Container` and `LootDrop` fields are `Save` fields of the ordinary save, which is versioned as a whole; a save without them loads with empty defaults, and an unknown field from a newer module is skipped. A save stores catalog item *numbers*, so a catalog may only grow at the end; renumbering items changes what an old save holds.
 - Not yet: a sample (step 5).
+
+## Crafting rules, events and stations (M-CRAFT 2)
+
+`mce/kit/craft.h`, installed by `install_stock` (after the loot kit). The recipes are in the project's `.mcitems` catalog (see above).
+
+- `craft_check(inv, catalog, recipe)` / `craft_apply(inv, catalog, recipe)`: pure functions of an `Inventory`. A craft is atomic: every
+  input comes out and every output goes in, or nothing changes. The room for the outputs is checked *after* the inputs are taken out,
+  against stacks, slots and the weight limit exactly as `inventory_add` does, so a full inventory can still make a recipe whose
+  inputs free the space. Results (`CraftResult`, `craft_result_name`): `Ok`, `NoRecipe`, `MissingInput` (reported before room),
+  `NoRoom`, `NoStation`, `StationBusy`, `NoInventory`.
+- `CraftingStation` (on any entity): `station` is the tag it offers (`workbench`). A recipe with a `station` needs a `CraftingStation` of
+  that tag; a recipe without one is made by hand.
+- Events: `CraftItem{owner, recipe, station}` in (`station` null: by hand); `ItemCrafted{owner, recipe, station}` and
+  `CraftFailed{owner, recipe, station, reason}` out. A recipe with time 0, or one made by hand, is applied in the tick the event is read.
+  A timed recipe at a station is checked when it starts and queued (`recipe`, `left_us` on the station, one at a time); the inputs
+  are taken and the outputs added when the time is up, as one atomic step, so the inventory stays usable meanwhile and a craft that
+  no longer fits fails with its reason. `recipe`, `left_us` and `crafter` are saved, so a craft in progress survives a save. Destroying a station drops its queued craft without
+  an event (nothing was taken); the station tag is checked again when the time is up. A recipe without a station tag is always made by hand, even when a station is named.
+- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: the next step.
