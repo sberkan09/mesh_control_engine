@@ -34,6 +34,7 @@ bool chunk_type_for_asset_name(StringView name, ChunkType& out) {
         {Skeleton2D::name, Skeleton2D::chunk},
         {Script::name, Script::chunk},
         {RoadNetwork::name, RoadNetwork::chunk},
+        {ItemCatalogChunk::name, ItemCatalogChunk::chunk},
     };
     for (const Pair& p : kTable) {
         if (name == p.name) {

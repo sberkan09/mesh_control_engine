@@ -1,0 +1,22 @@
+{
+  "format": "mce-items",
+  "version": 1,
+  "guid": "13b10000-0000-4000-8000-000000000002",
+  "items": [
+    { "id": "coin", "name": "Coin", "stack": 100 },
+    { "id": "potion", "name": "Potion", "stack": 5, "weight": 0.5, "tags": ["consumable", "heal"], "stats": { "heal": 25 } },
+    { "id": "sword", "name": "Iron Sword", "stack": 1, "weight": 3, "tags": ["equip.weapon"], "stats": { "damage": 12 } },
+    { "id": "gem", "name": "Gem", "stack": 5, "weight": 0.1 }
+  ],
+  "tables": [
+    { "id": "chest", "rolls": [2, 3], "entries": [
+        { "item": "coin", "weight": 6, "qty": [5, 20] },
+        { "item": "gem", "weight": 3, "qty": [1, 2] },
+        { "item": "potion", "weight": 2, "qty": 1 },
+        { "item": "coin", "guaranteed": true, "qty": 10 } ] },
+    { "id": "goblin", "rolls": 1, "entries": [
+        { "item": "coin", "weight": 4, "qty": [2, 6] },
+        { "table": "chest", "weight": 1 },
+        { "item": "gem", "guaranteed": true, "qty": 1 } ] }
+  ]
+}

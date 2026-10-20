@@ -1,0 +1,1 @@
+- ROADMAP status batch (2026-10-20): M-INVENTORY, M-SNOWCOVER, M-STRINGSED done with PR numbers; M-RAINFX in progress; M-CRAFT planned.
