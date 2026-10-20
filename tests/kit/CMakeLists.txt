@@ -40,6 +40,7 @@ mce_add_test(test_kit UMBRELLA
         test_combat3d.cpp
         test_missions.cpp
         test_inventory.cpp
+        test_loot.cpp
         test_padding.cpp
         test_world_clock.cpp
         test_day_cycle.cpp

@@ -25,6 +25,7 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/map_markers.h"
 #include "mce/kit/inventory.h"
+#include "mce/kit/loot.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/timed_light.h"
@@ -139,6 +140,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_combat3d(world, assets);
     install_missions(world, assets);
     install_inventory(world, assets);
+    install_loot(world, assets);
     install_world_clock(world, assets);
     install_day_cycle(world, assets);
     install_timed_light(world, assets);
