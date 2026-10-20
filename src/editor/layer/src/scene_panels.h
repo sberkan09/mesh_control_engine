@@ -36,6 +36,9 @@ inline constexpr const char* kMaterialPanel = "Material";
 // The Particle panel (particle_panel.cpp): a .mcpart's emitter parameters beside a live CPU swatch.
 void add_particle_panel(EditorShell& shell);
 inline constexpr const char* kParticlePanel = "Particle";
+// The Sequence panel (sequence_panel.cpp): a .mcseq's steps as an editable list.
+void add_sequence_panel(EditorShell& shell);
+inline constexpr const char* kSequencePanel = "Sequence";
 // The Scenes panel (scenes_panel.cpp): a tab per open scene file (M-SCENETABS).
 void add_scenes_panel(EditorShell& shell);
 inline constexpr const char* kScenesPanel = "Scenes";

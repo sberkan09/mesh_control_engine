@@ -144,6 +144,9 @@ public:
     // The same for the Particle panel (a double click on a particle preset).
     asset::Guid particle_request() const { return particle_request_; }
     void open_particle(asset::Guid guid);
+    // And for the Sequence panel (a double click on a sequence).
+    asset::Guid sequence_request() const { return sequence_request_; }
+    void open_sequence(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
@@ -236,6 +239,7 @@ private:
     asset::Guid material_request_;
     SceneTabs tabs_;
     asset::Guid particle_request_;
+    asset::Guid sequence_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

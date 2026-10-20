@@ -208,6 +208,7 @@ bool EditorShell::open_project(StringView root) {
     skeleton2d_.close();
     material_request_ = asset::Guid{};
     particle_request_ = asset::Guid{};
+    sequence_request_ = asset::Guid{};
     tabs_.clear();
     if (Result<void> r = session_.open_project(root); !r) {
         FixedString<512> msg;
@@ -271,6 +272,12 @@ void EditorShell::open_particle(asset::Guid guid) {
     particle_request_ = guid;
     if (IEditorPanel* p = find_panel("Particle")) p->open = true;
     focus_panel("Particle");
+}
+
+void EditorShell::open_sequence(asset::Guid guid) {
+    sequence_request_ = guid;
+    if (IEditorPanel* p = find_panel("Sequence")) p->open = true;
+    focus_panel("Sequence");
 }
 
 void EditorShell::open_skeleton2d(asset::Guid guid) {
