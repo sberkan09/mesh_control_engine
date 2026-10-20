@@ -222,7 +222,30 @@ bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset,
     registry.scan(project.root(), project.importers(), false, scan);
     cook::DiagList diags;
     Array<byte> cooked;
-    if (!cook::cook_document(registry, *importer, asset.guid, rel, text, cooked, diags)) {
+    bool ok;
+    if (importer->native()) {
+        ok = cook::cook_document(registry, *importer, asset.guid, rel, text, cooked, diags);
+    } else {
+        // An interchange source (a strings .csv): cook the text with the settings of its sidecar, as the project cook does.
+        cook::String side;
+        cook::JsonDoc sidecar;
+        cook::JsonError je;
+        cook::ImportInput in;
+        cook::String side_path = project.asset_path(rel);
+        side_path += ".mceasset";
+        if (cook::fs::read_text(side_path.view(), side) && sidecar.parse(side.view(), je))
+            in.settings = sidecar.root().get("settings");
+        cook::String disp = "assets/";
+        disp += rel;
+        in.guid = asset.guid;
+        in.display_path = disp.view();
+        in.source_path = rel;
+        in.source = Span<const byte>(reinterpret_cast<const byte*>(text.data()), text.size());
+        asset::ContainerWriter writer;
+        ok = importer->cook(in, writer, diags);
+        if (ok) writer.finish(cooked);
+    }
+    if (!ok) {
         err += "the cook refuses this document (nothing was written):";
         usize n = 0;
         for (const cook::Diagnostic& d : diags.all()) {

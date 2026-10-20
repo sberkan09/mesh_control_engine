@@ -1,0 +1,1 @@
+- Strings grid, M-STRINGSED step 1: `StringsGrid` in editor core loads every locale table of a project into one key by locale grid and saves each edited table back as CSV (comment rows and extra columns kept), only through the cook-first write; `validate_and_save_source` now cooks non-native sources too. The Strings panel follows in step 2.
