@@ -58,6 +58,8 @@ expect("${first}" "script: inv: given coin 30 potion 7 sword 1 gem 0 weight 6500
 expect("${first}" "script: inv: slot 1 is potion x5\n" "the first stack is not 5 potions")
 # The sword is worn (out of the slots, so 3 kg), one potion is drunk.
 expect("${first}" "script: inv: equipped and drank coin 30 potion 6 sword 0 gem 0 weight 3000\n" "equip or use did not land")
+# M-ITEMFX: the hero starts at 40/100 health; the potion heals 25 and the helm adds 20 max health and 0.2 armor.
+expect("${first}" "script: inv: health 65/120 armor 0.2\n" "the potion did not heal or the helm did not armour")
 # The chest rolls its table (seed 7) on the first open: 32 coins in this run.
 expect("${first}" "script: inv: opened chest coin 62 potion 6 sword 0 gem 0 weight 3000\n" "the chest did not hand over its loot")
 # The goblin (seed 11) dies: its table is one gem plus one roll, as pickups.

@@ -1,4 +1,4 @@
--- 12_loot: M-INVENTORY's demo. The hero gets items, equips the sword, drinks a potion, opens the chest (the table rolls
+-- 12_loot: M-INVENTORY's demo. The hero gets items, equips the sword and a helm, drinks a potion (it heals the wounded hero; the helm adds max health and armor), opens the chest (the table rolls
 -- into the chest on the first open, the hero takes what fits), the goblin dies (a scripted Died3D; a real game's
 -- Weapon3D does the same) and drops its table as pickups, and the hero drops two potions, then crafts a tonic by hand and a potion pack at the workbench (M-CRAFT). The script keeps nothing:
 -- everything is the Inventory, Equipment, Container and LootDrop components. Events land a few ticks after the call, so
@@ -14,15 +14,20 @@ function update()
     if t == 1 then
         inventory.add(hero, "potion", 7)
         inventory.add(hero, "sword")
+        inventory.add(hero, "helm")
         inventory.add(hero, "coin", 30)
     elseif t == 6 then
         report("given", hero)
         local id, qty = inventory.slot(hero, 1)
         mce.log(string.format("inv: slot 1 is %s x%d", id, qty))
         inventory.equip(hero, 3, "weapon")
+        inventory.equip(hero, 4, "head")
         inventory.use(hero, 1)
     elseif t == 12 then
         report("equipped and drank", hero)
+        -- M-ITEMFX: the potion healed 25 of the 60 missing and the helm adds 20 max health and 0.2 armor
+        local hp, max, armor = mce.get(hero, "Health3D", "current", "Health3D", "max", "Health3D", "armor")
+        mce.log(string.format("inv: health %d/%d armor %.1f", hp, max, armor))
         inventory.open(chest, hero)
     elseif t == 18 then
         report("opened chest", hero)
