@@ -39,8 +39,8 @@
 
 namespace mce::asset {
 
-inline constexpr u8 ITEM_CATALOG_VERSION = 1;
-inline constexpr u8 ITEM_CATALOG_MINOR_RECIPES = 1;  // the minor a chunk carries when it has recipes  // CHNK_ITEMS: item definitions and loot tables (M-INVENTORY 1)
+inline constexpr u8 ITEM_CATALOG_VERSION = 1;  // CHNK_ITEMS: item definitions, loot tables (M-INVENTORY 1) and recipes (M-CRAFT 1)
+inline constexpr u8 ITEM_CATALOG_MINOR_RECIPES = 1;  // the minor a chunk carries when it has recipes
 
 inline constexpr u32 kItemMaxItems = 4096;
 inline constexpr u32 kItemMaxTables = 1024;

@@ -253,6 +253,7 @@ const char* item_catalog_problem(const ItemCatalog& c, u32* index) {
         for (usize j = 0; j < i; ++j)
             if (recipes[j].id.view() == r.id.view()) return fail("recipe: two recipes share this id", n);
         if (r.name.truncated()) return fail("recipe: the name is too long", n);
+        if (r.name.empty()) return fail("recipe: the name is empty", n);
         for (const char ch : r.name.view())
             if (static_cast<unsigned char>(ch) < 0x20 || ch == 0x7F) return fail("recipe: the name has a control character", n);
         if (r.station.truncated() || (!r.station.empty() && !id_ok(r.station))) return fail("recipe: the station must be 1-31 letters, digits, '_', '-' or '.'", n);
