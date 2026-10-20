@@ -1,12 +1,17 @@
 #include "mce/render/quality.h"
 
 #include "mce/convar.h"
+#include "unit_clamp.h"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
 
 namespace mce::render {
+
+using detail::noise_cell;
+using detail::unit01;
+
 namespace {
 
 MCE_CVAR(cv_quality, "r.quality", "auto", "3D quality tier: auto, low, medium, high (auto = medium on phones)",
@@ -104,39 +109,34 @@ void apply_quality(const QualitySettings& q, ParallaxSettings& p) {
 }
 
 WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet) {
-    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
     WetSurfaces out = wet;
-    out.wetness = q.wet_surfaces && cv_wet_surfaces.get_bool() ? unit(wet.wetness) : 0.0f;
-    out.darken = unit(wet.darken);
-    out.roughness = unit(wet.roughness);
-    out.puddles = unit(wet.puddles);
-    out.puddle_scale = wet.puddle_scale > 0.25f ? (wet.puddle_scale < 256.0f ? wet.puddle_scale : 256.0f) : 0.25f;
+    out.wetness = q.wet_surfaces && cv_wet_surfaces.get_bool() ? unit01(wet.wetness) : 0.0f;
+    out.darken = unit01(wet.darken);
+    out.roughness = unit01(wet.roughness);
+    out.puddles = unit01(wet.puddles);
+    out.puddle_scale = noise_cell(wet.puddle_scale);
     // Off with wet_surfaces (wetness 0 skips the whole shader branch, puddles included) whatever this says.
     out.puddles_enabled = wet.puddles_enabled && q.wet_puddles;
     return out;
 }
 
 SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow) {
-    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
     SnowCover out = snow;
-    out.cover = q.snow_cover && cv_snow_cover.get_bool() ? unit(snow.cover) : 0.0f;
-    out.coverage = unit(snow.coverage);
-    out.wind_bias = unit(snow.wind_bias);
-    out.noise_scale = snow.noise_scale > 0.25f ? (snow.noise_scale < 256.0f ? snow.noise_scale : 256.0f) : 0.25f;
+    out.cover = q.snow_cover && cv_snow_cover.get_bool() ? unit01(snow.cover) : 0.0f;
+    out.coverage = unit01(snow.coverage);
+    out.wind_bias = unit01(snow.wind_bias);
+    out.noise_scale = noise_cell(snow.noise_scale);
     // Meaningless with snow_cover off (cover 0 skips the whole shader branch, noise included).
     out.noise_enabled = snow.noise_enabled && q.snow_noise;
     return out;
 }
 
 Ripples apply_quality(const QualitySettings& q, const Ripples& ripples) {
-    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
     Ripples out = ripples;
-    out.strength = q.rain_ripples && cv_rain_ripples.get_bool() ? unit(ripples.strength) : 0.0f;
-    out.density = unit(ripples.density);
-    out.ring_width = unit(ripples.ring_width);
-    // NaN fails the first compare and lands on the nominal rate 1.
-    const f32 sp = ripples.speed;
-    out.speed = sp == sp ? (sp > 0.1f ? (sp < 10.0f ? sp : 10.0f) : 0.1f) : 1.0f;
+    out.strength = q.rain_ripples && cv_rain_ripples.get_bool() ? unit01(ripples.strength) : 0.0f;
+    out.density = unit01(ripples.density);
+    out.ring_width = unit01(ripples.ring_width);
+    out.speed = detail::ripple_speed(ripples.speed);  // NaN -> the nominal rate 1
     return out;
 }
 
