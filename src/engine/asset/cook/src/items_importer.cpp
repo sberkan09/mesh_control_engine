@@ -117,7 +117,7 @@ void add_dep(Array<DepRef>& out, JsonValue obj, StringView key, ChunkType expect
 class ItemsImporter final : public IImporter {
 public:
     StringView id() const override { return "items"; }
-    u32 version() const override { return 1; }
+    u32 version() const override { return 2; }  // 2: recipes (chunk minor 1)
     ChunkType type() const override { return ChunkType::ItemCatalog; }
     bool native() const override { return true; }
     bool handles_extension(StringView ext) const override { return ext == ".mcitems"; }
@@ -137,7 +137,7 @@ public:
         const JsonValue doc = in.settings;
         const StringView file = in.display_path;
         const u32 errors_before = diags.error_count();
-        if (!detail::check_keys(doc, {"format", "version", "guid", "items", "tables"}, file, kStage, diags)) return false;
+        if (!detail::check_keys(doc, {"format", "version", "guid", "items", "tables", "recipes"}, file, kStage, diags)) return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-items") {
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-items\"");
@@ -306,14 +306,70 @@ public:
                 if (!catalog.add_table(lt, entries.span())) error(diags, file, t, "two loot tables share this \"id\"");
             }
         }
+        const JsonValue recipes = doc.get("recipes");
+        if (recipes.valid() && !recipes.is_array()) error(diags, file, recipes, "'recipes' must be an array");
+        else if (recipes.valid() && recipes.size() > asset::kItemMaxRecipes) error(diags, file, recipes, "a catalog holds at most 1024 recipes");
+        else if (recipes.valid())
+            for (u32 i = 0; i < recipes.size(); ++i) {
+                const JsonValue rj = recipes.at(i);
+                if (!detail::check_keys(rj, {"id", "name", "station", "time", "in", "out"}, file, kStage, diags)) continue;
+                if (!rj.get("id").is_string() || rj.get("id").as_string().empty()) {
+                    error(diags, file, rj, "every recipe needs a non-empty \"id\"");
+                    continue;
+                }
+                asset::Recipe rc;
+                bool good = read_text(rj, "id", rc.id, file, diags);
+                good &= read_text(rj, "name", rc.name, file, diags);
+                if (rc.name.empty()) rc.name = rc.id.view();
+                good &= read_text(rj, "station", rc.station, file, diags);
+                const JsonValue tm = rj.get("time");
+                if (tm.valid()) {
+                    if (!tm.is_number() || !std::isfinite(tm.as_number()) || tm.as_number() < 0.0 || tm.as_number() > 3600.0) {
+                        error(diags, file, tm, "'time' must be seconds from 0 to 3600");
+                        good = false;
+                    } else {
+                        rc.time_ms = static_cast<u32>(std::llround(tm.as_number() * 1000.0));
+                    }
+                }
+                Array<asset::RecipeIngredient> sides[2];
+                const char* const keys[2] = {"in", "out"};
+                for (u32 s = 0; s < 2; ++s) {
+                    const JsonValue list = rj.get(keys[s]);
+                    if (!list.is_array() || list.size() == 0 || list.size() > asset::kItemMaxIngredients) {
+                        error(diags, file, list.valid() ? list : rj, s == 0 ? "'in' must list 1 to 8 ingredients" : "'out' must list 1 to 8 ingredients");
+                        good = false;
+                        continue;
+                    }
+                    for (u32 k = 0; k < list.size(); ++k) {
+                        const JsonValue ij = list.at(k);
+                        if (!detail::check_keys(ij, {"item", "qty"}, file, kStage, diags)) {
+                            good = false;
+                            continue;
+                        }
+                        const JsonValue item = ij.get("item");
+                        const u16 idx = item.is_string() ? catalog.find_item(item.as_string()) : asset::kNoItem;
+                        if (idx == asset::kNoItem) {
+                            error(diags, file, item.valid() ? item : ij, "this ingredient names an item that is not in \"items\"");
+                            good = false;
+                            continue;
+                        }
+                        asset::RecipeIngredient ing;
+                        ing.item = idx;
+                        good &= read_whole(ij, "qty", 1, asset::kItemMaxStack, ing.qty, file, diags);
+                        sides[s].push_back(ing);
+                    }
+                }
+                if (!good) continue;
+                if (!catalog.add_recipe(rc, sides[0].span(), sides[1].span())) error(diags, file, rj, "two recipes share this \"id\"");
+            }
         if (diags.error_count() != errors_before) return false;
 
         u32 at = 0;
         if (const char* why = asset::item_catalog_problem(catalog, &at)) {
             String msg;
-            const bool table = why[0] == 't';
-            const StringView name = table ? catalog.tables()[at].id.view() : catalog.items()[at].id.view();
-            appendf(msg, "%s (%s \"%.*s\")", why + (table ? 7 : 6), table ? "table" : "item", static_cast<int>(name.size()), name.data());
+            const bool table = why[0] == 't', recipe = why[0] == 'r';
+            const StringView name = recipe ? catalog.recipes()[at].id.view() : table ? catalog.tables()[at].id.view() : catalog.items()[at].id.view();
+            appendf(msg, "%s (%s \"%.*s\")", why + (recipe ? 8 : table ? 7 : 6), recipe ? "recipe" : table ? "table" : "item", static_cast<int>(name.size()), name.data());
             error(diags, file, doc, msg);
             return false;
         }
@@ -332,7 +388,7 @@ public:
 
         asset::ContainerWriter::ChunkDesc d;
         d.type = ChunkType::ItemCatalog;
-        d.version = asset::chunk_version(asset::ITEM_CATALOG_VERSION, 0);
+        d.version = asset::chunk_version(asset::ITEM_CATALOG_VERSION, catalog.recipes().empty() ? 0 : asset::ITEM_CATALOG_MINOR_RECIPES);
         d.guid = in.guid;
         out.add(d, bytes.span());
         return true;

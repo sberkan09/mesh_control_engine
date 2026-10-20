@@ -116,6 +116,12 @@ u16 ItemCatalog::find_table(StringView id) const {
     return kNoItem;
 }
 
+u16 ItemCatalog::find_recipe(StringView id) const {
+    for (usize i = 0; i < recipes_.size(); ++i)
+        if (recipes_[i].id.view() == id) return static_cast<u16>(i);
+    return kNoItem;
+}
+
 bool ItemCatalog::has_tag(const ItemDef& d, StringView tag) const {
     for (const FixedString<32>& t : tags_of(d))
         if (t.view() == tag) return true;
@@ -153,12 +159,28 @@ bool ItemCatalog::add_table(const LootTable& t, Span<const LootEntry> entries) {
     return true;
 }
 
+bool ItemCatalog::add_recipe(const Recipe& r, Span<const RecipeIngredient> inputs, Span<const RecipeIngredient> outputs) {
+    if (recipes_.size() >= kItemMaxRecipes || inputs.size() > kItemMaxIngredients || outputs.size() > kItemMaxIngredients) return false;
+    if (r.id.empty() || find_recipe(r.id.view()) != kNoItem) return false;
+    Recipe copy = r;
+    copy.first_in = static_cast<u32>(ingredients_.size());
+    copy.in_count = static_cast<u8>(inputs.size());
+    for (const RecipeIngredient& i : inputs) ingredients_.push_back(i);
+    copy.first_out = static_cast<u32>(ingredients_.size());
+    copy.out_count = static_cast<u8>(outputs.size());
+    for (const RecipeIngredient& i : outputs) ingredients_.push_back(i);
+    recipes_.push_back(copy);
+    return true;
+}
+
 void ItemCatalog::clear() {
     items_.clear();
     stats_.clear();
     tags_.clear();
     tables_.clear();
     entries_.clear();
+    recipes_.clear();
+    ingredients_.clear();
 }
 
 const char* item_catalog_problem(const ItemCatalog& c, u32* index) {
@@ -221,6 +243,33 @@ const char* item_catalog_problem(const ItemCatalog& c, u32* index) {
             if (e.kind == LootKind::Table && e.ref == i) return fail("table: a loot table cannot name itself", n);
         }
         if (t.rolls_max > 0 && weighted == 0) return fail("table: it rolls but has no weighted entry to roll", n);
+    }
+    const Span<const Recipe> recipes = c.recipes();
+    if (recipes.size() > kItemMaxRecipes) return fail("recipe: too many recipes", 0);
+    for (usize i = 0; i < recipes.size(); ++i) {
+        const Recipe& r = recipes[i];
+        const u32 n = static_cast<u32>(i);
+        if (!id_ok(r.id)) return fail("recipe: the id must be 1-63 letters, digits, '_', '-' or '.'", n);
+        for (usize j = 0; j < i; ++j)
+            if (recipes[j].id.view() == r.id.view()) return fail("recipe: two recipes share this id", n);
+        if (r.name.truncated()) return fail("recipe: the name is too long", n);
+        if (r.name.empty()) return fail("recipe: the name is empty", n);
+        for (const char ch : r.name.view())
+            if (static_cast<unsigned char>(ch) < 0x20 || ch == 0x7F) return fail("recipe: the name has a control character", n);
+        if (r.station.truncated() || (!r.station.empty() && !id_ok(r.station))) return fail("recipe: the station must be 1-31 letters, digits, '_', '-' or '.'", n);
+        if (r.time_ms > kItemMaxCraftMs) return fail("recipe: the time is over an hour", n);
+        if (r.in_count < 1 || r.in_count > kItemMaxIngredients || usize(r.first_in) + r.in_count > c.ingredients().size())
+            return fail("recipe: it needs 1 to 8 inputs", n);
+        if (r.out_count < 1 || r.out_count > kItemMaxIngredients || usize(r.first_out) + r.out_count > c.ingredients().size())
+            return fail("recipe: it needs 1 to 8 outputs", n);
+        for (const Span<const RecipeIngredient> side : {c.inputs_of(r), c.outputs_of(r)}) {
+            for (usize k = 0; k < side.size(); ++k) {
+                if (side[k].item >= items.size()) return fail("recipe: an ingredient names an item that does not exist", n);
+                if (side[k].qty < 1 || side[k].qty > kItemMaxStack) return fail("recipe: an ingredient's quantity must be 1 to 1000000", n);
+                for (usize m = 0; m < k; ++m)
+                    if (side[m].item == side[k].item) return fail("recipe: an item is listed twice on one side", n);
+            }
+        }
     }
     // Nesting: the depth of every table's deepest path through other tables, with loops refused. A table's depth is
     // 1 + the deepest table it names; kItemMaxTableDepth caps the chain, so the walk is bounded.
@@ -303,6 +352,21 @@ void encode_item_catalog(const ItemCatalog& c, Array<byte>& out) {
             w.u32_(e.qty_max);
         }
     }
+    if (c.recipes().empty()) return;  // a catalog without recipes is byte-identical to chunk v1.0
+    w.u32_(static_cast<u32>(c.recipes().size()));
+    for (const Recipe& r : c.recipes()) {
+        w.str(r.id);
+        w.str(r.name);
+        w.str(r.station);
+        w.u32_(r.time_ms);
+        for (const Span<const RecipeIngredient> side : {c.inputs_of(r), c.outputs_of(r)}) {
+            w.u8_(static_cast<u8>(side.size()));
+            for (const RecipeIngredient& i : side) {
+                w.u16_(i.item);
+                w.u32_(i.qty);
+            }
+        }
+    }
 }
 
 static Result<void> decode_item_catalog_impl(Span<const byte> payload, ItemCatalog& out) {
@@ -367,7 +431,33 @@ static Result<void> decode_item_catalog_impl(Span<const byte> payload, ItemCatal
         if (!out.add_table(t, entries.span())) return bad(3);
     }
     if (!r.ok) return Error(Errc::Truncated, kStage);
-    if (r.pos != payload.size()) return bad(6);  // trailing bytes
+    if (r.pos != payload.size()) {  // chunk minor 1: the recipes
+        const u32 recipe_count = r.u32_();
+        if (!r.ok) return Error(Errc::Truncated, kStage);
+        if (recipe_count == 0 || recipe_count > kItemMaxRecipes) return bad(7);  // the writer leaves the section out when empty
+        for (u32 i = 0; i < recipe_count; ++i) {
+            Recipe rc;
+            r.str(rc.id);
+            r.str(rc.name);
+            r.str(rc.station);
+            rc.time_ms = r.u32_();
+            Array<RecipeIngredient> sides[2];
+            for (Array<RecipeIngredient>& side : sides) {
+                const u32 count = r.u8_();
+                if (count > kItemMaxIngredients) return bad(8);
+                for (u32 k = 0; k < count; ++k) {
+                    RecipeIngredient ing;
+                    ing.item = r.u16_();
+                    ing.qty = r.u32_();
+                    side.push_back(ing);
+                }
+            }
+            if (!r.ok) return Error(Errc::Truncated, kStage);
+            if (!out.add_recipe(rc, sides[0].span(), sides[1].span())) return bad(3);
+        }
+        if (!r.ok) return Error(Errc::Truncated, kStage);
+        if (r.pos != payload.size()) return bad(6);  // trailing bytes
+    }
     u32 at = 0;
     if (item_catalog_problem(out, &at)) return bad(100 + at);
     return ok();
