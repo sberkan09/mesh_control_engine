@@ -1,6 +1,6 @@
 # M-SNOWCOVER — Snow that settles on up-facing surfaces (milestone record)
 
-**Status:** planned 2026-10-19, step 6a next. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER and M-WETSURFACE: snow falls (`Precipitation3D`) and wets (`Weather.wetness`) but nothing piles up, so a snowstorm leaves the ground bare. No Linear issues (free issue limit); this record is the tracker. Render steps (6b) are Opus-written and not self-merged (coordinator rule for render and `scene3d.h`).
+**Status:** done 2026-10-20 (steps 6a to 6d). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER and M-WETSURFACE: snow falls (`Precipitation3D`) and wets (`Weather.wetness`) but nothing piles up, so a snowstorm leaves the ground bare. No Linear issues (free issue limit); this record is the tracker. Render steps (6b) are Opus-written and not self-merged (coordinator rule for render and `scene3d.h`).
 
 **Goal.** While `Weather.current` is snow, up-facing surfaces whiten with a noisy, wind-biased layer that grows with time and melts away afterwards, deterministically, saved with the scene, opt-in, and a scene without it renders exactly as today.
 
@@ -12,7 +12,7 @@
 - **Render carrier.** `render::SnowCover {cover, coverage, noise_scale, wind_bias, enabled}` in `scene3d.h` next to `WetSurfaces`, `set_snow_cover()` / `snow_cover()`, `QualitySettings::snow_cover` and cvar `r.snow_cover` (Low keeps the whitening, drops the noise breakup), `apply_quality` overload (by value, like the wet one, clamped to 0..1).
 - **Uniforms and shader.** One `vec4` `p_snow` (cover, coverage, 1/scale, wind_bias) plus reuse of `p_wet2.xy` (origin mod 256 m) in `Forward3DPassU` and `MCE_GLSL_PASS_U`; GLSL in `MCE_GLSL_MESH_FS` after `apply_wet` behind `p_snow.x > 0.0`, so cover 0 is bit-identical: integer-hash value noise (the `wet_hash`/`wet_value` helpers, periodic over 256 m), mask = smoothstep over (noise + cover bias) times the up-facing weight from the geometric normal (the same stand-in as puddles), albedo mixed toward 0.9 white, roughness toward 0.8, metallic toward 0 under the mask.
 - **Extract.** `Kit3DExtract::apply_environment` builds `render::SnowCover` from the first `SnowCover` only when a `Weather` exists as well; the cover is `SnowCover.cover * strength`.
-- **Luau.** `weather.snow_cover()` getter and `weather.set_snow{strength=, build=, melt=, coverage=, scale=}`; sample: `samples/12_weather` gets a `SnowCover` and the snow phase whitens the ground.
+- **Luau.** `weather.snow_cover()` getter and `weather.set_snow{strength=, build=, melt=, coverage=, scale=, wind=}` (plus getters `snow_strength()` ... `snow_wind()`); sample: `samples/12_weather` gets a `SnowCover` and the snow phase whitens the ground.
 
 ## Steps
 
@@ -38,4 +38,4 @@
 | 6a | done | #622 | `render::SnowCover`, `r.snow_cover`, tier fields, `apply_quality` overload |
 | 6b | done | #633 | `p_snow`, `apply_snow` after `apply_wet`, `snow_plaza` golden, tests/render_gl/test_render3d_snow_gl.cpp; wind toward +x, Low draws an even layer |
 | 6c | done | #623 | `SnowCover` component, `kit_snow_cover`, extract, tests/kit/test_snow_cover.cpp |
-| 6d | planned | | needs 6b, 6c |
+| 6d | done | #637 | `weather.snow_cover()`, the six getters and `weather.set_snow{...}` (clamped to the Range, named errors, nothing written on error) in `api_weather.cpp`, typed in `definitions.cpp`; `samples/12_weather` carries a `SnowCover` (build 4 s, melt 10 s) on the Weather entity (entity count stays 11); the snow phase (in effect from tick 1861, to 2340) builds the cover to 0.37 and the script logs `snow:` every 150 ticks |

@@ -182,6 +182,18 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (amplitude 0..50, frequency 0..10, gust -1..1,
     -- flutter 0..50); an unknown key or a non-number raises
     set_sway: (settings: { amplitude: number?, frequency: number?, gust: number?, flutter: number? }) -> (),
+    -- SnowCover (M-SNOWCOVER), the first one in the scene; the getters raise when there is none. snow_cover is the
+    -- engine-written cover 0..1 (read-only); the others are the authoring fields
+    snow_cover: () -> number,
+    snow_strength: () -> number,
+    snow_build: () -> number,
+    snow_melt: () -> number,
+    snow_coverage: () -> number,
+    snow_scale: () -> number,
+    snow_wind: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..4, build and melt 0..86400 seconds,
+    -- coverage 0..1, scale 0.1..100 metres, wind 0..1); an unknown key or a non-number raises
+    set_snow: (settings: { strength: number?, build: number?, melt: number?, coverage: number?, scale: number?, wind: number? }) -> (),
 }
 )";
 
