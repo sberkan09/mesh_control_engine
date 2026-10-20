@@ -302,9 +302,25 @@ void kit_inventory(Frame& f) {
         const asset::ItemDef& d = c->items()[item];
         u32 consumed = 0;
         if (c->has_tag(d, "consumable")) {
-            inv->qty[u.slot] -= 1;
-            if (inv->qty[u.slot] == 0) inv->item[u.slot] = 0;
-            consumed = 1;
+            bool refused = false;
+            f32 healed = 0.0f;
+            const f32 heal = c->stat(d, "heal", 0.0f);
+            Health3D* hp = heal > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get_mut<Health3D>(u.owner) : nullptr;
+            if (hp) {
+                const f32 room = hp->max - hp->current;
+                if (hp->dead || !(room > 0.0f)) {
+                    refused = true;  // a drink at full health (or on a corpse) is not wasted
+                } else {
+                    healed = heal < room ? heal : room;
+                    hp->current += healed;
+                }
+            }
+            if (!refused) {
+                inv->qty[u.slot] -= 1;
+                if (inv->qty[u.slot] == 0) inv->item[u.slot] = 0;
+                consumed = 1;
+                if (healed > 0.0f) ev.push(ItemHealed{u.owner, d.id, healed});
+            }
         }
         ev.push(ItemUsed{u.owner, d.id, u.slot, consumed});
     }
@@ -332,6 +348,7 @@ void install_inventory(World& world, asset::AssetSystem* assets) {
     world.register_event<ItemEquipped>(Phase::FixedUpdate_Pre);
     world.register_event<ItemUnequipped>(Phase::FixedUpdate_Pre);
     world.register_event<ItemUsed>(Phase::FixedUpdate_Pre);
+    world.register_event<ItemHealed>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit_inventory", &kit_inventory, "kit3d_health");
 }
 

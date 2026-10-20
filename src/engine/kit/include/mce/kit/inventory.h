@@ -26,7 +26,9 @@
 // Input events (push them; processed in the system, FixedUpdate_Pre): GiveItem, TakeItem, MoveItem, SplitItem,
 // EquipItem, UnequipItem, UseItem. Output events: ItemAdded (with what did not fit), ItemRemoved, ItemEquipped,
 // ItemUnequipped, ItemUsed. UseItem on an item tagged "consumable" takes one unit and sends ItemUsed; any other
-// item only sends ItemUsed (the game decides what it does).
+// item only sends ItemUsed (the game decides what it does). A consumable whose stats include "heal" also heals the user's
+// Health3D by that much (capped at its max; ItemHealed says how much). Used on someone who has a Health3D that is dead or
+// already full it is refused: nothing is consumed and ItemUsed.consumed is 0. Without a Health3D it is consumed as before.
 //
 // Saves hold catalog indices, not ids: edit a shipped catalog by appending items only (reordering or inserting changes what old
 // saves hold). A slot with quantity 0 or an index past the catalog is treated as unusable, never as stock.
@@ -148,6 +150,12 @@ struct ItemUsed {
     u32 slot = 0;
     u32 consumed = 0;  // 1 when the unit was taken
 };
+struct ItemHealed {  // M-ITEMFX 1: a consumable with a "heal" stat restored health
+    Entity owner;
+    FixedString<64> item;
+    f32 amount = 0.0f;  // what was actually gained (clamped to the missing health)
+};
+MCE_EVENT(ItemHealed, owner, item, amount)
 MCE_EVENT(ItemAdded, owner, item, qty, remainder)
 MCE_EVENT(ItemRemoved, owner, item, qty)
 MCE_EVENT(ItemEquipped, owner, item, equip_slot)
