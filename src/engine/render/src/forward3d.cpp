@@ -359,12 +359,13 @@ void snow_params(const SnowCover& s, const f64 origin[3], PassU& pu) {
 // The main pass's ripple member (M-RAINFX 7b). Strength 0 or `enabled` false leaves p_ripple zero: the shader skips
 // its branch and the frame is the ripple-less one bit for bit (it also skips it where no puddle lies, so the wet
 // members need no change here). The clock is the scene's (Scene3D::set_time), scaled by the speed and wrapped in f64
-// to 0..60 s: every drop period (3 to 6 quarter seconds) divides 60 s, so the wrap does not show and float precision
-// does not depend on how long the scene has run. A ring width (and a density) of 0 survives the clamp: the width is
+// to 0..60 s: every drop period (3 to 6 quarter seconds) divides 60 s, so the wrap does not show (the scene clock
+// itself is f32, so its resolution is bounded by that). A non-finite time counts as 0. A ring width (and a density) of 0 survives the clamp: the width is
 // floored at 0.01, the shader divides by it.
 void ripple_params(const Ripples& r, f32 time, PassU& pu) {
     const f32 strength = unit01(r.strength);
     if (!r.enabled || strength <= 0.0f) return;
+    if (!std::isfinite(time)) time = 0.0f;
     const f64 t = f64(time) * f64(detail::ripple_speed(r.speed));
     const f32 ring_width = unit01(r.ring_width);
     pu.ripple = vec4(strength, unit01(r.density), ring_width > 0.01f ? ring_width : 0.01f,

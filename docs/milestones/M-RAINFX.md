@@ -36,7 +36,7 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
-| 7b | done | | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/unit_clamp.h`) |
+| 7b | done | | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
 | 7c | planned | | needs 7a |
 | 7d | planned | | needs 7b, 7c |
 
