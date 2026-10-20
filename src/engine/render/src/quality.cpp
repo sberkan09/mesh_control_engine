@@ -15,6 +15,8 @@ MCE_CVAR(cv_wet_surfaces, "r.wet_surfaces", true,
          "Wet surfaces from the weather (WetSurfaces; off = the dry frame)", CVarFlags::Saved);
 MCE_CVAR(cv_snow_cover, "r.snow_cover", true,
          "Snow cover from the weather (SnowCover; off = the snowless frame)", CVarFlags::Saved);
+MCE_CVAR(cv_rain_ripples, "r.rain_ripples", true,
+         "Rain ripples on puddles from the weather (Ripples; off = the ripple-less frame)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -35,6 +37,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.parallax_max_steps = 0;
             q.wet_puddles = false;
             q.snow_noise = false;
+            q.rain_ripples = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -122,6 +125,18 @@ SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow) {
     out.noise_scale = snow.noise_scale > 0.25f ? (snow.noise_scale < 256.0f ? snow.noise_scale : 256.0f) : 0.25f;
     // Meaningless with snow_cover off (cover 0 skips the whole shader branch, noise included).
     out.noise_enabled = snow.noise_enabled && q.snow_noise;
+    return out;
+}
+
+Ripples apply_quality(const QualitySettings& q, const Ripples& ripples) {
+    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
+    Ripples out = ripples;
+    out.strength = q.rain_ripples && cv_rain_ripples.get_bool() ? unit(ripples.strength) : 0.0f;
+    out.density = unit(ripples.density);
+    out.ring_width = unit(ripples.ring_width);
+    // NaN fails the first compare and lands on the nominal rate 1.
+    const f32 sp = ripples.speed;
+    out.speed = sp == sp ? (sp > 0.1f ? (sp < 10.0f ? sp : 10.0f) : 0.1f) : 1.0f;
     return out;
 }
 
