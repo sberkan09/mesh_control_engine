@@ -629,6 +629,7 @@ ScriptHost::ScriptHost(const ScriptBudget& budget, u64 seed) : budget_(budget), 
     detail::register_world_api(L_);
     lua_setglobal(L_, "mce");
     detail::register_mission_api(L_);
+    detail::register_inventory_api(L_);
     detail::register_clock_api(L_);
     detail::register_weather_api(L_);
 

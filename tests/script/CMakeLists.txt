@@ -6,6 +6,7 @@ mce_add_test(test_script UMBRELLA
         test_scene_scripts.cpp
         test_script_api.cpp
         test_script_missions.cpp
+        test_script_inventory.cpp
         test_script_clock.cpp
         test_script_weather.cpp
         test_daynight_demo.cpp
