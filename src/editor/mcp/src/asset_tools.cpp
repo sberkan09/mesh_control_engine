@@ -295,13 +295,14 @@ constexpr AssetKind kKinds[] = {
 {"name":"convars","type":"object","help":"convar name -> true/false, a number or text, e.g. {\"ui.reference_height\": 720}"}])json",
      R"json({"convars":{}})json"},
     {"ItemCatalog", ".mcitems", "mce-items", 1,
-     "The project's items and loot tables (M-INVENTORY 1): item definitions (id, name, stack size, weight in kg, tags, named "
-     "numeric stats, icon and prefab) and weighted loot tables that roll items or other tables. Ids are 1-63 letters, digits, "
-     "'_', '-', '.'; tables may nest 8 deep and may not loop.",
+     "The project's items, loot tables and recipes (M-INVENTORY 1, M-CRAFT 1): item definitions (id, name, stack size, weight in kg, tags, named "
+     "numeric stats, icon and prefab), weighted loot tables that roll items or other tables, and crafting recipes (1-8 distinct inputs to 1-8 outputs, "
+     "an optional station tag, seconds). Ids are 1-63 letters, digits, '_', '-', '.'; tables may nest 8 deep and may not loop.",
      R"json([
 {"name":"items","type":"array","help":"[{\"id\":\"medkit\",\"name\":\"Medkit\",\"stack\":5,\"weight\":0.4,\"tags\":[\"consumable\"],\"stats\":{\"heal\":25},\"icon\":\"guid:<texture>\",\"prefab\":\"guid:<prefab>\"}]"},
-{"name":"tables","type":"array","help":"[{\"id\":\"chest\",\"rolls\":[1,3],\"entries\":[{\"item\":\"medkit\",\"weight\":5,\"qty\":[1,2]},{\"table\":\"rare\",\"weight\":1},{\"item\":\"key\",\"guaranteed\":true}]}]"}])json",
-     R"json({"items":[],"tables":[]})json"},
+{"name":"tables","type":"array","help":"[{\"id\":\"chest\",\"rolls\":[1,3],\"entries\":[{\"item\":\"medkit\",\"weight\":5,\"qty\":[1,2]},{\"table\":\"rare\",\"weight\":1},{\"item\":\"key\",\"guaranteed\":true}]}]"},
+{"name":"recipes","type":"array","help":"[{\"id\":\"bandage\",\"name\":\"Bandage\",\"station\":\"workbench\",\"time\":1.5,\"in\":[{\"item\":\"cloth\",\"qty\":2}],\"out\":[{\"item\":\"medkit\",\"qty\":1}]}]"}])json",
+     R"json({"items":[],"tables":[],"recipes":[]})json"},
 };
 
 const AssetKind* kind_for_extension(StringView path) {

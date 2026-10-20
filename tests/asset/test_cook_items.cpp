@@ -319,3 +319,138 @@ TEST_CASE("items: the chunk reader refuses damage") {
     CHECK(twice.add_item(a));
     CHECK_FALSE(twice.add_item(a));
 }
+
+// ---- recipes (M-CRAFT 1)
+
+namespace {
+
+std::string recipes_json(const std::string& items, const std::string& recipes) {
+    return std::string(R"({ "format": "mce-items", "version": 1, "guid": ")") + kCatalogGuid + R"(", "items": [)" + items + R"(], "recipes": [)" +
+           recipes + "] }";
+}
+
+const char* kCraftItems = R"(
+    { "id": "cloth", "stack": 20 },
+    { "id": "herb", "stack": 20 },
+    { "id": "bandage", "name": "Bandage", "stack": 5 })";
+
+const char* kRecipes = R"(
+    { "id": "bandage", "name": "Bandage", "station": "workbench", "time": 1.5,
+      "in": [ { "item": "cloth", "qty": 2 }, { "item": "herb" } ], "out": [ { "item": "bandage", "qty": 1 } ] },
+    { "id": "unravel", "in": [ { "item": "bandage" } ], "out": [ { "item": "cloth", "qty": 2 } ] })";
+
+}  // namespace
+
+TEST_CASE("recipes: .mcitems recipes cook and read back; a catalog without them keeps the v1.0 bytes") {
+    std::string diags, root;
+    REQUIRE_MESSAGE(cook_text("recipes_cook", recipes_json(kCraftItems, kRecipes), &diags, &root), diags);
+    asset::ItemCatalog c;
+    REQUIRE(load_catalog(root, c));
+    REQUIRE(c.recipes().size() == 2);
+    const asset::Recipe& r = c.recipes()[c.find_recipe("bandage")];
+    CHECK(r.name.view() == "Bandage");
+    CHECK(r.station.view() == "workbench");
+    CHECK(r.time_ms == 1500);
+    REQUIRE(c.inputs_of(r).size() == 2);
+    CHECK(c.inputs_of(r)[0].item == c.find_item("cloth"));
+    CHECK(c.inputs_of(r)[0].qty == 2);
+    CHECK(c.inputs_of(r)[1].qty == 1);  // qty defaults to 1
+    REQUIRE(c.outputs_of(r).size() == 1);
+    CHECK(c.outputs_of(r)[0].item == c.find_item("bandage"));
+    const asset::Recipe& u = c.recipes()[c.find_recipe("unravel")];
+    CHECK(u.name.view() == "unravel");  // the name defaults to the id
+    CHECK(u.station.empty());
+    CHECK(u.time_ms == 0);
+
+    // The same catalog without its recipes is the v1.0 payload, byte for byte.
+    asset::ItemCatalog plain;
+    for (const asset::ItemDef& it : c.items()) REQUIRE(plain.add_item(it));
+    Array<byte> with, without;
+    asset::encode_item_catalog(c, with);
+    asset::encode_item_catalog(plain, without);
+    REQUIRE(with.size() > without.size());
+    CHECK(std::memcmp(with.data(), without.data(), without.size()) == 0);
+    // ... which is what a reader still sees when the recipes are cut off cleanly, and a cut inside them is refused.
+    asset::ItemCatalog o;
+    CHECK(asset::decode_item_catalog(Span<const byte>(with.data(), without.size()), o));
+    CHECK(o.recipes().size() == 0);
+    for (usize n = without.size() + 1; n < with.size(); ++n) CHECK_FALSE(asset::decode_item_catalog(Span<const byte>(with.data(), n), o));
+    Array<byte> longer = with;
+    longer.push_back(byte{0});
+    CHECK_FALSE(asset::decode_item_catalog(longer.span(), o));
+    // Round trip, and any single damaged byte either fails or passes the catalog's own checks.
+    asset::ItemCatalog back;
+    REQUIRE(asset::decode_item_catalog(with.span(), back));
+    Array<byte> again;
+    asset::encode_item_catalog(back, again);
+    REQUIRE(again.size() == with.size());
+    CHECK(std::memcmp(again.data(), with.data(), with.size()) == 0);
+    for (usize i = without.size(); i < with.size(); ++i)
+        for (const unsigned v : {0x00u, 0x01u, 0x7Fu, 0x80u, 0xFFu}) {
+            Array<byte> t2 = with;
+            t2[i] = static_cast<byte>(v);
+            asset::ItemCatalog dmg;
+            if (asset::decode_item_catalog(t2.span(), dmg)) CHECK(asset::item_catalog_problem(dmg) == nullptr);
+        }
+}
+
+TEST_CASE("recipes: authoring mistakes are cook errors that name the problem") {
+    struct Bad {
+        std::string text;
+        const char* expect;
+    };
+    const std::string in = R"("in": [ { "item": "cloth" } ])", out = R"("out": [ { "item": "bandage" } ])";
+    const Bad bad[] = {
+        {recipes_json(kCraftItems, R"({ "in": [], "out": [] })"), "\"id\""},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [], )" + out + " }"), "'in'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", )" + in + R"(, "out": [] })"), "'out'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", )" + in + " }"), "'out'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [ { "item": "zzz" } ], )" + out + " }"), "not in \"items\""},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [ { "item": "cloth", "qty": 0 } ], )" + out + " }"), "'qty'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [ { "item": "cloth", "qty": 1000001 } ], )" + out + " }"), "'qty'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [ { "item": "cloth" }, { "item": "cloth" } ], )" + out + " }"), "listed twice"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "in": [ { "item": "cloth", "x": 1 } ], )" + out + " }"), "unknown key"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "time": -1, )" + in + ", " + out + " }"), "'time'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "time": 3601, )" + in + ", " + out + " }"), "'time'"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "station": "a b", )" + in + ", " + out + " }"), "station"},
+        {recipes_json(kCraftItems, R"({ "id": "r", "colour": 1, )" + in + ", " + out + " }"), "colour"},
+        {recipes_json(kCraftItems, R"({ "id": "r", )" + in + ", " + out + R"( }, { "id": "r", )" + in + ", " + out + " }"), "share this \"id\""},
+        {std::string(R"({ "format": "mce-items", "version": 1, "guid": ")") + kCatalogGuid + R"(", "recipes": {} })", "'recipes'"},
+    };
+    int n = 0;
+    for (const Bad& b : bad) {
+        std::string diags;
+        const bool ok = cook_text("recipes_bad_" + std::to_string(n++), b.text, &diags);
+        INFO("case " << (n - 1) << ": " << b.text);
+        CHECK_FALSE(ok);
+        CHECK_MESSAGE(diags.find(b.expect) != std::string::npos, "expected '" << b.expect << "' in: " << diags);
+    }
+}
+
+TEST_CASE("recipes: the catalog's own checks refuse a recipe built wrong in code") {
+    asset::ItemCatalog c;
+    asset::ItemDef d;
+    d.id = "a";
+    d.name = "A";
+    REQUIRE(c.add_item(d));
+    asset::Recipe r;
+    r.id = "r";
+    asset::RecipeIngredient ok{0, 1}, past{5, 1}, zero{0, 0};
+    CHECK_FALSE(c.add_recipe(asset::Recipe{}, Span<const asset::RecipeIngredient>(&ok, 1), Span<const asset::RecipeIngredient>(&ok, 1)));  // empty id
+    REQUIRE(c.add_recipe(r, Span<const asset::RecipeIngredient>(&past, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
+    const char* why = asset::item_catalog_problem(c);
+    REQUIRE(why != nullptr);
+    CHECK(std::string(why).find("recipe") == 0);
+    asset::ItemCatalog z;
+    REQUIRE(z.add_item(d));
+    REQUIRE(z.add_recipe(r, Span<const asset::RecipeIngredient>(&zero, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
+    CHECK(asset::item_catalog_problem(z) != nullptr);
+    asset::ItemCatalog none;
+    REQUIRE(none.add_item(d));
+    REQUIRE(none.add_recipe(r, Span<const asset::RecipeIngredient>(), Span<const asset::RecipeIngredient>(&ok, 1)));
+    CHECK(asset::item_catalog_problem(none) != nullptr);  // a recipe needs inputs
+    asset::ItemCatalog dup;
+    REQUIRE(dup.add_item(d));
+    REQUIRE(dup.add_recipe(r, Span<const asset::RecipeIngredient>(&ok, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
+    CHECK_FALSE(dup.add_recipe(r, Span<const asset::RecipeIngredient>(&ok, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
+}

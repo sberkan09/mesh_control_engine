@@ -37,7 +37,11 @@ const char* const kCatalog = R"({ "format": "mce-items", "version": 1, "guid": "
     { "id": "chest_common", "rolls": [1, 3], "entries": [
         { "item": "medkit", "weight": 5, "qty": [1, 2] }, { "item": "ammo", "weight": 10, "qty": [10, 30] },
         { "table": "chest_rare", "weight": 1 }, { "item": "key", "guaranteed": true } ] },
-    { "id": "chest_rare", "rolls": 1, "entries": [ { "item": "medkit", "weight": 1, "qty": 5 } ] } ] })";
+    { "id": "chest_rare", "rolls": 1, "entries": [ { "item": "medkit", "weight": 1, "qty": 5 } ] } ],
+  "recipes": [
+    { "id": "ration", "name": "Ration", "station": "campfire", "time": 2.5,
+      "in": [ { "item": "ammo", "qty": 10 }, { "item": "key" } ], "out": [ { "item": "medkit", "qty": 2 } ] },
+    { "id": "scrap", "in": [ { "item": "medkit" } ], "out": [ { "item": "ammo", "qty": 5 } ] } ] })";
 
 // Cooks `text`; on success the ItemCatalog chunk's payload lands in `payload`.
 bool cook_items(const cook::IImporter& imp, Span<const byte> text, std::vector<byte>* payload) {
@@ -79,6 +83,10 @@ bool read_back(Span<const byte> p) {
         (void)c.tags_of(d);
     }
     for (const asset::LootTable& t : c.tables()) (void)c.entries_of(t);
+    for (const asset::Recipe& r : c.recipes()) {
+        (void)c.inputs_of(r);
+        (void)c.outputs_of(r);
+    }
     return true;
 }
 
