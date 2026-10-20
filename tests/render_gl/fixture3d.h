@@ -618,4 +618,22 @@ inline void wet_plaza_scene(Scene3D& s, const WetSurfaces& wet, vec3 world_offse
     s.set_wet_surfaces(wet);
 }
 
+// ---- M-SNOWCOVER 6b: snow cover ---------------------------------------------------------------------------------
+
+// The snow plaza is the wet plaza (upload_wet_plaza) under snow: `cover` with coverage 0.8, 2 m noise cells and
+// wind bias 0.5, at a lower exposure than the wet plaza's so 0.9 white snow in the sun stays below 8-bit white.
+inline SnowCover snow_plaza_snow(f32 cover) {
+    SnowCover s;
+    s.cover = cover;
+    s.noise_scale = 2.0f;
+    return s;
+}
+
+inline void snow_plaza_scene(Scene3D& s, const SnowCover& snow, const WetSurfaces& wet,
+                             vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    wet_plaza_scene(s, wet, world_offset);
+    s.set_exposure(0.35f);
+    s.set_snow_cover(snow);
+}
+
 }  // namespace mce::render_test

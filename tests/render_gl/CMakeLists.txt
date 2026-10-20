@@ -2,7 +2,7 @@
 # run again on mce_rhi_sdlgpu (Vulkan, lavapipe) as test_render_sdlgpu.
 # Always builds; registers only with MCE_GPU_TESTS.
 find_package(Threads REQUIRED)
-add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_views_gl.cpp test_render3d_scale_gl.cpp test_render3d_terrain_gl.cpp test_render3d_instancing_gl.cpp test_render3d_merge_gl.cpp test_render3d_wet_gl.cpp test_render_bc_gl.cpp)
+add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_views_gl.cpp test_render3d_scale_gl.cpp test_render3d_terrain_gl.cpp test_render3d_instancing_gl.cpp test_render3d_merge_gl.cpp test_render3d_wet_gl.cpp test_render3d_snow_gl.cpp test_render_bc_gl.cpp)
 target_link_libraries(test_render_gl PRIVATE mce::mce_render mce::mce_rhi_default mce::doctest_main Threads::Threads)
 mce_apply_compile_policy(test_render_gl)
 if(MCE_GPU_TESTS)
