@@ -80,3 +80,28 @@ TEST_CASE("MixerModel: reverb units, the limiter and ducks are independent and u
     REQUIRE(scene.redo());
     CHECK(mix.duck(AudioBus::Music, db));
 }
+
+TEST_CASE("MixerModel: writes to one item merge into a single undo entry until the undo is sealed") {
+    EditorScene scene;
+    scene.new_scene("mix");
+    MixerModel mix(scene);
+
+    audio::AudioLimiter lim;
+    lim.ceiling_db = -2.f;
+    CHECK(mix.set_limiter(lim));
+    lim.ceiling_db = -4.f;  // a slider drag: several writes
+    CHECK(mix.set_limiter(lim));
+    lim.ceiling_db = -6.f;
+    CHECK(mix.set_limiter(lim));
+    scene.seal_undo();
+    lim.ceiling_db = -8.f;
+    CHECK(mix.set_limiter(lim));
+
+    audio::AudioLimiter got;
+    REQUIRE(scene.undo());  // the drag after the seal
+    CHECK(mix.limiter(got));
+    CHECK(got.ceiling_db == -6.f);
+    REQUIRE(scene.undo());  // the earlier drag and the creation, one entry
+    CHECK_FALSE(mix.limiter(got));
+    CHECK(scene.doc().size() == 0);
+}

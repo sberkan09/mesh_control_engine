@@ -802,6 +802,7 @@ void add_default_panels(EditorShell& shell) {
     add_scenes_panel(shell);
     add_sequence_panel(shell);
     add_strings_panel(shell);
+    add_mixer_panel(shell);
     add_project_settings_panel(shell);
 }
 

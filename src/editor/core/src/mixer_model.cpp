@@ -35,11 +35,12 @@ const char* bus_name(AudioBus bus) {
 
 // Writes `value` onto the entity that holds the matching component, or onto a new "Mixer <label>" entity.
 template <class T, class Match>
-bool put(EditorScene& scene, Match match, const char* label, const T& value) {
+bool put(EditorScene& scene, Match match, const char* label, u64 selector, const T& value) {
     const refl::TypeRecord& type = refl::type_of<T>();
     EntityId owner = kNoEntity;
     const T* have = find_first<T>(scene, match, owner);
-    scene.begin_edit("Edit the mixer");
+    // Consecutive writes to the same item merge into one undo entry (a slider drag), until the panel seals it.
+    scene.begin_edit("Edit the mixer", (reinterpret_cast<u64>(&type) << 8) + selector + 1);
     if (!have) {
         cook::String name = "Mixer ";
         name += label;
@@ -100,23 +101,23 @@ bool MixerModel::duck(AudioBus bus, audio::AudioDuck& out) const {
 
 bool MixerModel::set_bus_effects(AudioBus bus, audio::AudioBusEffects value) {
     value.bus = bus;
-    return put<audio::AudioBusEffects>(scene_, [&](const auto& x) { return x.bus == bus; }, bus_name(bus), value);
+    return put<audio::AudioBusEffects>(scene_, [&](const auto& x) { return x.bus == bus; }, bus_name(bus), static_cast<u64>(bus), value);
 }
 
 bool MixerModel::set_reverb(u32 unit, audio::AudioReverb value) {
     value.unit = static_cast<u8>(unit);
-    return put<audio::AudioReverb>(scene_, [&](const auto& x) { return x.unit == unit; }, unit ? "Reverb 1" : "Reverb 0", value);
+    return put<audio::AudioReverb>(scene_, [&](const auto& x) { return x.unit == unit; }, unit ? "Reverb 1" : "Reverb 0", unit, value);
 }
 
 bool MixerModel::set_limiter(const audio::AudioLimiter& value) {
-    return put<audio::AudioLimiter>(scene_, [](const auto&) { return true; }, "Limiter", value);
+    return put<audio::AudioLimiter>(scene_, [](const auto&) { return true; }, "Limiter", 0, value);
 }
 
 bool MixerModel::set_duck(AudioBus bus, audio::AudioDuck value) {
     value.bus = bus;
     cook::String label = "Duck ";
     label += bus_name(bus);
-    return put<audio::AudioDuck>(scene_, [&](const auto& x) { return x.bus == bus; }, label.c_str(), value);
+    return put<audio::AudioDuck>(scene_, [&](const auto& x) { return x.bus == bus; }, label.c_str(), static_cast<u64>(bus), value);
 }
 
 bool MixerModel::clear_bus_effects(AudioBus bus) {
