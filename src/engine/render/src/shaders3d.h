@@ -63,6 +63,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_wet;            // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
     vec4 p_wet2;           // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on (0 on Low)
     vec4 p_snow;           // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise, Low), w wind bias
+    vec4 p_ripple;         // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -622,8 +623,8 @@ float wet_puddle(vec3 p, vec3 ng, float ao) {
 // Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
 // more, ask for roughness 0.03 (the lighting's clamp to 0.045 below wins, so they draw at 0.045) and flatten the
 // normal map (`fill`). Metals neither darken (their albedo is their F0) nor smooth: water beads on them, and the
-// gate holds a wet metal sphere's look within 1%.
-void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
+// gate holds a wet metal sphere's look within 1%. Returns the puddle cover (the rain ripples' mask).
+float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
     float w = p_wet.x;
     float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
     float dielectric = 1.0 - clamp(metallic, 0.0, 1.0);
@@ -632,6 +633,7 @@ void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, 
     rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
     rough = mix(rough, 0.03, pud);
     fill = max(fill, pud);
+    return pud;
 }
 
 // ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
@@ -660,13 +662,66 @@ float snow_mask(vec3 p, vec3 ng) {
     return smoothstep(t - 0.04, t + 0.04, h) * min(4.0 * c, 1.0) * up;
 }
 // Under the mask: albedo toward 0.9 white, roughness toward 0.8, metallic toward 0 (snow on metal is snow), and
-// the normal map flattens (`fill`: the layer hides the surface's relief).
-void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill) {
+// the normal map flattens (`fill`: the layer hides the surface's relief). Snow over a puddle stills it: `pud`, the
+// rain ripples' mask, keeps only the uncovered share.
+void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill,
+                inout float pud) {
     float m = snow_mask(p, ng);
     albedo = mix(albedo, vec3(0.9), m);
     rough = mix(rough, 0.8, m);
     metallic = mix(metallic, 0.0, m);
     fill = max(fill, m);
+    pud *= 1.0 - m;
+}
+
+// ---- rain ripples (M-RAINFX 7b), behind p_ripple.x > 0 and only where a puddle lies (`pud`, apply_wet's cover
+// after the snow): a frame with no wetness, no puddles or no ripples is the ripple-less one bit for bit, and ground
+// outside the puddles never changes. Drops land on a grid of 0.5 m cells, 512 across the puddles' 256 m period (the
+// same origin p_wet2.xy, so a floating-origin rebase keeps them in place). Cell c holds a drop when its hash is
+// below the density; its period is 3..6 quarter seconds and its phase hashed. In each cycle the drop lands at a
+// hashed point of its cell (the cycle index wraps with the clock: p_ripple.w is the speed-scaled time mod 60 s,
+// which every period divides) and two concentric rings grow from it, radius u * 0.8 and u * 0.44 cells for the
+// cycle's age u = 0..1, fading in over the first tenth and out as (1 - u)^2. A ring is the slope of a smooth bump
+// (1 - y^2)^2, y = (distance - radius) / (half width), half width ring_width * 0.3 cells: the longest reach,
+// 0.9 + 0.8 + 0.3 cells from a cell's corner, stays inside the 3 x 3 cells searched. No derivatives: the branch is
+// not uniform.
+float ripple_ring(float x, float hw) {
+    float y = x / hw;
+    return abs(y) < 1.0 ? y * (1.0 - y * y) * 2.598 : 0.0;  // the outward slope, peak 1 at y = 1 / sqrt(3)
+}
+vec2 ripple_tilt(vec3 p) {
+    vec2 g = mod(p.xz + p_wet2.xy, 256.0) * 2.0;  // cells
+    vec2 i = floor(g);
+    float t4 = p_ripple.w * 4.0;  // quarter seconds, 0..240
+    float hw = p_ripple.z * 0.3;
+    vec2 tilt = vec2(0.0);
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            vec2 cell = i + vec2(float(dx), float(dy));
+            uvec2 c = uvec2(mod(cell, 512.0));
+            uint h = wet_hash(c + uvec2(0x68E31DA4u, 0xB5297A4Du));
+            if (float(h & 0xFFFFu) * (1.0 / 65536.0) >= p_ripple.y) continue;
+            uint k = 3u + ((h >> 16u) & 3u);
+            float tp = t4 / float(k) + float(h >> 18u) * (1.0 / 16384.0);  // cycles
+            float cyc = floor(tp);
+            float u = tp - cyc;
+            uint cy = uint(cyc) % (240u / k);
+            uint h2 = wet_hash(uvec2(c.x ^ (cy * 0x27D4EB2Du), c.y + 0x165667B1u));
+            vec2 drop = cell + 0.1 + 0.8 * vec2(float(h2 & 0xFFFFu), float(h2 >> 16u)) * (1.0 / 65536.0);
+            vec2 d = g - drop;
+            float dist = length(d);
+            if (dist < 1e-4) continue;
+            float a = smoothstep(0.0, 0.1, u) * (1.0 - u) * (1.0 - u);
+            float s = ripple_ring(dist - 0.8 * u, hw) + 0.5 * ripple_ring(dist - 0.44 * u, hw);
+            tilt += d * (a * s / dist);
+        }
+    return tilt;
+}
+// The rings tilt the water's normal by up to ~0.4 rad per ring and roughen it a little at their crests.
+void apply_ripples(vec3 p, float pud, inout vec3 n, inout float rough) {
+    vec2 t = ripple_tilt(p) * (p_ripple.x * pud);
+    n = normalize(n + vec3(t.x, 0.0, t.y) * 0.4);
+    rough += 0.04 * min(length(t), 1.0);
 }
 
 #ifdef MCE_TERRAIN
@@ -884,10 +939,10 @@ void main() {
                 metallic *= orm.b;
             }
         }
-        float fill = 0.0;
+        float fill = 0.0, pud = 0.0;
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
-        if (p_wet.x > 0.0) apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
-        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill);  // after the water: snow wins
+        if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
+        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud);  // after the water: snow wins
 #ifdef MCE_TERRAIN
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
@@ -896,6 +951,7 @@ void main() {
             n = normalize(mix(nb, n, fill));
         }
 #endif
+        if (p_ripple.x > 0.0 && pud > 0.0) apply_ripples(v_world, pud, n, rough);  // on the water the snow left
         rough = clamp(rough, 0.045, 1.0);
         metallic = clamp(metallic, 0.0, 1.0);
         float a = rough * rough;

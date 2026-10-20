@@ -8,6 +8,7 @@
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "shaders3d.h"
+#include "unit_clamp.h"
 
 namespace mce::render {
 
@@ -91,12 +92,14 @@ struct Forward3DPassU {
     vec4 wet;         // M-WETSURFACE 5b: x wetness (0 = off), y puddle coverage, z 1 / puddle cell (m), w darken
     vec4 wet2;        // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on
     vec4 snow;        // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise), w wind bias
+    vec4 ripple;      // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
                   offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
-                  offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16,
-              "PassU: p_wet / p_wet2 / p_snow follow p_sky_rot as in MCE_GLSL_PASS_U");
+                  offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
+                  offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16,
+              "PassU: p_wet / p_wet2 / p_snow / p_ripple follow p_sky_rot as in MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -324,10 +327,9 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
     return sky_tex;
 }
 
-// 0..1, NaN -> 0 (the wet and snow members are clamped again here: a caller may skip apply_quality).
-f32 unit01(f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; }
-// A noise cell in meters, 0.25..256 (NaN -> 0.25).
-f32 noise_cell(f32 m) { return m > 0.25f ? (m < 256.0f ? m : 256.0f) : 0.25f; }
+// The wet, snow and ripple members are clamped again here (apply_quality's clamps: a caller may skip it).
+using detail::noise_cell;
+using detail::unit01;
 // The floating origin mod 256 m, in f64: the wet and snow noise is periodic over 256 m (the shader fits whole cells
 // into that span), so float precision does not depend on how far the world has rebased.
 f32 wrap256(f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); }
@@ -352,6 +354,21 @@ void snow_params(const SnowCover& s, const f64 origin[3], PassU& pu) {
                    unit01(s.wind_bias));
     pu.wet2.x = wrap256(origin[0]);
     pu.wet2.y = wrap256(origin[2]);
+}
+
+// The main pass's ripple member (M-RAINFX 7b). Strength 0 or `enabled` false leaves p_ripple zero: the shader skips
+// its branch and the frame is the ripple-less one bit for bit (it also skips it where no puddle lies, so the wet
+// members need no change here). The clock is the scene's (Scene3D::set_time), scaled by the speed and wrapped in f64
+// to 0..60 s: every drop period (3 to 6 quarter seconds) divides 60 s, so the wrap does not show and float precision
+// does not depend on how long the scene has run. A ring width (and a density) of 0 survives the clamp: the width is
+// floored at 0.01, the shader divides by it.
+void ripple_params(const Ripples& r, f32 time, PassU& pu) {
+    const f32 strength = unit01(r.strength);
+    if (!r.enabled || strength <= 0.0f) return;
+    const f64 t = f64(time) * f64(detail::ripple_speed(r.speed));
+    const f32 ring_width = unit01(r.ring_width);
+    pu.ripple = vec4(strength, unit01(r.density), ring_width > 0.01f ? ring_width : 0.01f,
+                     f32(t - 60.0 * std::floor(t / 60.0)));
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -1836,10 +1853,11 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
-    // Wet surfaces and snow: the main pass (and the fog injection, which does not read them). Probe and volume
-    // captures stay dry and snowless: they are cached across frames while the wetness and the cover change.
+    // Wet surfaces, snow and rain ripples: the main pass (and the fog injection, which does not read them). Probe
+    // and volume captures stay dry, snowless and still: they are cached across frames while the weather changes.
     wet_params(scene.wet_surfaces(), origin_, pu);
     snow_params(scene.snow_cover(), origin_, pu);
+    ripple_params(scene.ripples(), scene.time(), pu);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
