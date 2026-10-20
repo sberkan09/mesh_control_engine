@@ -36,6 +36,6 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 6a | done | #622 | `render::SnowCover`, `r.snow_cover`, tier fields, `apply_quality` overload |
-| 6b | done | #632 | `p_snow`, `apply_snow` after `apply_wet`, `snow_plaza` golden, tests/render_gl/test_render3d_snow_gl.cpp; wind toward +x, Low draws an even layer |
+| 6b | done | #633 | `p_snow`, `apply_snow` after `apply_wet`, `snow_plaza` golden, tests/render_gl/test_render3d_snow_gl.cpp; wind toward +x, Low draws an even layer |
 | 6c | done | #623 | `SnowCover` component, `kit_snow_cover`, extract, tests/kit/test_snow_cover.cpp |
 | 6d | planned | | needs 6b, 6c |
