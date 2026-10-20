@@ -1,7 +1,5 @@
 #include "mce/editor/mixer_model.h"
 
-#include <cstring>
-
 #include "mce/cook/string.h"
 
 namespace mce::editor {
@@ -41,7 +39,6 @@ bool put(EditorScene& scene, Match match, const char* label, const T& value) {
     const refl::TypeRecord& type = refl::type_of<T>();
     EntityId owner = kNoEntity;
     const T* have = find_first<T>(scene, match, owner);
-    if (have && std::memcmp(have, &value, sizeof(T)) == 0) return false;
     scene.begin_edit("Edit the mixer");
     if (!have) {
         cook::String name = "Mixer ";
@@ -51,7 +48,7 @@ bool put(EditorScene& scene, Match match, const char* label, const T& value) {
     }
     const bool changed = scene.set_component(owner, type, &value);
     scene.end_edit();
-    return changed || !have;
+    return changed || !have;  // set_component is a no-op on an unchanged value
 }
 
 // Removes the matching component; an entity named "Mixer ..." left without components goes with it.
