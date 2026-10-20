@@ -6,6 +6,7 @@
 
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/timed_light.h"
 #include "mce/kit/wet_surfaces.h"
@@ -206,6 +207,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Pre, "kit_weather", &kit_weather, "kit_timed_light");
     world.register_components<SnowCover>();  // M-SNOWCOVER 6c: advanced by kit_snow_cover, read by Kit3DExtract
     world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
+    world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
 }
 
 }  // namespace mce::kit

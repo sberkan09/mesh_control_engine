@@ -12,6 +12,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
@@ -855,6 +856,28 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             snow.noise_enabled = true;
         }
         scene.set_snow_cover(render::apply_quality(quality_, snow));
+    }
+    {  // rain ripples (M-RAINFX 7c): only a scene with Weather, WetSurfaces and RainRipples, while it rains
+        const Weather* weather = nullptr;
+        bool has_wet = false;
+        const RainRipples* ripc = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const WetSurfaces&>().each([&](const WetSurfaces&) { has_wet = true; });
+        world.query<const RainRipples&>().each([&](const RainRipples& c) {
+            if (!ripc) ripc = &c;
+        });
+        render::Ripples ripples;  // strength 0 by default (off)
+        if (weather && has_wet && ripc && weather->intensity > 0.0f) {
+            const f32 inten = weather->intensity < 1.0f ? weather->intensity : 1.0f;
+            ripples.strength = ripc->strength * inten;
+            ripples.density = ripc->density;
+            ripples.speed = ripc->speed;
+            ripples.ring_width = ripc->ring_width;
+            ripples.enabled = true;
+        }
+        scene.set_ripples(render::apply_quality(quality_, ripples));
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
