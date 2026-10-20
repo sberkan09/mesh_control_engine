@@ -1,0 +1,1 @@
+- Luau `inventory` global (M-INVENTORY step 4a, GH-406): `inventory.add`, `remove`, `count`, `has`, `weight`, `slot`, `equip`, `unequip`, `use`, `drop` and `open` over the kit's `Inventory`, `Equipment` and `Container`. Changes go in as the kit's events; reads look straight at the component. `docs/user-guide/27-scripting.md`.

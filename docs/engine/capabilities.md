@@ -84,9 +84,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
-| `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
-| `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
+| `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
+| `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
+| `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp |
 | `Joint3D` | `mce/kit/joints3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `MeshRef` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/11_daynight/assets/scenes/daynight.mcscene |
@@ -105,7 +105,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_loot.cpp |
-| `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_loot.cpp |
+| `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/27-scripting.md | allowed: M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_loot.cpp |
 | `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
