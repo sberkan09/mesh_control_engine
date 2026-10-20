@@ -637,7 +637,7 @@ void apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, 
 // ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
 // water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
 // normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
-//   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~33 degrees fully, none past ~57
+//   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
 //   c   = clamp(cover * coverage * (1 + wind_bias * ng.x), 0, 1)
 //         the share of the surface to whiten; the weather's wind blows toward +x (Precipitation3D drifts the snow
 //         that way), so +x-facing (lee) slopes take up to 1 + wind_bias times the share and -x-facing (windward)
