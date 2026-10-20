@@ -68,7 +68,8 @@ u64 seed_of(u64 seed, const FixedString<64>& table, Entity e) {
 void ring_offset(u32 i, f32 r, f32& x, f32& z) {
     static constexpr f32 kX[8] = {1.0f, 0.70710678f, 0.0f, -0.70710678f, -1.0f, -0.70710678f, 0.0f, 0.70710678f};
     static constexpr f32 kZ[8] = {0.0f, 0.70710678f, 1.0f, 0.70710678f, 0.0f, -0.70710678f, -1.0f, -0.70710678f};
-    const f32 k = static_cast<f32>(i / 8u + 1u);
+    const u32 ring = i / 8u + 1u;
+    const f32 k = static_cast<f32>(ring);
     x = kX[i % 8u] * r * k;
     z = kZ[i % 8u] * r * k;
 }
