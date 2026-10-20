@@ -1,0 +1,1 @@
+- Mixer model, M-MIXEDIT step 1: `MixerModel` in editor core reads and writes a scene's bus effects, reverb units, limiter and ducks through `EditorScene` (one undo entry per change, a `Mixer ...` entity is created and removed as needed). The Mixer panel follows in step 2.
