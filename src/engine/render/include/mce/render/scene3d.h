@@ -362,6 +362,19 @@ struct WetSurfaces {
     u8 pad_[3] = {};
 };
 
+// Snow cover (M-SNOWCOVER 6a; the weather drives it, the quality tiers gate it): `cover` 0..1 whitens
+// up-facing surfaces, `coverage` 0..1 is the share of them that whitens at full cover, `noise_scale` the
+// breakup noise cell in meters, `wind_bias` 0..1 how much the layer favors the lee side. cover 0 = off:
+// the frame is the snowless one.
+struct SnowCover {
+    f32 cover = 0.0f;
+    f32 coverage = 0.8f;
+    f32 noise_scale = 3.0f;
+    f32 wind_bias = 0.5f;
+    bool noise_enabled = true;  // false on the Low tier (apply_quality)
+    u8 pad_[3] = {};
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -674,6 +687,7 @@ public:
     void set_contact_shadows(const ContactShadows& c) { contact_ = c; }
     void set_parallax(const ParallaxSettings& p) { parallax_ = p; }
     void set_wet_surfaces(const WetSurfaces& w) { wet_ = w; }
+    void set_snow_cover(const SnowCover& s) { snow_ = s; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -738,6 +752,7 @@ public:
     const ContactShadows& contact_shadows() const { return contact_; }
     const ParallaxSettings& parallax() const { return parallax_; }
     const WetSurfaces& wet_surfaces() const { return wet_; }
+    const SnowCover& snow_cover() const { return snow_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -827,6 +842,7 @@ private:
     ContactShadows contact_;
     ParallaxSettings parallax_;
     WetSurfaces wet_;
+    SnowCover snow_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

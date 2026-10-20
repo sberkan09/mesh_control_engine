@@ -77,6 +77,35 @@
     "Weather": {
      "transition_seconds": 10
     },
+    "WetSurfaces": {
+     "strength": 4,
+     "darken": 0.5,
+     "puddles": 0.6
+    },
+    "WindSway": {},
+    "Foliage3D": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000006",
+     "tint": [
+      0.25,
+      0.5,
+      0.2,
+      1
+     ],
+     "half_extents": [
+      14,
+      5
+     ],
+     "count": 60,
+     "seed": 12,
+     "scale_min": 0.3,
+     "scale_max": 0.7,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "wind_gust": 0.2,
+     "wind_flutter": 0.02,
+     "cast_shadows": 0
+    },
     "LocalTransform": {}
    }
   },

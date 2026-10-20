@@ -6,7 +6,10 @@
 
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/snow_cover.h"
 #include "mce/kit/timed_light.h"
+#include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_sway.h"
 
 namespace mce::kit {
 namespace {
@@ -160,6 +163,31 @@ void kit_weather(Frame& f) {
     });
 }
 
+// Snow cover (M-SNOWCOVER 6c): the same integer idiom as Weather.wet_q. Rises by intensity while it snows, else melts.
+void kit_snow_cover(Frame& f) {
+    const Weather* weather = nullptr;
+    f.query<const Weather>().each([&](Entity, const Weather& w) {
+        if (!weather) weather = &w;
+    });
+    const f64 dt = static_cast<f64>(f.dt);
+    bool first = true;  // one SnowCover per scene: the first in ECS order drives
+    f.query<SnowCover>().each([&](Entity, SnowCover& c) {
+        if (!first) return;
+        first = false;
+        if (c.snow_q > kWetMax) c.snow_q = kWetMax;
+        if (weather && weather->current == WeatherKind::Snow && weather->fade_den > 0) {
+            const u64 rise = mul_div(static_cast<u64>(kWetMax) * weather->fade, 1,
+                                     static_cast<u64>(weather->fade_den) * ticks_of(static_cast<f64>(c.build_seconds), dt));
+            const u64 q = c.snow_q + rise;
+            c.snow_q = q > kWetMax ? kWetMax : static_cast<u32>(q);
+        } else {
+            const u64 fall = kWetMax / ticks_of(static_cast<f64>(c.melt_seconds), dt);
+            c.snow_q = c.snow_q > fall ? static_cast<u32>(c.snow_q - fall) : 0;
+        }
+        c.cover = static_cast<f32>(static_cast<f64>(c.snow_q) / static_cast<f64>(kWetMax));
+    });
+}
+
 }  // namespace
 
 void install_weather(World& world, asset::AssetSystem* assets) {
@@ -167,8 +195,12 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     if (world.try_resource<WeatherInstalled>()) return;
     world.set_resource(WeatherInstalled{});
     world.register_components<Weather>();
+    world.register_components<WindSway>();     // read by Kit3DExtract (M-WINDSWAY 1); no system
+    world.register_components<WetSurfaces>();  // read by Kit3DExtract (M-WETSURFACE 5c); no system
     world.register_event<WeatherChanged>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit_weather", &kit_weather, "kit_timed_light");
+    world.register_components<SnowCover>();  // M-SNOWCOVER 6c: advanced by kit_snow_cover, read by Kit3DExtract
+    world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
 }
 
 }  // namespace mce::kit

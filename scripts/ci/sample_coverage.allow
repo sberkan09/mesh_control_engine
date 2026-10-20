@@ -13,3 +13,4 @@ FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_o
 Inventory | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp
 Equipment | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp
 ItemPickup3D | M-INVENTORY 5 shows it in samples/12_loot; tested in tests/kit/test_inventory.cpp
+SnowCover | wired in 6d (samples/12_weather)

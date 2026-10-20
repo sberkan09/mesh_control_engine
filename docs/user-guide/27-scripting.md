@@ -172,7 +172,7 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `mce.random()` | a number in [0, 1) that depends only on the seed, the tick, the script and the call |
 | `mce.load_scene(target)` | switches scene after this tick (a source path or `"guid:<uuid>"`; section 4.5) |
 | `mce.quit()` | ends the run after this tick, like the window's close button |
-| `mce.log(msg)` | an info line in the engine log, `[<name>] script: <msg>` (the name of the script that wrote it) |
+| `mce.log(msg, level?)` | a line in the engine log, `[<name>] script: <msg>` (the name of the script that wrote it); `level` is `"info"` (default), `"warn"` or `"error"`, and warnings and errors count in a `.mctest`'s `log_warnings` / `log_errors` checks |
 
 **Missions and map markers.** Two more global tables, `mission` and `marker`, are thin over the mission kit (section 9.13) and the map markers (9.15). They keep nothing: the state is the `Mission` and `MapMarker` components and the `MissionSignal` event, so saves, replays and the editor see it. A world without the kit pieces gets an error that says so; a bad argument is a Luau error that names the call, and it disables only that script.
 
@@ -230,6 +230,10 @@ end
 | `weather.intensity()` | 0 to 1, the blend of the kind in effect |
 | `weather.wind()` | 0 to 1 |
 | `weather.wetness()` | 0 to 1 |
+| `weather.wet_strength()`, `weather.wet_darken()`, `weather.wet_puddles()`, `weather.wet_puddle_scale()` | read the first `WetSurfaces` (section 9.19): `strength`, `darken`, `puddles` and `puddle_scale_m`. A scene without a `WetSurfaces` raises an error that names the call |
+| `weather.set_wet{strength=, darken=, puddles=, puddle_scale=}` | writes those fields of the first `WetSurfaces`; every key is optional and each value is clamped to the field's range (strength 0 to 4, darken 0 to 1, puddles 0 to 1, puddle_scale 0.1 to 100 m). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
+| `weather.sway_amplitude()`, `weather.sway_frequency()`, `weather.sway_gust()`, `weather.sway_flutter()` | read the four gains of the first `WindSway` (the foliage sway at `weather.wind()` 1, section 9.19): `amplitude_gain`, `frequency_gain`, `gust_gain` and `flutter_gain`. A scene without a `WindSway` raises an error that names the call |
+| `weather.set_sway{amplitude=, frequency=, gust=, flutter=}` | writes those gains of the first `WindSway`; every key is optional and each value is clamped to the field's range (amplitude 0 to 50, frequency 0 to 10, gust -1 to 1, flutter 0 to 50). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
 
 ```lua
 -- A storm rolls in when the player enters the harbour.
@@ -393,7 +397,8 @@ In 2D, `mce.axis2("Move")` is +y up (W and the up arrow), like the world. A pick
 (or `vector.magnitude(a - b) < r` over `LocalTransform.position`); `mce.destroy` is safe inside `mce.each`. The headless run
 prints `mce.log` lines and the state hash; to see component values after a run use `mce inspect MyGame --component Coin` (every live
 entity with that component, at most 64) or `--entity <id or name>`, add `--show ScriptVars,LocalTransform` to pick the components and
-`--ticks N` for the run length: it prints the live values as JSON, `ScriptVars.v` included. `.mctest` scenarios run with `mce test MyGame`
+`--ticks N` for the run length: it prints the live values as JSON, `ScriptVars.v` included. To see how a value moved over the run, `--trace Hero:ScriptVars.v` (or
+`--trace 7:LocalTransform.position.x`, repeatable, `--every N` ticks, default 10) prints one row per sampled tick. `.mctest` scenarios run with `mce test MyGame`
 (chapter 14.3.1), not through `mce_player`.
 
 

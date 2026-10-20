@@ -93,7 +93,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `perception_debug_lines` | `ticks?` (1) | plays the saved scene headless and reports every `Perceiver`: world `eye`, `forward`, `yaw_deg`, range, angle, `sees`, `target`, `last_seen`, and the debug `lines` (cone edges, range arc, a line to the target); the way to see where a guard looks |
 | | `debug_lines` | `ticks?` (1), `categories?`, `limit?` (2000) | plays the saved scene headless and returns the gameplay debugger's world-space lines as data: box colliders, rigid bodies, triggers (green while occupied), joints, character capsules, vehicle wheels (red while skidding), waypoint chains and driver targets, with `counts` per category |
 | | `debug_view` | `view?` (`top`/`front`/`side`), `ticks?`, `categories?`, `width?`, `height?` (512) | the same lines drawn by a CPU rasteriser and returned as a PNG, no GPU needed |
-| | `asset_thumbnail` | `path` or `guid` (one asset) or `folder` (a contact sheet; `""` for all), `type?`, `size?` (16–512; 128 single, 64 sheet), `limit?` (64) | a CPU-drawn picture of the asset as PNG: a texture, a sound's waveform, a mesh (cook first), else a plain tile by type; the JSON says per tile whether it is `real` |
+| | `asset_thumbnail` | `path` or `guid` (one asset) or `folder` (a contact sheet; `""` for all), `type?`, `size?` (16–512; 128 single, 64 sheet), `limit?` (64) | a CPU-drawn picture of the asset as PNG: a texture, a sound's waveform, a mesh (cook first), a material as a lit sphere, a particle preset as its emitter run for 1.5 s, else a plain tile by type; the JSON says per tile whether it is `real` |
 | 2D skeleton | `skel2d_create` | `path`, `name?`, `root?` ("root") | a new `.mcskel2d` with a fresh GUID and one root bone (user guide 7.13). Every `skel2d_*` edit is cooked by the real importer before it is written, so an error names `file:line` and nothing changes |
 | | `skel2d_add_bone` | `skeleton`, `name`, `parent?`, `x?`, `y?`, `rotation?` (degrees), `scale?` (number or `[sx, sy]`), `length?` | adds a bone, last; the parent must already exist |
 | | `skel2d_add_slot` | `skeleton`, `name`, `bone`, `texture?` (`guid:`), `rect?`, `size?`, `pivot?`, `offset?`, `rotation?`, `tint?`, `attachments?`, `attachment?` | adds a slot (a textured quad on a bone, drawn after the earlier slots); `attachments` makes it a list of quads and meshes in the `.mcskel2d` form |
@@ -402,7 +402,8 @@ there are none).
 `mce inspect <project> --component Type` is the `run_headless` tool's `inspect` for a terminal: it plays the scene (`--ticks`, default 300)
 and prints the live component values of every entity with that component and/or of `--entity` ids or names as JSON (Transient runtime fields
 such as `ScriptVars.v` included; `--show A,B` picks the components). The state hash goes to stderr; it exits 3 when a script failed, as
-`mce_player -headless` does.
+`mce_player -headless` does. `--trace Hero:LocalTransform.position.x` (repeatable, at most 16; `--every N`, default 10) samples a field while the
+run plays and prints one row per sampled tick (at most 1000), so you see how a value moved, not only where it ended; with only `--trace` no entity dump is printed.
 
 A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag.mctest`):
 
@@ -420,6 +421,8 @@ A scenario is a JSON file under the project's `tests/` folder (`tests/reach_flag
     { "entity": "Player", "field": "LocalTransform.position.x", ">": 10, "tick": 600 },
     { "entity": "Score", "field": "ScoreBoard.coins", "value": 3 },
     { "event": "CoinCollected", ">=": 3 },
+    { "count": "Enemy", "<=": 3 },
+    { "script": "enemy.luau", "metric": "peak_steps", "<=": 400 },
     { "log_errors": 0 },
     { "log_contains": "level complete" }
   ],
@@ -442,6 +445,9 @@ A check names one thing and compares it: `{"entity", "field"}` (a component fiel
 name `my_game::CoinCollected`, or `CoinCollected` when one event type has that name; an unknown
 name fails the check with a note listing the game's events),
 `scene` (the scene the run is in, by source path, after the game's `scene::request_change`),
+`count` (how many live entities have that component, ones the run spawned included: `{"count": "Enemy", "<=": 3}`; it needs a comparison and a known component type),
+`script` (a scene script's step profile, `mce profile`'s numbers: `{"script": "enemy.luau", "metric": "peak_steps", "<=": 400}`; the script by its path or the end of it, `metric` is
+`peak_steps`, `avg_steps`, `total_steps` or `updates`; an unknown script name fails the check with the scripts that ran listed; steps are deterministic, so a budget regression fails a test),
 `log_contains`, `log_errors` / `log_warnings` (the most allowed) or `feel` (`deaths`,
 `idle_ticks`, `stuck_ticks`, `stuck_spots`, `distance`, `cells`, `finished_tick`). The comparison
 is `"value": x` (equal), an operator key (`"<=": 3`, `">": 0`, `"!=": "Idle"`) or `"op"` with

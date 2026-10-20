@@ -43,6 +43,11 @@ struct QualitySettings {
     // (wetness 0 draws the dry frame, puddles included).
     bool wet_surfaces = true;
     bool wet_puddles = true;
+    // M-SNOWCOVER 6a: SnowCover is honored (off: cover 0) and, separately, its noise breakup. Low keeps the
+    // whitening and drops the noise. snow_noise has no effect while snow_cover is off (cover 0 draws the
+    // snowless frame, noise included).
+    bool snow_cover = true;
+    bool snow_noise = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -82,5 +87,11 @@ void apply_quality(const QualitySettings& q, ParallaxSettings& p);
 // copy: the extract builds the value from kit data and hands it straight to Scene3D::set_wet_surfaces, which
 // exposes no mutable reference to apply it to.
 WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet);
+// Snow cover: the weather's cover, zeroed when the tier or `r.snow_cover 0` switches it off; noise_enabled
+// follows the tier (and means nothing at cover 0). cover, coverage and wind_bias are clamped to 0..1 (NaN to 0)
+// and noise_scale to 0.25..256 m. Returns a copy for the same reason as the WetSurfaces overload: the extract
+// builds the value from kit data and hands it straight to Scene3D::set_snow_cover, which exposes no mutable
+// reference to apply it to.
+SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow);
 
 }  // namespace mce::render

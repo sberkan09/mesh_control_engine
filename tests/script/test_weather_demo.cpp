@@ -26,6 +26,8 @@
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_sway.h"
 #include "mce/kit/world_clock.h"
 #include "mce/scene/scene.h"
 #include "mce/script/compiler.h"
@@ -115,6 +117,22 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(d.world.try_get<kit::Environment3D>(d.e[kSky])->atmosphere == 0);
     CHECK(d.wx().transition_seconds == 10.0f);
     CHECK(d.wx().target == kit::WeatherKind::Clear);
+    // M-WETSURFACE 5d: the Weather entity also carries the WetSurfaces (strength 4 lifts the slow wetness).
+    const kit::WetSurfaces* wet = d.world.try_get<kit::WetSurfaces>(d.e[kWeather]);
+    REQUIRE(wet != nullptr);
+    CHECK(wet->strength == 4.0f);
+    CHECK(wet->darken == 0.5f);
+    CHECK(wet->puddles == 0.6f);
+    CHECK(wet->puddle_scale_m == 4.0f);
+    // M-WINDSWAY 2: ... and a WindSway with the default gains plus a Foliage3D patch to sway.
+    const kit::WindSway* sway = d.world.try_get<kit::WindSway>(d.e[kWeather]);
+    REQUIRE(sway != nullptr);
+    CHECK(sway->amplitude_gain == 4.0f);
+    CHECK(sway->frequency_gain == 1.5f);
+    const kit::Foliage3D* foliage = d.world.try_get<kit::Foliage3D>(d.e[kWeather]);
+    REQUIRE(foliage != nullptr);
+    CHECK(foliage->count == 60);
+    CHECK(foliage->wind_amplitude == 0.08f);
     // Tick 0: nothing has run, the resource is the authored Environment3D.
     CHECK(bits(d.env().sun_intensity) == bits(2.0f));
     CHECK(d.em().emitting == 0);  // as authored: dry until the weather says otherwise

@@ -12,6 +12,10 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/kit/snow_cover.h"
+#include "mce/kit/weather.h"
+#include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_sway.h"
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/refl/property_path.h"
@@ -41,6 +45,15 @@ template <class F>
 void foliage_look(const F& f, render::InstanceBatch& b) {
     b.tint_variation = f.tint_variation;
     b.wind_ext = {max(f.wind_height, 0.0f), clamp(f.wind_gust, 0.0f, 1.0f), max(f.wind_flutter, 0.0f), 0.0f};
+}
+
+// Wind sway (M-WINDSWAY 1): the batch's wind fields scaled by Weather.wind. Batch fields only, after the cached
+// transforms, so a wind change never re-scatters (entry->version is untouched). Called only when both exist.
+void apply_wind_sway(f32 wind, const WindSway& s, render::InstanceBatch& b) {
+    b.wind_amplitude *= 1.0f + (s.amplitude_gain - 1.0f) * wind;
+    b.wind_frequency *= 1.0f + (s.frequency_gain - 1.0f) * wind;
+    b.wind_ext.y = clamp(b.wind_ext.y + s.gust_gain * wind, 0.0f, 1.0f);
+    b.wind_ext.z *= 1.0f + (s.flutter_gain - 1.0f) * wind;
 }
 
 // The kind (0..3) a scattered copy belongs to: a hash of its origin and the seed against the cumulative weights.
@@ -806,6 +819,43 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     vol.max_distance = env.volumetric_distance;
     render::apply_quality(quality_, vol);
     scene.set_volumetrics(vol);
+    {  // wet surfaces (M-WETSURFACE 5c): only a scene with both a Weather and a WetSurfaces gets wet
+        const Weather* weather = nullptr;
+        const WetSurfaces* wetc = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const WetSurfaces&>().each([&](const WetSurfaces& c) {
+            if (!wetc) wetc = &c;
+        });
+        render::WetSurfaces wet;  // dry by default
+        if (weather && wetc) {
+            wet.wetness = weather->wetness * wetc->strength;
+            wet.darken = wetc->darken;
+            wet.roughness = wetc->wet_roughness;
+            wet.puddles = wetc->puddles;
+            wet.puddle_scale = wetc->puddle_scale_m;
+            wet.puddles_enabled = true;
+        }
+        scene.set_wet_surfaces(render::apply_quality(quality_, wet));
+    }
+    {  // snow cover (M-SNOWCOVER 6c): only a scene with both a Weather and a SnowCover can whiten
+        bool has_weather = false;
+        const SnowCover* snowc = nullptr;
+        world.query<const Weather&>().each([&](const Weather&) { has_weather = true; });
+        world.query<const SnowCover&>().each([&](const SnowCover& c) {
+            if (!snowc) snowc = &c;
+        });
+        render::SnowCover snow;  // bare by default (cover 0)
+        if (has_weather && snowc) {
+            snow.cover = snowc->cover * snowc->strength;
+            snow.coverage = snowc->coverage;
+            snow.noise_scale = snowc->noise_scale_m;
+            snow.wind_bias = snowc->wind_bias;
+            snow.noise_enabled = true;
+        }
+        scene.set_snow_cover(render::apply_quality(quality_, snow));
+    }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
     post.bloom = env.bloom != 0 && quality_.bloom;
@@ -1200,6 +1250,15 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     // Scale (M-VISUAL 9): foliage batches, decals, GPU particles on the scene's clock.
     if (!bake_mode_ && !extra_view_) time_ += max(frame_dt_, 0.0f);
     scene.set_time(time_, bake_mode_ ? 0.0f : max(frame_dt_, 0.0f));
+    const Weather* sway_weather = nullptr;  // wind sway: only a scene with both a Weather and a WindSway (first of each)
+    const WindSway* sway = nullptr;
+    world.query<const Weather&>().each([&](const Weather& c) {
+        if (!sway_weather) sway_weather = &c;
+    });
+    world.query<const WindSway&>().each([&](const WindSway& c) {
+        if (!sway) sway = &c;
+    });
+    const f32 sway_wind = sway_weather && sway ? sway_weather->wind : 0.0f;
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;
         vec3 pos, scale;
@@ -1295,6 +1354,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             b.wind_frequency = f.wind_frequency;
             b.wind_direction = f.wind_direction;
             foliage_look(f, b);
+            if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
             scene.add_batch(b);
             ++stats_.foliage;
             stats_.foliage_instances += static_cast<u32>(copies.size());
@@ -1392,6 +1452,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         b.wind_frequency = f.wind_frequency;
         b.wind_direction = f.wind_direction;
         foliage_look(f, b);
+        if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
         scene.add_batch(b);
         ++stats_.foliage;
         stats_.foliage_instances += static_cast<u32>(entry->transforms.size());

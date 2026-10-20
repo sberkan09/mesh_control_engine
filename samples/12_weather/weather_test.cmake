@@ -3,7 +3,9 @@
 # tick N shows the state after N + 1 system ticks; 10 s transitions are 600 ticks). The sun, emitter, lightning and
 # environment numbers are in tests/script/test_weather_demo.cpp. Gates:
 #   1. 600 ticks: clear, then rain from tick 60 (intensity (N - 60) / 600), the same state hash on two plays;
-#   2. 2700 ticks: rain 0.900 at tick 600, storm and snow arrive, clear again at tick 2400, and no problem logged.
+#   2. 2700 ticks: rain 0.900 at tick 600, storm and snow arrive, clear again at tick 2400, and no problem logged;
+#   3. (M-WINDSWAY 2) the "sway:" lines: the factor Kit3DExtract scales the Foliage3D wind amplitude and frequency by,
+#      1 + (gain - 1) * Weather.wind with the WindSway gains 4 and 1.5, per weather kind.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -42,6 +44,8 @@ play(second -ticks 600 -input "${INPUT}")
 expect("${first}" "600 ticks, 11 entities, state_hash" "the run did not end after 600 ticks with 11 entities")
 expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
 expect("${first}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.000 at tick 0\n" "the weather did not start clear")
+expect("${first}" "script: sway: amplitude x1.300 frequency x1.050 at tick 0\n" "the clear sway factor is not 1 + 3 * 0.1")
+expect("${first}" "script: sway: amplitude x1.780 frequency x1.130 at tick 300\n" "the rain sway factor did not follow the wind")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -58,6 +62,10 @@ expect("${forecast}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0
 expect("${forecast}" "script: weather: storm intensity 0.602 wind 0.641 wetness 0.165 at tick 1500\n" "the storm is not at 0.602 when snow is called")
 expect("${forecast}" "script: weather: snow intensity 0.400 wind 0.140 wetness 0.209 at tick 2100\n" "snow is not at 0.4 when clear is called")
 expect("${forecast}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.213 at tick 2400\n" "the weather did not clear")
+expect("${forecast}" "script: sway: amplitude x2.380 frequency x1.230 at tick 600\n" "the sway factor is wrong when the storm is called")
+expect("${forecast}" "script: sway: amplitude x2.924 frequency x1.321 at tick 1500\n" "the storm does not sway the foliage at 2.924 times")
+expect("${forecast}" "script: sway: amplitude x1.420 frequency x1.070 at tick 2100\n" "the snow sway factor is wrong")
+expect("${forecast}" "script: sway: amplitude x1.300 frequency x1.050 at tick 2400\n" "the sway did not return to the clear factor")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

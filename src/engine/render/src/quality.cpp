@@ -13,6 +13,8 @@ MCE_CVAR(cv_quality, "r.quality", "auto", "3D quality tier: auto, low, medium, h
          CVarFlags::RequiresRestart | CVarFlags::Saved);
 MCE_CVAR(cv_wet_surfaces, "r.wet_surfaces", true,
          "Wet surfaces from the weather (WetSurfaces; off = the dry frame)", CVarFlags::Saved);
+MCE_CVAR(cv_snow_cover, "r.snow_cover", true,
+         "Snow cover from the weather (SnowCover; off = the snowless frame)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -32,6 +34,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.parallax_distance = 0.0f;
             q.parallax_max_steps = 0;
             q.wet_puddles = false;
+            q.snow_noise = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -107,6 +110,18 @@ WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet) {
     out.puddle_scale = wet.puddle_scale > 0.25f ? (wet.puddle_scale < 256.0f ? wet.puddle_scale : 256.0f) : 0.25f;
     // Off with wet_surfaces (wetness 0 skips the whole shader branch, puddles included) whatever this says.
     out.puddles_enabled = wet.puddles_enabled && q.wet_puddles;
+    return out;
+}
+
+SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow) {
+    const auto unit = [](f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; };  // NaN -> 0
+    SnowCover out = snow;
+    out.cover = q.snow_cover && cv_snow_cover.get_bool() ? unit(snow.cover) : 0.0f;
+    out.coverage = unit(snow.coverage);
+    out.wind_bias = unit(snow.wind_bias);
+    out.noise_scale = snow.noise_scale > 0.25f ? (snow.noise_scale < 256.0f ? snow.noise_scale : 256.0f) : 0.25f;
+    // Meaningless with snow_cover off (cover 0 skips the whole shader branch, noise included).
+    out.noise_enabled = snow.noise_enabled && q.snow_noise;
     return out;
 }
 

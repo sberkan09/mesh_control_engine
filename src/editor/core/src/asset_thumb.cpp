@@ -6,6 +6,8 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/asset/file_io.h"
+#include "mce/cook/fs.h"
+#include "mce/cook/json.h"
 #include "mce/editor/project.h"
 #include "mce/math/math.h"
 
@@ -176,6 +178,181 @@ bool thumb_from_mesh(const asset::MeshView& mesh, u32 size, cook::Image& out) {
     return true;
 }
 
+namespace {
+
+f32 saturate(f32 v) { return std::fmin(std::fmax(v, 0.0f), 1.0f); }
+
+u8 to_srgb8(f32 linear) { return static_cast<u8>(std::lround(std::pow(saturate(linear), 1.0f / 2.2f) * 255.0f)); }
+
+}  // namespace
+
+void thumb_from_material(const MaterialSwatch& m, u32 size, cook::Image& out) {
+    size = clamp_size(size);
+    fill(out, size, 40, 40, 40);
+    const f32 half = static_cast<f32>(size) * 0.5f;
+    const f32 radius = static_cast<f32>(size) * 0.42f;
+    const f32 roughness = std::fmax(saturate(m.roughness), 0.045f);
+    const f32 metallic = saturate(m.metallic);
+    const math::vec3 light = math::normalize(math::vec3(-0.5f, 0.6f, 0.62f));
+    const math::vec3 view(0.0f, 0.0f, 1.0f);
+    const math::vec3 half_v = math::normalize(light + view);
+    const f32 shininess = std::fmin(std::fmax(2.0f / (roughness * roughness * roughness * roughness) - 2.0f, 2.0f), 2000.0f);
+    const f32 spec_norm = (shininess + 8.0f) / 25.1327f;  // (n + 8) / 8 pi
+    const f32 alpha = m.blend ? saturate(m.base[3]) : 1.0f;
+    for (u32 y = 0; y < size; ++y)
+        for (u32 x = 0; x < size; ++x) {
+            const f32 dx = (static_cast<f32>(x) + 0.5f - half) / radius;
+            const f32 dy = (half - static_cast<f32>(y) - 0.5f) / radius;
+            const f32 r2 = dx * dx + dy * dy;
+            if (r2 > 1.0f) continue;
+            const math::vec3 n(dx, dy, std::sqrt(1.0f - r2));
+            const f32 ndl = std::fmax(math::dot(n, light), 0.0f);
+            const f32 ndh = std::fmax(math::dot(n, half_v), 0.0f);
+            const f32 ndv = std::fmax(n.z, 0.0f);
+            f32 c[3];
+            for (u32 k = 0; k < 3; ++k) {
+                const f32 base = m.base[k];
+                if (m.unlit) {
+                    c[k] = base;
+                    continue;
+                }
+                const f32 f0 = 0.04f + (base - 0.04f) * metallic;
+                const f32 fres = f0 + (1.0f - f0) * std::pow(1.0f - ndv, 5.0f) * (1.0f - roughness);
+                const f32 diffuse = base * (1.0f - metallic) * (ndl * 1.1f + 0.12f);
+                const f32 spec = fres * std::pow(ndh, shininess) * spec_norm * ndl;
+                // A tinted sky above, a dark ground below, reflected more by smooth and by metallic surfaces.
+                const f32 sky = n.y * 0.5f + 0.5f;
+                const f32 env = (0.18f + 0.55f * sky) * fres * (1.0f - roughness * 0.8f);
+                c[k] = diffuse + spec * 2.0f + env + m.emissive[k];
+            }
+            const u32 check = (((x / 8) + (y / 8)) & 1u) ? 150 : 100;
+            const u32 a = static_cast<u32>(std::lround(alpha * 255.0f));
+            put(out, x, y, mix(to_srgb8(c[0]), check, a), mix(to_srgb8(c[1]), check, a), mix(to_srgb8(c[2]), check, a));
+        }
+}
+
+namespace {
+
+// xorshift32: a fixed stream, so the same preset always draws the same picture.
+struct Rng {
+    u32 s = 0x9E3779B9u;
+    f32 next() {
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        return static_cast<f32>(s >> 8) / 16777216.0f;
+    }
+    f32 range(f32 lo, f32 hi) { return lo + (hi - lo) * next(); }
+};
+
+struct Spark {
+    f32 x, y, vx, vy, age, life;
+};
+
+}  // namespace
+
+void thumb_from_particles(const ParticleSwatch& p, u32 size, cook::Image& out) {
+    size = clamp_size(size);
+    fill(out, size, 40, 40, 40);
+    constexpr u32 kTicks = 90, kSnapshotEvery = 9;  // ten snapshots
+    constexpr f32 kDt = 1.0f / 60.0f;
+    struct Dot {
+        f32 x, y, half, rgba[4];
+        u32 snapshot;
+    };
+    Array<Dot> dots;
+    Array<Spark> live;
+    Rng rng;
+    const u32 cap = std::max<u32>(p.max_particles, 1);
+    auto spawn = [&](u32 n) {
+        for (u32 i = 0; i < n && live.size() < cap; ++i) {
+            Spark s;
+            s.x = p.area[0] > 0.0f ? rng.range(-p.area[0], p.area[0]) : 0.0f;
+            s.y = p.area[1] > 0.0f ? rng.range(-p.area[1], p.area[1]) : 0.0f;
+            const f32 angle = p.direction + (p.spread > 0.0f ? rng.range(-p.spread, p.spread) : 0.0f);
+            const f32 speed = rng.range(p.speed[0], p.speed[1]);
+            s.vx = std::cos(angle) * speed;
+            s.vy = std::sin(angle) * speed;
+            s.age = 0.0f;
+            s.life = std::fmax(rng.range(p.lifetime[0], p.lifetime[1]), kDt);
+            live.push_back(s);
+        }
+    };
+    spawn(p.burst);
+    f32 owed = 0.0f;
+    for (u32 tick = 0; tick < kTicks; ++tick) {
+        const f32 t = static_cast<f32>(tick) * kDt;
+        if (p.rate > 0.0f && (p.duration <= 0.0f || t < p.duration)) {
+            owed += p.rate * kDt;
+            const u32 n = static_cast<u32>(owed);
+            owed -= static_cast<f32>(n);
+            spawn(n);
+        }
+        for (usize i = live.size(); i-- > 0;) {
+            Spark& s = live[i];
+            s.vx += p.gravity[0] * kDt;
+            s.vy += p.gravity[1] * kDt;
+            const f32 damp = std::fmax(1.0f - p.drag * kDt, 0.0f);
+            s.vx *= damp;
+            s.vy *= damp;
+            s.x += s.vx * kDt;
+            s.y += s.vy * kDt;
+            s.age += kDt;
+            if (s.age >= s.life) live.erase_swap(i);
+        }
+        if ((tick + 1) % kSnapshotEvery != 0) continue;
+        for (const Spark& s : live) {
+            const f32 u = saturate(s.age / s.life);
+            Dot d;
+            d.x = s.x;
+            d.y = s.y;
+            d.half = 0.5f * (p.size[0] + (p.size[1] - p.size[0]) * u);
+            for (u32 k = 0; k < 4; ++k) d.rgba[k] = p.color_start[k] + (p.color_end[k] - p.color_start[k]) * u;
+            d.snapshot = (tick + 1) / kSnapshotEvery;
+            dots.push_back(d);
+        }
+    }
+    if (dots.empty()) return;
+    f32 x0 = dots[0].x, x1 = x0, y0 = dots[0].y, y1 = y0;
+    for (const Dot& d : dots) {
+        x0 = std::fmin(x0, d.x - d.half);
+        x1 = std::fmax(x1, d.x + d.half);
+        y0 = std::fmin(y0, d.y - d.half);
+        y1 = std::fmax(y1, d.y + d.half);
+    }
+    const f32 span = std::fmax(std::fmax(x1 - x0, y1 - y0), 0.5f);
+    const f32 scale = static_cast<f32>(size) * 0.84f / span;
+    const f32 cx = 0.5f * (x0 + x1), cy = 0.5f * (y0 + y1);
+    const f32 centre = static_cast<f32>(size) * 0.5f;
+    // Float accumulation per pixel, so overlapping dots add up in additive mode and blend in alpha mode.
+    Array<f32> acc;
+    acc.resize(static_cast<usize>(size) * size * 3);
+    for (usize i = 0; i < acc.size(); i += 3) acc[i] = acc[i + 1] = acc[i + 2] = 40.0f / 255.0f;
+    for (const Dot& d : dots) {  // oldest snapshot first, so newer particles draw on top
+        const f32 fade = 0.25f + 0.75f * static_cast<f32>(d.snapshot) / 10.0f;
+        const f32 a = saturate(d.rgba[3]) * fade;
+        const f32 half_px = std::fmax(d.half * scale, 0.5f);
+        const i32 px0 = static_cast<i32>(std::lround(centre + (d.x - cx) * scale - half_px));
+        const i32 px1 = std::max(px0, static_cast<i32>(std::lround(centre + (d.x - cx) * scale + half_px)) - 1);
+        const i32 py0 = static_cast<i32>(std::lround(centre - (d.y - cy) * scale - half_px));
+        const i32 py1 = std::max(py0, static_cast<i32>(std::lround(centre - (d.y - cy) * scale + half_px)) - 1);
+        for (i32 y = std::max(py0, 0); y <= std::min(py1, static_cast<i32>(size) - 1); ++y)
+            for (i32 x = std::max(px0, 0); x <= std::min(px1, static_cast<i32>(size) - 1); ++x) {
+                f32* c = &acc[(static_cast<usize>(y) * size + static_cast<usize>(x)) * 3];
+                for (u32 k = 0; k < 3; ++k) {
+                    const f32 src = saturate(d.rgba[k]);
+                    c[k] = p.additive ? c[k] + src * a : c[k] * (1.0f - a) + src * a;
+                }
+            }
+    }
+    for (u32 y = 0; y < size; ++y)
+        for (u32 x = 0; x < size; ++x) {
+            const f32* c = &acc[(static_cast<usize>(y) * size + x) * 3];
+            put(out, x, y, static_cast<u8>(std::lround(saturate(c[0]) * 255.0f)), static_cast<u8>(std::lround(saturate(c[1]) * 255.0f)),
+                static_cast<u8>(std::lround(saturate(c[2]) * 255.0f)));
+        }
+}
+
 void thumb_tile(asset::ChunkType type, u32 size, cook::Image& out) {
     size = clamp_size(size);
     const u32 t = static_cast<u32>(type);
@@ -188,6 +365,114 @@ void thumb_tile(asset::ChunkType type, u32 size, cook::Image& out) {
         put(out, size - 1, i, 20, 20, 20);
     }
 }
+
+namespace {
+
+// The average colour of a texture's source PNG (alpha-weighted), in 0..1 sRGB; false when it does not read.
+bool texture_average(EditorProject& project, asset::Guid guid, f32 out[3]) {
+    const ProjectAsset* tex = project.find(guid);
+    if (!tex || tex->type != asset::ChunkType::Texture) return false;
+    Array<byte> bytes;
+    if (!asset::read_file(project.asset_path(tex->path.view()).view(), bytes)) return false;
+    Result<cook::Image> img = cook::decode_png(bytes.span());
+    if (!img || img.value().width == 0 || img.value().height == 0) return false;
+    f64 acc[3] = {};
+    f64 weight = 0;
+    const cook::Image& im = img.value();
+    for (usize i = 0; i + 3 < im.rgba.size(); i += 4) {
+        const f64 a = im.rgba[i + 3];
+        for (u32 k = 0; k < 3; ++k) acc[k] += a * im.rgba[i + k];
+        weight += a;
+    }
+    if (weight <= 0) return false;
+    for (u32 k = 0; k < 3; ++k) out[k] = static_cast<f32>(acc[k] / weight / 255.0);
+    return true;
+}
+
+f32 srgb_to_linear(f32 v) { return std::pow(saturate(v), 2.2f); }
+
+// Reads the scalar look of a .mcmat source file; the base colour texture's average colour multiplies the base colour.
+bool read_material_swatch(EditorProject& project, const ProjectAsset& asset, MaterialSwatch& m) {
+    cook::String text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), text)) return false;
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    if (!doc.parse(text.view(), err) || !doc.root().is_object()) return false;
+    const cook::JsonValue root = doc.root();
+    auto number = [&](const char* key, f32& out) {
+        const cook::JsonValue v = root.get(key);
+        if (v.valid() && v.is_number()) out = static_cast<f32>(v.as_number());
+    };
+    auto vec = [&](const char* key, f32* out, u32 n) {
+        const cook::JsonValue v = root.get(key);
+        if (!v.valid() || !v.is_array() || v.size() != n) return;
+        for (u32 i = 0; i < n; ++i)
+            if (v.at(i).is_number()) out[i] = static_cast<f32>(v.at(i).as_number());
+    };
+    vec("base_color", m.base, 4);
+    vec("emissive", m.emissive, 3);
+    number("metallic", m.metallic);
+    number("roughness", m.roughness);
+    const cook::JsonValue mode = root.get("alpha_mode");
+    m.blend = mode.valid() && mode.is_string() && mode.as_string() == "blend";
+    const cook::JsonValue unlit = root.get("unlit");
+    m.unlit = unlit.valid() && unlit.is_bool() && unlit.as_bool();
+    const cook::JsonValue tex = root.get("textures").get("base_color");
+    if (tex.valid() && tex.is_string()) {
+        StringView ref = tex.as_string();
+        if (ref.size() > 5 && ref.substr(0, 5) == "guid:") ref = ref.substr(5);
+        const Result<asset::Guid> g = asset::parse_guid(ref);
+        f32 avg[3];
+        if (g && texture_average(project, g.value(), avg))
+            for (u32 k = 0; k < 3; ++k) m.base[k] *= srgb_to_linear(avg[k]);
+    }
+    return true;
+}
+
+// Reads a .mcpart source file (angles in degrees there, radians in the swatch).
+bool read_particle_swatch(EditorProject& project, const ProjectAsset& asset, ParticleSwatch& p) {
+    cook::String text;
+    if (!cook::fs::read_text(project.asset_path(asset.path.view()).view(), text)) return false;
+    cook::JsonDoc doc;
+    cook::JsonError err;
+    if (!doc.parse(text.view(), err) || !doc.root().is_object()) return false;
+    const cook::JsonValue root = doc.root();
+    constexpr f32 kDeg = 0.017453292519943295f;
+    auto number = [&](const char* key, f32& out) {
+        const cook::JsonValue v = root.get(key);
+        if (v.valid() && v.is_number()) out = static_cast<f32>(v.as_number());
+    };
+    auto vec = [&](const char* key, f32* out, u32 n) {
+        const cook::JsonValue v = root.get(key);
+        if (!v.valid() || !v.is_array() || v.size() != n) return;
+        for (u32 i = 0; i < n; ++i)
+            if (v.at(i).is_number()) out[i] = static_cast<f32>(v.at(i).as_number());
+    };
+    f32 burst = 0, max_particles = 256, direction = 90, spread = 0;
+    number("rate", p.rate);
+    number("burst", burst);
+    number("max_particles", max_particles);
+    number("duration", p.duration);
+    number("direction", direction);
+    number("spread", spread);
+    number("drag", p.drag);
+    vec("lifetime", p.lifetime, 2);
+    vec("speed", p.speed, 2);
+    vec("gravity", p.gravity, 2);
+    vec("size", p.size, 2);
+    vec("area", p.area, 2);
+    vec("color_start", p.color_start, 4);
+    vec("color_end", p.color_end, 4);
+    p.burst = static_cast<u32>(std::fmin(std::fmax(burst, 0.0f), 65536.0f));
+    p.max_particles = static_cast<u32>(std::fmin(std::fmax(max_particles, 1.0f), 65536.0f));
+    p.direction = direction * kDeg;
+    p.spread = spread * kDeg;
+    const cook::JsonValue blend = root.get("blend");
+    p.additive = blend.valid() && blend.is_string() && blend.as_string() == "additive";
+    return true;
+}
+
+}  // namespace
 
 bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 size, cook::Image& out) {
     size = clamp_size(size);
@@ -208,6 +493,18 @@ bool render_thumbnail(EditorProject& project, const ProjectAsset& asset, u32 siz
                     return true;
                 }
             }
+        }
+    } else if (asset.type == asset::ChunkType::ParticlePreset) {
+        ParticleSwatch swatch;
+        if (read_particle_swatch(project, asset, swatch)) {
+            thumb_from_particles(swatch, size, out);
+            return true;
+        }
+    } else if (asset.type == asset::ChunkType::Material) {
+        MaterialSwatch swatch;
+        if (read_material_swatch(project, asset, swatch)) {
+            thumb_from_material(swatch, size, out);
+            return true;
         }
     } else if (asset.type == asset::ChunkType::Mesh) {
         asset::AssetSystem* assets = project.mounted();

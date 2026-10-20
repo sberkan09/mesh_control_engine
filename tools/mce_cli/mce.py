@@ -423,10 +423,38 @@ def cmd_test(args):
     return 1 if out.get("failed", 0) else 0
 
 
+def print_trace(trace):
+    """One row per sampled tick, one column per traced field (`run_headless`'s `trace`)."""
+    series = trace.get("series") or []
+    ticks = trace.get("ticks") or []
+
+    def cell(v):
+        if isinstance(v, float):
+            return f"{v:.4g}"
+        if isinstance(v, list):
+            return "(" + ", ".join(cell(x) for x in v) + ")"
+        return "-" if v is None else str(v)
+
+    heads = ["tick"] + [f"{s['entity']}:{s['field']}" for s in series]
+    rows = [[str(t)] + [cell(s["values"][i]) if i < len(s.get("values", [])) else "-" for s in series] for i, t in enumerate(ticks)]
+    widths = [max(len(h), *(len(r[c]) for r in rows)) if rows else len(h) for c, h in enumerate(heads)]
+    print("  ".join(h.rjust(w) for h, w in zip(heads, widths)))
+    for r in rows:
+        print("  ".join(c.rjust(w) for c, w in zip(r, widths)))
+    if trace.get("truncated"):
+        print(f"(truncated at {len(ticks)} rows)")
+
+
 def cmd_inspect(args):
     """Run the game headless and print the live component values of entities (the `run_headless` tool's inspect)."""
-    if not (args.entity or args.component):
-        sys.exit("mce: inspect needs --component <Type> (every entity with it) and/or --entity <id or name>")
+    if not (args.entity or args.component or args.trace):
+        sys.exit("mce: inspect needs --component <Type> (every entity with it), --entity <id or name> and/or --trace <entity>:<Component.path>")
+    fields = []
+    for t in args.trace or []:
+        ent, sep, field = t.partition(":")
+        if not sep or not ent or not field:
+            sys.exit(f"mce: --trace '{t}' is <entity id or name>:<Component.path>, e.g. Hero:LocalTransform.position.x")
+        fields.append({"entity": int(ent) if ent.isdigit() else ent, "field": field})
     p = Project(args.project)
     p.built(host=False)
     module = [] if p.script else ["--module", p.module]
@@ -437,12 +465,19 @@ def cmd_inspect(args):
         insp["component"] = args.component
     if args.show:
         insp["show"] = [t for t in args.show.split(",") if t]
-    arguments = {"ticks": args.ticks, "inspect": insp, "log_lines": 0}
+    arguments = {"ticks": args.ticks, "log_lines": 0}
+    if insp:
+        arguments["inspect"] = insp
+    if fields:
+        arguments["trace"] = {"every": args.every, "fields": fields}
     scene = args.scene or p.start_scene_path()
     if scene:
         arguments["scene"] = scene
     out = mcp_call([tool("mce_mcp")] + module + ["--project", p.dir], "run_headless", arguments)
-    print(json.dumps(out.get("inspect", {}), indent=2))
+    if insp:
+        print(json.dumps(out.get("inspect", {}), indent=2))
+    if fields:
+        print_trace(out.get("trace") or {})
     print(f"{args.ticks} ticks, state_hash {out.get('state_hash', '?')}", file=sys.stderr)
     errs = out.get("script_errors") or []
     for e in errs:
@@ -1029,6 +1064,9 @@ def main(argv):
     s.add_argument("--entity", action="append", help="a scene entity id or name (repeatable)")
     s.add_argument("--show", help="comma-separated components to print (default: the entity's own, or the --component plus LocalTransform)")
     s.add_argument("--scene", help="play this saved scene (path under assets/)")
+    s.add_argument("--trace", action="append", metavar="ENTITY:FIELD",
+                   help="sample a field while it runs and print the series, e.g. Hero:LocalTransform.position.x (repeatable, at most 16)")
+    s.add_argument("--every", type=int, default=10, help="with --trace: sample every N ticks (default 10)")
     s.set_defaults(fn=cmd_inspect)
 
     s = sub.add_parser("profile", help="run the game headless and print each scene script's step cost against its budget")

@@ -22,6 +22,7 @@
 #include "mce/editor/orbit_camera.h"
 #include "mce/editor/perf_monitor.h"
 #include "mce/editor/preview_renderer.h"
+#include "mce/editor/scene_tabs.h"
 #include "mce/editor/stub_world.h"
 #include "mce/memory/allocator.h"
 #include "mce/platform/window.h"
@@ -136,11 +137,23 @@ public:
     // viewport draws its bones, in the panel's previewed pose, on the selected entities that play it.
     Skeleton2DEditor& skeleton2d() { return skeleton2d_; }
     void open_skeleton2d(asset::Guid guid);
+    // The material the Material panel edits (open_material: a double click in Assets). The panel loads the file
+    // itself (a MaterialForm) and saves it with its own button; the shell only carries the request.
+    asset::Guid material_request() const { return material_request_; }
+    void open_material(asset::Guid guid);
+    // The same for the Particle panel (a double click on a particle preset).
+    asset::Guid particle_request() const { return particle_request_; }
+    void open_particle(asset::Guid guid);
+    // And for the Sequence panel (a double click on a sequence).
+    asset::Guid sequence_request() const { return sequence_request_; }
+    void open_sequence(asset::Guid guid);
     // True once a project is open: the viewport shows the scene instead of the stub world.
     bool scene_mode() const { return session_.project().is_open(); }
     bool open_project(StringView root);
     bool open_scene(StringView path);  // absolute, or relative to the project's assets/ (offers autosave recovery)
-    void request_open_scene(StringView path);  // asks first when the open scene is dirty
+    void request_open_scene(StringView path);  // asks first only when the open scene is dirty and has no file yet
+    // The open scene files (M-SCENETABS): opening one parks the dirty scene in its autosave file instead of asking.
+    SceneTabs& scene_tabs() { return tabs_; }
     bool save_scene();                 // Save As prompt when the scene has no file yet
     void new_scene();                  // asks first when the open scene is dirty
     void cook(bool pack = false);
@@ -223,6 +236,10 @@ private:
     AnimGraphEditor anim_graph_;
     BtEditor bt_;
     Skeleton2DEditor skeleton2d_;
+    asset::Guid material_request_;
+    SceneTabs tabs_;
+    asset::Guid particle_request_;
+    asset::Guid sequence_request_;
     PerfMonitor perf_;
     FrameSample perf_pending_;
     Array<mem::UniquePtr<IEditorPanel>> panels_;

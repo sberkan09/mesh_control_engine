@@ -1,0 +1,1 @@
+- `.mctest` and `playtest` get a `{"script": "a.luau", "metric": "peak_steps", <op>: n}` check on a scene script's step profile, M-SCRIPTTEST step 2.

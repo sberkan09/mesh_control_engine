@@ -1,0 +1,1 @@
+- Assets panel thumbnails, M-THUMBS step 3: a **Grid** checkbox shows the catalog as thumbnails (textures, audio waveforms, meshes, plain tiles by type). A cache draws a few per frame on the CPU and redraws a picture when its file changes.
