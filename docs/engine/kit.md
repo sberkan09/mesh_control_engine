@@ -458,4 +458,4 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
   are taken and the outputs added when the time is up, as one atomic step, so the inventory stays usable meanwhile and a craft that
   no longer fits fails with its reason. `recipe`, `left_us` and `crafter` are saved, so a craft in progress survives a save. Destroying a station drops its queued craft without
   an event (nothing was taken); the station tag is checked again when the time is up. A recipe without a station tag is always made by hand, even when a station is named.
-- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: the next step.
+- System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: `inventory.can_craft(e, recipe, station?)` and `inventory.craft(e, recipe, station?)` (`docs/user-guide/27-scripting.md`); `samples/12_loot` crafts a tonic by hand and a pack at a workbench.

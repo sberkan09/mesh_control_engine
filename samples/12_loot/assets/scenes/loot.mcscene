@@ -140,6 +140,21 @@
      "phase": "Post"
     }
    }
+  },
+  {
+   "name": "Workbench",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4,
+      0.5,
+      0
+     ]
+    },
+    "CraftingStation": {
+     "station": "workbench"
+    }
+   }
   }
  ]
 }
