@@ -15,6 +15,7 @@ mce_add_library(mce_script UMBRELLA
         src/script.cpp
         src/api_world.cpp
         src/api_missions.cpp
+        src/api_inventory.cpp
         src/api_clock.cpp
         src/api_weather.cpp
         src/scene_scripts.cpp

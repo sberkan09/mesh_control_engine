@@ -185,6 +185,22 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `marker.add(e, {icon?, color?, layer?, label?, always_visible?, follow?})` | puts a `MapMarker` on the entity at the next sync point. `color` is `{r, g, b}`, `{r, g, b, a}` or a vector (`colour` works too); `layer` 0 to 31; `label` up to 31 characters; `follow` an `Objective` or `Mission` entity. Fields left out keep the current marker's, or the defaults; an unknown field is an error |
 | `marker.remove(e)` | takes the `MapMarker` off at the next sync point (nothing happens without one) |
 
+**Inventories** (M-INVENTORY 4). The `inventory` global is thin over the kit's `Inventory`, `Equipment` and `Container` (`docs/engine/kit.md`). It keeps no state: changes go in as the kit's input events and land a couple of ticks later, reads look straight at the component. Slots count from 1 (1 to 24). A world without `install_inventory` gets an error that says so.
+
+| Call | What it does |
+|---|---|
+| `inventory.add(e, id, qty?)` | queues a `GiveItem` (`qty` a whole number from 1 to 1000000, default 1); what does not fit is reported by `ItemAdded.remainder` |
+| `inventory.remove(e, id, qty?)` | queues a `TakeItem` |
+| `inventory.count(e, id)` | units of the item across all slots; 0 for an id the catalog does not have |
+| `inventory.has(e, id, qty?)` | `true` when the entity carries at least `qty` (default 1) |
+| `inventory.weight(e)` | carried weight in thousandths of a kilogram |
+| `inventory.slot(e, i)` | `id, qty` of slot `i`; `nil, 0` when it is empty |
+| `inventory.equip(e, i, where?)` | queues an `EquipItem` from slot `i`; `where` is `"head"`, `"body"`, `"hands"`, `"feet"`, `"weapon"`, `"offhand"`, `"accessory1"` or `"accessory2"`, or left out to take the first the item's `equip.*` tags allow |
+| `inventory.unequip(e, where)` | queues an `UnequipItem` |
+| `inventory.use(e, i)` | queues a `UseItem`; an item tagged `consumable` loses one unit |
+| `inventory.drop(e, i, qty?)` | takes `qty` (default the whole stack) out of slot `i` now and spawns an `ItemPickup3D` 1.5 m along +x of the entity; returns how many were dropped |
+| `inventory.open(container, opener)` | queues an `OpenContainer`: the chest rolls its table on the first open and the opener takes what fits |
+
 ```lua
 -- Start the mission when the player presses Interact, and mark the depot on the map.
 function update()
