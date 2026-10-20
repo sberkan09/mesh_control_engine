@@ -166,6 +166,8 @@ function update()
             inventory.equip(e, 1, "weapon")
             inventory.unequip(e, "weapon")
             local dropped: number = inventory.drop(e, 2)
+            local can: boolean = inventory.can_craft(e, "bandage")
+            if can then inventory.craft(e, "bandage", e) end
         end
         mce.log(tostring(id) .. tostring(qty))
     end)

@@ -16,6 +16,10 @@
 //   inventory.drop(e, i, qty?)          takes qty (default the whole stack) out of slot i now and spawns an ItemPickup3D
 //                                       1.5 m along +x of the owner; returns how many were dropped
 //   inventory.open(container, opener)   queue OpenContainer
+//   inventory.can_craft(e, recipe, station?) -> boolean   whether the recipe could be made from the inventory right now
+//                                       (inputs present, room for the outputs, and the station when the recipe names one)
+//   inventory.craft(e, recipe, station?) queue CraftItem; `station` is an entity with a CraftingStation (nil: by hand).
+//                                       ItemCrafted or CraftFailed{reason} follows a couple of ticks later
 //
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
@@ -26,6 +30,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/fixed_string.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/craft.h"
 #include "mce/kit/inventory.h"
 #include "mce/kit/loot.h"
 
@@ -230,9 +235,51 @@ int l_open(lua_State* L) {
     return 0;
 }
 
+// The optional station argument: nil (by hand) or an entity that has a CraftingStation.
+Entity check_station(lua_State* L, World& w, int idx, const char* fn) {
+    if (lua_isnoneornil(L, idx)) return Entity();
+    const Entity st = check_entity(L, idx);
+    if (!w.alive(st) || !w.try_get<kit::CraftingStation>(st)) luaL_error(L, "%s: the station entity has no CraftingStation component", fn);
+    return st;
+}
+
+int l_can_craft(lua_State* L) {
+    World& w = world_of(L);
+    const Entity e = check_entity(L, 1);
+    const FixedString<64> id = check_id(L, 2, "inventory.can_craft");
+    const Entity st = check_station(L, w, 3, "inventory.can_craft");
+    const kit::Inventory& inv = check_inventory(L, w, e, "inventory.can_craft");
+    const asset::ItemCatalog& c = check_catalog(L, w, inv, "inventory.can_craft");
+    const u16 recipe = c.find_recipe(id.view());
+    bool ok = false;
+    if (recipe != asset::kNoItem) {
+        const asset::Recipe& r = c.recipes()[recipe];
+        const kit::CraftingStation* cs = st.is_null() ? nullptr : w.try_get<kit::CraftingStation>(st);
+        const bool station_ok = r.station.empty() || (cs && cs->station.view() == r.station.view());
+        ok = station_ok && kit::craft_check(inv, c, recipe) == kit::CraftResult::Ok;
+    }
+    lua_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+int l_craft(lua_State* L) {
+    Frame& f = frame_of(L);
+    World& w = f.world();
+    const Entity e = check_entity(L, 1);
+    check_inventory(L, w, e, "inventory.craft");
+    kit::CraftItem q;
+    q.owner = e;
+    q.recipe = check_id(L, 2, "inventory.craft");
+    q.station = check_station(L, w, 3, "inventory.craft");
+    if (!w.event_queue<kit::CraftItem>()) luaL_error(L, "inventory.craft: this world has no crafting (install_crafting)");
+    f.events().push(q);
+    return 0;
+}
+
 const luaL_Reg kInventoryLib[] = {
     {"add", l_add},       {"remove", l_remove}, {"count", l_count}, {"has", l_has},       {"weight", l_weight}, {"slot", l_slot},
-    {"equip", l_equip},   {"unequip", l_unequip}, {"use", l_use},   {"drop", l_drop},     {"open", l_open},     {nullptr, nullptr},
+    {"equip", l_equip},   {"unequip", l_unequip}, {"use", l_use},   {"drop", l_drop},     {"open", l_open},
+    {"can_craft", l_can_craft}, {"craft", l_craft}, {nullptr, nullptr},
 };
 
 }  // namespace

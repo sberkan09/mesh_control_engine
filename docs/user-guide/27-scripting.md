@@ -200,6 +200,8 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `inventory.use(e, i)` | queues a `UseItem`; an item tagged `consumable` loses one unit |
 | `inventory.drop(e, i, qty?)` | takes `qty` (default the whole stack) out of slot `i` now and spawns an `ItemPickup3D` 1.5 m along +x of the entity; returns how many were dropped |
 | `inventory.open(container, opener)` | queues an `OpenContainer`: the chest rolls its table on the first open and the opener takes what fits |
+| `inventory.can_craft(e, recipe, station?)` | `true` when the recipe (an id from the `.mcitems` `recipes`) could be made now: every input present, room for every output, and a `station` entity with the recipe's station tag when it names one; `false` for an unknown recipe |
+| `inventory.craft(e, recipe, station?)` | queues a `CraftItem` (`station` nil: by hand). The craft is atomic; `ItemCrafted` or `CraftFailed` (with a reason) follows. A timed recipe at a station completes when its time is up |
 
 ```lua
 -- Start the mission when the player presses Interact, and mark the depot on the map.

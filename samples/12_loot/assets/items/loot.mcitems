@@ -6,7 +6,9 @@
     { "id": "coin", "name": "Coin", "stack": 100 },
     { "id": "potion", "name": "Potion", "stack": 5, "weight": 0.5, "tags": ["consumable", "heal"], "stats": { "heal": 25 } },
     { "id": "sword", "name": "Iron Sword", "stack": 1, "weight": 3, "tags": ["equip.weapon"], "stats": { "damage": 12 } },
-    { "id": "gem", "name": "Gem", "stack": 5, "weight": 0.1 }
+    { "id": "gem", "name": "Gem", "stack": 5, "weight": 0.1 },
+    { "id": "tonic", "name": "Tonic", "stack": 5, "weight": 0.2, "tags": ["consumable", "heal"], "stats": { "heal": 60 } },
+    { "id": "potion_pack", "name": "Potion Pack", "stack": 3, "weight": 1.2 }
   ],
   "tables": [
     { "id": "chest", "rolls": [2, 3], "entries": [
@@ -18,5 +20,10 @@
         { "item": "coin", "weight": 4, "qty": [2, 6] },
         { "table": "chest", "weight": 1 },
         { "item": "gem", "guaranteed": true, "qty": 1 } ] }
+  ],
+  "recipes": [
+    { "id": "tonic", "name": "Tonic", "in": [ { "item": "potion", "qty": 1 }, { "item": "coin", "qty": 5 } ], "out": [ { "item": "tonic", "qty": 1 } ] },
+    { "id": "pack", "name": "Potion Pack", "station": "workbench", "time": 0.2,
+      "in": [ { "item": "potion", "qty": 3 } ], "out": [ { "item": "potion_pack", "qty": 1 } ] }
   ]
 }
