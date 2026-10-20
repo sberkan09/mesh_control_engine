@@ -32,9 +32,14 @@ u32 hash_pick(u32 seed, u32 counter) {
     return static_cast<u32>(z >> 32);
 }
 
+// The longest duration in ticks (2^31: it fits Weather.fade_den, a u32, and the products with it stay far inside u64).
+constexpr u64 kMaxTicks = 1ull << 31;
+
 u64 ticks_of(f64 seconds, f64 dt) {
     if (!(dt > 0.0) || !(seconds > 0.0)) return 1;
-    const u64 t = static_cast<u64>(std::llround(seconds / dt));
+    const f64 x = seconds / dt;
+    if (!(x < static_cast<f64>(kMaxTicks))) return kMaxTicks;  // +Inf, FLT_MAX, anything past the clamp
+    const u64 t = static_cast<u64>(std::llround(x));
     return t < 1 ? 1 : t;
 }
 

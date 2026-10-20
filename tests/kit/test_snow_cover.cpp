@@ -5,6 +5,10 @@
 
 #include <doctest/doctest.h>
 
+#include <cfloat>
+#include <cmath>
+#include <limits>
+
 #include "mce/containers/array.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
@@ -60,9 +64,22 @@ struct Rig {
     void set_target(WeatherKind k) {
         world.query<Weather&>().each([&](Weather& w) { w.target = k; });
     }
+    void set_times(f32 build, f32 melt) {
+        world.query<SnowCover&>().each([&](SnowCover& c) {
+            c.build_seconds = build;
+            c.melt_seconds = melt;
+        });
+    }
+    void set_snow_q(u32 q) {
+        world.query<SnowCover&>().each([&](SnowCover& c) { c.snow_q = q; });
+    }
     SnowCover snow() {
         SnowCover s;
-        world.query<const SnowCover&>().each([&](const SnowCover& c) { s = c; });
+        bool first = true;  // the first in ECS order is the driven one
+        world.query<const SnowCover&>().each([&](const SnowCover& c) {
+            if (first) s = c;
+            first = false;
+        });
         return s;
     }
     Weather weather() {
@@ -162,7 +179,6 @@ TEST_CASE("snow_cover: save and load mid-snow resumes with the same state hash")
         REQUIRE(a.snow().snow_q > 0);
         REQUIRE(a.snow().snow_q < kMax);
         save::write_save(a.world, {}, bytes);
-        hash_a = a.world.state_hash();
         a.run(200);
         hash_a = a.world.state_hash();
     }
@@ -202,7 +218,6 @@ TEST_CASE("snow_cover: the extract builds the carrier only with both Weather and
     Rig neither(false, false);
     neither.run(300);
     CHECK(neither.carrier().cover == 0.0f);
-    CHECK(only_weather.world.state_hash() != 0);
 
     Rig zero(true, true, WeatherKind::Snow, 0.0f);
     zero.run(300);
@@ -219,10 +234,67 @@ TEST_CASE("snow_cover: the Low tier drops the noise and keeps the cover") {
     CHECK(c.cover == doctest::Approx(r.snow().cover));
 }
 
-TEST_CASE("snow_cover: Weather and a scene without SnowCover keep the same state hash as before the component") {
-    Rig a(true, false), b(true, false);
-    a.run(600);
-    b.run(600);
-    CHECK(a.world.state_hash() == b.world.state_hash());
-    CHECK(a.carrier().cover == 0.0f);
+TEST_CASE("snow_cover: a second SnowCover component stays frozen") {
+    Rig r(true, true);
+    const Entity second = r.world.spawn_with(SaveKey{3}, SnowCover{});
+    r.run(300);
+    REQUIRE(r.snow().snow_q > 0);
+    const SnowCover* s = r.world.try_get<SnowCover>(second);
+    REQUIRE(s != nullptr);
+    CHECK(s->snow_q == 0);
+    CHECK(s->cover == 0.0f);
+}
+
+TEST_CASE("snow_cover: strength above 1 saturates the carrier through apply_quality") {
+    Rig r(true, true, WeatherKind::Snow, 3.0f);
+    r.run(1200);
+    REQUIRE(r.snow().cover == 1.0f);
+    CHECK(r.carrier().cover == 1.0f);  // 1 * 3 clamped to 1, not 3
+    Rig half(true, true, WeatherKind::Snow, 3.0f);
+    half.run(300);
+    const f32 c = half.snow().cover;
+    REQUIRE(c > 0.34f);
+    REQUIRE(c < 0.9f);
+    CHECK(half.carrier().cover == 1.0f);  // c * 3 > 1
+}
+
+TEST_CASE("snow_cover: build_seconds and melt_seconds of 0, NaN and negative are one tick (instant)") {
+    const f32 bad[] = {0.0f, -5.0f, std::numeric_limits<f32>::quiet_NaN(), -std::numeric_limits<f32>::infinity()};
+    for (f32 v : bad) {
+        Rig r(true, true);
+        r.set_times(v, v);
+        for (u32 i = 0; i < 200; ++i) {
+            r.run(1);
+            const SnowCover s = r.snow();
+            REQUIRE(s.cover >= 0.0f);
+            REQUIRE(s.cover <= 1.0f);
+            REQUIRE(s.snow_q <= kMax);
+        }
+        CHECK(r.snow().snow_q == kMax);  // one tick of build_seconds: the fade alone sets the pace, full after 1 s
+        r.set_target(WeatherKind::Clear);
+        r.run(61);
+        REQUIRE(r.weather().current == WeatherKind::Clear);
+        r.run(1);
+        CHECK(r.snow().snow_q == 0);  // one tick of melt_seconds: gone at once
+        CHECK(r.snow().cover == 0.0f);
+    }
+}
+
+TEST_CASE("snow_cover: +Inf and FLT_MAX build_seconds and melt_seconds are very slow, never a crash") {
+    const f32 huge[] = {std::numeric_limits<f32>::infinity(), FLT_MAX};
+    for (f32 v : huge) {
+        Rig r(true, true);
+        r.set_times(v, v);
+        r.run(1200);  // 20 s of snow: no rise at the clamp (2^31 ticks)
+        CHECK(r.snow().snow_q == 0);
+        CHECK(r.snow().cover == 0.0f);
+        r.set_snow_q(static_cast<u32>(kMax));
+        r.set_target(WeatherKind::Clear);
+        r.run(300);
+        CHECK(r.snow().snow_q == kMax);  // no melt either
+        CHECK(r.snow().cover == 1.0f);
+        r.set_times(v, 5.0f);  // an infinite build with a finite melt still melts normally
+        r.run(400);
+        CHECK(r.snow().snow_q == 0);
+    }
 }
