@@ -636,4 +636,21 @@ inline void snow_plaza_scene(Scene3D& s, const SnowCover& snow, const WetSurface
     s.set_snow_cover(snow);
 }
 
+// ---- M-RAINFX 7b: rain ripples ------------------------------------------------------------------------------------
+
+// Ripples at `strength` with the defaults (density 0.5, speed 1, ring width 0.15).
+inline Ripples ripple_plaza_ripples(f32 strength) {
+    Ripples r;
+    r.strength = strength;
+    return r;
+}
+
+// The ripple plaza is the wet plaza (upload_wet_plaza) with ripples at the scene time `time` (seconds).
+inline void ripple_plaza_scene(Scene3D& s, const Ripples& ripples, const WetSurfaces& wet, f32 time,
+                               vec3 world_offset = {0.0f, 0.0f, 0.0f}) {
+    wet_plaza_scene(s, wet, world_offset);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_ripples(ripples);
+}
+
 }  // namespace mce::render_test
