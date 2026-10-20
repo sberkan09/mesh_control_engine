@@ -23,6 +23,15 @@
 // A slot whose item index is past the end of the catalog (the catalog changed under a save) is left alone: it counts
 // for no weight and nothing adds to, removes from or merges with it.
 //
+// Worn items change the wearer's Health3D (M-ITEMFX 2): the "armor" stats of the equipped items (slot order) add to
+// Health3D.armor (kept within 0..1) and their "max_health" stats to Health3D.max (never below 1; current is clamped down
+// when max falls). Only the *change* is applied each tick, and Equipment remembers what it has added (armor_applied,
+// max_applied), so the authored base is never overwritten, other systems may still change Health3D.max (a level-up), and
+// unequipping takes back exactly what was added. The remembered amounts are not saved (Health3D is not in a save game either:
+// both load at their authored values and the bonus is applied again on the first tick). A Health3D replaced at run time
+// (a respawn that overwrites the component) loses the bonus until the equipment changes: reset Equipment too when respawning.
+// An entity with Equipment but no Health3D is left alone.
+//
 // Input events (push them; processed in the system, FixedUpdate_Pre): GiveItem, TakeItem, MoveItem, SplitItem,
 // EquipItem, UnequipItem, UseItem. Output events: ItemAdded (with what did not fit), ItemRemoved, ItemEquipped,
 // ItemUnequipped, ItemUsed. UseItem on an item tagged "consumable" takes one unit and sends ItemUsed; any other
@@ -71,8 +80,11 @@ MCE_COMPONENT(Inventory, (catalog, Save, Help{"the .mcitems catalog the item num
 struct Equipment {
     asset::AssetRef<asset::ItemCatalogChunk> catalog;
     u16 item[kEquipSlots] = {};  // by EquipSlot: catalog index + 1, 0: empty
+    f32 armor_applied = 0.0f;    // engine-written, not saved: what worn items' "armor" stats have added to Health3D.armor (M-ITEMFX 2)
+    f32 max_applied = 0.0f;      // engine-written, not saved: the same for "max_health" and Health3D.max
 };
-MCE_COMPONENT(Equipment, (catalog, Save, Help{"the .mcitems catalog the item numbers index (the inventory's)"}), (item, Save, ReadOnly))
+MCE_COMPONENT(Equipment, (catalog, Save, Help{"the .mcitems catalog the item numbers index (the inventory's)"}), (item, Save, ReadOnly),
+              (armor_applied, ReadOnly), (max_applied, ReadOnly))
 
 struct ItemPickup3D {
     FixedString<64> item;  // the item's id in the collector's catalog
