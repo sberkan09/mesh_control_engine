@@ -418,4 +418,23 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
   `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
   not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit.
-- Not yet: the loot roller and `Container` (step 3), Luau and the `ItemGrid` widget (step 4), a sample (step 5).
+- Loot tables and chests: see the next section. Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
+
+## Loot tables, drops and chests (M-INVENTORY 3)
+
+`mce/kit/loot.h`, installed by `install_stock` (it installs the inventory kit first). The tables are in the project's `.mcitems`
+catalog: weighted entries, nested tables, guaranteed entries, quantity ranges and roll ranges.
+
+- `roll_loot(catalog, table, Rng&, out)`: a pure function of the catalog, the table and the stream. A table does its guaranteed
+  entries first, in entry order, then rolls `rolls_min..rolls_max` times, each roll picking one weighted entry (integer cumulative
+  weights, a 64-bit draw; no float). An entry that names a table rolls that table (depth-limited). Equal items merge in first-seen
+  order; a quantity saturates instead of wrapping. The same table and the same stream give the same list on every machine.
+- `LootDrop` (on an entity with `Health3D`): when `Died3D` fires, rolls `table` once and spawns each result as an `ItemPickup3D` with
+  a sphere `Trigger3D` (`radius`) on a fixed ring (`scatter` metres; a second ring beyond eight). `dropped` and `rolls` are saved.
+- `Container` (a chest; give the entity an `Inventory` on the same catalog): the first `OpenContainer{container, opener}` rolls
+  `table` into the chest's own `Inventory` (slots you pre-filled stay), then the opener takes as much as fits (stacks and weight
+  cap apply). The rest stays; a later open takes more. `ContainerOpened{taken, left}` and an `ItemAdded` per move are sent. An opener
+  on a different catalog than the chest moves nothing.
+- Seeds: `seed` 0 derives from the table id and the entity index; a non-zero `seed` is used as given (set it for loot that must be
+  the same on every run). The stream is `Rng::child(seed, "loot", rolls)`, so loading a save carries on with the next draw.
+- Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
