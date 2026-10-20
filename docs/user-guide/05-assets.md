@@ -398,6 +398,13 @@ project is typical; it is one asset with one GUID, and items and tables are name
               { "id": "chest_rare", "entries": [ { "item": "medkit", "qty": 5 } ] } ] }
 ```
 
+Recipes (M-CRAFT) sit in the same file: `"recipes": [ { "id": "bandage", "name": "Bandage", "station": "workbench", "time": 1.5,
+"in": [ { "item": "cloth", "qty": 2 } ], "out": [ { "item": "medkit" } ] } ]`. Each side lists 1 to 8 different items (`qty` from 1,
+default 1), `station` is an optional tag the crafting place must carry (letters, digits, `_`, `-`, `.`), `time` is seconds (0 to
+3600, kept as whole milliseconds) and the `name` defaults to the id. The cook refuses an unknown item, an item listed twice on
+one side, an empty side and a repeated id. A catalog without recipes cooks to the same bytes as before. The crafting rules and
+station come in the next steps of M-CRAFT.
+
 Using it: give an entity an `Inventory` (and an `Equipment` to wear things) whose `catalog` is the file's GUID. A table is rolled
 by a `LootDrop` (drops its table as pickups when its `Health3D` entity dies) or a `Container` (a chest: put an `Inventory` on the
 same entity, name the `table`, and send `OpenContainer`); set `seed` on either for loot that is the same on every run, leave it 0 for a

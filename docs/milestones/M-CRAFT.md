@@ -1,6 +1,6 @@
 # M-CRAFT — Crafting recipes as data (milestone record)
 
-**Status:** planned (added 2026-10-20; **owner: the M-INVENTORY thread (routine 1), claimed 2026-10-20**; device-free; no Linear issues: the workspace is at its free limit, this record is the tracker).
+**Status:** step 1 built (added 2026-10-20; **owner: the M-INVENTORY thread (routine 1), claimed 2026-10-20**; device-free; no Linear issues: the workspace is at its free limit, this record is the tracker).
 
 **Why.** M-INVENTORY gave the kit items, inventories, equipment, pickups and loot, and listed crafting as its first follow-up
 ("crafting and recipes ... are follow-ups once step 5 has shown the shape"; `samples/12_loot` has now shown it). Survival,
@@ -15,7 +15,7 @@ integer rules only, no RNG unless a recipe has a chance field (then it draws fro
 
 | # | Step | Modules | Model | State |
 |---|---|---|---|---|
-| 1 | `recipes` in `.mcitems`: id, name, inputs (item, qty), outputs (item, qty), required station tag, craft time; cook validation (unknown items, empty sides, quantities, duplicate ids, limits), chunk version bump with a reader that still reads version 1, `item_catalog_problem` checks, fuzz seed, `asset_schema` text | asset, asset/cook | Opus (untrusted-input reader, format bump) | planned |
+| 1 | `recipes` in `.mcitems`: id, name, inputs (item, qty), outputs (item, qty), required station tag, craft time; cook validation (unknown items, empty sides, quantities, duplicate ids, limits), a chunk minor bump (the recipes section is appended only when a catalog has recipes, so a catalog without them stays byte-identical to v1.0), `item_catalog_problem` checks, fuzz seed, `asset_schema` text | asset, asset/cook | Opus (untrusted-input reader, format bump) | built (GH-406), Opus review pending: `items_format.h/.cpp` (`Recipe`, `RecipeIngredient`, `add_recipe`, codec), `items_importer.cpp` (importer version 2), tests in `test_cook_items.cpp` (3 cases) and the fuzz corpus |
 | 2 | `craft_check` / `craft_apply` rules (pure functions of an Inventory: all inputs present, room for the outputs, nothing changes on failure), events `CraftItem` in and `ItemCrafted` / `CraftFailed` (reason) out, `CraftingStation` component (station tag, optional queue of one with `seconds`) | kit | Opus for the rules (atomicity, overflow, weight cap), Sonnet for the component | planned |
 | 3 | Luau `inventory.craft(e, recipe, station?)` and `inventory.can_craft`, typed definitions with a check test, `samples/12_loot` gets a recipe and a gate line, user-guide text, close | script, samples, docs | Sonnet | planned |
 
