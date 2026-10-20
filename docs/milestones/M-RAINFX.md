@@ -35,7 +35,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 7a | planned | | |
+| 7a | done | | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | planned | | needs 7a; Opus writes |
 | 7c | planned | | needs 7a |
 | 7d | planned | | needs 7b, 7c |

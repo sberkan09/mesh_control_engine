@@ -375,6 +375,20 @@ struct SnowCover {
     u8 pad_[3] = {};
 };
 
+// Rain ripples on puddles (M-RAINFX 7a; the weather drives it, the quality tiers gate it): `strength` 0..1
+// scales the ring normal perturbation, `density` 0..1 the share of grid cells that hold a drop, `speed` the
+// ring animation rate (1 = nominal, 0.1..10), `ring_width` 0..1 the ring thickness. strength 0 = off: the
+// frame is the ripple-less one. `enabled` is a pass-through switch for the caller (a ripple-less scene sets
+// it false); apply_quality does not change it.
+struct Ripples {
+    f32 strength = 0.0f;
+    f32 density = 0.5f;
+    f32 speed = 1.0f;
+    f32 ring_width = 0.15f;
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -688,6 +702,7 @@ public:
     void set_parallax(const ParallaxSettings& p) { parallax_ = p; }
     void set_wet_surfaces(const WetSurfaces& w) { wet_ = w; }
     void set_snow_cover(const SnowCover& s) { snow_ = s; }
+    void set_ripples(const Ripples& r) { ripples_ = r; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -753,6 +768,7 @@ public:
     const ParallaxSettings& parallax() const { return parallax_; }
     const WetSurfaces& wet_surfaces() const { return wet_; }
     const SnowCover& snow_cover() const { return snow_; }
+    const Ripples& ripples() const { return ripples_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -843,6 +859,7 @@ private:
     ParallaxSettings parallax_;
     WetSurfaces wet_;
     SnowCover snow_;
+    Ripples ripples_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
