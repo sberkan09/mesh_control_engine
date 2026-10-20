@@ -35,7 +35,15 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 7a | planned | | |
+| 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | planned | | needs 7a; Opus writes |
 | 7c | planned | | needs 7a |
 | 7d | planned | | needs 7b, 7c |
+
+## Notes for 7b from the 7a review (independent Opus review, no blockers)
+
+- `apply_quality(q, Ripples)` passes `enabled` through; it is not the off switch. 7b's upload must treat `strength == 0 || !enabled` as off (no `p_ripple`), so a "disabled" carrier never draws.
+- Ripples are not tied to the wet gates in the carrier: with `r.wet_surfaces 0` or `puddles_enabled` false, strength stays non-zero. The shader must multiply by the puddle mask (which is 0 when wetness or puddles are off) so the dry-frame gate holds.
+- `ring_width` and `density` may be 0 after clamping: guard any `smoothstep` width or divisor (floor at 0.01 in the upload).
+- Share the `unit` clamp helper between `quality.cpp` (three copies now) and `forward3d.cpp` while in this code (carry-over from M-WETSURFACE).
+- `r.rain_ripples` is a main-thread cvar like the others; keep `apply_quality` in the main-thread extract.

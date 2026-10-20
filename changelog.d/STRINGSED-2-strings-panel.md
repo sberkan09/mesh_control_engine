@@ -1,0 +1,1 @@
+- Strings panel, M-STRINGSED step 2 (closes the milestone): a double click on a `.csv` string table in Assets opens the Strings panel, every locale in one key by locale grid (filter, missing only, in-place cells, add and remove key, Save cooks each changed table first, Revert).

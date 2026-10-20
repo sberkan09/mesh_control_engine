@@ -48,6 +48,8 @@ struct QualitySettings {
     // snowless frame, noise included).
     bool snow_cover = true;
     bool snow_noise = true;
+    // M-RAINFX 7a: Ripples are honored (off: strength 0, the ripple-less frame). Low turns them off.
+    bool rain_ripples = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -93,5 +95,9 @@ WetSurfaces apply_quality(const QualitySettings& q, const WetSurfaces& wet);
 // builds the value from kit data and hands it straight to Scene3D::set_snow_cover, which exposes no mutable
 // reference to apply it to.
 SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow);
+// Rain ripples: the weather's ripples, strength zeroed when the tier or `r.rain_ripples 0` switches them off.
+// strength, density and ring_width are clamped to 0..1 (NaN to 0), speed to 0.1..10 (NaN to 1, the nominal
+// rate); `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
+Ripples apply_quality(const QualitySettings& q, const Ripples& ripples);
 
 }  // namespace mce::render

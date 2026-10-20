@@ -209,6 +209,11 @@ private:
             if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
             if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
             if (a->type == asset::ChunkType::Sequence) shell.open_sequence(a->guid);
+            // A string table opens the Strings panel (every locale in one grid).
+            if (a->type == asset::ChunkType::StringTable) {
+                if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
+                shell.focus_panel(kStringsPanel);
+            }
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
         if (ImGui::BeginDragDropSource()) {
