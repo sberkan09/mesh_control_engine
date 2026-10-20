@@ -612,6 +612,17 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   without a `SnowCover` (or without a `Weather`) stays bare and renders exactly as before. The Low quality tier
   keeps the whitening but drops the noise breakup, and `r.snow_cover 0` switches snow off.
 
+## 9.19a Rain ripples (M-RAINFX)
+
+An optional `RainRipples` entity (one per scene, the first in ECS order is read; it is registered with the weather)
+makes rings spread on the puddles while it rains. Its fields are strength (1, scales the ripples), density (0.5, how
+many drops land per puddle area), speed (1, the ring animation rate) and ring_width (0.15, the ring thickness), all
+saved with the scene. The renderer gets ripples only when the scene has a Weather, a WetSurfaces and a RainRipples and
+the weather intensity is above 0: the strength is the field times that intensity, so the rings fade in and out with
+the rain. A scene missing any of the three stays ripple-free and renders exactly as before. The rings show on
+puddles only, so the puddles of the wet surfaces (9.19) decide where. The Low quality tier and `r.rain_ripples 0`
+switch them off.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

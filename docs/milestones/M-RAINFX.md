@@ -21,6 +21,7 @@
 | 7a. Render data | `render::Ripples` POD, `set_ripples()`, `QualitySettings::rain_ripples`, `r.rain_ripples`, `apply_quality` overload with clamping, test | render, tests/render | Sonnet; seam PR for `scene3d.h` |
 | 7b. Ripple shader | `p_ripple`, GLSL, `ripple_plaza` golden and pixel tests, all goldens byte-identical | render, tests/render_gl | **Opus writes**, independent Opus review |
 | 7c. Kit | `RainRipples`, `RainSplash`, `ThunderDelay` components and systems, extract, determinism and save tests, padding audit | kit, tests/kit | Sonnet |
+| 7e. RainSplash + ThunderDelay (kit) | `RainSplash`, `ThunderDelay` components and systems, determinism and save tests, padding audit | kit, tests/kit | Sonnet |
 | 7d. Luau, sample, docs | the three setters, `samples/12_weather`, guide, close | script, samples | Sonnet |
 
 7c does not depend on 7b and can run in parallel with it after 7a.
@@ -37,8 +38,9 @@
 |---|---|---|---|
 | 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | done | #645 | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
-| 7c | planned | | needs 7a |
+| 7c | part 1 in review | #648 | `RainRipples` + extract only (7e carries splash and thunder) |
 | 7d | planned | | needs 7b, 7c |
+| 7e | planned | | `RainSplash` + `ThunderDelay` (kit), needs 7c |
 
 ## Notes for 7b from the 7a review (independent Opus review, no blockers)
 
