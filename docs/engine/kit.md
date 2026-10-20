@@ -437,4 +437,6 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
   on a different catalog than the chest moves nothing.
 - Seeds: `seed` 0 derives from the table id and the entity index; a non-zero `seed` is used as given (set it for loot that must be
   the same on every run). The stream is `Rng::child(seed, "loot", rolls)`, so loading a save carries on with the next draw.
-- Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
+- Luau: the `inventory` global (`docs/user-guide/27-scripting.md`). UI: Text widgets named `slot_N`, `equip_<where>` and `inventory_weight` are filled by the stock player (`docs/user-guide/12-ui-and-console.md`).
+- Saves: `Inventory`, `Equipment`, `Container` and `LootDrop` fields are `Save` fields of the ordinary save, which is versioned as a whole; a save without them loads with empty defaults, and an unknown field from a newer module is skipped. A save stores catalog item *numbers*, so a catalog may only grow at the end; renumbering items changes what an old save holds.
+- Not yet: a sample (step 5).
