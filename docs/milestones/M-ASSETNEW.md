@@ -11,8 +11,8 @@ Source: `assessments/motor-erisim-bosluklari.md`, section 11 (Editor): the JSON 
 
 | # | Step | State |
 |---|---|---|
-| 1 | Seam: the asset kind table (extension, format, fields, starter object) moves from the MCP asset tools to editor core (`mce/editor/asset_kinds.h`); MCP uses it from there, nothing changes for MCP clients | in progress |
-| 2 | `create_asset`, `duplicate_asset` and `delete_asset` in editor core, cook-first, with tests | planned |
+| 1 | Seam: the asset kind table (extension, format, fields, starter object) moves from the MCP asset tools to editor core (`mce/editor/asset_kinds.h`); MCP uses it from there, nothing changes for MCP clients | done |
+| 2 | `create_asset`, `duplicate_asset`, `delete_asset` and `references_to` in editor core (`mce/editor/asset_ops.h`), cook-first, with tests (every kind is created from its starter and cooks) | done |
 | 3 | The Assets panel's New, Duplicate and Delete entries, guide row | planned |
 
 **Gates:** `test_asset_kinds.cpp` and the MCP tests (step 1); the core tests (step 2); step 3 is build-checked (no display in CI).

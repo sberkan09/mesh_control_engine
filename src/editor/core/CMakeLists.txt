@@ -14,6 +14,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/asset_form.cpp
         src/scene_tabs.cpp
         src/asset_kinds.cpp
+        src/asset_ops.cpp
         src/mixer_model.cpp
         src/strings_grid.cpp
         src/thumb_cache.cpp
