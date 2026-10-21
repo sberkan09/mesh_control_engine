@@ -1578,7 +1578,7 @@ float cloud_value(vec2 g, uint m, uint seed) {
 // Lit by the sun (brighter on the sun side, a silver lining on thin edges near the disk, a darker base under a thick
 // deck) and the sky ambient, both from the frame's light, so night and dusk follow; the sun disk behind dims by a.
 vec3 apply_clouds(vec3 c, vec3 d, vec3 sun, float cs) {
-    if (d.y <= 0.0) return c;
+    if (d.y <= 0.03) return c;
     vec2 q = mod(d.xz * (p_cloud.w / d.y) * p_cloud.z - p_cloud2.xy, 64.0);
     float n = cloud_value(q, 64u, 0x27D4EB2Fu) * 0.55 + cloud_value(q * 2.0, 128u, 0x165667B1u) * 0.30 +
               cloud_value(q * 4.0, 256u, 0xD3A2646Cu) * 0.15;
