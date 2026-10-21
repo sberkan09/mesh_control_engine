@@ -93,13 +93,16 @@ struct Forward3DPassU {
     vec4 wet2;        // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on
     vec4 snow;        // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise), w wind bias
     vec4 ripple;      // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
+    vec4 snow2;       // M-WINDDIR 8c: xy the snow wind direction (xz unit vector), zw 0
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
                   offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
                   offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
-                  offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16,
-              "PassU: p_wet / p_wet2 / p_snow / p_ripple follow p_sky_rot as in MCE_GLSL_PASS_U");
+                  offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16 &&
+                  offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
+                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, snow2) + 16,
+              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 follow p_sky_rot as in MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -330,6 +333,7 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
 // The wet, snow and ripple members are clamped again here (apply_quality's clamps: a caller may skip it).
 using detail::noise_cell;
 using detail::unit01;
+using detail::unit_wind_dir;
 // The floating origin mod 256 m, in f64: the wet and snow noise is periodic over 256 m (the shader fits whole cells
 // into that span), so float precision does not depend on how far the world has rebased.
 f32 wrap256(f64 x) { return f32(x - 256.0 * std::floor(x / 256.0)); }
@@ -344,14 +348,23 @@ void wet_params(const WetSurfaces& w, const f64 origin[3], PassU& pu) {
     pu.wet2 = vec4(wrap256(origin[0]), wrap256(origin[2]), unit01(w.roughness), puddles ? 1.0f : 0.0f);
 }
 
-// The main pass's snow members (M-SNOWCOVER 6b). Cover 0 leaves p_snow zero: the shader skips its branch and the
-// frame is the snowless one bit for bit. The noise shares the wet origin (p_wet2.xy), written here too when the
-// scene is dry; without noise (Low) z is 0 and the shader draws an even layer.
+// The snow's wind direction (M-WINDDIR 8c): p_snow2.xy, the xz unit vector the lee bias leans along (normalized
+// again, NaN or zero length -> +x). The default (1, 0) stays (1, 0) exactly, so the shader's dot is ng.x and the
+// frame the pre-8c one bit for bit. Written by snow_params only, so a snowless frame keeps p_snow2 zero.
+void snow_wind_params(const SnowCover& s, PassU& pu) {
+    const vec2 d = unit_wind_dir(s.wind_dir);
+    pu.snow2 = vec4(d.x, d.y, 0.0f, 0.0f);
+}
+
+// The main pass's snow members (M-SNOWCOVER 6b). Cover 0 leaves p_snow (and p_snow2) zero: the shader skips its
+// branch and the frame is the snowless one bit for bit. The noise shares the wet origin (p_wet2.xy), written here
+// too when the scene is dry; without noise (Low) z is 0 and the shader draws an even layer.
 void snow_params(const SnowCover& s, const f64 origin[3], PassU& pu) {
     const f32 cover = unit01(s.cover);
     if (cover <= 0.0f) return;
     pu.snow = vec4(cover, unit01(s.coverage), s.noise_enabled ? 1.0f / noise_cell(s.noise_scale) : 0.0f,
                    unit01(s.wind_bias));
+    snow_wind_params(s, pu);
     pu.wet2.x = wrap256(origin[0]);
     pu.wet2.y = wrap256(origin[2]);
 }

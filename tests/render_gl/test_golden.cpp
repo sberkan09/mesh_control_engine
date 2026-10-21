@@ -642,6 +642,26 @@ TEST_CASE("golden: snow_plaza: full snow cover with wind-biased patches over the
     check_golden("snow_plaza", f);
 }
 
+// ---- M-WINDDIR 8c: snow wind direction ------------------------------------------------------------
+
+// An even layer (no noise) at coverage 0.6: in snow_plaza's noise the sphere's cap lies inside one patch whose mask
+// is 1 on both sides whatever the wind, so that frame does not show the direction; here the cap's -x-facing (lee)
+// side takes the extra snow and the +x-facing one the less.
+TEST_CASE("golden: snow_plaza_west: an even snow layer on the plaza, the wind toward -x (lee bias mirrored)") {
+    Fixture3D f;
+    upload_wet_plaza(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        WetSurfaces w = wet_plaza_wet(1.0f, 0.5f);
+        w.puddle_scale = 2.0f;
+        SnowCover snow = snow_plaza_snow(1.0f);
+        snow.noise_enabled = false;
+        snow.coverage = 0.6f;
+        snow.wind_dir = {-1.0f, 0.0f};
+        snow_plaza_scene(s, snow, w);
+    });
+    check_golden("snow_plaza_west", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

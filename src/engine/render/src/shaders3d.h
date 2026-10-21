@@ -64,6 +64,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_wet2;           // xy: the floating origin's xz mod 256 m, z: wet roughness, w: puddles on (0 on Low)
     vec4 p_snow;           // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise, Low), w wind bias
     vec4 p_ripple;         // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
+    vec4 p_snow2;          // M-WINDDIR 8c: xy the snow wind direction (xz unit vector the wind blows toward), zw 0
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -640,10 +641,11 @@ float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough,
 // water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
 // normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
 //   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
-//   c   = clamp(cover * coverage * (1 + wind_bias * ng.x), 0, 1)
-//         the share of the surface to whiten; the weather's wind blows toward +x (Precipitation3D drifts the snow
-//         that way), so +x-facing (lee) slopes take up to 1 + wind_bias times the share and -x-facing (windward)
-//         ones down to 1 - wind_bias; flat ground (ng.x = 0) is unchanged.
+//   c   = clamp(cover * coverage * (1 + wind_bias * dot(ng.xz, wind_dir)), 0, 1)
+//         the share of the surface to whiten; the wind blows toward wind_dir (p_snow2.xy, M-WINDDIR 8c; +x by
+//         default), so slopes facing that way (lee) take up to 1 + wind_bias times the share and those facing into
+//         it (windward) down to 1 - wind_bias; flat ground (ng.xz = 0) is unchanged. With wind_dir (1, 0) the dot
+//         is ng.x exactly (ng.x * 1 + ng.z * 0), so the default frame is the pre-8c one bit for bit.
 //   noise (p_snow.z > 0): h = the two-octave value noise of the puddles (1 and 2.03 per cell, other seeds),
 //         s = c - 0.5, t = 0.5 - s (0.48 + 2.55 s^4) (a fit of the noise's quantiles: about the share c of points
 //         has h > t), mask = smoothstep(t - 0.04, t + 0.04, h) * min(4 c, 1) (the factor fades the last
@@ -652,7 +654,7 @@ float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough,
 float snow_mask(vec3 p, vec3 ng) {
     float up = smoothstep(0.55, 0.85, ng.y);
     if (up <= 0.0) return 0.0;
-    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * ng.x), 0.0, 1.0);
+    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * dot(ng.xz, p_snow2.xy)), 0.0, 1.0);
     if (p_snow.z <= 0.0) return c * up;
     vec2 q = mod(p.xz + p_wet2.xy, 256.0);
     float c1 = max(floor(256.0 * p_snow.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_snow.z + 0.5), 1.0);
