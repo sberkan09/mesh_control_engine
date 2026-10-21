@@ -3,7 +3,8 @@
 // tick; `has` looks straight at the StatusEffects component. A world without the kit piece gets a named error.
 //
 //   status.add(e, id, kind, amount, seconds, source?)   queue ApplyStatus. kind is "regen" or "poison" (amount: positive
-//                                       hp per second), "armor" or "max_health" (amount: the added value, +-1e6);
+//                                       hp per second), "armor" or "max_health" (amount: the added value, +-1e6),
+//                                       "cooldown" (changes nothing itself; `has` tells a script it is running);
 //                                       seconds 0.01 to 3600. Adding an id that is active refreshes it. `source` is
 //                                       credited for poison damage (default: nobody)
 //   status.has(e, id) -> boolean        whether the effect is active on e
@@ -44,7 +45,8 @@ u32 check_kind(lua_State* L, int idx, const char* fn) {
     if (std::strcmp(s, "poison") == 0) return static_cast<u32>(kit::StatusKind::Poison);
     if (std::strcmp(s, "armor") == 0) return static_cast<u32>(kit::StatusKind::Armor);
     if (std::strcmp(s, "max_health") == 0) return static_cast<u32>(kit::StatusKind::MaxHealth);
-    luaL_error(L, "%s: unknown kind '%s' (regen, poison, armor, max_health)", fn, s);
+    if (std::strcmp(s, "cooldown") == 0) return static_cast<u32>(kit::StatusKind::Cooldown);
+    luaL_error(L, "%s: unknown kind '%s' (regen, poison, armor, max_health, cooldown)", fn, s);
     return 0;
 }
 
