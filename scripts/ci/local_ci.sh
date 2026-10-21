@@ -5,7 +5,7 @@
 #   scripts/ci/local_ci.sh --quick    # walls + linux-gcc-debug (with GPU tests)
 #   scripts/ci/local_ci.sh --tidy-all # everything, with clang-tidy over the whole tree
 #   scripts/ci/local_ci.sh --task     # before a task's PR: walls + linux-gcc-debug + tidy, scoped to the change (below)
-#   scripts/ci/local_ci.sh --premerge # right before merging, if dev_claude moved: walls + the PR's own tests (below)
+#   scripts/ci/local_ci.sh --premerge # right before merging, if master moved: walls + the PR's own tests (below)
 #   scripts/ci/local_ci.sh --batch    # the full matrix; the integration runner's job, threads do not run it
 #   scripts/ci/local_ci.sh walls tidy linux-asan   # pick stages (a stage named here always runs in full)
 #   scripts/ci/local_ci.sh regen      # integration runner only: regenerate the generated files (below)
@@ -20,10 +20,10 @@
 # regen builds mce_mcp in the gcc debug tree and runs scripts/ci/regen_generated.py: capabilities.md, the sample
 # coverage allow list and the transcript golden. scripts/ci/integration_run.sh commits the result; threads do not.
 #
-# --premerge (the M7 gate, ~1-3 min) is for after dev_claude was merged into the branch: a PR goes green with ONE
+# --premerge (the M7 gate, ~1-3 min) is for after master was merged into the branch: a PR goes green with ONE
 # --task on its own base and is not re-run. It runs walls (capabilities --check included), then builds mce_mcp
 # and the tests defined next to the files the PR changed (scripts/ci/premerge.py tests) and runs those plus the
-# MCP transcript golden (`ctest -R`). It also prints whether dev_claude changed files the PR also changes since
+# MCP transcript golden (`ctest -R`). It also prints whether master changed files the PR also changes since
 # the last green --task (the base is recorded in build/local-ci-logs/last-task.env; MCE_PREMERGE_SINCE=<sha>
 # overrides): only then is a --task re-run needed. Generated files that went stale after the
 # merge (capabilities.md, transcript goldens, the sample coverage allow list) are the integration runner's to
@@ -37,7 +37,7 @@
 # linux-gcc-debug only; the other presets build them without running them.
 #
 # --task scopes every stage to the files changed since the merge base with $MCE_TIDY_BASE (default
-# origin/dev_claude), committed or not (`git fetch origin dev_claude` first: with no base ref everything runs in
+# origin/master), committed or not (`git fetch origin master` first: with no base ref everything runs in
 # full). A stage named on the command line is never scoped.
 #   tests:   the `gpu` label (68 tests, ~80 % of the ctest time under llvmpipe) is skipped only when every
 #            changed file is GPU-irrelevant (docs, scripts outside scripts/ci, src/engine/{net,monetize,
@@ -126,12 +126,12 @@ full_run=0
 # ---------------------------------------------------------------------------------------------------
 # The change: files changed since the merge base with $MCE_TIDY_BASE, committed or not.
 
-have_base() { git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" > /dev/null 2>&1; }
+have_base() { git merge-base HEAD "${MCE_TIDY_BASE:-origin/master}" > /dev/null 2>&1; }
 
 # Prints nothing when the base ref is missing (callers then fall back to "everything").
 changed_files() {
     local mb
-    mb="$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" || return 0
+    mb="$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/master}" 2>/dev/null)" || return 0
     { git diff --name-only "$mb"; git ls-files --others --exclude-standard; } | sort -u
 }
 CHANGED="$(changed_files)"
@@ -268,7 +268,7 @@ if [[ $task_run -eq 1 ]] && touches_web; then
     stages+=(web)
 fi
 if [[ $task_run -eq 1 ]] && ! have_base; then
-    echo "=== --task: no merge base with ${MCE_TIDY_BASE:-origin/dev_claude} (git fetch origin dev_claude); every stage runs in full"
+    echo "=== --task: no merge base with ${MCE_TIDY_BASE:-origin/master} (git fetch origin master); every stage runs in full"
 fi
 
 LOG_DIR="$ROOT/build/local-ci-logs"
@@ -976,10 +976,10 @@ if [[ $HAVE_CCACHE -eq 1 ]]; then
         sed 's/^/  ccache: /'
     save_cache_snapshot
 fi
-# A --task whose walls and gcc-debug tests passed records the base it ran on (a tidy-only fix needs no re-run), so --premerge can tell later whether dev_claude moved onto the
+# A --task whose walls and gcc-debug tests passed records the base it ran on (a tidy-only fix needs no re-run), so --premerge can tell later whether master moved onto the
 # PR's files (scripts/ci/premerge.py overlap).
 if [[ $task_run -eq 1 && "${RESULT[walls]:-}" == PASS* && "${RESULT[linux-gcc-debug]:-}" == PASS* ]]; then
-    printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/dev_claude}" 2>/dev/null)" \
+    printf 'BASE=%s\nHEAD=%s\n' "$(git merge-base HEAD "${MCE_TIDY_BASE:-origin/master}" 2>/dev/null)" \
         "$(git rev-parse HEAD)" > "$LOG_DIR/last-task.env"
 fi
 # One line per run in a log shared by every thread, so the pre-PR CI time is measurable:

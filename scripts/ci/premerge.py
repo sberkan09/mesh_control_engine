@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Helpers for `local_ci.sh --premerge` (the M7 gate).
 
-  premerge.py overlap [--since REF]   does dev_claude's movement touch files the PR also touches?
+  premerge.py overlap [--since REF]   does master's movement touch files the PR also touches?
   premerge.py tests                   the PR's own tests: a ctest -R regex, and the targets to build
 
-The PR's own files are the ones changed since the merge base with origin/dev_claude (MCE_TIDY_BASE), the
+The PR's own files are the ones changed since the merge base with origin/master (MCE_TIDY_BASE), the
 same set local_ci.sh uses. The base of the last green `--task` run is recorded in
 build/local-ci-logs/last-task.env (BASE=<merge base sha>); `--since` overrides it. Without either,
 overlap cannot be decided and the script says a --task run is needed.
@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-BASE_REF = os.environ.get("MCE_TIDY_BASE", "origin/dev_claude")
+BASE_REF = os.environ.get("MCE_TIDY_BASE", "origin/master")
 RECORD = ROOT / "build" / "local-ci-logs" / "last-task.env"
 
 # Always part of the gate: the MCP transcript golden (drives the real mce_mcp, see tests/mcp).
@@ -43,7 +43,7 @@ def merge_base():
 
 
 def pr_files():
-    """Files the PR changes relative to dev_claude, committed or not."""
+    """Files the PR changes relative to master, committed or not."""
     mb = merge_base()
     if not mb:
         return None
@@ -97,10 +97,10 @@ def cmd_overlap(args):
     if near:
         # Only files the PR itself changed trigger a re-run: churn next to them is not an overlap (the integration
         # run catches a real clash). Printed so the author can still look.
-        print(f"premerge: note: dev_claude changed {len(near)} other file(s) in modules the PR touches (not an overlap):")
+        print(f"premerge: note: master changed {len(near)} other file(s) in modules the PR touches (not an overlap):")
         for f in near[:10]:
             print("  " + f)
-    print("premerge: none of the PR's own files changed on dev_claude, a --task re-run is NOT needed")
+    print("premerge: none of the PR's own files changed on master, a --task re-run is NOT needed")
     print("premerge: a semantic clash elsewhere (a header the PR includes) is caught by the integration run")
     return 0
 
