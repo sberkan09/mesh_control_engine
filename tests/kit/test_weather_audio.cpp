@@ -292,7 +292,7 @@ TEST_CASE("weather_audio: a scene without a WeatherAudio is unchanged and the We
         without.run(1);
         const Weather a = with.weather();
         const Weather b = without.weather();
-        REQUIRE(std::memcmp(&a, &b, sizeof(Weather)) == 0);
+        REQUIRE(std::memcmp(&a, &b, sizeof(Weather)) == 0);  // NOLINT(bugprone-suspicious-memory-comparison): checks bit-exact bytes, as state_hash does
     }
     CHECK(without.rain_db() == 0.0f);
     CHECK(without.wind_db() == 0.0f);
