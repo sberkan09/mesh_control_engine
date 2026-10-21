@@ -9,6 +9,7 @@
     { "id": "gem", "name": "Gem", "stack": 5, "weight": 0.1 },
     { "id": "tonic", "name": "Tonic", "stack": 5, "weight": 0.2, "tags": ["consumable", "heal"], "stats": { "heal": 60 } },
     { "id": "potion_pack", "name": "Potion Pack", "stack": 3, "weight": 1.2 },
+    { "id": "elixir", "name": "Elixir", "stack": 3, "weight": 0.1, "tags": ["consumable"], "stats": { "regen": 20, "regen_seconds": 0.5, "armor_boost": 0.3, "boost_seconds": 1 } },
     { "id": "helm", "name": "Iron Helm", "stack": 1, "tags": ["equip.head"], "stats": { "armor": 0.2, "max_health": 20 } }
   ],
   "tables": [

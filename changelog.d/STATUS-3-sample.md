@@ -1,0 +1,1 @@
+- Sample (M-STATUS 3): `samples/12_loot` drinks an elixir (`regen`, `armor_boost` stats) and takes a poisoned goblin strike; `loot_test.cmake` pins the `status:` lines and the run is 150 ticks. Closes M-STATUS.

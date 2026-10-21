@@ -1,4 +1,4 @@
-# 12_loot's headless gate (M-INVENTORY step 5), run with cmake -P: mce_player plays the cooked pack for 60 ticks and the
+# 12_loot's headless gate (M-INVENTORY step 5), run with cmake -P: mce_player plays the cooked pack for 150 ticks and the
 # script's "inv:" log lines pin the run (the script's tick counts from 0; events it queues land a few ticks later).
 function(expect text pattern what)
     if(NOT text MATCHES "${pattern}")
@@ -49,9 +49,9 @@ endfunction()
 
 file(REMOVE_RECURSE "${WORK_DIR}")
 file(MAKE_DIRECTORY "${WORK_DIR}")
-play(first -ticks 60 -input "${INPUT}")
-play(second -ticks 60 -input "${INPUT}")
-expect("${first}" "60 ticks, 7 entities, state_hash" "the run did not end after 60 ticks with 7 entities")
+play(first -ticks 150 -input "${INPUT}")
+play(second -ticks 150 -input "${INPUT}")
+expect("${first}" "150 ticks, 7 entities, state_hash" "the run did not end after 150 ticks with 7 entities")
 expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
 # Gives: 7 potions (5 + 2), the sword and 30 coins weigh 7 * 0.5 + 3 = 6.5 kg.
 expect("${first}" "script: inv: given coin 30 potion 7 sword 1 gem 0 weight 6500\n" "the items did not arrive")
@@ -71,6 +71,10 @@ expect("${first}" "script: inv: can tonic true, pack by hand false, pack at benc
 expect("${first}" "script: inv: crafted tonic coin 57 potion 3 sword 0 gem 0 weight 1700\n" "the hand craft did not land")
 expect("${first}" "script: inv: tonic 1 potion_pack 1\n" "the workbench craft did not finish")
 expect("${first}" "script: inv: crafted pack coin 57 potion 0 sword 0 gem 0 weight 1400\n" "the pack did not take its potions")
+# M-STATUS: the elixir's regen (20 hp/s for 0.5 s) and armor_boost (0.3 for 1 s) start two effects, a poisoned strike (8 hp/s, 4 per
+# pulse before armor) runs alongside; 65 health + 10 regen - 2 pulses of 4 at armor 0.5 = 71, and the boost is given back.
+expect("${first}" "script: status: elixir true, boost true, venom true, health 66 armor 0.5\n" "the elixir did not start its effects")
+expect("${first}" "script: status: over, elixir false, boost false, venom false, health 71 armor 0.2\n" "the effects did not end cleanly")
 hash_of("${first}" hash_a)
 hash_of("${second}" hash_b)
 if(NOT hash_a STREQUAL hash_b)
