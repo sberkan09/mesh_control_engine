@@ -4,7 +4,7 @@
 name: agentgate
 on:
   pull_request:
-    branches: [dev_claude]
+    branches: [master]
 
 permissions:
   contents: read
@@ -22,6 +22,6 @@ jobs:
           python-version: "3.12"
       - uses: sberkan09/agentgate@main
         with:
-          base: dev_claude
+          base: master
           agent-branches: "claude/*"
           fail-on-conflict: false

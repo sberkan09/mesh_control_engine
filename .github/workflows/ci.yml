@@ -6,7 +6,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [master, dev_claude]
+    branches: [master]
   workflow_dispatch:
     inputs:
       gate:
