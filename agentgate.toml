@@ -1,0 +1,11 @@
+[agentgate]
+base = "dev_claude"
+agent_branches = ["claude/*"]
+
+[tests]
+runner = "ctest"
+full_on = ["cmake/**", "CMakePresets.json"]
+ignore = ["**/*.md", "docs/**", "changelog.d/**", "claude_communication/**", ".claude/**", ".clang-format", ".clang-tidy", ".gitignore", ".mcp.json"]
+
+[deps]
+roots = ["src", "tests", "samples", "projects", "tools"]
