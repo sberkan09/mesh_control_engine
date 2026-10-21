@@ -184,3 +184,26 @@ end
     CHECK(has(bad, "3:5 Key 'eqip' not found"));
     CHECK_FALSE(bad.list.empty());
 }
+
+TEST_CASE("script check: the status global is typed") {
+    const Problems ok = check(R"(
+function update()
+    mce.each("StatusEffects", function(e)
+        status.add(e, "bleed", "poison", 4, 2.5, e)
+        status.add(e, "shield", "armor", 0.25, 10)
+        local on: boolean = status.has(e, "bleed")
+        if on then status.clear(e, "bleed") end
+        status.clear(e)
+    end)
+end
+)");
+    INFO(ok.all);
+    CHECK(ok.list.empty());
+    const Problems bad = check(R"(function update()
+    status.add(mce.find("x"), "bleed", "poison", 4)
+    status.hass(mce.find("x"), "bleed")
+end
+)");
+    INFO(bad.all);
+    CHECK_FALSE(bad.list.empty());
+}

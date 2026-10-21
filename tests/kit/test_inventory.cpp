@@ -9,6 +9,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/inventory.h"
+#include "mce/kit/status.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -562,4 +563,59 @@ TEST_CASE("inventory: equipping and drinking in the same tick judges the heal ag
     CHECK(r.w.try_get<Health3D>(r.hero)->max == doctest::Approx(150.0f));
     CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(130.0f));
     CHECK(inventory_count(r.inv(), r.id("tonic")) == 0);
+}
+
+TEST_CASE("inventory: a consumable with regen and armor_boost stats starts timed effects (M-STATUS 2)") {
+    Rig r;
+    install_status(r.w, nullptr);
+    asset::ItemCatalog c = r.cat;
+    const FixedString<32> tag("consumable");
+    asset::ItemDef d;
+    d.id = "elixir";
+    d.name = "elixir";
+    d.stack_max = 5;
+    asset::ItemStat st[4];
+    st[0].key = "regen";
+    st[0].value = 10.0f;
+    st[1].key = "regen_seconds";
+    st[1].value = 2.0f;
+    st[2].key = "armor_boost";
+    st[2].value = 0.25f;
+    st[3].key = "boost_seconds";
+    st[3].value = 3.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st, 4), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("elixir", 3);
+    auto use = [&] {
+        UseItem u;
+        u.owner = r.hero;
+        u.slot = 0;
+        EventAccess(r.w).push(u);
+        r.tick(4);  // UseItem, then the ApplyStatus it queues
+    };
+    use();  // no Health3D: nothing to affect, nothing consumed
+    CHECK(r.inv().qty[0] == 3);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 50.0f;
+    hp.armor = 0.5f;
+    r.w.set(r.hero, hp);
+    use();  // Health3D but no StatusEffects: still refused
+    CHECK(r.inv().qty[0] == 3);
+    r.w.set(r.hero, StatusEffects{});
+    use();
+    CHECK(r.inv().qty[0] == 2);
+    const StatusEffects& se = *r.w.try_get<StatusEffects>(r.hero);
+    u32 active = 0;
+    for (u32 i = 0; i < kStatusSlots; ++i) active += se.key[i] != 0;
+    CHECK(active == 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->armor == doctest::Approx(0.75f));
+    CHECK(r.w.try_get<Health3D>(r.hero)->current > 50.0f);  // regen already ticking
+    r.tick(60 * 4 - 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->armor == doctest::Approx(0.5f));  // boost over after 3 s
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(70.0f).epsilon(0.02));  // 2 s of 10 hp/s
+    for (u32 i = 0; i < kStatusSlots; ++i) CHECK(se.key[i] == 0);
+    r.w.try_get_mut<Health3D>(r.hero)->dead = 1;
+    use();  // a corpse: refused
+    CHECK(r.inv().qty[0] == 2);
 }

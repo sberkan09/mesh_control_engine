@@ -62,6 +62,9 @@ void register_world_api(lua_State* L);
 void register_mission_api(lua_State* L);
 // The `inventory` global (api_inventory.cpp).
 void register_inventory_api(lua_State* L);
+
+// The `status` global (api_status.cpp).
+void register_status_api(lua_State* L);
 // The `clock` global (api_clock.cpp).
 void register_clock_api(lua_State* L);
 // The `weather` global (api_weather.cpp).

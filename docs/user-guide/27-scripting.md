@@ -202,6 +202,9 @@ Stopping or fading a sound has no call of its own: play it from an entity with a
 | `inventory.open(container, opener)` | queues an `OpenContainer`: the chest rolls its table on the first open and the opener takes what fits |
 | `inventory.can_craft(e, recipe, station?)` | `true` when the recipe (an id from the `.mcitems` `recipes`) could be made now: every input present, room for every output, and a `station` entity with the recipe's station tag when it names one; `false` for an unknown recipe |
 | `inventory.craft(e, recipe, station?)` | queues a `CraftItem` (`station` nil: by hand). The craft is atomic; `ItemCrafted` or `CraftFailed` (with a reason) follows. A timed recipe at a station completes when its time is up |
+| `status.add(e, id, kind, amount, seconds, source?)` | queues a timed effect on an entity with `Health3D` and `StatusEffects`. `kind`: `"regen"` or `"poison"` (`amount` hp per second, positive; poison hits in half-second pulses and credits `source`), `"armor"` or `"max_health"` (`amount` is added while active and given back at the end, ±1e6). `seconds` 0.01 to 3600. Adding an id that is active refreshes it instead of stacking. `StatusApplied`, `StatusEnded` or `StatusRefused` follows |
+| `status.has(e, id)` | `true` while the effect is active |
+| `status.clear(e, id?)` | queues the end of one effect, or of every effect without an `id` (`StatusEnded` with `expired` 0) |
 
 ```lua
 -- Start the mission when the player presses Interact, and mark the depot on the map.
