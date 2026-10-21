@@ -45,6 +45,11 @@ inline constexpr const char* kMixerPanel = "Mixer";
 // The Strings panel (strings_panel.cpp): every locale's string table as one key by locale grid.
 void add_strings_panel(EditorShell& shell);
 inline constexpr const char* kStringsPanel = "Strings";
+// The Source panel (source_panel.cpp): any JSON source asset as text, checked by the cook as it is typed (M-SOURCEEDIT).
+void add_source_panel(EditorShell& shell);
+inline constexpr const char* kSourcePanel = "Source";
+// Opens the Source panel on an asset (a no-op when the panel is not registered).
+void open_source_panel(EditorShell& shell, asset::Guid guid);
 // The Scenes panel (scenes_panel.cpp): a tab per open scene file (M-SCENETABS).
 void add_scenes_panel(EditorShell& shell);
 inline constexpr const char* kScenesPanel = "Scenes";

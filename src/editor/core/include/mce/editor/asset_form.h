@@ -102,6 +102,10 @@ bool sequence_form_to_text(StringView old_text, const SequenceForm& form, cook::
 bool load_sequence_form(const EditorProject& project, const ProjectAsset& asset, SequenceForm& out, cook::String& err);
 bool save_sequence_form(EditorProject& project, const ProjectAsset& asset, const SequenceForm& form, cook::String& err);
 
+// Cooks `text` in memory as the asset at `asset.path` would cook and writes nothing. False when the cook refuses it
+// (the errors are in `diags`) or no importer reads the file type (`diags` empty, `err` says so).
+bool check_source(const EditorProject& project, const ProjectAsset& asset, StringView text, cook::DiagList& diags, cook::String& err);
+
 // Cooks `text` in memory as the asset at `asset.path` would cook, then writes it atomically and rescans the
 // catalog. Nothing is written when the cook refuses it. False with `err` set.
 bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset, StringView text, cook::String& err);
