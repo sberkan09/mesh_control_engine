@@ -27,7 +27,7 @@
 ## Gates
 - A scene without `WindDirection` has `SnowCover::wind_dir == (1, 0)` and an unchanged state hash; every existing golden under `tests/render_gl/*` stays byte-identical.
 - Kit: `angle_q` is integer and saved; a save/load mid-drift resumes with the same state hash; 360 degrees of drift returns to the start angle exactly.
-- Rotating the wind by 180 degrees mirrors the snow lee side in the new golden (pixel test), and the sway direction of a foliage batch follows the angle.
+- Rotating the wind by 180 degrees mirrors the snow lee side (the ball pixel test carries it; the new golden snow_plaza_west pins the west frame), and the sway direction of a foliage batch follows the angle.
 
 ## Step status
 

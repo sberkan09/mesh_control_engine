@@ -114,8 +114,8 @@ TEST_CASE("render3d_gl: wind_dir (1, 0) draws the pre-8c snow frame; cover 0 sta
     CHECK(same(draw_plaza(f, windy(s, 3.0f, 0.0f)), plain));  // normalized on upload: the same direction
     CHECK(same(draw_plaza(f, windy(s, 0.0f, 0.0f)), plain));  // zero length falls back to +x
     // In the golden's full cover the plaza sphere's cap lies inside one 2 m noise patch whose mask is 1 on both
-    // sides whatever the wind, so (-1, 0) draws that frame too (the golden snow_plaza_west takes the even layer).
-    CHECK(same(draw_plaza(f, windy(s, -1.0f, 0.0f)), plain));
+    // sides, so the wind hardly shows there (the golden snow_plaza_west takes the even layer); not asserted, it
+    // would pin a fixture accident.
     SnowCover even = s;
     even.noise_enabled = false;
     even.coverage = 0.6f;
