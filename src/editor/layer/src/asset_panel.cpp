@@ -13,6 +13,8 @@
 #include <cstring>
 
 #include "mce/editor/asset_browser.h"
+#include "mce/editor/asset_kinds.h"
+#include "mce/editor/asset_ops.h"
 #include "mce/editor/asset_thumb.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/thumb_cache.h"
@@ -47,6 +49,8 @@ public:
         if (ImGui::Combo("##type", &type_, kTypes, IM_ARRAYSIZE(kTypes))) model_.set_type(type_ == 0 ? StringView() : StringView(kTypes[type_]));
 
         ImGui::SameLine();
+        if (ImGui::Button("+ New")) begin_new();
+        ImGui::SameLine();
         ImGui::Checkbox("Grid", &grid_);
         if (grid_) {
             ImGui::SameLine();
@@ -62,6 +66,7 @@ public:
         ImGui::SameLine();
         if (ImGui::BeginChild("##entries")) draw_entries(shell);
         ImGui::EndChild();
+        draw_dialogs(shell);
     }
 
 private:
@@ -186,34 +191,40 @@ private:
         cache_.trim();
     }
 
+    // What a double click on an asset does: a scene or prefab opens, the rest open in their own panel.
+    void open_in_editor(EditorShell& shell, const ProjectAsset& asset, asset::Guid& open_scene) {
+        const ProjectAsset* a = &asset;
+        // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
+        if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab)
+            open_scene = a->guid;
+        // A UI document opens in the UI Document panel.
+        if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
+        // A timeline opens in the Timeline panel.
+        if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
+        // An animation graph opens in the Animation panel.
+        if (a->type == asset::ChunkType::AnimGraph) shell.open_anim_graph(a->guid);
+        // A behavior tree opens in the Behavior Tree panel.
+        if (a->type == asset::ChunkType::BehaviorTree) shell.open_bt(a->guid);
+        // A 2D skeleton opens in the Skeleton panel.
+        if (a->type == asset::ChunkType::Skeleton2D) shell.open_skeleton2d(a->guid);
+        // A material opens in the Material panel.
+        if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
+        if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
+        if (a->type == asset::ChunkType::Sequence) shell.open_sequence(a->guid);
+        // A string table opens the Strings panel (every locale in one grid).
+        if (a->type == asset::ChunkType::StringTable) {
+            if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
+            shell.focus_panel(kStringsPanel);
+        }
+    }
+
     // The click, double-click, tooltip, drag source and context menu of the item just drawn (a row or a grid cell).
     void item_interactions(EditorShell& shell, const ProjectAsset& asset, const char* label, asset::Guid& open_scene) {
         const ProjectAsset* a = &asset;
         const char* type = asset_type_name(a->type);
         if (ImGui::IsItemClicked()) selected_ = a->guid;
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
-            if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab)
-                open_scene = a->guid;
-            // A UI document opens in the UI Document panel.
-            if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
-            // A timeline opens in the Timeline panel.
-            if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
-            // An animation graph opens in the Animation panel.
-            if (a->type == asset::ChunkType::AnimGraph) shell.open_anim_graph(a->guid);
-            // A behavior tree opens in the Behavior Tree panel.
-            if (a->type == asset::ChunkType::BehaviorTree) shell.open_bt(a->guid);
-            // A 2D skeleton opens in the Skeleton panel.
-            if (a->type == asset::ChunkType::Skeleton2D) shell.open_skeleton2d(a->guid);
-            // A material opens in the Material panel.
-            if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
-            if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
-            if (a->type == asset::ChunkType::Sequence) shell.open_sequence(a->guid);
-            // A string table opens the Strings panel (every locale in one grid).
-            if (a->type == asset::ChunkType::StringTable) {
-                if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
-                shell.focus_panel(kStringsPanel);
-            }
+            open_in_editor(shell, *a, open_scene);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
         if (ImGui::BeginDragDropSource()) {
@@ -224,6 +235,8 @@ private:
         if (ImGui::BeginPopupContextItem("##ctx")) {
             selected_ = a->guid;
             if (ImGui::MenuItem("Rename / move", "F2")) begin_rename(*a);
+            if (ImGui::MenuItem("Duplicate...")) begin_duplicate(*a);
+            if (ImGui::MenuItem("Delete...")) begin_delete(shell.session().project(), *a);
             const AssetDrop kind = asset_drop_kind(a->type);
             if (ImGui::MenuItem("Add to scene", nullptr, false,
                                 !shell.playing() && (kind == AssetDrop::Sprite || kind == AssetDrop::PrefabInstance)))
@@ -289,6 +302,140 @@ private:
         for (GpuThumb& t : gpu_) t.tex->WantDestroyNextFrame = true;
     }
 
+    // ---- New, Duplicate and Delete (M-ASSETNEW 3): modal dialogs over the asset_ops functions ----
+    enum class Dialog : u8 { None, New, Duplicate, Delete };
+
+    void open_dialog(Dialog d) {
+        dialog_ = d;
+        open_dialog_ = true;
+        error_ = cook::String();
+    }
+
+    void begin_new() {
+        kind_ = 0;
+        default_new_name();
+        open_dialog(Dialog::New);
+    }
+
+    void default_new_name() {
+        const AssetKind& k = asset_kinds()[static_cast<usize>(kind_)];
+        cook::String name;
+        if (!model_.folder().empty()) {
+            name += model_.folder();
+            name += '/';
+        }
+        name += "new_";
+        for (const char* c = k.type; *c; ++c) name += static_cast<char>(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c);
+        name += k.ext;
+        std::snprintf(name_buf_, sizeof(name_buf_), "%s", name.c_str());
+    }
+
+    void begin_duplicate(const ProjectAsset& a) {
+        dialog_guid_ = a.guid;
+        const StringView path = a.path.view();
+        const usize dot = path.rfind('.');
+        cook::String name(path.substr(0, dot));
+        name += "_copy";
+        name += path.substr(dot);
+        std::snprintf(name_buf_, sizeof(name_buf_), "%s", name.c_str());
+        open_dialog(Dialog::Duplicate);
+    }
+
+    void begin_delete(const EditorProject& project, const ProjectAsset& a) {
+        dialog_guid_ = a.guid;
+        refs_.clear();
+        references_to(project, a.guid, refs_);
+        open_dialog(Dialog::Delete);
+    }
+
+    void finish(EditorShell& shell, asset::Guid select, bool open_it) {
+        EditorSession& session = shell.session();
+        model_.refresh(session.project());
+        seen_assets_ = session.project().assets().size();
+        dialog_ = Dialog::None;
+        ImGui::CloseCurrentPopup();
+        if (select.is_null()) return;
+        selected_ = select;
+        if (const ProjectAsset* a = session.project().find(select)) {
+            model_.set_folder(asset_folder(a->path.view()));
+            if (open_it) {
+                asset::Guid unused;
+                open_in_editor(shell, *a, unused);
+            }
+        }
+    }
+
+    void draw_dialogs(EditorShell& shell) {
+        if (dialog_ == Dialog::None) return;
+        EditorSession& session = shell.session();
+        const char* title = dialog_ == Dialog::New ? "New asset" : dialog_ == Dialog::Duplicate ? "Duplicate asset" : "Delete asset";
+        if (open_dialog_) {
+            ImGui::OpenPopup(title);
+            open_dialog_ = false;
+        }
+        if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            dialog_ = Dialog::None;
+            return;
+        }
+        if (dialog_ == Dialog::New) {
+            const Span<const AssetKind> kinds = asset_kinds();
+            const AssetKind& cur = kinds[static_cast<usize>(kind_)];
+            cook::String preview = cur.type;
+            preview += "  (";
+            preview += cur.ext;
+            preview += ')';
+            if (ImGui::BeginCombo("Type", preview.c_str())) {
+                for (usize i = 0; i < kinds.size(); ++i) {
+                    cook::String label = kinds[i].type;
+                    label += "  (";
+                    label += kinds[i].ext;
+                    label += ')';
+                    if (ImGui::Selectable(label.c_str(), static_cast<int>(i) == kind_)) {
+                        kind_ = static_cast<int>(i);
+                        default_new_name();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::TextWrapped("%s", cur.summary);
+            ImGui::InputText("Path under assets/", name_buf_, sizeof(name_buf_));
+            if (ImGui::Button("Create")) {
+                asset::Guid g;
+                cook::String err;
+                if (create_asset(session.project(), StringView(name_buf_), g, err)) finish(shell, g, true);
+                else error_ = err;
+            }
+        } else if (dialog_ == Dialog::Duplicate) {
+            ImGui::InputText("New path under assets/", name_buf_, sizeof(name_buf_));
+            if (ImGui::Button("Duplicate")) {
+                asset::Guid g;
+                cook::String err;
+                if (duplicate_asset(session.project(), dialog_guid_, StringView(name_buf_), g, err)) finish(shell, g, false);
+                else error_ = err;
+            }
+        } else {
+            const ProjectAsset* a = session.project().find(dialog_guid_);
+            ImGui::Text("Delete %s and its sidecar?", a ? a->path.c_str() : "(gone)");
+            if (!refs_.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Still named by %u asset(s), which will not cook until fixed:", static_cast<unsigned>(refs_.size()));
+                for (usize i = 0; i < refs_.size() && i < 8; ++i) ImGui::BulletText("%s", refs_[i].c_str());
+                if (refs_.size() > 8) ImGui::TextDisabled("... and %u more", static_cast<unsigned>(refs_.size() - 8));
+            }
+            if (ImGui::Button("Delete")) {
+                cook::String err;
+                if (delete_asset(session.project(), dialog_guid_, err)) finish(shell, asset::Guid{}, false);
+                else error_ = err;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            dialog_ = Dialog::None;
+            ImGui::CloseCurrentPopup();
+        }
+        if (!error_.empty()) ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", error_.c_str());
+        ImGui::EndPopup();
+    }
+
     void begin_rename(const ProjectAsset& a) {
         renaming_ = a.guid;
         std::snprintf(rename_buf_, sizeof(rename_buf_), "%s", a.path.c_str());
@@ -335,6 +482,13 @@ private:
     asset::Guid selected_, renaming_;
     char rename_buf_[256] = {};
     bool focus_rename_ = false;
+    Dialog dialog_ = Dialog::None;
+    bool open_dialog_ = false;
+    asset::Guid dialog_guid_;
+    int kind_ = 0;
+    char name_buf_[256] = {};
+    cook::String error_;
+    Array<cook::String> refs_;
 };
 
 }  // namespace
