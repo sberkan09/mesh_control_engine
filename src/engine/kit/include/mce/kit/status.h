@@ -41,8 +41,8 @@ inline constexpr u32 kStatusSlots = 8;
 inline constexpr u32 kStatusPulseUs = 500000;  // poison damage comes in half-second pulses
 inline constexpr f32 kStatusMaxSeconds = 3600.0f;
 
-enum class StatusKind : u8 { Regen, Poison, Armor, MaxHealth };
-MCE_ENUM(StatusKind, Regen, Poison, Armor, MaxHealth)
+enum class StatusKind : u8 { Regen, Poison, Armor, MaxHealth, Cooldown };  // Cooldown changes nothing itself: `status.has` and item use read it
+MCE_ENUM(StatusKind, Regen, Poison, Armor, MaxHealth, Cooldown)
 
 struct StatusEffects {
     u32 key[kStatusSlots] = {};        // hash of the effect id, 0: empty
