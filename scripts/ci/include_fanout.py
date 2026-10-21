@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """How many translation units include a changed header (M3): the cost of a header change made visible.
 
-    scripts/ci/include_fanout.py                  # headers changed since the merge base with origin/dev_claude
+    scripts/ci/include_fanout.py                  # headers changed since the merge base with origin/master
     scripts/ci/include_fanout.py --all            # the 25 widest headers of the tree
     scripts/ci/include_fanout.py path/to/a.h ...  # these headers
-    options: --warn N (default 150)   --base REF (default $MCE_TIDY_BASE or origin/dev_claude)
+    options: --warn N (default 150)   --base REF (default $MCE_TIDY_BASE or origin/master)
 
 A header that reaches N or more .cpp/.cc/.c/.mm files, directly or through other headers, makes every build
 tree after the merge rebuild all of them: the ccache hit rate of every container drops. Above the threshold
@@ -104,7 +104,7 @@ def main():
     ap.add_argument("headers", nargs="*")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--warn", type=int, default=150)
-    ap.add_argument("--base", default=os.environ.get("MCE_TIDY_BASE", "origin/dev_claude"))
+    ap.add_argument("--base", default=os.environ.get("MCE_TIDY_BASE", "origin/master"))
     args = ap.parse_args()
 
     tus, edges = scan()

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The integration run (M1): the full matrix on the dev_claude head, once, instead of per thread.
+# The integration run (M1): the full matrix on the master head, once, instead of per thread.
 #
 #   scripts/ci/integration_run.sh [--no-push] [--branch NAME]
 #
-# 1. checks out origin/dev_claude (detached; refuses a dirty tree) and regenerates the generated files
+# 1. checks out origin/master (detached; refuses a dirty tree) and regenerates the generated files
 #    (capabilities.md, the sample coverage allow list, the transcript golden: `local_ci.sh regen`);
 #    a change is committed on a branch ci/regen-<sha> and pushed, for the coordinator to merge. The stages
 #    below run on that commit, so a stale golden never turns the run red.
@@ -15,7 +15,7 @@
 # 3b. keeps each group's log and a progress line in /mnt/project-files/.cache/integration/ as it finishes (a container
 #    restart kills the run; the folder survives).
 # 4. writes build/local-ci-logs/integration-report.md and prints it: result per group, and on red the
-#    suspect PRs, i.e. the first-parent merges on dev_claude since the last green integration run
+#    suspect PRs, i.e. the first-parent merges on master since the last green integration run
 #    (MCE_INTEGRATION_STATE, default /mnt/project-files/.cache/integration-last-green when that folder exists,
 #    else build/local-ci-logs/integration-last-green; without it, the last 10 merges).
 #
@@ -54,10 +54,10 @@ KEEP=""
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
     echo "integration: the working tree has uncommitted changes; run it on a clean checkout"; exit 2
 fi
-git fetch -q origin dev_claude || { echo "integration: cannot fetch origin/dev_claude"; exit 2; }
-git checkout -q --detach origin/dev_claude || exit 2
+git fetch -q origin master || { echo "integration: cannot fetch origin/master"; exit 2; }
+git checkout -q --detach origin/master || exit 2
 head_sha="$(git rev-parse --short HEAD)"
-echo "=== integration run on dev_claude $head_sha"
+echo "=== integration run on master $head_sha"
 
 bash scripts/ci/setup_env.sh > "$LOG_DIR/setup_env.log" 2>&1 || echo "integration: setup_env.sh failed (see $LOG_DIR/setup_env.log), going on"
 
@@ -74,11 +74,11 @@ if [[ -n "$(git status --porcelain)" ]]; then
     git checkout -q -b "$regen_branch" &&
         git add -A docs/engine/capabilities.md scripts/ci/sample_coverage.allow tests/mcp/transcripts &&
         git -c user.name="integration-runner" -c user.email="noreply@anthropic.com" commit -q \
-            -m "CI: regenerate generated files on dev_claude $head_sha" \
+            -m "CI: regenerate generated files on master $head_sha" \
             -m "Written by scripts/ci/integration_run.sh (capabilities.md, sample coverage allow list, transcript golden)." &&
         regen_note="regenerated: $(git show --name-only --format= HEAD | paste -sd, -) on branch $regen_branch"
     if [[ $push -eq 1 ]]; then
-        git push -q -u origin "$regen_branch" 2>&1 && regen_note="$regen_note (pushed; merge it into dev_claude)" ||
+        git push -q -u origin "$regen_branch" 2>&1 && regen_note="$regen_note (pushed; merge it into master)" ||
             regen_note="$regen_note (NOT pushed: push failed)"
     fi
 fi
@@ -139,12 +139,12 @@ scripts/ci/local_ci.sh --save-cache-only > "$LOG_DIR/integration-snapshot.log" 2
 last_green=""
 [[ -f "$STATE" ]] && last_green="$(head -n1 "$STATE")"
 if [[ -n "$last_green" ]] && git cat-file -e "$last_green^{commit}" 2>/dev/null; then
-    range="$last_green..origin/dev_claude"
+    range="$last_green..origin/master"
 else
-    range="-10 origin/dev_claude"
+    range="-10 origin/master"
 fi
 {
-    echo "# Integration run on dev_claude $head_sha"
+    echo "# Integration run on master $head_sha"
     echo
     echo "Generated files: $regen_note"
     echo
@@ -161,7 +161,7 @@ fi
     fi
     if [[ ${#failed[@]} -gt 0 ]]; then
         echo
-        echo "## Suspect PRs (first-parent merges on dev_claude since ${last_green:-the last 10 merges})"
+        echo "## Suspect PRs (first-parent merges on master since ${last_green:-the last 10 merges})"
         # shellcheck disable=SC2086
         git log --first-parent --format='- %h %s' $range
         echo
@@ -173,8 +173,8 @@ echo
 echo "=== Integration summary ($head_sha)"
 cat "$REPORT"
 if [[ ${#failed[@]} -eq 0 ]]; then
-    # the state records dev_claude's head, not the regen commit
-    git rev-parse origin/dev_claude > "$STATE" 2> /dev/null || true
+    # the state records master's head, not the regen commit
+    git rev-parse origin/master > "$STATE" 2> /dev/null || true
     exit 0
 fi
 exit 1

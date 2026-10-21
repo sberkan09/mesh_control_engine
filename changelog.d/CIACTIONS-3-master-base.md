@@ -1,0 +1,1 @@
+- CI scripts: `local_ci.sh`, `premerge.py`, `include_fanout.py`, `integration_run.sh` and `bump_version.py` use `origin/master` as the default base branch (was `origin/dev_claude`).
