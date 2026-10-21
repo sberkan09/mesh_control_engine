@@ -87,7 +87,7 @@ def chunk_types():
 
 
 def mcp_kinds():
-    text = read(ROOT / "src/editor/mcp/src/asset_tools.cpp")
+    text = read(ROOT / "src/editor/core/src/asset_kinds.cpp")  # the table the MCP asset tools share (M-ASSETNEW)
     return {m.group(1): m.group(2) for m in re.finditer(r'^\s*\{"(\w+)", "(\.\w+)", "mce-[\w-]+", \d+,', text, re.M)}
 
 
