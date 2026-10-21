@@ -209,7 +209,7 @@ bool load_material_form(const EditorProject& project, const ProjectAsset& asset,
     return material_form_from_text(text.view(), out, err);
 }
 
-bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset, StringView text, cook::String& err) {
+bool check_source(const EditorProject& project, const ProjectAsset& asset, StringView text, cook::DiagList& diags, cook::String& err) {
     const StringView rel = asset.path.view();
     const usize dot = rel.rfind('.');
     const cook::IImporter* importer = dot == StringView::npos ? nullptr : project.importers().for_extension(rel.substr(dot));
@@ -220,7 +220,6 @@ bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset,
     cook::AssetRegistry registry;
     cook::DiagList scan;
     registry.scan(project.root(), project.importers(), false, scan);
-    cook::DiagList diags;
     Array<byte> cooked;
     bool ok;
     if (importer->native()) {
@@ -245,7 +244,19 @@ bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset,
         ok = importer->cook(in, writer, diags);
         if (ok) writer.finish(cooked);
     }
-    if (!ok) {
+    if (!ok) err += "the cook refuses this document";
+    return ok;
+}
+
+bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset, StringView text, cook::String& err) {
+    const StringView rel = asset.path.view();
+    cook::DiagList diags;
+    cook::String why;
+    if (!check_source(project, asset, text, diags, why)) {
+        if (diags.all().size() == 0) {
+            err += why;
+            return false;
+        }
         err += "the cook refuses this document (nothing was written):";
         usize n = 0;
         for (const cook::Diagnostic& d : diags.all()) {
