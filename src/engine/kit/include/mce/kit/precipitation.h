@@ -45,6 +45,8 @@
 // Event (producer FixedUpdate_Pre): LightningStruck {thunder_delay_ticks} once per strike, in 30..300 (hash of
 // (seed, counter) for the strike), for audio to play thunder later.
 //
+// A ThunderDelay (thunder_delay.h) turns each strike into a delayed one-shot; install_precipitation adds its system.
+//
 // install_precipitation calls install_weather. Saved: all engine-written fields of Lightning.
 
 #include "mce/math/math.h"

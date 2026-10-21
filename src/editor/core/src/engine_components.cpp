@@ -51,6 +51,7 @@
 #include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
 #include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)
 #include "mce/kit/snow_cover.h"         // SnowCover (M-SNOWCOVER 6c)
+#include "mce/kit/thunder_delay.h"      // ThunderDelay (M-RAINFX 7e)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
 #include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)

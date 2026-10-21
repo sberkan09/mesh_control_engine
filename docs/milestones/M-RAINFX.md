@@ -22,6 +22,8 @@
 | 7b. Ripple shader | `p_ripple`, GLSL, `ripple_plaza` golden and pixel tests, all goldens byte-identical | render, tests/render_gl | **Opus writes**, independent Opus review |
 | 7c. Kit | `RainRipples`, `RainSplash`, `ThunderDelay` components and systems, extract, determinism and save tests, padding audit | kit, tests/kit | Sonnet |
 | 7d. Luau, sample, docs | the three setters, `samples/12_weather`, guide, close | script, samples | Sonnet |
+| 7e. Thunder | `ThunderDelay` component and `kit_thunder_delay` (7c split: ThunderDelay only), tests, padding audit, guide 9.19a | kit, tests/kit | Sonnet |
+| 7f. Splash | `RainSplash` and `kit_rain_splash` (the rest of 7c) | kit, tests/kit | Sonnet |
 
 7c does not depend on 7b and can run in parallel with it after 7a.
 
@@ -39,6 +41,8 @@
 | 7b | done | #645 | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
 | 7c | planned | | needs 7a |
 | 7d | planned | | needs 7b, 7c |
+| 7e | in progress | | `ThunderDelay` only (component, `kit_thunder_delay`, tests/kit/test_thunder_delay.cpp, padding audit, guide 9.19a); the strike distance is derived from `LightningStruck.thunder_delay_ticks` (the event has no position) |
+| 7f | planned | | `RainSplash` (moved out of 7e) |
 
 ## Notes for 7b from the 7a review (independent Opus review, no blockers)
 
