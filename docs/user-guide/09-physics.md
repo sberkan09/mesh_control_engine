@@ -625,6 +625,19 @@ linear gain `volume / (1 + distance / 100 m)`, never below -60 dB. A scene needs
 strikes are saved, so a save in the middle of a storm resumes with the thunder still on its way. A scene without a
 `ThunderDelay` sounds exactly as before.
 
+## 9.19c Rain splashes (M-RAINFX)
+
+`mce/kit/rain_splash.h` adds the `RainSplash` component, which makes drops splash where they land while it rains. Put
+it on an entity that also has a `ParticleEmitter3D` and a `LocalTransform` (the same shape as `Precipitation3D`);
+installing precipitation adds its system `kit_rain_splash`. Its fields are rate (1, scales how many splashes land per
+tick), height_m (0.15, how high a splash jumps), life_seconds (0.25, how long it lasts), radius_m (25, how far from the
+primary 3D camera they land) and seed (1). While the weather is rain or a storm with intensity above 0, every tick
+fires one burst of `round(4 * intensity * rate)` particles at a seeded random point within radius_m of the camera,
+at the entity's own height: set the entity's y to the floor height, since the system moves only x and z. It never
+creates entities, and the only state it keeps is a saved burst counter, so a save mid-storm resumes on the same
+splash pattern. In clear weather, snow, or a scene with no camera the emitter is switched off and nothing spawns; a
+scene without a `RainSplash` is unchanged.
+
 ## 9.19a Rain ripples (M-RAINFX)
 
 An optional `RainRipples` entity (one per scene, the first in ECS order is read; it is registered with the weather)

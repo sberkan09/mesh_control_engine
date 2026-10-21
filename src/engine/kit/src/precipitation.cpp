@@ -6,6 +6,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/rain_splash.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
 
@@ -183,6 +184,7 @@ void install_precipitation(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Pre, "kit_lightning", &kit_lightning, "kit_weather");
     world.add_system(Phase::FixedUpdate_Pre, "kit_precipitation", &kit_precipitation, "kit_lightning");
     install_thunder_delay(world);
+    install_rain_splash(world);  // M-RAINFX 7f: after "kit_precipitation"
 }
 
 }  // namespace mce::kit

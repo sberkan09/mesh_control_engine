@@ -46,6 +46,7 @@
 // (seed, counter) for the strike), for audio to play thunder later.
 //
 // A ThunderDelay (thunder_delay.h) turns each strike into a delayed one-shot; install_precipitation adds its system.
+// A RainSplash (rain_splash.h) drives splash bursts while it rains; install_precipitation adds "kit_rain_splash".
 //
 // install_precipitation calls install_weather. Saved: all engine-written fields of Lightning.
 
