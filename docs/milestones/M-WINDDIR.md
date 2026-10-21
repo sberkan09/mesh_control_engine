@@ -35,6 +35,6 @@
 |---|---|---|---|
 | 8a | done | #663 | `WindDirection` also carries a saved `frac` (drift remainder) and `seeded` flag |
 | 8b | done | #664 | |
-| 8c | planned | | needs 8b |
+| 8c | in progress | | `p_snow2` after `p_ripple`; all 68 existing goldens byte-identical on both backends; the full-cover `snow_plaza` cap sits in one noise patch (mask 1 either way), so `snow_plaza_west` is the even layer at coverage 0.6; a dark ball's slope whitening mirrors (lee gain 20.5 / 20.2 luma) |
 | 8d | planned | | needs 8a, 8b |
 | 8e | planned | | needs 8c, 8d |
