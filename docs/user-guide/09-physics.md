@@ -638,6 +638,18 @@ creates entities, and the only state it keeps is a saved burst counter, so a sav
 splash pattern. In clear weather, snow, or a scene with no camera the emitter is switched off and nothing spawns; a
 scene without a `RainSplash` is unchanged.
 
+## 9.19d Wind direction (M-WINDDIR)
+
+`mce/kit/wind_direction.h` adds the `WindDirection` component, one optional entity per scene (the first in ECS order
+drives; registered with the weather) that gives the wind a heading. `degrees` (0) is the heading, 0 = +x and
+counter-clockwise seen from above, so 90 points along +z; `drift_degrees_per_minute` (0, clamped to +-3600) turns it
+slowly, negative the other way. The system `kit_wind_direction` keeps the heading as the saved integer `angle_q` (in
+1/65536 degree) and a saved remainder, so a long drift loses nothing, 360 degrees of drift returns to the start
+exactly and a save in the middle of a turn resumes on the same state. With a drift of 0 the heading is simply
+`degrees`, so editing it takes effect on the next tick; with a drift the heading starts at `degrees` and turns from
+there. This step only holds the state: the snow lee side and the foliage sway follow it in later steps. A scene without
+a `WindDirection` is unchanged.
+
 ## 9.19a Rain ripples (M-RAINFX)
 
 An optional `RainRipples` entity (one per scene, the first in ECS order is read; it is registered with the weather)
