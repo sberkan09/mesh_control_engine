@@ -65,6 +65,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_snow;           // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise, Low), w wind bias
     vec4 p_ripple;         // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
     vec4 p_snow2;          // M-WINDDIR 8c: xy the snow wind direction (xz unit vector the wind blows toward), zw 0
+    vec4 p_cloud;          // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
+    vec4 p_cloud2;         // xy: the drift in noise cells mod 64 (wind_dir * speed * time), zw 0
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1540,6 +1542,59 @@ void main() {
 constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
 layout(location = 0) in vec2 v_ndc;
 layout(location = 0) out vec4 o_color;
+// ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
+// ray meets a plane p_cloud.w meters above the camera (up-going rays only), camera-relative: the camera's xz and the
+// floating origin never enter, only the drift p_cloud2.xy (noise cells, wrapped on the CPU to the 64-cell period).
+// Three octaves of value noise on integer lattice hashes (pcg2d, the puddle and snow noise's family; no sin()), at
+// 1, 2 and 4 times the cell rate, each a whole lattice per period, so the pattern is seamless and precision-stable.
+uint cloud_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v.x;
+}
+float cloud_lattice(uvec2 c, uint seed) { return float(cloud_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
+// g: noise coordinates in 0..m cells (m: lattice cells per period).
+float cloud_value(vec2 g, uint m, uint seed) {
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uvec2 c0 = uvec2(max(i, vec2(0.0))) % m;  // g may round up to m: it wraps to cell 0
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = cloud_lattice(c0, seed), b = cloud_lattice(uvec2(c1.x, c0.y), seed);
+    float c = cloud_lattice(uvec2(c0.x, c1.y), seed), e = cloud_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
+// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
+//   q    = d.xz * height / d.y * (1 / cell) - drift, mod 64 cells
+//   n    = 0.55 v(q) + 0.30 v(2q) + 0.15 v(4q)                       (0..1, mean 0.5)
+//   t    = 0.78 - 0.6 coverage                                        (coverage 1 covers the whole sky)
+//   mask = smoothstep(t, t + 0.12, n), thick = clamp((n - t) / 0.3, 0, 1) * density
+//   a    = mask * (0.55 + 0.45 density) * smoothstep(0.03, 0.25, d.y)  (fades into the horizon haze)
+// Lit by the sun (brighter on the sun side, a silver lining on thin edges near the disk, a darker base under a thick
+// deck) and the sky ambient, both from the frame's light, so night and dusk follow; the sun disk behind dims by a.
+vec3 apply_clouds(vec3 c, vec3 d, vec3 sun, float cs) {
+    if (d.y <= 0.03) return c;
+    vec2 q = mod(d.xz * (p_cloud.w / d.y) * p_cloud.z - p_cloud2.xy, 64.0);
+    float n = cloud_value(q, 64u, 0x27D4EB2Fu) * 0.55 + cloud_value(q * 2.0, 128u, 0x165667B1u) * 0.30 +
+              cloud_value(q * 4.0, 256u, 0xD3A2646Cu) * 0.15;
+    float t = 0.78 - 0.6 * p_cloud.x;
+    float mask = smoothstep(t, t + 0.12, n);
+    if (mask <= 0.0) return c;
+    float thick = clamp((n - t) / 0.3, 0.0, 1.0) * p_cloud.y;
+    float a = mask * (0.55 + 0.45 * p_cloud.y) * smoothstep(0.03, 0.25, d.y);
+    float sun_up = smoothstep(-0.1, 0.1, sun.y);
+    float side = 0.55 + 0.45 * cs;
+    float lining = pow(max(cs, 0.0), 24.0) * 1.5 * (1.0 - thick);
+    vec3 direct = p_light_color.rgb * sun_up * (side * (1.0 - 0.65 * thick) + lining);
+    vec3 ambient = p_amb_sky.rgb * (1.0 - 0.4 * thick);
+    vec3 cloud = 0.9 * (ambient + 0.5 * direct);
+    return mix(c, cloud, a);
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1548,6 +1603,7 @@ void main() {
     float cs = dot(d, sun);
     float edge = 1.0 - p_sun.x;
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
+    if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
         c = c * f.a + f.rgb;
