@@ -217,6 +217,29 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength 0..4, build and melt 0..86400 seconds,
     -- coverage 0..1, scale 0.1..100 metres, wind 0..1); an unknown key or a non-number raises
     set_snow: (settings: { strength: number?, build: number?, melt: number?, coverage: number?, scale: number?, wind: number? }) -> (),
+    -- RainRipples (M-RAINFX), the first one in the scene; the getters raise when there is none
+    ripples_strength: () -> number,
+    ripples_density: () -> number,
+    ripples_speed: () -> number,
+    ripples_ring_width: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..1, density 0..1, speed 0.1..10,
+    -- ring_width 0..1); an unknown key or a non-number raises
+    set_ripples: (settings: { strength: number?, density: number?, speed: number?, ring_width: number? }) -> (),
+    -- RainSplash (M-RAINFX), the first one in the scene; the engine-written counter is not reachable
+    splash_rate: () -> number,
+    splash_height: () -> number,
+    splash_life: () -> number,
+    splash_radius: () -> number,
+    splash_seed: () -> number,
+    -- every key optional, each value clamped to the field's range (rate 0..64, height 0.01..5 metres, life 0.02..5
+    -- seconds, radius 0.5..500 metres, seed 0..4294967295); an unknown key or a non-number raises
+    set_splash: (settings: { rate: number?, height: number?, life: number?, radius: number?, seed: number? }) -> (),
+    -- ThunderDelay (M-RAINFX), the first one in the scene; the clip and the engine-written queue are not reachable
+    thunder_speed: () -> number,
+    thunder_volume: () -> number,
+    -- every key optional, each value clamped to the field's range (speed 1..1000000 m/s, volume 0..4); an unknown
+    -- key or a non-number raises
+    set_thunder: (settings: { speed: number?, volume: number? }) -> (),
 }
 )";
 

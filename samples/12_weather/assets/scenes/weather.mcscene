@@ -87,6 +87,8 @@
      "build_seconds": 4,
      "melt_seconds": 10
     },
+    "RainRipples": {},
+    "ThunderDelay": {},
     "Foliage3D": {
      "mesh": "guid:12d12000-0000-4000-8000-000000000006",
      "tint": [
@@ -284,6 +286,35 @@
      "script": "guid:12d12000-0000-4000-8000-000000000003",
      "phase": "Post"
     }
+   }
+  },
+  {
+   "name": "Splash",
+   "components": {
+    "RainSplash": {},
+    "ParticleEmitter3D": {
+     "color_start": [
+      0.7,
+      0.78,
+      0.9,
+      0.5
+     ],
+     "color_end": [
+      0.7,
+      0.78,
+      0.9,
+      0
+     ],
+     "size_start": 0.05,
+     "size_end": 0.03,
+     "max_particles": 1024,
+     "seed": 2,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0,
+     "rate": 0
+    },
+    "LocalTransform": {}
    }
   }
  ]
