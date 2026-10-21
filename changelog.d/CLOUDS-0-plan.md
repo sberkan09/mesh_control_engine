@@ -1,0 +1,1 @@
+- M-CLOUDS milestone record (a procedural cloud layer in the sky that follows the weather and the wind direction, opt-in), planned in `docs/milestones/M-CLOUDS.md`.
