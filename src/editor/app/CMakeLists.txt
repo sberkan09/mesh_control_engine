@@ -7,6 +7,11 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     add_test(NAME editor_smoke
              COMMAND mce_editor -frames 120 -selftest -editor.ini "" -platform.error_box 0 -r.vsync 0)
     set_tests_properties(editor_smoke PROPERTIES LABELS gpu)
+    # M-PANELSHOT: every panel's tab in turn, one .ppm each in panel-shots/; exit 3 on a blank shot or a GL error.
+    add_test(NAME editor_panel_shots
+             COMMAND mce_editor -editor.panel_shots ${CMAKE_CURRENT_BINARY_DIR}/panel-shots -editor.ini ""
+                     -platform.error_box 0 -r.vsync 0)
+    set_tests_properties(editor_panel_shots PROPERTIES LABELS gpu)
     # M-PERF step 4: -editor.perf_capture opens a player's .mcperf in the Profiler's Capture tab.
     add_test(NAME editor_profiler_capture
              COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>

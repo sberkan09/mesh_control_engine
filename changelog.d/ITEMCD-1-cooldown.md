@@ -1,0 +1,1 @@
+- Kit, Luau (M-ITEMCD): consumables with a `cooldown` stat start a `Cooldown` status (`cd:<item>`) and cannot be used again until it ends; `StatusKind::Cooldown`, `status.add(.., "cooldown", ..)`. Closes the M-ITEMFX open item. Docs: `docs/engine/kit.md`.

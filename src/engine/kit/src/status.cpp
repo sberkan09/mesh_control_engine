@@ -70,7 +70,7 @@ void kit_status(Frame& f) {
 
     for (const ApplyStatus& a : ev.read<ApplyStatus>()) {
         StatusEffects* s = a.target.is_null() || !w.alive(a.target) ? nullptr : w.try_get_mut<StatusEffects>(a.target);
-        const bool sane = a.kind <= static_cast<u32>(StatusKind::MaxHealth) && a.seconds >= 0.01f && a.seconds <= kStatusMaxSeconds &&
+        const bool sane = a.kind <= static_cast<u32>(StatusKind::Cooldown) && a.seconds >= 0.01f && a.seconds <= kStatusMaxSeconds &&
                           std::isfinite(a.amount) && a.amount > -1.0e6f && a.amount < 1.0e6f && !a.id.empty() &&
                           (a.kind >= static_cast<u32>(StatusKind::Armor) || a.amount > 0.0f);
         if (!s || !sane) {
@@ -108,7 +108,7 @@ void kit_status(Frame& f) {
         for (u32 i = 0; i < kStatusSlots; ++i) {
             if (s.key[i] == 0) continue;
             const StatusKind kind = static_cast<StatusKind>(s.kind[i]);
-            if (s.kind[i] > static_cast<u8>(StatusKind::MaxHealth) || !std::isfinite(s.amount[i]) || !std::isfinite(s.applied[i])) {
+            if (s.kind[i] > static_cast<u8>(StatusKind::Cooldown) || !std::isfinite(s.amount[i]) || !std::isfinite(s.applied[i])) {
                 clear_slot(s, i);  // a hostile or corrupt save: drop it rather than let it poison Health3D
                 continue;
             }

@@ -486,3 +486,12 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
   use (`ApplyStatus` is queued by `kit_inventory` and read by `kit_status`).
 - Luau: `status.add(e, id, kind, amount, seconds, source?)`, `status.has(e, id)`, `status.clear(e, id?)` (`src/api_status.cpp`, typed in
   `definitions.cpp`, call table in `docs/user-guide/27-scripting.md`). Bad arguments raise an error that names the call.
+- `samples/12_loot` (M-STATUS 3) drinks an elixir (regen 20 hp/s for 0.5 s, armor boost 0.3 for 1 s) while a poisoned strike (8 hp/s from the goblin) runs; `loot_test.cmake` pins the two `status:` lines.
+
+### Consumable cooldowns (M-ITEMCD)
+
+- A consumable with a `cooldown` stat (seconds, up to 3600) starts a `Cooldown` status named `cd:<item>` when used, and a use while it runs is refused and
+  not consumed (nothing heals either). The user needs `StatusEffects`; without it the stat is ignored. A refused use (full health, dead) starts no cooldown.
+  Two `UseItem` events for the same item in one tick both pass, since the cooldown starts a tick later. Luau: `status.has(e, "cd:potion")` tells a
+  script (and a HUD) the item is cooling down; `status.add(e, id, "cooldown", 1, seconds)` makes a cooldown by hand.
+

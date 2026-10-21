@@ -310,9 +310,18 @@ void kit_inventory(Frame& f) {
         if (c->has_tag(d, "consumable")) {
             bool refused = false;
             f32 healed = 0.0f;
+            // cooldown (M-ITEMCD): a `cooldown` stat (seconds) keeps the same item from being used again until a Cooldown effect named
+            // "cd:<item>" ends; it needs StatusEffects on the user and is skipped without it
+            const f32 cooldown = c->stat(d, "cooldown", 0.0f);
+            FixedString<32> cd_id;
+            cd_id.assign("cd:");
+            cd_id.append(d.id.view());
+            const StatusEffects* cds = cooldown > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get<StatusEffects>(u.owner) : nullptr;
+            const bool cd_on = cds && w.event_queue<ApplyStatus>() != nullptr;
+            if (cd_on && status_find(*cds, status_key(cd_id.view())) >= 0) refused = true;  // still cooling down: not wasted
             const f32 heal = c->stat(d, "heal", 0.0f);
             Health3D* hp = heal > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get_mut<Health3D>(u.owner) : nullptr;
-            if (hp) {
+            if (hp && !refused) {
                 const f32 room = hp->max - hp->current;
                 if (hp->dead || !(room > 0.0f)) {
                     refused = true;  // a drink at full health (or on a corpse) is not wasted
@@ -352,6 +361,16 @@ void kit_inventory(Frame& f) {
                         a.seconds = boost_s;
                         ev.push(a);
                     }
+                }
+                if (cd_on) {
+                    ApplyStatus a;
+                    a.target = u.owner;
+                    a.source = u.owner;
+                    a.id = cd_id;
+                    a.kind = static_cast<u32>(StatusKind::Cooldown);
+                    a.amount = 1.0f;
+                    a.seconds = cooldown < kStatusMaxSeconds ? (cooldown > 0.01f ? cooldown : 0.01f) : kStatusMaxSeconds;
+                    ev.push(a);
                 }
                 inv->qty[u.slot] -= 1;
                 if (inv->qty[u.slot] == 0) inv->item[u.slot] = 0;

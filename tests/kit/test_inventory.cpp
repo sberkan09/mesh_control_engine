@@ -619,3 +619,47 @@ TEST_CASE("inventory: a consumable with regen and armor_boost stats starts timed
     use();  // a corpse: refused
     CHECK(r.inv().qty[0] == 2);
 }
+
+TEST_CASE("inventory: a consumable with a cooldown stat cannot be used again until it ends (M-ITEMCD)") {
+    Rig r;
+    install_status(r.w, nullptr);
+    asset::ItemCatalog c = r.cat;
+    const FixedString<32> tag("consumable");
+    asset::ItemDef d;
+    d.id = "salve";
+    d.name = "salve";
+    d.stack_max = 9;
+    asset::ItemStat st[2];
+    st[0].key = "heal";
+    st[0].value = 10.0f;
+    st[1].key = "cooldown";
+    st[1].value = 2.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st, 2), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("salve", 5);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 10.0f;
+    r.w.set(r.hero, hp);
+    auto use = [&](u32 ticks) {
+        UseItem u;
+        u.owner = r.hero;
+        u.slot = 0;
+        EventAccess(r.w).push(u);
+        r.tick(ticks);
+    };
+    use(4);  // no StatusEffects: the cooldown is skipped, a second use works at once
+    use(4);
+    CHECK(r.inv().qty[0] == 3);
+    r.w.set(r.hero, StatusEffects{});
+    use(4);  // heals and starts the 2 s cooldown
+    CHECK(r.inv().qty[0] == 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(40.0f));
+    use(4);  // cooling down: refused, nothing consumed, nothing healed
+    CHECK(r.inv().qty[0] == 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(40.0f));
+    r.tick(60 * 2);
+    use(4);  // over
+    CHECK(r.inv().qty[0] == 1);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(50.0f));
+}
