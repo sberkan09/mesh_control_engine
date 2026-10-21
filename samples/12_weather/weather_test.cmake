@@ -8,7 +8,9 @@
 #      1 + (gain - 1) * Weather.wind with the WindSway gains 4 and 1.5, per weather kind;
 #   4. (M-SNOWCOVER 6d) the "snow:" lines: the SnowCover (build 4 s, melt 10 s) is 0 until the snow is in effect (tick
 #      1861), builds while it snows (up to tick 2340) and melts after;
-#   5. (M-RAINFX 7d) the "rain fx:" lines: the RainRipples strength, RainSplash rate and ThunderDelay speed the script reads.
+#   5. (M-RAINFX 7d) the "rain fx:" lines: the RainRipples strength, RainSplash rate and ThunderDelay speed the script reads;
+#   6. (M-WINDDIR 8e) the "wind dir:" lines: the WindDirection heading starts at 0 and turns 6 degrees a minute (0.1 degree a
+#      second, so 0.25 degree per 150 ticks).
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -51,6 +53,8 @@ expect("${first}" "script: sway: amplitude x1.300 frequency x1.050 at tick 0\n" 
 expect("${first}" "script: sway: amplitude x1.780 frequency x1.130 at tick 300\n" "the rain sway factor did not follow the wind")
 expect("${first}" "script: snow: cover 0.000 at tick 450\n" "it snowed cover in the rain")
 expect("${first}" "script: rain fx: ripples 1.00 splash 1.00 thunder 343 at tick 450\n" "the rain effects are not wired into the scene")
+expect("${first}" "script: wind dir: heading 0.00 drift 6.0 at tick 0\n" "the wind direction did not start at +x")
+expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the wind direction did not turn 6 degrees a minute")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -77,6 +81,7 @@ expect("${forecast}" "script: snow: cover 0.201 at tick 2100\n" "the snow cover 
 expect("${forecast}" "script: snow: cover 0.372 at tick 2250\n" "the snow cover did not keep building")
 expect("${forecast}" "script: snow: cover 0.298 at tick 2400\n" "the snow cover did not start to melt")
 expect("${forecast}" "script: snow: cover 0.048 at tick 2550\n" "the snow cover did not melt away")
+expect("${forecast}" "script: wind dir: heading 4.25 drift 6.0 at tick 2550\n" "the wind direction did not keep turning")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

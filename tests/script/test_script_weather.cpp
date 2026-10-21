@@ -14,6 +14,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/script/compiler.h"
@@ -30,10 +31,11 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
+                  bool with_wind = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -56,7 +58,9 @@ struct WRig {
             splash_e = w.spawn_with(kit::RainSplash{});
             thunder_e = w.spawn_with(kit::ThunderDelay{});
         }
+        if (with_wind) wind_e = w.spawn_with(kit::WindDirection{});
     }
+    kit::WindDirection& wind() { return *w.try_get_mut<kit::WindDirection>(wind_e); }
     kit::RainRipples& ripples() { return *w.try_get_mut<kit::RainRipples>(ripples_e); }
     kit::RainSplash& splash() { return *w.try_get_mut<kit::RainSplash>(splash_e); }
     kit::ThunderDelay& thunder() { return *w.try_get_mut<kit::ThunderDelay>(thunder_e); }
@@ -75,9 +79,10 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
+                  bool with_wind = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -571,5 +576,91 @@ TEST_CASE("weather api: the rain effect setters' bad arguments raise an error th
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.ripples().strength == 1.0f);
         CHECK(r.ripples().speed == 1.0f);
+    }
+}
+
+TEST_CASE("weather api: the wind direction getters read the first component, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.wind_degrees() == 0 and weather.wind_drift() == 0 and weather.wind_heading() == 0)
+        weather.set_wind_direction{degrees = 90}
+    end
+    if t == 3 then
+        assert(weather.wind_degrees() == 90 and weather.wind_drift() == 0)  -- only the given key changed
+        assert(weather.wind_heading() == 90)  -- kit_wind_direction resolved it (drift 0: round(degrees * 65536))
+        weather.set_wind_direction{degrees = 1e6, drift = 1e6}
+    end
+    if t == 4 then
+        assert(weather.wind_degrees() == 360 and weather.wind_drift() == 3600)
+        weather.set_wind_direction{degrees = -5, drift = -1e6}
+        weather.set_wind_direction{}  -- nothing given, nothing changes
+    end
+    if t == 5 then
+        assert(weather.wind_degrees() == 0 and weather.wind_drift() == -3600)
+        assert(weather.wind_heading() >= 0 and weather.wind_heading() < 360)
+        weather.set_wind_direction{degrees = 45, drift = 0}
+    end
+    if t == 7 then
+        assert(weather.wind_heading() == 45)  -- stopping the drift returns to the authored degrees
+        weather.set_wind_direction{drift = 6}
+    end
+end
+)",
+           true, true, false, false, false, false, true);
+    r.step(1);
+    CHECK(r.wind().degrees == 90.0f);
+    r.step(3);
+    CHECK(r.wind().degrees == 0.0f);
+    CHECK(r.wind().drift_degrees_per_minute == -3600.0f);
+    r.step(3);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.wind().degrees == 45.0f);
+    CHECK(r.wind().drift_degrees_per_minute == 6.0f);
+    r.step(60);  // one second at 6 degrees per minute: 0.1 degree
+    const f32 heading = static_cast<f32>(r.wind().angle_q) / 65536.0f;
+    CHECK(heading > 45.0f);
+    CHECK(heading < 45.5f);
+}
+
+TEST_CASE("weather api: a world without a WindDirection raises a named error") {
+    for (const char* name : {"wind_degrees", "wind_drift", "wind_heading"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no WindDirection entity").c_str());
+    expect_error("weather.set_wind_direction{}", "weather.set_wind_direction: the scene has no WindDirection entity");
+    expect_error("weather.wind_heading()", "weather.wind_heading: this world has no weather", false, false);
+    expect_error("weather.set_wind_direction{}", "weather.set_wind_direction: this world has no weather", false, false);
+    // The rain effect components alone are not enough.
+    expect_error("weather.wind_degrees()", "weather.wind_degrees: the scene has no WindDirection entity", true, true,
+                 true, true, true, true);
+}
+
+TEST_CASE("weather api: set_wind_direction bad arguments raise an error that names the call and write nothing") {
+    expect_error("weather.set_wind_direction{bogus = 1}", "weather.set_wind_direction: unknown key 'bogus'", true, true,
+                 false, false, false, false, true);
+    expect_error("weather.set_wind_direction{angle_q = 1}", "weather.set_wind_direction: unknown key 'angle_q'", true,
+                 true, false, false, false, false, true);
+    expect_error("weather.set_wind_direction{frac = 1}", "weather.set_wind_direction: unknown key 'frac'", true, true,
+                 false, false, false, false, true);
+    expect_error("weather.set_wind_direction{degrees = 'north'}", "weather.set_wind_direction: 'degrees' is not a number",
+                 true, true, false, false, false, false, true);
+    expect_error("weather.set_wind_direction{drift = 0/0}", "weather.set_wind_direction: 'drift' is not a number", true,
+                 true, false, false, false, false, true);
+    expect_error("weather.set_wind_direction{[1] = 0.5}", "weather.set_wind_direction: the keys are names", true, true,
+                 false, false, false, false, true);
+    expect_error("weather.set_wind_direction(0.5)", "table expected", true, true, false, false, false, false, true);
+    expect_error("weather.set_wind_direction()", "table expected", true, true, false, false, false, false, true);
+    for (const char* body : {"weather.set_wind_direction{degrees = 90, drift = 'fast'}",
+                             "weather.set_wind_direction{drift = 'fast', degrees = 90}",
+                             "weather.set_wind_direction{degrees = 90, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.wind().degrees == 0.0f);
+        CHECK(r.wind().drift_degrees_per_minute == 0.0f);
     }
 }

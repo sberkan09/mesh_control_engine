@@ -30,6 +30,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_direction.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/world_clock.h"
@@ -154,6 +155,12 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     REQUIRE(th != nullptr);
     CHECK(th->speed_mps == 343.0f);
     CHECK(th->clip.guid.is_null());
+    // M-WINDDIR 8e: ... and a WindDirection that turns 6 degrees a minute from +x.
+    const kit::WindDirection* wd = d.world.try_get<kit::WindDirection>(d.e[kWeather]);
+    REQUIRE(wd != nullptr);
+    CHECK(wd->degrees == 0.0f);
+    CHECK(wd->drift_degrees_per_minute == 6.0f);
+    CHECK(wd->angle_q == 0u);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);
@@ -300,4 +307,18 @@ TEST_CASE("weather demo: the splash emitter bursts in the rain and is off in the
     d.run_to(600);  // rain 0.9
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash])->counter > 0u);
     CHECK(sp().burst > 0u);
+}
+
+TEST_CASE("weather demo: the wind heading drifts 6 degrees a minute from +x") {
+    Demo d;
+    const auto& wd = [&]() -> const kit::WindDirection& { return *d.world.try_get<kit::WindDirection>(d.e[kWeather]); };
+    d.run_to(600);  // ten seconds: one degree
+    const u32 at_600 = wd().angle_q;
+    CHECK(at_600 > 0u);
+    CHECK(static_cast<f64>(at_600) / 65536.0 == doctest::Approx(1.0).epsilon(0.02));
+    d.run_to(2700);  // forty-five seconds: 4.5 degrees
+    CHECK(wd().angle_q > at_600);
+    CHECK(static_cast<f64>(wd().angle_q) / 65536.0 == doctest::Approx(4.5).epsilon(0.02));
+    CHECK(wd().seeded == 1u);
+    CHECK(wd().degrees == 0.0f);  // the authored start heading is never rewritten
 }
