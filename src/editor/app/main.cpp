@@ -34,10 +34,11 @@ MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window 
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_selftest, "selftest", false, "With -frames: verify the viewport and shell pixels on the last frame",
          CVarFlags::None);
-MCE_CVAR(cv_panel_shots, "editor.panel_shots", "",
-         "Bring every panel's tab to the front in turn and write <dir>/<panel>.ppm for each; quits when done (exit 3 on a "
-         "blank shot or a GL validation error); -frames and -selftest are not needed",
-         CVarFlags::None);
+MCE_CVAR(
+    cv_panel_shots, "editor.panel_shots", "",
+    "Bring every panel's tab to the front in turn and write <dir>/<panel>.ppm for each; quits when done (exit 3 on a "
+    "blank shot or a GL validation error); -frames and -selftest are not needed",
+    CVarFlags::None);
 MCE_CVAR(cv_project, "project", "", "Project folder to open (holds assets/)", CVarFlags::None);
 MCE_CVAR(cv_module, "module", "",
          "Game module to load (lib<game>.so / .dll): its components in the inspector and the cook, its install() in play",
@@ -108,8 +109,9 @@ public:
 
         const bool shots = !cv_panel_shots.get_string().empty();
         if (shots) panel_shots(rc.frame_index);
-        const bool last = shots ? shots_done_
-                                : cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
+        const bool last = shots
+                              ? shots_done_
+                              : cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
         if (last && shots) {
             if (device_.validation_error_count() != 0) {
                 MCE_LOG_ERROR("panel shots: {} GL validation errors", device_.validation_error_count());
