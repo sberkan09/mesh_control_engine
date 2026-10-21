@@ -149,6 +149,7 @@ A cave level that makes its footsteps ring and muffles the music:
     "AudioBusEffects": { "bus": "Music", "lowpass_hz": 1200 } } }
 ```
 
+- The editor's Mixer panel (Window menu) edits these components without hunting for the entities.
 - One entity per bus and per reverb unit counts: the first in ECS order wins. Removing it (or changing
   scene) puts that bus back to dry and unfiltered, or turns the unit off.
 - A new cutoff glides there by an octave every 512 frames (about 10 ms), so a filter that closes

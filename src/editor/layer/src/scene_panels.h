@@ -39,6 +39,9 @@ inline constexpr const char* kParticlePanel = "Particle";
 // The Sequence panel (sequence_panel.cpp): a .mcseq's steps as an editable list.
 void add_sequence_panel(EditorShell& shell);
 inline constexpr const char* kSequencePanel = "Sequence";
+// The Mixer panel (mixer_panel.cpp): the scene's bus effects, reverb units, limiter and ducks (M-MIXEDIT).
+void add_mixer_panel(EditorShell& shell);
+inline constexpr const char* kMixerPanel = "Mixer";
 // The Strings panel (strings_panel.cpp): every locale's string table as one key by locale grid.
 void add_strings_panel(EditorShell& shell);
 inline constexpr const char* kStringsPanel = "Strings";

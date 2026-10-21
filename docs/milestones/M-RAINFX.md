@@ -39,9 +39,9 @@
 |---|---|---|---|
 | 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | done | #645 | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
-| 7c | planned | | needs 7a |
+| 7c | done | #648 | `RainRipples` + extract only (7e is thunder, 7f splash) |
 | 7d | planned | | needs 7b, 7c |
-| 7e | in progress | | `ThunderDelay` only (component, `kit_thunder_delay`, tests/kit/test_thunder_delay.cpp, padding audit, guide 9.19a); the strike distance is derived from `LightningStruck.thunder_delay_ticks` (the event has no position) |
+| 7e | in progress | #658 | `ThunderDelay` only (component, `kit_thunder_delay`, tests/kit/test_thunder_delay.cpp, padding audit, guide 9.19a); the strike distance is derived from `LightningStruck.thunder_delay_ticks` (the event has no position) |
 | 7f | planned | | `RainSplash` (moved out of 7e) |
 
 ## Notes for 7b from the 7a review (independent Opus review, no blockers)
