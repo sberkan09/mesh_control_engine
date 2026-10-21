@@ -1,5 +1,5 @@
 # 12_loot: M-INVENTORY's demo, a data-only game the stock mce_player plays (assets/ + one Luau script, no C++).
-# A hero, a chest and a goblin on a ground box; assets/items/loot.mcitems holds seven items, two loot tables and two crafting recipes. The script
+# A hero, a chest and a goblin on a ground box; assets/items/loot.mcitems holds eight items, two loot tables and two crafting recipes. The script
 # gives and equips items, drinks a potion (which heals) and wears a helm (armor, max health), opens the chest, kills the goblin, drops potions and crafts a tonic and a potion pack at the workbench, logging "inv:" lines.
 # `mce_player -pack <build>/samples/12_loot/project/assets.mce -input samples/12_loot/input.txt`
 if(NOT TARGET mce_cook OR NOT MCE_WITH_SCRIPT)

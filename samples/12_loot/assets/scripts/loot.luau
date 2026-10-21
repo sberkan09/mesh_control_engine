@@ -2,7 +2,8 @@
 -- into the chest on the first open, the hero takes what fits), the goblin dies (a scripted Died3D; a real game's
 -- Weapon3D does the same) and drops its table as pickups, and the hero drops two potions, then crafts a tonic by hand and a potion pack at the workbench (M-CRAFT). The script keeps nothing:
 -- everything is the Inventory, Equipment, Container and LootDrop components. Events land a few ticks after the call, so
--- each step waits for the previous one. The "inv:" lines are what samples/12_loot/loot_test.cmake pins.
+-- each step waits for the previous one. At the end an elixir starts regeneration and an armor boost (M-STATUS) while a
+-- poisoned strike runs. The "inv:" and "status:" lines are what samples/12_loot/loot_test.cmake pins.
 local function report(label, hero)
     mce.log(string.format("inv: %s coin %d potion %d sword %d gem %d weight %d", label, inventory.count(hero, "coin"),
         inventory.count(hero, "potion"), inventory.count(hero, "sword"), inventory.count(hero, "gem"), inventory.weight(hero)))
@@ -50,5 +51,21 @@ function update()
     elseif t == 54 then
         mce.log(string.format("inv: tonic %d potion_pack %d", inventory.count(hero, "tonic"), inventory.count(hero, "potion_pack")))
         report("crafted pack", hero)
+        inventory.add(hero, "elixir")
+    elseif t == 62 then
+        -- M-STATUS: the elixir's regen and armor_boost stats start two timed effects when it is used
+        for i = 1, 24 do
+            local id = inventory.slot(hero, i)
+            if id == "elixir" then inventory.use(hero, i) end
+        end
+        status.add(hero, "venom", "poison", 8, 1, goblin) -- a poisoned goblin strike: 4 hp per half second, credited to the goblin
+    elseif t == 68 then
+        local hp, armor = mce.get(hero, "Health3D", "current", "Health3D", "armor")
+        mce.log(string.format("status: elixir %s, boost %s, venom %s, health %d armor %.1f", tostring(status.has(hero, "elixir")),
+            tostring(status.has(hero, "elixir:armor")), tostring(status.has(hero, "venom")), hp, armor))
+    elseif t == 140 then
+        local hp, armor = mce.get(hero, "Health3D", "current", "Health3D", "armor")
+        mce.log(string.format("status: over, elixir %s, boost %s, venom %s, health %d armor %.1f", tostring(status.has(hero, "elixir")),
+            tostring(status.has(hero, "elixir:armor")), tostring(status.has(hero, "venom")), hp, armor))
     end
 end

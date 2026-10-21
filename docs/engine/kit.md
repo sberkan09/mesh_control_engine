@@ -486,3 +486,4 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
   use (`ApplyStatus` is queued by `kit_inventory` and read by `kit_status`).
 - Luau: `status.add(e, id, kind, amount, seconds, source?)`, `status.has(e, id)`, `status.clear(e, id?)` (`src/api_status.cpp`, typed in
   `definitions.cpp`, call table in `docs/user-guide/27-scripting.md`). Bad arguments raise an error that names the call.
+- `samples/12_loot` (M-STATUS 3) drinks an elixir (regen 20 hp/s for 0.5 s, armor boost 0.3 for 1 s) while a poisoned strike (8 hp/s from the goblin) runs; `loot_test.cmake` pins the two `status:` lines.
