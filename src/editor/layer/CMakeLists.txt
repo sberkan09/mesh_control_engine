@@ -20,6 +20,7 @@ mce_add_library(mce_editor_layer UMBRELLA
         src/scenes_panel.cpp
         src/sequence_panel.cpp
         src/mixer_panel.cpp
+        src/source_panel.cpp
         src/strings_panel.cpp
         src/draw_clip.cpp
         src/editor_shell.cpp

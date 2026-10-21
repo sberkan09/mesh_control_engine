@@ -15,6 +15,7 @@
 #include "mce/editor/asset_browser.h"
 #include "mce/editor/asset_kinds.h"
 #include "mce/editor/asset_ops.h"
+#include "mce/editor/source_doc.h"
 #include "mce/editor/asset_thumb.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/thumb_cache.h"
@@ -216,6 +217,17 @@ private:
             if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
             shell.focus_panel(kStringsPanel);
         }
+        // A JSON kind with no panel of its own opens as text.
+        if (!has_own_editor(a->type) && source_editable(*a)) open_source_panel(shell, a->guid);
+    }
+
+    // The types a double click opens somewhere other than the Source panel.
+    static bool has_own_editor(asset::ChunkType t) {
+        using asset::ChunkType;
+        return asset_drop_kind(t) == AssetDrop::OpenScene || t == ChunkType::Prefab || t == ChunkType::UiDocument ||
+               t == ChunkType::Timeline || t == ChunkType::AnimGraph || t == ChunkType::BehaviorTree ||
+               t == ChunkType::Skeleton2D || t == ChunkType::Material || t == ChunkType::ParticlePreset ||
+               t == ChunkType::Sequence || t == ChunkType::StringTable;
     }
 
     // The click, double-click, tooltip, drag source and context menu of the item just drawn (a row or a grid cell).
@@ -243,6 +255,7 @@ private:
                 drop_asset(shell.scene(), *a, shell.camera().center);
             if (ImGui::MenuItem("Open scene", nullptr, false, kind == AssetDrop::OpenScene)) open_scene = a->guid;
             if (kind == AssetDrop::PrefabInstance && ImGui::MenuItem("Open prefab")) open_scene = a->guid;
+            if (ImGui::MenuItem("Edit source...", nullptr, false, source_editable(*a))) open_source_panel(shell, a->guid);
             if (ImGui::MenuItem("Copy GUID")) ImGui::SetClipboardText(asset::to_string(a->guid).c_str());
             ImGui::EndPopup();
         }
