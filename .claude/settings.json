@@ -12,6 +12,7 @@
         ],
         "permissions": {
           "allow": [
+            "Bash(git merge origin/master:*)",
             "Bash(git merge origin/dev_claude:*)",
             "Bash(git push -u origin claude/*:*)",
             "mcp__github__merge_pull_request"

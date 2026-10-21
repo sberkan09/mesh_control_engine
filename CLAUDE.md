@@ -8,8 +8,7 @@ Short rules for Claude sessions and humans. The engine itself is described in [R
 PRs target `master`. GitHub Actions (`.github/workflows/ci.yml`) runs `scripts/ci/local_ci.sh --task` on every PR on
 standard hosted runners (free for this public repository); `.github/workflows/integration.yml` runs the full matrix
 on `master` every 6 hours, refreshes the ccache and pushes `ci/regen-<sha>` for stale generated files. The same script
-runs locally; the gate has three levels. Locally, set `MCE_TIDY_BASE=origin/master` (the script's default base is
-still `origin/dev_claude`).
+runs locally; the gate has three levels.
 
 | Level | When | Command |
 |---|---|---|

@@ -10,7 +10,7 @@ and the newest `## x.y.z` heading in CHANGELOG.md. The template's mceproj takes 
 new_project.py at generation time, so it is not a copy.
 
 Bumping renames CHANGELOG.md's `## Unreleased` section to `## x.y.z (date)` and opens an empty
-`## Unreleased` above it. It does not commit or tag: the tag `vx.y.z` goes on dev_claude after
+`## Unreleased` above it. It does not commit or tag: the tag `vx.y.z` goes on master after
 the bump's PR merges.
 """
 
@@ -90,7 +90,7 @@ def bump(version):
     CMAKE.write_text(CMAKE_RE.sub(rf"\g<1>{version}", CMAKE.read_text(encoding="utf-8"), count=1), encoding="utf-8")
     for path in copies():
         path.write_text(MCEPROJ_RE.sub(rf"\g<1>{version}\g<3>", path.read_text(encoding="utf-8")), encoding="utf-8")
-    print(f"{old} -> {version}. After the PR merges: git tag v{version} origin/dev_claude && git push origin v{version}")
+    print(f"{old} -> {version}. After the PR merges: git tag v{version} origin/master && git push origin v{version}")
     return check()
 
 
