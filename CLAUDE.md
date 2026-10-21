@@ -5,27 +5,31 @@ Short rules for Claude sessions and humans. The engine itself is described in [R
 
 ## Running CI
 
-There is no hosted CI. `scripts/ci/local_ci.sh` is the CI; the gate has three levels.
+PRs target `master`. GitHub Actions (`.github/workflows/ci.yml`) runs `scripts/ci/local_ci.sh --task` on every PR on
+standard hosted runners (free for this public repository); `.github/workflows/integration.yml` runs the full matrix
+on `master` every 6 hours, refreshes the ccache and pushes `ci/regen-<sha>` for stale generated files. The same script
+runs locally; the gate has three levels. Locally, set `MCE_TIDY_BASE=origin/master` (the script's default base is
+still `origin/dev_claude`).
 
 | Level | When | Command |
 |---|---|---|
 | PR gate | once per PR, on the PR's own base | `scripts/ci/local_ci.sh --task` |
-| Pre-merge | right before merging, if `dev_claude` moved since the `--task` | `scripts/ci/local_ci.sh --premerge` |
-| Integration | the full matrix, on the `dev_claude` head, by the integration runner only | `scripts/ci/integration_run.sh` |
+| Pre-merge | right before merging, if `master` moved since the `--task` | `scripts/ci/local_ci.sh --premerge` |
+| Integration | the full matrix, on the `master` head, by the integration workflow only | `scripts/ci/integration_run.sh` |
 
-- `--task` runs once. After merging `dev_claude` into the branch do **not** run it again; run `--premerge`
+- `--task` runs once. After merging `master` into the branch do **not** run it again; run `--premerge`
   (walls, `capabilities --check`, the MCP transcript golden and `ctest -R` on the PR's own tests, 1-3 min). It also
-  prints whether `dev_claude` changed files the PR changes too; only an overlap makes a `--task` re-run necessary.
+  prints whether `master` changed files the PR changes too; only an overlap makes a `--task` re-run necessary.
 - Threads never run `--batch` or the full matrix. The integration runner does (scheduled), refreshes the ccache
   snapshot and regenerates the generated files; if it goes red, the thread of the PR it names fixes forward.
 - Generated files (`docs/engine/capabilities.md`, `scripts/ci/sample_coverage.allow`, the transcript golden
   `tests/mcp/transcripts/*.golden.jsonl`) are the integration runner's to regenerate. A stale one after merging
-  `dev_claude` is not a reason to re-run `--task`.
+  `master` is not a reason to re-run `--task`.
 
 ### Container discipline
 
 - Run `scripts/ci/setup_env.sh` before the first CI call (cloud sessions do it on start).
-- `git fetch origin dev_claude` before `--task`: without the merge base every scoped stage runs in full and tidy
+- `git fetch origin master` before `--task`: without the merge base every scoped stage runs in full and tidy
   checks the whole tree. A stage named on the command line always runs in full.
 - Run `--task` detached and poll, never as a foreground command:
   `nohup scripts/ci/local_ci.sh --task > build/local-ci-logs/run.log 2>&1 &`, then wait for `=== Summary` in the log.
