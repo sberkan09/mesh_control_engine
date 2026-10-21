@@ -1,0 +1,1 @@
+- Kit, Luau (M-STATUS 2): a consumable with `regen` + `regen_seconds` or `armor_boost` + `boost_seconds` stats starts the matching effect on use (refused, not consumed, when the user cannot carry it); new Luau global `status` with `add`, `has` and `clear`, typed in the definitions.

@@ -7,6 +7,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/status.h"
 #include "mce/log.h"
 
 namespace mce::kit {
@@ -320,7 +321,38 @@ void kit_inventory(Frame& f) {
                     hp->current += healed;
                 }
             }
+            // timed effects (M-STATUS 2): `regen` hp/s for `regen_seconds`, `armor_boost` for `boost_seconds`
+            const f32 regen = c->stat(d, "regen", 0.0f), regen_s = c->stat(d, "regen_seconds", 0.0f);
+            const f32 boost = c->stat(d, "armor_boost", 0.0f), boost_s = c->stat(d, "boost_seconds", 0.0f);
+            const bool fx_regen = regen > 0.0f && regen_s > 0.0f, fx_boost = boost != 0.0f && boost_s > 0.0f;
+            const bool wants_fx = (fx_regen || fx_boost) && w.event_queue<ApplyStatus>() != nullptr;
+            bool can_fx = false;  // the user needs Health3D (alive) and StatusEffects to carry it
+            if (wants_fx && !u.owner.is_null() && w.alive(u.owner)) {
+                const Health3D* th = w.try_get<Health3D>(u.owner);
+                can_fx = th && !th->dead && w.try_get<StatusEffects>(u.owner) != nullptr;
+            }
+            if (wants_fx && heal <= 0.0f && !can_fx) refused = true;  // nothing to affect: not wasted
             if (!refused) {
+                if (can_fx) {
+                    ApplyStatus a;
+                    a.target = u.owner;
+                    a.source = u.owner;
+                    if (fx_regen) {
+                        a.id.assign(d.id.view());
+                        a.kind = static_cast<u32>(StatusKind::Regen);
+                        a.amount = regen;
+                        a.seconds = regen_s;
+                        ev.push(a);
+                    }
+                    if (fx_boost) {
+                        a.id.assign(d.id.view());
+                        a.id.append(":armor");
+                        a.kind = static_cast<u32>(StatusKind::Armor);
+                        a.amount = boost;
+                        a.seconds = boost_s;
+                        ev.push(a);
+                    }
+                }
                 inv->qty[u.slot] -= 1;
                 if (inv->qty[u.slot] == 0) inv->item[u.slot] = 0;
                 consumed = 1;

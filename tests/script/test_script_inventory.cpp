@@ -7,9 +7,11 @@
 #include <string>
 
 #include "mce/ecs/transform.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/craft.h"
 #include "mce/kit/inventory.h"
 #include "mce/kit/loot.h"
+#include "mce/kit/status.h"
 #include "mce/script/compiler.h"
 
 using namespace mce;
@@ -68,6 +70,7 @@ struct IRig {
         w.register_components<LocalTransform>();
         if (install_kit) {
             kit::install_crafting(w, nullptr);
+            kit::install_status(w, nullptr);
             w.resource<kit::ItemRegistry>().define(kCat, cat);
         } else {
             w.register_components<kit::Inventory>();
@@ -81,7 +84,7 @@ struct IRig {
         inv.catalog.guid = kCat;
         kit::Equipment eq;
         eq.catalog.guid = kCat;
-        hero = install_kit ? w.spawn_with(inv, eq, LocalTransform{}) : w.spawn_with(inv);
+        hero = install_kit ? w.spawn_with(inv, eq, LocalTransform{}, kit::Health3D{}, kit::StatusEffects{}) : w.spawn_with(inv);
         if (install_kit) {
             kit::Container c;
             c.catalog.guid = kCat;
@@ -222,4 +225,47 @@ TEST_CASE("inventory api: craft argument errors name the call") {
     expect_error("inventory.craft(e, 'forge', e)", "inventory.craft: the station entity has no CraftingStation component");
     expect_error("inventory.can_craft(e, 'brew', e)", "inventory.can_craft: the station entity has no CraftingStation component");
     expect_error("inventory.can_craft(e, 'brew')", "this world has no inventories", false);
+}
+
+TEST_CASE("status api: add, has and clear at pinned ticks, with named errors (M-STATUS 2)") {
+    IRig r(R"(
+function update()
+    local t = mce.tick()
+    mce.each("Equipment", function(e)
+        if t == 1 then
+            assert(not status.has(e, "bleed"))
+            status.add(e, "bleed", "poison", 4, 2.5)
+            status.add(e, "shield", "armor", 0.25, 10)
+        elseif t == 40 then
+            assert(status.has(e, "bleed") and status.has(e, "shield"))
+            status.clear(e, "bleed")
+        elseif t == 44 then
+            assert(not status.has(e, "bleed") and status.has(e, "shield"))
+            status.clear(e)
+        elseif t == 52 then
+            assert(not status.has(e, "shield"))
+        end
+    end)
+end
+)");
+    kit::Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 100.0f;
+    r.w.set(r.hero, hp);
+    r.step(56);
+    INFO(r.err());
+    CHECK(r.host.scripts()[0].state == ScriptState::Running);
+    CHECK(r.w.try_get<kit::Health3D>(r.hero)->armor == doctest::Approx(0.0f));  // given back
+    CHECK(r.w.try_get<kit::Health3D>(r.hero)->current < 100.0f);                 // poisoned until cleared
+}
+
+TEST_CASE("status api: bad arguments raise errors that name the call (M-STATUS 2)") {
+    expect_error("status.add(e, 'x', 'burn', 1, 1)", "status.add: unknown kind 'burn'");
+    expect_error("status.add(e, '', 'regen', 1, 1)", "status.add: the effect id is empty");
+    expect_error("status.add(e, 'x', 'regen', -1, 1)", "regen and poison need a positive amount");
+    expect_error("status.add(e, 'x', 'armor', 1e9, 1)", "outside +-1000000");
+    expect_error("status.add(e, 'x', 'regen', 1, 0)", "seconds 0 is outside");
+    expect_error("status.add(e, 'x', 'regen', 1, 99999)", "outside 0.01 to 3600");
+    expect_error("status.clear(e, {})", "string expected");
+    expect_error("status.has(e, 'x')", "no status effects", false);
 }

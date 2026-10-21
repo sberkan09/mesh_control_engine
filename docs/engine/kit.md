@@ -477,3 +477,12 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
   (`refreshed` when the id was active), `StatusEnded` (`expired` 1 or 0 when cleared) and `StatusRefused` (all 8 slots busy, or bad
   input: seconds outside 0.01 to 3600, a non-finite amount, an unknown kind) out. Applying an id that is active refreshes it (a refresh that changes the kind first gives back what the old kind added); nothing stacks. Regen and Poison need a positive amount, amounts are limited to ±1e6, clears are handled before applies in a tick (a cleanse then a re-apply ends with the effect on), and each effect remembers who applied it, so a poison kill credits the poisoner. A corrupt saved slot (non-finite amount, unknown kind) is dropped. A `Health3D` overwritten at run time loses the bonus kinds until they end: clear the effects when respawning.
 - System `kit_status` (FixedUpdate_Pre, after `kit_craft`). Items and Luau: the next step.
+
+### Items and Luau start effects (M-STATUS 2)
+
+- A consumable with `regen` (hp/s) and `regen_seconds` starts a `Regen` effect named after the item; `armor_boost` and `boost_seconds` start an
+  `Armor` effect named `<item>:armor`. The user needs `Health3D` (alive) and `StatusEffects`; without them an item that only carries effects is
+  refused and not consumed, as a heal at full health is. An item that also has `heal` follows the heal rule. The effect starts a tick after the
+  use (`ApplyStatus` is queued by `kit_inventory` and read by `kit_status`).
+- Luau: `status.add(e, id, kind, amount, seconds, source?)`, `status.has(e, id)`, `status.clear(e, id?)` (`src/api_status.cpp`, typed in
+  `definitions.cpp`, call table in `docs/user-guide/27-scripting.md`). Bad arguments raise an error that names the call.
