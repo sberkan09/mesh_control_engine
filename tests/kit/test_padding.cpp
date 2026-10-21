@@ -15,6 +15,7 @@
 
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
+#include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/wet_surfaces.h"
@@ -70,6 +71,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<WetSurfaces>("WetSurfaces", sizeof(WetSurfaces::pad_));  // wet_surfaces.h (M-WETSURFACE 5c)
     expect_pad<WindSway>("WindSway", sizeof(WindSway::pad_));  // wind_sway.h (M-WINDSWAY 1)
     expect_pad<SnowCover>("SnowCover", sizeof(SnowCover::pad_));  // snow_cover.h (M-SNOWCOVER 6c)
+    expect_pad<RainSplash>("RainSplash", sizeof(RainSplash::pad_));  // rain_splash.h (M-RAINFX 7f)
     expect_pad<ThunderDelay>("ThunderDelay", sizeof(ThunderDelay::pad_));  // thunder_delay.h (M-RAINFX 7e)
     expect_pad<RainRipples>("RainRipples", 0);  // rain_ripples.h (M-RAINFX 7c): four f32, no padding
 }
