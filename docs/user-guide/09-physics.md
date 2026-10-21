@@ -652,8 +652,10 @@ unit vector (a scene without a `WindDirection` keeps +x), and every `Foliage3D` 
 authored `wind_direction` by the heading relative to +x, so foliage authored along +x sways along the scene wind and one
 authored along another axis keeps its offset (authored +z at heading 90 sways along -x). The foliage turn needs a
 `Weather` as well, like the wind sway; without one the batches keep their authored direction. It touches the batch
-fields only, so changing the heading never re-scatters. Falling snow and rain particles are not affected: they fall
-straight and drift as before. A scene without a `WindDirection` is unchanged.
+fields only, so changing the heading never re-scatters. The falling rain and snow particles of `Precipitation3D`
+(section 9.20) lean along the heading too (their direction and gravity sideways part follows the same unit vector, so
+heading 90 slants them toward +z and 180 toward -x), again only with a `Weather`. A scene without a `WindDirection`
+is unchanged, its particles still lean toward +x.
 
 ## 9.19a Rain ripples (M-RAINFX)
 
@@ -675,7 +677,8 @@ components are opt-in; scenes without them are unchanged.
   the system `kit_precipitation` sets the emitter from the first `Weather`'s `current`, `intensity` and `wind`: rain
   `rate = rain_rate * intensity` (a storm x1.6; default `rain_rate` 3000), fast thin bluish streaks falling with
   `rain_speed` (18), slanted by the wind; snow `rate = snow_rate * intensity` (800), slow large white flakes drifting
-  sideways with the wind. Clear and overcast set `emitting` 0 and `rate` 0 (live particles play out). The values are
+  sideways with the wind. The slant and drift point along the scene `WindDirection` (section 9.19d; +x when the scene
+  has none). Clear and overcast set `emitting` 0 and `rate` 0 (live particles play out). The values are
   pure functions of the weather and the component, written only when they change, so a quiet scene is untouched; the
   fields it sets (rate, gravity, direction, speeds, lifetimes, colours, sizes, box, `max_particles`, `additive` 0)
   replace the authored ones. The exact table is in the header. Without a `Weather` nothing is written.

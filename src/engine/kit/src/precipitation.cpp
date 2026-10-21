@@ -9,6 +9,7 @@
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_direction.h"
 
 namespace mce::kit {
 namespace {
@@ -55,13 +56,22 @@ const Weather* first_weather(World& w) {
     return out;
 }
 
-math::vec3 slanted(f32 x) {
+// The sideways part of a lean of `a` along the wind's unit vector `w`. The default (1, 0) is the old +x lean exactly
+// (bits included); otherwise a zero lane is written as +0 so a wind of 0 gives the same bits at every heading.
+math::vec3 lean(f32 a, f32 y, const math::vec2& w) {
+    if (w.x == 1.0f && w.y == 0.0f) return {a, y, 0.0f};
+    const f32 lx = a * w.x, lz = a * w.y;
+    return {lx == 0.0f ? 0.0f : lx, y, lz == 0.0f ? 0.0f : lz};
+}
+
+math::vec3 slanted(f32 x, const math::vec2& w) {
     const f32 inv = 1.0f / std::sqrt(x * x + 1.0f);
-    return {x * inv, -inv, 0.0f};
+    return lean(x * inv, -inv, w);
 }
 
 // Writes the rain or snow table into the emitter, field by field and only when the bits change.
-void apply_emitter(ParticleEmitter3D& e, const Precipitation3D& p, bool snow, bool storm, f32 intensity, f32 wind) {
+void apply_emitter(ParticleEmitter3D& e, const Precipitation3D& p, bool snow, bool storm, f32 intensity, f32 wind,
+                   const math::vec2& w) {
     const f32 rate_max = snow ? p.snow_rate : p.rain_rate * 1.6f;
     f32 rate = (snow ? p.snow_rate : p.rain_rate) * intensity;
     if (storm) rate *= 1.6f;
@@ -81,16 +91,16 @@ void apply_emitter(ParticleEmitter3D& e, const Precipitation3D& p, bool snow, bo
     set(e.lifetime_max, life_max);
     set(e.max_particles, static_cast<u32>(std::ceil(rate_max * life_max)) + 64u);
     if (snow) {
-        set(e.direction, slanted(0.8f * wind));
-        set(e.gravity, math::vec3{2.0f * wind, -0.3f * p.snow_speed, 0.0f});
+        set(e.direction, slanted(0.8f * wind, w));
+        set(e.gravity, lean(2.0f * wind, -0.3f * p.snow_speed, w));
         set(e.spread_deg, 25.0f);
         set(e.size_start, 0.09f);
         set(e.size_end, 0.07f);
         set(e.color_start, math::vec4{0.95f, 0.97f, 1.0f, 0.9f});
         set(e.color_end, math::vec4{0.95f, 0.97f, 1.0f, 0.6f});
     } else {
-        set(e.direction, slanted(0.5f * wind));
-        set(e.gravity, math::vec3{3.0f * wind, -0.5f * p.rain_speed, 0.0f});
+        set(e.direction, slanted(0.5f * wind, w));
+        set(e.gravity, lean(3.0f * wind, -0.5f * p.rain_speed, w));
         set(e.spread_deg, 2.0f);
         set(e.size_start, 0.04f);
         set(e.size_end, 0.04f);
@@ -106,6 +116,14 @@ void kit_precipitation(Frame& f) {
     const WeatherKind kind = wx->current;
     const f32 intensity = wx->intensity;
     const f32 wind = wx->wind;
+    // The scene wind heading (M-WINDDIR 8f): the first WindDirection in ECS order, only together with a Weather.
+    math::vec2 wdir{1.0f, 0.0f};
+    bool wd_found = false;
+    w.query<const WindDirection>().each([&](Entity, const WindDirection& c) {
+        if (wd_found) return;
+        wd_found = true;
+        wdir = wind_direction_vector(c);
+    });
     const bool wet = intensity > 0.0f && (kind == WeatherKind::Rain || kind == WeatherKind::Storm || kind == WeatherKind::Snow);
 
     bool cam_found = false, cam_primary = false;
@@ -120,7 +138,7 @@ void kit_precipitation(Frame& f) {
     f.query<const Precipitation3D, ParticleEmitter3D, LocalTransform>().each(
         [&](Entity, const Precipitation3D& p, ParticleEmitter3D& e, LocalTransform& t) {
             if (wet) {
-                apply_emitter(e, p, kind == WeatherKind::Snow, kind == WeatherKind::Storm, intensity, wind);
+                apply_emitter(e, p, kind == WeatherKind::Snow, kind == WeatherKind::Storm, intensity, wind, wdir);
             } else {
                 set(e.emitting, 0u);
                 set(e.rate, 0.0f);
