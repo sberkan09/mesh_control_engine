@@ -36,5 +36,5 @@
 | 8a | done | #663 | `WindDirection` also carries a saved `frac` (drift remainder) and `seeded` flag |
 | 8b | done | #664 | |
 | 8c | done | #665 | `p_snow2` after `p_ripple`; all 68 existing goldens byte-identical on both backends; the full-cover `snow_plaza` cap sits in one noise patch (mask 1 either way), so `snow_plaza_west` is the even layer at coverage 0.6; a dark ball's slope whitening mirrors (lee gain 20.5 / 20.2 luma) |
-| 8d | in progress | | extract: snow `wind_dir` and foliage rotation; the snow carrier still needs a Weather and a SnowCover, the foliage turn needs a Weather |
+| 8d | done | #666 | extract: snow `wind_dir` and foliage rotation; the snow carrier still needs a Weather and a SnowCover, the foliage turn needs a Weather |
 | 8e | planned | | needs 8c, 8d |
