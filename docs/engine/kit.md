@@ -460,3 +460,20 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
   no longer fits fails with its reason. `recipe`, `left_us` and `crafter` are saved, so a craft in progress survives a save. Destroying a station drops its queued craft without
   an event (nothing was taken); the station tag is checked again when the time is up. A recipe without a station tag is always made by hand, even when a station is named.
 - System `kit_craft` (FixedUpdate_Pre, after `kit_loot`). Luau: `inventory.can_craft(e, recipe, station?)` and `inventory.craft(e, recipe, station?)` (`docs/user-guide/27-scripting.md`); `samples/12_loot` crafts a tonic by hand and a pack at a workbench.
+
+## Timed status effects (M-STATUS 1)
+
+`mce/kit/status.h`, installed by `install_stock` (after the crafting kit). A `StatusEffects` component holds up to 8 effects, each an id, a
+kind, an amount and a time left in whole microseconds (the fixed step rounded to microseconds, so a run is the same every time).
+
+- Kinds: `Regen` (hp/s, capped at `Health3D.max`, a dead entity is not healed), `Poison` (hp/s taken in half-second pulses through
+  `apply_damage`, so armor, `Died3D`, ragdolls and `LootDrop` work as for any damage; the instigator is the applier), `Armor` (adds to
+  `Health3D.armor`, kept within 0..1) and `MaxHealth` (adds to `Health3D.max`, never below 1, `current` clamped down when it falls).
+  A poison pulse that has not completed when the effect ends is not dealt.
+- Bonuses are applied as a remembered change (`applied`, not saved), like `Equipment`: the authored base is never overwritten, a
+  level-up that raises `max` stays on top and the end of the effect gives back exactly what it added. `Health3D` is not in a save game
+  either, so the bonus applies again on the first tick after a load.
+- Events: `ApplyStatus{target, id, kind, amount, seconds, source}` and `ClearStatus{target, id}` (empty id: all) in; `StatusApplied`
+  (`refreshed` when the id was active), `StatusEnded` (`expired` 1 or 0 when cleared) and `StatusRefused` (all 8 slots busy, or bad
+  input: seconds outside 0.01 to 3600, a non-finite amount, an unknown kind) out. Applying an id that is active refreshes it (a refresh that changes the kind first gives back what the old kind added); nothing stacks. Regen and Poison need a positive amount, amounts are limited to ±1e6, clears are handled before applies in a tick (a cleanse then a re-apply ends with the effect on), and each effect remembers who applied it, so a poison kill credits the poisoner. A corrupt saved slot (non-finite amount, unknown kind) is dropped. A `Health3D` overwritten at run time loses the bonus kinds until they end: clear the effects when respawning.
+- System `kit_status` (FixedUpdate_Pre, after `kit_craft`). Items and Luau: the next step.
