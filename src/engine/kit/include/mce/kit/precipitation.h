@@ -13,17 +13,19 @@
 // Precipitation. System "kit_precipitation" (FixedUpdate_Pre, after "kit_lightning", which is after "kit_weather")
 // reads the first Weather's `current` and `intensity` (I). Every emitter field below is a pure function of the
 // Precipitation3D fields and the Weather state, never multiplied in place, so nothing drifts; a field is written only
-// when its bits change, so a quiet scene is untouched. The authored values of the fields the table sets are replaced
+// when its bits change, so a quiet scene is untouched. The lean (the x lanes below) follows the scene WindDirection
+// (M-WINDDIR 8f): with u = (cos a, sin a), the first WindDirection's unit vector (default (1, 0), only with a Weather),
+// the x lane is multiplied by u.x and a z lane of the same size by u.y; a scene without one keeps the +x lean exactly. The authored values of the fields the table sets are replaced
 // while a Precipitation3D is on the entity. With no Weather nothing is written.
 //   all kinds   box = (area, 0.5, area); offset, texture, seed, burst*, bounce 0, drag 0, collide 0, additive 0
 //   clear, overcast, or I = 0:  emitting = 0, rate = 0 (live particles play out); nothing else is written
 //   rain  (storm = rain, with rate x1.6):
 //     rate = rain_rate * I (x1.6 storm); emitting 1; wind w = Weather.wind
-//     direction = normalize(0.5 w, -1, 0); gravity = (3 w, -0.5 rain_speed, 0)
+//     direction = normalize(0.5 w u.x, -1, 0.5 w u.y); gravity = (3 w u.x, -0.5 rain_speed, 3 w u.y)
 //     speed_min/max = 0.9 / 1.1 rain_speed; spread 2 degrees; lifetime_min/max = height / rain_speed, x1.2
 //     size 0.04 -> 0.04; colour (0.55, 0.62, 0.75) alpha 0.35 -> 0.15; max_particles = ceil(1.6 rain_rate lifetime_max) + 64
 //   snow:
-//     rate = snow_rate * I; emitting 1; direction = normalize(0.8 w, -1, 0); gravity = (2 w, -0.3 snow_speed, 0)
+//     rate = snow_rate * I; emitting 1; direction = normalize(0.8 w u.x, -1, 0.8 w u.y); gravity = (2 w u.x, -0.3 snow_speed, 2 w u.y)
 //     speed_min/max = 0.8 / 1.2 snow_speed; spread 25 degrees; lifetime_min/max = height / snow_speed, x1.25
 //     size 0.09 -> 0.07; colour (0.95, 0.97, 1.0) alpha 0.9 -> 0.6; max_particles = ceil(snow_rate lifetime_max) + 64
 // With `follow_camera` != 0 the entity's LocalTransform.position is set to the primary Camera3DComponent's position
