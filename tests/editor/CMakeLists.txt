@@ -3,6 +3,7 @@ mce_add_test(test_editor UMBRELLA
     SOURCES
         test_animgraph_editor.cpp
         test_asset_browser.cpp
+        test_asset_kinds.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp
         test_scene_tabs.cpp
