@@ -1,0 +1,27 @@
+# agentgate (https://github.com/sberkan09/agentgate): on every PR, a conflict forecast against the other
+# open claude/* branches and a task-scoped test selection, posted as a sticky PR comment. Observation
+# only for now: nothing fails and no tests run here; local_ci.sh --task stays the gate.
+name: agentgate
+on:
+  pull_request:
+    branches: [dev_claude]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: sberkan09/agentgate@main
+        with:
+          base: dev_claude
+          agent-branches: "claude/*"
+          fail-on-conflict: false
