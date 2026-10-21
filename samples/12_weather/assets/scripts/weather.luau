@@ -23,5 +23,9 @@ function update()
             1 + (weather.sway_frequency() - 1) * weather.wind(), t))
         -- M-SNOWCOVER: kit_snow_cover writes the cover; the renderer whitens up-facing surfaces by cover * strength.
         mce.log(string.format("snow: cover %.3f at tick %d", weather.snow_cover(), t))
+        -- M-RAINFX: the rain effects' authoring fields (ripples on the puddles, splashes where drops land; the
+        -- ThunderDelay has no clip in this sample, so its strikes make no sound).
+        mce.log(string.format("rain fx: ripples %.2f splash %.2f thunder %.0f at tick %d",
+            weather.ripples_strength(), weather.splash_rate(), weather.thunder_speed(), t))
     end
 end

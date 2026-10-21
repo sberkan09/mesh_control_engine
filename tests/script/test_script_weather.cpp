@@ -9,7 +9,10 @@
 #include <string>
 
 #include "mce/ecs/transform.h"
+#include "mce/kit/rain_ripples.h"
+#include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -27,10 +30,10 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false, bool with_snow = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -48,7 +51,15 @@ struct WRig {
         if (with_wet) wet_e = w.spawn_with(kit::WetSurfaces{});
         if (with_sway) sway_e = w.spawn_with(kit::WindSway{});
         if (with_snow) snow_e = w.spawn_with(kit::SnowCover{});
+        if (with_rainfx) {
+            ripples_e = w.spawn_with(kit::RainRipples{});
+            splash_e = w.spawn_with(kit::RainSplash{});
+            thunder_e = w.spawn_with(kit::ThunderDelay{});
+        }
     }
+    kit::RainRipples& ripples() { return *w.try_get_mut<kit::RainRipples>(ripples_e); }
+    kit::RainSplash& splash() { return *w.try_get_mut<kit::RainSplash>(splash_e); }
+    kit::ThunderDelay& thunder() { return *w.try_get_mut<kit::ThunderDelay>(thunder_e); }
     kit::SnowCover& snow() { return *w.try_get_mut<kit::SnowCover>(snow_e); }
     kit::WindSway& sway() { return *w.try_get_mut<kit::WindSway>(sway_e); }
     void step(u32 n = 1) {
@@ -64,9 +75,9 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
-                  bool with_wet = false, bool with_sway = false, bool with_snow = false) {
+                  bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -439,5 +450,126 @@ TEST_CASE("weather api: set_snow bad arguments raise an error that names the cal
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.snow().strength == 1.0f);
         CHECK(r.snow().noise_scale_m == 3.0f);
+    }
+}
+
+TEST_CASE("weather api: the rain effect getters read the first component, the setters write and clamp to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.ripples_strength() == 1 and weather.ripples_density() == 0.5)
+        assert(weather.ripples_speed() == 1 and math.abs(weather.ripples_ring_width() - 0.15) < 1e-6)
+        assert(weather.splash_rate() == 1 and math.abs(weather.splash_height() - 0.15) < 1e-6)
+        assert(weather.splash_life() == 0.25 and weather.splash_radius() == 25 and weather.splash_seed() == 1)
+        assert(weather.thunder_speed() == 343 and weather.thunder_volume() == 1)
+        weather.set_ripples{density = 0.25}
+        weather.set_splash{seed = 42}
+        weather.set_thunder{volume = 2}
+    end
+    if t == 2 then
+        assert(weather.ripples_density() == 0.25 and weather.ripples_strength() == 1)  -- only the given key changed
+        assert(weather.splash_seed() == 42 and weather.splash_rate() == 1)
+        assert(weather.thunder_volume() == 2 and weather.thunder_speed() == 343)
+        weather.set_ripples{strength = 9, density = -1, speed = 1e6, ring_width = 7}
+        weather.set_splash{rate = 1e6, height = 0, life = 99, radius = -3, seed = 1e12}
+        weather.set_thunder{speed = -5, volume = 99}
+    end
+    if t == 3 then
+        assert(weather.ripples_strength() == 1 and weather.ripples_density() == 0 and weather.ripples_speed() == 10)
+        assert(weather.ripples_ring_width() == 1)
+        assert(weather.splash_rate() == 64 and math.abs(weather.splash_height() - 0.01) < 1e-6)
+        assert(weather.splash_life() == 5 and weather.splash_radius() == 0.5 and weather.splash_seed() == 4294967295)
+        assert(weather.thunder_speed() == 1 and weather.thunder_volume() == 4)
+        weather.set_ripples{strength = -1, speed = 0}
+        weather.set_splash{seed = -7, rate = -1}
+        weather.set_ripples{}  -- nothing given, nothing changes
+        weather.set_splash{}
+        weather.set_thunder{}
+    end
+    if t == 4 then
+        assert(weather.ripples_strength() == 0 and math.abs(weather.ripples_speed() - 0.1) < 1e-6)
+        assert(weather.splash_seed() == 0 and weather.splash_rate() == 0)
+        weather.set_ripples{strength = 0.5, density = 0.75, speed = 2, ring_width = 0.3}
+        weather.set_splash{rate = 2, height = 0.5, life = 0.5, radius = 40, seed = 9}
+        weather.set_thunder{speed = 300, volume = 0.5}
+    end
+end
+)",
+           true, true, false, false, false, true);
+    r.step(1);
+    CHECK(r.ripples().density == 0.25f);
+    CHECK(r.splash().seed == 42u);
+    CHECK(r.thunder().volume == 2.0f);
+    r.step(1);
+    CHECK(r.ripples().speed == 10.0f);
+    CHECK(r.splash().seed == 4294967295u);
+    CHECK(r.thunder().speed_mps == 1.0f);
+    r.step(2);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.ripples().strength == 0.5f);
+    CHECK(r.ripples().density == 0.75f);
+    CHECK(r.ripples().speed == 2.0f);
+    CHECK(r.ripples().ring_width == 0.3f);
+    CHECK(r.splash().rate == 2.0f);
+    CHECK(r.splash().height_m == 0.5f);
+    CHECK(r.splash().life_seconds == 0.5f);
+    CHECK(r.splash().radius_m == 40.0f);
+    CHECK(r.splash().seed == 9u);
+    CHECK(r.splash().counter == 0u);  // engine-written, untouched
+    CHECK(r.thunder().speed_mps == 300.0f);
+    CHECK(r.thunder().volume == 0.5f);
+    CHECK(r.thunder().pending == 0u);
+}
+
+TEST_CASE("weather api: a world without the rain effect components raises a named error") {
+    for (const char* name : {"ripples_strength", "ripples_density", "ripples_speed", "ripples_ring_width"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no RainRipples entity").c_str());
+    for (const char* name : {"splash_rate", "splash_height", "splash_life", "splash_radius", "splash_seed"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no RainSplash entity").c_str());
+    for (const char* name : {"thunder_speed", "thunder_volume"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no ThunderDelay entity").c_str());
+    expect_error("weather.set_ripples{}", "weather.set_ripples: the scene has no RainRipples entity");
+    expect_error("weather.set_splash{rate = 1}", "weather.set_splash: the scene has no RainSplash entity");
+    expect_error("weather.set_thunder{volume = 1}", "weather.set_thunder: the scene has no ThunderDelay entity");
+    expect_error("weather.ripples_strength()", "weather.ripples_strength: this world has no weather", false, false);
+    expect_error("weather.set_splash{}", "weather.set_splash: this world has no weather", false, false);
+    expect_error("weather.set_thunder{}", "weather.set_thunder: this world has no weather", false, false);
+    // The snow, wet and sway components alone are not enough.
+    expect_error("weather.splash_rate()", "weather.splash_rate: the scene has no RainSplash entity", true, true, true,
+                 true, true);
+}
+
+TEST_CASE("weather api: the rain effect setters' bad arguments raise an error that names the call and write nothing") {
+    expect_error("weather.set_ripples{bogus = 1}", "weather.set_ripples: unknown key 'bogus'", true, true, false, false,
+                 false, true);
+    expect_error("weather.set_splash{counter = 1}", "weather.set_splash: unknown key 'counter'", true, true, false,
+                 false, false, true);
+    expect_error("weather.set_thunder{clip = 1}", "weather.set_thunder: unknown key 'clip'", true, true, false, false,
+                 false, true);
+    expect_error("weather.set_thunder{pending = 1}", "weather.set_thunder: unknown key 'pending'", true, true, false,
+                 false, false, true);
+    expect_error("weather.set_ripples{strength = 'lots'}", "weather.set_ripples: 'strength' is not a number", true, true,
+                 false, false, false, true);
+    expect_error("weather.set_splash{radius = 0/0}", "weather.set_splash: 'radius' is not a number", true, true, false,
+                 false, false, true);
+    expect_error("weather.set_thunder{[1] = 0.5}", "weather.set_thunder: the keys are names", true, true, false, false,
+                 false, true);
+    expect_error("weather.set_splash(0.5)", "table expected", true, true, false, false, false, true);
+    expect_error("weather.set_ripples()", "table expected", true, true, false, false, false, true);
+    for (const char* body : {"weather.set_ripples{strength = 0.5, speed = 'fast'}",
+                             "weather.set_ripples{speed = 'fast', strength = 0.5}",
+                             "weather.set_ripples{strength = 0.5, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.ripples().strength == 1.0f);
+        CHECK(r.ripples().speed == 1.0f);
     }
 }

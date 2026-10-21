@@ -1,6 +1,6 @@
 # M-RAINFX — Rain you can see land (milestone record)
 
-**Status:** planned 2026-10-20, step 7a next. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER and M-WETSURFACE: rain falls and the ground gets wet and puddled, but nothing happens where a drop lands and thunder is only an event. No Linear issues (free issue limit); this record is the tracker. Render steps (7b) are Opus-written and merged after an independent Opus review plus a green `--task` (Sami, 2026-10-20: "İzin veriyorum sormayın bana").
+**Status:** done 2026-10-21 (steps 7a to 7f). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER and M-WETSURFACE: rain falls and the ground gets wet and puddled, but nothing happens where a drop lands and thunder is only an event. No Linear issues (free issue limit); this record is the tracker. Render steps (7b) are Opus-written and merged after an independent Opus review plus a green `--task` (Sami, 2026-10-20: "İzin veriyorum sormayın bana").
 
 **Goal.** While it rains, puddles ripple and drops splash where they land, thunder reaches the listener after a delay that depends on how far the strike was, all deterministic, saved with the scene, opt-in, and a scene without the new components renders and sounds exactly as today.
 
@@ -40,7 +40,7 @@
 | 7a | done | #640 | `render::Ripples`, `r.rain_ripples`, tier field, `apply_quality` overload |
 | 7b | done | #645 | `p_ripple`, `apply_ripples` on the puddle mask apply_wet returns (snow stills it), `ripple_plaza` golden, tests/render_gl/test_render3d_ripple_gl.cpp; clock = `Scene3D::time()`; `unit01` shared (`src/engine/render/src/unit_clamp.h`) |
 | 7c | done | #648 | `RainRipples` + extract only (7e is thunder, 7f splash) |
-| 7d | planned | | needs 7b, 7c |
+| 7d | done | #661 | `weather.ripples_*`, `splash_*`, `thunder_*` getters and `weather.set_ripples{...}`, `set_splash{...}`, `set_thunder{...}` (clamped to the Range, named errors, nothing written on error) in `api_weather.cpp`, typed in `definitions.cpp`; `samples/12_weather`: `RainRipples` and `ThunderDelay` (no clip: the sample has no sfx asset, so no thunder sounds) on the Weather entity, `RainSplash` on a new `Splash` entity with a `ParticleEmitter3D` (entity count 11 to 12) |
 | 7e | done | #658 | `ThunderDelay` only (component, `kit_thunder_delay`, tests/kit/test_thunder_delay.cpp, padding audit, guide 9.19a); the strike distance is derived from `LightningStruck.thunder_delay_ticks` (the event has no position) |
 | 7f | done | #659 | `RainSplash` (component with `seed` and a saved `counter`, `kit_rain_splash`, tests/kit/test_rain_splash.cpp, padding audit, guide 9.19c); one burst per tick on the author's own `ParticleEmitter3D`, no pool entities; ground y = the entity's own y |
 

@@ -25,7 +25,10 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
+#include "mce/kit/rain_ripples.h"
+#include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_sway.h"
@@ -42,7 +45,7 @@ namespace {
 constexpr f32 kDt = 1.0f / 60.0f;
 constexpr const char* kScene = "12d12000-0000-4000-8000-000000000001";
 // Entities in the scene's order.
-constexpr u32 kSky = 1, kClock = 2, kCamera = 3, kWeather = 4, kPrecip = 5, kLightning = 6, kScript = 10;
+constexpr u32 kSky = 1, kClock = 2, kCamera = 3, kWeather = 4, kPrecip = 5, kLightning = 6, kScript = 10, kSplash = 11;
 
 u32 bits(f32 v) { return std::bit_cast<u32>(v); }
 
@@ -84,7 +87,7 @@ struct Demo {
         kit::install_stock(world, &assets);
         script::install_scene_scripts(world, &assets);
         REQUIRE(scene::load(world, assets, asset::parse_guid(kScene).value(), &e));
-        REQUIRE(e.size() == 11);
+        REQUIRE(e.size() == 12);
         if (!forecast) world.destroy(e[kScript]);
     }
     void run_to(u64 tick) {
@@ -142,6 +145,18 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(snow->melt_seconds == 10.0f);
     CHECK(snow->strength == 1.0f);
     CHECK(snow->cover == 0.0f);
+    // M-RAINFX 7d: ... a RainRipples and a ThunderDelay (no clip: the sample has no sfx asset) ...
+    const kit::RainRipples* rip = d.world.try_get<kit::RainRipples>(d.e[kWeather]);
+    REQUIRE(rip != nullptr);
+    CHECK(rip->strength == 1.0f);
+    CHECK(rip->density == 0.5f);
+    const kit::ThunderDelay* th = d.world.try_get<kit::ThunderDelay>(d.e[kWeather]);
+    REQUIRE(th != nullptr);
+    CHECK(th->speed_mps == 343.0f);
+    CHECK(th->clip.guid.is_null());
+    // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
+    CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
+    CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);
     // Tick 0: nothing has run, the resource is the authored Environment3D.
     CHECK(bits(d.env().sun_intensity) == bits(2.0f));
     CHECK(d.em().emitting == 0);  // as authored: dry until the weather says otherwise
@@ -272,4 +287,17 @@ TEST_CASE("weather demo: the snow cover stays 0 until the snow is in effect, bui
     // The control without the forecast never snows.
     c.run_to(2700);
     CHECK(c.snow().cover == 0.0f);
+}
+
+TEST_CASE("weather demo: the splash emitter bursts in the rain and is off in the clear") {
+    Demo d;
+    const auto& sp = [&]() -> const kit::ParticleEmitter3D& {
+        return *d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]);
+    };
+    d.run_to(30);  // clear
+    CHECK(sp().emitting == 0);
+    CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash])->counter == 0u);
+    d.run_to(600);  // rain 0.9
+    CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash])->counter > 0u);
+    CHECK(sp().burst > 0u);
 }

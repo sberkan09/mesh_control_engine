@@ -46,13 +46,39 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Rain effects (M-RAINFX step 7d) are the same kind of binding over the first kit::RainRipples (mce/kit/rain_ripples.h),
+// kit::RainSplash (mce/kit/rain_splash.h) and kit::ThunderDelay (mce/kit/thunder_delay.h). Named errors as above.
+// The engine-written fields (RainSplash.counter, ThunderDelay.pending, due, gain_db) and ThunderDelay.clip are not
+// reachable from Luau.
+//
+//   weather.ripples_strength() -> number  RainRipples.strength (0..1)
+//   weather.ripples_density() -> number   RainRipples.density (0..1)
+//   weather.ripples_speed() -> number     RainRipples.speed (0.1..10)
+//   weather.ripples_ring_width() -> number RainRipples.ring_width (0..1)
+//   weather.set_ripples{strength=, density=, speed=, ring_width=}
+//   weather.splash_rate() -> number       RainSplash.rate (0..64)
+//   weather.splash_height() -> number     RainSplash.height_m (0.01..5)
+//   weather.splash_life() -> number       RainSplash.life_seconds (0.02..5)
+//   weather.splash_radius() -> number     RainSplash.radius_m (0.5..500)
+//   weather.splash_seed() -> number       RainSplash.seed (0..4294967295)
+//   weather.set_splash{rate=, height=, life=, radius=, seed=}
+//   weather.thunder_speed() -> number     ThunderDelay.speed_mps (1..1000000)
+//   weather.thunder_volume() -> number    ThunderDelay.volume (0..4)
+//   weather.set_thunder{speed=, volume=}
+//                                         each setter takes a table, every key optional, each value clamped to the
+//                                         field's Range; an unknown key or a non-number raises an error that names
+//                                         the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
 #include <cstring>
 
 #include "api.h"
+#include "mce/kit/rain_ripples.h"
+#include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -124,6 +150,25 @@ kit::SnowCover& check_snow(lua_State* L, const char* fn) {
     if (!found) luaL_error(L, "%s: the scene has no SnowCover entity", fn);
     return *found;
 }
+
+// The first component of type T (registered under `name`), or a Luau error that names the call.
+template <typename T>
+T& check_first(lua_State* L, const char* fn, const char* name) {
+    World& w = world_of(L);
+    const refl::TypeRecord* type = refl::find_type(StringId(name));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent)
+        luaL_error(L, "%s: this world has no weather (install_weather)", fn);
+    T* found = nullptr;
+    w.query<T>().each([&](Entity, T& c) {
+        if (!found) found = &c;
+    });
+    if (!found) luaL_error(L, "%s: the scene has no %s entity", fn, name);
+    return *found;
+}
+
+kit::RainRipples& check_ripples(lua_State* L, const char* fn) { return check_first<kit::RainRipples>(L, fn, "RainRipples"); }
+kit::RainSplash& check_splash(lua_State* L, const char* fn) { return check_first<kit::RainSplash>(L, fn, "RainSplash"); }
+kit::ThunderDelay& check_thunder(lua_State* L, const char* fn) { return check_first<kit::ThunderDelay>(L, fn, "ThunderDelay"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -351,6 +396,88 @@ int l_weather_set_snow(lua_State* L) {
     return 0;
 }
 
+// Reads the settings table at index 1 into value[]/given[] (slot i is keys[i]); raises on a non-name key, an unknown
+// key or a non-number (NaN included) before anything is written. `list` is the key list for the messages.
+void read_settings(lua_State* L, const char* fn, const char* const* keys, int n, const char* list, f64* value,
+                   bool* given) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0) {
+        if (lua_type(L, -2) != LUA_TSTRING) luaL_error(L, "%s: the keys are names (%s)", fn, list);
+        const char* key = lua_tostring(L, -2);
+        int slot = -1;
+        for (int i = 0; i < n; ++i) {
+            if (std::strcmp(key, keys[i]) == 0) slot = i;
+        }
+        if (slot < 0) luaL_error(L, "%s: unknown key '%s' (%s)", fn, key, list);
+        if (lua_type(L, -1) != LUA_TNUMBER) luaL_error(L, "%s: '%s' is not a number", fn, key);
+        const f64 v = lua_tonumber(L, -1);
+        if (std::isnan(v)) luaL_error(L, "%s: '%s' is not a number", fn, key);
+        value[slot] = v;
+        given[slot] = true;
+        lua_pop(L, 1);
+    }
+}
+
+#define MCE_WEATHER_GETTER(luaname, check, field)                                                  \
+    int l_weather_##luaname(lua_State* L) {                                                       \
+        lua_pushnumber(L, static_cast<double>(check(L, "weather." #luaname).field));              \
+        return 1;                                                                                  \
+    }
+MCE_WEATHER_GETTER(ripples_strength, check_ripples, strength)
+MCE_WEATHER_GETTER(ripples_density, check_ripples, density)
+MCE_WEATHER_GETTER(ripples_speed, check_ripples, speed)
+MCE_WEATHER_GETTER(ripples_ring_width, check_ripples, ring_width)
+MCE_WEATHER_GETTER(splash_rate, check_splash, rate)
+MCE_WEATHER_GETTER(splash_height, check_splash, height_m)
+MCE_WEATHER_GETTER(splash_life, check_splash, life_seconds)
+MCE_WEATHER_GETTER(splash_radius, check_splash, radius_m)
+MCE_WEATHER_GETTER(splash_seed, check_splash, seed)
+MCE_WEATHER_GETTER(thunder_speed, check_thunder, speed_mps)
+MCE_WEATHER_GETTER(thunder_volume, check_thunder, volume)
+#undef MCE_WEATHER_GETTER
+
+// weather.set_ripples{strength=, density=, speed=, ring_width=}: validated before anything is written.
+int l_weather_set_ripples(lua_State* L) {
+    static const char* const kKeys[4] = {"strength", "density", "speed", "ring_width"};
+    f64 value[4] = {0, 0, 0, 0};
+    bool given[4] = {false, false, false, false};
+    read_settings(L, "weather.set_ripples", kKeys, 4, "strength, density, speed, ring_width", value, given);
+    kit::RainRipples& r = check_ripples(L, "weather.set_ripples");
+    if (given[0]) r.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) r.density = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) r.speed = static_cast<f32>(clamp_range(value[2], 0.1, 10.0));
+    if (given[3]) r.ring_width = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    return 0;
+}
+
+// weather.set_splash{rate=, height=, life=, radius=, seed=}. (`counter` is engine-written and not settable.)
+int l_weather_set_splash(lua_State* L) {
+    static const char* const kKeys[5] = {"rate", "height", "life", "radius", "seed"};
+    f64 value[5] = {0, 0, 0, 0, 0};
+    bool given[5] = {false, false, false, false, false};
+    read_settings(L, "weather.set_splash", kKeys, 5, "rate, height, life, radius, seed", value, given);
+    kit::RainSplash& s = check_splash(L, "weather.set_splash");
+    if (given[0]) s.rate = static_cast<f32>(clamp_range(value[0], 0.0, 64.0));
+    if (given[1]) s.height_m = static_cast<f32>(clamp_range(value[1], 0.01, 5.0));
+    if (given[2]) s.life_seconds = static_cast<f32>(clamp_range(value[2], 0.02, 5.0));
+    if (given[3]) s.radius_m = static_cast<f32>(clamp_range(value[3], 0.5, 500.0));
+    if (given[4]) s.seed = static_cast<u32>(std::floor(clamp_range(value[4], 0.0, 4294967295.0)));
+    return 0;
+}
+
+// weather.set_thunder{speed=, volume=}. (The clip, pending, due and gain_db are not settable.)
+int l_weather_set_thunder(lua_State* L) {
+    static const char* const kKeys[2] = {"speed", "volume"};
+    f64 value[2] = {0, 0};
+    bool given[2] = {false, false};
+    read_settings(L, "weather.set_thunder", kKeys, 2, "speed, volume", value, given);
+    kit::ThunderDelay& t = check_thunder(L, "weather.set_thunder");
+    if (given[0]) t.speed_mps = static_cast<f32>(clamp_range(value[0], 1.0, 1000000.0));
+    if (given[1]) t.volume = static_cast<f32>(clamp_range(value[1], 0.0, 4.0));
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -376,6 +503,20 @@ const luaL_Reg kWeatherLib[] = {
     {"snow_scale", l_weather_snow_scale},
     {"snow_wind", l_weather_snow_wind},
     {"set_snow", l_weather_set_snow},
+    {"ripples_strength", l_weather_ripples_strength},
+    {"ripples_density", l_weather_ripples_density},
+    {"ripples_speed", l_weather_ripples_speed},
+    {"ripples_ring_width", l_weather_ripples_ring_width},
+    {"set_ripples", l_weather_set_ripples},
+    {"splash_rate", l_weather_splash_rate},
+    {"splash_height", l_weather_splash_height},
+    {"splash_life", l_weather_splash_life},
+    {"splash_radius", l_weather_splash_radius},
+    {"splash_seed", l_weather_splash_seed},
+    {"set_splash", l_weather_set_splash},
+    {"thunder_speed", l_weather_thunder_speed},
+    {"thunder_volume", l_weather_thunder_volume},
+    {"set_thunder", l_weather_set_thunder},
     {nullptr, nullptr},
 };
 
