@@ -54,6 +54,7 @@
 #include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
 #include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)
 #include "mce/kit/snow_cover.h"         // SnowCover (M-SNOWCOVER 6c)
+#include "mce/kit/wind_direction.h"     // WindDirection (M-WINDDIR 8a)
 #include "mce/kit/thunder_delay.h"      // ThunderDelay (M-RAINFX 7e)
 #include "mce/kit/rain_splash.h"        // RainSplash (M-RAINFX 7f)
 #include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)

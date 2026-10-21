@@ -1,5 +1,6 @@
 #include "mce/kit/weather.h"
 
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -12,6 +13,7 @@
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/timed_light.h"
 #include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_sway.h"
 
 namespace mce::kit {
@@ -196,6 +198,57 @@ void kit_snow_cover(Frame& f) {
     });
 }
 
+// Wind direction (M-WINDDIR 8a): the heading in 1/65536 degree as an integer, advanced by a fixed-point drift.
+constexpr i64 kWindFull = 360ll * 65536;  // one turn in angle_q units
+
+i64 wind_wrap(i64 q) {
+    q %= kWindFull;
+    return q < 0 ? q + kWindFull : q;
+}
+
+// Degrees to angle_q: NaN is 0, anything is clamped to +-1e9 first, rounded to the nearest quantum (half away from
+// zero).
+i64 wind_q_of_degrees(f32 degrees) {
+    const f64 d = std::isnan(degrees) ? 0.0 : std::clamp(static_cast<f64>(degrees), -1e9, 1e9);
+    return wind_wrap(std::llround(std::fmod(d, 360.0) * 65536.0));
+}
+
+void kit_wind_direction(Frame& f) {
+    const f64 dt = static_cast<f64>(f.dt);
+    bool first = true;  // one WindDirection per scene: the first in ECS order drives
+    f.query<WindDirection>().each([&](Entity, WindDirection& c) {
+        if (!first) return;
+        first = false;
+        const f64 drift = std::isnan(c.drift_degrees_per_minute)
+                              ? 0.0
+                              : std::clamp(static_cast<f64>(c.drift_degrees_per_minute), -3600.0, 3600.0);
+        c.pad_ = 0;
+        if (drift == 0.0) {  // the authored heading, no history
+            c.angle_q = static_cast<u32>(wind_q_of_degrees(c.degrees));
+            c.frac = 0;
+            c.seeded = 0;
+            return;
+        }
+        i64 q = c.seeded == 1 ? wind_wrap(c.angle_q) : wind_q_of_degrees(c.degrees);
+        i64 frac = c.seeded == 1 ? static_cast<i64>(c.frac & 0xFFFFu) : 0;
+        if (dt > 0.0) {
+            // Ticks per minute: snapped to the integer when dt is a whole tick rate (f32 1/60 is 3599.9998 otherwise).
+            f64 tpm = std::min(60.0 / dt, 1e12);
+            const f64 r = std::round(tpm);
+            if (r >= 1.0 && std::abs(tpm - r) < 1e-4 * r) tpm = r;
+            // Step in 1/2^32 degree per tick, rounded toward +inf so the error is never negative: a negative drift
+            // then floors to the same quantum as a positive one, and whole turns land exactly.
+            const i64 step = static_cast<i64>(std::ceil(drift * 4294967296.0 / tpm));
+            const i64 acc = frac + step;
+            q = wind_wrap(q + (acc >> 16));  // floor: the arithmetic shift carries a negative drift correctly
+            frac = acc & 0xFFFF;
+        }
+        c.angle_q = static_cast<u32>(q);
+        c.frac = static_cast<u32>(frac);
+        c.seeded = 1;
+    });
+}
+
 }  // namespace
 
 void install_weather(World& world, asset::AssetSystem* assets) {
@@ -211,6 +264,8 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<ThunderDelay>();  // M-RAINFX 7e: advanced by kit_thunder_delay (install_precipitation)
     world.register_components<SnowCover>();  // M-SNOWCOVER 6c: advanced by kit_snow_cover, read by Kit3DExtract
     world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
+    world.register_components<WindDirection>();  // M-WINDDIR 8a: advanced by kit_wind_direction, read by Kit3DExtract (8d)
+    world.add_system(Phase::FixedUpdate_Pre, "kit_wind_direction", &kit_wind_direction, "kit_weather");
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
 }
 
