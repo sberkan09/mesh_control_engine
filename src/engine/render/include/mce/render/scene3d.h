@@ -365,12 +365,14 @@ struct WetSurfaces {
 // Snow cover (M-SNOWCOVER 6a; the weather drives it, the quality tiers gate it): `cover` 0..1 whitens
 // up-facing surfaces, `coverage` 0..1 is the share of them that whitens at full cover, `noise_scale` the
 // breakup noise cell in meters, `wind_bias` 0..1 how much the layer favors the lee side. cover 0 = off:
-// the frame is the snowless one.
+// the frame is the snowless one. `wind_dir` (M-WINDDIR 8b) is the xz direction the wind blows toward, unit length
+// after apply_quality (default +x, the old hard-wired lean); the struct grows 24 -> 28 bytes (no pad_ room for 8).
 struct SnowCover {
     f32 cover = 0.0f;
     f32 coverage = 0.8f;
     f32 noise_scale = 3.0f;
     f32 wind_bias = 0.5f;
+    math::vec2 wind_dir{1.0f, 0.0f};  // xz, normalized by apply_quality; NaN / zero falls back to +x
     bool noise_enabled = true;  // false on the Low tier (apply_quality)
     u8 pad_[3] = {};
 };

@@ -126,6 +126,7 @@ SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow) {
     out.coverage = unit01(snow.coverage);
     out.wind_bias = unit01(snow.wind_bias);
     out.noise_scale = noise_cell(snow.noise_scale);
+    out.wind_dir = detail::unit_wind_dir(snow.wind_dir);
     // Meaningless with snow_cover off (cover 0 skips the whole shader branch, noise included).
     out.noise_enabled = snow.noise_enabled && q.snow_noise;
     return out;
