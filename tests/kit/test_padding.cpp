@@ -15,6 +15,7 @@
 
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
@@ -76,6 +77,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<RainSplash>("RainSplash", sizeof(RainSplash::pad_));  // rain_splash.h (M-RAINFX 7f)
     expect_pad<ThunderDelay>("ThunderDelay", sizeof(ThunderDelay::pad_));  // thunder_delay.h (M-RAINFX 7e)
     expect_pad<RainRipples>("RainRipples", 0);  // rain_ripples.h (M-RAINFX 7c): four f32, no padding
+    expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 
 TEST_CASE("padding: ParticleEmitter3D copied from a dirty stack hashes the same as from a clean one") {

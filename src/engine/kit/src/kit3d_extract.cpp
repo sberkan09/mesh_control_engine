@@ -12,6 +12,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
@@ -893,6 +894,40 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             ripples.enabled = true;
         }
         scene.set_ripples(render::apply_quality(quality_, ripples));
+    }
+    {  // clouds (M-CLOUDS 9c): only a scene with both a Weather and a CloudLayer; the clock is Scene3D::time()
+        const Weather* weather = nullptr;
+        const CloudLayer* cloudc = nullptr;
+        const WindDirection* cloud_wd = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const CloudLayer&>().each([&](const CloudLayer& c) {
+            if (!cloudc) cloudc = &c;
+        });
+        world.query<const WindDirection&>().each([&](const WindDirection& c) {
+            if (!cloud_wd) cloud_wd = &c;
+        });
+        render::Clouds clouds;  // coverage 0 by default (off)
+        if (weather && cloudc) {
+            f32 kind = 0.0f;  // Clear 0, Overcast / Rain / Storm 1, Snow 0.9
+            switch (weather->current) {
+                case WeatherKind::Clear: kind = 0.0f; break;
+                case WeatherKind::Snow: kind = 0.9f; break;
+                default: kind = 1.0f; break;
+            }
+            f32 inten = weather->intensity;  // NaN falls to 0, the rest clamps to 0..1
+            inten = inten > 0.0f ? (inten < 1.0f ? inten : 1.0f) : 0.0f;
+            const f32 blend = kind * inten;
+            clouds.coverage = (cloudc->fair_coverage + (cloudc->overcast_coverage - cloudc->fair_coverage) * blend) *
+                              cloudc->strength;
+            clouds.scale_m = cloudc->scale_m;
+            clouds.height_m = cloudc->height_m;
+            clouds.speed = weather->wind * cloudc->speed_scale;
+            if (cloud_wd) clouds.wind_dir = wind_direction_vector(*cloud_wd);  // else the default +x
+            clouds.enabled = true;
+        }
+        scene.set_clouds(render::apply_quality(quality_, clouds));
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;

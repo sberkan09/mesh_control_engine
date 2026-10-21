@@ -668,6 +668,20 @@ the rain. A scene missing any of the three stays ripple-free and renders exactly
 puddles only, so the puddles of the wet surfaces (9.19) decide where. The Low quality tier and `r.rain_ripples 0`
 switch them off.
 
+## 9.19e Clouds (M-CLOUDS)
+
+An optional `CloudLayer` entity (one per scene, the first in ECS order is read; it is registered with the weather)
+draws a procedural cloud layer in the sky that follows the weather. Its fields are strength (1, scales the cover),
+fair_coverage (0.35, the sky cover in clear weather), overcast_coverage (0.9, the cover at full overcast), scale_m (900,
+the size of one cloud cell in metres), speed_scale (1, scales the drift speed) and height_m (2000, the height of the
+layer above the camera), all saved with the scene. The renderer gets clouds only when the scene has a Weather and a
+CloudLayer: the cover goes from fair_coverage toward overcast_coverage with the weather kind (clear stays fair,
+overcast, rain and storm reach the full overcast cover, snow 0.9 of it) times the weather intensity, times strength.
+The clouds drift along the scene `WindDirection` (section 9.19d; +x when the scene has none) at the weather's wind times
+speed_scale, and the clock is the scene time, so a paused or replayed frame draws the same sky. A scene without a
+`Weather` or a `CloudLayer` has no clouds and renders exactly as before. The Low quality tier and `r.clouds 0` switch
+them off.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

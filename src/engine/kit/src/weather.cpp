@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "mce/ecs/world.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
@@ -267,6 +268,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<WindDirection>();  // M-WINDDIR 8a: advanced by kit_wind_direction, read by Kit3DExtract (8d)
     world.add_system(Phase::FixedUpdate_Pre, "kit_wind_direction", &kit_wind_direction, "kit_weather");
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
+    world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
 }
 
 }  // namespace mce::kit
