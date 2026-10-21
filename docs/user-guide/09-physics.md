@@ -647,8 +647,13 @@ slowly, negative the other way. The system `kit_wind_direction` keeps the headin
 1/65536 degree) and a saved remainder, so a long drift loses nothing, 360 degrees of drift returns to the start
 exactly and a save in the middle of a turn resumes on the same state. With a drift of 0 the heading is simply
 `degrees`, so editing it takes effect on the next tick; with a drift the heading starts at `degrees` and turns from
-there. This step only holds the state: the snow lee side and the foliage sway follow it in later steps. A scene without
-a `WindDirection` is unchanged.
+there. The snow lee side and the foliage sway follow the heading: the snow cover's `wind_dir` becomes the heading's
+unit vector (a scene without a `WindDirection` keeps +x), and every `Foliage3D` and `TerrainFoliage3D` batch turns its
+authored `wind_direction` by the heading relative to +x, so foliage authored along +x sways along the scene wind and one
+authored along another axis keeps its offset (authored +z at heading 90 sways along -x). The foliage turn needs a
+`Weather` as well, like the wind sway; without one the batches keep their authored direction. It touches the batch
+fields only, so changing the heading never re-scatters. Falling snow and rain particles are not affected: they fall
+straight and drift as before. A scene without a `WindDirection` is unchanged.
 
 ## 9.19a Rain ripples (M-RAINFX)
 
