@@ -248,6 +248,16 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (degrees 0..360, drift -3600..3600 degrees per
     -- minute); an unknown key (angle_q included) or a non-number raises
     set_wind_direction: (settings: { degrees: number?, drift: number? }) -> (),
+    -- CloudLayer (M-CLOUDS), the first one in the scene; the getters raise when there is none
+    cloud_strength: () -> number,
+    cloud_fair_coverage: () -> number,
+    cloud_overcast_coverage: () -> number,
+    cloud_scale: () -> number,
+    cloud_speed_scale: () -> number,
+    cloud_height: () -> number,
+    -- every key optional, each value clamped to the field's range (strength, fair_coverage and overcast_coverage
+    -- 0..1, scale 50..20000 m, speed_scale 0..10, height 100..20000 m); an unknown key or a non-number raises
+    set_clouds: (settings: { strength: number?, fair_coverage: number?, overcast_coverage: number?, scale: number?, speed_scale: number?, height: number? }) -> (),
 }
 )";
 

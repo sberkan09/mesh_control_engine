@@ -80,12 +80,26 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Clouds (M-CLOUDS step 9d) are the same kind of binding over the first kit::CloudLayer (mce/kit/cloud_layer.h). Named
+// errors as above. All six fields are authoring, so all are settable.
+//
+//   weather.cloud_strength() -> number           CloudLayer.strength (0..1)
+//   weather.cloud_fair_coverage() -> number      CloudLayer.fair_coverage (0..1)
+//   weather.cloud_overcast_coverage() -> number  CloudLayer.overcast_coverage (0..1)
+//   weather.cloud_scale() -> number              CloudLayer.scale_m (50..20000)
+//   weather.cloud_speed_scale() -> number        CloudLayer.speed_scale (0..10)
+//   weather.cloud_height() -> number             CloudLayer.height_m (100..20000)
+//   weather.set_clouds{strength=, fair_coverage=, overcast_coverage=, scale=, speed_scale=, height=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
 #include <cstring>
 
 #include "api.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -184,6 +198,8 @@ kit::ThunderDelay& check_thunder(lua_State* L, const char* fn) { return check_fi
 kit::WindDirection& check_wind_direction(lua_State* L, const char* fn) {
     return check_first<kit::WindDirection>(L, fn, "WindDirection");
 }
+
+kit::CloudLayer& check_clouds(lua_State* L, const char* fn) { return check_first<kit::CloudLayer>(L, fn, "CloudLayer"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -521,6 +537,37 @@ int l_weather_set_wind_direction(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_CL(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_clouds(L, "weather." #luaname).field));         \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_CL(cloud_strength, strength)
+MCE_WEATHER_GETTER_CL(cloud_fair_coverage, fair_coverage)
+MCE_WEATHER_GETTER_CL(cloud_overcast_coverage, overcast_coverage)
+MCE_WEATHER_GETTER_CL(cloud_scale, scale_m)
+MCE_WEATHER_GETTER_CL(cloud_speed_scale, speed_scale)
+MCE_WEATHER_GETTER_CL(cloud_height, height_m)
+#undef MCE_WEATHER_GETTER_CL
+
+// weather.set_clouds{strength=, fair_coverage=, overcast_coverage=, scale=, speed_scale=, height=}: validated before
+// anything is written.
+int l_weather_set_clouds(lua_State* L) {
+    static const char* const kKeys[6] = {"strength", "fair_coverage", "overcast_coverage", "scale", "speed_scale", "height"};
+    f64 value[6] = {0, 0, 0, 0, 0, 0};
+    bool given[6] = {false, false, false, false, false, false};
+    read_settings(L, "weather.set_clouds", kKeys, 6, "strength, fair_coverage, overcast_coverage, scale, speed_scale, height",
+                  value, given);
+    kit::CloudLayer& c = check_clouds(L, "weather.set_clouds");
+    if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) c.fair_coverage = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) c.overcast_coverage = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) c.scale_m = static_cast<f32>(clamp_range(value[3], 50.0, 20000.0));
+    if (given[4]) c.speed_scale = static_cast<f32>(clamp_range(value[4], 0.0, 10.0));
+    if (given[5]) c.height_m = static_cast<f32>(clamp_range(value[5], 100.0, 20000.0));
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -564,6 +611,13 @@ const luaL_Reg kWeatherLib[] = {
     {"wind_drift", l_weather_wind_drift},
     {"wind_heading", l_weather_wind_heading},
     {"set_wind_direction", l_weather_set_wind_direction},
+    {"cloud_strength", l_weather_cloud_strength},
+    {"cloud_fair_coverage", l_weather_cloud_fair_coverage},
+    {"cloud_overcast_coverage", l_weather_cloud_overcast_coverage},
+    {"cloud_scale", l_weather_cloud_scale},
+    {"cloud_speed_scale", l_weather_cloud_speed_scale},
+    {"cloud_height", l_weather_cloud_height},
+    {"set_clouds", l_weather_set_clouds},
     {nullptr, nullptr},
 };
 

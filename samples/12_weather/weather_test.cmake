@@ -10,7 +10,8 @@
 #      1861), builds while it snows (up to tick 2340) and melts after;
 #   5. (M-RAINFX 7d) the "rain fx:" lines: the RainRipples strength, RainSplash rate and ThunderDelay speed the script reads;
 #   6. (M-WINDDIR 8e) the "wind dir:" lines: the WindDirection heading starts at 0 and turns 6 degrees a minute (0.1 degree a
-#      second, so 0.25 degree per 150 ticks).
+#      second, so 0.25 degree per 150 ticks);
+#   7. (M-CLOUDS 9d) the "clouds:" lines: the CloudLayer authoring fields the script reads.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -55,6 +56,7 @@ expect("${first}" "script: snow: cover 0.000 at tick 450\n" "it snowed cover in 
 expect("${first}" "script: rain fx: ripples 1.00 splash 1.00 thunder 343 at tick 450\n" "the rain effects are not wired into the scene")
 expect("${first}" "script: wind dir: heading 0.00 drift 6.0 at tick 0\n" "the wind direction did not start at +x")
 expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the wind direction did not turn 6 degrees a minute")
+expect("${first}" "script: clouds: strength 1.00 fair 0.35 overcast 0.90 height 2000 at tick 450\n" "the cloud layer is not wired into the scene")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")

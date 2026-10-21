@@ -9,6 +9,7 @@
 #include <string>
 
 #include "mce/ecs/transform.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -31,11 +32,11 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false) {
+                  bool with_wind = false, bool with_clouds = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -59,7 +60,9 @@ struct WRig {
             thunder_e = w.spawn_with(kit::ThunderDelay{});
         }
         if (with_wind) wind_e = w.spawn_with(kit::WindDirection{});
+        if (with_clouds) cloud_e = w.spawn_with(kit::CloudLayer{});
     }
+    kit::CloudLayer& clouds() { return *w.try_get_mut<kit::CloudLayer>(cloud_e); }
     kit::WindDirection& wind() { return *w.try_get_mut<kit::WindDirection>(wind_e); }
     kit::RainRipples& ripples() { return *w.try_get_mut<kit::RainRipples>(ripples_e); }
     kit::RainSplash& splash() { return *w.try_get_mut<kit::RainSplash>(splash_e); }
@@ -80,9 +83,9 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false) {
+                  bool with_wind = false, bool with_clouds = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -662,5 +665,85 @@ TEST_CASE("weather api: set_wind_direction bad arguments raise an error that nam
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.wind().degrees == 0.0f);
         CHECK(r.wind().drift_degrees_per_minute == 0.0f);
+    }
+}
+
+TEST_CASE("weather api: the cloud getters read the first CloudLayer, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.cloud_strength() == 1 and weather.cloud_scale() == 900 and weather.cloud_height() == 2000)
+        assert(weather.cloud_speed_scale() == 1)
+        assert(math.abs(weather.cloud_fair_coverage() - 0.35) < 1e-6)
+        assert(math.abs(weather.cloud_overcast_coverage() - 0.9) < 1e-6)
+        weather.set_clouds{strength = 0.5, scale = 1200}
+    end
+    if t == 2 then
+        assert(weather.cloud_strength() == 0.5 and weather.cloud_scale() == 1200)
+        assert(weather.cloud_height() == 2000)  -- only the given keys changed
+        weather.set_clouds{strength = 9, fair_coverage = 9, overcast_coverage = 9, scale = 1e9, speed_scale = 1e9, height = 1e9}
+    end
+    if t == 3 then
+        assert(weather.cloud_strength() == 1 and weather.cloud_fair_coverage() == 1 and weather.cloud_overcast_coverage() == 1)
+        assert(weather.cloud_scale() == 20000 and weather.cloud_speed_scale() == 10 and weather.cloud_height() == 20000)
+        weather.set_clouds{strength = -5, fair_coverage = -5, overcast_coverage = -5, scale = -1e9, speed_scale = -1e9, height = -1e9}
+        weather.set_clouds{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.cloud_strength() == 0 and weather.cloud_fair_coverage() == 0 and weather.cloud_overcast_coverage() == 0)
+        assert(weather.cloud_scale() == 50 and weather.cloud_speed_scale() == 0 and weather.cloud_height() == 100)
+        weather.set_clouds{fair_coverage = 0.2, overcast_coverage = 0.8, speed_scale = 2}
+    end
+end
+)",
+           true, true, false, false, false, false, false, true);
+    r.step(1);
+    CHECK(r.clouds().strength == 0.5f);
+    CHECK(r.clouds().scale_m == 1200.0f);
+    r.step(4);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.clouds().strength == 0.0f);
+    CHECK(r.clouds().fair_coverage == 0.2f);
+    CHECK(r.clouds().overcast_coverage == 0.8f);
+    CHECK(r.clouds().speed_scale == 2.0f);
+    CHECK(r.clouds().height_m == 100.0f);
+}
+
+TEST_CASE("weather api: a world without a CloudLayer raises a named error") {
+    for (const char* name : {"cloud_strength", "cloud_fair_coverage", "cloud_overcast_coverage", "cloud_scale",
+                             "cloud_speed_scale", "cloud_height"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no CloudLayer entity").c_str());
+    expect_error("weather.set_clouds{}", "weather.set_clouds: the scene has no CloudLayer entity");
+    expect_error("weather.cloud_height()", "weather.cloud_height: this world has no weather", false, false);
+    expect_error("weather.set_clouds{}", "weather.set_clouds: this world has no weather", false, false);
+    // The other weather components alone are not enough.
+    expect_error("weather.cloud_scale()", "weather.cloud_scale: the scene has no CloudLayer entity", true, true, true,
+                 true, true, true, true);
+}
+
+TEST_CASE("weather api: set_clouds bad arguments raise an error that names the call and write nothing") {
+    auto bad = [](const char* body, const char* needle) {
+        expect_error(body, needle, true, true, false, false, false, false, false, true);
+    };
+    bad("weather.set_clouds{bogus = 1}", "weather.set_clouds: unknown key 'bogus'");
+    bad("weather.set_clouds{scale_m = 1}", "weather.set_clouds: unknown key 'scale_m'");
+    bad("weather.set_clouds{strength = 'thick'}", "weather.set_clouds: 'strength' is not a number");
+    bad("weather.set_clouds{height = 0/0}", "weather.set_clouds: 'height' is not a number");
+    bad("weather.set_clouds{[1] = 0.5}", "weather.set_clouds: the keys are names");
+    bad("weather.set_clouds(0.5)", "table expected");
+    bad("weather.set_clouds()", "table expected");
+    for (const char* body : {"weather.set_clouds{strength = 0.5, height = 'high'}",
+                             "weather.set_clouds{height = 'high', strength = 0.5}",
+                             "weather.set_clouds{strength = 0.5, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.clouds().strength == 1.0f);
+        CHECK(r.clouds().height_m == 2000.0f);
     }
 }

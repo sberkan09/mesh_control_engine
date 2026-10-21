@@ -30,5 +30,9 @@ function update()
         -- M-WINDDIR: the scene wind turns 6 degrees a minute from 0 (+x); the foliage sway and the snow lean follow it.
         mce.log(string.format("wind dir: heading %.2f drift %.1f at tick %d",
             weather.wind_heading(), weather.wind_drift(), t))
+        -- M-CLOUDS: the cloud layer's authoring fields; the renderer derives the cover from the weather kind.
+        mce.log(string.format("clouds: strength %.2f fair %.2f overcast %.2f height %.0f at tick %d",
+            weather.cloud_strength(), weather.cloud_fair_coverage(), weather.cloud_overcast_coverage(),
+            weather.cloud_height(), t))
     end
 end
