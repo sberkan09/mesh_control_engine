@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "@PROJECT@",
+  "title": "@TITLE@",
+  "engine_version": "@ENGINE_VERSION@",
+  "games": ["@GAME@"],
+  "start_scene": "@GUID_SCENE@",
+  "plugins": []
+}

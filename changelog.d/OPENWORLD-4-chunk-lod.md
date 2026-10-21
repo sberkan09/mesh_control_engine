@@ -1,0 +1,1 @@
+- Kit: `ChunkLod3D` on a `SceneChunk` entity draws an HLOD proxy mesh while the streamed area is not loaded (an impostor beyond `impostor_distance`, nothing beyond `max_distance`), so far areas keep their skyline (M-OPENWORLD A4). Cook: the `hlod` importer cooks a baked `.mchlod` proxy into an ordinary mesh, checking its header, hash and mesh.

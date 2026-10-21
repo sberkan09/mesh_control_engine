@@ -1,0 +1,326 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "12d12000-0000-4000-8000-000000000001",
+ "name": "weather",
+ "entities": [
+  {
+   "name": "Ground",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.5,
+      0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000005",
+     "tint": [
+      0.5,
+      0.53,
+      0.48,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Sky",
+   "components": {
+    "Environment3D": {
+     "atmosphere": 0,
+     "sky_enabled": 0,
+     "sun_intensity": 2.0,
+     "bloom": 1,
+     "bloom_intensity": 0.12,
+     "bloom_threshold": 1.0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Clock",
+   "components": {
+    "WorldClock": {
+     "hour": 12,
+     "day_length_seconds": 600
+    },
+    "DayCycle": {},
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      8,
+      34
+     ],
+     "rotation": [
+      -0.104528,
+      0,
+      0,
+      0.994522
+     ]
+    }
+   }
+  },
+  {
+   "name": "Weather",
+   "components": {
+    "Weather": {
+     "transition_seconds": 10
+    },
+    "WetSurfaces": {
+     "strength": 4,
+     "darken": 0.5,
+     "puddles": 0.6
+    },
+    "WindSway": {},
+    "SnowCover": {
+     "build_seconds": 4,
+     "melt_seconds": 10
+    },
+    "RainRipples": {},
+    "ThunderDelay": {},
+    "WindDirection": {
+     "degrees": 0,
+     "drift_degrees_per_minute": 6
+    },
+    "CloudLayer": {},
+    "Foliage3D": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000006",
+     "tint": [
+      0.25,
+      0.5,
+      0.2,
+      1
+     ],
+     "half_extents": [
+      14,
+      5
+     ],
+     "count": 60,
+     "seed": 12,
+     "scale_min": 0.3,
+     "scale_max": 0.7,
+     "wind_amplitude": 0.08,
+     "wind_frequency": 0.6,
+     "wind_height": 1,
+     "wind_gust": 0.2,
+     "wind_flutter": 0.02,
+     "cast_shadows": 0
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Precipitation",
+   "components": {
+    "Precipitation3D": {
+     "rain_rate": 3000,
+     "snow_rate": 800,
+     "follow_camera": 1,
+     "height": 12,
+     "area": 14,
+     "rain_speed": 18,
+     "snow_speed": 1.5
+    },
+    "ParticleEmitter3D": {
+     "color_start": [
+      0.55,
+      0.62,
+      0.75,
+      0.35
+     ],
+     "color_end": [
+      0.55,
+      0.62,
+      0.75,
+      0.15
+     ],
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "box": [
+      14,
+      0.5,
+      14
+     ],
+     "direction": [
+      0,
+      -1,
+      0
+     ],
+     "gravity": [
+      0,
+      -9,
+      0
+     ],
+     "spread_deg": 2,
+     "rate": 0,
+     "speed_min": 16.2,
+     "speed_max": 19.8,
+     "lifetime_min": 0.667,
+     "lifetime_max": 0.8,
+     "drag": 0,
+     "ground_height": 0,
+     "bounce": 0,
+     "size_start": 0.04,
+     "size_end": 0.04,
+     "max_particles": 4096,
+     "seed": 1,
+     "burst": 0,
+     "burst_version": 0,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      20,
+      34
+     ]
+    }
+   }
+  },
+  {
+   "name": "Lightning",
+   "components": {
+    "Lightning": {
+     "min_gap_seconds": 2,
+     "max_gap_seconds": 5,
+     "flash_ticks": 8,
+     "flash_boost": 4,
+     "seed": 7
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Building Tower",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -13,
+      8,
+      -12
+     ],
+     "scale": [
+      1.6,
+      16,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000006",
+     "tint": [
+      0.55,
+      0.45,
+      0.4,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Building Hall",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      5,
+      -12
+     ],
+     "scale": [
+      2.2,
+      10,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000006",
+     "tint": [
+      0.5,
+      0.52,
+      0.58,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Building Block",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      13,
+      6.5,
+      -12
+     ],
+     "scale": [
+      1.8,
+      13,
+      2.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12d12000-0000-4000-8000-000000000006",
+     "tint": [
+      0.6,
+      0.55,
+      0.45,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Script: weather",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:12d12000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    }
+   }
+  },
+  {
+   "name": "Splash",
+   "components": {
+    "RainSplash": {},
+    "ParticleEmitter3D": {
+     "color_start": [
+      0.7,
+      0.78,
+      0.9,
+      0.5
+     ],
+     "color_end": [
+      0.7,
+      0.78,
+      0.9,
+      0
+     ],
+     "size_start": 0.05,
+     "size_end": 0.03,
+     "max_particles": 1024,
+     "seed": 2,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0,
+     "rate": 0
+    },
+    "LocalTransform": {}
+   }
+  }
+ ]
+}

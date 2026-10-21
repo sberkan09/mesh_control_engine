@@ -1,0 +1,133 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "f0ec6ae3-e2cb-4f09-9e7d-78461d8b96e1",
+ "name": "main",
+ "entities": [
+  {
+   "name": "Camera",
+   "components": {
+    "Camera2DComponent": {
+     "pixels_per_meter": 28,
+     "zoom": 1
+    },
+    "LocalTransform": {
+     "position": [
+      24,
+      16,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "name": "World Settings",
+   "components": {
+    "WorldSettings": {}
+   }
+  },
+  {
+   "name": "Level",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    },
+    "ProcLevel": {
+     "kind": "Rooms",
+     "width": 48,
+     "height": 32,
+     "seed": 1,
+     "tile_size": 1,
+     "path_markers": true,
+     "wall_color": [
+      0.32,
+      0.3,
+      0.4,
+      1
+     ],
+     "floor_color": [
+      0.09,
+      0.09,
+      0.12,
+      1
+     ]
+    },
+    "SaveKey": {
+     "key": 1
+    }
+   }
+  },
+  {
+   "name": "Player",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      1.5,
+      1.5,
+      0
+     ]
+    },
+    "Sprite": {
+     "texture": "guid:f438fc22-8393-4c6b-887d-4f907e4c4153",
+     "size": [
+      0.6,
+      0.6
+     ],
+     "tint": [
+      1,
+      0.7,
+      0.2,
+      1
+     ],
+     "layer": 2
+    },
+    "RigidBody2D": {
+     "type": "Kinematic",
+     "fixed_rotation": true
+    },
+    "Collider2D": {
+     "shape": {
+      "type": "Circle",
+      "radius": 0.3
+     },
+     "density": 0
+    },
+    "CharacterController2D": {},
+    "ScriptVars": {
+     "v": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Script: dungeon",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:17213b69-6ad9-4902-87f2-8aae4d00162a",
+     "order": 0,
+     "phase": "Post"
+    }
+   }
+  }
+ ]
+}

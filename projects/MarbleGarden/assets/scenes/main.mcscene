@@ -1,0 +1,163 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "53c28d98-dd51-42b0-a2e4-a5fc03a31fb8",
+  "name": "main",
+  "entities": [
+    {
+      "id": 7,
+      "name": "Environment",
+      "components": {
+        "Environment3D": { "sky_texture": "guid:b6d4e294-9df0-43f1-b2bb-8ba4b01b5c34", "sun_direction": [-0.6, -0.45, -0.5], "sun_intensity": 3.2, "sun_color": [1, 0.8, 0.55], "ambient_sky": [0.32, 0.33, 0.38], "exposure": 0.65, "ambient_ground": [0.2, 0.15, 0.1], "fog_density": 0.006, "fog_color": [0.95, 0.78, 0.58], "sky_zenith": [0.38, 0.55, 0.8], "sky_horizon": [0.98, 0.82, 0.6], "sky_ground": [0.4, 0.32, 0.22], "bloom_intensity": 0.08, "bloom_threshold": 1.5, "shadow_distance": 45, "sky_ibl": 1 },
+        "LocalTransform": {}
+      }
+    },
+    {
+      "id": 8,
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": { "fov_deg": 45, "far_z": 100 },
+        "LocalTransform": { "position": [0, 5.6, 9.2], "rotation": [-0.2588, 0, 0, 0.9659] }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Plinth",
+      "components": {
+        "LocalTransform": { "position": [0, -0.25, 0], "scale": [6, 0.5, 4] },
+        "MeshRef": { "mesh": "guid:bbc1f6e2-41b2-4d1d-aa09-d924eeb3296e", "material": "guid:33e0f3ce-b167-446f-a9ef-43dbc18b1d67" }
+      }
+    },
+    {
+      "id": 23,
+      "name": "Backdrop Floor",
+      "components": {
+        "LocalTransform": { "position": [0, -1.15, 0], "scale": [80, 0.1, 80] },
+        "MeshRef": { "mesh": "guid:e1143282-14f3-436b-b7cf-7723ba6caf10", "tint": [0.18, 0.25, 0.14, 1], "cast_shadows": 0, "material": "guid:1eeac5ff-8357-45bb-a220-f29983fa6d59" }
+      }
+    },
+    {
+      "id": 24,
+      "name": "Backdrop Wall",
+      "components": {
+        "LocalTransform": { "position": [0, 8, -14], "scale": [80, 30, 1] },
+        "MeshRef": { "mesh": "guid:e1143282-14f3-436b-b7cf-7723ba6caf10", "tint": [0.12, 0.18, 0.1, 1], "cast_shadows": 0, "material": "guid:1eeac5ff-8357-45bb-a220-f29983fa6d59" }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Plinth Base",
+      "components": {
+        "LocalTransform": { "position": [0, -0.8, 0], "scale": [6.4, 0.6, 4.4] },
+        "MeshRef": { "mesh": "guid:fe8c890b-2ef6-4ebb-9e77-ca7359616f20", "material": "guid:b39cf0be-b8ea-43ef-970a-92eeca61320f" }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Hedge Back",
+      "components": {
+        "LocalTransform": { "position": [0, 0.4, -1.6], "scale": [5, 0.8, 0.6] },
+        "MeshRef": { "mesh": "guid:e1143282-14f3-436b-b7cf-7723ba6caf10", "material": "guid:1eeac5ff-8357-45bb-a220-f29983fa6d59" }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Marble",
+      "components": {
+        "LocalTransform": { "position": [0, 0.35, 0.6] },
+        "MeshRef": { "mesh": "guid:18fcfe5f-0c35-4b84-a982-2135e1359e75", "material": "guid:3746cc14-4acf-4407-938d-66b5fb647ec3" }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Gem 1",
+      "components": {
+        "Gem": { "bob_height": 0.1 },
+        "LocalTransform": { "position": [-2, 0.6, 0.2] },
+        "MeshRef": { "mesh": "guid:b78edf9e-6fdc-4d7a-9d67-559c8d7bd56e", "emissive_tint": [0.6, 0.1, 0.3], "material": "guid:c3c44317-b2c6-4a38-8e73-0a97979ff882" }
+      }
+    },
+    {
+      "id": 14,
+      "name": "Gem 2",
+      "components": {
+        "Gem": { "bob_height": 0.1 },
+        "LocalTransform": { "position": [-1, 0.7, -0.6] },
+        "MeshRef": { "mesh": "guid:b78edf9e-6fdc-4d7a-9d67-559c8d7bd56e", "emissive_tint": [0.6, 0.1, 0.3], "material": "guid:c3c44317-b2c6-4a38-8e73-0a97979ff882" }
+      }
+    },
+    {
+      "id": 15,
+      "name": "Gem 3",
+      "components": {
+        "Gem": { "bob_height": 0.1 },
+        "LocalTransform": { "position": [1, 0.7, -0.6] },
+        "MeshRef": { "mesh": "guid:b78edf9e-6fdc-4d7a-9d67-559c8d7bd56e", "emissive_tint": [0.6, 0.1, 0.3], "material": "guid:c3c44317-b2c6-4a38-8e73-0a97979ff882" }
+      }
+    },
+    {
+      "id": 16,
+      "name": "Gem 4",
+      "components": {
+        "Gem": { "bob_height": 0.1 },
+        "LocalTransform": { "position": [2, 0.6, 0.2] },
+        "MeshRef": { "mesh": "guid:b78edf9e-6fdc-4d7a-9d67-559c8d7bd56e", "emissive_tint": [0.6, 0.1, 0.3], "material": "guid:c3c44317-b2c6-4a38-8e73-0a97979ff882" }
+      }
+    },
+    {
+      "id": 17,
+      "name": "HUD Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 1, "fit_height": 720 },
+        "LocalTransform": {}
+      }
+    },
+    {
+      "id": 18,
+      "name": "Title",
+      "components": {
+        "LocalTransform": { "position": [0, 230, 0] },
+        "TextLabel": { "font": "guid:4ad88c3a-d9c4-44b0-8bbc-7f591b141222", "text": "Marble Garden", "color": [1, 0.62, 0.16, 1], "height": 96, "layer": 10 }
+      }
+    },
+    {
+      "id": 19,
+      "name": "Subtitle",
+      "components": {
+        "LocalTransform": { "position": [0, 150, 0] },
+        "TextLabel": { "font": "guid:3d306d4b-33fd-4009-8714-585f13ed5a62", "text": "Roll the marble. Find five gems in ninety seconds.", "color": [1, 0.9, 0.72, 1], "height": 32, "layer": 10 }
+      }
+    },
+    {
+      "id": 20,
+      "name": "Controls",
+      "components": {
+        "LocalTransform": { "position": [0, -250, 0] },
+        "TextLabel": { "font": "guid:3d306d4b-33fd-4009-8714-585f13ed5a62", "text": "WASD or arrow keys to roll. Mind the pond!", "color": [1, 0.9, 0.72, 1], "height": 28, "layer": 10 }
+      }
+    },
+    {
+      "id": 21,
+      "name": "Prompt",
+      "components": {
+        "LocalTransform": { "position": [0, -300, 0] },
+        "TextLabel": { "font": "guid:3d306d4b-33fd-4009-8714-585f13ed5a62", "text": "Press Enter or Space to play", "color": [1, 0.62, 0.16, 1], "height": 32, "layer": 10 }
+      }
+    },
+    {
+      "id": 22,
+      "name": "Menu",
+      "components": {
+        "LocalTransform": {},
+        "MenuScreen": { "min_time": 0.4 }
+      }
+    },
+    {
+      "id": 25,
+      "name": "Music",
+      "components": {
+        "AudioSource": { "clip": "guid:496d1e5a-688d-4795-8ad3-083b9a9de84a", "gain_db": -10, "bus": "Music", "loop": true, "play_on_start": true, "fade_s": 1.5 }
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "the gate stays shut until the lanterns are lit",
+  "scene": "scenes/level1.mcscene",
+  "ticks": 300,
+  "input": "1-300 Move=-1,0",
+  "actor": "Moth",
+  "assert": [
+    {
+      "entity": "Gate",
+      "field": "MoonGate.open",
+      "value": 0
+    },
+    {
+      "entity": "Lantern 1",
+      "field": "Lantern.lit",
+      "value": 0
+    },
+    {
+      "scene": "scenes/level1.mcscene"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

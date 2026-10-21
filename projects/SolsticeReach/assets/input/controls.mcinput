@@ -1,0 +1,21 @@
+{ "format": "mce-input", "version": 1,
+  "guid": "cab322b7-ccef-567b-aaf8-3f9d3c5ca08b",
+  "maps": [
+    { "name": "SolsticeReach", "actions": [
+      { "name": "Move", "type": "axis2d", "bindings": [
+        { "key": "D", "scale": 1 }, { "key": "A", "scale": -1 }, { "key": "W", "axis": "y", "scale": 1 }, { "key": "S", "axis": "y", "scale": -1 },
+        { "key": "Right", "scale": 1 }, { "key": "Left", "scale": -1 }, { "key": "Up", "axis": "y", "scale": 1 }, { "key": "Down", "axis": "y", "scale": -1 },
+        { "gamepad_axis": "LeftX", "scale": 1 }, { "gamepad_axis": "LeftY", "axis": "y", "scale": -1 } ] },
+      { "name": "Look", "type": "axis2d", "bindings": [
+        { "mouse_delta": "x" }, { "mouse_delta": "y", "axis": "y" },
+        { "key": "Q", "scale": -9 }, { "key": "E", "scale": 9 },
+        { "gamepad_axis": "RightX", "scale": 9 }, { "gamepad_axis": "RightY", "axis": "y", "scale": 14 } ] },
+      { "name": "Jump", "bindings": [ { "key": "Space" }, { "gamepad_button": "South" } ] },
+      { "name": "Fire", "bindings": [ { "key": "J" }, { "mouse_button": "Left" }, { "gamepad_button": "West" } ] },
+      { "name": "Interact", "bindings": [ { "key": "F" }, { "key": "J" }, { "mouse_button": "Left" }, { "gamepad_button": "West" } ] },
+      { "name": "Sprint", "bindings": [ { "key": "LShift" }, { "gamepad_button": "LeftStick" } ] },
+      { "name": "Lantern", "bindings": [ { "key": "L" }, { "gamepad_button": "North" } ] },
+      { "name": "Confirm", "bindings": [ { "key": "Return" }, { "key": "Space" }, { "gamepad_button": "South" } ] },
+      { "name": "Cancel", "bindings": [ { "key": "Backspace" }, { "gamepad_button": "East" } ] },
+      { "name": "NewGame", "bindings": [ { "key": "N" }, { "gamepad_button": "Back" } ] } ] } ]
+}

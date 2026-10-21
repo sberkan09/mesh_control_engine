@@ -1,0 +1,51 @@
+{
+  "format": "mce-particles",
+  "version": 1,
+  "guid": "34d777db-491c-4abe-94c6-a6b84f0c28a9",
+  "name": "bubbles",
+  "texture": "guid:9f5ff560-aff0-4611-a5bf-326045390810",
+  "rate": 2.5,
+  "burst": 0,
+  "max_particles": 64,
+  "duration": 0,
+  "lifetime": [
+    3,
+    5
+  ],
+  "speed": [
+    0.3,
+    0.7
+  ],
+  "direction": 90,
+  "spread": 12,
+  "gravity": [
+    0,
+    0
+  ],
+  "drag": 1.0,
+  "size": [
+    0.08,
+    0.2
+  ],
+  "spin": [
+    0,
+    0
+  ],
+  "area": [
+    2.5,
+    0.5
+  ],
+  "color_start": [
+    0.7,
+    0.9,
+    1,
+    0.5
+  ],
+  "color_end": [
+    0.7,
+    0.9,
+    1,
+    0
+  ],
+  "blend": "alpha"
+}

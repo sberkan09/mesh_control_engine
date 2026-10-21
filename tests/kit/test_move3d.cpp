@@ -1,0 +1,780 @@
+// M-MOVE3D, with the numbers each feature promises. Step 1, character feel: CharacterController3D's
+// acceleration, coyote time, jump buffer, jump cut, air jumps, sprint, crouch and the Landed3D event.
+// Step 2, the camera: CameraFollow3D's spring arm, look-ahead, first person and lock-on.
+// Step 3, vehicle feel: Vehicle3D's anti-roll bars, downforce, gears and shift points, skids and
+// self-righting.
+
+#include <doctest/doctest.h>
+
+#include <cmath>
+
+#include "mce/ecs/transform.h"
+#include "mce/ecs/world.h"
+#include "mce/kit/bodies3d.h"
+#include "mce/kit/effects.h"
+#include "mce/kit/kit3d.h"
+#include "mce/kit/particles.h"
+#include "mce/kit/vehicles3d.h"
+
+using namespace mce;
+using namespace mce::kit;
+
+namespace {
+
+constexpr f32 kDt = 1.0f / 60.0f;
+
+LocalTransform at(f32 x, f32 y, f32 z) { return LocalTransform{{x, y, z}, math::quat::identity(), {1, 1, 1}}; }
+
+struct Scene {
+    World w;
+    u64 t = 0;
+    u32 landings = 0;
+    f32 last_impact = 0.0f;
+    explicit Scene(f32 floor_half_x = 20.0f) {
+        w.register_components<LocalTransform>();
+        install_bodies3d(w, nullptr);
+        install_particles(w, nullptr);
+        install_effects(w, nullptr);
+        install_vehicles3d(w, nullptr);
+        box({0, -0.5f, 0}, {floor_half_x, 0.5f, 20.0f});  // top at y = 0
+    }
+    Entity box(math::vec3 p, math::vec3 half) {
+        BoxCollider3D c;
+        c.half = half;
+        return w.spawn_with(at(p.x, p.y, p.z), c);
+    }
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            w.tick(kDt, t++);
+            for (const Landed3D& ev : EventAccess(w).read<Landed3D>()) {
+                ++landings;
+                last_impact = ev.impact_speed;
+            }
+        }
+    }
+    CharacterController3D& cc(Entity e) { return *w.try_get_mut<CharacterController3D>(e); }
+    f32 y(Entity e) { return w.try_get<LocalTransform>(e)->position.y; }
+    f32 x(Entity e) { return w.try_get<LocalTransform>(e)->position.x; }
+};
+
+// A character standing at rest on the floor (capsule centre 0.9 m up).
+Entity stand(Scene& s, const CharacterController3D& c, f32 x = 0.0f) {
+    const Entity e = s.w.spawn_with(at(x, 0.9f, 0), c);
+    s.run(10);
+    REQUIRE(s.cc(e).grounded);
+    return e;
+}
+
+// Walks a character off a ledge at x = 2 and asks for a jump `wait` ticks after it left the ground.
+// True when the jump happened.
+bool coyote_jump(f32 coyote_time, u32 wait) {
+    Scene s(2.0f);
+    s.box({0, -20.5f, 0}, {40, 0.5f, 40});  // far below
+    CharacterController3D c;
+    c.coyote_time = coyote_time;
+    c.move = {3, 0, 0};
+    const Entity e = stand(s, c, 1.0f);
+    while (s.cc(e).grounded) s.run(1);
+    CHECK(s.cc(e).airborne_ticks == 1);
+    s.run(wait - 1);
+    CHECK(s.cc(e).airborne_ticks == wait);
+    s.cc(e).jump = true;
+    s.run(1);
+    return s.cc(e).velocity.y > 4.0f;
+}
+
+// Drops a character from 3 m and asks for a jump `early` ticks before the tick it lands on. Returns
+// the highest point after landing (0.9 when it did not jump).
+f32 buffered_jump(f32 jump_buffer, u32 early) {
+    u32 land = 0;
+    {
+        Scene s;
+        const Entity e = s.w.spawn_with(at(0, 3, 0), CharacterController3D{});
+        while (!s.cc(e).grounded) {
+            s.run(1);
+            ++land;
+        }
+    }
+    Scene s;
+    CharacterController3D c;
+    c.jump_buffer = jump_buffer;
+    const Entity e = s.w.spawn_with(at(0, 3, 0), c);
+    s.run(land - early - 1);
+    CHECK_FALSE(s.cc(e).grounded);
+    s.cc(e).jump = true;
+    s.run(early + 1);
+    CHECK(s.cc(e).grounded);  // the landing tick
+    f32 top = s.y(e);
+    for (u32 i = 0; i < 40; ++i) {
+        s.run(1);
+        top = math::max(top, s.y(e));
+    }
+    return top;
+}
+
+// The highest point of a jump at 5 m/s, Jump let go after `hold` ticks (0 = never).
+f32 jump_peak(f32 jump_cut, u32 hold) {
+    Scene s;
+    CharacterController3D c;
+    c.jump_cut = jump_cut;
+    const Entity e = stand(s, c);
+    const f32 floor_y = s.y(e);
+    s.cc(e).jump = true;
+    f32 top = floor_y;
+    for (u32 i = 0; i < 90; ++i) {
+        if (hold > 0 && i == hold) s.cc(e).release_jump = true;
+        s.run(1);
+        top = math::max(top, s.y(e));
+    }
+    return top - floor_y;
+}
+
+}  // namespace
+
+TEST_CASE("move3d: acceleration and deceleration ease the ground speed at their rates") {
+    Scene s;
+    CharacterController3D c;
+    c.acceleration = 30.0f;  // 0.5 m/s per tick
+    c.deceleration = 60.0f;  // 1 m/s per tick
+    const Entity e = stand(s, c);
+    s.cc(e).move = {6, 0, 0};
+    s.run(6);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(3.0f).epsilon(0.01));
+    s.run(6);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(6.0f).epsilon(0.01));
+    s.run(10);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(6.0f).epsilon(0.01));  // capped at the wanted speed
+    s.cc(e).move = {};
+    s.run(3);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(3.0f).epsilon(0.01));
+    s.run(3);
+    CHECK(std::fabs(s.cc(e).velocity.x) < 1e-3f);
+
+    // The default (0) is the original controller: the full speed on the first tick.
+    Scene t;
+    const Entity d = stand(t, CharacterController3D{});
+    t.cc(d).move = {6, 0, 0};
+    t.run(1);
+    CHECK(t.cc(d).velocity.x == doctest::Approx(6.0f).epsilon(0.01));
+}
+
+TEST_CASE("move3d: air_acceleration steers in the air at its own rate") {
+    Scene s;
+    CharacterController3D c;
+    c.air_acceleration = 6.0f;  // 0.1 m/s per tick
+    const Entity e = stand(s, c);
+    s.cc(e).jump = true;
+    s.run(2);
+    REQUIRE_FALSE(s.cc(e).grounded);
+    s.cc(e).move = {6, 0, 0};
+    s.run(10);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(1.0f).epsilon(0.01));
+}
+
+TEST_CASE("move3d: coyote time lets a jump through for its window after a ledge, and no longer") {
+    CHECK(coyote_jump(0.1f, 6));       // 6 ticks at 60 Hz
+    CHECK_FALSE(coyote_jump(0.1f, 7));
+    CHECK_FALSE(coyote_jump(0.0f, 1));  // the default: none
+}
+
+TEST_CASE("move3d: coyote time never adds a jump to a jump") {
+    Scene s;
+    CharacterController3D c;
+    c.coyote_time = 1.0f;  // longer than the whole jump
+    const Entity e = stand(s, c);
+    s.cc(e).jump = true;
+    s.run(35);  // past the apex
+    REQUIRE(s.cc(e).velocity.y < 0.0f);
+    REQUIRE_FALSE(s.cc(e).grounded);
+    s.cc(e).jump = true;
+    s.run(1);
+    CHECK(s.cc(e).velocity.y < 0.0f);
+}
+
+TEST_CASE("move3d: a jump buffered in the air fires on landing within its window") {
+    // A 0.1 s buffer holds a request through 6 more airborne ticks.
+    CHECK(buffered_jump(0.1f, 5) > 1.8f);
+    CHECK(buffered_jump(0.1f, 6) < 1.0f);
+    CHECK(buffered_jump(0.0f, 1) < 1.0f);  // the default: a jump only counts on the tick it is asked for
+}
+
+TEST_CASE("move3d: letting Jump go early cuts the rise") {
+    const f32 full = jump_peak(1.0f, 0);
+    CHECK(full == doctest::Approx(5.0f * 5.0f / (2.0f * 9.81f)).epsilon(0.05));  // v^2 / 2g
+    CHECK(jump_peak(1.0f, 6) == doctest::Approx(full).epsilon(0.001));         // jump_cut 1: full height always
+    // Cut at 0.5 after 6 ticks: 5 - 6 * 9.81 / 60 = 4.02 m/s halves to 2.01 m/s.
+    const f32 rise = 5.0f * 0.1f - 0.5f * 9.81f * 0.01f, after = 0.5f * (5.0f - 9.81f * 0.1f);
+    CHECK(jump_peak(0.5f, 6) == doctest::Approx(rise + after * after / (2.0f * 9.81f)).epsilon(0.08));
+}
+
+TEST_CASE("move3d: air jumps, once each until the ground") {
+    Scene s;
+    CharacterController3D c;
+    c.air_jumps = 1;
+    const Entity e = stand(s, c);
+    s.cc(e).jump = true;
+    s.run(20);
+    REQUIRE_FALSE(s.cc(e).grounded);
+    s.cc(e).jump = true;
+    s.run(1);
+    CHECK(s.cc(e).velocity.y > 4.5f);  // the air jump
+    CHECK(s.cc(e).air_jumps_used == 1);
+    s.run(20);
+    s.cc(e).jump = true;
+    s.run(1);
+    CHECK(s.cc(e).velocity.y < 2.0f);  // none left: still slowing from the air jump (5 - 21 ticks of gravity)
+    CHECK(s.cc(e).air_jumps_used == 1);
+    s.run(120);
+    CHECK(s.cc(e).grounded);
+    CHECK(s.cc(e).air_jumps_used == 0);
+}
+
+TEST_CASE("move3d: sprint and crouch scale the speed; standing up waits for room") {
+    Scene s;
+    s.box({4, 1.8f, 0}, {2, 0.5f, 2});  // a low roof: underside at 1.3 m, from x = 2 to 6
+    CharacterController3D c;
+    c.speed = 4.0f;
+    c.crouch_half_height = 0.2f;  // 1.0 m tall crouched
+    c.use_input = false;
+    c.move = {4, 0, 0};
+    const Entity e = stand(s, c, -4.0f);
+    s.cc(e).sprint = true;
+    s.run(1);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(6.0f).epsilon(0.01));  // sprint_multiplier 1.5
+    s.cc(e).sprint = false;
+    s.cc(e).crouch = true;
+    s.run(1);
+    CHECK(s.cc(e).crouched);
+    CHECK(s.cc(e).velocity.x == doctest::Approx(2.0f).epsilon(0.01));  // crouch_multiplier 0.5
+    CHECK(s.y(e) == doctest::Approx(0.9f).epsilon(0.01));              // the feet stay put
+
+    while (s.x(e) < 3.0f) s.run(1);  // under the roof
+    s.cc(e).crouch = false;
+    s.run(5);
+    CHECK(s.cc(e).crouched);  // no room to stand
+    while (s.x(e) < 3.5f) s.run(1);
+    CHECK(s.cc(e).crouched);
+    while (s.x(e) < 6.5f) s.run(1);
+    CHECK_FALSE(s.cc(e).crouched);  // out the other side
+    CHECK(s.cc(e).velocity.x == doctest::Approx(4.0f).epsilon(0.01));
+}
+
+TEST_CASE("move3d: Landed3D reports the impact speed and fires effects on landing") {
+    Scene s;
+    ParticleBurst burst;
+    burst.on = FireOn::Landed;
+    const Entity e = s.w.spawn_with(at(0, 3, 0), CharacterController3D{}, burst);
+    s.run(60);
+    CHECK(s.landings == 1);
+    CHECK(s.last_impact == doctest::Approx(std::sqrt(2.0f * 9.81f * 2.1f)).epsilon(0.05));  // a 2.1 m fall
+    CHECK(s.w.try_get<ParticleBurst>(e)->fired == 1);
+    s.run(30);
+    CHECK(s.landings == 1);  // standing still lands once
+}
+
+TEST_CASE("move3d: a run with every feature replays to the same hash") {
+    auto play = [] {
+        Scene s;
+        s.box({4, 1.8f, 0}, {2, 0.5f, 2});
+        CharacterController3D c;
+        c.acceleration = 20.0f;
+        c.deceleration = 30.0f;
+        c.coyote_time = 0.1f;
+        c.jump_buffer = 0.1f;
+        c.jump_cut = 0.5f;
+        c.air_jumps = 1;
+        c.crouch_half_height = 0.2f;
+        const Entity e = s.w.spawn_with(at(-5, 2, 0), c);
+        for (u32 i = 0; i < 240; ++i) {
+            CharacterController3D& k = s.cc(e);
+            k.move = {i < 200 ? 4.0f : 0.0f, 0, 0};
+            k.jump = i % 50 == 10 || i % 50 == 25;
+            k.release_jump = i % 50 == 14;
+            k.crouch = i >= 100 && i < 160;
+            k.sprint = i < 60;
+            s.run(1);
+        }
+        return s.w.state_hash();
+    };
+    CHECK(play() == play());
+}
+
+// ---- step 2: the camera ----------------------------------------------------------------------------
+
+namespace {
+
+// A camera on a target at the origin, boom along +Z (yaw 0, pitch 0), pivot at the target.
+Entity follow_cam(Scene& s, Entity target, const CameraFollow3D& base = {}) {
+    CameraFollow3D c = base;
+    c.target = target;
+    c.offset = {};
+    c.pitch = 0.0f;
+    c.min_pitch = -1.0f;
+    c.smoothing = 0.0f;
+    return s.w.spawn_with(LocalTransform{}, c);
+}
+
+math::vec3 pos(Scene& s, Entity e) { return s.w.try_get<LocalTransform>(e)->position; }
+
+}  // namespace
+
+TEST_CASE("move3d: the spring arm stays in front of a wall and eases back out when it goes") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    const Entity wall = s.box({0, 1, 3.25f}, {5, 5, 0.25f});  // its near face at z = 3
+    CameraFollow3D c;
+    c.collide = true;
+    c.collision_radius = 0.2f;
+    c.return_speed = 4.0f;
+    const Entity cam = follow_cam(s, target, c);
+    const Entity free = follow_cam(s, target);  // collide off: the old boom
+    s.run(2);
+    CHECK(pos(s, cam).z == doctest::Approx(2.8f).epsilon(0.01));  // the face less the sphere's radius
+    CHECK(pos(s, free).z == doctest::Approx(6.0f).epsilon(0.001));
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->arm == doctest::Approx(2.8f).epsilon(0.01));
+
+    s.w.destroy(wall);
+    s.run(16);  // the first tick still sees the old wall's body go; then 15 ticks at 4 m/s: + 1 m
+    CHECK(pos(s, cam).z == doctest::Approx(3.8f).epsilon(0.02));
+    s.run(40);
+    CHECK(pos(s, cam).z == doctest::Approx(6.0f).epsilon(0.001));  // capped at distance
+}
+
+TEST_CASE("move3d: look-ahead leads the pivot by the target's ground velocity") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    CameraFollow3D c;
+    c.look_ahead = 0.5f;
+    const Entity cam = follow_cam(s, target, c);
+    for (u32 i = 0; i < 10; ++i) {
+        s.w.try_get_mut<LocalTransform>(target)->position = {3.0f * kDt * static_cast<f32>(i), 1.0f + 0.1f * static_cast<f32>(i), 0};
+        s.run(1);
+    }
+    const CameraFollow3D& f = *s.w.try_get<CameraFollow3D>(cam);
+    const math::vec3 p = s.w.try_get<LocalTransform>(target)->position;
+    CHECK(f.pivot.x == doctest::Approx(p.x + 1.5f).epsilon(0.001));  // 3 m/s for 0.5 s
+    CHECK(f.pivot.y == doctest::Approx(p.y).epsilon(0.001));         // vertical motion is not led
+}
+
+TEST_CASE("move3d: first person puts the camera at the pivot looking along yaw and pitch") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(2, 0, 3));
+    CameraFollow3D c;
+    c.first_person = true;
+    const Entity cam = follow_cam(s, target, c);
+    s.w.try_get_mut<CameraFollow3D>(cam)->offset = {0, 1.6f, 0};
+    s.w.try_get_mut<CameraFollow3D>(cam)->yaw = math::kPi / 2.0f;
+    s.run(1);
+    CHECK(math::near(pos(s, cam), {2, 1.6f, 3}, 1e-4f));
+    const math::vec3 look = math::rotate(s.w.try_get<LocalTransform>(cam)->rotation, math::vec3{0, 0, -1});
+    CHECK(math::near(look, {-1, 0, 0}, 1e-4f));  // yaw a quarter turn left of -Z
+}
+
+TEST_CASE("move3d: lock-on turns the camera to frame the target in front of the locked entity") {
+    Scene s;
+    const Entity target = s.w.spawn_with(at(0, 1, 0));
+    const Entity foe = s.w.spawn_with(at(10, 1, 0));
+    CameraFollow3D c;
+    c.lock_on = foe;
+    c.lock_on_rate = 3.0f;  // 0.05 rad per tick
+    const Entity cam = follow_cam(s, target, c);
+    s.run(10);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-0.5f).epsilon(0.001));
+    s.run(30);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-math::kPi / 2.0f).epsilon(0.001));
+    const math::vec3 look = math::rotate(s.w.try_get<LocalTransform>(cam)->rotation, math::vec3{0, 0, -1});
+    const math::vec3 to_foe = math::normalize(s.w.try_get<LocalTransform>(foe)->position - pos(s, cam));
+    CHECK(math::dot(look, to_foe) > 0.999f);  // the camera, the target and the foe on one line
+    CHECK(pos(s, cam).x == doctest::Approx(-6.0f).epsilon(0.001));
+
+    // Free again: the orbit stays where lock-on left it.
+    s.w.try_get_mut<CameraFollow3D>(cam)->lock_on = {};
+    s.run(5);
+    CHECK(s.w.try_get<CameraFollow3D>(cam)->yaw == doctest::Approx(-math::kPi / 2.0f).epsilon(0.001));
+}
+
+TEST_CASE("move3d: a camera run with every feature replays to the same hash") {
+    auto play = [] {
+        Scene s;
+        s.box({0, 1, 3.25f}, {5, 5, 0.25f});
+        CharacterController3D walker;
+        walker.acceleration = 20.0f;
+        const Entity hero = s.w.spawn_with(at(-4, 0.9f, 0), walker);
+        const Entity foe = s.w.spawn_with(at(6, 1, -4));
+        CameraFollow3D c;
+        c.collide = true;
+        c.look_ahead = 0.3f;
+        c.lock_on_rate = 2.0f;
+        const Entity cam = follow_cam(s, hero, c);
+        for (u32 i = 0; i < 180; ++i) {
+            s.cc(hero).move = {3, 0, i < 90 ? 0.0f : 2.0f};
+            s.w.try_get_mut<CameraFollow3D>(cam)->lock_on = i >= 60 && i < 140 ? foe : Entity{};
+            s.run(1);
+        }
+        return s.w.state_hash();
+    };
+    CHECK(play() == play());
+}
+
+// ---- step 3: vehicle feel --------------------------------------------------------------------------
+
+namespace {
+
+// A 1.2 t car (1.8 x 0.8 x 4 m) facing -Z on a 600 m road, all-wheel drive.
+struct Road {
+    World w;
+    u64 t = 0;
+    u32 skids = 0;
+    Road() {
+        w.register_components<LocalTransform>();
+        install_vehicles3d(w, nullptr);
+        install_particles(w, nullptr);
+        install_effects(w, nullptr);
+        BoxCollider3D road;
+        road.half = {300.0f, 0.5f, 300.0f};
+        road.friction = 1.0f;
+        w.spawn_with(at(0, -0.5f, 0), road);
+    }
+    Entity car(const Vehicle3D& tune = {}, math::quat rot = math::quat::identity(), f32 y = 1.2f) {
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v = tune;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        v.drive = VehicleDrive3D::All;
+        return w.spawn_with(LocalTransform{{0, y, 0}, rot, {1, 1, 1}}, b, v);
+    }
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            w.tick(kDt, t++);
+            skids += static_cast<u32>(EventAccess(w).read<Skid3D>().size());
+        }
+    }
+    Vehicle3D& veh(Entity e) { return *w.try_get_mut<Vehicle3D>(e); }
+    const LocalTransform& pose(Entity e) { return *w.try_get<LocalTransform>(e); }
+    f32 roll(Entity e) {  // how far the body's up leans from vertical, rad
+        const math::vec3 up = math::rotate(pose(e).rotation, math::vec3{0, 1, 0});
+        return std::acos(math::clamp(up.y, -1.0f, 1.0f));
+    }
+};
+
+// The most the body leans, and the fewest wheels down, in a turn at 10 m/s.
+f32 corner_lean(f32 anti_roll, u32& fewest_wheels) {
+    Road r;
+    Vehicle3D v;
+    v.anti_roll = anti_roll;
+    const Entity c = r.car(v);
+    r.veh(c).throttle = 1.0f;
+    r.run(100);
+    r.veh(c).steer = 0.5f;
+    r.veh(c).throttle = 0.5f;
+    f32 most = 0.0f;
+    fewest_wheels = 4;
+    for (u32 i = 0; i < 90; ++i) {
+        r.run(1);
+        most = math::max(most, r.roll(c));
+        fewest_wheels = math::min(fewest_wheels, r.veh(c).wheels_on_ground);
+    }
+    return most;
+}
+
+}  // namespace
+
+TEST_CASE("move3d: anti-roll bars keep the car flat and on four wheels in a turn") {
+    u32 soft_wheels = 0, stiff_wheels = 0;
+    const f32 soft = corner_lean(0.0f, soft_wheels), stiff = corner_lean(8000.0f, stiff_wheels);
+    CHECK(soft > 0.5f);  // without bars it rolls up onto two wheels
+    CHECK(soft_wheels <= 2);
+    CHECK(stiff < 0.1f);
+    CHECK(stiff_wheels == 4);
+}
+
+TEST_CASE("move3d: downforce presses the car down at speed and not at rest") {
+    auto ride = [](f32 downforce, bool drive) {
+        Road r;
+        Vehicle3D v;
+        v.downforce = downforce;
+        const Entity c = r.car(v);
+        r.veh(c).throttle = drive ? 1.0f : 0.0f;
+        r.run(240);
+        return r.pose(c).position.y;
+    };
+    CHECK(ride(12.0f, true) < ride(0.0f, true) - 0.02f);
+    CHECK(ride(12.0f, false) == doctest::Approx(ride(0.0f, false)).epsilon(1e-4));
+}
+
+TEST_CASE("move3d: gears and shift points are data") {
+    auto top_gear = [](u8 gears, f32 shift_up, u32& first_shift) {
+        Road r;
+        Vehicle3D v;
+        v.gears = gears;
+        v.shift_up_rpm = shift_up;
+        const Entity c = r.car(v);
+        r.veh(c).throttle = 1.0f;
+        i32 most = 0;
+        first_shift = 0;
+        for (u32 i = 0; i < 900; ++i) {
+            r.run(1);
+            if (r.veh(c).gear > 1 && first_shift == 0) first_shift = i;
+            most = std::max(most, r.veh(c).gear);
+        }
+        return most;
+    };
+    u32 early = 0, late = 0, stock = 0;
+    CHECK(top_gear(2, 4000.0f, early) == 2);  // two gears: never past second
+    CHECK(top_gear(0, 4000.0f, stock) > 2);   // the stock five
+    top_gear(0, 3000.0f, early);
+    top_gear(0, 5000.0f, late);
+    CHECK(early < stock);  // a lower shift point leaves first sooner
+    CHECK(stock < late);
+}
+
+TEST_CASE("move3d: a handbrake turn skids, raises Skid3D and fires effects; gentle driving does not") {
+    Road r;
+    Vehicle3D v;
+    v.skid_slip = 0.3f;
+    const Entity c = r.car(v);
+    ParticleBurst burst;
+    burst.on = FireOn::Skid;
+    r.w.add(c, burst);
+    r.veh(c).throttle = 0.4f;
+    r.run(180);
+    CHECK(r.skids == 0);
+    CHECK(r.veh(c).skidding == 0);
+    r.veh(c).throttle = 1.0f;
+    r.run(120);
+    r.veh(c).handbrake = 1.0f;
+    r.veh(c).steer = 1.0f;
+    u32 skidding_ticks = 0;
+    f32 most = 0.0f;
+    for (u32 i = 0; i < 60; ++i) {
+        r.run(1);
+        skidding_ticks += r.veh(c).skidding != 0 ? 1u : 0u;
+        most = math::max(most, r.veh(c).lateral_slip);
+    }
+    CHECK(r.skids >= 1);
+    CHECK(skidding_ticks > 10);
+    CHECK(most > 0.3f);
+    CHECK(r.w.try_get<ParticleBurst>(c)->fired >= 1);
+
+    // skid_slip 0: the same turn raises nothing.
+    Road q;
+    const Entity d = q.car();
+    q.veh(d).throttle = 1.0f;
+    q.run(120);
+    q.veh(d).handbrake = 1.0f;
+    q.veh(d).steer = 1.0f;
+    q.run(60);
+    CHECK(q.skids == 0);
+}
+
+TEST_CASE("move3d: self_right puts a flipped car back on its wheels after right_after") {
+    const math::quat roof = math::quat_from_axis_angle({0, 0, 1}, math::kPi);
+    const math::quat turned = math::quat_from_axis_angle({0, 1, 0}, 0.7f);
+    Road r;
+    Vehicle3D v;
+    v.self_right = 1;
+    v.right_after = 0.5f;
+    const Entity c = r.car(v, math::normalize(turned * roof), 0.6f);
+    r.run(20);
+    CHECK(r.roll(c) > 0.95f);  // stuck on its side (max_tilt holds it at 60 degrees)
+    CHECK(r.veh(c).rightings == 0);
+    r.run(60);
+    CHECK(r.veh(c).rightings == 1);
+    r.run(90);
+    CHECK(r.roll(c) < 0.1f);
+    CHECK(r.veh(c).wheels_on_ground == 4);
+    const math::vec3 fwd = math::rotate(r.pose(c).rotation, math::vec3{0, 0, -1});
+    CHECK(math::near(fwd, {-std::sin(0.7f), 0, -std::cos(0.7f)}, 0.02f));  // facing the way it did
+
+    Road q;  // off: stays on its roof
+    const Entity d = q.car({}, math::normalize(turned * roof), 0.6f);
+    q.run(170);
+    CHECK(q.roll(d) > 0.95f);
+}
+
+TEST_CASE("move3d: a vehicle run with every feature replays to the same hash") {
+    auto play = [] {
+        Road r;
+        Vehicle3D v;
+        v.anti_roll = 20000.0f;
+        v.downforce = 3.0f;
+        v.gears = 4;
+        v.skid_slip = 0.3f;
+        v.self_right = 1;
+        const Entity c = r.car(v);
+        for (u32 i = 0; i < 300; ++i) {
+            Vehicle3D& k = r.veh(c);
+            k.throttle = 1.0f;
+            k.steer = i > 150 ? 1.0f : 0.0f;
+            k.handbrake = i > 200 && i < 230 ? 1.0f : 0.0f;
+            r.run(1);
+        }
+        return r.w.state_hash();
+    };
+    CHECK(play() == play());
+}
+
+
+
+// ---- step 4: AI drivers ------------------------------------------------------------------------------
+
+namespace {
+
+// A 40 x 120 m rectangle of waypoints on the road; the start is 10 m ahead of the car, mid-straight.
+struct Track {
+    Road r;
+    Entity start;
+    Entity points[5];
+    u32 laps = 0;
+    explicit Track(f32 corner_speed = 0.0f) {
+        const math::vec3 at_[5] = {{0, 0, -10}, {0, 0, -90}, {-40, 0, -90}, {-40, 0, 30}, {0, 0, 30}};
+        for (u32 i = 0; i < 5; ++i) points[i] = r.w.spawn_with(at(at_[i].x, at_[i].y, at_[i].z));
+        for (u32 i = 0; i < 5; ++i) {
+            Waypoint3D wp;
+            wp.next = points[(i + 1) % 5];
+            wp.speed = corner_speed;
+            r.w.add(points[i], wp);
+        }
+        start = points[0];
+    }
+    Entity car(const VehicleDriver3D& tune = {}) {
+        Vehicle3D v;
+        v.anti_roll = 8000.0f;
+        const Entity c = r.car(v);
+        VehicleDriver3D d = tune;
+        d.path = start;
+        r.w.add(c, d);
+        return c;
+    }
+    f32 lap_times[8] = {};
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            r.run(1);
+            for (const LapCompleted3D& ev : EventAccess(r.w).read<LapCompleted3D>())
+                if (laps < 8) lap_times[laps++] = ev.time;
+        }
+    }
+    VehicleDriver3D& drv(Entity e) { return *r.w.try_get_mut<VehicleDriver3D>(e); }
+};
+
+}  // namespace
+
+// Runs a driver until it finishes `laps` (or 150 s); the most roll and the top speed on the way.
+struct LapRun {
+    f32 top = 0.0f;
+    f32 roll = 0.0f;
+    f32 wide = 0.0f;  // the farthest the car got outside the track's rectangle, m
+};
+LapRun drive_laps(Track& t, Entity c) {
+    LapRun out;
+    for (u32 i = 0; i < 60 * 150 && !t.drv(c).finished; ++i) {
+        t.run(1);
+        const math::vec3 p = t.r.pose(c).position;
+        out.top = math::max(out.top, t.r.veh(c).speed);
+        out.roll = math::max(out.roll, t.r.roll(c));
+        out.wide = math::max(out.wide, math::max(math::max(p.x, -40.0f - p.x), math::max(-90.0f - p.z, p.z - 30.0f)));
+    }
+    return out;
+}
+
+TEST_CASE("move3d: a VehicleDriver3D laps the track, brakes for the corners and stops after its laps") {
+    Track t;
+    VehicleDriver3D d;
+    d.laps = 4;
+    const Entity c = t.car(d);
+    t.run(1);
+    CHECK(t.drv(c).target == t.start);
+    const LapRun run = drive_laps(t, c);
+    REQUIRE(t.drv(c).finished == 1);
+    CHECK(t.drv(c).laps_done == 4);
+    CHECK(t.laps == 4);
+    // Laps 2-4 start at speed: within 0.5 s of each other; the first starts from rest.
+    for (u32 i = 1; i < 4; ++i) CHECK(std::fabs(t.lap_times[i] - t.lap_times[1]) < 0.5f);
+    CHECK(t.lap_times[0] > t.lap_times[1]);
+    CHECK(t.drv(c).best_lap <= t.lap_times[1]);
+    CHECK(t.drv(c).last_lap == doctest::Approx(t.lap_times[3]));
+    // Flat out on the straights, flat through the corners, never more than 5 m wide of them.
+    CHECK(run.top > 19.0f);
+    CHECK(run.top < 20.5f);
+    CHECK(run.roll < 0.15f);
+    CHECK(run.wide < 5.0f);
+    // Done: it brakes to a stop and holds there.
+    t.run(180);
+    CHECK(std::fabs(t.r.veh(c).speed) < 0.5f);
+    CHECK(t.r.veh(c).brake == 1.0f);
+    CHECK(t.laps == 4);
+}
+
+TEST_CASE("move3d: corner grip, a waypoint's speed cap and max_speed set the pace") {
+    auto best = [](f32 corner_accel, f32 max_speed) {
+        Track t;
+        VehicleDriver3D d;
+        d.laps = 2;
+        d.corner_accel = corner_accel;
+        d.max_speed = max_speed;
+        const Entity c = t.car(d);
+        const LapRun run = drive_laps(t, c);
+        CHECK(run.roll < 0.15f);
+        CHECK(run.top < max_speed + 0.5f);
+        return t.lap_times[1];
+    };
+    const f32 normal = best(6.0f, 20.0f);
+    CHECK(best(3.0f, 20.0f) > normal + 3.0f);   // half the grip: slower corners
+    CHECK(best(6.0f, 12.0f) > normal + 3.0f);   // a lower top speed
+
+    // A 3 m/s cap on the first corner: the slowest the car goes through it, against no cap.
+    auto slowest = [](f32 cap) {
+        Track t;
+        t.r.w.try_get_mut<Waypoint3D>(t.points[1])->speed = cap;
+        const Entity c = t.car();
+        f32 low = 100.0f;
+        for (u32 i = 0; i < 60 * 12; ++i) {
+            t.run(1);
+            if (i > 180) low = math::min(low, t.r.veh(c).speed);
+        }
+        return low;
+    };
+    const f32 free = slowest(0.0f), capped = slowest(3.0f);
+    CHECK(capped < 3.5f);
+    CHECK(free > capped + 1.0f);
+}
+
+TEST_CASE("move3d: a lap fires FireOn::Lap effects; drive = 0 leaves the inputs alone") {
+    Track t;
+    VehicleDriver3D d;
+    d.laps = 1;
+    const Entity c = t.car(d);
+    ParticleBurst burst;
+    burst.on = FireOn::Lap;
+    t.r.w.add(c, burst);
+    drive_laps(t, c);
+    t.run(2);
+    CHECK(t.laps == 1);
+    CHECK(t.r.w.try_get<ParticleBurst>(c)->fired == 1);
+
+    Track u;
+    VehicleDriver3D off;
+    off.drive = 0;
+    const Entity e = u.car(off);
+    u.r.veh(e).throttle = 0.3f;
+    u.run(60);
+    CHECK(u.r.veh(e).throttle == 0.3f);
+    CHECK(u.drv(e).target.is_null());
+    CHECK(u.r.pose(e).position.z < -1.0f);
+}
+
+TEST_CASE("move3d: a driven lap replays to the same hash") {
+    auto play = [] {
+        Track t;
+        VehicleDriver3D d;
+        d.laps = 1;
+        const Entity c = t.car(d);
+        drive_laps(t, c);
+        return t.r.w.state_hash();
+    };
+    CHECK(play() == play());
+}

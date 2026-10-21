@@ -1,0 +1,1 @@
+- Kit (M-ITEMFX 2): worn items' `armor` and `max_health` stats add to the wearer's `Health3D` (armor within 0..1, max at least 1) as a delta remembered in `Equipment.armor_applied` / `max_applied`, so unequipping restores the base. `Equipment` gains the two saved, read-only fields. Docs: `docs/engine/kit.md`.

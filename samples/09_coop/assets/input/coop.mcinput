@@ -1,0 +1,271 @@
+{
+ "format": "mce-input",
+ "version": 1,
+ "guid": "b0c90000-0000-4000-8000-000000000002",
+ "maps": [
+  {
+   "name": "Coop P1",
+   "player": 1,
+   "actions": [
+    {
+     "name": "Move",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "D"
+      },
+      {
+       "key": "A",
+       "scale": -1
+      },
+      {
+       "key": "W",
+       "axis": "y"
+      },
+      {
+       "key": "S",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Join",
+     "bindings": [
+      {
+       "key": "Space"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    },
+    {
+     "name": "Leave",
+     "bindings": [
+      {
+       "key": "Q"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Coop P2",
+   "player": 2,
+   "actions": [
+    {
+     "name": "Move",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "Right"
+      },
+      {
+       "key": "Left",
+       "scale": -1
+      },
+      {
+       "key": "Up",
+       "axis": "y"
+      },
+      {
+       "key": "Down",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Join",
+     "bindings": [
+      {
+       "key": "Return"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    },
+    {
+     "name": "Leave",
+     "bindings": [
+      {
+       "key": "RShift"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Coop P3",
+   "player": 3,
+   "actions": [
+    {
+     "name": "Move",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "L"
+      },
+      {
+       "key": "J",
+       "scale": -1
+      },
+      {
+       "key": "I",
+       "axis": "y"
+      },
+      {
+       "key": "K",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Join",
+     "bindings": [
+      {
+       "key": "U"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    },
+    {
+     "name": "Leave",
+     "bindings": [
+      {
+       "key": "O"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Coop P4",
+   "player": 4,
+   "actions": [
+    {
+     "name": "Move",
+     "type": "axis2d",
+     "bindings": [
+      {
+       "key": "H"
+      },
+      {
+       "key": "F",
+       "scale": -1
+      },
+      {
+       "key": "T",
+       "axis": "y"
+      },
+      {
+       "key": "G",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.15,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.15,
+        1
+       ],
+       "scale": -1
+      }
+     ]
+    },
+    {
+     "name": "Join",
+     "bindings": [
+      {
+       "key": "Y"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
+    },
+    {
+     "name": "Leave",
+     "bindings": [
+      {
+       "key": "R"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

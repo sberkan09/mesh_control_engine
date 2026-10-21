@@ -1,0 +1,2022 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "3ef6698e-b57e-4d0a-a199-816f20ed8b65",
+  "name": "main",
+  "entities": [
+    {
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "clear_color": [0.42, 0.62, 0.86, 1] },
+        "CameraFollow": { "offset": [0, 0], "min": [13.333333, 7.5], "max": [51.666668, 7.5], "smoothing": 0.18 },
+        "LocalTransform": { "position": [13.333333, 7.5, 0] }
+      }
+    },
+    {
+      "name": "Sky",
+      "components": {
+        "LocalTransform": {},
+        "Parallax": { "factor": [0, 0], "repeat_x": true },
+        "Sprite": { "texture": "guid:1bb80194-8f93-41b3-902b-11be253077f8", "size": [30, 16], "layer": -20 }
+      }
+    },
+    {
+      "name": "Mountains",
+      "components": {
+        "LocalTransform": { "position": [0, -1.5, 0] },
+        "Parallax": { "factor": [0.15, 0], "repeat_x": true },
+        "Sprite": { "texture": "guid:fe44ef69-c5cb-491e-972d-ddf7c573f538", "size": [40, 12], "layer": -16 }
+      }
+    },
+    {
+      "name": "Hills",
+      "components": {
+        "LocalTransform": { "position": [0, -4.5, 0] },
+        "Parallax": { "factor": [0.35, 0], "repeat_x": true },
+        "Sprite": { "texture": "guid:7f21f672-954d-4d63-ac6d-56b9cf4c9de0", "size": [40, 8], "layer": -14 }
+      }
+    },
+    {
+      "name": "Cloud",
+      "components": {
+        "LocalTransform": { "position": [6, 3.4, 0] },
+        "Parallax": { "factor": [0.6, 0] },
+        "Sprite": { "texture": "guid:eaad68a1-c95d-4d43-a6f5-3a7d6e80e9d3", "tint": [1, 1, 1, 0.9], "size": [2.5, 2.5], "layer": -12 }
+      }
+    },
+    {
+      "name": "Cloud",
+      "components": {
+        "LocalTransform": { "position": [44, 3.8, 0] },
+        "Parallax": { "factor": [0.6, 0] },
+        "Sprite": { "texture": "guid:eaad68a1-c95d-4d43-a6f5-3a7d6e80e9d3", "tint": [1, 1, 1, 0.9], "size": [2.5, 2.5], "layer": -12 }
+      }
+    },
+    {
+      "name": "Cloud",
+      "components": {
+        "LocalTransform": { "position": [31, 2.9, 0] },
+        "Parallax": { "factor": [0.6, 0] },
+        "Sprite": { "texture": "guid:eaad68a1-c95d-4d43-a6f5-3a7d6e80e9d3", "tint": [1, 1, 1, 0.9], "size": [2.5, 2.5], "layer": -12 }
+      }
+    },
+    {
+      "name": "Cloud",
+      "components": {
+        "LocalTransform": { "position": [19, 4.2, 0] },
+        "Parallax": { "factor": [0.6, 0] },
+        "Sprite": { "texture": "guid:eaad68a1-c95d-4d43-a6f5-3a7d6e80e9d3", "tint": [1, 1, 1, 0.9], "size": [2.5, 2.5], "layer": -12 }
+      }
+    },
+    {
+      "name": "HUD Status",
+      "components": {
+        "HudText": {},
+        "LocalTransform": { "position": [-12.733334, 6.6, 0] },
+        "Parallax": { "factor": [0, 0] },
+        "TextLabel": { "font": "guid:5d43665d-3540-4002-84bd-c48642a85168", "text": "COINS 0/0", "color": [1, 0.97, 0.88, 1], "height": 0.55, "layer": 60, "align": "Left" }
+      }
+    },
+    {
+      "name": "HUD Banner",
+      "components": {
+        "HudText": { "kind": "Banner" },
+        "LocalTransform": { "position": [0, 5.7, 0] },
+        "Parallax": { "factor": [0, 0] },
+        "TextLabel": { "font": "guid:5d43665d-3540-4002-84bd-c48642a85168", "text": "SWITCHES SWAP RED AND BLUE - LIGHT THE FLAG", "color": [1, 0.85, 0.5, 1], "layer": 60 }
+      }
+    },
+    {
+      "name": "Ground 0-20",
+      "components": {
+        "Collider2D": { "shape": { "half": [10.5, 1] }, "density": 0 },
+        "LocalTransform": { "position": [10.5, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Ground 31-64",
+      "components": {
+        "Collider2D": { "shape": { "half": [17, 1] }, "density": 0 },
+        "LocalTransform": { "position": [48, 1, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Ground 0-0",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.5, 6] }, "density": 0 },
+        "LocalTransform": { "position": [0.5, 8, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Ground 45-49",
+      "components": {
+        "Collider2D": { "shape": { "half": [2.5, 2] }, "density": 0 },
+        "LocalTransform": { "position": [47.5, 4, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Ground 53-64",
+      "components": {
+        "Collider2D": { "shape": { "half": [6, 2] }, "density": 0 },
+        "LocalTransform": { "position": [59, 4, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Ground 64-64",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.5, 4] }, "density": 0 },
+        "LocalTransform": { "position": [64.5, 10, 0] },
+        "RigidBody2D": {}
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [1.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [64.5, 13.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [0.5, 13.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [63.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [62.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [61.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [60.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [59.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [58.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [57.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [56.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [55.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [54.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [53.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [49.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [48.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [47.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [46.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [45.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [52.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [51.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [50.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [44.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [43.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [42.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [41.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [40.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [39.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [38.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [37.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [36.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [35.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [34.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [33.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [32.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [31.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [20.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [19.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [18.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [17.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [16.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [15.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [14.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [13.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [12.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [11.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [10.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [9.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [8.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [7.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [6.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [5.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [4.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [3.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Grass",
+      "components": {
+        "LocalTransform": { "position": [2.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:9aa5ba9a-0833-4b4f-81a7-65982a7c3b65" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 12.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 12.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 11.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 11.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 10.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 10.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 9.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 9.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 8.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 8.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 7.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 7.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 6.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 6.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 5.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [63.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [62.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [61.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [60.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [59.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [58.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [57.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [56.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [55.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [54.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [53.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [49.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [48.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [47.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [46.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [45.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 4.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [63.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [62.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [61.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [60.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [59.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [58.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [57.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [56.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [55.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [54.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [53.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [49.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [48.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [47.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [46.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [45.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 3.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [63.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [62.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [61.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [60.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [59.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [58.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [57.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [56.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [55.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [54.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [53.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [49.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [48.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [47.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [46.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [45.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 2.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [63.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [62.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [61.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [60.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [59.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [58.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [57.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [56.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [55.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [54.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [53.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [49.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [48.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [47.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [46.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [45.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [0.5, 1.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [64.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [63.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [62.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [61.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [60.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [59.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [58.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [57.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [56.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [55.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [54.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [53.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [52.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [51.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [50.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [49.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [48.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [47.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [46.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [45.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [44.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [43.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [42.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [41.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [40.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [39.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [38.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [37.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [36.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [35.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [34.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [33.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [32.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [31.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [20.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [19.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [18.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [17.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [16.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [15.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [14.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [13.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [12.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [11.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [10.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [9.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [8.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [7.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [6.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [5.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [4.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [3.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [2.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Soil",
+      "components": {
+        "LocalTransform": { "position": [1.5, 0.5, 0] },
+        "Sprite": { "texture": "guid:5a77abd2-a240-40a7-b206-a1e1f81fa402" }
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [18.5, 2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [18.5, 6.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [44.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [43.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [18.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [44.5, 4.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [43.5, 4.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [18.5, 4.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [44.5, 3.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [43.5, 3.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [40.5, 3.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [39.5, 3.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [18.5, 3.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [44.5, 2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [43.5, 2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [40.5, 2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Red Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [39.5, 2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:2b988b3c-b6b1-4493-b631-854b9259efb5", "layer": 1 },
+        "SwitchBlock": {}
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [21.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [30.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [29.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [28.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [27.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [26.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [25.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [24.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [23.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Blue Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "LocalTransform": { "position": [22.5, 1.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:c902a088-98e7-400b-8597-2189ea0f60c2", "layer": 1 },
+        "SwitchBlock": { "color": "Blue" }
+      }
+    },
+    {
+      "name": "Switch",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.5] }, "density": 0, "is_sensor": true },
+        "ColorSwitch": { "sound": "guid:14167fff-e347-4517-b1fe-ed28ae1666b8" },
+        "LocalTransform": { "position": [14.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:8f284d91-0408-4061-8157-04051a9d3651", "layer": 2 }
+      }
+    },
+    {
+      "name": "Switch",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.5] }, "density": 0, "is_sensor": true },
+        "ColorSwitch": { "sound": "guid:14167fff-e347-4517-b1fe-ed28ae1666b8" },
+        "LocalTransform": { "position": [35.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:8f284d91-0408-4061-8157-04051a9d3651", "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [5.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [34.5, 9.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [33.5, 9.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [56.5, 6.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [51.5, 6.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [26.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [25.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [7.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "Coin": { "sound": "guid:7eddd20a-6f23-46e0-b703-43912ebb3d5f" },
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.3 }, "density": 0, "is_sensor": true },
+        "LocalTransform": { "position": [6.5, 2.5, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:201aeae6-198d-4dac-b695-c65327f35e75", "size": [0.75, 0.75], "layer": 2 }
+      }
+    },
+    {
+      "name": "Spikes",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.2] }, "density": 0, "is_sensor": true },
+        "Hazard": {},
+        "LocalTransform": { "position": [10.5, 2.3, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:71e76859-b544-4ab3-b7dc-9125999263ba", "size": [1, 0.6], "layer": 1 }
+      }
+    },
+    {
+      "name": "Spikes",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.2] }, "density": 0, "is_sensor": true },
+        "Hazard": {},
+        "LocalTransform": { "position": [52.5, 2.3, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:71e76859-b544-4ab3-b7dc-9125999263ba", "size": [1, 0.6], "layer": 1 }
+      }
+    },
+    {
+      "name": "Spikes",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.2] }, "density": 0, "is_sensor": true },
+        "Hazard": {},
+        "LocalTransform": { "position": [51.5, 2.3, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:71e76859-b544-4ab3-b7dc-9125999263ba", "size": [1, 0.6], "layer": 1 }
+      }
+    },
+    {
+      "name": "Spikes",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.2] }, "density": 0, "is_sensor": true },
+        "Hazard": {},
+        "LocalTransform": { "position": [50.5, 2.3, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:71e76859-b544-4ab3-b7dc-9125999263ba", "size": [1, 0.6], "layer": 1 }
+      }
+    },
+    {
+      "name": "Spikes",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.4, 0.2] }, "density": 0, "is_sensor": true },
+        "Hazard": {},
+        "LocalTransform": { "position": [11.5, 2.3, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:71e76859-b544-4ab3-b7dc-9125999263ba", "size": [1, 0.6], "layer": 1 }
+      }
+    },
+    {
+      "name": "Crumbling Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "Crumble": {},
+        "LocalTransform": { "position": [50.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:28f5094b-d523-46cb-ab81-b76b1e37d728", "layer": 1 }
+      }
+    },
+    {
+      "name": "Crumbling Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "Crumble": {},
+        "LocalTransform": { "position": [52.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:28f5094b-d523-46cb-ab81-b76b1e37d728", "layer": 1 }
+      }
+    },
+    {
+      "name": "Crumbling Block",
+      "components": {
+        "Collider2D": { "density": 0 },
+        "Crumble": {},
+        "LocalTransform": { "position": [51.5, 5.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:28f5094b-d523-46cb-ab81-b76b1e37d728", "layer": 1 }
+      }
+    },
+    {
+      "name": "Lift",
+      "components": {
+        "Collider2D": { "shape": { "half": [1.5, 0.25] }, "density": 0 },
+        "LocalTransform": { "position": [33.5, 5.5, 0] },
+        "Mover": { "extent": [0, 1.5], "period": 5 },
+        "RigidBody2D": { "type": "Kinematic", "fixed_rotation": true, "gravity_scale": 0 },
+        "Sprite": { "texture": "guid:3f070690-f353-4441-a259-b92b71570607", "size": [3, 0.5], "layer": 1 }
+      }
+    },
+    {
+      "name": "Flag",
+      "components": {
+        "Collider2D": { "shape": { "half": [0.3, 1] }, "density": 0, "is_sensor": true },
+        "Goal": { "sound": "guid:d8ee55c5-b39c-4abc-b480-a2a458308d39" },
+        "LocalTransform": { "position": [58.5, 7, 0] },
+        "RigidBody2D": { "layer": 3, "mask": 2 },
+        "Sprite": { "texture": "guid:6ef41469-74b6-40e9-9525-a6c9269c83bf", "size": [1, 2], "layer": 1 }
+      }
+    },
+    {
+      "name": "Player",
+      "components": {
+        "CharacterController2D": {},
+        "Collider2D": { "shape": { "half": [0.35, 0.45] }, "density": 0 },
+        "LocalTransform": { "position": [3.5, 2.46, 0] },
+        "PlayerController": { "idle": "guid:0da186c0-e909-422a-8de0-6196743f90be", "run_a": "guid:1bc23905-f328-4ad6-8671-46ad98153d81", "run_b": "guid:00f21509-aaa6-46ff-bf19-bcb0d6cc3167", "jump": "guid:bc6cfc1b-431d-4b75-b00c-6cea62eb84fe", "dash": "guid:5bf512de-341d-452e-b882-d5691fd852ec", "jump_sound": "guid:6980005f-e6e9-4ffa-ba79-f0c7d8a95f5f", "hurt_sound": "guid:37369d0a-518e-49a2-8f87-4505714029d1" },
+        "RigidBody2D": { "type": "Kinematic", "fixed_rotation": true, "layer": 1, "mask": 9, "gravity_scale": 0 },
+        "Sprite": { "texture": "guid:0da186c0-e909-422a-8de0-6196743f90be", "layer": 10 }
+      }
+    },
+    {
+      "name": "Options",
+      "components": {
+        "UiFlow": { "show_on": "Pause", "hide_on": "Back", "pause": true },
+        "UiScreen": { "document": "guid:331d1e16-2ef8-4b2c-9b5d-ca2b824b5d30", "order": 10, "visible": false }
+      }
+    }
+  ]
+}

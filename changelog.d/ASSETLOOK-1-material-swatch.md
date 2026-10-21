@@ -1,0 +1,1 @@
+- Material swatches, M-ASSETLOOK step 1: a `.mcmat` material shows as a lit sphere (base colour, metallic, roughness, emissive; a see-through blend material shows the checker) in the Assets grid and in `asset_thumbnail`, drawn on the CPU.

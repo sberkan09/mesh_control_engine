@@ -1,0 +1,4 @@
+# UBSan runtime suppressions for the macos-asan stage of scripts/ci/local_ci_macos.sh. Each entry is a
+# finding in cloud-owned code that has been reported to the project chat; remove it once the fix lands.
+#
+# (none at the moment: xxhash.cpp's empty-input pointer overflow was fixed in 87bd340)

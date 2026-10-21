@@ -1,0 +1,51 @@
+{
+  "format": "mce-particles",
+  "version": 1,
+  "guid": "718f3eb8-0d1f-4f7f-8436-86c688846cec",
+  "name": "boom",
+  "texture": "guid:f7fa24f2-457c-45a0-a01d-34d407f83d16",
+  "rate": 0,
+  "burst": 0,
+  "max_particles": 512,
+  "duration": 0,
+  "lifetime": [
+    0.35,
+    0.9
+  ],
+  "speed": [
+    2,
+    8
+  ],
+  "direction": 90,
+  "spread": 180,
+  "gravity": [
+    0,
+    0
+  ],
+  "drag": 2.0,
+  "size": [
+    0.55,
+    0.05
+  ],
+  "spin": [
+    0,
+    0
+  ],
+  "area": [
+    0,
+    0
+  ],
+  "color_start": [
+    1,
+    0.8,
+    0.4,
+    1
+  ],
+  "color_end": [
+    1,
+    0.2,
+    0.05,
+    0
+  ],
+  "blend": "additive"
+}

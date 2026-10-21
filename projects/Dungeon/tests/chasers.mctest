@@ -1,0 +1,26 @@
+{
+  "name": "chasers plan a walk to the player and leave no errors",
+  "scene": "scenes/main.mcscene",
+  "ticks": 1500,
+  "actor": "Player",
+  "input": [
+    {
+      "from": 2,
+      "to": 2,
+      "actions": {
+        "Jump": true
+      }
+    }
+  ],
+  "assert": [
+    {
+      "log_contains": "chaser spawned"
+    },
+    {
+      "log_contains": "chaser planned"
+    },
+    {
+      "log_errors": 0
+    }
+  ]
+}

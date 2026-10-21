@@ -1,0 +1,1 @@
+- Reflection: `FieldFlags::WorldPoint` (attribute `WorldPoint`) marks a Vec3 field that holds a world-space point, so a floating-origin rebase can move it (M-OPENWORLD A2 seam). `describe_component` reports it as `world_point`.

@@ -1,0 +1,17 @@
+{
+  "format": "mce-spritesheet",
+  "version": 1,
+  "guid": "229d194d-191b-4c1c-97e8-3f6128607894",
+  "name": "moth",
+  "texture": "guid:9f70e863-b39c-4caa-9efe-6d09c3e19af5",
+  "grid": {
+    "columns": 2,
+    "rows": 1
+  },
+  "clips": [{
+      "fps": 8,
+      "frames": [0, 1],
+      "mode": "Loop",
+      "name": "flutter"
+    }]
+}

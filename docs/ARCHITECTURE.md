@@ -5,6 +5,11 @@
 **Inputs:** `docs/REQUIREMENTS.md` (authoritative), `docs/architecture/{core,rhi-renderer,ecs-gameplay,physics,assets,editor-tools,audio-input-ui,scripting}.md`.
 **This revision:** all eight subsystem docs are finalized and state "applies the binding errata from ARCHITECTURE §5.1". The twelve contract fixes of Revision 2 (**F1–F12**) are **verified applied** across every subsystem doc. Reading the finalized docs end-to-end surfaced nine further cross-document mismatches — recorded here as **CF13–CF21** (§5.1) — plus a citation register that disambiguates the two `F#` namespaces now in circulation (fix-register vs findings-register).
 
+> **Design-time document.** This is the architecture as decided on 2026-10-06, kept as the record of intent. The
+> code has moved on: as-built deltas live in the ADRs from 0017 onward (`docs/adr/`) and in the per-module pages
+> under `docs/engine/`. Where they disagree with this file, they describe the code. §2.1, §6.1, §7 and §8 were
+> regenerated from the tree on 2026-10-11; the rest is unchanged design text with a few marked corrections.
+
 ---
 
 ## 1. Architecture overview
@@ -21,7 +26,7 @@ flowchart TB
     end
 
     subgraph L5["L5 · editor layer"]
-        ELAYER["mce_editor_layer<br/>(ImGui, ImGuizmo, panels)"]
+        ELAYER["mce_editor_layer<br/>(ImGui, hand-rolled gizmo, panels)"]
         ECORE["mce_editor_core<br/>(SceneDocument, UndoStack,<br/>PlaySession, picking — headless)"]
     end
 
@@ -42,7 +47,7 @@ flowchart TB
         PHY3["mce_physics3d (v0.5)<br/>(Jolt 5 behind ADR-0003)"]
         AUDIO["mce_audio<br/>(48kHz mixer, SPSC cmd FIFO)"]
         INPUT["mce_input<br/>(action maps → InputState)"]
-        FSM["mce_fsm (fsm.h)<br/>+ SequenceRunner (v0.5)"]
+        FSM["mce/kit/fsm.h (header in mce_gameplay_kit)<br/>+ SequenceRunner (v0.5)"]
     end
 
     subgraph L1["L1 · structural foundations"]
@@ -55,7 +60,6 @@ flowchart TB
         CORE["mce_core<br/>(allocators, containers, math,<br/>Result/Error, log/assert/crash,<br/>convars, jobs, app loop, StringId)"]
     end
 
-    GAME --> ELAYER
     EDITOR --> ELAYER
     ELAYER --> ECORE
     ECORE --> KIT
@@ -101,18 +105,18 @@ The engine is a **strictly downward-closed DAG of CMake targets**. A module may 
 2. **The SDL wall** — `SDL_Event` appears only in `mce_platform` (FR-INP-010 grep). The single sanctioned leak is `Window::native_handle()` returning `SDL_Window*` to `mce_rhi_gl` (context creation) and the editor — allowlisted in the CI grep.
 3. **The ImGui wall** — ImGui symbols never appear in anything linked by a shipped game. `mce_editor_layer` is the only ImGui consumer; CI symbol-scans the shipped `game.exe`/`mce_engine.dll` (FR-UI-048). There is no `#ifdef MCE_EDITOR` anywhere in runtime code — the wall is a *link error*, not a preprocessor branch.
 4. **The JPH wall** (v0.5) — `JPH::` symbols appear only inside `mce_physics3d`, exactly like the GL wall (CI grep). Components are core-math plain structs; physics leaks types in neither direction (physics.md D7).
-5. **The gameplay module wall** — game code includes exactly one umbrella, `mce/gameplay.h` (the FR-DX-010 12-type budget), and links only the `mce_module_api` interface target. It cannot see `SDL_Event`, GL, JSON, or ImGui — compiler-enforced, not convention.
+5. **The gameplay module wall** — game code includes exactly one umbrella, `mce/gameplay.h` (the FR-DX-010 12-type budget), and links only the `mce_module_api` interface target. *As built (2026-10-11): this is a convention. `mce_module_api` exposes every engine include directory (ADR-0021 "Not in this change"); the only CI-enforced gameplay wall is the "UI gameplay wall" in `scripts/ci/check_walls.py`, which keeps `mce/ui/` out of game code.*
 6. **The Box2D wall** (test-time, CF13/ADR-0016) — `b2*`/Box2D symbols are legal **only** in `test_physics2d`. Box2D v3 is a *test-time oracle* — the physics twin of the DirectXMath math oracle — never linked into runtime, editor, cook, or shipped targets (CI grep).
 
-Two of the apparent back-edges in the diagram are sanctioned **inverted interfaces** (the interface is defined low, implemented high, so the include direction still points down): `IGpuUploadSink` (defined in `mce_asset`, implemented by `mce_render` — fix F6) and `IDebugDrawSink` (defined in `mce_ecs`, filled by physics, implemented by the renderer — fix F5). The third seam of the same class is the `FrameSlotFence` protocol (core-defined, renderer-registered, headless stub always-signaled).
+Two of the apparent back-edges in the diagram are sanctioned **inverted interfaces** (the interface is defined low, implemented high, so the include direction still points down): `IGpuUploadSink` (defined in `mce_asset`, implemented by `mce_render` — fix F6) and `IDebugDrawSink` (defined in `mce_ecs`, filled by physics, implemented by the renderer — fix F5; *as built the seam is `physics::DebugDrawSink` in `mce_physics2d`'s `mce/physics/world2d.h`*). The third seam of the same class is the `FrameSlotFence` protocol (core-defined, renderer-registered, headless stub always-signaled).
 
 Above the walls sit three composition principles (P6 — one path, thin seams):
 
-- **One loop.** `mce::app::run()` (core, *Fix Your Timestep* — Gaffer On Games) is the only loop in the engine. The editor runs it; `game.exe` runs it; the headless determinism harness runs it with a no-op fence and zero GL symbols loaded (FR-RUN-025). No subsystem spins its own thread loop except the SDL audio callback and the single IO worker.
+- **One loop.** `mce::app::run()` (core, *Fix Your Timestep* — Gaffer On Games) is the only loop in the engine. The editor runs it; `game.exe` runs it; the headless determinism harness runs it with a no-op fence and zero GL symbols loaded (FR-RUN-025). No subsystem spins its own thread loop except the SDL audio callback and the single IO worker (*as built: the asset loader thread, ADR-0037; see §6.1*).
 - **One scene truth.** The editor's `SceneDocument` is canonical; cooking produces immutable columnar `.mce` scene chunks; the runtime *instantiates* them and never mutates the canonical scene (FR-ENT-060). Play-in-editor, run-in-player, and the shipped game all reach a running world through the same `load_scene` path.
 - **One frame-memory discipline.** Everything per-frame comes from the frame-linear allocator in the frame-slot ring; everything cross-frame is a persistent arena, a pool, or a generational handle. "When is it safe to overwrite last frame's memory" has one answer for the whole engine: after the fence for slot *N−MCE_FRAMES_IN_FLIGHT* signals (§6).
 
-**What is deliberately absent at MVP:** no frame graph (fixed hand-authored pass list per view with pooled transients — rhi-renderer D3), no scheduler (explicit phase pipeline only; auto-parallel is an M3+ flag-gated experiment gated by the determinism CI test), no scripting VM, no observers/relationship pairs, no second render path ("old/new systems" is the solo-engine death pattern — P6).
+**What is deliberately absent at MVP:** no frame graph (fixed hand-authored pass list per view with pooled transients — rhi-renderer D3), no scheduler (explicit phase pipeline only; the auto-parallel experiment was run and not merged, REQUIREMENTS N17), no scripting VM, no observers/relationship pairs, no second render path ("old/new systems" is the solo-engine death pattern — P6).
 
 ---
 
@@ -120,30 +124,50 @@ Above the walls sit three composition principles (P6 — one path, thin seams):
 
 ### 2.1 Module table
 
+*Regenerated 2026-10-11 from `src/*/CMakeLists.txt`, `tools/*/CMakeLists.txt` and `tests/devhost` (direct public
+deps; private deps in brackets). Engine libraries are static; `MCE_ENGINE_LIBS` in the root `CMakeLists.txt` lists
+the set that `mce_engine` whole-archives. "Umbrella" marks targets that link `mce_engine` instead of the static
+libraries where game modules are supported (Linux, macOS; `cmake/MceTarget.cmake`, ADR-0021). Per-module detail:
+`docs/engine/`.*
+
 | Module | Directory | Layer | Depends on | One-line responsibility |
 |---|---|---|---|---|
-| `mce_core` | `src/engine/core` | L0 | (STL subset, spdlog, Tracy) | Allocators, containers, math, `Result`/`Error`, logging/asserts/crash, convars, jobs, the app loop, frame slots |
-| `mce_platform` | `src/engine/platform` | L1 | core | SDL3 window/event pump, filesystem + mmap, threads/TLS, `load_library`, the `SDL_Event` quarantine |
-| `mce_refl` | `src/engine/refl` | L1 | core | Generic field/trait metadata registry; the *sole* source of component field metadata (fix F4) |
-| `mce_ecs` | `src/engine/ecs` | L1 | core, refl | Archetype tables, generational entities, phases + sync points, `Commands`, `EventQueue<T>`, `Frame`, `World::state_hash` |
-| `mce_rhi` | `src/engine/rhi` | L2 | core | RenderDevice + recorded CommandBuffer interface (no GL) |
-| `mce_rhi_gl` | `src/engine/rhi_gl` | L2 | rhi, platform (window handle) | The only GL 4.5 code: DSA, persistent-mapped rings, MDI, fences |
-| `mce_asset` | `src/engine/asset` | L2 | core, refl, platform | `.mce` container reader, GUID registry, cook library, hot-reload commit machinery, `IGpuUploadSink` (fix F6) |
-| `mce_physics2d` | `src/engine/physics2d` | L2 | core, ecs | Hand-written Catto-style 2D world: solver, character controller, queries, events |
-| `mce_physics3d` (v0.5) | `src/engine/physics3d` | L2 | core, ecs | `World3D` facade over embedded Jolt 5 (ADR-0003 gate before first include) |
-| `mce_audio` | `src/engine/audio` | L2 | core, platform, ecs | 48 kHz float32 mixer on the SDL3 callback; SPSC command FIFO; voices/buses; streaming music |
-| `mce_input` | `src/engine/input` | L2 | core, platform, asset, ecs | Action maps (cooked chunk) → tick-quantized `InputState` snapshots; record/replay streams |
-| `mce_render` | `src/engine/render` | L3 | core, ecs, asset, rhi, rhi_gl | Extract/cull/sort/batch, 2D+3D passes, DebugDraw, editor views, picking, golden capture |
-| `mce_gameplay_kit` | `src/engine/kit` | L4 | L0–L3 | FR-ENT-080 starter components/systems; the 12-type gameplay surface consumers actually touch |
-| `mce_ui` (v1.0) | `src/engine/ui` | L4 | L0–L3 | Retained anchored-rect runtime UI rendered through the 2D MDI batch (FR-UI-020; design doc is an **M4 deliverable** — CF21) |
-| `mce_engine` (dll) | `src/module` | L5 | all of L0–L4 | The umbrella shared library: exports `mce::` gameplay API, carries `MCE_ENGINE_ID`, hosts the game-module loader (fix F8) |
-| `mce_editor_core` | `src/editor/core` | L5 | mce_engine | Headless editor logic: `SceneDocument` + `SceneCommand` funnel, `UndoStack`, `SelectionSet`, picking, `PlaySession` — CI-testable with no ImGui |
-| `mce_editor_layer` | `src/editor/layer` | L5 | mce_editor_core, ImGui | The only ImGui consumer: panels, viewport widget, gizmos, console; implements `DrawCtx` |
-| `game.dll` | `games/<game>/module` | L6 | `mce_module_api` (import lib of mce_engine) | The game module: `mce_game_module()` returning `ModuleInfo{install(World&)}` |
-| `game.exe` | `games/<game>/host` | L6 | mce_engine | Thin shipped host: boots, loads `game.dll` (copy-and-load), runs the app loop |
-| `mce_editor.exe` | `src/editor/app` | L6 | mce_editor_layer, mce_engine | Docking editor application |
-| `mce_cook.exe` | `tools/cook` | L6 | mce_asset, core | CLI cook: scan → graph → topological cook → content-addressed outputs, CI exit codes |
-| `mce_devhost.exe` | `tests/devhost` | L6 | L0–L4 | Sample ladder host, determinism harness, crash-test, golden runner |
+| `mce_core` | `src/engine/core` | L0 | spdlog, Tracy [dl] | Allocators, containers, math, `Result`/`Error`, logging/asserts, crash handler, convars, jobs (serial), the app loop, frame slots |
+| `mce_platform` | `src/engine/platform` | L1 | core [SDL3 static] | SDL3 window/event pump, audio output, gamepads, filesystem, `load_library`, child processes, the `SDL_Event` quarantine |
+| `mce_refl` | `src/engine/refl` | L1 | core | Field/trait metadata registry and property paths; the sole source of component field metadata |
+| `mce_ecs` | `src/engine/ecs` | L1 | core, refl | Archetype tables, generational entities, phases, `Commands`, events, hierarchy, `World::state_hash` |
+| `mce_rhi` | `src/engine/rhi` | L2 | core | `RenderDevice` + recorded `CommandBuffer` interface, binding banks (no API code) |
+| `mce_rhi_gl` | `src/engine/rhi_gl` | L2 | rhi, platform [glad, SDL3] | The only GL 4.5 code (Linux, Windows) |
+| `mce_rhi_metal` | `src/engine/rhi_metal` | L2 | rhi, platform [SDL3, glslang, SPIRV-Cross, Metal/QuartzCore/Foundation] | The only Metal code (macOS, M-MAC, ADR-0028); GLSL → SPIR-V → MSL at pipeline creation |
+| `mce_rhi_default` | `src/engine/rhi_default` | L2 | rhi, platform [`mce_rhi_gl` or `mce_rhi_metal`] | `rhi::create_default_device`: picks the platform's backend (`MCE_RHI_BACKEND`) |
+| `mce_asset` | `src/engine/asset` | L2 | core, refl, Threads | `.mce` container reader, GUIDs, mounts, hot-reload commit, `IGpuUploadSink`, async loader thread (ADR-0037), mod resolution (ADR-0034) |
+| `mce_asset_cook` | `src/engine/asset/cook` | tools | asset [mce_stb, mce_meshopt, glslang] | Importers (texture, glTF, WAV/audio, font, material, shader, scene, tilemap, particles, sequence, input map), cook graph and cache, `mce/cook/json.h`; never in a runtime target (umbrella) |
+| `mce_stb` | `src/engine/asset/cook` | tools | stb headers | The stb implementation unit, cook-only (stb wall) |
+| `mce_ecs_scene` | `src/engine/ecs` | L2 | ecs, asset | Prefabs, saves (`ecs/save.h`) |
+| `mce_scene` | `src/engine/scene` | L2 | ecs, asset, refl | `load_scene` / `instantiate` of cooked scenes; optional scene streaming (ADR-0037) |
+| `mce_physics2d` | `src/engine/physics2d` | L2 | core, refl, ecs | Hand-written Catto-style 2D world, character controller, queries, events, `DebugDrawSink` |
+| `mce_physics3d` | `src/engine/physics3d` | L2 | core, ecs [Jolt] | `World3D` facade over Jolt 5 (ADR-0003) |
+| `mce_audio` | `src/engine/audio` | L2 | core, platform, ecs, refl, asset | 48 kHz float32 mixer on the SDL3 callback; SPSC command FIFO; voices/buses; streaming; spatial |
+| `mce_input` | `src/engine/input` | L2 | core, platform, ecs, refl | Action maps → tick-quantized `InputState`; record/replay; bindings persistence |
+| `mce_net` (optional) | `src/engine/net` | L3 | core, ecs [ENet] (umbrella) | Opt-in multiplayer: UDP `Host` (reliable/sequenced/unreliable channels), the byte codec, server-authoritative snapshot replication; never part of `mce_engine`, a game links it (ADR-0035) |
+| `mce_render` | `src/engine/render` | L3 | rhi, asset, core | 2D batches, `Scene3D` / `Forward3D` (PBR, Forward+, CSM, post, skinning), text, sort keys, GPU uploads |
+| `mce_gameplay_kit` | `src/engine/kit` | L4 | ecs, refl, asset, render, ecs_scene, audio, physics2d | Starter components and systems, `mce/kit/fsm.h`, `SequenceRunner`, particles, sprite extract |
+| `mce_ui` | `src/engine/ui` | L4 | render, input, ecs, refl, core | Retained anchored-rect runtime UI and the shipped `DevConsole` ([architecture/ui.md](architecture/ui.md)) |
+| `mce_module_host` | `src/module` | L5 | ecs [platform] | Game-module loader: copy-and-load, in place on read-only folders (ADR-0021) |
+| `mce_engine` (shared) | `src/module` | L5 | whole-archives `MCE_ENGINE_LIBS` | The umbrella shared library hosts and modules share; not built on Windows yet |
+| `mce_module_api` | `src/module` | L5 | `mce_engine` (interface) | What a game module links; `mce/gameplay.h` is the intended include |
+| `mce_editor_core` | `src/editor/core` | L5 | core, rhi, render, scene, gameplay_kit, asset_cook, physics2d, physics3d, audio (umbrella) | Headless editor logic: `EditorScene`, undo, selection, gizmo, inspector, asset browser, hot reload, `PlaySession` |
+| `mce_editor_layer` | `src/editor/layer` | L5 | editor_core, platform [ImGui, SDL3 headers] (umbrella) | The only ImGui consumer: shell, panels, viewport, ImGui renderer |
+| `mce_mcp_core` | `src/editor/mcp` | L5 | editor_core, input (umbrella) | MCP server over stdio: tools, values, headless runs (ADR-0027) |
+| `mce_player_runtime` | `src/player` | L6 | `mce_engine` (Windows: the static libraries) | `player::run`: the shipped host's boot, mods, saves, streaming, crash reports |
+| `mce_editor` | `src/editor/app` | L6 | editor_layer, rhi_default, module_host (umbrella) | Docking editor; loads a game module with `-module` |
+| `mce_mcp` | `src/editor/mcp/app` | L6 | mcp_core, module_host (umbrella) | MCP server executable |
+| `mce_cook` | `tools/cook` | L6 | asset_cook, gameplay_kit, physics2d, audio, ecs_scene, scene, module_host (umbrella) | CLI cook and pack; loads a game module for its components |
+| `mce_player` | `src/player` | L6 | player_runtime | Generic player for any project's pack (`-headless`, `-pack`, `-module`) |
+| `mce_devhost` | `tests/devhost` | L6 | `mce_engine` (Windows: core) | Headless module host and determinism harness |
+| `mce` CLI | `tools/mce_cli` | tools | Python | The installed SDK command: `mce new/build/play/editor/cook/ship` (`cmake/MceInstall.cmake`) |
+| game module | `projects/<P>/games/<game>/module` | L6 | `mce_module_api` | `mce_game_module()` → `ModuleInfo{install(World&)}` |
+| game host | `projects/<P>/games/<game>/host` | L6 | player_runtime | Thin shipped host (`mce_add_project`, `cmake/MceProject.cmake`) |
 
 ### 2.2 Dependency graph (data-flow annotated)
 
@@ -156,7 +180,9 @@ flowchart LR
         PLAT["mce_platform"] --> CORE
         RHI["mce_rhi"] --> CORE
         RHIGL["mce_rhi_gl"] --> RHI
-        ASSET["mce_asset"] --> ECS
+        ASSET["mce_asset"] --> REFL
+        SCENE["mce_scene · mce_ecs_scene"] --> ASSET
+        SCENE --> ECS
         PHY["mce_physics2d/3d"] --> ECS
         AUD["mce_audio"] --> PLAT
         AUD -. "SPSC cmd FIFO" .-> ECS
@@ -174,7 +200,7 @@ flowchart LR
     MOD -. "mce::ui consumers: menus + shipped debug console; gameplay binds read-only via reflection only (FR-UI-030)" .-> UI
     ECORE["mce_editor_core"] --> KIT
     ELAYER["mce_editor_layer"] --> ECORE
-    GAME["game.exe"] --> ECORE
+    GAME["game.exe<br/>(mce_player_runtime → mce_engine)"] -->|"copy-and-load"| MOD
     COOK["mce_cook.exe"] --> ASSET
     DEVH["mce_devhost.exe"] --> KIT
     AUD -. "DebugDrawSink (interface)" .-> RENDER
@@ -183,8 +209,8 @@ flowchart LR
 
 Notes on the edges that people get wrong:
 
-- **assets → ecs, not the reverse.** Scene chunks are component columns laid out per the ECS registration contract; `mce_asset` includes `mce_ecs`/`mce_refl` to type them. The renderer consumes asset *blobs* — include direction `mce_render → mce_asset` only. The one apparent back-edge (GPU upload on hot reload) is the inverted interface `IGpuUploadSink`, defined in `mce_asset`, implemented by `mce_render` (fix F6).
-- **physics → ecs, never → render.** Physics fills an `IDebugDrawSink` interface (defined in `mce_ecs` next to the other shared interfaces, fix F5); the renderer implements it; the composition point registers the implementation as a World resource.
+- **assets do not depend on ecs (as built, 2026-10-11).** `mce_asset` links only `mce_core` and `mce_refl`: it reads containers and hands out typed chunk views. Instantiating scene chunks into a `World` lives one step up: `mce_ecs_scene` (prefabs, saves) links `mce_ecs` + `mce_asset`, and `mce_scene` (`load_scene`, streaming) links `mce_ecs` + `mce_asset` + `mce_refl`. The renderer consumes asset *blobs* — include direction `mce_render → mce_asset` only. The one apparent back-edge (GPU upload on hot reload) is the inverted interface `IGpuUploadSink`, defined in `mce_asset`, implemented by `mce_render` (fix F6).
+- **physics → ecs, never → render.** Physics fills an `IDebugDrawSink` interface (defined in `mce_ecs` next to the other shared interfaces, fix F5; *as built: `physics::DebugDrawSink` in `mce/physics/world2d.h`*); the renderer implements it; the composition point registers the implementation as a World resource.
 - **audio/input → ecs only for lifecycle and resources.** Both register ordinary systems/phases; neither includes render, physics, or assets beyond cooked-chunk views.
 
 ---
@@ -459,17 +485,21 @@ Owner = the module that defines and evolves the API. Consumers list who may call
 
 ## 6. Threading & memory model (whole engine)
 
-### 6.1 Thread roster (complete — five steady-state threads, ever)
+### 6.1 Thread roster (as built, 2026-10-11 — amended by ADR-0037)
 
 | Thread | Owner | Runs | Rules |
 |---|---|---|---|
-| **Main** | core | sim + render + editor + ECS, all of it through v1.0 | owns GL context, ECS worlds, document/undo, command recording; the only thread that mutates the registry, asset tables, or scene structure |
-| **Audio (SDL callback)** | audio | continuous mix | RT rules (Doumler): no locks, no allocations, no syscalls, no ECS; in = SPSC POD command FIFO + 2 atomic snapshots (bus gains, listener); out = mixed 48 kHz float32 |
-| **IO worker** | platform | one thread | completion-queue driven: cook steps (M2), music page prefetch, editor file-watch polling; no GL, no ECS access |
-| **Job workers ×N−1** | core jobs | M3+ only, flag-gated | fork-join counters; serial inline implementation until M3 so call sites are written once |
-| **Cook worker** | assets (via job system) | during cook | one thread at MVP; posts progress/errors to the main thread over `MpScQueue` (F10) |
+| **Main** | core | sim + render + editor + ECS + cook + editor file-watch poll + music page fill, all of it | owns the GPU device, ECS worlds, document/undo, command recording; the only thread that mutates the registry, asset tables, or scene structure |
+| **Audio (SDL callback)** | audio (via `mce_platform` audio output) | continuous mix | RT rules (Doumler): no locks, no allocations, no syscalls, no ECS; in = SPSC POD command FIFO + atomic snapshots; out = mixed 48 kHz float32 |
+| **Asset loader** | `mce_asset` (`AssetSystem::AsyncLoader`, one `std::thread`) | only after a first `request_async` (async scene streaming in a windowed player) | reads, hashes and CRC-checks dev-mount container files; never touches the asset tables; the main thread commits in `poll_async` (ADR-0037) |
 
-Cross-thread communication is exclusively: SPSC `RingBuffer` (audio commands, log ring), `MpScQueue` (editor/cook events), atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary; the audio hot path has none. Module code (`game.dll`) never leaves the main thread — which is what keeps the M3+ auto-parallel experiment a zero-change option for gameplay code.
+Not built as designed: there is **no platform IO worker** (music pages are filled ahead of the play cursor on the main
+thread in `AudioDevice::update()`, the editor's file watch is a main-thread poll, and the cook runs on the main thread); the **job system is serial**
+(`jobs.cpp` runs every job inline, so there are no job workers or cook worker threads). The auto-parallel
+scheduler that would have added workers was built, measured and not merged
+(`docs/research/auto-parallel-scheduling.md`).
+
+Cross-thread communication is exclusively: SPSC `RingBuffer` (audio commands, log ring), `MpScQueue` (editor/cook events), atomics (audio snapshots, stream `filled_upto`), and frame fences. No mutex is ever held across a subsystem boundary; the audio hot path has none. Module code (`game.dll`) never leaves the main thread (the auto-parallel experiment would have broken this rule and was not merged, REQUIREMENTS N17). *As built, the asset loader thread exchanges jobs and results with the main thread through a mutex and condition variables private to `mce_asset`.*
 
 ### 6.2 Memory map
 
@@ -488,78 +518,97 @@ The single discipline: **core owns the CPU half of the frame slots; the renderer
 
 ---
 
-## 7. Technology stack (final)
+## 7. Technology stack (as built, 2026-10-11)
+
+*Regenerated from `CMakePresets.json`, `cmake/Dependencies.cmake` and `cmake/macos/MetalDependencies.cmake`
+(the source of truth for every pin, ADR-0017). The 2026-10-06 design table chose a vcpkg manifest, ImGuizmo,
+nlohmann/json and GitHub Actions; none of them was adopted.*
 
 | Concern | Choice | Version / pin policy | From-scratch? |
 |---|---|---|---|
-| Language | C++20 | MSVC v143 (VS 2022), `/std:c++20`, `/EHs-c-`, `_HAS_EXCEPTIONS=0`, no RTTI in runtime | — |
-| Build | CMake + Ninja | ≥ 3.28 (binding), presets only (`msvc-debug`, `msvc-release`, `msvc-determinism`, `msvc-asan`) | — |
-| Package mgmt | vcpkg manifest, pinned baseline | `vcpkg.json` in repo; baseline bumped only by ADR | — |
-| Window/input/platform | SDL3 | latest stable at M0, pinned (core R1 fallback: vendor under `third_party/`) | wrapped |
-| Graphics API | OpenGL 4.5 Core (DSA, persistent-mapped rings, MDI) | driver on dev machine; loader = **glad2** | loader is boilerplate |
-| RHI | `mce_rhi` + `mce_rhi_gl` | — | **hand-written** |
-| Renderer | `mce_render` (forward, MDI batching, radix sort) | — | **hand-written** |
-| ECS | `mce_ecs` (archetype tables) | — | **hand-written** (flecs-3/EnTT/Bevy studied, never linked) |
-| Math | `mce::math` scalar-first | DirectXMath as *test oracle only* | **hand-written** |
-| 2D physics | `mce_physics2d` (sequential impulse, Catto) | hand-computed cases + **Box2D v3 as test-time oracle (CF13, ADR-0016)** | **hand-written** |
-| 2D physics oracle | Box2D v3 — **test-time only**, linked into `test_physics2d` exclusively | vcpkg-pinned; CI greps `b2*` symbols everywhere else | dependency (test lane) |
-| 3D physics | Jolt 5 (v0.5, ADR-0003) | Jolt 5.x pinned, vendored or vcpkg | embedded (pre-approved exception) |
-| Audio | `mce_audio` mixer on SDL3 callback | RBJ cookbook / Freeverb as paper oracles | **hand-written** |
+| Language | C++20, no exceptions, no RTTI | MSVC v143 (`/EHs-c- /GR- /fp:precise`), gcc/clang (`-fno-exceptions -fno-rtti -ffp-contract=off`), Apple clang; warnings as errors (`cmake/MceTarget.cmake`) | — |
+| Build | CMake ≥ 3.28 + Ninja, presets only | `msvc-{debug,release,determinism,asan}`, `linux-{gcc,clang}-{debug,release}`, `linux-asan`, `macos-{debug,release,asan}` (ADR-0018, ADR-0028) | — |
+| Dependencies | CMake FetchContent, pinned git tags | one reviewed line per bump; first configure clones into the build tree (ADR-0017) | — |
+| Window/input/platform | SDL3 | release-3.4.18, static; linked by `mce_platform`, `mce_rhi_gl`, `mce_rhi_metal`, `mce_editor_layer` (headers only on the umbrella) | wrapped |
+| Graphics API | OpenGL 4.5 Core (Linux, Windows); Metal (macOS) | GL loader glad2, generated and vendored in `third_party/glad`; Metal via system frameworks | loader is boilerplate |
+| Shader toolchain | glslang (shader cook validation and SPIR-V reflection, ADR-0033); on macOS glslang + SPIRV-Cross translate GLSL → MSL at pipeline creation (ADR-0028) | glslang 16.6.0, SPIRV-Cross vulkan-sdk-1.4.363.0 | dependency |
+| Networking (optional) | ENet, linked only by `mce_net` (ADR-0035) | v1.3.18 | dependency |
+| WebRTC (optional) | libdatachannel (with libjuice, usrsctp; system OpenSSL), linked only by `mce_net` on Linux (`MCE_WITH_RTC`, M-NET3 step 4); the browser's `RTCPeerConnection` on the web | v0.22.6 | dependency |
+| RHI | `mce_rhi` + `mce_rhi_gl` / `mce_rhi_metal`, chosen by `mce_rhi_default` | — | **hand-written** |
+| Renderer | `mce_render` (2D batches; 3D PBR, Forward+, CSM, post, skinning) | — | **hand-written** |
+| ECS | `mce_ecs` (archetype tables) | — | **hand-written** |
+| Math | `mce::math` scalar-first | DirectXMath jun2026 as test oracle only (`test_math_oracle`) | **hand-written** |
+| 2D physics | `mce_physics2d` (sequential impulse) | Box2D v3.1.1 as test-time oracle only (ADR-0016, Box2D wall) | **hand-written** |
+| 3D physics | Jolt (ADR-0003), behind `mce_physics3d` | v5.6.0 via FetchContent (JPH and Jolt link walls) | embedded |
+| Audio | `mce_audio` mixer on the SDL3 callback; Ogg Vorbis clips (ADR-0044) | stb_vorbis (stb @2c980bb) decodes, in `mce_asset` only (stb_vorbis wall); libvorbis v1.3.7 + libogg v1.3.5 encode, cook-only (libvorbis wall); dr_mp3 and dr_flac (dr_libs @dfe8377, public domain or MIT-0, David Reid) decode `.mp3` and `.flac` at cook time only (dr_libs wall and link wall, budgeted allocator) | **hand-written** mixer |
+| Video | `render::VideoDecoder` over pl_mpeg (ADR-0043), `kit::VideoPlayer` | pl_mpeg @c871f2b (MIT, MPEG-1 + MP2), in `mce_render` only (pl_mpeg wall) | embedded |
 | Reflection | `mce_refl` | — | **hand-written** |
-| Asset pipeline | `mce_asset` + `mce_cook` | cook-side: nlohmann/json, meshoptimizer, stb_image, stb_truetype, glslangValidator, ispc_texcomp (v0.5), DirectXTex (BCn test oracle), **msdf-atlas-gen (v0.5 — FR-R2D-060's MSDF font path; cook-time-only, glslangValidator-class test/cook-time ADR)** | **hand-written** (importers are boilerplate) |
-| Editor UI | Dear ImGui docking branch + ImGuizmo | 1.9x docking pinned; multi-viewport off | editor-only |
-| Logging | spdlog (+ fmt) | `SPDLOG_NO_EXCEPTIONS` | boilerplate |
-| Profiling | Tracy client | v0.11+; compiled out of shipped except FrameMark | tool |
-| GPU debugging | RenderDoc | external tool, capture = merge gate (FR-DBG-020) | external |
-| Tests | doctest; ASan per PR; clang-cl UBSan weekly; golden images dev-machine-only (< 0.5% perceptual, never a CI gate) | doctest single-header | — |
-| Crash dumps | dbghelp `MiniDumpWriteDump` + archived PDBs | Windows SDK | — |
-| CI | GitHub Actions `windows-latest`, clang-tidy | green pipeline = merge requirement (FR-SHP-040) | external |
+| Asset pipeline | `mce_asset` + `mce_asset_cook` + `mce_cook` | cook-only: stb @2c980bb (images incl. Radiance `.hdr`, stb_truetype fonts), tinyexr v1.0.12 (`.exr` skies; BSD-3-Clause, Syoyo Fujita and contributors, with its bundled miniz, MIT; tinyexr wall), bc7enc_rdo @b943862 (BC7/BC5/BC4/BC1 desktop textures; MIT or Unlicense, Richard Geldreich; scalar C++, `-ffp-contract=off`, pinned by commit; bc7enc wall), meshoptimizer v0.25, glslang; JSON is the hand-written codec `mce/cook/json.h` (errors carry line and column) | **hand-written** |
+| FBX import | ufbx (ADR-0047), cook-only: `mce_ufbx` from one `ufbx.c` via `ufbx_impl.c`, `-ffp-contract=off` / `/fp:precise`, OBJ and geometry-cache readers compiled out | v0.23.1 pinned by commit `26a482a`; MIT or Unlicense (Samuli Raivio), MIT taken; ufbx wall and ufbx link wall | embedded |
+| Editor UI | Dear ImGui (docking) | v1.92.9b-docking; editor-only (ImGui wall); the gizmo is hand-rolled (ADR-0025, ADR-0030), no ImGuizmo | editor-only |
+| Logging | spdlog | v1.17.0, `SPDLOG_NO_EXCEPTIONS` | boilerplate |
+| Profiling | Tracy client | v0.14.1, on-demand | tool |
+| Tests | doctest | v2.5.3; GPU tests under Xvfb/llvmpipe on Linux, Metal validation layer on macOS | — |
+| Crash reports | `mce/crash.h` in `mce_core`: POSIX signal handler (alternate stack, `.crash` text report) and Windows `SetUnhandledExceptionFilter` + `MiniDumpWriteDump` | `scripts/symbolicate.py` resolves frames by build id (M8 packaging) | **hand-written** |
+| CI | none hosted; `scripts/ci/local_ci.sh` (walls, linux presets, ASan+UBSan, clang-tidy, determinism) and `scripts/ci/local_ci_macos.sh` | run before merge; the `msvc-*` presets are not exercised (ADR-0018 amendment) | — |
+| GPU debugging | RenderDoc / Xcode Metal capture | external tools | external |
 
-External-dependency rule: `mce_core` links only spdlog + Tracy, ever; anything new anywhere needs an ADR. Cook-time-only deps (json, meshoptimizer, stb, ispc_texcomp) are never linked into `mce_engine.dll` (FR-AST-010 symbol scan). Box2D is a *test-lane* dep with the same class of rule (ADR-0016): linked only into `test_physics2d`.
+External-dependency rule (unchanged): `mce_core` links only spdlog + Tracy; anything new needs an ADR. Cook-time
+deps (stb, meshoptimizer, glslang via `mce_asset_cook`; ufbx for FBX) never reach runtime targets (`check_walls.py` stb, meshopt,
+ufbx and cook walls). Box2D and DirectXMath are test-lane only. Jolt links only into `mce_physics3d`.
 
 ---
 
-## 8. Repository / directory layout
+## 8. Repository / directory layout (as built, 2026-10-11)
 
 ```
 mesh_control_engine/
-├── CMakeLists.txt                  # presets: msvc-debug, msvc-release, msvc-determinism (named release alias, F29), msvc-asan
-├── CMakePresets.json
-├── vcpkg.json                      # pinned baseline; cook-time deps quarantined
-├── .clang-format  .clang-tidy
-├── cmake/                          # toolchain helpers, MCE_ENGINE_ID generation, unity/PCH helpers
+├── CMakeLists.txt  CMakePresets.json   # msvc-*, linux-*, macos-* presets; MCE_ENGINE_LIBS, MCE_RHI_BACKEND
+├── .clang-format  .clang-tidy  .mcp.json
+├── cmake/                          # Dependencies.cmake (FetchContent pins), macos/MetalDependencies.cmake,
+│                                   # MceTarget.cmake (target helpers, UMBRELLA), MceProject.cmake, MceInstall.cmake
+│                                   # + MCEConfig.cmake.in (installed SDK), MceShip.cmake, EngineId.cmake, ScanSymbols.cmake
 ├── docs/
 │   ├── REQUIREMENTS.md  ARCHITECTURE.md  ROADMAP.md
-│   ├── adr/                        # 0001-rhi-seam … 0015-editor-watch-poll.md, 0016-box2d-test-oracle.md
-│   ├── architecture/               # the 8 subsystem docs (this file's inputs)
-│   ├── engine/                     # per-subsystem one-pagers written from memory (FR-DX-060)
-│   ├── research/  drafts/  tech/
+│   ├── adr/                        # 24 records (0003, 0016, 0017 onward) + README index
+│   ├── architecture/               # 11 subsystem design docs (design-time; incl. ui.md, macos-metal.md, editor-mcp.md)
+│   ├── engine/                     # 16 per-module as-built pages + README
+│   ├── milestones/                 # 22 milestone records
+│   ├── user-guide/                 # 19 chapters + README
+│   ├── design/  research/  drafts/  tech/
 ├── src/
-│   ├── engine/                     # → linked into mce_engine.dll (the ImGui-free set = "mce_runtime")
-│   │   ├── core/        platform/     refl/        ecs/
-│   │   ├── rhi/         rhi_gl/       asset/       render/
-│   │   ├── physics2d/   physics3d/    audio/       input/
-│   │   └── kit/         ui/
-│   ├── module/                     # mce_engine umbrella dll, mce/gameplay.h, mce_module_api target, loader
-│   ├── editor/
-│   │   ├── core/                   # mce_editor_core (headless, CI-tested)
-│   │   ├── layer/                  # mce_editor_layer (only ImGui consumer)
-│   │   └── app/                    # mce_editor.exe main()
-│   └── tools/cook/                 # mce_cook.exe
-├── games/
-│   ├── template/                   # game.dll + game.exe skeleton (the module idiom, FR-DX-070; ships at M8 — finding F17)
-│   ├── ember_step/                 # UC-A: full 2D platformer content + module
-│   ├── ashen_court/                # UC-B 3D arena content + module
-│   └── uc_d/                       # v1.0 proof game (editor-first)
-│   # each project is shaped per assets.md §4.4 (CF17):
-│   #   <game>.mceproj · assets/ (source tree + .mceasset sidecars, VCS'd)
-│   #   · cooked/ (git-ignored, disposable) · module/ · host/ · assets.mce (shipped pack)
-├── samples/                        # 01_triangle · 02_boids · 03_platformer · 04_cubes · 05_showcase
-├── tests/                          # doctest units + devhost (determinism harness, golden runner, --crash-test)
-│   └── test_physics2d/             # the ONLY target allowed to link Box2D (ADR-0016)
-├── third_party/                    # vendor fallback only (SDL3 if vcpkg port breaks; Jolt at v0.5)
-└── scripts/ci/                     # include-grep walls, symbol scans, cook-determinism, golden (dev-only)
+│   ├── engine/                     # static engine libraries, whole-archived into mce_engine
+│   │   ├── core/       platform/   refl/       ecs/        (ecs/ also builds mce_ecs_scene)
+│   │   ├── rhi/        rhi_gl/     rhi_metal/  rhi_default/
+│   │   ├── asset/      (asset/cook/: mce_asset_cook, mce_stb)   scene/      render/
+│   │   ├── physics2d/  physics3d/  audio/      input/
+│   │   └── kit/        ui/         net/        (net/: optional mce_net, not in mce_engine)
+│   ├── module/                     # mce_module_host, mce_engine (shared), mce_module_api, mce/gameplay.h
+│   ├── player/                     # mce_player_runtime + mce_player
+│   └── editor/
+│       ├── core/                   # mce_editor_core (headless, CI-tested)
+│       ├── layer/                  # mce_editor_layer (only ImGui consumer)
+│       ├── app/                    # mce_editor
+│       └── mcp/                    # mce_mcp_core + mce_mcp (app/)
+├── tools/
+│   ├── cook/                       # mce_cook
+│   └── mce_cli/                    # mce.py, the installed `mce` command
+├── templates/project/              # the project template: <Name>.mceproj, assets/, games/@GAME@/{module,host}
+├── projects/                       # Kindle · PrismBreak · SolsticeReach · Undelivered · Undertow
+│   # each: <Name>.mceproj · assets/ · games/<game>/{module,host} · tests/ (most); built by mce_add_project
+├── samples/                        # 01_triangle · 02_boids · 03_platformer (Ember Step) · 04_cubes · 04_diorama
+│                                   # · 05_ashen_court · extras_2d · physics2d_headless · physics3d_headless
+│                                   # · scene_demo · sprites_2d · stream_demo · ui_gallery · common/
+├── tests/                          # doctest suites per module (tests/<module>/), devhost/ (mce_devhost),
+│                                   # render_gl/ rhi_gl/ rhi_metal/ (GPU), sdk/, abi_spike/, support/
+│   └── physics2d/oracle/           # the ONLY place Box2D may appear (ADR-0016)
+├── third_party/glad/               # generated GL 4.5 loader (everything else is fetched)
+└── scripts/                        # ship.py, symbolicate.py, new_project.*, soak.py, module_reload_stopwatch.py
+    └── ci/                         # local_ci.sh, local_ci_macos.sh, check_walls.py, determinism.py, setup_env.sh
 ```
+
+There is no `vcpkg.json` and no top-level `games/` directory: games live in `projects/` (and the bundled
+samples), each shaped by the project template.
 
 ---
 

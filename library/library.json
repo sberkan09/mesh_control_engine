@@ -1,0 +1,1335 @@
+{
+ "version": 1,
+ "about": "The engine's bundled content library (ROADMAP M-AGENT step 5). Files are paths under the SDK's share/mce (samples/, examples/, library/); in the source tree examples/ is projects/. Recipes run a generator tool with these arguments. library_search and library_add serve it.",
+ "entries": [
+  {
+   "id": "kenney-building-garage",
+   "kind": "model",
+   "title": "Building garage",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "town",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/building-garage.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-building-small-a",
+   "kind": "model",
+   "title": "Building small a",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "town",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/building-small-a.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-building-small-b",
+   "kind": "model",
+   "title": "Building small b",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "town",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/building-small-b.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-building-small-c",
+   "kind": "model",
+   "title": "Building small c",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "town",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/building-small-c.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-building-small-d",
+   "kind": "model",
+   "title": "Building small d",
+   "tags": [
+    "building",
+    "house",
+    "city",
+    "town",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/building-small-d.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-character",
+   "kind": "model",
+   "title": "Character",
+   "tags": [
+    "character",
+    "player",
+    "hero",
+    "platformer",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/character.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-cloud",
+   "kind": "model",
+   "title": "Cloud",
+   "tags": [
+    "cloud",
+    "sky",
+    "decoration",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/cloud.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-coin",
+   "kind": "model",
+   "title": "Coin",
+   "tags": [
+    "coin",
+    "pickup",
+    "collectible",
+    "platformer",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/coin.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-flag",
+   "kind": "model",
+   "title": "Flag",
+   "tags": [
+    "flag",
+    "goal",
+    "checkpoint",
+    "platformer",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/flag.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-grass-trees-tall",
+   "kind": "model",
+   "title": "Grass trees tall",
+   "tags": [
+    "tree",
+    "trees",
+    "ground",
+    "nature",
+    "city",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/grass-trees-tall.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-grass-trees",
+   "kind": "model",
+   "title": "Grass trees",
+   "tags": [
+    "tree",
+    "trees",
+    "ground",
+    "nature",
+    "city",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/grass-trees.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-grass",
+   "kind": "model",
+   "title": "Grass",
+   "tags": [
+    "ground",
+    "nature",
+    "city",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/grass.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-pavement-fountain",
+   "kind": "model",
+   "title": "Pavement fountain",
+   "tags": [
+    "fountain",
+    "ground",
+    "city",
+    "street",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/pavement-fountain.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-pavement",
+   "kind": "model",
+   "title": "Pavement",
+   "tags": [
+    "ground",
+    "city",
+    "street",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/pavement.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-road-corner",
+   "kind": "model",
+   "title": "Road corner",
+   "tags": [
+    "road",
+    "street",
+    "city",
+    "tile",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/road-corner.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-road-intersection",
+   "kind": "model",
+   "title": "Road intersection",
+   "tags": [
+    "road",
+    "street",
+    "city",
+    "tile",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/road-intersection.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-road-split",
+   "kind": "model",
+   "title": "Road split",
+   "tags": [
+    "road",
+    "street",
+    "city",
+    "tile",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/road-split.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-road-straight-lightposts",
+   "kind": "model",
+   "title": "Road straight lightposts",
+   "tags": [
+    "lights",
+    "lamp",
+    "road",
+    "street",
+    "city",
+    "tile",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/road-straight-lightposts.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-road-straight",
+   "kind": "model",
+   "title": "Road straight",
+   "tags": [
+    "road",
+    "street",
+    "city",
+    "tile",
+    "3d",
+    "low poly",
+    "kenney"
+   ],
+   "files": [
+    "samples/04_diorama/assets/models/road-straight.glb"
+   ],
+   "deps": [
+    "samples/04_diorama/assets/models/Textures/colormap.png"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: City Builder, github.com/KenneyNL/Starter-Kit-City-Builder",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-sfx-jump",
+   "kind": "sound",
+   "title": "Jump",
+   "tags": [
+    "jump",
+    "platformer",
+    "player",
+    "sfx",
+    "kenney"
+   ],
+   "files": [
+    "samples/03_platformer/assets/sfx/jump.wav"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer (converted to WAV)",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-sfx-pickup",
+   "kind": "sound",
+   "title": "Coin pickup",
+   "tags": [
+    "coin",
+    "pickup",
+    "collect",
+    "sfx",
+    "kenney"
+   ],
+   "files": [
+    "samples/03_platformer/assets/sfx/pickup.wav"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer (converted to WAV)",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-sfx-hurt",
+   "kind": "sound",
+   "title": "Fall / hurt",
+   "tags": [
+    "hurt",
+    "fall",
+    "damage",
+    "death",
+    "sfx",
+    "kenney"
+   ],
+   "files": [
+    "samples/03_platformer/assets/sfx/hurt.wav"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer (converted to WAV)",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "kenney-sfx-stomp",
+   "kind": "sound",
+   "title": "Stomp / break",
+   "tags": [
+    "stomp",
+    "break",
+    "hit",
+    "enemy",
+    "sfx",
+    "kenney"
+   ],
+   "files": [
+    "samples/03_platformer/assets/sfx/stomp.wav"
+   ],
+   "author": "Kenney",
+   "source": "kenney.nl, Starter Kit: 3D Platformer, github.com/KenneyNL/Starter-Kit-3D-Platformer (converted to WAV)",
+   "license": "CC0 1.0"
+  },
+  {
+   "id": "font-proggy-clean",
+   "kind": "font",
+   "title": "ProggyClean (pixel monospace)",
+   "tags": [
+    "pixel",
+    "monospace",
+    "ui",
+    "debug",
+    "retro",
+    "font"
+   ],
+   "files": [
+    "samples/scene_demo/assets/fonts/ProggyClean.ttf"
+   ],
+   "deps": [],
+   "author": "Tristan Grimmer",
+   "source": "github.com/bluescan/proggyfonts",
+   "license": "MIT"
+  },
+  {
+   "id": "font-crimson-pro",
+   "kind": "font",
+   "title": "Crimson Pro Regular (serif)",
+   "tags": [
+    "serif",
+    "book",
+    "story",
+    "novel",
+    "body text",
+    "font"
+   ],
+   "files": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-Regular.ttf"
+   ],
+   "deps": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-OFL.txt"
+   ],
+   "author": "Jacques Le Bailly",
+   "source": "github.com/Fonthausen/CrimsonPro",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-crimson-pro-bold",
+   "kind": "font",
+   "title": "Crimson Pro Bold (serif)",
+   "tags": [
+    "serif",
+    "bold",
+    "title",
+    "heading",
+    "font"
+   ],
+   "files": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-Bold.ttf"
+   ],
+   "deps": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-OFL.txt"
+   ],
+   "author": "Jacques Le Bailly",
+   "source": "github.com/Fonthausen/CrimsonPro",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-crimson-pro-italic",
+   "kind": "font",
+   "title": "Crimson Pro Italic (serif)",
+   "tags": [
+    "serif",
+    "italic",
+    "story",
+    "font"
+   ],
+   "files": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-Italic.ttf"
+   ],
+   "deps": [
+    "examples/Undelivered/assets/fonts/CrimsonPro-OFL.txt"
+   ],
+   "author": "Jacques Le Bailly",
+   "source": "github.com/Fonthausen/CrimsonPro",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-nothing-you-could-do",
+   "kind": "font",
+   "title": "Nothing You Could Do (handwriting)",
+   "tags": [
+    "handwriting",
+    "script",
+    "note",
+    "letter",
+    "casual",
+    "font"
+   ],
+   "files": [
+    "examples/Undelivered/assets/fonts/NothingYouCouldDo-Regular.ttf"
+   ],
+   "deps": [
+    "examples/Undelivered/assets/fonts/NothingYouCouldDo-OFL.txt"
+   ],
+   "author": "Kimberly Geswein",
+   "source": "fonts.google.com/specimen/Nothing+You+Could+Do",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-pixelify-sans",
+   "kind": "font",
+   "title": "Pixelify Sans (pixel)",
+   "tags": [
+    "pixel",
+    "retro",
+    "arcade",
+    "ui",
+    "body text",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/PixelifySans.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/PixelifySans-OFL.txt"
+   ],
+   "author": "The Pixelify Sans Project Authors",
+   "source": "github.com/eifetx/Pixelify-Sans",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-press-start-2p",
+   "kind": "font",
+   "title": "Press Start 2P (pixel titles)",
+   "tags": [
+    "pixel",
+    "retro",
+    "arcade",
+    "title",
+    "heading",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/PressStart2P-Regular.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/PressStart2P-OFL.txt"
+   ],
+   "author": "Cody \"CodeMan38\" Boisclair",
+   "source": "github.com/google/fonts/tree/main/ofl/pressstart2p",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-atkinson-hyperlegible-next",
+   "kind": "font",
+   "title": "Atkinson Hyperlegible Next (clean sans)",
+   "tags": [
+    "sans",
+    "clean",
+    "readable",
+    "ui",
+    "body text",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/AtkinsonHyperlegibleNext.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/AtkinsonHyperlegibleNext-OFL.txt"
+   ],
+   "author": "Braille Institute",
+   "source": "github.com/googlefonts/atkinson-hyperlegible-next",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "font-karla",
+   "kind": "font",
+   "title": "Karla (sans titles)",
+   "tags": [
+    "sans",
+    "grotesque",
+    "title",
+    "heading",
+    "ui",
+    "font"
+   ],
+   "files": [
+    "templates/project/assets/fonts/Karla.ttf"
+   ],
+   "deps": [
+    "templates/project/assets/fonts/Karla-OFL.txt"
+   ],
+   "author": "Jonny Pinhorn",
+   "source": "github.com/googlefonts/karla",
+   "license": "SIL OFL 1.1"
+  },
+  {
+   "id": "sky-day",
+   "kind": "texture",
+   "title": "Day sky with clouds",
+   "tags": [
+    "sky",
+    "day",
+    "clouds",
+    "skybox",
+    "backdrop",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 3,
+    "kind": "sky",
+    "width": 1024,
+    "height": 512,
+    "colors": [
+     "#cfe6f5",
+     "#3a7bd5",
+     "#ffffff"
+    ],
+    "clouds": 0.45
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sky-dusk",
+   "kind": "texture",
+   "title": "Dusk sky",
+   "tags": [
+    "sky",
+    "dusk",
+    "sunset",
+    "evening",
+    "skybox",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 5,
+    "kind": "sky",
+    "width": 1024,
+    "height": 512,
+    "colors": [
+     "#f6a35b",
+     "#2b2f6b",
+     "#e9b8c8"
+    ],
+    "clouds": 0.3,
+    "stars": 0.15
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sky-night",
+   "kind": "texture",
+   "title": "Starry night sky",
+   "tags": [
+    "sky",
+    "night",
+    "stars",
+    "space",
+    "skybox",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 7,
+    "kind": "sky",
+    "width": 1024,
+    "height": 512,
+    "colors": [
+     "#1a2140",
+     "#05060f",
+     "#2a3157"
+    ],
+    "clouds": 0.1,
+    "stars": 0.8
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tex-rock",
+   "kind": "texture",
+   "title": "Rock / stone (tileable)",
+   "tags": [
+    "rock",
+    "stone",
+    "ground",
+    "material",
+    "tileable",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 11,
+    "kind": "ridged",
+    "scale": 6,
+    "colors": [
+     "#3b3a38",
+     "#6f6b66",
+     "#a8a39b"
+    ]
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tex-grass",
+   "kind": "texture",
+   "title": "Grass ground (tileable)",
+   "tags": [
+    "grass",
+    "ground",
+    "field",
+    "material",
+    "tileable",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 13,
+    "kind": "fbm",
+    "scale": 8,
+    "colors": [
+     "#2f5a1f",
+     "#4f8a2b",
+     "#86b84a"
+    ]
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tex-sand",
+   "kind": "texture",
+   "title": "Sand (tileable)",
+   "tags": [
+    "sand",
+    "desert",
+    "beach",
+    "ground",
+    "material",
+    "tileable",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 17,
+    "kind": "perlin",
+    "scale": 10,
+    "colors": [
+     "#c9a66b",
+     "#e2c48d",
+     "#f3dfb2"
+    ]
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tex-water",
+   "kind": "texture",
+   "title": "Water caustics (tileable)",
+   "tags": [
+    "water",
+    "sea",
+    "lake",
+    "caustics",
+    "material",
+    "tileable",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 19,
+    "kind": "worley",
+    "scale": 6,
+    "colors": [
+     "#0e3d66",
+     "#1f6fa8",
+     "#9fdcff"
+    ]
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tex-lava",
+   "kind": "texture",
+   "title": "Lava (tileable)",
+   "tags": [
+    "lava",
+    "fire",
+    "magma",
+    "material",
+    "tileable",
+    "generated"
+   ],
+   "tool": "gen_texture",
+   "args": {
+    "seed": 23,
+    "kind": "ridged",
+    "scale": 5,
+    "colors": [
+     "#2a0500",
+     "#c2300a",
+     "#ffd34d"
+    ]
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tiles-grass",
+   "kind": "sprite",
+   "title": "Grass platformer tiles",
+   "tags": [
+    "tiles",
+    "tileset",
+    "grass",
+    "platformer",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_tileset",
+   "args": {
+    "seed": 1,
+    "style": "grass",
+    "tile": 16
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tiles-stone",
+   "kind": "sprite",
+   "title": "Stone dungeon tiles",
+   "tags": [
+    "tiles",
+    "tileset",
+    "stone",
+    "dungeon",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_tileset",
+   "args": {
+    "seed": 2,
+    "style": "stone",
+    "tile": 16
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "tiles-snow",
+   "kind": "sprite",
+   "title": "Snow tiles",
+   "tags": [
+    "tiles",
+    "tileset",
+    "snow",
+    "winter",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_tileset",
+   "args": {
+    "seed": 3,
+    "style": "snow",
+    "tile": 16
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sprite-slimes",
+   "kind": "sprite",
+   "title": "Slime enemies (8 variants)",
+   "tags": [
+    "slime",
+    "enemy",
+    "blob",
+    "monster",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_sprite",
+   "args": {
+    "seed": 40,
+    "kind": "blob",
+    "width": 16,
+    "height": 16,
+    "variants": 8,
+    "scheme": "neon"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sprite-creatures",
+   "kind": "sprite",
+   "title": "Creature enemies (8 variants)",
+   "tags": [
+    "creature",
+    "enemy",
+    "monster",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_sprite",
+   "args": {
+    "seed": 10,
+    "kind": "creature",
+    "width": 16,
+    "height": 16,
+    "variants": 8,
+    "scheme": "analogous"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sprite-heroes",
+   "kind": "sprite",
+   "title": "Hero characters (8 variants)",
+   "tags": [
+    "character",
+    "hero",
+    "player",
+    "npc",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_sprite",
+   "args": {
+    "seed": 20,
+    "kind": "character",
+    "width": 16,
+    "height": 24,
+    "variants": 8,
+    "scheme": "triad"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sprite-ships",
+   "kind": "sprite",
+   "title": "Space ships (8 variants)",
+   "tags": [
+    "ship",
+    "spaceship",
+    "shooter",
+    "space",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_sprite",
+   "args": {
+    "seed": 30,
+    "kind": "ship",
+    "width": 16,
+    "height": 16,
+    "variants": 8,
+    "scheme": "complementary"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sprite-items",
+   "kind": "sprite",
+   "title": "Items and pickups (8 variants)",
+   "tags": [
+    "item",
+    "pickup",
+    "gem",
+    "loot",
+    "2d",
+    "generated"
+   ],
+   "tool": "gen_sprite",
+   "args": {
+    "seed": 50,
+    "kind": "item",
+    "width": 12,
+    "height": 12,
+    "variants": 8,
+    "scheme": "pastel"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-coin",
+   "kind": "sound",
+   "title": "Retro coin",
+   "tags": [
+    "coin",
+    "pickup",
+    "retro",
+    "8-bit",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 1,
+    "preset": "pickup"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-laser",
+   "kind": "sound",
+   "title": "Retro laser",
+   "tags": [
+    "laser",
+    "shoot",
+    "gun",
+    "retro",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 2,
+    "preset": "laser"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-explosion",
+   "kind": "sound",
+   "title": "Retro explosion",
+   "tags": [
+    "explosion",
+    "boom",
+    "retro",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 3,
+    "preset": "explosion"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-powerup",
+   "kind": "sound",
+   "title": "Retro power-up",
+   "tags": [
+    "powerup",
+    "upgrade",
+    "retro",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 4,
+    "preset": "powerup"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-hit",
+   "kind": "sound",
+   "title": "Retro hit",
+   "tags": [
+    "hit",
+    "hurt",
+    "damage",
+    "retro",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 5,
+    "preset": "hit"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-jump",
+   "kind": "sound",
+   "title": "Retro jump",
+   "tags": [
+    "jump",
+    "retro",
+    "platformer",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 6,
+    "preset": "jump"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "sfx-blip",
+   "kind": "sound",
+   "title": "UI blip",
+   "tags": [
+    "blip",
+    "ui",
+    "menu",
+    "select",
+    "sfx",
+    "generated"
+   ],
+   "tool": "gen_sfx",
+   "args": {
+    "seed": 7,
+    "preset": "blip"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "music-upbeat",
+   "kind": "music",
+   "title": "Upbeat loop (major, 128 bpm)",
+   "tags": [
+    "music",
+    "happy",
+    "upbeat",
+    "platformer",
+    "loop",
+    "generated"
+   ],
+   "tool": "gen_music",
+   "args": {
+    "seed": 1,
+    "bpm": 128,
+    "bars": 8,
+    "root": 0,
+    "scale": "major"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "music-adventure",
+   "kind": "music",
+   "title": "Adventure loop (dorian, 110 bpm)",
+   "tags": [
+    "music",
+    "adventure",
+    "exploration",
+    "loop",
+    "generated"
+   ],
+   "tool": "gen_music",
+   "args": {
+    "seed": 2,
+    "bpm": 110,
+    "bars": 8,
+    "root": 2,
+    "scale": "dorian"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "music-tense",
+   "kind": "music",
+   "title": "Tense loop (minor, 140 bpm)",
+   "tags": [
+    "music",
+    "tense",
+    "boss",
+    "action",
+    "loop",
+    "generated"
+   ],
+   "tool": "gen_music",
+   "args": {
+    "seed": 3,
+    "bpm": 140,
+    "bars": 8,
+    "root": 9,
+    "scale": "minor"
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "music-calm",
+   "kind": "music",
+   "title": "Calm loop (pentatonic, 84 bpm, no drums)",
+   "tags": [
+    "music",
+    "calm",
+    "menu",
+    "ambient",
+    "loop",
+    "generated"
+   ],
+   "tool": "gen_music",
+   "args": {
+    "seed": 4,
+    "bpm": 84,
+    "bars": 8,
+    "root": 5,
+    "scale": "pentatonic",
+    "drums": false
+   },
+   "license": "generated (the project's)"
+  },
+  {
+   "id": "music-blues",
+   "kind": "music",
+   "title": "Blues loop (96 bpm)",
+   "tags": [
+    "music",
+    "blues",
+    "bar",
+    "night",
+    "loop",
+    "generated"
+   ],
+   "tool": "gen_music",
+   "args": {
+    "seed": 5,
+    "bpm": 96,
+    "bars": 12,
+    "root": 4,
+    "scale": "blues"
+   },
+   "license": "generated (the project's)"
+  }
+ ]
+}

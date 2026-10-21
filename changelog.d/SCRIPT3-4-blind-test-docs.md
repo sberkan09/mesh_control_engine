@@ -1,0 +1,1 @@
+- Script guide, M-SCRIPT3 step 4 (blind test): 27.1 no longer says the bare cook writes sidecars (it needs `--adopt`), and 27.7 has a hand-made script-only project (`.mceproj`, scene notes, the raw cook and player commands, where `.mctest` runs).

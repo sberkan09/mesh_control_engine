@@ -462,7 +462,7 @@ What is deliberately **not** in the loop: no mid-session code reload (N13), no s
 
 ### 4.2 Threads
 
-Module code runs **only on the main thread, only inside fixed-step phases** — there is no module-visible threading surface at all (no spawn-API in `gameplay.h`; jobs are engine-internal). The audio thread never executes module code (commands cross the SPSC FIFO via the audio bridge, FR-AUD-010); the editor watch/cook threads never execute module code. The M3+ auto-parallel *experiment* (ecs-gameplay §4.1) is the only future place module systems could run off-main, it stays flag-gated and determinism-gated, and it requires no module-code changes because systems are already pure functions of `Frame` — that is the payoff of rule §2.4.1.
+Module code runs **only on the main thread, only inside fixed-step phases** — there is no module-visible threading surface at all (no spawn-API in `gameplay.h`; jobs are engine-internal). The audio thread never executes module code (commands cross the SPSC FIFO via the audio bridge, FR-AUD-010); the editor watch/cook threads never execute module code. The auto-parallel experiment (ecs-gameplay §4.1) was the only place module systems could have run off-main; it was run on 2026-10-10 and not merged (REQUIREMENTS N17), so this rule holds without exception.
 
 ### 4.3 Module lifecycle states
 
@@ -509,7 +509,7 @@ All transitions happen on the main thread at Play boundaries. `install()` failur
 4. **Sequence semantics** (FR-ENT-100, v0.5): a sequence with `Wait/MoveTo/PlayAnim/Emit/Call` completes at the tick-math-derived time; save mid-sequence → resume → identical completion tick and final hash (round-trip acceptance); `Call` id resolution errors are diagnosable; infinite-loop validation fires.
 5. **Sample ladder as the module API contract** (FR-DX-070): each sample module builds + cooks + runs 300 headless fixed steps in CI, state-hash snapshotted; an engine header change that breaks a module fails the PR. This is also the FR-DX-010 census check (grep `mce::` usage in samples ≤ budget).
 6. **Determinism integration** (FR-RUN-040): module systems are ordinary phase members, so the 10k-tick hash harness covers them by inclusion — the platformer sample's FSM + player controller are in the hash set; replay (FR-RUN-070) replays module behavior with no extra machinery.
-7. **Sanitizers + hygiene:** ASan per PR over the loader/reload tests (DLL boundary is prime UAF territory — the FreeLibrary-vs-world-teardown order is the risk); clang-tidy on `src/module_host` and the sample modules; CI greps module sources for banned includes (SDL/GL/ImGui/heap) and for mutable file-scope statics.
+7. **Sanitizers + hygiene:** ASan per PR over the loader/reload tests (DLL boundary is prime UAF territory — the FreeLibrary-vs-world-teardown order is the risk); clang-tidy on `src/module` (the module host: `src/module/src/module_host.cpp`) and the sample modules; CI greps module sources for banned includes (SDL/GL/ImGui/heap) and for mutable file-scope statics.
 8. **Manual gate:** the 30-second loop (UC-C) timed end-to-end with a module change in the middle — the stopwatch number goes in the milestone doc (NFR-B-02/05).
 
 ---

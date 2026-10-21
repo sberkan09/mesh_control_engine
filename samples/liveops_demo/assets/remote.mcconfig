@@ -1,0 +1,4 @@
+{
+  "format": "mce-config", "version": 1, "guid": "5d000000-0000-4000-8000-0000000000b2",
+  "values": { "level_ticks": 200, "motd": "Welcome" }
+}

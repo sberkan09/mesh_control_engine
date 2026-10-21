@@ -1,0 +1,70 @@
+{
+ "format": "mce-prefab",
+ "version": 1,
+ "guid": "ba637b4f-69f3-5217-a6fc-f75f861caf4c",
+ "name": "traffic_car",
+ "entities": [
+  {
+   "name": "Car",
+   "components": {
+    "LocalTransform": {},
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000
+    },
+    "VehicleSeat3D": {
+     "seat": [
+      0,
+      0.2,
+      0.1
+     ],
+     "exit": [
+      -1.7,
+      0,
+      0
+     ],
+     "locked": 1
+    },
+    "TrafficDriver3D": {}
+   }
+  },
+  {
+   "name": "Model",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:7f9b6343-3f98-5541-9c3f-b66d4cf49cc9"
+    }
+   }
+  }
+ ]
+}

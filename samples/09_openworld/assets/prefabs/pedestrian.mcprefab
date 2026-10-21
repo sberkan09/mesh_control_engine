@@ -1,0 +1,56 @@
+{
+ "format": "mce-prefab",
+ "version": 1,
+ "guid": "4628cb14-cc2b-5c19-8e11-4453eecc5f75",
+ "name": "pedestrian",
+ "entities": [
+  {
+   "name": "Pedestrian",
+   "components": {
+    "LocalTransform": {},
+    "Pedestrian3D": {},
+    "RigidBody3D": {
+     "type": "Kinematic",
+     "shape": "Capsule",
+     "radius": 0.3,
+     "half_height": 0.6
+    },
+    "Health3D": {
+     "max": 30,
+     "team": 3,
+     "destroy_on_death": 1,
+     "linger": 0.2
+    }
+   }
+  },
+  {
+   "name": "Model",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b402e937-ef6e-5f6f-99ea-86c834755288"
+    }
+   }
+  }
+ ]
+}

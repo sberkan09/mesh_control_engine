@@ -1,0 +1,150 @@
+#include "audio_decode.h"
+#include "fbx_importer.h"
+#include "importer_common.h"
+#include "obj_importer.h"
+
+namespace mce::cook {
+
+mem::UniquePtr<IImporter> make_hlod_importer();  // .mchlod -> CHNK_MESH (M-OPENWORLD A3), hlod_importer.cpp
+
+// .mcroads -> CHNK_ROADS (M-OPENWORLD B1), declared here rather than in importer.h, which 170 TUs include.
+mem::UniquePtr<IImporter> make_roads_importer();
+
+void ImporterRegistry::add(mem::UniquePtr<IImporter> importer) {
+    MCE_ASSERT_MSG(importer && !find(importer->id()), "importer missing or registered twice");
+    importers_.push_back(std::move(importer));
+}
+
+const IImporter* ImporterRegistry::find(StringView id) const {
+    for (const auto& i : importers_)
+        if (i->id() == id) return i.get();
+    return nullptr;
+}
+
+const IImporter* ImporterRegistry::for_extension(StringView lower_ext) const {
+    for (const auto& i : importers_)
+        if (i->handles_extension(lower_ext)) return i.get();
+    return nullptr;
+}
+
+#if !MCE_HAS_FBX
+bool dump_fbx_scene_json(StringView, Span<const byte>, String&, String& error) {
+    error = String("this build has no FBX reader (a cross build); run `mce import fbx` with the host's mce_cook");
+    return false;
+}
+#endif
+
+void ImporterRegistry::add_builtins(ImporterRegistry& reg) {
+    reg.add(make_texture_importer());
+    reg.add(make_wav_importer());
+    reg.add(make_ogg_importer());
+    reg.add(make_mp3_importer());
+    reg.add(make_flac_importer());
+    reg.add(make_sound_set_importer());
+    reg.add(make_video_importer());
+    reg.add(make_font_importer());
+    reg.add(make_material_importer());
+    reg.add(make_scene_importer());
+    reg.add(make_gltf_importer());
+    reg.add(make_obj_importer());
+    reg.add(make_mtl_importer());
+#if MCE_HAS_FBX
+    reg.add(make_fbx_importer());
+#endif
+    reg.add(make_prefab_importer());
+    reg.add(make_tilemap_importer());
+    reg.add(make_spritesheet_importer());
+    reg.add(make_animgraph_importer());
+    reg.add(make_particle_importer());
+    reg.add(make_sequence_importer());
+    reg.add(make_timeline_importer());
+    reg.add(make_bt_importer());
+    reg.add(make_skeleton2d_importer());
+    reg.add(make_shader_importer());
+    reg.add(make_input_map_importer());
+    reg.add(make_store_importer());
+    reg.add(make_config_importer());
+    reg.add(make_convar_defaults_importer());
+    reg.add(make_items_importer());
+    reg.add(make_services_importer());
+    reg.add(make_ui_importer());
+    reg.add(make_ui_theme_importer());
+    reg.add(make_string_importer());
+    reg.add(make_envmap_importer());
+    reg.add(make_terrain_importer());
+    reg.add(make_navmesh_importer());
+    reg.add(make_hlod_importer());
+    reg.add(make_roads_importer());
+#if MCE_HAS_SCRIPT
+    reg.add(make_script_importer());
+#endif
+}
+
+bool parse_guid_ref(StringView text, Guid& out) {
+    constexpr StringView kPrefix = "guid:";
+    if (text.substr(0, kPrefix.size()) != kPrefix) return false;
+    auto g = asset::parse_guid(text.substr(kPrefix.size()));
+    if (!g) return false;
+    out = g.value();
+    return true;
+}
+
+namespace detail {
+
+void error_at(DiagList& diags, Errc code, StringView file, JsonValue at, const char* stage, StringView msg) {
+    diags.error(code, file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, stage, msg);
+}
+
+bool check_keys(JsonValue obj, std::initializer_list<StringView> allowed, StringView file, const char* stage, DiagList& diags) {
+    if (!obj.valid()) return true;
+    if (!obj.is_object()) {
+        error_at(diags, Errc::ParseError, file, obj, stage, "expected an object");
+        return false;
+    }
+    bool ok = true;
+    for (u32 i = 0; i < obj.size(); ++i) {
+        bool known = false;
+        for (StringView a : allowed) known = known || a == obj.key_at(i);
+        if (!known) {
+            String msg("unknown key '");
+            msg += obj.key_at(i);
+            msg += "'";
+            error_at(diags, Errc::ParseError, file, obj.at(i), stage, msg);
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+bool read_bool(JsonValue obj, StringView key, bool def, bool& out, StringView file, const char* stage, DiagList& diags) {
+    out = def;
+    const JsonValue v = obj.get(key);
+    if (!v.valid()) return true;
+    if (!v.is_bool()) {
+        String msg("'");
+        msg += key;
+        msg += "' must be true or false";
+        error_at(diags, Errc::ParseError, file, v, stage, msg);
+        return false;
+    }
+    out = v.as_bool();
+    return true;
+}
+
+bool read_number(JsonValue obj, StringView key, f64 def, f64& out, StringView file, const char* stage, DiagList& diags) {
+    out = def;
+    const JsonValue v = obj.get(key);
+    if (!v.valid()) return true;
+    if (!v.is_number()) {
+        String msg("'");
+        msg += key;
+        msg += "' must be a number";
+        error_at(diags, Errc::ParseError, file, v, stage, msg);
+        return false;
+    }
+    out = v.as_number();
+    return true;
+}
+
+}  // namespace detail
+}  // namespace mce::cook

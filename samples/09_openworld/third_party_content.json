@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "kenney-blocky-characters",
+      "title": "Blocky Characters",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/blocky-characters",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "archive_sha256": "5e123859aa0c1598342b600c6db197024a1d63eb9ec531398b310725f589887e",
+      "files": {
+        "models/Textures/texture-a.png": "257e944c582ce7cda206fbd8ceb717be648f9721756baf377a36478c11c0059a",
+        "models/Textures/texture-b.png": "c614148428fbf63ab701ab95e2ebe0b6103ea0e2e6212c986d8931899bad7692",
+        "models/Textures/texture-c.png": "582a62eae6ca086f65e6bfdde16d0d1d15a95fdaf484c0def4769d5a47ba1c8e",
+        "models/Textures/texture-d.png": "c61bc29ec4d96229b979fc9196500afac13c2b448bbab1085832354fb4ef849a",
+        "models/Textures/texture-e.png": "6bbdb4f76b8d2ba7feb1ad8e4a341ca87afd655a4f061c77a86c400ad3125049",
+        "models/Textures/texture-f.png": "54404f22588bac5a7f8df09c2aac0520e101a6f32944ce4070f550d7ad80c6f7",
+        "models/character-a.glb": "8ee5dae167ec589863f6bba222467eb90ace8be357a4c5abfcab289290181616",
+        "models/character-b.glb": "30ed390a741a1b285f587544819aa8a02c8f7f270e552ed742eb84785034f62a",
+        "models/character-c.glb": "ad2425ba0da5d9adff791b949bd62389ddcb09963ff89265930eab0d6484398c",
+        "models/character-d.glb": "bd7cbf0d45e58f6809e3249a84502ce629ac53bfa13bc39fb0a83d171faf84bf",
+        "models/character-e.glb": "9a12684981bc7763aebeceaffed82abfcc458d27b1ed3e169b92bebcc4870675",
+        "models/character-f.glb": "04223c1c6cdce5da6fe9c9729a24e1aa9c765dec93af952379112f7da24a828a"
+      },
+      "materials": []
+    },
+    {
+      "id": "kenney-car-kit",
+      "title": "Car Kit",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/car-kit",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "archive_sha256": "fac7dacac5c7874348cf19729af3ef205f3d366493edaf0a827d93f4fdf3d0c4",
+      "files": {
+        "models/Textures/colormap.png": "f3622a03a20c6696065cae9cbe391351be873508af190c2ebd1d420c055787a5",
+        "models/delivery.glb": "426a3e3a2c242c05c889b1445ba02ef95b2c8b7cd6f597e1275ef736a826014b",
+        "models/police.glb": "a617b880594f56239b7ac4cf6fd4d74ebdae3ba6c5d842e77c76a5906eff352a",
+        "models/sedan-sports.glb": "2889c428ca1dd9c975c3ff760eb8757883490410555ab60b818f712f583826d6",
+        "models/sedan.glb": "b532ea7d2c59f7f6b22b138cf1955218a2c1898f1cea932af4d3fd563c3959b7",
+        "models/suv.glb": "9df31f6e89e927a8176fc792aa125f0b19dc1ba29d2025bfef7c4f4d6ab1778a",
+        "models/taxi.glb": "3803539718ffd3b84b515dbce8ed6b489f1ff5be58edb1903d2c5db5c584bdc7"
+      },
+      "materials": []
+    },
+    {
+      "id": "kenney-city-kit-commercial",
+      "title": "City Kit (Commercial)",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/city-kit-commercial",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "archive_sha256": "f8b09b081c2bb88bcc126e2dec1cb40fd0dad7e7e591b6c26aaefe96fb35276b",
+      "files": {
+        "models/Textures/colormap.png": "191bec3889aaaca5018380038fecc129ebb5c2182879a099b7b538b3fa050b5d",
+        "models/building-a.glb": "5cf220f90ee3f21e7abe38055ca409a48aa8ef1d5ffab6e2deb99e5a5e1ed5e0",
+        "models/building-b.glb": "3b5d3ac0799c024781d92bb15971d42f4f8e380554dc5cf6a40c2f07d948947a",
+        "models/building-c.glb": "f6887608a95a165503561730252c30506938803731c6546efca12bd47b1666bd",
+        "models/building-d.glb": "40605608e9aca0c98e294acff4af0f74afa417a51d589be490ca98f33ce4c2f5",
+        "models/building-e.glb": "edbe5b49858a3c83e72d3cf496129c06082ef3a3d6005769f8883138e275b456",
+        "models/building-f.glb": "633a25f7fb3ccf98e304a885a36ed900aecee5bde7ecd554729dec753cceea78",
+        "models/building-g.glb": "9a28fa2fdfac07492ee95589882213cfd6eb32d6752cb3b2f5404604c676d27a",
+        "models/building-h.glb": "6881613ce218bb33a0f56137d4d33b00d307c47e518fbb21ccba1083efbea896",
+        "models/building-i.glb": "3e572277d3eead30e24668a653ec6a11a488228a219d4902f08638cbca7c3dfe",
+        "models/building-j.glb": "eedc2690cda345b62351f03a218a817a6ad59f399c12e064ca5ff37333d059f5",
+        "models/building-k.glb": "afd36f573b9d6a6a890675aa0fbe762b29efb6258f322990752d79d9f0da42c6",
+        "models/building-l.glb": "0c3d1b346c142198b7f504d12b40cb1630bb14c3ff38a013922b700d09f9dcff",
+        "models/building-m.glb": "1cdc717ac86a0479043ff0d0146142f5dfc2622c0e3aaac484fad5807f94d580",
+        "models/building-n.glb": "35dc225d48516ead483a49e90dd164f1bc62b1ad75d3095488bd404cad1848b0",
+        "models/building-skyscraper-a.glb": "d8339bbb75944ff91d1ec9a70ec6dead71bd98b94a42d3dd0fc1f3b107ddbe85",
+        "models/building-skyscraper-b.glb": "3a383e8a0a8819023d30b2aee1c6f40fa6bc28990227a306a86e531f36c6b8d5",
+        "models/building-skyscraper-c.glb": "e73c357554f7561fedb8c1cbecf9d7163ba09ada264d661c59a0f0a180e0185f"
+      },
+      "materials": []
+    },
+    {
+      "id": "kenney-city-kit-suburban",
+      "title": "City Kit (Suburban)",
+      "author": "Kenney",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "homepage": "https://kenney.nl/assets/city-kit-suburban",
+      "attribution": "Kenney (www.kenney.nl), CC0; crediting is optional",
+      "archive_sha256": "5869c35cf30b1c87bdb2d197b6d325eebadd2ef08ea27f04797e8e08d77a9a39",
+      "files": {
+        "models/Textures/colormap.png": "9b5de86078c25ef02351a80d35ff3c978693a1044565b73eedd9ae9b5b80665d",
+        "models/building-type-a.glb": "49f32e20b9dcd24b1c8f6d6488807b8c8cb684cbb595bfb0bb36ad903e470faa",
+        "models/building-type-b.glb": "a964a10c51bb334be677657fd8fa483531974dd15b4243575990192818e2300e",
+        "models/building-type-c.glb": "86a69f30f1a09461283e158514945ae5cc9d56357b0ddc83a9a3f0eecd113591",
+        "models/building-type-d.glb": "a41cd28265b2b224e700373c3a8356562619699998b7fa4d70ed41de629a6731",
+        "models/building-type-e.glb": "9ec43994c8c332b1ae5b058d8b9646255831fd91047c1a35b1fc1ecae4c082fc",
+        "models/building-type-f.glb": "6f778f50d7f03c86f9a018e428cf8ffdd9e918df09954c0651d1c9559584a22b"
+      },
+      "materials": []
+    }
+  ]
+}

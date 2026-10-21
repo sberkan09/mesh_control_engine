@@ -1,0 +1,633 @@
+#pragma once
+// Starter-kit 3D components (M-KIT3D, issue #129): what a 3D scene authored in the editor or over
+// MCP is made of, alongside LocalTransform. Plain reflected structs with the field layouts
+// SolsticeReach validated; the stock player draws them (kit::Kit3DExtract, kit3d_extract.h) and
+// kit::install_kit3d runs their systems. Data-only header (core + refl + math + asset refs), so
+// game modules and the cook include it without the renderer.
+//
+// Conventions: right-handed, Y up, metres. An entity's LocalTransform (WorldTransform when the
+// hierarchy wrote one) places it; cameras look down their local -Z.
+//
+// Layouts are padding-free (World::state_hash hashes component bytes): asset refs and 8-byte
+// fields first, then 4-byte fields, with explicit pad fields to a multiple of 8.
+//
+//   kit::install_kit3d(world, &assets);   // components, Environment3D, Physics3D, the systems
+
+#include "mce/asset/handle.h"
+#include "mce/containers/array.h"
+#include "mce/fixed_string.h"
+#include "mce/math/math.h"
+#include "mce/physics3d/world3d.h"
+#include "mce/refl/macros.h"
+
+namespace mce {
+class World;
+}
+
+namespace mce::asset {
+class AssetSystem;
+}
+
+namespace mce::kit {
+
+// A placed model: `mesh` drawn at the entity's transform.
+struct MeshRef {
+    asset::AssetRef<asset::Mesh> mesh;
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};       // multiplies the base color (alpha needs a blended material)
+    math::vec3 emissive_tint{1.0f, 1.0f, 1.0f};    // multiplies the emissive color; > 1 feeds bloom
+    f32 cull_radius = 0.0f;                        // 0: the mesh bounds; else a sphere culled first (scaled)
+    u32 cast_shadows = 1;
+    u32 interpolate = 0;  // 1: drawn between the last two ticks' transforms (things the game moves)
+    u32 skinning = 1;     // skinned meshes: 0 draws the bind pose rigidly
+    u32 visible = 1;
+    asset::AssetRef<asset::Material> material;     // a .mcmat drawn on every submesh instead of the mesh's own
+};
+MCE_COMPONENT(MeshRef, mesh, tint, emissive_tint, (cull_radius, Range{0, 1000}, Help{"0 = mesh bounds"}), cast_shadows,
+              (interpolate, Help{"1: smooth between ticks (moving objects)"}), skinning, visible,
+              (material, Help{"a .mcmat replacing every submesh's material; null = the mesh's own"}))
+
+// A point light at the entity's position plus `offset` (in the entity's space).
+struct PointLight3D {
+    math::Color color{1.0f, 0.7f, 0.4f, 1.0f};  // linear
+    math::vec3 offset;
+    f32 intensity = 3.0f;
+    f32 radius = 7.0f;   // no light past this distance
+    u32 enabled = 1;
+    u32 cast_shadows = 0;  // 1: a shadow map (six cube faces), granted by screen importance (r.local_shadows)
+};
+MCE_COMPONENT(PointLight3D, color, offset, (intensity, Range{0, 100}), (radius, Range{0.1f, 200}), enabled,
+              (cast_shadows, Help{"1: casts shadows (cube shadow map, budgeted per frame)"}))
+
+// A spot light: a point light lit only inside a cone along `direction` (entity space). Full
+// intensity inside `inner_deg`, none past `outer_deg` (half-angles).
+struct SpotLight3D {
+    math::Color color{1.0f, 0.95f, 0.85f, 1.0f};
+    math::vec3 offset;
+    f32 intensity = 6.0f;
+    math::vec3 direction{0.0f, -1.0f, 0.0f};
+    f32 radius = 12.0f;
+    f32 outer_deg = 30.0f;
+    f32 inner_deg = 20.0f;
+    u32 enabled = 1;
+    u32 cast_shadows = 0;  // 1: a shadow map (one atlas tile), granted by screen importance (r.local_shadows)
+};
+MCE_COMPONENT(SpotLight3D, color, offset, (intensity, Range{0, 100}), direction, (radius, Range{0.1f, 200}),
+              (outer_deg, Range{1, 89}), (inner_deg, Range{0, 89}), enabled,
+              (cast_shadows, Help{"1: casts shadows (one shadow atlas tile, budgeted per frame)"}))
+
+// A reflection probe (M-VISUAL 2): the scene seen from the entity's position plus `offset`, used
+// for the specular reflections of surfaces inside the world-axis box of `half_extents` around the
+// entity (box-projected, so a room's walls line up in its reflections). Keep the room's floor and
+// walls inside the box by more than `blend_distance`, over which the probe fades to the sky.
+// Needs Environment3D::sky_ibl. Captured when placed or moved; bump `version` to re-capture after
+// the room itself changed. With `baked` (the editor's bake, a cooked .mcenv) the bake is loaded
+// instead and nothing is captured at runtime. At most four per scene.
+struct ReflectionProbe3D {
+    math::vec3 half_extents{5.0f, 3.0f, 5.0f};
+    math::vec3 offset;
+    f32 blend_distance = 1.0f;
+    f32 intensity = 1.0f;
+    u32 version = 0;
+    u32 enabled = 1;
+    asset::AssetRef<asset::Texture> baked;
+};
+MCE_COMPONENT(ReflectionProbe3D, half_extents, (offset, Help{"capture point, entity space"}),
+              (blend_distance, Range{0, 20}), (intensity, Range{0, 4}),
+              (version, Help{"bump to re-capture"}), enabled,
+              (baked, Help{"the editor's bake (.mcenv); empty = captured at runtime"}))
+
+// A global-illumination irradiance volume (M-VISUAL 6): a probes_x × probes_y × probes_z grid of
+// probes over the world-axis box of `half_extents` around the entity (centered at `offset`), lighting
+// the surfaces inside with the light the scene bounces: the sun, point and spot lights, emissive
+// surfaces and the sky, as seen from each probe (render::GiVolume). The first enabled one in the scene
+// is used. `probes_per_frame` probes are re-captured every frame and blended in by `hysteresis`, so
+// moving lights carry over; bump `version` to refill them all at once. With `baked` (the editor's
+// bake, a cooked .mcenv) the volume starts from the bake, and the Low quality tier uses the bake only
+// (no bake there: no global illumination). Keep the grid's planes off the walls: a probe buried in a
+// wall darkens what is near it.
+struct GiVolume3D {
+    math::vec3 half_extents{8.0f, 2.0f, 8.0f};
+    math::vec3 offset;
+    u32 probes_x = 8;
+    u32 probes_y = 4;
+    u32 probes_z = 8;
+    f32 intensity = 1.0f;
+    f32 normal_bias = 0.25f;
+    f32 fade_distance = 1.0f;
+    f32 hysteresis = 0.85f;
+    u32 probes_per_frame = 16;
+    u32 version = 0;
+    u32 enabled = 1;
+    asset::AssetRef<asset::Texture> baked;
+};
+MCE_COMPONENT(GiVolume3D, half_extents, (offset, Help{"box center, entity space"}), (probes_x, Range{2, 32}),
+              (probes_y, Range{2, 32}), (probes_z, Range{2, 32}), (intensity, Range{0, 4}),
+              (normal_bias, Range{0, 2}, Help{"meters a lookup moves off the surface"}),
+              (fade_distance, Range{0, 20}, Help{"meters outside the box over which the sky's ambient returns"}),
+              (hysteresis, Range{0, 0.99f}, Help{"weight of a probe's old light when it is re-captured"}),
+              (probes_per_frame, Range{0, 1024}, Help{"rolling updates; 0 = filled once"}),
+              (version, Help{"bump to refill every probe"}), enabled,
+              (baked, Help{"the editor's bake (.mcenv); empty = filled at runtime"}))
+
+// The 3D view a player renders from: the first `primary` camera in ECS order, at its entity's
+// transform (looking down local -Z). Drawn between the last two ticks' transforms, so a camera the
+// game moves every tick is smooth at any frame rate. A scene with one plays on the 3D path.
+// `mouse_look` asks the player for relative mouse mode (InputState::look keeps turning past the
+// window edge); the player releases it while paused, while the console is open and when unfocused.
+struct Camera3DComponent {
+    f32 fov_deg = 60.0f;  // vertical
+    f32 near_z = 0.1f;
+    f32 far_z = 1000.0f;
+    u32 primary = 1;
+    u32 mouse_look = 0;
+    f32 focus_distance = 0.0f;  // M-VISUAL3 3: meters to the sharpest plane for this camera; 0 = Environment3D's dof_focus_distance
+};
+MCE_COMPONENT(Camera3DComponent, (fov_deg, Range{5, 170}), (near_z, Range{0.001f, 100}), (far_z, Range{1, 100000}), primary,
+              (mouse_look, Help{"1: capture the mouse for look (released while paused or in the console)"}),
+              (focus_distance, Range{0, 1000}, Help{"depth of field: meters to the sharpest plane for this camera; 0 = the environment's dof_focus_distance"}))
+
+// Plays a node / skeleton clip of the entity's MeshRef mesh by name, cross-fading over `fade`
+// seconds when `clip` changes. kit3d advances `time` every tick (deterministic); a game may also
+// write `time` itself. An empty or unknown clip shows the rest pose. With `loop` off the clip plays
+// once, holds its last pose and sets `finished`; `restart` plays it again from the start.
+//
+// With `graph` (an .mcanim AnimGraph, M-DATA-REACH 7) the graph drives the Animator: `state` is the
+// state playing, `params` hold the graph's parameters in the order it lists them (the game, a
+// sequence or MCP writes them), transitions fire on parameter conditions or when a one-shot state
+// finishes and cross-fade over their own fade, a blend state mixes two neighbouring clips by a
+// parameter (`clip` and `blend_clip`, sampled at the same phase, weight `blend_weight`), and the
+// state's events raise AnimEvent3D (anim3d.h) as the playhead crosses them; `restart` returns to
+// the start state. Clip lengths come from the mesh, read through install_kit3d's asset system;
+// without it clips loop forever and one-shots never finish.
+//
+// A graph may also (M-GAMEPLAY3D step 5) blend a state's clips over two parameters (a 2D blend
+// space), play layers over the state machine (a clip on a bone mask, overriding or additive, each
+// with its own playhead in `layer_time`), take root motion from a bone (the entity moves by the
+// clip's ground motion, `root_motion`), and run IK chains: two-bone and look-at chains reach for
+// an IKTarget3D (anim3d.h), foot chains plant the feet on the ground below them.
+struct Animator {
+    FixedString<32> clip;
+    FixedString<32> state;                    // runtime: the graph state playing
+    asset::AssetRef<asset::AnimGraph> graph;  // optional state graph (.mcanim)
+    u64 playing = 0;                          // runtime: StringId of the clip `time` belongs to
+    u64 previous = 0;                         // runtime: the clip fading out
+    u64 blend_clip = 0;                       // runtime: a blend state's second clip
+    math::vec4 params;                        // the graph's parameters, in its order
+    FixedString<24> last_event;               // runtime: the last AnimEvent3D's name
+    f32 speed = 1.0f;
+    f32 phase = 0.0f;                         // seconds added when posing (desynchronises a row of banners)
+    f32 fade = 0.2f;                          // cross-fade seconds (0 = cut); a graph transition sets its own
+    f32 time = 0.0f;                          // seconds into `clip`
+    f32 previous_time = 0.0f;
+    f32 blend = 1.0f;                         // runtime: 0..1 weight of `clip` against `previous`
+    f32 blend_weight = 0.0f;                  // runtime: 0..1 weight of `blend_clip` against `clip`
+    u32 events_fired = 0;                     // runtime
+    bool loop = true;                         // without a graph: false plays `clip` once
+    bool finished = false;                    // runtime: a one-shot clip or state reached its end
+    bool restart = false;                     // set to replay from the start (the engine clears it)
+    u8 root_motion = 1;                       // a graph's root motion: 1 moves the entity, 2 only reports it, 0 leaves it in the pose
+    u32 pad2_ = 0;
+    math::vec4 layer_time;                    // runtime: each graph layer's playhead, seconds
+    math::vec3 root_velocity;                 // runtime: the last tick's root motion, m/s in world space
+    f32 root_turn = 0.0f;                     // runtime: its turn about +Y, rad/s
+};
+MCE_COMPONENT(Animator, clip, (graph, Help{"an AnimGraph (.mcanim) that drives clip, fades and events"}),
+              (params, Help{"the graph's parameters, in the order it lists them"}), (state, ReadOnly, Transient),
+              (playing, ReadOnly, Transient), (previous, ReadOnly, Transient), (blend_clip, ReadOnly, Transient),
+              (last_event, ReadOnly, Transient), (speed, Range{-8, 8}), phase, (fade, Range{0, 5}), time,
+              (previous_time, ReadOnly, Transient), (blend, ReadOnly, Transient), (blend_weight, ReadOnly, Transient),
+              (events_fired, ReadOnly, Transient), (loop, Help{"without a graph: off plays the clip once"}),
+              (finished, ReadOnly, Transient), (restart, Help{"replay from the start (the engine clears it)"}),
+              (root_motion, Range{0, 2},
+               Help{"a graph's root motion: 1 moves the entity (a CharacterController3D through its move), 2 only reports "
+                    "root_velocity and root_turn, 0 leaves the motion in the pose"}),
+              (layer_time, ReadOnly, Transient), (root_velocity, ReadOnly, Transient), (root_turn, ReadOnly, Transient))
+
+// The world's light, sky, fog, post chain and shadows (the renderer's DirectionalLight, Sky, Fog,
+// PostFx and ShadowSettings, flattened for reflection). It lives in two places:
+//   - as a component a scene authors (the first one in ECS order): the editor viewport draws it,
+//     and install_kit3d's Startup copies it into the resource;
+//   - as the world resource of the same type the game drives (a time of day) and the player draws.
+struct Environment3D {
+    asset::AssetRef<asset::Texture> sky_texture;    // equirect map; null = the gradient alone
+    math::vec3 sun_direction{-0.4f, -1.0f, -0.3f};  // the way the light travels
+    f32 sun_intensity = 2.0f;
+    math::vec3 sun_color{1.0f, 0.96f, 0.9f};        // linear
+    u32 sun_shadows = 1;
+    math::vec3 ambient_sky{0.35f, 0.42f, 0.55f};
+    f32 exposure = 1.0f;
+    math::vec3 ambient_ground{0.20f, 0.18f, 0.16f};
+    f32 fog_density = 0.0f;  // exp² fog; 0 = off
+    math::vec3 fog_color{0.62f, 0.72f, 0.85f};
+    u32 sky_enabled = 1;     // 0: clear to the fog color
+    math::vec3 sky_zenith{0.16f, 0.34f, 0.72f};
+    f32 sky_sun_size = 0.9994f;  // cos of the sun disk's angular radius
+    math::vec3 sky_horizon{0.62f, 0.74f, 0.88f};
+    f32 sky_sun_intensity = 12.0f;
+    math::vec3 sky_ground{0.22f, 0.21f, 0.20f};
+    f32 sky_texture_intensity = 1.0f;
+    math::vec4 shadow_splits{0.05f, 0.25f, 1.0f, 1.0f};  // cascade far ends as fractions of shadow_distance
+    u32 sky_texture_additive = 0;  // 1: gradient + texture (a star field over a dusk sky)
+    f32 sky_specular_ambient = 0.5f;
+    u32 bloom = 1;
+    f32 bloom_intensity = 0.05f;
+    f32 bloom_threshold = 1.0f;
+    u32 fxaa = 1;
+    u32 shadow_cascades = 3;
+    f32 shadow_distance = 60.0f;
+    f32 shadow_blend = 0.1f;
+    u32 sky_ibl = 0;  // 1: the sky lights the scene (image-based lighting, M-VISUAL 2)
+    f32 ibl_texture_intensity = 1.0f;
+    u32 ibl_pad_ = 0;  // explicit: the AssetRef below is 8-byte aligned (state_hash reads every byte)
+    asset::AssetRef<asset::Texture> ibl_texture;  // equirect the IBL bakes from; null = the visible sky
+    // M-VISUAL 7. The physically based sky: it replaces the gradient and the sky texture, tints the sun
+    // (sun_color is then the light above the air) and sets the ambient from the sky and the lit ground.
+    u32 atmosphere = 0;
+    f32 atmosphere_intensity = 1.0f;
+    f32 atmosphere_haze = 1.0f;     // aerosols: whiter skies, a wider glow around the sun
+    f32 time_of_day = -1.0f;        // hours 0..24 placing the sun on a simple day's arc; -1 = sun_direction
+    // Volumetric fog in place of the exp² fog: a height fog lit by the sun (shafts), the lights and the ambient.
+    u32 volumetric_fog = 0;
+    f32 volumetric_density = 0.03f;          // extinction per meter at y = 0 and below
+    f32 volumetric_height_falloff = 0.15f;   // density × exp(-falloff · y) above 0
+    f32 volumetric_anisotropy = 0.5f;        // > 0 glows toward the lights
+    math::vec3 volumetric_albedo{0.9f, 0.9f, 0.9f};
+    f32 volumetric_distance = 48.0f;         // meters the froxel grid covers
+    // M-VISUAL 8. Auto exposure (a luminance histogram) on top of `exposure`, a color-grade LUT (a
+    // 256 × 16 strip of 16³, imported with "srgb": false and "mips": false), depth of field and motion
+    // blur (both off on the Low quality tier).
+    u32 auto_exposure = 0;
+    f32 exposure_compensation = 0.0f;        // EV added to the auto target
+    f32 auto_exposure_speed_up = 3.0f;       // adaptation per second (EV) when the frame brightens
+    f32 auto_exposure_speed_down = 1.0f;     // ... and when it darkens
+    f32 color_grade_strength = 1.0f;
+    u32 depth_of_field = 0;
+    f32 dof_focus_distance = 8.0f;           // meters to the sharpest plane
+    f32 dof_focus_range = 1.0f;              // meters either side that stay sharp
+    f32 dof_blur_range = 6.0f;               // meters beyond that over which the blur grows to its largest
+    f32 dof_max_radius = 0.012f;             // the largest blur radius, a fraction of the view height
+    u32 motion_blur = 0;
+    f32 motion_blur_intensity = 0.5f;        // the share of a frame's motion smeared (a shutter fraction)
+    asset::AssetRef<asset::Texture> color_grade;  // the LUT; empty = ungraded
+    // M-VISUAL 3. Screen-space ambient occlusion: darkens the ambient light in creases and contact
+    // points (never the sun or the lights). r.ssao 0 turns it off for every scene.
+    u32 ssao = 0;
+    f32 ssao_radius = 0.6f;     // world meters the samples reach
+    f32 ssao_intensity = 1.0f;
+    f32 ssao_power = 1.5f;      // contrast of the occlusion
+    // M-VISUAL2 1. Screen-space reflections: smooth surfaces mirror what the screen shows, over the
+    // probes and the sky. r.ssr 0 turns them off for every scene; the Low quality tier drops them.
+    u32 ssr = 0;
+    f32 ssr_max_distance = 8.0f;   // world meters a reflection ray travels
+    f32 ssr_thickness = 0.25f;     // meters behind a surface a ray may pass and still hit it
+    f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
+    f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
+    f32 ssr_intensity = 1.0f;
+    u32 ssr_steps = 32;            // march steps per ray (4..128): more find thinner things, cost more
+    f32 ssr_edge_fade = 0.1f;      // fraction of the screen at its borders over which reflections fade
+    // M-VISUAL2 2. When the quality tier draws below the output size (Low, Medium) without TAA: 1 =
+    // the edge-adaptive spatial upsample, 0 = bilinear. `sharpen` (0..1) sharpens the final frame.
+    // r.upscaler and r.sharpen override both per player.
+    u32 upscaler = 1;
+    f32 sharpen = 0.0f;
+    // M-VISUAL2 3. Contact shadows: a short screen-space ray toward the sun shadows the creases, feet
+    // and small details the cascades are too coarse for. r.contact_shadows 0 turns them off for every
+    // scene; the Low quality tier drops them.
+    u32 contact_shadows = 0;
+    f32 contact_length = 0.35f;     // world meters the ray travels toward the sun
+    f32 contact_thickness = 0.1f;   // meters behind a surface a sample may be and still occlude
+    f32 contact_intensity = 1.0f;   // 0..1: how much of the sun an occluded pixel loses
+    u32 contact_steps = 12;         // march steps per ray (4..64)
+    f32 sky_rotation_deg = 0.0f;    // M-VISUAL3 4: yaw of the sky texture about +Y (sky and IBL textures; the gradient and atmosphere ignore it)
+    // M-VISUAL3 3. The camera's look, in the tonemap pass; all off by default.
+    f32 vignette = 0.0f;             // 0..1: darkening at the frame's corners
+    f32 vignette_smoothness = 0.5f;  // 0.05..1: how far in from the corners it reaches
+    f32 film_grain = 0.0f;           // 0..1: animated, luminance-weighted grain
+    f32 grain_size = 1.5f;           // 1..4: grain cell size in output pixels
+    f32 chromatic_aberration = 0.0f; // 0..1: radial colour fringe toward the edges (1 = 0.5 % of the view width)
+    f32 lens_dirt_intensity = 0.0f;  // 0..4: how strongly bloom lights the dirt texture
+    u32 tonemapper = 0;              // 0 ACES fit (the long-standing one), 1 AgX, 2 Khronos PBR Neutral
+    u32 lens_pad_ = 0;
+    asset::AssetRef<asset::Texture> lens_dirt;  // rgb dirt mask over the frame, imported srgb false; empty = none
+};
+MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradient"}), sun_direction,
+              (sun_intensity, Range{0, 50}), sun_color, sun_shadows, ambient_sky, (exposure, Range{0.01f, 16}), ambient_ground,
+              (fog_density, Range{0, 0.2f}), fog_color, sky_enabled, sky_zenith, (sky_sun_size, Range{0.99f, 1}), sky_horizon,
+              (sky_sun_intensity, Range{0, 100}), sky_ground, (sky_texture_intensity, Range{0, 10}), shadow_splits,
+              sky_texture_additive, (sky_specular_ambient, Range{0, 2}), bloom, (bloom_intensity, Range{0, 1}),
+              (bloom_threshold, Range{0, 10}), fxaa, (shadow_cascades, Range{1, 4}), (shadow_distance, Range{1, 2000}),
+              (shadow_blend, Range{0, 0.5f}), (sky_ibl, Help{"1: SH9 sky irradiance + pre-filtered sky reflections"}),
+              (ibl_texture_intensity, Range{0, 10}),
+              (ibl_texture, Help{"equirect the image-based lighting bakes from; empty = the visible sky"}),
+              (atmosphere, Help{"1: physically based sky (tints the sun, sets the ambient)"}), (atmosphere_intensity, Range{0, 10}),
+              (atmosphere_haze, Range{0, 10}), (time_of_day, Range{-1, 24}, Help{"hours placing the sun; -1 = sun_direction"}),
+              (volumetric_fog, Help{"1: froxel volumetric fog lit by the sun and lights (replaces the exp² fog)"}),
+              (volumetric_density, Range{0, 1}), (volumetric_height_falloff, Range{0, 2}), (volumetric_anisotropy, Range{-0.9f, 0.9f}),
+              volumetric_albedo, (volumetric_distance, Range{4, 500}),
+              (auto_exposure, Help{"1: the exposure follows the frame's brightness (histogram)"}),
+              (exposure_compensation, Range{-8, 8}), (auto_exposure_speed_up, Range{0, 20}),
+              (auto_exposure_speed_down, Range{0, 20}), (color_grade_strength, Range{0, 1}),
+              (depth_of_field, Help{"1: blur away from dof_focus_distance"}), (dof_focus_distance, Range{0.1f, 1000}),
+              (dof_focus_range, Range{0, 100}), (dof_blur_range, Range{0.1f, 1000}), (dof_max_radius, Range{0, 0.05f}),
+              (motion_blur, Help{"1: smear moving objects (and the camera's motion) along their velocity"}),
+              (motion_blur_intensity, Range{0, 2}),
+              (color_grade, Help{"256x16 strip LUT (16^3), imported srgb false; empty = ungraded"}),
+              (ssao, Help{"1: screen-space ambient occlusion (darkens the ambient in creases)"}), (ssao_radius, Range{0.05f, 5}),
+              (ssao_intensity, Range{0, 4}), (ssao_power, Range{0.25f, 8}),
+              (ssr, Help{"1: screen-space reflections on smooth surfaces (over the probes and the sky)"}),
+              (ssr_max_distance, Range{0.1f, 200}), (ssr_thickness, Range{0.01f, 5}), (ssr_max_roughness, Range{0, 1}),
+              (ssr_roughness_fade, Range{0.01f, 1}), (ssr_intensity, Range{0, 4}),
+              (ssr_steps, Range{4, 128}), (ssr_edge_fade, Range{0, 0.5f}),
+              (upscaler, Range{0, 1}, Help{"below output size: 1 = edge-adaptive spatial upsample, 0 = bilinear"}),
+              (sharpen, Range{0, 1}, Help{"contrast-adaptive sharpening of the final frame (0 = off)"}),
+              (contact_shadows, Help{"1: short screen-space sun shadows in creases and under small details"}),
+              (contact_length, Range{0.01f, 5}), (contact_thickness, Range{0.005f, 2}), (contact_intensity, Range{0, 1}),
+              (contact_steps, Range{4, 64}),
+              (sky_rotation_deg, Range{-360, 360}, Help{"yaw of the sky texture about +Y, degrees; 0 = as authored"}),
+              (vignette, Range{0, 1}, Help{"darkens the frame's corners (0 = off)"}), (vignette_smoothness, Range{0.05f, 1}),
+              (film_grain, Range{0, 1}, Help{"animated film grain (0 = off)"}), (grain_size, Range{1, 4}),
+              (chromatic_aberration, Range{0, 1}, Help{"colour fringe toward the frame's edges (0 = off)"}),
+              (lens_dirt_intensity, Range{0, 4}, Help{"how strongly bloom lights lens_dirt (needs bloom on)"}),
+              (tonemapper, Range{0, 2}, Help{"0 = ACES fit, 1 = AgX, 2 = Khronos PBR Neutral"}),
+              (lens_dirt, Help{"dirt mask over the frame, imported srgb false; empty = none"}))
+
+// ---- static colliders in the 3D physics world --------------------------------------------------
+
+// A static box in Physics3D's World3D, built at Startup from the entity's transform: `half`
+// (scaled by the entity's scale) around the entity's position plus `offset` (entity space),
+// tilted by `pitch_deg` about its local X (ramps) after the entity's rotation.
+struct BoxCollider3D {
+    math::vec3 half{0.5f, 0.5f, 0.5f};
+    f32 pitch_deg = 0.0f;
+    math::vec3 offset;
+    f32 friction = 0.6f;
+    u32 layer = 0;  // collision layer 0..15
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(BoxCollider3D, half, (pitch_deg, Range{-90, 90}), offset, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// A static triangle-mesh collider from a mesh asset (its rest pose), built at Startup under the
+// entity's transform. Use a simple collision mesh, not the drawn one, for large levels.
+struct MeshCollider3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    f32 friction = 0.6f;
+    u32 layer = 0;
+};
+MCE_COMPONENT(MeshCollider3D, mesh, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// World resource: the 3D physics world the colliders above live in. Games add their own bodies
+// and characters to `world` (Entity ids of their choosing) and query it. With `auto_step` the kit
+// steps it every FixedUpdate_Physics; a game that steps it itself (only while playing) sets 0.
+struct Physics3D {
+    physics::World3D world{physics::PhysicsConfig3D{}};
+    u32 auto_step = 1;
+    u32 colliders = 0;  // bodies the kit built at Startup
+};
+
+// ---- scale (M-VISUAL 9): instanced foliage, projected decals, GPU particles ----------------------
+
+// `count` copies of `mesh` scattered over the world-axis rectangle of `half_extents` (x, z) around the
+// entity, at its height, each turned by a random yaw (`random_yaw`) and scaled between `scale_min` and
+// `scale_max` (render::scatter_foliage, deterministic in `seed`). Drawn as one instanced batch culled
+// per instance (on the GPU where compute exists, against the frame's depth too), with LOD levels per
+// instance, shadows, and a wind sway of `wind_amplitude` × h² metres (h: height above the copy's
+// origin) at `wind_frequency` Hz along `wind_direction` (xz). Rigid meshes only; the copies take no
+// local-light shadows and are not seen by reflection probes or the GI volume.
+struct Foliage3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    asset::AssetRef<asset::Material> material;     // a .mcmat on every copy instead of the mesh's own
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vec2 half_extents{5.0f, 5.0f};
+    u32 count = 200;
+    u32 seed = 1;
+    f32 scale_min = 0.8f;
+    f32 scale_max = 1.2f;
+    f32 wind_amplitude = 0.05f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};
+    f32 cull_distance = 0.0f;  // metres from the camera past which a copy is culled; 0 = the far plane
+    u32 cast_shadows = 1;
+    u32 random_yaw = 1;
+    u32 enabled = 1;
+    // M-VISUAL3 6: each copy's colour = tint x mix(white, tint_variation, hash of its origin); the default (white) keeps `tint`.
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 wind_height = 0.0f;    // metres where the sway reaches wind_amplitude; 0 = amplitude x h^2 (h in metres)
+    f32 wind_gust = 0.0f;      // 0..1: slow gusts travelling along wind_direction across the field
+    f32 wind_flutter = 0.0f;   // metres of fast per-vertex leaf jitter at wind_height
+    u32 mesh_pad_ = 0;         // explicit: mesh_1.. below are 8-byte aligned
+    // More kinds in one scatter: each point picks mesh, mesh_1, mesh_2 or mesh_3 by a hash weighted by mesh_weights
+    // (relative shares; an unbound mesh gets none).
+    asset::AssetRef<asset::Mesh> mesh_1, mesh_2, mesh_3;
+    math::vec4 mesh_weights{1.0f, 0.0f, 0.0f, 0.0f};
+};
+MCE_COMPONENT(Foliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
+              (half_extents, Help{"metres, x and z, around the entity"}), (count, Range{0, 1000000}), seed,
+              (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
+              (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
+              (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}),
+              (mesh_1, Help{"a second kind in the same scatter"}), (mesh_2, Help{"a third kind"}), (mesh_3, Help{"a fourth kind"}),
+              (mesh_weights, Help{"relative share of mesh, mesh_1, mesh_2, mesh_3"}))
+
+// ---- terrain (M-TERRAIN) -------------------------------------------------------------------------
+
+// A heightmap terrain: `terrain` (a .mcterrain) centred on the entity, scaled and turned with it. Drawn
+// as a quadtree of grid meshes (render::TerrainLod): near the camera at full resolution, farther away
+// in coarser nodes whose error stays under `pixel_error` pixels (0: the quality tier's, 4 / 2 / 1 px
+// on Low / Medium / High), joined by skirts. Shadows like any mesh. `material` (a .mcmat) covers the
+// whole terrain, its textures repeating every `uv_tile` metres (0: once over the terrain).
+struct Terrain3D {
+    asset::AssetRef<asset::Terrain> terrain;
+    asset::AssetRef<asset::Material> material;  // null = a plain grey
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 pixel_error = 0.0f;
+    f32 uv_tile = 0.0f;
+    u32 cast_shadows = 1;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Terrain3D, (terrain, Help{"a .mcterrain"}), (material, Help{"a .mcmat over the whole terrain; null = plain grey"}), tint,
+              (pixel_error, Range{0, 64}, Help{"LOD screen error in pixels; 0 = the quality tier's"}),
+              (uv_tile, Range{0, 10000}, Help{"metres per texture repeat; 0 = once over the terrain"}), cast_shadows, enabled)
+
+// A static height-field collider for the entity's Terrain3D, built at Startup (and for runtime-spawned
+// terrains) under the entity's transform. It collides with the same triangles the terrain draws at full
+// resolution, and the terrain's holes (cave mouths, tunnels) cut it like they cut the drawn surface.
+struct TerrainCollider3D {
+    f32 friction = 0.8f;
+    u32 layer = 0;
+};
+MCE_COMPONENT(TerrainCollider3D, (friction, Range{0, 2}), (layer, Range{0, 15}))
+
+// Grass, flowers or rocks growing on a terrain (M-TERRAIN 5): copies of `mesh` standing on the surface of
+// the Terrain3D on this entity (or on its parent), `density` per square metre where splat layer `layer`
+// has full weight and thinner where it has less (layer 8: everywhere), none in holes or on ground steeper
+// than `max_slope_deg`, at most `max_count`. Painting the layer in the editor paints the foliage. Drawn
+// like Foliage3D (render::scatter_on_terrain): one instanced batch, culled per copy, LOD, shadows, wind.
+// One kind per entity: put more kinds on child entities of the terrain.
+struct TerrainFoliage3D {
+    asset::AssetRef<asset::Mesh> mesh;
+    asset::AssetRef<asset::Material> material;  // a .mcmat on every copy instead of the mesh's own
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    u32 layer = 0;
+    f32 density = 1.0f;
+    u32 max_count = 50000;
+    u32 seed = 1;
+    f32 scale_min = 0.8f;
+    f32 scale_max = 1.2f;
+    f32 max_slope_deg = 40.0f;
+    f32 wind_amplitude = 0.05f;
+    f32 wind_frequency = 0.5f;
+    math::vec2 wind_direction{1.0f, 0.0f};
+    f32 cull_distance = 60.0f;  // metres from the camera past which a copy is culled; 0 = the far plane
+    u32 cast_shadows = 0;
+    u32 random_yaw = 1;
+    u32 enabled = 1;
+    u32 pad_ = 0;
+    math::vec4 tint_variation{1.0f, 1.0f, 1.0f, 1.0f};  // as Foliage3D
+    f32 wind_height = 0.0f;
+    f32 wind_gust = 0.0f;
+    f32 wind_flutter = 0.0f;
+    u32 pad2_ = 0;
+};
+MCE_COMPONENT(TerrainFoliage3D, mesh, (material, Help{"a .mcmat replacing the mesh's materials; null = the mesh's own"}), tint,
+              (layer, Range{0, 8}, Help{"the splat layer whose weight sets the density; 8 = everywhere"}),
+              (density, Range{0, 1000}, Help{"copies per square metre at full weight"}), (max_count, Range{0, 1000000}), seed,
+              (scale_min, Range{0.01f, 100}), (scale_max, Range{0.01f, 100}),
+              (max_slope_deg, Range{0, 90}, Help{"no copies on steeper ground"}),
+              (wind_amplitude, Range{0, 2}, Help{"sway in metres at 1 m above the copy's origin"}),
+              (wind_frequency, Range{0, 10}, Help{"Hz"}), (wind_direction, Help{"x, z"}),
+              (cull_distance, Range{0, 100000}, Help{"0 = the far plane"}), cast_shadows, random_yaw, enabled,
+              (tint_variation, Help{"each copy's colour = tint x mix(white, this, hash of its origin); white = no variation; keep alpha 1"}),
+              (wind_height, Range{0, 100}, Help{"metres where the sway reaches wind_amplitude; 0 = amplitude x h^2"}),
+              (wind_gust, Range{0, 1}, Help{"slow gusts travelling along wind_direction"}),
+              (wind_flutter, Range{0, 1}, Help{"metres of fast leaf jitter at wind_height; needs wind_amplitude > 0"}))
+
+// A projected decal: `texture` (rgb color, a coverage; empty = plain `color`) projected down the
+// entity's local -Y onto every opaque surface inside the box of `size` metres (x, projection depth y, z)
+// at the entity's transform. It recolors the surface (and sets its roughness and metallic by
+// `material_weight`) before lighting, and can glow (`emissive`). Up to 64 visible decals from 3
+// distinct textures per frame (render::Decal).
+struct Decal3D {
+    asset::AssetRef<asset::Texture> texture;
+    math::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
+    math::vec4 uv_rect{0.0f, 0.0f, 1.0f, 1.0f};
+    math::vec3 size{1.0f, 1.0f, 1.0f};
+    f32 roughness = 0.7f;
+    f32 metallic = 0.0f;
+    f32 material_weight = 1.0f;
+    f32 emissive = 0.0f;
+    f32 angle_fade = 0.2f;
+    f32 edge_fade = 0.2f;
+    u32 enabled = 1;
+};
+MCE_COMPONENT(Decal3D, (texture, Help{"rgb color, a coverage; empty = plain color"}), (color, Help{"linear rgb, a opacity"}),
+              (uv_rect, Help{"offset xy, scale zw of the texture's region"}),
+              (size, Help{"metres: x, projection depth y, z"}), (roughness, Range{0, 1}), (metallic, Range{0, 1}),
+              (material_weight, Range{0, 1}, Help{"how far roughness and metallic follow the decal"}),
+              (emissive, Range{0, 100}), (angle_fade, Range{0, 1}), (edge_fade, Range{0, 1}), enabled)
+
+// GPU particles: up to `max_particles` camera-facing sprites simulated in compute (render::ParticleEmitter),
+// spawned at `rate` per second inside the box of half extents `box` around the entity's position plus
+// `offset`, moving at a random speed in the cone of half-angle `spread_deg` around `direction` (entity
+// space). They fall by `gravity`, slow by `drag`, bounce off y = `ground_height` with `collide`, and grow
+// and fade from the start to the end values over their life. Bump `burst_version` to spawn `burst` at
+// once. Additive or alpha blended, unsorted, unlit. Not part of the simulation (render-side state).
+struct ParticleEmitter3D {
+    asset::AssetRef<asset::Texture> texture;      // the sprite (a: coverage); empty = a soft round dot
+    math::vec4 color_start{4.0f, 2.0f, 0.6f, 1.0f};
+    math::vec4 color_end{1.0f, 0.2f, 0.05f, 0.0f};
+    math::vec3 offset;
+    math::vec3 box;
+    math::vec3 direction{0.0f, 1.0f, 0.0f};
+    math::vec3 gravity{0.0f, -9.81f, 0.0f};
+    f32 spread_deg = 23.0f;
+    f32 rate = 64.0f;
+    f32 speed_min = 1.0f;
+    f32 speed_max = 3.0f;
+    f32 lifetime_min = 1.0f;
+    f32 lifetime_max = 2.0f;
+    f32 drag = 0.0f;
+    f32 ground_height = 0.0f;
+    f32 bounce = 0.3f;
+    f32 size_start = 0.2f;
+    f32 size_end = 0.05f;
+    u32 max_particles = 1024;
+    u32 seed = 1;
+    u32 burst = 0;
+    u32 burst_version = 0;
+    u32 collide = 0;
+    u32 additive = 1;
+    u32 emitting = 1;
+    u32 pad_ = 0;
+    u32 pad2_ = 0;  // explicit tail: the struct is 8-byte aligned (state_hash reads every byte)
+};
+MCE_COMPONENT(ParticleEmitter3D, texture, (color_start, Help{"linear, HDR allowed; a opacity"}), color_end,
+              (offset, Help{"entity space"}), (box, Help{"spawn volume half extents"}), (direction, Help{"entity space"}),
+              gravity, (spread_deg, Range{0, 180}), (rate, Range{0, 100000}, Help{"per second; 0 = bursts only"}),
+              (speed_min, Range{0, 1000}), (speed_max, Range{0, 1000}), (lifetime_min, Range{0.01f, 600}),
+              (lifetime_max, Range{0.01f, 600}), (drag, Range{0, 100}), ground_height, (bounce, Range{0, 1}),
+              (size_start, Range{0, 100}, Help{"sprite width in metres"}), (size_end, Range{0, 100}),
+              (max_particles, Range{1, 262144}), seed, burst, (burst_version, Help{"bump to spawn `burst` once"}),
+              collide, additive, (emitting, Help{"0: no new particles, the live ones play out"}))
+
+// ---- many static copies of a few meshes (grass, rocks, trees) -----------------------------------
+
+// One copy. `max_distance` > 0 hides it past that camera distance; past `thin_distance` (> 0) only
+// every other copy of its cell draws.
+struct StaticInstance3D {
+    math::vec3 position;
+    f32 scale = 1.0f;
+    math::quat rotation;
+    u32 mesh = 0;              // index into StaticInstances3D::meshes
+    u32 cast_shadows = 1;
+    f32 max_distance = 0.0f;
+    f32 thin_distance = 0.0f;
+};
+
+// A run of instances culled as one sphere (build_cells makes them).
+struct StaticCell3D {
+    math::vec3 center;
+    f32 radius = 0.0f;
+    u32 first = 0, count = 0;
+};
+
+// World resource: copies a game places at Startup (a seeded scatter, a forest), drawn by the
+// extract cell by cell. Not part of World::state_hash (resources are not), so place them
+// deterministically if the sim reads them.
+struct StaticInstances3D {
+    Array<asset::Guid> meshes;
+    Array<StaticInstance3D> instances;
+    Array<StaticCell3D> cells;
+
+    // Index of `mesh` in `meshes`, appended when new (~0u for a null GUID).
+    u32 mesh_slot(asset::Guid mesh);
+    // Sorts `instances` into square cells of `cell_size` metres (stable) and rebuilds `cells`;
+    // `max_extent` is the largest radius one instance reaches around its position.
+    void build_cells(f32 cell_size = 16.0f, f32 max_extent = 6.0f);
+};
+
+// Registers the kit3d components, sets the Environment3D, StaticInstances3D and Physics3D
+// resources (each kept if already set: a game sets Physics3D first for its own PhysicsConfig3D)
+// and adds the systems:
+//   Startup              "kit3d_environment"  the scene's Environment3D component, if any, into the resource
+//   Startup              "kit3d_colliders"    BoxCollider3D / MeshCollider3D / TerrainCollider3D bodies (after the environment)
+//   FixedUpdate_Physics  "kit3d_physics"      Physics3D::world.step when auto_step
+//   FixedUpdate_Post     "kit3d_animators"    Animator time, cross-fades, graphs and events (anim3d.h)
+//   FixedUpdate_Post     "kit3d_attach"       AttachToBone poses (after the animators)
+// Idempotent. `assets` (for MeshCollider3D, Animator graphs and clip lengths, AttachToBone) may be
+// null: mesh colliders are then skipped, graphs do not run and clips loop.
+void install_kit3d(World& world, asset::AssetSystem* assets);
+
+// Model-space triangles of a cooked mesh payload (CHNK_MESH) in its rest pose, every submesh
+// dequantized and placed by its node; positions are multiplied by `transform` (scale, pose).
+// False when the payload does not read. For colliders and tools; skinned submeshes use the bind pose.
+bool mesh_triangles(Span<const byte> mesh_blob, const math::mat4& transform, Array<math::vec3>& vertices, Array<u32>& indices);
+
+// True when the world has an entity with a Camera3DComponent (the player then draws in 3D).
+bool has_camera_3d(World& world);
+
+}  // namespace mce::kit

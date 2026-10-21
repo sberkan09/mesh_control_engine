@@ -1,0 +1,204 @@
+{
+  "format": "mce-timeline",
+  "version": 1,
+  "guid": "c1e3a000-0000-4000-8000-000000000060",
+  "name": "gate_intro",
+  "duration": 12,
+  "tracks": [
+    {
+      "type": "video",
+      "target": 6,
+      "keys": [
+        {
+          "t": 0,
+          "video": "guid:c1e3a000-0000-4000-8000-000000000050",
+          "duration": 3
+        }
+      ]
+    },
+    {
+      "type": "activation",
+      "target": 6,
+      "path": "VideoPlayer.fullscreen",
+      "ranges": [
+        {
+          "from": 0,
+          "to": 3
+        }
+      ]
+    },
+    {
+      "type": "camera",
+      "cuts": [
+        {
+          "t": 0,
+          "camera": 0
+        },
+        {
+          "t": 8,
+          "camera": 1,
+          "blend": 1.5
+        }
+      ]
+    },
+    {
+      "type": "property",
+      "target": 0,
+      "path": "CameraRail3D.t",
+      "keys": [
+        {
+          "t": 3,
+          "value": 0
+        },
+        {
+          "t": 8.5,
+          "value": 1,
+          "ease": "smooth"
+        }
+      ]
+    },
+    {
+      "type": "property",
+      "target": 3,
+      "path": "PointLight3D.intensity",
+      "keys": [
+        {
+          "t": 3.5,
+          "value": 0
+        },
+        {
+          "t": 5.5,
+          "value": 5,
+          "ease": "ease_out"
+        }
+      ]
+    },
+    {
+      "type": "property",
+      "target": 4,
+      "path": "PointLight3D.intensity",
+      "keys": [
+        {
+          "t": 4,
+          "value": 0
+        },
+        {
+          "t": 6,
+          "value": 5,
+          "ease": "ease_out"
+        }
+      ]
+    },
+    {
+      "type": "transform",
+      "target": 2,
+      "keys": [
+        {
+          "t": 6,
+          "position": [
+            0,
+            0,
+            -8
+          ]
+        },
+        {
+          "t": 8,
+          "position": [
+            0,
+            3.1,
+            -8
+          ],
+          "ease": "smooth"
+        }
+      ]
+    },
+    {
+      "type": "audio",
+      "keys": [
+        {
+          "t": 3,
+          "sound": "guid:c1e3a000-0000-4000-8000-000000000040",
+          "gain_db": -4
+        }
+      ]
+    },
+    {
+      "type": "animation",
+      "target": 5,
+      "keys": [
+        {
+          "t": 0,
+          "clip": "idle",
+          "loop": true
+        },
+        {
+          "t": 8.6,
+          "clip": "walk",
+          "loop": true,
+          "fade": 0.3
+        },
+        {
+          "t": 11.2,
+          "clip": "idle",
+          "loop": true,
+          "fade": 0.3
+        }
+      ]
+    },
+    {
+      "type": "transform",
+      "target": 5,
+      "keys": [
+        {
+          "t": 8.6,
+          "position": [
+            0,
+            0,
+            -11.5
+          ]
+        },
+        {
+          "t": 11.2,
+          "position": [
+            0,
+            0,
+            -7
+          ],
+          "ease": "ease_out"
+        }
+      ]
+    },
+    {
+      "type": "subtitle",
+      "lines": [
+        {
+          "t": 3.6,
+          "duration": 2.4,
+          "text": "The gate has not opened in a hundred years.",
+          "speaker": "Warden"
+        },
+        {
+          "t": 6.4,
+          "duration": 2.0,
+          "text": "Someone is knocking from the other side.",
+          "speaker": "Warden"
+        },
+        {
+          "t": 9.0,
+          "duration": 2.4,
+          "text": "Special delivery.",
+          "speaker": "Courier"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "keys": [
+        {
+          "t": 12,
+          "emit": "intro_done"
+        }
+      ]
+    }
+  ]
+}

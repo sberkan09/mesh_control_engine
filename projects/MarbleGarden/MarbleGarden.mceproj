@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "MarbleGarden",
+  "title": "Marble Garden",
+  "engine_version": "0.9.0",
+  "games": ["marble_garden"],
+  "start_scene": "53c28d98-dd51-42b0-a2e4-a5fc03a31fb8",
+  "plugins": []
+}

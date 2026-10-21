@@ -1,0 +1,1 @@
+- Scenes panel, M-SCENETABS step 2 (closes the milestone): a tab per open scene; opening another scene parks unsaved changes in the autosave file instead of asking, and the tab brings them back; Quit asks while any tab has changes.

@@ -1,0 +1,6 @@
+# UBSan runtime suppressions for the fuzz tests of the ASan stage (tests/fuzz/CMakeLists.txt makes a report fatal there).
+# Each entry is a finding in third-party code that the engine does not own; remove it once the pin moves past the fix.
+
+# pl_mpeg shifts negative values left in its IDCT and motion-vector code (pl_mpeg.h:3291-3418). Every compiler we use
+# defines this as the arithmetic shift the decoder wants; the bounds patch (cmake/patch_pl_mpeg.cmake) covers memory only.
+shift-base:pl_mpeg.h

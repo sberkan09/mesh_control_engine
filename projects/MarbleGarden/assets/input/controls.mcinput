@@ -1,0 +1,158 @@
+{
+  "format": "mce-input",
+  "version": 1,
+  "guid": "5350bb64-bc7c-458c-9339-4b0a3b69db81",
+  "maps": [{
+      "actions": [{
+          "bindings": [{
+              "key": "D"
+            }, {
+              "key": "A",
+              "scale": -1
+            }, {
+              "axis": "y",
+              "key": "W"
+            }, {
+              "axis": "y",
+              "key": "S",
+              "scale": -1
+            }, {
+              "key": "Right"
+            }, {
+              "key": "Left",
+              "scale": -1
+            }, {
+              "axis": "y",
+              "key": "Up"
+            }, {
+              "axis": "y",
+              "key": "Down",
+              "scale": -1
+            }, {
+              "deadzone": [0.15, 1],
+              "gamepad_axis": "LeftX"
+            }, {
+              "axis": "y",
+              "deadzone": [0.15, 1],
+              "gamepad_axis": "LeftY",
+              "scale": -1
+            }, {
+              "gamepad_button": "DpadRight"
+            }, {
+              "gamepad_button": "DpadLeft",
+              "scale": -1
+            }, {
+              "axis": "y",
+              "gamepad_button": "DpadUp"
+            }, {
+              "axis": "y",
+              "gamepad_button": "DpadDown",
+              "scale": -1
+            }, {
+              "touch_stick": "x",
+              "zone": [0, 0, 1, 1]
+            }, {
+              "deadzone": [0.15, 1],
+              "scale": -1,
+              "touch_stick": "y",
+              "zone": [0, 0, 1, 1]
+            }],
+          "name": "Move",
+          "type": "axis2d"
+        }, {
+          "bindings": [{
+              "deadzone": [0.2, 1],
+              "gamepad_axis": "RightX"
+            }, {
+              "axis": "y",
+              "deadzone": [0.2, 1],
+              "gamepad_axis": "RightY",
+              "scale": -1
+            }],
+          "name": "Look",
+          "type": "axis2d"
+        }, {
+          "bindings": [{
+              "key": "Space"
+            }, {
+              "gamepad_button": "South"
+            }],
+          "name": "Jump"
+        }, {
+          "bindings": [{
+              "key": "J"
+            }, {
+              "mouse_button": "Left"
+            }, {
+              "gamepad_button": "West"
+            }],
+          "name": "Fire"
+        }, {
+          "bindings": [{
+              "key": "Escape"
+            }, {
+              "gamepad_button": "Start"
+            }],
+          "name": "Pause"
+        }, {
+          "bindings": [{
+              "key": "Return"
+            }, {
+              "key": "Space"
+            }, {
+              "mouse_button": "Left"
+            }, {
+              "gamepad_button": "South"
+            }, {
+              "gamepad_button": "Start"
+            }, {
+              "touch_tap": [0, 0, 1, 1]
+            }],
+          "name": "Confirm"
+        }, {
+          "bindings": [{
+              "key": "Escape"
+            }, {
+              "gamepad_button": "East"
+            }],
+          "name": "Cancel"
+        }],
+      "name": "Gameplay"
+    }, {
+      "actions": [{
+          "bindings": [{
+              "key": "Right"
+            }, {
+              "key": "Left",
+              "scale": -1
+            }, {
+              "axis": "y",
+              "key": "Up"
+            }, {
+              "axis": "y",
+              "key": "Down",
+              "scale": -1
+            }],
+          "name": "Navigate",
+          "type": "axis2d"
+        }, {
+          "bindings": [{
+              "key": "Return"
+            }, {
+              "key": "Space"
+            }, {
+              "gamepad_button": "South"
+            }],
+          "name": "Confirm"
+        }, {
+          "bindings": [{
+              "key": "Escape"
+            }, {
+              "gamepad_button": "East"
+            }],
+          "name": "Cancel"
+        }],
+      "blocks_below": true,
+      "name": "UI"
+    }]
+}

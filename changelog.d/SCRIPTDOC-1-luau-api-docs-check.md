@@ -1,0 +1,1 @@
+- `scripts/ci/check_docs.py` (walls) checks that every member of the Luau API tables (`mce.*`, `mission.*`, ...) is named in the scripting guide or `docs/engine/script.md`, M-SCRIPTDOC.

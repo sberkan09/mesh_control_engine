@@ -1,0 +1,17 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "1eeac5ff-8357-45bb-a220-f29983fa6d59",
+  "name": "hedge",
+  "base_color": [0.75, 0.8, 0.7, 1],
+  "metallic": 0,
+  "roughness": 1,
+  "emissive": [0, 0, 0],
+  "alpha_mode": "opaque",
+  "alpha_cutoff": 0.5,
+  "double_sided": false,
+  "unlit": false,
+  "textures": {
+    "base_color": "guid:763495f3-47f1-4fc5-ba24-242f6e596e15"
+  }
+}

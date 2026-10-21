@@ -1,0 +1,173 @@
+# Shared compile policy for every MCE target (core.md §1.4).
+#
+#  - no exceptions, no RTTI in engine targets (/EHs-c- /GR-, -fno-exceptions -fno-rtti)
+#  - precise floating point everywhere (/fp:precise, -ffp-contract=off): determinism (ADR-0007)
+#  - warnings are errors
+#
+# Helpers:
+#   mce_add_library(<name> [UMBRELLA] SOURCES ... [PUBLIC_DEPS ...] [PRIVATE_DEPS ...])
+#   mce_add_executable(<name> [UMBRELLA] SOURCES ... [DEPS ...])
+#   mce_add_test(<name> [UMBRELLA] [NO_CTEST] SOURCES ... [DEPS ...])
+#   mce_add_game_module(<name> SOURCES ... [DEPS ...])
+#   mce_engine_deps(<out> <deps...>)
+#
+# This file is also installed with the SDK (cmake/MceInstall.cmake) and loaded by MCEConfig.cmake,
+# so a project built against an installed engine gets the same helpers and the same policy.
+#
+# UMBRELLA marks a target that loads game modules, or is linked by one that does: the editor, the
+# MCP server, the cook and their libraries. Where game modules are supported such a target links
+# the mce_engine shared library (src/module) in place of every static engine library in its deps,
+# so it and the module it loads share one engine instance (one convar registry, one reflection
+# registry, one allocator). Linking a static engine library next to the umbrella would silently
+# make a second engine, so the helpers refuse an UMBRELLA library in a non-UMBRELLA target. Where
+# modules are not supported (Windows) UMBRELLA changes nothing.
+
+function(mce_apply_compile_policy target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE
+            /W4 /permissive- /Zc:preprocessor /Zc:__cplusplus /utf-8
+            /EHs-c- /GR- /fp:precise
+            /wd4324)  # C4324: padding from alignas(64) on SPSC/MPSC cursors is intended
+        target_compile_definitions(${target} PRIVATE _HAS_EXCEPTIONS=0 NOMINMAX WIN32_LEAN_AND_MEAN
+            _CRT_SECURE_NO_WARNINGS)
+        if(MCE_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE /WX)
+        endif()
+        if(MCE_ASAN)
+            target_compile_options(${target} PRIVATE /fsanitize=address)
+        endif()
+    else()
+        # C-family sources only: a target with Swift sources (the iOS StoreKit / UIKit bridges in
+        # mce_platform) hands its compile options to swiftc too, which knows none of these.
+        set(c_family "$<COMPILE_LANGUAGE:C,CXX,OBJC,OBJCXX>")
+        target_compile_options(${target} PRIVATE "$<${c_family}:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion;-Wno-sign-conversion;-fno-exceptions;-fno-rtti;-ffp-contract=off>")
+        if(MCE_WARNINGS_AS_ERRORS)
+            target_compile_options(${target} PRIVATE "$<${c_family}:-Werror>")
+        endif()
+        if(MCE_ASAN)
+            target_compile_options(${target} PRIVATE "$<${c_family}:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
+            target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+        endif()
+    endif()
+    if(MCE_FORCE_ASSERTS)
+        target_compile_definitions(${target} PRIVATE MCE_FORCE_ASSERTS=1)
+    endif()
+endfunction()
+
+# <out> = <deps> with every engine library (MCE_ENGINE_LIBS, with or without the mce:: prefix)
+# replaced by mce::mce_engine where game modules are supported; unchanged elsewhere. The umbrella's
+# interface carries the engine libraries compile-only, so headers resolve as before.
+function(mce_engine_deps out)
+    if(NOT MCE_GAME_MODULES_SUPPORTED)
+        set(${out} ${ARGN} PARENT_SCOPE)
+        return()
+    endif()
+    set(result)
+    set(on_umbrella FALSE)
+    foreach(dep IN LISTS ARGN)
+        string(REGEX REPLACE "^mce::" "" bare "${dep}")
+        if(bare IN_LIST MCE_ENGINE_LIBS OR bare STREQUAL "mce_engine")
+            set(on_umbrella TRUE)
+        else()
+            list(APPEND result "${dep}")
+        endif()
+    endforeach()
+    if(on_umbrella)
+        list(PREPEND result mce::mce_engine)
+    endif()
+    set(${out} ${result} PARENT_SCOPE)
+endfunction()
+
+# Fails the configure when a non-UMBRELLA target links an UMBRELLA library (a second engine).
+function(_mce_check_umbrella_deps target umbrella)
+    if(umbrella OR NOT MCE_GAME_MODULES_SUPPORTED)
+        return()
+    endif()
+    foreach(dep IN LISTS ARGN)
+        string(REGEX REPLACE "^mce::" "" bare "${dep}")
+        if(TARGET ${bare})
+            get_target_property(is_umbrella ${bare} MCE_UMBRELLA)
+            if(is_umbrella)
+                message(FATAL_ERROR "${target} links ${dep}, an UMBRELLA library: add UMBRELLA to ${target} "
+                                    "so it links mce_engine instead of the static engine libraries")
+            endif()
+        endif()
+    endforeach()
+endfunction()
+
+function(mce_add_library name)
+    cmake_parse_arguments(ARG "UMBRELLA" "" "SOURCES;PUBLIC_DEPS;PRIVATE_DEPS" ${ARGN})
+    add_library(${name} STATIC ${ARG_SOURCES})
+    add_library(mce::${name} ALIAS ${name})
+    target_include_directories(${name} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    _mce_check_umbrella_deps(${name} ${ARG_UMBRELLA} ${ARG_PUBLIC_DEPS} ${ARG_PRIVATE_DEPS})
+    if(ARG_UMBRELLA)
+        mce_engine_deps(ARG_PUBLIC_DEPS ${ARG_PUBLIC_DEPS})
+        mce_engine_deps(ARG_PRIVATE_DEPS ${ARG_PRIVATE_DEPS})
+        set_target_properties(${name} PROPERTIES MCE_UMBRELLA TRUE)
+    endif()
+    target_link_libraries(${name} PUBLIC ${ARG_PUBLIC_DEPS} PRIVATE ${ARG_PRIVATE_DEPS})
+    mce_apply_compile_policy(${name})
+endfunction()
+
+function(mce_add_executable name)
+    cmake_parse_arguments(ARG "UMBRELLA" "" "SOURCES;DEPS" ${ARGN})
+    add_executable(${name} ${ARG_SOURCES})
+    _mce_check_umbrella_deps(${name} ${ARG_UMBRELLA} ${ARG_DEPS})
+    if(ARG_UMBRELLA)
+        mce_engine_deps(ARG_DEPS ${ARG_DEPS})
+    endif()
+    target_link_libraries(${name} PRIVATE ${ARG_DEPS})
+    mce_apply_compile_policy(${name})
+endfunction()
+
+# A test that takes over 60 s (M4) is labelled `slow` and ships a smoke variant for --task: fewer ticks or frames,
+# one scene, the same checks. The presets' ctest runs skip `slow` (CMakePresets.json filter.exclude); the integration
+# run executes them with local_ci.sh's `slow` stage (ctest preset linux-gcc-debug-slow). Keeps the other labels
+# (gpu, ...). Note: a command-line `-LE <expr>` on `ctest --preset` replaces the preset's exclude, so such a
+# caller must list slow itself (-LE 'gpu|slow'). Usage:  mce_mark_slow(my_test_gpu)  and  add_test(NAME my_test_gpu_smoke ...) with the shorter run.
+function(mce_mark_slow test)
+    get_test_property(${test} LABELS _labels)
+    if(_labels STREQUAL "NOTFOUND")
+        set(_labels "")
+    endif()
+    set_tests_properties(${test} PROPERTIES LABELS "${_labels};slow")
+endfunction()
+
+# NO_CTEST builds the executable without registering it (GPU tests register themselves under
+# MCE_GPU_TESTS). An UMBRELLA test compiles tests/test_main.cpp in directly: mce::doctest_main
+# would bring a static mce_core next to the umbrella.
+function(mce_add_test name)
+    cmake_parse_arguments(ARG "UMBRELLA;NO_CTEST" "" "SOURCES;DEPS" ${ARGN})
+    find_package(Threads REQUIRED)
+    _mce_check_umbrella_deps(${name} ${ARG_UMBRELLA} ${ARG_DEPS})
+    if(ARG_UMBRELLA AND MCE_GAME_MODULES_SUPPORTED)
+        add_executable(${name} ${ARG_SOURCES} "${PROJECT_SOURCE_DIR}/tests/test_main.cpp")
+        target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/tests")
+        mce_engine_deps(ARG_DEPS ${ARG_DEPS})
+        target_link_libraries(${name} PRIVATE ${ARG_DEPS} mce::mce_engine mce::doctest Threads::Threads)
+    else()
+        add_executable(${name} ${ARG_SOURCES})
+        target_link_libraries(${name} PRIVATE ${ARG_DEPS} mce::doctest_main Threads::Threads)
+    endif()
+    mce_apply_compile_policy(${name})
+    if(NOT ARG_NO_CTEST)
+        add_test(NAME ${name} COMMAND ${name})
+    endif()
+endfunction()
+
+# A game module (scripting.md §2): a MODULE library linked against the engine umbrella, exporting
+# nothing but mce_game_module(). Hosts load it with mce::load_game_module; the tools with -module.
+function(mce_add_game_module name)
+    cmake_parse_arguments(ARG "" "" "SOURCES;DEPS" ${ARGN})
+    add_library(${name} MODULE ${ARG_SOURCES})
+    target_link_libraries(${name} PRIVATE mce::mce_module_api ${ARG_DEPS})
+    # Only mce_game_module() is exported (MCE_MODULE_EXPORT); everything else stays inside.
+    set_target_properties(${name} PROPERTIES
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
+    if(NOT MCE_ASAN AND NOT APPLE)
+        target_link_options(${name} PRIVATE "LINKER:--no-undefined")
+    endif()
+    mce_apply_compile_policy(${name})
+endfunction()

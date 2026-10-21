@@ -1,0 +1,16 @@
+{
+  "format": "mce-uitheme", "version": 1, "guid": "@GUID_THEME_CLEAN@",
+  "palette": {
+    "panel": [0.1, 0.12, 0.16, 0.9],
+    "button": [0.16, 0.42, 0.9, 1], "button_hover": [0.26, 0.52, 1, 1], "button_pressed": [0.1, 0.3, 0.68, 1],
+    "button_focused": [0.98, 0.98, 1, 1], "button_disabled": [0.28, 0.31, 0.37, 1],
+    "text": [1, 1, 1, 1], "text_focused": [0.08, 0.2, 0.5, 1], "text_disabled": [0.62, 0.65, 0.7, 1],
+    "label": [0.94, 0.96, 1, 1], "accent": [0.35, 0.75, 1, 1]
+  },
+  "sprites": "guid:@GUID_SKIN_CLEAN@", "white_region": 0,
+  "fonts": { "body": "guid:@GUID_FONT_CLEAN@", "title": "guid:@GUID_FONT_CLEAN_TITLE@", "button": "guid:@GUID_FONT_CLEAN@" },
+  "styles": {
+    "Panel": { "style": { "sprite_region": 1, "slice": { "left": 6, "top": 6, "right": 6, "bottom": 6 } } },
+    "Button": { "style": { "sprite_region": 2, "slice": { "left": 5, "top": 5, "right": 5, "bottom": 5 } } }
+  }
+}

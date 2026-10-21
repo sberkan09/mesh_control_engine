@@ -1,0 +1,12 @@
+{
+  "cold_load": {
+    "artifact": "platformer",
+    "budget_bytes": 4194304,
+    "measured_bytes": 2960785
+  },
+  "replay": {
+    "project": "projects/Kindle",
+    "ticks": 600,
+    "state_hash": "fb72acbe8baa8b11"
+  }
+}

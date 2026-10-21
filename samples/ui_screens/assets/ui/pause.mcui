@@ -1,0 +1,16 @@
+{
+  "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000003a2",
+  "modal": true,
+  "widgets": [
+    { "name": "veil", "fill": true, "blocks_pointer": true,
+      "style": { "tint": [0, 0, 0, 0.6] },
+      "children": [
+        { "name": "menu", "kind": "Stack", "at": [0.5, 0.5, 320, 0], "stack": { "spacing": 14 },
+          "children": [
+            { "name": "title", "kind": "Text", "text": "PAUSED", "font_role": "Title", "style": { "text_size": 36 } },
+            { "name": "resume", "kind": "Button", "text": "RESUME", "style": { "text_size": 24 }, "action": "Resume",
+              "default_focus": true, "nav": { "down": "veil/menu/restart" } },
+            { "name": "restart", "kind": "Button", "text": "RESTART", "style": { "text_size": 24 }, "action": "Restart",
+              "nav": { "up": "veil/menu/resume" } } ] } ] }
+  ]
+}

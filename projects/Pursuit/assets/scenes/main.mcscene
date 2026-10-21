@@ -1,0 +1,441 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "4a0d6f0e-3b7a-4c55-9a1e-3d3a5c9b7e01",
+  "name": "main",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Floor",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            30,
+            0.5,
+            30
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            -0.5,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:26df0098-b9d4-492c-8452-d7627e9fc8e6"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Wall West",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            14,
+            1.5,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            -16,
+            1.5,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:09f9a383-4218-4a34-8b84-182cd92aec03"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Wall East",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            14,
+            1.5,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            16,
+            1.5,
+            0
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:09f9a383-4218-4a34-8b84-182cd92aec03"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Hero",
+      "components": {
+        "CharacterController3D": {
+          "use_input": true
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            0.9,
+            12
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Grunt",
+      "components": {
+        "CharacterController3D": {
+          "layer": 1,
+          "mask": 65531
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            0.9,
+            -14
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:632caf8a-ee5a-4027-9ca0-5d7242556094"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Coin 0",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            0.45,
+            0.08,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            -8,
+            0.4,
+            -8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Coin 1",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            0.45,
+            0.08,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            8,
+            0.4,
+            -8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Coin 2",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            0.45,
+            0.08,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            -8,
+            0.4,
+            8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Coin 3",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            0.45,
+            0.08,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            8,
+            0.4,
+            8
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Coin 4",
+      "components": {
+        "BoxCollider3D": {
+          "half": [
+            0.45,
+            0.08,
+            0.3
+          ]
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            0.4,
+            -20
+          ],
+          "scale": [
+            0.15,
+            0.15,
+            0.15
+          ]
+        },
+        "MeshRef": {
+          "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a"
+        },
+        "ScriptVars": {
+          "v": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": {},
+        "CameraFollow3D": {
+          "target": "$4",
+          "distance": 16,
+          "pitch": 0.9
+        },
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 12,
+      "name": "Navmesh",
+      "components": {
+        "LocalTransform": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "NavMeshSurface3D": {
+          "cell_size": 0.3,
+          "agent_radius": 0.4
+        }
+      }
+    },
+    {
+      "id": 13,
+      "name": "Script: arena",
+      "components": {
+        "ScriptSystem": {
+          "script": "guid:4a0d6f0e-3b7a-4c55-9a1e-3d3a5c9b7e02"
+        }
+      }
+    }
+  ]
+}

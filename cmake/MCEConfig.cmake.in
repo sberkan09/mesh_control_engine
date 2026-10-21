@@ -1,0 +1,112 @@
+# MCEConfig.cmake: the installed Mesh Control Engine (cmake/MceInstall.cmake in the engine tree).
+#
+#   find_package(MCE REQUIRED)        # with CMAKE_PREFIX_PATH=<sdk prefix>, or MCE_DIR=<prefix>/lib/cmake/MCE
+#   mce_add_project(my_game ...)      # the project template's one call (cmake/MceProject.cmake)
+#
+# Targets:  mce::mce_engine (the engine, shared), mce::mce_player_runtime (static; a host links it),
+#           mce::mce_module_api (what a game module links; mce_add_game_module uses it),
+#           mce::mce_net (static, optional networking; mce_add_project(... DEPS mce::mce_net)),
+#           mce::mce_kit_novel (static, the opt-in visual-novel kit; DEPS mce::mce_kit_novel),
+#           mce::mce_kit_novel_ui (static, its NPC dialogue box for a host; HOST_DEPS mce::mce_kit_novel_ui)
+# Helpers:  mce_add_project, mce_add_game_module, mce_add_executable, mce_add_library, mce_add_test,
+#           mce_apply_compile_policy (no exceptions, no RTTI, precise FP, warnings as errors)
+# Tools:    MCE_PLAYER_EXE, MCE_EDITOR_EXE, MCE_MCP_EXE, MCE_COOK_EXE, MCE_BIN_DIR, MCE_LIB_DIR,
+#           MCE_INCLUDE_DIR, MCE_TEMPLATE_DIR, MCE_STORY_COMPILE (the story compiler mce_add_project's
+#           STORY runs)
+# Facts:    MCE_VERSION, MCE_ENGINE_DESCRIBE (this engine's build stamp), MCE_ENGINE_ID_HEX,
+#           MCE_ENGINE_LIBS (the libraries mce::mce_engine stands for; mce_engine_deps maps them)
+#
+# A module built against this SDK carries this engine's MCE_ENGINE_ID (include/mce/engine_version.h);
+# the loader refuses modules from another build. The engine was built @CMAKE_BUILD_TYPE@ with
+# @CMAKE_CXX_COMPILER_ID@ @CMAKE_CXX_COMPILER_VERSION@; build projects with a compatible compiler.
+cmake_minimum_required(VERSION 3.28)
+
+set(MCE_SDK TRUE)
+set(MCE_VERSION "@PROJECT_VERSION@")
+set(MCE_ENGINE_DESCRIBE "@MCE_ENGINE_DESCRIBE@")
+set(MCE_ENGINE_ID_HEX "@MCE_ENGINE_ID_HEX@")
+set(MCE_GAME_MODULES_SUPPORTED ON)
+# The engine libraries folded into libmce_engine: mce_engine_deps() maps each (with or without mce::)
+# to mce::mce_engine, so a custom host can name mce::mce_render & co. as it does in the engine tree.
+set(MCE_ENGINE_LIBS "@MCE_ENGINE_LIBS@")
+set(MCE_ASAN @MCE_ASAN@)
+set(MCE_FORCE_ASSERTS @MCE_FORCE_ASSERTS@)
+option(MCE_WARNINGS_AS_ERRORS "Treat warnings as errors (the engine's own policy)" ON)
+# On by default so `ctest` (and the MCP server's module_test) finds the smoke test in a fresh project.
+option(MCE_BUILD_TESTS "Register the project's tests (<game>_headless_300)" ON)
+if(MCE_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    enable_testing()
+endif()
+
+get_filename_component(_mce_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(MCE_BIN_DIR "${_mce_prefix}/@CMAKE_INSTALL_BINDIR@")
+set(MCE_LIB_DIR "${_mce_prefix}/@CMAKE_INSTALL_LIBDIR@")
+set(MCE_INCLUDE_DIR "${_mce_prefix}/@CMAKE_INSTALL_INCLUDEDIR@")
+set(MCE_TEMPLATE_DIR "${_mce_prefix}/@CMAKE_INSTALL_DATADIR@/mce/templates/project")
+set(MCE_PLAYER_EXE "${MCE_BIN_DIR}/mce_player@MCE_SDK_EXE_SUFFIX@")
+set(MCE_EDITOR_EXE "${MCE_BIN_DIR}/mce_editor@MCE_SDK_EXE_SUFFIX@")
+set(MCE_MCP_EXE "${MCE_BIN_DIR}/mce_mcp@MCE_SDK_EXE_SUFFIX@")
+set(MCE_COOK_EXE "${MCE_BIN_DIR}/mce_cook@MCE_SDK_EXE_SUFFIX@")
+set(MCE_STORY_COMPILE "${_mce_prefix}/@CMAKE_INSTALL_DATADIR@/mce/scripts/story_compile.py")
+if(APPLE)
+    set(MCE_ORIGIN_RPATH "@loader_path")
+else()
+    set(MCE_ORIGIN_RPATH "\$ORIGIN")
+endif()
+
+# The engine's language policy, for projects that did not set their own.
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+find_package(Threads REQUIRED)
+
+if(NOT TARGET mce::mce_engine)
+    add_library(mce::mce_engine SHARED IMPORTED)
+    set_target_properties(mce::mce_engine PROPERTIES
+        IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_ENGINE_FILE@"
+        INTERFACE_INCLUDE_DIRECTORIES "${MCE_INCLUDE_DIR}"
+        INTERFACE_COMPILE_DEFINITIONS "SPDLOG_COMPILED_LIB;FMT_USE_EXCEPTIONS=0;SPDLOG_NO_EXCEPTIONS;SPDLOG_ACTIVE_LEVEL=@MCE_SDK_SPDLOG_LEVEL@;MCE_RENDER_HAS_ASSET=1"
+        INTERFACE_LINK_LIBRARIES "Threads::Threads")
+
+    if(NOT "@MCE_SDK_SCRIPT_FILE@" STREQUAL "")
+        # Scene scripts (M-SCRIPT): the runner and Luau's VM, linked by the player runtime.
+        add_library(mce::luau_vm STATIC IMPORTED)
+        set_target_properties(mce::luau_vm PROPERTIES IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_LUAU_VM_FILE@")
+        add_library(mce::mce_script STATIC IMPORTED)
+        set_target_properties(mce::mce_script PROPERTIES
+            IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_SCRIPT_FILE@"
+            INTERFACE_LINK_LIBRARIES "mce::luau_vm;mce::mce_engine")
+    endif()
+    add_library(mce::mce_player_runtime STATIC IMPORTED)
+    set_target_properties(mce::mce_player_runtime PROPERTIES
+        IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_RUNTIME_FILE@"
+        INTERFACE_LINK_LIBRARIES "@MCE_SDK_RUNTIME_LINKS@")
+
+    if(NOT "@MCE_SDK_NET_FILE@" STREQUAL "")
+        add_library(mce::mce_net STATIC IMPORTED)
+        set_target_properties(mce::mce_net PROPERTIES
+            IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NET_FILE@"
+            INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+    endif()
+
+    add_library(mce::mce_kit_novel STATIC IMPORTED)
+    set_target_properties(mce::mce_kit_novel PROPERTIES
+        IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NOVEL_FILE@"
+        INTERFACE_LINK_LIBRARIES "mce::mce_engine")
+    add_library(mce::mce_kit_novel_ui STATIC IMPORTED)
+    set_target_properties(mce::mce_kit_novel_ui PROPERTIES
+        IMPORTED_LOCATION "${MCE_LIB_DIR}/@MCE_SDK_NOVEL_UI_FILE@"
+        INTERFACE_LINK_LIBRARIES "mce::mce_kit_novel;mce::mce_engine")
+
+    add_library(mce_module_api INTERFACE)
+    add_library(mce::mce_module_api ALIAS mce_module_api)
+    target_link_libraries(mce_module_api INTERFACE mce::mce_engine)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/MceTarget.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/MceShip.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/MceProject.cmake")
+set(MCE_FOUND TRUE)

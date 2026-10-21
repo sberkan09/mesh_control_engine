@@ -1,0 +1,213 @@
+#include "mce/scene/scene.h"
+
+#include <algorithm>
+#include <cstring>
+
+#include "mce/ecs/hierarchy.h"
+#include "mce/ecs/save.h"
+#include "mce/log.h"
+#include "mce/scene/entity_names.h"
+#include "mce/refl/refl.h"
+#include "mce/scene/streaming.h"
+
+namespace mce::scene {
+
+namespace {
+
+constexpr const char* kStage = "scene.instantiate";
+
+struct ColumnPlan {
+    const refl::TypeRecord* type = nullptr;
+    ecs::ComponentId id = ecs::kInvalidComponent;
+};
+
+// Adds the scene's named entities to the world's EntityNames (created on the first named entity).
+void record_names(World& world, const asset::SceneView& scene, const Array<Entity>& spawned) {
+    EntityNames* names = nullptr;
+    for (u32 e = 0; e < scene.header->entity_count && e < spawned.size(); ++e) {
+        const StringView name = scene.entity_name(e);
+        if (name.empty()) continue;
+        if (!names) {
+            names = world.try_resource<EntityNames>();
+            if (!names) names = &world.set_resource(EntityNames{});
+        }
+        names->rows.push_back(EntityNames::Row{StringId(name).value, spawned[e]});
+    }
+    if (names) {
+        // Rows of entities that are gone (a streamed chunk unloaded, a destroyed entity) would pile up
+        // over load/unload cycles: drop them now, while the table is being rebuilt anyway.
+        usize kept = 0;
+        for (usize i = 0; i < names->rows.size(); ++i)
+            if (world.alive(names->rows[i].entity)) names->rows[kept++] = names->rows[i];
+        names->rows.resize(kept);
+        std::stable_sort(names->rows.begin(), names->rows.end(),
+                         [](const EntityNames::Row& a, const EntityNames::Row& b) { return a.hash < b.hash; });
+    }
+}
+
+}  // namespace
+
+Entity find_entity(World& world, StringView name) {
+    EntityNames* names = world.try_resource<EntityNames>();
+    if (!names) return Entity::null;
+    const u64 h = StringId(name).value;
+    const auto it = std::lower_bound(names->rows.begin(), names->rows.end(), h,
+                                     [](const EntityNames::Row& r, u64 v) { return r.hash < v; });
+    for (auto i = it; i != names->rows.end() && i->hash == h; ++i)
+        if (world.alive(i->entity)) return i->entity;
+    return Entity::null;
+}
+
+ecs::ComponentId component_for(World& world, const refl::TypeRecord& type) {
+    const ecs::ComponentId found = world.find_component(type.type_hash);
+    if (found != ecs::kInvalidComponent) return found;
+    ecs::ComponentInfo info;
+    info.type_hash = type.type_hash;
+    info.name = StringView(type.name);
+    info.refl_id = type.id.value;  // so prefab instantiation finds scene-registered components
+    info.is_tag = type.fields.empty() && type.size == 1;  // MCE_COMPONENT(Tag): an empty struct
+    info.size = info.is_tag ? 0u : type.size;
+    info.align = type.align;
+    return world.register_component_info(info);
+}
+
+Result<void> instantiate(World& world, const asset::SceneView& scene, Array<Entity>* spawned, bool hierarchy) {
+    const asset::SceneHeader& h = *scene.header;
+
+    // Validate every column against this process's registry before touching the world.
+    Array<ColumnPlan> plan;
+    plan.resize(h.column_count);
+    u32 max_size = 0;
+    for (u32 c = 0; c < h.column_count; ++c) {
+        const asset::SceneColumn& col = scene.columns[c];
+        const refl::TypeRecord* t = refl::find_type(StringId(col.type_id));
+        if (!t || !t->is_component()) {
+            MCE_LOG_ERROR("scene: column {} names a component type that is not reflected in this process ({:016x})", c,
+                          col.type_id);
+            return Error(Errc::NotFound, kStage);
+        }
+        if (t->size != col.type_size || t->align != col.type_align || t->type_hash == 0) {
+            MCE_LOG_ERROR("scene: component {} was cooked with size {} align {}, this build has {} / {}: re-cook",
+                          t->name, col.type_size, col.type_align, t->size, t->align);
+            return Error(Errc::InvalidArgument, kStage, StringView(t->name));
+        }
+        plan[c].type = t;
+        if (t->size > max_size) max_size = t->size;
+    }
+
+    Array<Entity> local;
+    Array<Entity>& out = spawned ? *spawned : local;
+    out.clear();
+    out.reserve(h.entity_count);
+    for (u32 e = 0; e < h.entity_count; ++e) out.push_back(world.spawn());
+    for (u32 c = 0; c < h.column_count; ++c) plan[c].id = component_for(world, *plan[c].type);
+
+    // Rows are copied into an aligned scratch row so entity fixups can be applied before the
+    // write; fixups are sorted by (column, row, offset).
+    Array<u64> scratch;  // u64 storage: 8-byte alignment covers every component
+    scratch.resize((max_size + 7) / 8 + 1);
+    usize fix = 0;
+    const Span<const asset::SceneFixup> efix = scene.entity_fixups;
+    for (u32 c = 0; c < h.column_count; ++c) {
+        const Span<const u32> rows = scene.rows(c);
+        const Span<const byte> data = scene.data(c);
+        const u32 size = scene.columns[c].type_size;
+        for (u32 r = 0; r < rows.size(); ++r) {
+            byte* row = reinterpret_cast<byte*>(scratch.data());
+            std::memcpy(row, data.data() + usize(r) * size, size);
+            while (fix < efix.size() && (efix[fix].column < c || (efix[fix].column == c && efix[fix].row < r))) ++fix;
+            for (; fix < efix.size() && efix[fix].column == c && efix[fix].row == r; ++fix) {
+                u32 index = 0;
+                std::memcpy(&index, row + efix[fix].byte_offset, sizeof(index));
+                const Entity target = index < out.size() ? out[index] : Entity::null;
+                if (efix[fix].byte_offset + sizeof(Entity) <= size) std::memcpy(row + efix[fix].byte_offset, &target, sizeof(Entity));
+            }
+            world.set_raw(out[rows[r]], plan[c].id, row);
+        }
+    }
+    // A scene with a ChildOf column gets the transform hierarchy: WorldTransforms are composed
+    // now and kept by "transform_propagate" (ADR-0030 §5). Scenes without one are untouched.
+    for (u32 c = 0; hierarchy && c < h.column_count; ++c) {
+        if (plan[c].type != &refl::type_of<ChildOf>()) continue;
+        ecs::install_hierarchy(world);
+        ecs::propagate_transforms(world);
+        break;
+    }
+    record_names(world, scene, out);
+    return ok();
+}
+
+Result<void> load(World& world, asset::AssetSystem& assets, asset::Guid guid, Array<Entity>* spawned) {
+    const asset::AssetKey key = assets.find(guid);
+    if (key == asset::kInvalidAssetKey) return Error(Errc::NotFound, kStage);
+    MCE_TRY_ASSIGN(asset::AssetHandle<asset::Scene> handle, assets.load_sync<asset::Scene>(key));
+    Result<asset::SceneView> view = asset::SceneView::read(assets.resolve(handle));
+    Result<void> r = view ? instantiate(world, view.value(), spawned) : Result<void>(view.error());
+    assets.release(asset::AnyHandle(handle));
+    if (r) {
+        SceneChange* c = world.try_resource<SceneChange>();
+        if (!c) c = &world.set_resource(SceneChange{});
+        c->current.assign(assets.info(key).path);
+        c->current_guid = guid;
+    }
+    return r;
+}
+
+Result<asset::Guid> find_scene(const asset::AssetSystem& assets, StringView want) {
+    constexpr StringView kGuidPrefix = "guid:";
+    constexpr StringView kAssetsPrefix = "assets/";
+    if (want.starts_with(kGuidPrefix)) want.remove_prefix(kGuidPrefix.size());
+    if (Result<asset::Guid> g = asset::parse_guid(want)) {
+        const asset::AssetKey k = assets.find(g.value());
+        if (k == asset::kInvalidAssetKey || assets.info(k).type != asset::ChunkType::Scene)
+            return Error(Errc::NotFound, "scene.change", want);
+        return g.value();
+    }
+    if (want.starts_with(kAssetsPrefix)) want.remove_prefix(kAssetsPrefix.size());
+    for (asset::AssetKey k = 0; k < assets.asset_count(); ++k) {
+        const asset::AssetInfo info = assets.info(k);
+        if (info.type == asset::ChunkType::Scene && info.path == want) return info.guid;
+    }
+    return Error(Errc::NotFound, "scene.change", want);
+}
+
+static Result<bool> change_scene(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    const FixedString<256> target = c->next;
+    c->next.clear();
+    MCE_TRY_ASSIGN(const asset::Guid guid, find_scene(assets, target.view()));
+    if (SceneStreaming* s = world.try_resource<SceneStreaming>()) s->unload_all(world);
+    world.destroy_all();
+    if (EntityNames* names = world.try_resource<EntityNames>()) names->rows.clear();
+    if (spawned) spawned->clear();
+    MCE_TRY(load(world, assets, guid, spawned));
+    world.rerun_startup();
+    ++world.resource<SceneChange>().changes;
+    MCE_LOG_INFO("scene: changed to {}", target.view());
+    return true;
+}
+
+
+Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity>* spawned) {
+    SceneChange* c = world.try_resource<SceneChange>();
+    if (!c) return false;
+    bool changed = false;
+    if (!c->next.empty()) {
+        MCE_TRY_ASSIGN(changed, change_scene(world, assets, spawned));
+    }
+    c = world.try_resource<SceneChange>();
+    if (!c->load_slot.empty()) {
+        const FixedString<64> slot = c->load_slot;
+        c->load_slot.clear();
+        if (Result<save::LoadStats> r = save::load_game(world, slot.view()); r) {
+            MCE_LOG_INFO("scene: save '{}' loaded ({} entities)", slot.view(), r.value().entities);
+        } else {
+            FixedString<512> why;
+            format_error(r.error(), why);
+            MCE_LOG_ERROR("scene: save '{}' not loaded: {}", slot.view(), why.view());
+        }
+    }
+    return changed;
+}
+
+}  // namespace mce::scene

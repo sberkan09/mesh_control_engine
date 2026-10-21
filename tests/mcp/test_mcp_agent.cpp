@@ -1,0 +1,571 @@
+// The M-AGENT tools (ROADMAP M-AGENT) in process against a copy of the scene_demo project. Cases in
+// the "gpu" suite draw with the real player (CI: Xvfb + Mesa llvmpipe; the offscreen software path
+// without a display) and register only with MCE_GPU_TESTS.
+
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
+#include "mcp_client.h"
+
+using namespace mce;
+using namespace mcp_client;
+using namespace cook_test;
+
+namespace {
+
+const std::string kDemoAssets = std::string(MCE_SOURCE_DIR) + "/samples/scene_demo/assets";
+const std::string kGoldens = std::string(MCE_SOURCE_DIR) + "/tests/mcp/goldens";
+
+std::string demo_project(const char* name) {
+    const std::string root = fresh_dir(name);
+    std::filesystem::copy(kDemoAssets, root + "/assets", std::filesystem::copy_options::recursive);
+    return root;
+}
+
+std::string compact(cook::JsonValue v) {
+    cook::String s;
+    cook::write_json(v, s, true);
+    return std::string(s.view());
+}
+
+mcp::ServerOptions with_player() {
+    mcp::ServerOptions opt;
+    opt.player = MCE_PLAYER_EXE;
+    return opt;
+}
+
+void write_png(const std::string& path, const cook::Image& img) {
+    Array<byte> png;
+    REQUIRE(cook::encode_png(img.width, img.height, img.rgba.span(), png));
+    write_file(path, std::string(reinterpret_cast<const char*>(png.data()), png.size()));
+}
+
+cook::Image solid(u32 w, u32 h, u8 r, u8 g, u8 b) {
+    cook::Image img;
+    img.width = w;
+    img.height = h;
+    img.rgba.resize(usize(w) * h * 4);
+    for (usize i = 0; i < img.rgba.size(); i += 4) {
+        img.rgba[i] = r;
+        img.rgba[i + 1] = g;
+        img.rgba[i + 2] = b;
+        img.rgba[i + 3] = 255;
+    }
+    return img;
+}
+
+bool same_pixels(const cook::Image& a, const cook::Image& b) {
+    return a.width == b.width && a.height == b.height && a.rgba.size() == b.rgba.size() &&
+           std::equal(a.rgba.begin(), a.rgba.end(), b.rgba.begin());
+}
+
+// Mean absolute channel difference of two same-size images, of full scale (1 when the sizes differ).
+double mean_diff(const cook::Image& a, const cook::Image& b) {
+    if (a.width != b.width || a.height != b.height || a.rgba.size() != b.rgba.size() || a.rgba.empty()) return 1.0;
+    double sum = 0.0;
+    for (usize i = 0; i < a.rgba.size(); ++i) sum += std::abs(int(a.rgba[i]) - int(b.rgba[i]));
+    return sum / (double(a.rgba.size()) * 255.0);
+}
+
+}  // namespace
+
+TEST_CASE("mcp agent tools: listed, and arguments are checked before anything runs") {
+    const std::string root = demo_project("mcp_agent_args");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto tools = c.request("tools/list");
+    std::string names;
+    const cook::JsonValue list = tools->root().get("result").get("tools");
+    for (u32 i = 0; i < list.size(); ++i) names += str(list.at(i).get("name")) + " ";
+    for (const char* t : {"render_frame", "render_sheet", "image_diff"}) CHECK(names.find(t) != std::string::npos);
+
+    CHECK(c.fails("render_frame", R"({"tick":0})").find("'tick'") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"width":10})").find("'width'") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"scene":"scenes/none.mcscene"})").find("no such scene") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"entity":"Nobody"}})").find("no entity named") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"position":[0,1,2]}})").find("camera.position") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"fov":3}})").find("camera") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"safe_area":{"top":-1}})").find("safe_area") != std::string::npos);
+    // M-VISUAL3 3c: the per-shot look is checked against the reflected fields before anything runs.
+    CHECK(c.fails("render_frame", R"({"camera":{"focus":"target"}})").find("position and camera.target") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"focus":-2}})").find("camera.focus") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"camera":{"exposure":0}})").find("camera.exposure") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":[1]})").find("environment") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"fog_dencity":1}})").find("fog_dencity") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"sky_texture":"x"}})").find("sky_texture") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"sun_color":[1,0]}})").find("[x, y, z]") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"environment":{"fog_density":"thick"}})").find("number") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"save":"../x.png"})").find("inside the project") != std::string::npos);
+    CHECK(c.fails("render_frame", R"({"input":"x Jump"})").find("line 1") != std::string::npos);
+    CHECK(c.fails("render_sheet", R"({"ticks":[5,3]})").find("ascending") != std::string::npos);
+    CHECK(c.fails("render_sheet", R"({"ticks":[]})").find("ticks") != std::string::npos);
+    CHECK(c.fails("image_diff", R"({"golden":"a.png"})").find("exactly one") != std::string::npos);
+    CHECK(c.fails("image_diff", R"({"golden":"a.txt","image":"b.png"})").find("'golden'") != std::string::npos);
+    // An unsaved edit: the frame is drawn from the cooked file, so it must be saved first.
+    c.ok("entity_create", R"({"name":"Extra"})");
+    CHECK(c.fails("render_frame").find("unsaved") != std::string::npos);
+}
+
+TEST_CASE("mcp agent tools: image_diff scores PNGs, writes a missing golden, and refuses size mismatches") {
+    const std::string root = demo_project("mcp_agent_diff");
+    Client c;
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    cook::Image grey = solid(40, 30, 100, 100, 100);
+    write_png(root + "/shots/a.png", grey);
+    cook::Image changed = grey;
+    for (u32 y = 0; y < 15; ++y)  // the top half brighter by 50
+        for (u32 x = 0; x < 40; ++x) changed.rgba[(usize(y) * 40 + x) * 4] = 150;
+    write_png(root + "/shots/b.png", changed);
+    write_png(root + "/shots/small.png", solid(20, 10, 0, 0, 0));
+
+    // No golden yet: the image becomes it.
+    auto first = c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/a.png"})");
+    CHECK(first.v().get("written").as_bool());
+    CHECK(std::filesystem::exists(root + "/goldens/a.png"));
+    REQUIRE(first.images.size() == 1);
+    CHECK(same_pixels(first.images[0], grey));
+
+    auto same = c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/a.png"})");
+    CHECK(same.v().get("score").as_number() == 0);
+    CHECK(same.v().get("pass").as_bool());
+
+    auto diff = c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png","threshold":10})");
+    CHECK(diff.v().get("changed_fraction").as_number() == doctest::Approx(0.5));
+    CHECK(diff.v().get("max_channel_diff").as_number() == 50);
+    CHECK(diff.v().get("score").as_number() == doctest::Approx(50.0 * 0.5 / (3 * 255)));
+    CHECK_FALSE(diff.v().get("pass").as_bool());
+    REQUIRE(diff.images.size() == 1);  // the heat map: changed pixels red
+    CHECK(diff.images[0].rgba[0] > 128);
+    CHECK(diff.images[0].rgba[(usize(29) * 40) * 4] < 64);
+    // A looser bar passes; a high threshold sees no changed pixel.
+    CHECK(c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png","max_score":0.05})").v().get("pass").as_bool());
+    CHECK(c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png","threshold":60})").v().get("changed_fraction").as_number() == 0);
+
+    CHECK(c.fails("image_diff", R"({"golden":"goldens/a.png","image":"shots/small.png"})").find("size mismatch") != std::string::npos);
+    auto upd = c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png","update":true})");
+    CHECK(upd.v().get("written").as_bool());
+    CHECK(c.ok("image_diff", R"({"golden":"goldens/a.png","image":"shots/b.png"})").v().get("score").as_number() == 0);
+}
+
+#if defined(MCE_PROBE_MODULE) && !defined(_WIN32)
+namespace {
+
+// A stand-in build tree: the probe module copied under <dir>/out/, a CMakeCache.txt whose
+// CMAKE_COMMAND is a script printing `cmake_output` (exit `cmake_rc`), and a ctest beside it.
+std::string fake_build_tree(const char* name, const std::string& cmake_output, int cmake_rc, const std::string& ctest_output, int ctest_rc) {
+    const std::string dir = fresh_dir(name);
+    std::filesystem::create_directories(dir + "/out");
+    std::filesystem::copy_file(MCE_PROBE_MODULE, dir + "/out/libtemplate_probe.so");
+    auto script = [&](const std::string& path, const std::string& text, int rc) {
+        write_file(path + ".txt", text);
+        write_file(path, "#!/bin/sh\necho \"$@\" > " + path + ".args\ncat " + path + ".txt\nexit " + std::to_string(rc) + "\n");
+        std::filesystem::permissions(path, std::filesystem::perms::owner_all);
+    };
+    script(dir + "/bin/cmake", cmake_output, cmake_rc);
+    script(dir + "/bin/ctest", ctest_output, ctest_rc);
+    write_file(dir + "/CMakeCache.txt", "# fake\nCMAKE_COMMAND:INTERNAL=" + dir + "/bin/cmake\n");
+    return dir;
+}
+
+std::string read_all(const std::string& path) {
+    std::ifstream f(path);
+    return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+}
+
+}  // namespace
+
+TEST_CASE("module_build: compiler errors as file:line:col JSON; a good build maps the module again and keeps the scene") {
+    const std::string root = fresh_dir("mcp_agent_build_project");
+    std::filesystem::copy(std::string(MCE_PROBE_PROJECT) + "/assets", root + "/assets", std::filesystem::copy_options::recursive);
+    const std::string bad = fake_build_tree("mcp_agent_build_bad",
+                                            "[1/2] Building CXX object game.cpp.o\n"
+                                            "FAILED: game.cpp.o\n"
+                                            "/p/games/x/module/x.cpp:12:5: error: 'Spinn' was not declared in this scope\n"
+                                            "/p/games/x/module/x.cpp:12:5: note: suggested alternative: 'Spin'\n"
+                                            "/p/games/x/module/x.h:3:1: warning: unused variable 'k' [-Wunused-variable]\n"
+                                            "/p/games/x/module/x.cpp:12:5: error: 'Spinn' was not declared in this scope\n"
+                                            "C:\\p\\x.cpp(40,7): error C2065: 'q': undeclared identifier\n"
+                                            "ninja: build stopped: subcommand failed.\n",
+                                            1, "", 0);
+    {
+        Client c;
+        REQUIRE(c.server.load_module(sv(bad + "/out/libtemplate_probe.so")));
+        REQUIRE(c.server.open_project(sv(root), "scenes/main.mcscene"));
+        c.init();
+        auto r = c.ok("module_build", R"({"warnings":true})");
+        CHECK_FALSE(r.v().get("ok").as_bool());
+        CHECK_FALSE(r.v().get("reloaded").as_bool());
+        CHECK(str(r.v().get("target")) == "template_probe_game");
+        CHECK(r.v().get("errors").as_number() == 2);  // the repeated one once
+        CHECK(r.v().get("warnings").as_number() == 1);
+        const cook::JsonValue d = r.v().get("diagnostics");
+        REQUIRE(d.size() == 4);
+        CHECK(str(d.at(0).get("file")) == "/p/games/x/module/x.cpp");
+        CHECK(d.at(0).get("line").as_number() == 12);
+        CHECK(d.at(0).get("col").as_number() == 5);
+        CHECK(str(d.at(0).get("severity")) == "error");
+        CHECK(str(d.at(1).get("severity")) == "note");
+        CHECK(str(d.at(3).get("file")) == "C:\\p\\x.cpp");
+        CHECK(d.at(3).get("line").as_number() == 40);
+        CHECK(str(r.v().get("output_tail")).find("subcommand failed") != std::string::npos);
+        CHECK(read_all(bad + "/bin/cmake.args").find("--build " + bad + " --target template_probe_game") != std::string::npos);
+    }
+
+    const std::string good = fake_build_tree("mcp_agent_build_good", "[1/1] Linking CXX shared module libtemplate_probe.so\n", 0,
+                                             "Test project /x\n"
+                                             "    Start 1: template_probe_headless_300\n"
+                                             "1/2 Test  #1: template_probe_headless_300 ...   Passed    0.30 sec\n"
+                                             "2/2 Test  #2: template_probe_gpu .............***Failed    0.10 sec\n",
+                                             8);
+    Client c;
+    REQUIRE(c.server.load_module(sv(good + "/out/libtemplate_probe.so")));
+    REQUIRE(c.server.open_project(sv(root), "scenes/main.mcscene"));
+    c.init();
+    auto before = c.ok("run_headless", R"({"ticks":60,"log_lines":0})");
+    c.ok("entity_create", R"({"name":"Added","components":{"Spin":{}}})");  // unsaved work survives the reload
+    auto r = c.ok("module_build");
+    CHECK(r.v().get("ok").as_bool());
+    CHECK(r.v().get("reloaded").as_bool());
+    CHECK(r.v().get("diagnostics").size() == 0);
+    CHECK(c.server.module().loaded());
+    auto info = c.ok("scene_info");
+    CHECK(info.v().get("dirty").as_bool());
+    CHECK(c.ok("scene_get_entity", R"({"entity":"Added"})").text.find("Spin") != std::string::npos);
+    CHECK(c.fails("scene_undo").find("nothing to undo") != std::string::npos);  // a fresh history
+    c.ok("scene_open", R"({"path":"scenes/main.mcscene","force":true})");
+    auto after = c.ok("run_headless", R"({"ticks":60,"log_lines":0})");
+    CHECK(str(after.v().get("state_hash")) == str(before.v().get("state_hash")));  // the module's systems still run
+
+    auto t = c.ok("module_test");
+    CHECK_FALSE(t.v().get("ok").as_bool());
+    CHECK(t.v().get("passed").as_number() == 1);
+    CHECK(t.v().get("failed").as_number() == 1);
+    CHECK(str(t.v().get("tests").at(1).get("name")) == "template_probe_gpu");
+    CHECK(read_all(good + "/bin/ctest.args").find("-R ^template_probe_") != std::string::npos);
+
+    Client none;  // no module: nothing to rebuild
+    REQUIRE(none.server.open_project(sv(root)));
+    none.init();
+    CHECK(none.fails("module_build").find("no game module") != std::string::npos);
+}
+#endif
+
+TEST_CASE("perf_run headless and perf_compare: the sim alone, judged and compared (M-PERF step 3)") {
+    const std::string root = demo_project("mcp_agent_perf_headless");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    CHECK(c.fails("perf_run", R"({"target":"console"})").find("'target'") != std::string::npos);
+    CHECK(c.fails("perf_run", R"({"frames":0})").find("'frames'") != std::string::npos);
+    CHECK(c.fails("perf_run", R"({"save":"../out.mcperf"})").find("'save'") != std::string::npos);
+    CHECK(c.fails("perf_compare", "{}").find("cannot read") != std::string::npos);  // nothing measured yet
+
+    // A short run works (the floor is 1 frame) and says its percentiles are noisy; the counts stay deterministic.
+    auto quick = c.ok("perf_run", R"({"headless":true,"frames":5,"warmup":2})");
+    CHECK(quick.v().get("frames").as_number() == 5);
+    CHECK(str(quick.v().get("note")).find("noisy") != std::string::npos);
+
+    auto r = c.ok("perf_run", R"({"headless":true,"frames":60,"warmup":10,"target":"mobile"})");
+    CHECK_FALSE(r.v().get("note").valid());
+    CHECK(str(r.v().get("file")) == "cooked/.perf/last.mcperf");
+    CHECK(std::filesystem::exists(root + "/cooked/.perf/last.mcperf"));
+    CHECK(r.v().get("frames").as_number() == 60);
+    CHECK(str(r.v().get("backend")) == "headless");
+    CHECK(str(r.v().get("target")) == "mobile");
+    CHECK(r.v().get("gpu_ms").get("measured").as_bool() == false);  // no GPU headless
+    CHECK(r.v().get("counters_max").get("draws").as_number() == 0);
+    CHECK(r.v().get("draw_causes").get("scene_draws_avg").as_number() == 0);  // M-CONTENT 2: no 3D, no causes
+    CHECK(r.v().get("draw_causes").get("causes").size() == 0);
+    const cook::JsonValue lines = r.v().get("verdict").get("lines");
+    REQUIRE(lines.size() >= 1);
+    bool sim_line = false;
+    for (u32 i = 0; i < lines.size(); ++i) sim_line = sim_line || str(lines.at(i).get("metric")) == "sim_ms";
+    CHECK(sim_line);
+    // The physics step runs every tick, so it is among the systems with time.
+    const cook::JsonValue top = r.v().get("top_systems");
+    REQUIRE(top.size() >= 1);
+    bool physics = false;
+    for (u32 i = 0; i < top.size(); ++i) physics = physics || str(top.at(i).get("phase")) == "FixedUpdate_Physics";
+    CHECK(physics);
+
+    // A second run kept under perf/: the compare reads the last two and finds the counters unchanged.
+    auto r2 = c.ok("perf_run", R"({"headless":true,"frames":60,"warmup":10,"save":"perf/again.mcperf"})");
+    CHECK(str(r2.v().get("file")) == "perf/again.mcperf");
+    CHECK(std::filesystem::exists(root + "/perf/again.mcperf"));
+    CHECK(std::filesystem::exists(root + "/cooked/.perf/previous.mcperf"));
+    auto cmp = c.ok("perf_compare", "{}");
+    CHECK(str(cmp.v().get("after")) == "cooked/.perf/last.mcperf");
+    CHECK(cmp.v().get("counters").get("draws").get("change").as_number() == 0);
+    CHECK(cmp.v().get("counters").get("heap_allocations").get("change").as_number() == 0);
+    CHECK(cmp.v().get("systems").size() >= 1);
+    CHECK(cmp.v().get("verdict").get("lines").size() >= 1);
+    auto named = c.ok("perf_compare", R"({"before":"perf/again.mcperf","after":"perf/again.mcperf"})");
+    CHECK(named.v().get("better").size() == 0);
+    CHECK(named.v().get("worse").size() == 0);
+    write_file(root + "/perf/bad.mcperf", "{\"format\": \"mce-scene\"}");
+    CHECK(c.fails("perf_compare", R"({"before":"perf/bad.mcperf"})").find("not a .mcperf capture") != std::string::npos);
+}
+
+TEST_SUITE("gpu") {
+
+TEST_CASE("render_frame: the player's frame at a tick, repeatable, from other cameras, checked against a golden") {
+    const std::string root = demo_project("mcp_agent_render");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto a = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"save":"shots/t30.png"})");
+    CHECK(a.v().get("tick").as_number() == 30);
+    REQUIRE(a.images.size() == 1);
+    CHECK(a.images[0].width == 320);
+    CHECK(a.images[0].height == 180);
+    CHECK(std::filesystem::exists(root + "/shots/t30.png"));
+    // The capture frame shows the held tick itself: the same call gives the same pixels.
+    auto again = c.ok("render_frame", R"({"tick":30,"width":320,"height":180})");
+    CHECK(same_pixels(a.images[0], again.images[0]));
+    // The offscreen software path (what a box without a display uses) draws the same frame: the same
+    // pixels when the window is Mesa too (Xvfb), within the golden's 0.5 % when it is a real GPU.
+    auto soft = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"software":true})");
+    CHECK(str(soft.v().get("renderer")).find("software") != std::string::npos);
+    CHECK(mean_diff(a.images[0], soft.images[0]) < 0.005);
+
+    // Later ticks and scripted input change the frame; so does another camera (render only).
+    auto later = c.ok("render_frame", R"({"tick":90,"width":320,"height":180})");
+    CHECK_FALSE(same_pixels(a.images[0], later.images[0]));
+    auto by_name = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"camera":{"entity":"Camera"}})");
+    CHECK(same_pixels(a.images[0], by_name.images[0]));  // the scene's own camera, by name
+    auto free2d = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"camera":{"center":[6,0],"zoom":0.5}})");
+    CHECK_FALSE(same_pixels(a.images[0], free2d.images[0]));
+    // A safe area: outlined on the returned image (cyan-ish edge at the inset).
+    auto safe = c.ok("render_frame", R"({"tick":30,"width":320,"height":180,"safe_area":{"top":20}})");
+    const u8* edge = &safe.images[0].rgba[(usize(20) * 320 + 160) * 4];
+    CHECK(edge[2] > 200);
+
+    // The golden (tests/mcp/goldens, Mesa llvmpipe): within 0.5 % mean difference. A missing golden
+    // is written and passes; MCE_UPDATE_GOLDENS=1 rewrites it.
+    const std::string golden = kGoldens + "/scene_demo_t30.png";
+    const char* upd = std::getenv("MCE_UPDATE_GOLDENS");
+    if (!std::filesystem::exists(golden) || (upd && *upd == '1')) {
+        std::filesystem::create_directories(kGoldens);
+        std::filesystem::copy_file(root + "/shots/t30.png", golden, std::filesystem::copy_options::overwrite_existing);
+        MESSAGE("wrote the golden " << golden);
+    }
+    std::filesystem::create_directories(root + "/goldens");
+    std::filesystem::copy_file(golden, root + "/goldens/scene_demo_t30.png", std::filesystem::copy_options::overwrite_existing);
+    auto d = c.ok("image_diff", R"({"golden":"goldens/scene_demo_t30.png","render":{"tick":30,"width":320,"height":180},"max_score":0.005})");
+    CHECK_MESSAGE(d.v().get("pass").as_bool(), "render_frame drifted from tests/mcp/goldens/scene_demo_t30.png: " << d.text);
+}
+
+TEST_CASE("render_sheet: ticks in columns, cameras in rows, one image") {
+    const std::string root = demo_project("mcp_agent_sheet");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    auto s = c.ok("render_sheet", R"({"ticks":[1,30,60],"cell_width":160,"cell_height":90,"cameras":[{"entity":"Camera"},{"center":[0,0],"zoom":0.25}]})");
+    CHECK(s.v().get("rows").as_number() == 2);
+    CHECK(s.v().get("columns").as_number() == 3);
+    REQUIRE(s.images.size() == 1);
+    CHECK(s.images[0].width == 3 * 160 + 4 * 4);
+    CHECK(s.images[0].height == 2 * 90 + 3 * 4);
+}
+
+TEST_CASE("perf_run: draw counters repeat run to run; three more sprite textures show as more draws (M-PERF step 3)") {
+    const std::string root = demo_project("mcp_agent_perf");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/demo.mcscene"));
+    c.init();
+    // With a progressToken the run reports its phases as notifications/progress: launching, warmup, capturing,
+    // reading the capture, in order, ending at the total.
+    {
+        c.out.clear();
+        c.server.handle(sv(R"({"jsonrpc":"2.0","id":900,"method":"tools/call","params":{"name":"perf_run","arguments":{"frames":30,"warmup":5,"width":320,"height":180},"_meta":{"progressToken":"p1"}}})"));
+        std::vector<std::string> phases;
+        u64 last = 0;
+        for (const std::string& line : c.out) {
+            auto m = parse(line);
+            if (str(m->root().get("method")) != "notifications/progress") continue;
+            const cook::JsonValue params = m->root().get("params");
+            CHECK(str(params.get("progressToken")) == "p1");
+            CHECK(params.get("total").as_number() == 35);
+            const u64 done = static_cast<u64>(params.get("progress").as_number());
+            CHECK(done >= last);
+            last = done;
+            phases.push_back(str(params.get("message")));
+        }
+        REQUIRE(phases.size() >= 4);
+        CHECK(phases.front() == "launching the player");
+        CHECK(phases.back() == "reading the capture");
+        CHECK(last == 35);
+        bool warm = false, capt = false;
+        for (const std::string& p : phases) {
+            warm = warm || p.rfind("warmup ", 0) == 0;
+            capt = capt || p.rfind("capturing ", 0) == 0;
+        }
+        CHECK(warm);
+        CHECK(capt);
+        CHECK(str(parse(c.out.back())->root().get("result").get("content").at(0).get("type")) == "text");
+    }
+    auto a = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/before.mcperf"})");
+    const u64 draws = static_cast<u64>(a.v().get("counters_max").get("draws").as_number());
+    CHECK(draws > 0);
+    CHECK(a.v().get("counters_max").get("sprites").as_number() > 0);
+    CHECK(a.v().get("frames").as_number() == 30);
+    auto again = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180})");
+    CHECK(compact(again.v().get("counters_max")) == compact(a.v().get("counters_max")));
+
+    // Three sprites with a texture each: three more batches, so more draws, and perf_compare says so.
+    for (int i = 0; i < 3; ++i) {
+        const std::string guid = "5ce4e000-0000-4000-8000-0000000000c" + std::to_string(i);
+        const std::string name = "textures/extra" + std::to_string(i) + ".png";
+        std::string path = root;
+        path += "/assets/";
+        path += name;
+        write_file(path, make_png(4, 4, std::vector<u8>(64, static_cast<u8>(60 * i + 40))));
+        write_file(path + ".mceasset", sidecar(guid.c_str(), "texture"));
+        std::string args = "{\"name\":\"Extra";
+        args += std::to_string(i);
+        args += "\",\"components\":{\"Sprite\":{\"texture\":\"guid:";
+        args += guid;
+        args += "\"},\"LocalTransform\":{\"position\":[";
+        args += std::to_string(i);
+        args += ",1,0]}}}";
+        c.ok("entity_create", args);
+    }
+    c.ok("scene_save");
+    auto b = c.ok("perf_run", R"({"frames":30,"warmup":5,"width":320,"height":180,"save":"perf/after.mcperf"})");
+    CHECK(b.v().get("counters_max").get("draws").as_number() > static_cast<f64>(draws));
+    auto cmp = c.ok("perf_compare", R"({"before":"perf/before.mcperf","after":"perf/after.mcperf","target":"mobile"})");
+    CHECK(cmp.v().get("counters").get("draws").get("change").as_number() > 0);
+    bool draws_worse = false;
+    const cook::JsonValue worse = cmp.v().get("worse");
+    for (u32 i = 0; i < worse.size(); ++i) draws_worse = draws_worse || str(worse.at(i)) == "draws";
+    CHECK(draws_worse);
+    CHECK(str(cmp.v().get("target")) == "mobile");
+}
+
+// M-VISUAL3 3c: camera.focus and camera.exposure, and `environment` overrides, change one shot and not the scene.
+TEST_CASE("render_frame: camera.focus, camera.exposure and environment overrides shape one shot") {
+    const std::string root = fresh_dir("mcp_agent_look");
+    std::filesystem::create_directories(root + "/assets");
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root)));
+    c.init();
+    const auto box = [&](const char* name, const char* size, const char* color) {
+        const std::string path = std::string("models/") + name + ".glb";
+        return str(c.ok("gen_mesh", std::string(R"({"shape":"box","size":)") + size + R"(,"color":")" + color + R"(","save":")" + path + R"("})")
+                       .v().get("saved").get("guid"));
+    };
+    const std::string near_m = box("near", "[1,1,1]", "#d03020");
+    const std::string left_m = box("left", "[16,16,1]", "#f0f0f0");
+    const std::string right_m = box("right", "[16,16,1]", "#101010");
+    c.ok("scene_new", R"({"name":"look"})");
+    const auto make = [&](const std::string& args) { c.ok("entity_create", args); };
+    const auto at = [](const char* mesh, const std::string& guid, const char* pos) {
+        return std::string(R"({"name":")") + mesh + R"(","components":{"LocalTransform":{"position":)" + pos + R"(},"MeshRef":{"mesh":")" + guid + R"("}}})";
+    };
+    make(at("Near", near_m, "[0,0,-4]"));
+    make(at("Left", left_m, "[-8,0,-20]"));    // a hard vertical edge at x = 0, far behind
+    make(at("Right", right_m, "[8,0,-20]"));
+    make(R"({"name":"Camera","components":{"LocalTransform":{},"Camera3DComponent":{}}})");
+    make(R"({"name":"Env","components":{"Environment3D":{"bloom":0,"fxaa":0,"auto_exposure":0}}})");
+    c.ok("scene_save", R"({"path":"scenes/look.mcscene"})");
+    REQUIRE(c.ok("cook_run").v().get("ok").as_bool());
+
+    // The far edge's sharpest luma step along the middle row.
+    const auto edge = [](const cook::Image& img) {
+        const u32 y = img.height / 2 + img.height / 4;
+        int best = 0;
+        for (u32 x = 1; x < img.width; ++x) {
+            const usize a = (usize(y) * img.width + x - 1) * 4, b = a + 4;
+            best = std::max(best, std::abs(int(img.rgba[a]) - int(img.rgba[b])));
+        }
+        return best;
+    };
+    const auto mean = [](const cook::Image& img) {
+        u64 sum = 0;
+        for (usize i = 0; i < img.rgba.size(); i += 4) sum += img.rgba[i] + img.rgba[i + 1] + img.rgba[i + 2];
+        return double(sum) / (double(img.width) * double(img.height) * 3.0);
+    };
+    const std::string dof = R"("environment":{"depth_of_field":1,"dof_focus_range":0.5,"dof_blur_range":4,"dof_max_radius":0.02})";
+    const std::string base = R"({"tick":3,"width":320,"height":180,"software":true)";
+    const auto shot = [&](const std::string& extra) {
+        auto r = c.ok("render_frame", base + (extra.empty() ? "" : "," + extra) + "}");
+        REQUIRE(r.images.size() == 1);
+        return r.images[0];
+    };
+    const cook::Image sharp = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1],"focus":20},)" + dof);
+    const cook::Image blurred = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1],"focus":4},)" + dof);
+    const cook::Image plain = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-1]})");
+    CHECK(edge(sharp) > 100);
+    CHECK(edge(blurred) < edge(sharp) - 30);  // focus on the near box blurs the far edge
+    CHECK(edge(plain) > 100);                  // no DoF without the override (the scene has none)
+    // "target" is the distance from position to target: a target at the near box keeps it sharp and the far wall soft.
+    const cook::Image by_target = shot(R"("camera":{"position":[0,0,0],"target":[0,0,-4],"focus":"target"},)" + dof);
+    CHECK(edge(by_target) < edge(sharp) - 30);
+
+    // Exposure scales the frame; an environment override moves it too, and neither touches the saved scene.
+    const cook::Image dim = shot(R"("camera":{"exposure":0.25})");
+    const cook::Image normal = shot(R"("camera":{"exposure":1})");
+    CHECK(mean(dim) < mean(normal) * 0.8);
+    const cook::Image sunless = shot(R"("environment":{"sun_intensity":0,"ambient_sky":[0,0,0],"ambient_ground":[0,0,0]})");
+    CHECK(mean(sunless) < mean(normal));
+    CHECK(same_pixels(normal, shot(R"("camera":{"exposure":1})")));
+    CHECK(same_pixels(normal, shot("")));  // the overrides lived in one player run only
+}
+
+}  // TEST_SUITE("gpu")
+
+// M-VIEWS 6: the co-op arena's four-way split reaches the frame (every cell draws, none is wiped by a
+// later cell's clear), render_frame's `view` shows one player's camera or the minimap's, and the
+// frame is the same twice.
+TEST_CASE("render_frame: a four-way split screen, one player's view and a render texture's camera") {
+    const std::string root = fresh_dir("mcp_agent_coop");
+    std::filesystem::copy(std::string(MCE_SOURCE_DIR) + "/samples/09_coop/assets", root + "/assets", std::filesystem::copy_options::recursive);
+    Client c(with_player());
+    REQUIRE(c.server.open_project(sv(root), "scenes/arena.mcscene"));
+    c.init();
+    const char* join = R"("input":"5 P2/Join\n8 P3/Join\n11 P4/Join\n20-60 P2/Move=-1,0")";
+    const std::string args = std::string(R"({"tick":90,"width":320,"height":180,"software":true,)") + join + "}";
+    auto all = c.ok("render_frame", args);
+    REQUIRE(all.images.size() == 1);
+    auto again = c.ok("render_frame", args);
+    CHECK(same_pixels(all.images[0], again.images[0]));
+
+    // Every quarter holds more than one color: a floor, walls, a player (a wiped cell is one clear color).
+    const cook::Image& img = all.images[0];
+    auto colors = [&](u32 x0, u32 y0) {
+        std::vector<u32> seen;
+        for (u32 y = y0; y < y0 + 90; ++y)
+            for (u32 x = x0; x < x0 + 160; ++x) {
+                const usize i = (usize(y) * img.width + x) * 4;
+                const u32 rgb = img.rgba[i] | (img.rgba[i + 1] << 8) | (img.rgba[i + 2] << 16);
+                if (std::find(seen.begin(), seen.end(), rgb) == seen.end()) seen.push_back(rgb);
+            }
+        return seen.size();
+    };
+    CHECK(colors(0, 0) > 2);
+    CHECK(colors(160, 0) > 2);
+    CHECK(colors(0, 90) > 2);
+    CHECK(colors(160, 90) > 2);
+
+    // One player's camera, full size: not the split frame, and not another player's.
+    const std::string p1 = std::string(R"({"tick":90,"width":320,"height":180,"software":true,"view":{"player":1},)") + join + "}";
+    const std::string p2 = std::string(R"({"tick":90,"width":320,"height":180,"software":true,"view":{"player":2},)") + join + "}";
+    auto v1 = c.ok("render_frame", p1);
+    auto v2 = c.ok("render_frame", p2);
+    REQUIRE(v1.images.size() == 1);
+    CHECK_FALSE(same_pixels(v1.images[0], all.images[0]));
+    CHECK_FALSE(same_pixels(v1.images[0], v2.images[0]));
+
+    // The minimap camera's own picture (the texture the monitor shows).
+    auto mini = c.ok("render_frame", std::string(R"({"tick":90,"width":256,"height":192,"software":true,"view":{"texture":"Minimap texture"},)") + join + "}");
+    CHECK(mini.images.size() == 1);
+    CHECK_FALSE(same_pixels(mini.images[0], v1.images[0]));
+}

@@ -1,0 +1,4 @@
+# 08_movement, scenes/course: wait for the lift (tick 220), run, jump the gap just after the deck ends (inside the 0.15 s of coyote time), crouch through the tunnel.
+220-900 Move=0,1
+424-445 Jump
+500-690 Crouch

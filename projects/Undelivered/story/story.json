@@ -1,0 +1,408 @@
+{
+  "format": "mce-story",
+  "version": 1,
+  "namespace": "undelivered::story",
+  "output": "games/undelivered/module/story_data.h",
+  "report": "story/REPORT.md",
+  "title": "Undelivered",
+  "extras": "Letters",
+  "characters": [
+    "deniz",
+    "mira",
+    {
+      "id": "feride",
+      "name": "Feride Hanım"
+    },
+    "selin",
+    "halil",
+    {
+      "id": "yusuf",
+      "name": "Yusuf Reis"
+    },
+    {
+      "id": "hasan",
+      "name": "Kaptan Hasan"
+    },
+    {
+      "id": "cemil",
+      "name": "Cemil, the muhtar"
+    },
+    "nermin",
+    "kemal",
+    "crowd"
+  ],
+  "cast": [
+    "mira",
+    "feride",
+    "selin",
+    "halil",
+    "yusuf",
+    "hasan",
+    "cemil"
+  ],
+  "expressions": [
+    "neutral",
+    "warm",
+    "troubled",
+    "sharp",
+    "open"
+  ],
+  "poses": [
+    "stand",
+    "gesture"
+  ],
+  "slots": [
+    "left",
+    "center",
+    "right"
+  ],
+  "locations": [
+    "none",
+    "pier",
+    "cafe",
+    "postoffice",
+    "lighthouse",
+    "radio",
+    "cove",
+    "school",
+    "grocery",
+    "drawer"
+  ],
+  "times": [
+    {
+      "id": "morning",
+      "paper": [
+        0.96,
+        0.98,
+        1.0,
+        1
+      ],
+      "cast": [
+        0.98,
+        0.99,
+        1.0,
+        1
+      ],
+      "ambient": [
+        0.92,
+        0.95,
+        1.0,
+        1
+      ],
+      "lamp": [
+        1.0,
+        0.95,
+        0.85,
+        1
+      ],
+      "lamp_pos": [
+        -7.0,
+        4.5
+      ],
+      "lamp_intensity": 1.2
+    },
+    {
+      "id": "noon",
+      "paper": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "cast": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "ambient": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "lamp": [
+        1.0,
+        0.98,
+        0.9,
+        1
+      ],
+      "lamp_pos": [
+        0.0,
+        5.5
+      ],
+      "lamp_intensity": 1.0
+    },
+    {
+      "id": "evening",
+      "paper": [
+        1.0,
+        0.9,
+        0.78,
+        1
+      ],
+      "cast": [
+        1.0,
+        0.94,
+        0.86,
+        1
+      ],
+      "ambient": [
+        0.95,
+        0.8,
+        0.65,
+        1
+      ],
+      "lamp": [
+        1.0,
+        0.75,
+        0.45,
+        1
+      ],
+      "lamp_pos": [
+        7.0,
+        2.5
+      ],
+      "lamp_intensity": 1.6
+    },
+    {
+      "id": "night",
+      "paper": [
+        0.55,
+        0.6,
+        0.8,
+        1
+      ],
+      "cast": [
+        0.72,
+        0.75,
+        0.9,
+        1
+      ],
+      "ambient": [
+        0.35,
+        0.4,
+        0.6,
+        1
+      ],
+      "lamp": [
+        1.0,
+        0.8,
+        0.55,
+        1
+      ],
+      "lamp_pos": [
+        4.0,
+        0.5
+      ],
+      "lamp_intensity": 2.2
+    }
+  ],
+  "luts": [
+    "neutral",
+    "warm",
+    "cold",
+    "sepia",
+    "night"
+  ],
+  "music": [
+    "none",
+    "harbour",
+    "cafe",
+    "drawer",
+    "light",
+    "cove",
+    "sunday"
+  ],
+  "ambience": [
+    "none",
+    "sea",
+    "cafe",
+    "wind",
+    "clock",
+    "radio"
+  ],
+  "sfx": [
+    "none",
+    "page",
+    "move",
+    "confirm",
+    "envelope",
+    "stamp",
+    "horn",
+    "motor",
+    "static",
+    "bell"
+  ],
+  "timelines": [
+    "ferry"
+  ],
+  "ui_sfx": {
+    "page": "page",
+    "move": "move",
+    "confirm": "confirm",
+    "letter": "envelope"
+  },
+  "endings": [
+    {
+      "id": "return_address",
+      "title": "Return Address"
+    },
+    {
+      "id": "open_water",
+      "title": "Open Water"
+    },
+    {
+      "id": "lamp_keeper",
+      "title": "Lamp Keeper"
+    },
+    {
+      "id": "drawer_shut",
+      "title": "The Drawer Stays Shut"
+    },
+    {
+      "id": "last_ferry",
+      "title": "The Last Ferry"
+    }
+  ],
+  "tags": [
+    "first",
+    "leave",
+    "stay",
+    "shut",
+    "write",
+    "honest",
+    "hard"
+  ],
+  "bot": {
+    "write": [
+      "write",
+      "stay"
+    ]
+  },
+  "flags": [
+    "cove_sold",
+    "kemal_boat",
+    "feride_blessing",
+    "halil_stays_keeper",
+    "wrote_back",
+    "told_mira",
+    "letter7_read",
+    "honest_drawer",
+    "cemil_pressed",
+    "radio_visited",
+    "mira_knows_conservatory",
+    "selin_knows_transfer",
+    "hasan_read",
+    "yusuf_wrote_back",
+    "school_visited",
+    "boat_fixed",
+    "feride_sang",
+    "halil_told_selin",
+    "deniz_decided_stay",
+    "deniz_decided_go",
+    "mira_asked",
+    "selin_asked",
+    "cemil_refused",
+    "nermin_defended",
+    "nermin_blamed",
+    "kept_six",
+    "epilogue_seen",
+    "aux_flag_a",
+    "aux_flag_b",
+    "aux_flag_c",
+    "aux_flag_d",
+    "aux_flag_e",
+    "delivered.1",
+    "delivered.2",
+    "delivered.3",
+    "delivered.4",
+    "delivered.5",
+    "delivered.6",
+    "delivered.7",
+    "read.1",
+    "read.2",
+    "read.3",
+    "read.4",
+    "read.5",
+    "read.6",
+    "read.7"
+  ],
+  "counters": [
+    "resolve",
+    "day",
+    "drawer_letter",
+    "drawer_action",
+    "afternoon",
+    "aux0",
+    "aux1",
+    "aux2",
+    "aux3",
+    "aux4",
+    "aux5",
+    "aux6",
+    "aux7",
+    "mira_days",
+    "selin_days",
+    "yusuf_days",
+    "alone_days",
+    {
+      "name": "trust.mira",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.feride",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.selin",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.halil",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.yusuf",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.hasan",
+      "min": -3,
+      "max": 6
+    },
+    {
+      "name": "trust.cemil",
+      "min": -3,
+      "max": 6
+    }
+  ],
+  "commands": [
+    "drawer"
+  ],
+  "title_screen": {
+    "location": "pier",
+    "time": "evening",
+    "lut": "warm",
+    "music": "harbour",
+    "ambience": "sea"
+  },
+  "background_normal_map": "textures/paper_normal.png",
+  "text": {
+    "font": "assets/fonts/CrimsonPro-Regular.ttf",
+    "px": 32,
+    "line_px": 860,
+    "lines_per_page": 4
+  },
+  "letters": {
+    "font": "assets/fonts/NothingYouCouldDo-Regular.ttf",
+    "px": 30,
+    "line_px": 820,
+    "lines_per_page": 12
+  }
+}

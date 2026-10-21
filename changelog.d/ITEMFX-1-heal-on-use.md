@@ -1,0 +1,1 @@
+- Kit (M-ITEMFX 1): using a consumable with a `heal` stat heals the user's `Health3D` (capped at `max`) and sends `ItemHealed`; at full health or on a dead body the drink is refused (nothing consumed, `ItemUsed.consumed` 0). Users without a `Health3D` consume as before. Docs: `docs/engine/kit.md`.

@@ -1,0 +1,95 @@
+#pragma once
+// ClipBank: the assets -> audio seam (audio-input-ui §4.3 "scene load: register_clip per referenced
+// clip (assets resolves GUID -> chunk -> payload)"). Maps a cooked Sfx asset's GUID to a
+// registered ClipHandle, holding one asset retain per clip so the payload the mixer reads stays
+// resident for the clip's life.
+//
+// Main thread only. Call sync() once per frame, before the sim ticks: a hot-reloaded asset is
+// re-registered and its old clip released while the retired blob is still alive (the asset
+// system keeps it for MCE_FRAMES_IN_FLIGHT end_frame()s; the mixer drops the old clip on its next
+// callback).
+
+#include "mce/asset/asset_system.h"
+#include "mce/audio/audio.h"
+
+namespace mce::audio {
+
+// Cooked CHNK_SFX payload -> mixer clip description (points into `payload`, no copy). A looping
+// clip ends at its loop_end and wraps to loop_start; the cook guarantees loop_end > loop_start.
+Result<ClipPayload> clip_payload_from_sfx(Span<const byte> payload);
+
+// One play's choice from ClipBank::pick: the clip, and the gain and pitch a sound set adds.
+struct ClipPick {
+    ClipHandle clip;
+    f32 gain_db = 0.f;
+    f32 pitch = 1.f;
+};
+
+class ClipBank {
+public:
+    ClipBank(asset::AssetSystem& assets, AudioDevice& device, mem::IAllocator& a = mem::heap());
+    ~ClipBank();
+    ClipBank(const ClipBank&) = delete;
+    ClipBank& operator=(const ClipBank&) = delete;
+
+    // Loads and registers the clip on first use; later calls are a table lookup. A GUID that is
+    // not mounted, not an Sfx, or fails to register yields a null handle and one error, and is
+    // not retried until release() (FR-DX-050: silence, never a crash). `stream` registers it as a
+    // streamed clip (AudioDevice::register_stream: music, long ambiences), falling back to an
+    // in-memory clip when every stream ring is taken; it applies when the GUID is first acquired.
+    // A Vorbis Sfx (M-AUDIO2 1) decodes here, at load, unless it streams: then its pages decode it.
+    // A sound set (.mcsound, M-AUDIO2 2) has no clip of its own: acquire() returns null for it.
+    ClipHandle acquire(asset::Guid guid, bool stream = false);
+    // What one play of `guid` sounds like. A plain Sfx is acquire() at its own gain and pitch; a
+    // sound set picks a member (random from `seed`, or the next in sequence) and a gain and pitch
+    // in its ranges from `seed`. The bridge derives `seed` from the tick and the source, so a replay
+    // picks the same; a sequence advances per play.
+    ClipPick pick(asset::Guid guid, u64 seed, bool stream = false);
+    // True for a GUID acquired as a sound set.
+    bool is_set(asset::Guid guid) const;
+    // The registered clip, or null when the GUID was never acquired (no load).
+    ClipHandle find(asset::Guid guid) const;
+    // Releases the clip and the asset retain.
+    void release(asset::Guid guid);
+    // Releases every clip and waits for the mixer to drop them before the retains go, so the
+    // pack can unmount right after (AudioDevice::finish_releases).
+    void release_all();
+
+    // Picks up hot reloads: every clip whose asset generation moved is released and registered
+    // again from the new payload. Handles held elsewhere go stale (silent no-ops); the bridge
+    // restarts looping sources on the new clip.
+    void sync();
+
+    u32 size() const { return static_cast<u32>(entries_.size()); }
+
+private:
+    struct Entry {
+        asset::AssetRef<asset::Sfx> ref;  // null handle = failed (not retried)
+        u32 generation = 0;
+        ClipHandle clip;
+        bool stream = false;
+        Array<f32> pcm;  // a Vorbis clip decoded for an in-memory registration
+        // A sound set: its members (loaded on their first pick) and how to pick.
+        bool set = false;
+        asset::SoundSetHeader params{};
+        Array<asset::Guid> members;
+        u32 cursor = 0;            // Sequence: plays so far
+        u32 last = 0xFFFFFFFFu;   // Random + NoRepeat: the member picked last
+    };
+    // Decoded samples the mixer may still read: freed once the device has dropped the clip.
+    struct Retired {
+        ClipHandle clip;
+        Array<f32> pcm;
+    };
+    ClipHandle register_entry(Entry& e);
+    void drop(Entry& e);
+    void retire(Entry& e);
+    void sweep();
+
+    asset::AssetSystem* assets_;
+    AudioDevice* device_;
+    HashMap<asset::Guid, Entry> entries_;
+    Array<Retired> retired_;
+};
+
+}  // namespace mce::audio

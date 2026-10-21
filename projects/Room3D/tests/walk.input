@@ -1,0 +1,4 @@
+# Room3D walk: forward, a jump, then strafe right (ticks at 60 Hz).
+10-120 Move=0,1
+60 Jump
+130-200 Move=1,0

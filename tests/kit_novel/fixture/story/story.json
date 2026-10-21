@@ -1,0 +1,16 @@
+{
+  "format": "mce-story", "version": 1,
+  "namespace": "novel_fixture",
+  "output": "novel_fixture.h",
+  "title": "Fixture",
+  "characters": ["mira", {"id": "harbour_master", "name": "Yusuf Reis"}],
+  "expressions": ["neutral", "warm"],
+  "endings": ["letter", "quiet"],
+  "tags": ["first", "kind"],
+  "bot": {"kind": ["kind", "first"]},
+  "flags": ["has_letter", "asked_boat"],
+  "counters": [{"name": "trust", "min": 0, "max": 3}],
+  "commands": ["wave"],
+  "timelines": ["intro"],
+  "localize": {"base": "en"}
+}

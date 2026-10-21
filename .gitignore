@@ -5,6 +5,7 @@ out/
 bin/
 obj/
 *.obj
+!samples/**/*.obj
 *.pdb
 *.ilk
 *.lib
@@ -45,3 +46,14 @@ RenderDoc captures/
 # OS
 Thumbs.db
 .DS_Store
+
+# scripts/ship.py output
+dist/
+
+# Project cook output written next to a source project (mce_cook <project>, the editor's Cook/Play)
+cooked/
+assets.mce
+# Editor session files
+*.autosave
+mce_editor.ini
+__pycache__/

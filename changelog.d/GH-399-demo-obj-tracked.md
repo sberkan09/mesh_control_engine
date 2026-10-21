@@ -1,0 +1,1 @@
+- `samples/import_demo/assets/models/tent.obj` was never committed because `.gitignore` ignores `*.obj`, so `import_demo_reimport` failed on a clean checkout. `.gitignore` now keeps `.obj` files under `samples/` (GH-399).

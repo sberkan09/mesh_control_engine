@@ -1,0 +1,148 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "MCE_BUILD_TESTS": "ON" }
+    },
+    {
+      "name": "msvc-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_C_COMPILER": "cl", "CMAKE_CXX_COMPILER": "cl" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    { "name": "msvc-debug",   "displayName": "MSVC Debug",   "inherits": "msvc-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "msvc-release", "displayName": "MSVC Release", "inherits": "msvc-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "msvc-determinism",
+      "displayName": "MSVC Determinism (alias of release, ADR-0007)",
+      "inherits": "msvc-release"
+    },
+    {
+      "name": "msvc-asan",
+      "displayName": "MSVC ASan",
+      "inherits": "msvc-base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "MCE_ASAN": "ON", "MCE_ENABLE_TRACY": "OFF" }
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_C_FLAGS": "-gz", "CMAKE_CXX_FLAGS": "-gz" },
+      "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    { "name": "linux-gcc-debug",     "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "g++",     "CMAKE_C_COMPILER": "gcc",   "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "linux-gcc-release",   "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "g++",     "CMAKE_C_COMPILER": "gcc",   "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    { "name": "linux-clang-debug",   "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++", "CMAKE_C_COMPILER": "clang", "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "linux-clang-release", "inherits": "linux-base", "cacheVariables": { "CMAKE_CXX_COMPILER": "clang++", "CMAKE_C_COMPILER": "clang", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "linux-asan",
+      "inherits": "linux-base",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "g++", "CMAKE_C_COMPILER": "gcc", "CMAKE_BUILD_TYPE": "Debug", "MCE_ASAN": "ON", "MCE_ENABLE_TRACY": "OFF" }
+    },
+    {
+      "name": "macos-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_C_COMPILER": "/usr/bin/clang", "CMAKE_CXX_COMPILER": "/usr/bin/clang++", "CMAKE_OSX_DEPLOYMENT_TARGET": "26.0",
+        "CMAKE_C_FLAGS": "-fmath-errno", "CMAKE_CXX_FLAGS": "-fmath-errno" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    { "name": "macos-debug",   "displayName": "macOS Debug (AppleClang, Metal)",   "inherits": "macos-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "macos-release", "displayName": "macOS Release (AppleClang, Metal)", "inherits": "macos-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "macos-asan",
+      "displayName": "macOS UBSan (AppleClang, Metal; ASan's runtime hangs at startup on macOS 26.6, see M-MAC.md)",
+      "inherits": "macos-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug", "MCE_ASAN": "OFF", "MCE_ENABLE_TRACY": "OFF",
+        "CMAKE_C_FLAGS": "-fmath-errno -fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fmath-errno -fsanitize=undefined -fno-sanitize=vptr -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=undefined",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=undefined"
+      }
+    },
+    {
+      "name": "android-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "M-MOBILE: Android arm64 (NDK r28+, ANDROID_NDK_HOME), Vulkan through mce_rhi_sdlgpu; packs cooked by the host's mce_cook (MCE_HOST_COOK, scripts/ship.py --target android)",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a", "ANDROID_PLATFORM": "android-29", "ANDROID_STL": "c++_static",
+        "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
+        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
+      }
+    },
+    { "name": "android-arm64-debug", "displayName": "Android arm64 Debug (NDK, Vulkan)", "inherits": "android-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "android-arm64-release", "displayName": "Android arm64 Release (NDK, Vulkan)", "inherits": "android-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "ios-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "M-MOBILE: iOS 16+ arm64, Metal through mce_rhi_sdlgpu; packs cooked by the host's mce_cook (MCE_HOST_COOK, scripts/ship.py --target ios)",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS", "CMAKE_OSX_ARCHITECTURES": "arm64", "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
+        "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
+        "MCE_WITH_NET": "OFF", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "ON"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+    },
+    { "name": "ios-sim-arm64", "displayName": "iOS Simulator arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphonesimulator", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0-simulator", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    { "name": "ios-arm64", "displayName": "iOS device arm64 (Metal)", "inherits": "ios-base", "cacheVariables": { "CMAKE_OSX_SYSROOT": "iphoneos", "CMAKE_Swift_COMPILER_TARGET": "arm64-apple-ios16.0", "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    {
+      "name": "web-base",
+      "hidden": true,
+      "inherits": "base",
+      "description": "M-WEB: Emscripten (EMSDK in the environment, emsdk 5.0.6) to wasm, WebGPU through mce_rhi_webgpu (ADR-0039); packs cooked by the host's mce_cook (MCE_HOST_COOK); mce_net for the WebSocket relay client",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "cacheVariables": {
+        "MCE_BUILD_TESTS": "OFF", "MCE_BUILD_EDITOR": "OFF", "MCE_BUILD_PROJECTS": "OFF", "MCE_TEMPLATE_PROBE": "OFF",
+        "MCE_WITH_NET": "ON", "MCE_WITH_SCRIPT": "ON", "MCE_ENABLE_TRACY": "OFF", "MCE_PHYSICS_ORACLE": "OFF", "MCE_RHI_SDLGPU": "OFF"
+      },
+      "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    { "name": "web-debug",   "displayName": "Web Debug (Emscripten, WebGPU)",   "inherits": "web-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "web-release", "displayName": "Web Release (Emscripten, WebGPU)", "inherits": "web-base", "cacheVariables": { "CMAKE_BUILD_TYPE": "MinSizeRel" } }
+  ],
+  "buildPresets": [
+    { "name": "msvc-debug",          "configurePreset": "msvc-debug" },
+    { "name": "msvc-release",        "configurePreset": "msvc-release" },
+    { "name": "msvc-determinism",    "configurePreset": "msvc-determinism" },
+    { "name": "msvc-asan",           "configurePreset": "msvc-asan" },
+    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug" },
+    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release" },
+    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug" },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release" },
+    { "name": "linux-asan",          "configurePreset": "linux-asan" },
+    { "name": "macos-debug",         "configurePreset": "macos-debug" },
+    { "name": "macos-release",       "configurePreset": "macos-release" },
+    { "name": "macos-asan",          "configurePreset": "macos-asan" },
+    { "name": "android-arm64-debug",   "configurePreset": "android-arm64-debug" },
+    { "name": "android-arm64-release", "configurePreset": "android-arm64-release" },
+    { "name": "ios-sim-arm64",         "configurePreset": "ios-sim-arm64" },
+    { "name": "ios-arm64",             "configurePreset": "ios-arm64" },
+    { "name": "web-debug",             "configurePreset": "web-debug" },
+    { "name": "web-release",           "configurePreset": "web-release" }
+  ],
+  "testPresets": [
+    { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-gcc-debug-slow", "configurePreset": "linux-gcc-debug", "output": { "outputOnFailure": true }, "filter": { "include": { "label": "slow" } } },
+    { "name": "linux-gcc-release",   "configurePreset": "linux-gcc-release",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-debug",   "configurePreset": "linux-clang-debug",   "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-clang-release", "configurePreset": "linux-clang-release", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } }
+  ]
+}

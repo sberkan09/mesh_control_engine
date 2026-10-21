@@ -1,0 +1,141 @@
+# M-WEB — Web (WASM) export (milestone record)
+
+**Status:** done (2026-10-15 → 2026-10-16; the browser checks outside Chromium wait on Sami). **Decision record:** ADR-0039 (WebGPU through `mce_rhi_webgpu`).
+**Plan:** `docs/ROADMAP.md`, "M-WEB". **Linear:** project mesh_control_engine, milestone M-WEB, SBA-62…SBA-68.
+
+## Plan
+
+Steps run in order; each lands as its own PR verified by `scripts/ci/local_ci.sh --task` (cloud) and a headless
+Chromium run on WebGPU/SwiftShader (`scripts/web/browser_smoke.cjs`).
+
+| # | Step | Linear | State |
+|---|---|---|---|
+| 1 | Graphics decision (ADR-0039): `mce_rhi_webgpu` over emdawnwebgpu, GLSL → WGSL with glslang + Tint, `web-*` presets; `01_triangle` draws in a browser | SBA-62 | done |
+| 2 | Emscripten toolchain for every sample and game: the player's main loop, the job system single-threaded (or pthreads under COOP/COEP), every engine library compiling | SBA-63 | done |
+| 3 | Files and assets: the pack over HTTP with progress, saves in IndexedDB | SBA-64 | done |
+| 4 | Audio and input: WebAudio unlock, touch, gamepad, pointer lock, fullscreen | SBA-65 | done |
+| 5 | `mce ship --target web`: shell page, itch.io zip, `mce serve` | SBA-66 | done |
+| 6 | MCP `ship_build {"target":"web"}` and a Playwright smoke returning the state hash and a screenshot | SBA-67 | done |
+| 7 | A `web` stage in `local_ci.sh`, the demo and the gates | SBA-68 | done |
+
+**Demo:** Ember Step, a novel and `04_diorama` in Chrome, Firefox and a mobile browser (below: Chromium here, the rest on Sami's devices).
+
+## What shipped (step 1)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Backend | `src/engine/rhi_webgpu` (`webgpu_device.cpp`, `webgpu_translate.cpp`) | every `RenderDevice` call; uniform/geometry/storage rings with one `queue.writeBuffer` each per submit; offscreen backbuffer blitted to `#canvas` |
+| Shader translator | `src/engine/rhi_webgpu/src/shader_wgsl.cpp` | glslang → SPIR-V (bindings rewritten to ADR-0039 §4) → Tint → WGSL |
+| Build | `cmake/MceWeb.cmake`, `cmake/web/TintDependencies.cmake`, presets `web-debug` / `web-release` | `cmake --preset web-release && cmake --build build/web-release --target 01_triangle` |
+| Loop | `core/src/app.cpp` awaits `requestAnimationFrame` per frame (ASYNCIFY) | the page stays responsive; the triangle spins |
+| Smoke | `scripts/web/browser_smoke.cjs` | `01_triangle` on Chromium 141 + SwiftShader: "rhi.webgpu: WebGPU on google swiftshader", 413 colours on the canvas, PASS |
+
+Numbers (`web-release`, MinSizeRel): `01_triangle.wasm` 8.9 MB, 2.5 MB gzipped; Tint + SPIRV-Tools alone are about
+0.9 MB of that gzipped.
+
+## What shipped (step 2)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Whole tree on wasm | `cmake --build build/web-release` (with `-DMCE_HOST_COOK=<host mce_cook>`): every engine library, `mce_player`, and the samples `01_triangle`, `sprites_2d`, `03_platformer`, `04_diorama`, `04_cubes`, `05_ashen_court` | build log, no errors |
+| No threads | `asset_system.cpp` reads queued async loads inline; `audio_output.cpp` opens the device inline (`__EMSCRIPTEN__` without `__EMSCRIPTEN_PTHREADS__`) | the samples load and play |
+| Jobs | the job system already runs jobs inline everywhere (`jobs.h`, until its v0.5 runtime flag), so the browser is single-threaded with no change; a pthreads build under COOP/COEP comes with that flag, not before | — |
+| Main loop | `app::run` + ASYNCIFY (step 1); no `emscripten_set_main_loop` callback rewrite | samples run their normal loop |
+| Cook | `mce_asset_cook` is skipped in cross builds (it never reaches a runtime target) | — |
+| Packs | (replaced in step 3) `mce_sample_pack` first embedded the pack with `--preload-file` | — |
+| Backend fixes | WGSL derivative uniformity relaxed like GL (`allow_non_uniform_derivatives`); write-only storage buffers become `read_write`; one transient storage ring per binding (WebGPU forbids one buffer read-write and read-only in one dispatch); WebAudio power-of-two buffers | — |
+| Build | links run one at a time (`mce_web_link` Ninja pool): wasm-opt's ASYNCIFY pass takes about 6 GB per executable | four parallel links were OOM-killed |
+| Smoke | `scripts/web/browser_smoke.cjs` on all six samples in headless Chromium (WebGPU/SwiftShader) | all PASS; `04_diorama` and `05_ashen_court` draw with shadows, clustered lights and GPU culling |
+
+## What shipped (step 3)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Browser services | `mce/web.h` (`src/engine/core/src/web.cpp`): `fetch_file`, `mount_persistent`, `persist`; no-ops outside a browser | — |
+| Pack over HTTP | `samples::resolve_shipped_path` downloads `assets.mce` from next to the page into the virtual file system when it is not there, reporting `Downloading assets.mce... (got/total)` through the page's `Module.setStatus` (the shell's progress bar); `mce_sample_pack` copies the pack next to the `.html` | `04_diorama: mounted /assets.mce`; no `.data` files any more |
+| Saves and settings | IndexedDB (IDBFS, `-lidbfs.js`) backs `/persistent` = `crash::user_data_root()`, mounted and loaded in `platform::init`; `save::write` and `console::save_settings` write it back at once; the page also writes it back every 5 s and on `pagehide` / hidden, which covers the other writers (novel stage, loc, monetize, liveops) | `browser_smoke.cjs --persist`: a probe file under `/persistent` survives a reload |
+| mmap | not needed: the asset system reads packs into heap buffers on every platform | — |
+
+## What shipped (step 4)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Audio unlock | `web::install_audio_unlock` (`core/src/web.cpp`), installed by `platform::init`: the first `pointerdown` / `touchend` / `keydown` resumes SDL's `AudioContext` from inside the handler (Safari's rule), then the listeners drop; `Module.mceAudioState()` reports it | probe: audio starts suspended, the first tap makes it run |
+| Pointer lock and full screen | `Window::set_relative_mouse` / `set_fullscreen` through SDL's emscripten driver, which defers each request to the next click or key press (the browser only grants them there) | probe: the canvas holds the pointer lock and goes full screen; relative moves arrive |
+| Window teardown | `~Window` leaves full screen and lets a pending `fullscreenchange` arrive before `SDL_DestroyWindow`: the page's restore callback holds SDL's window data, and read freed memory when the window went first | without it the probe's exit threw `querySelector: 'Pf' is not a valid selector` |
+| Touch, keys, gamepad | SDL's emscripten pointer events (fingers kept apart from the mouse, as on phones) and the Gamepad API (standard mapping); no engine changes | probe: a tap at 0.25 0.50, key W, a pad's South button and left stick |
+| Input probe | `mce_input_web_probe` (`src/engine/platform/web_probe`), driven by `scripts/web/probe_smoke.cjs <dir> input`: a fake pad behind `navigator.getGamepads`, CDP touches, and the strict autoplay rule (headless Chromium never blocks audio) | 13 checks, PASS |
+| Relay over WebSocket (M-NET2) | `mce_relay_web_probe` (`src/engine/net/web_probe`): two `RelayClient`s over `websocket_web.cpp` against a native `mce_relay`; `probe_smoke.cjs <dir> relay <mce_relay>` | room made, the guest joined, messages crossed both ways: OK |
+
+## What shipped (step 5)
+
+| Item | Where | Evidence |
+|---|---|---|
+| `ship.py --target web` | `scripts/ship.py` (the cross path of the phone builds: host cook first, then the `web-release` preset with `MCE_HOST_COOK` / `MCE_ONLY_PROJECT`), `scripts/web/web_package.py` | `Ember-Step-<v>-web.zip` 2.8 MiB (wasm 8.9 MiB, 2.5 MiB gzipped) and the visual novel `--project projects/Undelivered` 46 MiB (mostly its pack; wasm 3.6 MiB gzipped); `--smoke` PASS on both |
+| Shell page | `scripts/web/shell.html`: loading bar fed by the pack download, icon, "Click/Tap to play" (the gesture that starts audio), full-screen button, WebGPU check, `[critical]` shown on the page; the canvas fills the page through CSS, which SDL follows (resizable window) | `probe_smoke.cjs <stage> shell`: desktop and phone (390x844 at 3x, touch) both show the cover once the game runs, the click or tap hides it and audio runs, the canvas fills the page and follows a resize and rotation |
+| itch.io zip | flat, `index.html` at the root; `VERSION.txt` is fetched at start, so a web build is a shipped build (cheats locked) | `03_platformer 0.9.0+… web-release …, cheats locked` |
+| `mce serve` | `tools/mce_cli/mce.py serve <zip | folder | project>`: `application/wasm`, COOP/COEP, no-cache, `--lan` for a phone, `--open` | headers checked with curl |
+| `mce ship --target web` | runs the engine checkout's `ship.py` (the SDK's own or the one `install.sh` came from) for a project under `projects/` | — |
+| Docs | `docs/user-guide/15-shipping.md` §15.6 | — |
+
+## What shipped (step 6)
+
+| Item | Where | Evidence |
+|---|---|---|
+| Drawn runs end on a tick | `mce_player -run_ticks N`: windowed, quits right after tick N and prints the `state_hash` line `-headless` prints | Undelivered native: windowed (Xvfb) and headless 300 ticks both `901e0417fc3e43e0` |
+| The page's command line | `shell.html` turns the query into arguments: `index.html?run_ticks=600&sim.fast_forward=1` | — |
+| Last frame on screen | `web::linger` (`mce/web.h`): the player holds the page for a screenshot after a `-run_ticks` run, until `Module.mceRelease()` | the smoke's screenshot shows the game, not a cleared canvas |
+| Browser smoke with a hash | `browser_smoke.cjs ... --ticks N`: N ticks drawn and fast-forwarded, screenshot, the hash, then the same build `?headless=1&ticks=N` in a second page; the hashes must match | Undelivered 300 ticks: `156647983e9abc4c` drawn and headless, 1987 colours |
+| Ship and MCP | `ship.py --smoke --smoke-ticks N`, `mce ship --target web --smoke-ticks N`, MCP `ship_build {"target":"web","ticks":N}` → `zip`, `state_hash`, `headless_state_hash`, `matches_headless`, `screenshot` | `ship_build` on Undelivered, 240 ticks: `ok: true`, `matches_headless: true` |
+| Docs | `docs/user-guide/14-mcp-ai-workflow.md` (`ship_build`) | — |
+
+## What shipped (step 7)
+
+| Item | Where | Evidence |
+|---|---|---|
+| CI stage | `scripts/ci/local_ci.sh web` → `scripts/web/web_ci.py`: the host `mce_cook` and `mce_relay`, `web-release` with the six samples and both probes, `browser_smoke.cjs` on each sample, `probe_smoke.cjs input` and `relay`, Ember Step shipped and `probe_smoke.cjs shell` on its page, then the gates. Part of the full run; `--task` adds it when a change touches the web code; it reports a skip and passes without the Emscripten SDK or Playwright | `web PASS (172s)` on a warm tree |
+| Baselines | `tests/web/baselines.json`; `web_ci.py --skip-build --update` rewrites the measured values | — |
+| Presets | `web-base` turns `MCE_WITH_NET` on, so the relay probe builds in the stage | — |
+| Shell check | a game that opens no audio device (`04_diorama`) is reported, not failed | — |
+| Docs | `docs/user-guide/15-shipping.md` §15.6 (`--smoke-ticks`, the web stage and its gates) | — |
+
+## Gates
+
+| Gate | How it is checked | Result |
+|---|---|---|
+| The web replay hash is stable run to run (its own baseline) | Kindle shipped with `--smoke-ticks 600`: drawn and headless in Chromium, compared with `tests/web/baselines.json` | `321eaf1806bcebf2` drawn and headless, the same on a second full run of the stage |
+| The smoke passes in `local_ci.sh` | the `web` stage | PASS |
+| The zip uploads to itch.io unchanged | `web_ci.py` checks the zip against itch.io's HTML rules: `index.html` at the root, flat, at most 1000 files and 500 MB extracted, names under 240 characters, no unfilled template field, every file the page loads present by its exact name | Ember Step: 8 files, 9.5 MiB extracted, OK. A real upload to itch.io needs Sami's account (noted in Linear) |
+| A cold load of the 2D sample stays under a stated size budget | Ember Step: the page, loader, wasm, icon and pack, each gzipped at level 6 as a server sends them, under `cold_load.budget_bytes` = 4.00 MiB | 2.82 MiB |
+
+## Demo
+
+| Game | Zip | Headless Chromium (WebGPU on SwiftShader) |
+|---|---|---|
+| Ember Step (`ship.py platformer --target web --smoke`) | 2.8 MiB | smoke PASS; shell page PASS on a 1280×800 desktop page and a 390×844 phone page (touch, 3× DPR): cover, icon, tap, audio, fill and resize |
+| Undelivered, the novel (`--smoke-ticks 300`) | 46 MiB | 300 ticks drawn and headless `156647983e9abc4c`, 1987 colours; shell page PASS on desktop and phone |
+| `04_diorama` (`ship.py diorama --target web --smoke`) | 2.6 MiB | smoke PASS, 1590 colours; the shell's desktop checks pass, the phone page (3× DPR, shadows on SwiftShader) is too slow in software for the probe's tap |
+| Kindle shipped by an agent over MCP (`ship_build {"target":"web","ticks":600}`) | 3.9 MiB | `ok: true`, `state_hash` `321eaf1806bcebf2` (the stage's baseline), `matches_headless: true`, a screenshot |
+
+Desktop Firefox, Safari and real phones need a person with those browsers: Sami's check, recorded on SBA-68 in
+Linear. This cloud box only has Chromium.
+
+## Open items
+
+- Size: cook WGSL next to SPIR-V once renderer shaders are cooked assets (drops Tint from the page), narrow
+  ASYNCIFY to the frame yield and the device waits.
+- `mce ship --target web` for a project outside the checkout: the SDK installs no web libraries, so it runs
+  `ship.py` in the checkout, which only adds projects under `projects/` (a host build of another tree would need
+  its own `MCE_ONLY_PROJECT` run).
+- A browser build's state hash differs from a native build's for the same ticks (Undelivered, 300 ticks:
+  `156647983e9abc4c` on wasm, `901e0417fc3e43e0` on Linux GCC): another compiler and libm. Within one build the
+  drawn and headless runs agree, which is what the smoke checks. Lockstep play between a browser and a desktop
+  would need the deterministic math path on both (M-NET2 replicates state, so it is unaffected).
+- Firefox, Safari and real phones: not checked from the cloud (Chromium only); SBA-68 lists them for Sami.
+- `04_diorama`'s phone-sized page is too slow on SwiftShader for the shell probe; Ember Step's page is the one
+  the stage checks.
+- `-run_ticks` is the player's (projects and `mce_player`); the hand-written samples (`03_platformer`, ...) run
+  the plain smoke.
+- Timestamp queries are off (`DeviceCaps::timestamp_queries = false`); the profiler shows CPU times on the web.
+- Pixel parity with GL: checked by eye (orientation, winding) on `01_triangle`; a golden comparison against the GL
+  backend comes with the renderer samples in step 2.

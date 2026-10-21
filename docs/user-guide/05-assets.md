@@ -1,0 +1,475 @@
+# 5. Assets and the cook
+
+Everything the game loads is a **cooked** binary chunk inside a `.mce` container. You author source
+files (PNG, WAV, TTF, glTF) and native text assets (scenes, prefabs, materials, particle presets,
+sequences, tilemaps, shaders) under `assets/`; the cook turns them into `cooked/` during
+development and into one `assets.mce` pack for shipping. The runtime never parses text or image
+formats, which is what keeps the shipped game small and safe.
+
+## 5.1 Asset types
+
+| You author | Extension | Cooked into | Used by |
+|---|---|---|---|
+| Image | `.png`, `.jpg`, `.jpeg`, `.tga`, `.bmp` | texture (RGBA8, optional mips, sRGB flag) | `Sprite`, materials, tilesets, particles, LUTs, normal maps |
+| HDR image | `.hdr`, `.exr` | texture (RGBA16F: linear half floats, mips, `max_size`, `exposure`) | `Environment3D.sky_texture` and `ibl_texture` (chapter 8) |
+| Sound | `.wav`, `.ogg`, `.mp3`, `.flac` | 48 kHz float clip with loop points (an `.mp3` or `.ogg` is stored as Vorbis, a `.wav` or `.flac` as PCM; `"compress"` in the sidecar picks) | `AudioSource`, `PlaySfx`, sequences |
+| Font | `.ttf` (TrueType outlines; CFF `.otf` is refused) | glyph atlas plus metrics | `TextLabel` |
+| Model | `.gltf`, `.glb` | mesh: quantized streams, node tree, inline materials, animation clips, optional skins | 3D rendering (chapter 8) |
+| Model (OBJ) | `.obj`, `.mtl` | mesh: quantized streams, nodes per `o` / `g`, inline materials from the `.mtl` (adopt both files; section 8.4) | 3D rendering (chapter 8) |
+| Model (FBX) | `.fbx` | mesh: quantized streams, node tree, inline materials (external textures), skins, animation clips sampled at a fixed rate (section 8.4) | 3D rendering (chapter 8) |
+| Material | `.mcmat` | metallic-roughness parameters plus texture GUIDs | 3D rendering |
+| Terrain | `.mcterrain` | a heightmap: u16 samples, size, height range, chunk size | `Terrain3D` (chapter 8) |
+| Item catalog | `.mcitems` | item definitions (stack size, weight, tags, named stats, icon, prefab) and weighted loot tables | the inventory and loot kit (M-INVENTORY; section 5.7) |
+| Road network | `.mcroads` | lanes, junction connectors, right of way and signal phases from nodes and roads | traffic and crowds ([chapter 29](29-roads-and-traffic.md)) |
+| Scene | `.mcscene` | columnar entity rows | the game, the editor |
+| Prefab | `.mcprefab` | the same, entity 0 as root | instances in scenes, runtime spawns |
+| Tilemap | `.mctilemap` | one tile layer over a tileset | `TilemapLayer` |
+| Sprite sheet | `.mcsheet` | texture regions and named flipbook clips with frame events | `AnimatedSprite`, `Sprite.region` |
+| 2D skeleton | `.mcskel2d` | a bone tree (rest pose), the slots drawn on it (quads or skinned meshes) and its animations | `Skeleton2D` (chapter 7.13) |
+| String table | `assets/loc/<locale>.csv` | one language's text by key (`StringTable` chunks) | `TextLabel.loc_key`, `loc::Localization` (chapter 21) |
+| Animation graph | `.mcanim` | states over a mesh's clips, 1D blends, transitions, events | `Animator.graph` |
+| Particle preset | `.mcpart` | emitter parameters | `ParticleEmitter` |
+| Sound set | `.mcsound` | clips picked per play, pitch and gain ranges (an Sfx asset) | anywhere a sound goes (chapter 10.3) |
+| Sequence | `.mcseq` | an action list | `SequencePlayer` |
+| Timeline | `.mctimeline` | keyed tracks: transforms, properties, cuts, cues, subtitles | `TimelinePlayer` (chapter 13.5) |
+| Behavior tree | `.mcbt` | an AI's decisions: composites, decorators, conditions, tasks, typed blackboard keys | `AiBrain` (chapter 13.8) |
+| Input map | `.mcinput` | action maps and bindings | the player's input (chapter 11) |
+| UI document | `.mcui` | a widget tree: anchors, per-state styles, layouts, the skin by reference | `ui::build_document` (chapter 12.2) |
+| Shader | `.vert.glsl`, `.frag.glsl`, `.comp.glsl` | validated GLSL, variants, SPIR-V reflection | custom shaders (not yet reachable from a project) |
+
+Images up to 16384 pixels a side cook; a `.tga` (uncompressed or RLE, 8 to 32 bit, either origin) or `.bmp` (24 or 32 bit, palettes) takes the same sidecar settings as a PNG, and one cut short in the middle of its pixels is a cook error. Layered or animated formats (`.psd`, `.gif`) are not imported: export a flat PNG.
+
+## 5.2 Sidecars
+
+Every source file gets a sidecar `<file>.mceasset` next to it with the asset's GUID and the
+importer's settings:
+
+```json
+{
+  "guid": "201aeae6-198d-4dac-b695-c65327f35e75",
+  "importer": "texture",
+  "importer_version": 1,
+  "settings": { "srgb": true, "mips": false }
+}
+```
+
+Commit sidecars to version control: the GUID is the asset's identity, and every reference to the
+asset is that GUID. Native text assets (`.mcscene`, `.mcmat`, ...) carry their GUID inline and have
+no sidecar.
+
+Settings per importer (every key is optional; the defaults are shown):
+
+| Importer | Settings |
+|---|---|
+| `texture` | `"srgb": true` (colour data; set `false` for normal maps, LUTs and data textures), `"mips": true`, `"filter": "nearest"` (`"linear"` for smooth, non-pixel-art sprites; chapter 7.1), `"max_size"` (PNG and JPEG: the largest side in pixels, a power of two from 1 to 16384; a bigger image is halved until it fits, before its mips; default no limit, see "Keep the pack small" below), `"compress"` (PNG and JPEG: `"none"`, `"auto"`, `"bc7"`, `"bc5"`, `"bc4"`, `"bc1"` or `"astc"`; what each does depends on the cook mode, see "Compress the pack with BC" below; default: the mode's own default). For `.hdr` and `.exr`: `"mips": true`, `"max_size": 2048` (largest side, a power of two: the image is halved until it fits), `"exposure": 0` (EV applied at cook); `"srgb": true` is an error (see the HDR rule below) |
+| `wav` | `"normalize": true` (peak to -1 dBFS), `"loop": false`, `"loop_start"`, `"loop_end"` (source-rate frames; default to the file's own loop markers), `"compress": "pcm"` (`"vorbis"` stores Ogg Vorbis, about a tenth of the size; chapter 10.7), `"quality": 0.4` (Vorbis, -0.1..1) |
+| `ogg` | the same as `wav`, with `"compress": "vorbis"` by default |
+| `font` | `"size": 32` (pixel height), `"ranges": [[32, 126]]` (inclusive codepoint ranges), `"padding": 1`, `"strings": true` (also every character the string tables use), `"sdf": true` (bake a distance field: text drawn well above `size` keeps sharp edges; outlines wider than the field fade), `"spread": 4` (with `sdf`: how many pixels at `size` the field reaches, default `size / 8`, at least 2) |
+| `video` | `"audio": true` (keep the film's MP2 sound), `"normalize": false` (raise the sound to -1 dBFS); the film itself is converted to MPEG-1 beforehand (13.7) |
+| `gltf` | `"scale": 1.0` (applied to every root node), `"max_triangles": 0` (0 = no budget; a budget makes an over-size mesh a cook error), `"skinning": true` (`false` imports skinned meshes as static ones; see Skinning in [chapter 8](08-3d.md#86-rendering-a-frame-yourself)), `"lod_levels": 0` (1..3 generates that many coarser levels), `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4), `"ragdoll": {}` (per-bone ragdoll overrides by bone name; section 9.8), `"animations_from": []` (glTF files whose clips play on this mesh too, bound by bone name; section 8.9) |
+| `obj` | `"up": "y"` (`"z"` for a +Z-up file), `"scale": 1.0`, `"max_triangles": 0`, `"lod_levels": 0`, `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4); the `.mtl` next to it is adopted with `"importer": "mtl"` (no settings) |
+| `fbx` | `"scale": 1.0`, `"sample_rate": 30`, `"max_triangles": 0`, `"lod_levels": 0`, `"lod_ratio": 0.35`, `"lod_error": 0.05` (section 8.4); no `"up"`: the file says |
+
+Edit settings in the sidecar file, or through MCP's `asset_set_import_settings`. A settings change
+re-cooks the asset.
+
+Three importer rules that the error text alone does not make obvious:
+
+- **glTF is one file.** A `.gltf` whose buffers are separate `.bin` files cooks with `external buffers are not supported`.
+  Export a `.glb` (the buffer is inside it), or a `.gltf` with the buffers embedded as base64 `data:` URIs. Textures
+  are different: they stay separate PNG or JPEG files, adopted like any other texture and referenced by the material.
+- **`asset_write` never writes `format`, `version` or `guid`.** The tool sets them and keeps the file's own GUID, in
+  `merge` and in `replace` mode alike, so leave them out of `content`; passing them is refused
+  (`format, version and guid are set by the tool`). `replace` makes the document exactly `content` plus those three.
+- **HDR skies are linear floats.** A `.hdr` (Radiance) or `.exr` (OpenEXR: uncompressed, ZIP or PIZ, the first RGB(A)
+  layer) cooks to a linear RGBA16F texture that keeps values far above 1 (a sun can be 5000 times the sky), so it is
+  never sRGB: `"srgb": true` on one is a cook error (`remove "srgb" from the sidecar or set it to false`; an adopted
+  `.hdr` or `.exr` has no `srgb` key to begin with). Values clamp to the half-float range (0 .. 65504), NaN and Inf become 0, and the
+  mips are averaged in float. A float sky costs 8 bytes a texel, so `max_size` (default 2048, a power of two) halves the
+  image until its largest side fits; a 2048 × 1024 sky with mips is about 22 MB of GPU memory, four times an 8-bit one.
+  The source itself is capped at 64 megapixels (8192 × 8192; each side at most 16384): a bigger `.hdr` or `.exr` is a cook
+  error (`image is W x H, over the limit of 64 megapixels (8192 x 8192): downscale the source`) raised from the file's header,
+  before any pixel is decoded. Downscale the source in your image tool; a truncated file is an error too.
+  `exposure` shifts the whole image by EV at cook (`2` is four times brighter); `sky_texture_intensity` on
+  `Environment3D` is the exposure you can still change at run time. The phone cook (`--textures astc`) keeps these
+  in RGBA16F. Point `Environment3D.sky_texture` (and `ibl_texture`, with `sky_ibl`) at the asset; chapter 8 has the sky.
+- **Keep the pack small with `max_size`.** Textures cook to uncompressed RGBA8 plus a mip chain, so the cooked size
+  grows with the square of the side: a 1024 × 1024 texture with mips is about 5.3 MB (1024 × 1024 × 4 bytes, and a
+  third more for the chain), and the same image at 512 is about 1.3 MB. Seventy-eight 1024² textures make a
+  pack of about 400 MB; at 512 they make about 100 MB. Set `"max_size": 512` in a texture's sidecar (or
+  `asset_set_import_settings {"settings": {"max_size": 512}}`) and the cook box-halves the image (the filter the mips
+  use, in linear light for colour textures) until its longest side is 512 or less, then builds the mips from that;
+  a 1024 × 512 image becomes 512 × 256, so the shape is kept. The default is no limit, so a project that sets
+  nothing cooks to the same bytes as before. For the whole project at once, pass a cap to the cook:
+  `mce cook MyGame --max-texture-size 512`, `mce ship MyGame --max-texture-size 512`, or `"max_texture_size": 512` in
+  the MCP `cook_run`. The two combine as the smaller of the sidecar value and the project cap: a sidecar with
+  `"max_size": 256` stays at 256 under a project cap of 512, and a sidecar with `"max_size": 2048` is clamped to 512.
+  Changing either re-cooks the textures (and only the textures). A value that is not a power of two from 1 to 16384
+  is a cook error that names the file and says what to change. A normal map is halved with the same plain box filter
+  as its mips and is not re-normalized, which is fine for the usual 2x to 4x cut. `.hdr` and `.exr` keep their own
+  `max_size` (default 2048) and ignore the project cap. After every cook, `mce_cook` prints the cooked bytes by type
+  (textures, meshes, audio, scenes, other), how many textures the cap cut, and the five largest assets, and MCP's
+  `cook_run` returns the same as `sizes`: look there first when a pack is bigger than expected.
+- **Compress the pack with BC.** Cook a desktop pack with `mce_cook MyGame --textures bc` and the textures are stored
+  as block-compressed data (BC7, BC5, BC4 or BC1) instead of RGBA8: the same 1024 × 1024 texture with mips drops from
+  5.3 MB to 1.3 MB (BC7, BC5) or 0.67 MB (BC4, BC1), on disk and in GPU memory. The sidecar's `compress` key picks the
+  format, and the cook mode decides what a value produces (a missing key means the mode's default, so a project that
+  sets nothing cooks to the same bytes as before):
+
+  | `compress` | `--textures rgba8` (default) | `--textures bc` | `--textures astc` |
+  |---|---|---|---|
+  | missing | RGBA8 | as `auto` | ASTC 4x4 |
+  | `none` | RGBA8 | RGBA8 | RGBA8 |
+  | `auto` | RGBA8 | picked from the image (below) | ASTC 4x4 |
+  | `bc7`, `bc5`, `bc4`, `bc1` | RGBA8 | that format | ASTC 4x4 |
+  | `astc` | RGBA8 | RGBA8 | ASTC 4x4 |
+
+  `auto` picks BC7 for colour (`"srgb": true`), BC4 for opaque grey data such as height maps, BC5 for a normal map (a
+  linear image where at least 85% of the texels are unit-length normals; real normal maps pass 89-100%, colour maps
+  well under 1%), and BC7 for everything else; it keeps RGBA8 for colour-grading LUT strips. A normal map with many
+  flat or out-of-range texels can still land on BC7: set `"compress": "bc5"` on it. BC1 is never picked
+  for you: it is for opaque colour by explicit choice, and it drops alpha. BC5 and BC4 hold linear data, so they need
+  `"srgb": false`. BC needs both sides of the texture, after `max_size`, to be multiples of 4: otherwise the texture
+  cooks to RGBA8 and the cook warns with the file name (resize the image or pick a `max_size`). **Pixel art and UI:**
+  block compression blurs hard edges, so keep 2D projects on the default `rgba8` cook or set `"compress": "none"`;
+  the same goes for colour palettes (such as a kit's `colormap.png`) and LUTs. A BC pack runs only on a GPU that samples
+  BC textures (every desktop GPU; not phones or web): cook phones with `--textures astc` and web with `rgba8`. `.hdr`
+  and `.exr` skies are never compressed, and `compress` on them is an error. The encoder is deterministic, so a BC pack
+  cooks to the same bytes twice on x86_64. To ship one, run `mce ship MyGame --textures bc` (it re-cooks the pack
+  with BC into `MyGame/assets.mce` and zips that; combine it with `--max-texture-size`), `python3 scripts/ship.py --project
+  projects/MyGame --textures bc` from a checkout, or `cook_run {"textures": "bc"}` over MCP. `--target web` with `bc`
+  exits (a web pack serves every browser, phones included), and `ship.py --target android|ios` always cooks ASTC and
+  refuses `bc`. The size report after the cook shows the saving. The Ashen Court sample (six 256² textures) drops to
+  about a quarter of its RGBA8 texture bytes.
+- **Data textures need `"srgb": false`.** A texture is read as colour (sRGB) unless its sidecar says otherwise, which
+  brightens a normal, roughness, metallic, occlusion or LUT map and tilts every normal. Adoption writes `srgb: true`;
+  set `false` for those maps before the first cook (`asset_set_import_settings {"settings": {"srgb": false}}` or the sidecar).
+
+## 5.3 Adding files
+
+1. Copy the file into `assets/` (any subfolder; the layout is yours).
+2. Give it a sidecar. Either run the cook with adoption, which writes a sidecar with default
+   settings for every source file that lacks one:
+
+   ```sh
+   build/<preset>/projects/MyGame/my_game_cook projects/MyGame --adopt
+   ```
+
+   or ask an MCP agent for `cook_run {"adopt": true}`.
+3. In the editor, "Rescan assets" (Assets panel) if it was open.
+
+Adopted textures default to `srgb: true`; fix the sidecar for a normal map or a LUT before using it.
+
+Art and levels drawn in Aseprite, Tiled or LDtk are not copied in as they are: their exports are
+converted into the engine's own assets (`.mcsheet`, `.mcscene`, `.mctilemap`) by `mce import`, or by the
+MCP tool `asset_import`; section 7.3 describes each tool's settings and limits. The converter also gives
+the tileset or sheet PNG its sidecar, so no adoption is needed for those. A glTF or FBX model's lights and cameras
+cannot live in its mesh asset: `mce import gltf|fbx` (or `asset_import` with `tool` `gltf` / `fbx`) writes them as a
+`.mcprefab` next to the model and creates the model's sidecar if it has none (section 8.4, "Lights and cameras").
+
+After a cook, `mce_cook` prints one `mesh assets/...: N tris, N submeshes, N materials, N joints, N clips, N LODs` line per
+3D model (and MCP's `cook_run` returns `meshes`), the quickest check that an import came in as expected (section 8.4,
+"The import summary"). `samples/import_demo` carries a small OBJ + MTL, an ASCII FBX and a glTF with a light and a camera
+as examples, all written by its `gen_art.py`.
+
+### Open-licence content packs (`mce content`)
+
+The engine keeps one list of third-party packs it knows how to bring in: the **ledger**, `content/ledger.json` in the
+engine tree and `share/mce/content/ledger.json` in an SDK. Every pack records its author, licence, homepage, the archive
+URL with a SHA-256, the attribution text and the rules that turn archive members into project assets. Only CC0 and
+CC-BY packs are admitted (an NC, SA or ND licence fails `mce content check`), so what the ledger produces can ship in
+a commercial game. The first entries: Kenney's City Kits (commercial, suburban, roads), Car Kit, Blocky Characters and
+Impact Sounds, ambientCG PBR sets (asphalt, road, concrete, paving, grass), a Poly Haven sky HDRI and Quaternius'
+Universal Animation Library.
+
+```sh
+mce content list [--kind models|textures|audio|animations|hdri] [--tag car] [--json]
+mce content info kenney-car-kit
+mce content add kenney-car-kit MyGame [--only 'models/sedan*' --only 'models/Textures/*'] [--dry-run]
+mce content add ambientcg-asphalt031 MyGame
+mce content verify MyGame
+```
+
+`add` downloads the archive once into a cache (`MCE_CONTENT_CACHE`, default `~/.cache/mce/content`), refuses it unless its
+SHA-256 matches the ledger, and writes the selected files under `assets/third_party/<pack>/` with a sidecar for each
+(the importer comes from the extension; a rule can set import settings, e.g. `"srgb": false` for normal maps). GUIDs
+derive from the pack id and the file path, so adding a pack twice, or on another machine, gives identical sidecars. A pack
+of PBR textures also gets `.mcmat` materials that reference its colour and normal maps. `add` records the pack in
+`<project>/third_party_content.json` and rewrites the generated block of `CREDITS.md` (your own text around it is left
+alone); a CC-BY pack adds its attribution line there, which `mce ship` copies into the shipped folder. The cook then
+treats the files like any other source.
+
+`mce content verify <project>` is the gate to run before shipping: it fails on a file under `assets/third_party/` that
+no recorded pack owns, on a recorded file that changed or vanished, and on a recorded pack whose licence is not CC0 or
+CC-BY. If a download's hash no longer matches, the upstream file changed: read its licence again, then update the ledger
+entry (`source.sha256`, `size`, `retrieved`) in a PR. A pack whose download needs a browser session (`source.kind`
+`manual`, e.g. itch.io) is fetched by hand and passed with `--file <archive>`; `mce content fetch` verifies it and
+puts it in the cache.
+
+To add a pack to the ledger: read its licence on the author's page, download it, compute `sha256sum`, copy an existing
+entry of the same kind, fill in `license`, `license_url`, `homepage`, `retrieved` (the date you read the licence),
+`source` and the `cook` rules, and run `mce content check`. A CC-BY pack needs an `attribution` line; the check fails
+without one. Nothing under `content/` holds the archives themselves; they are never committed.
+
+A PBR set's roughness (and occlusion, when the pack has one) is packed into the engine's `metallic_roughness` texture
+at `add` time (R occlusion, G roughness, B metallic; the ledger entry's `orm` block names the source maps and the
+output, `mce content` reads and writes 8-bit PNG itself): the pack's `.mcmat` then references colour, normal and the
+packed `<Name>_ORM.png`, with roughness and metallic factors of 1 so the texture decides. The ambientCG entries
+therefore pin the `1K-PNG` archives. The packed file is recorded in the lock like any other.
+
+Limits: the Kenney kits' glTF files are static meshes; Blocky Characters animate their parts as nodes, not through a
+skin, so they take `mce retarget` only with `--map-only` (chapter 8.9). A 16-bit or palette PNG cannot be packed.
+
+The ledger's real packs are exercised by `tests/import/test_content_real.py` (ctest `import_content_real`, label
+`slow`: it needs the network or a populated `MCE_CONTENT_CACHE`, otherwise it skips): it adds roads, car, character,
+sound and PBR packs to a scratch project and runs `mce_cook` over it.
+
+## 5.4 The cook
+
+```sh
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame            # cook into projects/MyGame/cooked/
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --pack     # also write projects/MyGame/assets.mce
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --force    # ignore the cook DB, redo everything
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --adopt    # write missing sidecars first
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --only scenes/level_02.mcscene --only textures
+build/<preset>/projects/MyGame/my_game_cook projects/MyGame --skip-errors   # cook what can be cooked, list the rest
+```
+
+Exit codes: 0 clean, 1 cook errors, 2 usage. Errors are printed as `file:line:col: error: message
+[stage]`, the same text the editor's Cook panel shows.
+
+Use the **project's** cook (`my_game_cook`), or the stock `mce_cook --module
+build/<preset>/projects/MyGame/libmy_game.so projects/MyGame` (`mce cook MyGame` with the SDK): both
+know your components, so scenes that use them cook. The stock `mce_cook` without `--module` only
+knows the engine's and fails on `Spin` with "unknown component type".
+
+What the cook does, so its behaviour makes sense:
+
+- **Incremental.** Each asset's re-cook key is a content hash of its source, settings, importer
+  version and every dependency's output. Touching a file's timestamp changes nothing; changing one
+  texture re-cooks that texture and the scenes and materials that reference it.
+- **Deterministic.** Deleting `cooked/` and cooking again gives byte-identical files. The pack is
+  sorted by GUID. This is a tested guarantee, which makes `cooked/` disposable.
+- **Dependency checked.** A scene that references a GUID that does not exist, or a texture where a
+  sound is expected, is a cook error that names the file, line and column.
+- **Failure keeps the old output.** A failed asset leaves its previous cooked output in place, so
+  the editor and a running game keep working while you fix it.
+- **Content-addressed outputs** live under `cooked/<aa>/<guid>/<hash>.mce` with a `manifest.mce`
+  mapping GUIDs to paths. You never read these by hand.
+
+The build cooks for you: building `my_game` runs `my_game_cook` over a copy of `assets/` into
+`build/<preset>/projects/MyGame/project/assets.mce`, which is the pack the host loads from the
+build tree. The editor's F7 cooks into `<Project>/cooked/` for the editor's own use.
+
+### When a cook fails
+
+A failed cook still cooks everything that does not depend on the failed file (and the failed file's
+previous output keeps serving), but it writes no pack. Read the first error; these are the usual ones.
+
+| Error | Cause | Fix |
+|---|---|---|
+| `unregistered asset (no .mceasset sidecar)` | a new source file (a `.luau` script, texture, model, sound) with no sidecar | adopt it: over MCP `cook_run {"adopt": true}`, on the command line `mce cook <project> --adopt`. The same error stops `mce build`; adopt, then build again |
+| `unknown component type 'X'` or `unknown field 'x' on X` | the process that cooks has an older game module than your source (the component or field is new) | `mce build` (or MCP `module_build`), then restart the MCP server (`mce mcp <project>`); `mce cook` loads the module fresh each time |
+| `missing reference <guid>` | a scene or material names an asset that was deleted or never adopted | adopt the file, or fix the reference |
+| a pack that plays an old scene | the cook writes `cooked/`; `mce play` and `mce headless` run `build/project/assets.mce`, which only `mce build` refreshes (they print a warning when it is older than `assets/`) | `mce build`, or cook with `--pack` and run the player with `-pack` |
+
+To work around a file you are not ready to fix, cook around it. `--only <path>` (MCP `cook_run`
+`paths`) cooks just those assets and what they depend on, leaves the rest as it was, and does not
+look at the other files, so an unrelated unadopted file is not its error; it writes `cooked/` but
+never the pack, which must hold the whole project. `--skip-errors` (MCP `skip_errors`) keeps
+cooking past failures as a cook always does, and prints every failing file with its first error at
+the end; the pack is still written only by a run with no errors.
+
+## 5.5 Development mount versus the pack
+
+| | `cooked/` directory | `assets.mce` pack |
+|---|---|---|
+| Written by | the editor (F7), the cook without `--pack` | `--pack`, the build, `ship.py` |
+| Loaded by | the editor; `-pack <Project>/cooked` for the player | the host and the player by default |
+| Integrity | every file's CRC checked at load | checked once at mount |
+| Hot reload | yes, in the editor | no |
+
+A player or host can mount either: `-pack projects/MyGame/cooked` or `-pack path/to/assets.mce`.
+
+## 5.6 References and GUIDs
+
+Components refer to assets by GUID (`AssetRef<Texture>` in C++, `"guid:<uuid>"` in text). At load
+the reference holds only the GUID; the engine resolves it to a loaded asset on first use and keeps
+the handle. If the asset is missing or fails to load, the reference resolves to a placeholder (the
+magenta checker for textures, silence for sounds) and the log says so once.
+
+To find a GUID: the Assets panel's "Copy GUID", the sidecar file, or MCP's `asset_list`.
+
+## 5.7 Native text formats
+
+Besides scenes and prefabs (chapter 4), these text assets are JSON with a `format` and a `guid`:
+
+**Material** (`.mcmat`, chapter 8):
+
+```json
+{ "format": "mce-material", "version": 1, "guid": "<uuid>",
+  "base_color": [1, 1, 1, 1], "metallic": 0, "roughness": 1, "emissive": [0, 0, 0],
+  "uv_scale": [1, 1],
+  "alpha_mode": "opaque", "alpha_cutoff": 0.5, "double_sided": false, "unlit": false,
+  "textures": { "base_color": "guid:<uuid>", "normal": "guid:<uuid>",
+                "metallic_roughness": "guid:<uuid>", "emissive": "guid:<uuid>" } }
+```
+
+`uv_scale` repeats the textures across the mesh's UVs: `[8, 8]` on a plane tiles a stone texture
+eight times each way (the samplers repeat), so a 30 m courtyard floor is one mesh, not many slabs.
+
+Optional extension keys add lobes on top of the base (all 0 by default, which is the plain material):
+`clearcoat` and `clearcoat_roughness` (0..1, a varnish layer), `sheen_color` ([r, g, b]) and
+`sheen_roughness` (cloth and velvet), `anisotropy` (-1..1) and `anisotropy_rotation` (radians; brushed
+metal), `transmission` (0..1, see-through like glass; the frame behind shows through, tinted by the base
+color) and `ior` (1..3, 0 = 1.5; sets a dielectric's reflectance). A value out of range is a cook error.
+
+**Height map (parallax, M-VISUAL3 2).** `textures.height` names a grey image (white is high; import it with
+`"srgb": false`) and `height_scale` (0..0.5, in texture repeats; 0.02..0.1 is typical) turns it on, with
+`parallax_steps` (`[min, max]`, 4..64, default `[8, 32]`) as the march budget looking straight on and at a
+grazing angle. `height_scale` without `textures.height` is a cook error. The height map has to match the normal
+map in size, mip count and format (the player packs the two into one array): when it does not, or no texture
+store exists, the engine logs one warning naming the material and draws it without parallax. Only `.mcmat`
+materials carry a height map.
+
+**Terrain** (`.mcterrain`, chapter 8): `resolution` samples per side (2^n+1, 33 to 4097), `chunk` quads
+per LOD node (a power of two, default 32), `size` in metres along x and z, `height_range` mapping sample
+0 and 65535 to metres. `heights` is base64 of `resolution²` little-endian u16 samples, z rows of x
+columns; or leave it out and give `fill` (one height in metres) for a flat start.
+
+```json
+{ "format": "mce-terrain", "version": 1, "guid": "<uuid>", "name": "island",
+  "resolution": 129, "chunk": 32, "size": [128, 128], "height_range": [0, 32], "fill": 0 }
+```
+
+`layers` paints the terrain with up to 8 materials. Each layer names a `.mcmat` (its base color map,
+normal map, roughness/metallic map and factors), a `tile` in metres per repeat (default 4), `triplanar`
+(also project along x and z on steep ground, so cliffs are not smeared) and `height_strength` (how far
+its albedo's brightness lifts it over its neighbours where layers meet). `splat` is the weight map:
+base64 of `splat_resolution²` samples (default `min(resolution, 1025)`), each one u8 weight per layer.
+Without `splat`, each layer's `auto` rule places it by `height` (metres) and `slope` (degrees), and
+ground no rule claims goes to layer 0:
+
+```json
+"layers": [
+  { "material": "guid:<grass>", "tile": 4, "auto": { "slope": [0, 25] } },
+  { "material": "guid:<rock>", "tile": 6, "triplanar": true, "auto": { "slope": [30, 90] } },
+  { "material": "guid:<snow>", "auto": { "height": [40, 60] } }
+]
+```
+
+`holes` cuts the terrain open (cave mouths, tunnel entrances): base64 of a bit per height sample, sample
+`z * resolution + x` at bit `i % 8` of byte `i / 8`, `(resolution² + 7) / 8` bytes. Every triangle with a
+hole sample as a corner is left out of both the drawn surface and the `TerrainCollider3D` collision, so a
+3 × 3 block of hole samples opens a 4 × 4 m gap at 1 m spacing. An all-zero mask cooks to no holes.
+
+The editor's Terrain panel (chapter 3) sculpts and paints a terrain in place. A stroke writes the file
+back with explicit `heights` (replacing `fill`), plus `splat` once a layer is painted (from then on the
+`auto` rules no longer apply) and `holes` once one is cut; every other key stays as written. Heights
+stay inside `height_range`: widen it first to raise higher or dig deeper.
+
+Agents shape terrains over MCP (chapter 14) with the same brushes: `terrain_sculpt` (raise, lower, smooth,
+flatten, noise) and `terrain_paint` (a layer, holes, filling them) dab at `[x, z]` points in metres from the
+terrain's centre, or along them as a stroke. `terrain_import` reads a heightmap under `assets/` into the
+heights: a `.png` (8- or 16-bit grey) or raw samples (`.r16`/`.raw` 16-bit little-endian, `.r8` 8-bit),
+resampled to `resolution`, the image's top row along -z and its left column along -x, black and white
+mapped to `range` (default `height_range`). `terrain_generate` grows a landscape: fBm value noise
+(`feature` metres across the largest hills, `octaves`, `lacunarity`, `gain`, `ridged`), stretched between
+`low` and `high` shares of `height_range`, sunk toward the edges by `island`, then erosion-lite: `thermal`
+passes settle slopes steeper than `talus_deg` and `droplets` of rain carve channels and silt up hollows.
+The same `seed` gives the same terrain. Each writes `heights` and keeps holes and painted layers; a
+terrain whose layers follow `auto` rules re-applies them to the new shape.
+
+Give every layer's maps of one kind the same size and import settings: each kind is packed into one
+texture array, and a map that differs from the first layer's is left out with a warning.
+
+**Item catalog** (`.mcitems`, M-INVENTORY): the things a game's inventories hold and the loot tables that drop them. One file per
+project is typical; it is one asset with one GUID, and items and tables are named by id inside it.
+
+```json
+{ "format": "mce-items", "version": 1, "guid": "<uuid>",
+  "items": [ { "id": "medkit", "name": "Medkit", "stack": 5, "weight": 0.4, "tags": ["consumable"],
+               "stats": { "heal": 25 }, "icon": "guid:<texture uuid>", "prefab": "guid:<prefab uuid>" },
+             { "id": "key" } ],
+  "tables": [ { "id": "chest_common", "rolls": [1, 3], "entries": [
+                 { "item": "medkit", "weight": 5, "qty": [1, 2] },
+                 { "table": "chest_rare", "weight": 1 },
+                 { "item": "key", "guaranteed": true } ] },
+              { "id": "chest_rare", "entries": [ { "item": "medkit", "qty": 5 } ] } ] }
+```
+
+Recipes (M-CRAFT) sit in the same file: `"recipes": [ { "id": "bandage", "name": "Bandage", "station": "workbench", "time": 1.5,
+"in": [ { "item": "cloth", "qty": 2 } ], "out": [ { "item": "medkit" } ] } ]`. Each side lists 1 to 8 different items (`qty` from 1,
+default 1), `station` is an optional tag the crafting place must carry (letters, digits, `_`, `-`, `.`), `time` is seconds (0 to
+3600, kept as whole milliseconds) and the `name` defaults to the id. The cook refuses an unknown item, an item listed twice on
+one side, an empty side and a repeated id. A catalog without recipes cooks to the same bytes as before. The crafting rules and
+station come in the next steps of M-CRAFT.
+
+Using it: give an entity an `Inventory` (and an `Equipment` to wear things) whose `catalog` is the file's GUID. A table is rolled
+by a `LootDrop` (drops its table as pickups when its `Health3D` entity dies) or a `Container` (a chest: put an `Inventory` on the
+same entity, name the `table`, and send `OpenContainer`); set `seed` on either for loot that is the same on every run, leave it 0 for a
+seed derived from the table and the entity. A catalog may only grow at the end: saves keep item numbers, not ids. The `inventory`
+Luau global (section 27), the `slot_N` Text widgets (section 12) and `samples/12_loot` show it working.
+
+`stack` (default 1, up to 1,000,000) is how many fit in one slot; `weight` is kilograms per unit, stored as whole thousandths so
+sums never depend on float order; `stats` are free named numbers (`damage`, `heal`) that scripts and the kit read by name; `icon` is a
+texture and `prefab` the entity spawned when the item lies in the world, both optional and checked at cook. A loot table makes
+`rolls` (a number or `[min, max]`, default 1) weighted picks among its entries; a `guaranteed` entry is always added and does not
+count as a pick, and an entry that names a `table` rolls on that table in turn (tables nest 8 deep and may not loop, and may be
+listed in any order). `qty` is a number or `[min, max]`. Ids are 1 to 63 letters, digits, `_`, `-` and `.`; a stat or tag name up to
+31. Limits: 4096 items, 1024 tables, 256 entries a table, 32 stats and 16 tags an item. The cook names the file and line of every
+mistake. This step ships the data and its cook; the inventory components and the loot roller come with the next steps of the milestone.
+
+**Particle preset** (`.mcpart`, chapter 7):
+
+```json
+{ "format": "mce-particles", "version": 1, "guid": "<uuid>", "name": "embers",
+  "texture": "guid:<uuid>", "rate": 30, "max_particles": 128,
+  "lifetime": [1.2, 2.2], "speed": [0.6, 1.6], "direction": 90, "spread": 25,
+  "gravity": [0, 0.6], "drag": 0.6, "size": [0.35, 0.05], "spin": [0, 0], "area": [0.3, 0.1],
+  "color_start": [1, 0.7, 0.25, 1], "color_end": [1, 0.2, 0.05, 0], "blend": "additive" }
+```
+
+**Sequence** (`.mcseq`, chapter 13), **timeline** (`.mctimeline`, chapter 13.5), **tilemap** (`.mctilemap`, chapter 7; the editor's
+Tilemap panel writes it) **sprite sheet** (`.mcsheet`, chapter 7.3) and **animation graph** (`.mcanim`, chapter 8.9).
+
+**Shaders** are validated and compiled to SPIR-V at cook, with variants declared as
+`// @variant NAME` header lines, but the built-in 2D and 3D shaders are not cooked assets yet and a
+project cannot replace them. Treat the shader importer as groundwork. (On macOS the Metal backend
+translates the engine's GLSL to MSL with SPIRV-Cross when it creates a pipeline; nothing changes for
+a project.)
+
+## 5.8 Hot reload
+
+In the editor, saving a source file (an image editor writing a PNG, a text editor writing a scene)
+is picked up within half a second: the changed asset and its dependents re-cook and the viewport
+swaps to the new version. A shipped game has no watcher; the player reloads nothing at run time.
+
+## 5.9 Organizing content
+
+- Any folder layout under `assets/` works; the template uses `scenes/`, `textures/`, `sfx/`,
+  `fonts/`. Kindle adds `textures/ember/`, `textures/backdrop/`, `textures/switch/`.
+- Keep a `CREDITS.md` in the project root for third-party content; `ship.py` copies it into the
+  zip.
+- Sprites show a whole texture, so one image per sprite frame. Atlas regions and sprite sheets are
+  not imported yet (see 7.3 for the animation recipe).
+- Large tiled areas: a `TilemapLayer` over a tileset, or one `Sprite` per tile. A single stretched
+  sprite smears the texture.
+
+## 5.10 Damaged and hostile files
+
+Packs, mods, saves, replays, input recordings and every importable source file may come from somewhere
+you do not control, so the engine reads them as untrusted. A bad file is refused with an error naming
+it (the cook prints it as a diagnostic; the player logs it); it must never crash, hang or read outside
+its buffer. Each reader and importer is tested against thousands of deterministic byte mutations of real
+files (`tests/fuzz/`, milestone record `docs/milestones/M-FUZZ.md`), and the ASan stage of `local_ci.sh`
+runs them with the sanitizers on, a sanitizer report counting as a failure.
+
+- If a file does crash the engine, keep it and report it: the test names (`fuzz: importers ... file F
+  iteration N`) replay one mutant, and `MCE_FUZZ_ITERS=<n>` runs a longer search by hand.
+- Adding a chunk type or an importer: `scripts/ci/check_walls.py` fails until the new chunk type has a
+  reader in `tests/fuzz/test_chunk_readers.cpp` and the new importer has a source file the fuzz test
+  reads (or an entry with a reason in the wall's allow-list).
+- Not covered: Luau bytecode (the loader trusts it, so only the game's own pack may carry it; a mod's is dropped, see
+  19.4, and `check_walls.py` pins the mount sites), and the GPU drivers, the OS and third-party libraries beyond the
+  calls the engine makes into them.

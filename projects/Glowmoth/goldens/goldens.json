@@ -1,0 +1,7 @@
+[
+  {"golden": "goldens/main.png", "render": {"scene": "scenes/main.mcscene", "tick": 30}, "max_score": 0.02},
+  {"golden": "goldens/level1.png", "render": {"scene": "scenes/level1.mcscene", "tick": 30}, "max_score": 0.02},
+  {"golden": "goldens/level2.png", "render": {"scene": "scenes/level2.mcscene", "tick": 30}, "max_score": 0.02},
+  {"golden": "goldens/win.png", "render": {"scene": "scenes/win.mcscene", "tick": 30}, "max_score": 0.02},
+  {"golden": "goldens/lose.png", "render": {"scene": "scenes/lose.mcscene", "tick": 30}, "max_score": 0.02}
+]

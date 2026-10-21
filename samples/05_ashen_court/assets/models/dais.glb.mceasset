@@ -1,0 +1,8 @@
+{
+  "guid": "2fe64ac0-3cb3-5b62-8877-1bea30e9100d",
+  "importer": "gltf",
+  "importer_version": 2,
+  "settings": {
+    "max_triangles": 1000
+  }
+}

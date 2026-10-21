@@ -1,7 +1,9 @@
 # Architecture: Editor & Tools (`editor-tools`)
 
 **Project:** Mesh Control Engine (MCE) · **Subsystem:** `editor-tools` · **Date:** 2026-10-06
-**Status:** Architecture design (design-only; no implementation)
+**Status:** Implemented (M2–M8); as built in `docs/engine/editor.md`. This file is the design-time record. *ImGuizmo was
+never taken: the gizmo is hand-rolled (ADR-0025, then ADR-0030 for rotate/scale), so every ImGuizmo mention below is
+superseded.*
 **Inputs:** `docs/REQUIREMENTS.md` (authoritative), `docs/ARCHITECTURE.md` (integration authority — fixes F7, F8, F10, F12 and ADR-0008/0015 applied here), `docs/research/existing-engines.md`, `docs/research/audio-input-ui.md` (§4 editor UI, §4.3 target wall), `docs/research/ecs-gameplay.md` (scene document, commands, events), `docs/research/platform-engineering.md` (threads, allocators, logging).
 **Binding context honored:** Dear ImGui (docking branch, multi-viewport **off**), ImGuizmo via one-page ADR, editor owns the canonical scene and the runtime never mutates it, all scene/inspector/editor serialization flows through the hand-rolled reflection system, ImGui is editor/debug-only and CI-walled out of the engine library set (`mce_engine.dll` — fix F8 naming), fixed 60 Hz sim, generational handles, zero heap in hot paths, `Result<T,Error>` for fallible I/O, no `#ifdef MCE_EDITOR` in runtime code.
 
@@ -59,6 +61,7 @@ mce_editor.exe  ->  mce_editor_layer ->  mce_editor_core ->  mce_engine.dll
                                                cook requests)
 game.exe        ->  mce_engine.dll + game.dll (module)             (no ImGui anywhere downstream)
 mce_devhost.exe ->  mce_devhost_layer -> mce_engine.dll + imgui    (dev-only debug harness)
+                    [as built: tests/devhost/mce_devhost links only mce_engine; no ImGui, no layer]
 ```
 
 The three-target split is ARCHITECTURE fix F7: `mce_editor_core` compiles headless in CI (no ImGui), `mce_editor_layer` is the only ImGui consumer, and `mce_editor.exe` is a ~20-line main. Cook requests go through `mce_asset`'s `CookService` (assets.md §7.6), reached from `mce_editor_core` — the editor drives cook, never implements it.
@@ -286,6 +289,8 @@ struct ViewportPanel final : IEditorPanel { /* ... */ };
 
 **Tilemap authoring panel (v0.5, FR-EDT-121):** paint/erase on a 2D grid over the viewport (tile picker from the atlas sprite set, rect-fill via the FR-EDT-120 selection), writes the `.mctilemap` document through the same mutation funnel as everything else (§2.3). The re-bake loop: panel edit → document save → `CookService` request → tilemap chunk re-bake → hot-reload swap in the preview world (< 1 s, FR-AST-090) — the panel never builds GPU geometry itself; rhi-renderer consumes only the baked chunk (rhi-renderer §3.4 tilemap note).
 
+**UI document panel (M-UI-DATA step 6):** `UiDocumentEditor` (editor core, headless) holds one `.mcui` as `ui::DocumentData`. Structural edits (add, remove, move, kind change) re-order the flat depth-first widget list and remap parent, nav and default-focus indices. Every edit is written by `cook::write_ui_document`, read back whole by `cook::read_ui_document` and kept only when it reads, the same path as the MCP `ui_*` tools. `save()` writes that canonical text through `EditorSession::write_asset` (hot reload). Undo keeps canonical texts, one step per run of edits between saves. `draw_ui_inspector` draws a widget through the `DrawCtx` seam; anchors, styles and layouts go through the reflected `Ui*` structs (`draw_fields`). `UiDocumentPreview` builds a `ui::Document` the way the player's `UiScreens` does (the theme applied, the theme's fonts) with the preview renderer's built-in skin. It submits into a `Screen2D` batch at the chosen size and rebuilds when the document, the mount or the hot-reload count moves. The ImGui panel (`ui_panel.cpp`) is a thin adapter.
+
 ### 2.8 Play session (v0.5; MVP ships run-in-player)
 
 ```cpp
@@ -411,7 +416,7 @@ Each world instance (preview or play) owns an `EntityMap`: `EntityId -> ecs::Ent
 ### 3.5 Editor/runtime separation mechanism (recap with teeth)
 
 1. **CMake wall:** `mce_editor_layer` links `mce_engine.dll` + ImGui; nothing under `src/engine/` links UI. Leakage is a link error, not a review finding.
-2. **Include grep:** no `imgui.h` outside `src/editor/` and `src/devhost/` (CI).
+2. **Include grep:** no `imgui.h` outside `src/editor/` and `tests/devhost/` (CI). *As built, the ImGui wall in `check_walls.py` allows only `src/editor/layer/`.*
 3. **Symbol scan:** `dumpbin /symbols` on `mce_engine.dll` must contain no `ImGui*` (CI, `FR-UI-048`; scan target per ARCHITECTURE fix F8).
 4. **No `#ifdef MCE_EDITOR`:** separate mains; the editor registers *editor* systems into a `Phase::Editor`-shaped slot only when it runs its own preview loop, and registers **nothing** into a play world's phases.
 5. **ImGuizmo + (later) ImPlot** enter via the one-page ADR named in `audio-input-ui.md` §4.1 — single-purpose, ImGui-native, 2-file.
@@ -521,6 +526,7 @@ Tier names with ROADMAP milestone IDs (ARCHITECTURE §10.1 is the mapping author
 - **ROADMAP M0 (MVP):** shell (docking + panel registry + input arbitration), viewport + console panels over a stub world, dock layout persistence. *Artifact: FR-EDT-010 gate (shell portion).*
 - **ROADMAP M2 (MVP):** reflection inspector (`FR-EDT-020`) + hierarchy flat list + **scene create/save** — lands with `mce_refl` (moved here from the old M1; finding F4).
 - **ROADMAP M3 (MVP):** entity CRUD + copy/paste (`FR-EDT-050`), translate gizmo + entity picking (`FR-EDT-030`), asset/entity reference pickers (Guid + type-filtered dropdown, finding F6), autosave, cook error panel (`FR-EDT-070`), run-in-player button (A4), 2D viewport RT (`FR-R2D-080`), 2D grid/snap + rect-fill authoring aids (`FR-EDT-120`, finding 31). *Artifact A is authorable end-to-end in the editor.*
+- **ROADMAP M4.5 (off-tier tooling):** headless editor MCP server `mce_mcp` over `mce_editor_core` (`FR-EDT-160`; design in `editor-mcp.md`) — scene read/edit through the mutation funnel, cook, headless runs for an external AI client.
 - **v0.5 (ROADMAP M5b–M7):** undo/redo (`FR-EDT-040`), asset browser + drag-drop (`FR-EDT-110`), rotate/scale gizmos + multi-select (`FR-EDT-030/050`), **play-in-editor with pause/step/slow-mo + live inspection (`FR-EDT-060`, M5b — finding 11)**, debug overlays + event-flow monitor + ECS metrics (`FR-EDT-090`), tilemap authoring panel (v0.5 tier, FR-EDT-121), audio bus mixer panel.
 - **v1.0 (ROADMAP M8):** prefab instantiate/override UI (`FR-EDT-080`), browser thumbnails, multi-scene tabs, timeline/curve editor (`FR-EDT-130`) alongside FR-ENT-110.
 

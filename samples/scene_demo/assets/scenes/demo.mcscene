@@ -1,0 +1,64 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "5ce4e000-0000-4000-8000-000000000100",
+  "name": "demo",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Camera",
+      "components": {
+        "Camera2DComponent": { "pixels_per_meter": 40 },
+        "LocalTransform": { "position": [0, 3, 0] }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Ground",
+      "components": {
+        "Collider2D": { "shape": { "half": [12, 0.5] }, "density": 0 },
+        "LocalTransform": { "position": [0, -2.5, 0] },
+        "RigidBody2D": {},
+        "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-000000000002", "size": [24, 1] }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Crate A",
+      "components": {
+        "Collider2D": {},
+        "LocalTransform": { "position": [-2, 2, 0] },
+        "RigidBody2D": { "type": "Dynamic" },
+        "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-000000000001" }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Crate B",
+      "components": {
+        "Collider2D": {},
+        "LocalTransform": { "position": [-1.6, 4, 0] },
+        "RigidBody2D": { "type": "Dynamic" },
+        "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-000000000001" }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Ball",
+      "components": {
+        "Collider2D": { "shape": { "type": "Circle", "radius": 0.4 }, "restitution": 0.6 },
+        "LocalTransform": { "position": [2, 6, 0] },
+        "RigidBody2D": { "type": "Dynamic" },
+        "Sprite": { "texture": "guid:5ce4e000-0000-4000-8000-000000000003", "size": [0.8, 0.8] }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Title",
+      "components": {
+        "LocalTransform": { "position": [0, 8, 0] },
+        "TextLabel": { "font": "guid:5ce4e000-0000-4000-8000-000000000010", "text": "MESH CONTROL ENGINE", "color": [1, 0.95, 0.8, 1], "height": 0.8 }
+      }
+    }
+  ]
+}

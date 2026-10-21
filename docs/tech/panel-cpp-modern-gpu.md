@@ -2,6 +2,7 @@
 
 **Position:** C++23 with a hand-written RHI over raw Direct3D 12 (first) and raw Vulkan 1.3 (second).
 **Candidate stance:** maximum control, maximum industry-standard skill transfer, honest about solo-dev cost.
+**Status:** Panel input, not adopted; the binding stack is ARCHITECTURE §7 / ADR-0001, 0010, 0017.
 
 ---
 

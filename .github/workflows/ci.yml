@@ -1,0 +1,61 @@
+# Pull-request gate: scripts/ci/local_ci.sh --task (walls, gcc debug + tests, clang-tidy, scoped to the change).
+# Standard GitHub-hosted runners only: free and without a minute quota in a public repository. The ccache comes
+# from the caches the integration workflow saves on master (a PR run only restores, so it cannot evict them).
+# Local CI stays: scripts/ci/local_ci.sh is the same script this workflow calls.
+name: CI
+
+on:
+  pull_request:
+    branches: [master, dev_claude]
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: "local_ci.sh mode to run on the selected ref"
+        type: choice
+        options: [--task, --premerge, --quick]
+        default: --task
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ github.event.inputs.gate || '--task' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CCACHE_MAXSIZE: 3G
+      MCE_TIDY_BASE: origin/${{ github.base_ref || 'master' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Make the base branch available for --task scoping
+        run: git fetch origin ${{ github.base_ref || 'master' }}:refs/remotes/origin/${{ github.base_ref || 'master' }}
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install dependencies
+        run: scripts/ci/setup_env.sh
+      - name: Restore ccache (saved by the integration workflow)
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-pr-${{ github.run_id }}
+          restore-keys: |
+            ccache-g1-
+            ccache-tidy-
+      - name: Run the gate
+        run: scripts/ci/local_ci.sh ${{ github.event.inputs.gate || '--task' }}
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-ci-logs
+          path: build/local-ci-logs
+          retention-days: 7

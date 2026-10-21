@@ -70,11 +70,13 @@ Interchange formats are closed: glTF 2.0 (`.gltf`/`.glb`), PNG/JPG, WAV. MCE-nat
 | Sprite atlas | `.mcscene`-adjacent `.mcatlas` def + PNGs | `CHNK_ATLAS` | Skyline bin packing, deterministic order (ARCHITECTURE CF15) | MVP |
 | Scene | `.mcscene` (editor canonical) | `CHNK_SCENE` | component columns + id remap (§6) | MVP |
 | Prefab | `.mcprefab` | `CHNK_PREFAB` | entity sub-tree template; nested flattened at cook | v0.5 |
-| Timeline | `.mctimeline` | `CHNK_TIMELINE` | track/clip data (FR-ENT-110) | v1.0 sketch |
+| Timeline | `.mctimeline` | `CHNK_TIMELINE` | track/clip data (FR-ENT-110) | built (M-CINEMA 1; `kit/timeline.h`) |
+| Behavior tree | `.mcbt` | `CHNK_BT` | pre-order nodes, typed blackboard keys (ADR-0045) | built (M-AI 1-2; `kit/ai.h`) |
+| 2D skeleton | `.mcskel2d` | `CHNK_SKEL2D` | bones (rest pose, parents first) + slots (textured quads in draw order) + animations (minor 1: per-bone rotate / translate / scale timelines with linear, stepped or bezier keys, events) + attachments (minor 2, header flag: per-slot quad and mesh attachments, mesh vertices with up to 4 normalized bone weights, triangles, slot color / attachment and mesh deform timelines) + IK constraints (minor 3, header flag: two-bone and CCD chains, a target bone, mix, bend, iterations, sorted by order; IK mix timelines) + names | built (M-ANIM2D 1, 2, 3, 4; `kit/skeleton2d.h`) |
 | Input action map | `.mcinput` | `CHNK_INPUT` | named actions, bindings, curves (FR-INP-020) | MVP |
 | Animation clips | glTF node-transform tracks | `CHNK_ANIM` | sampled or keyframed node tracks (MVP: single-node TRS; per-node tracks sampled at runtime by the ECS `AnimationPlayer` — see `ecs-gameplay` §3.8) | MVP (diorama prop) |
 | Particle preset | `.mcpart` (MCE-native) | `CHNK_PART` | emitter parameters + sprite GUID + spawn curves (FR-R2D-050) | v0.5 |
-| String table | `.mcstr` (MCE-native) | `CHNK_STR` | key → localized string rows, one per locale (N12 groundwork) | v0.5 |
+| String table | `assets/loc/<locale>.csv` (`key,text`, `key#one` plural forms; sidecar importer `strings`) | `CHNK_STR` | one locale's sorted key → UTF-8 text rows (`mce/loc/string_table.h`); the cook warns about keys a locale lacks against the base (`en`) table | M-MOBILE 11a |
 
 **Rules for cooked chunks** (binding + FR-AST-020):
 
@@ -171,7 +173,7 @@ Every source asset has `<source-file>.mceasset` beside it, checked into version 
 
 Rules:
 
-- Sidecars are created by the editor on import (or by `mce_cook --init` for CI-only projects); a source without a sidecar is a **cook error** ("unregistered asset, run editor or `mce_cook --adopt`") rather than a silent new GUID — silent GUID churn is how reference graphs rot.
+- Sidecars are created by the editor on import (or by `mce_cook --init` for CI-only projects); a source without a sidecar is a **cook error** ("unregistered asset", fixed by `mce_cook --adopt` or the MCP `cook_run` with `adopt`) rather than a silent new GUID — silent GUID churn is how reference graphs rot.
 - MCE-native text assets (`.mcmat`, `.mcscene`, ...) carry their GUID **inline** in a `"guid"` top-level field instead of a sidecar — they are already MCE-controlled files, and a second file per scene is noise. One exception, two lines of code, fewer files.
 - Renaming *inside the editor* = move source + sidecar together + update registry. An external (non-editor) rename is detected at the next scan as an orphan (GUID with no file) plus an unregistered file with identical content hash → auto-repair + info log, not an error.
 
@@ -271,7 +273,7 @@ Rules that make this layout load-bearing rather than convention:
 | **Material** | `.mcmat` validate + texture GUIDs resolved → `CHNK_MAT` with fixed-width param block (baseColor, metallic, roughness, emissive, flags) | glTF import *extracts* materials into `.mcmat` files on first import (Unity-style), so glTF is interchange only and the editor has a native material asset to edit |
 | **Shader** | GLSL 4.5 source → `glslangValidator -V` per stage, **MVP slice (finding F9): single default variant only — validate, check binding-bank conformance against the §3.3 fixed table via glslangValidator's reflection dump (printed, not stored), and emit `CHNK_SHD` = {source text (never *parsed* at runtime — recompiled by `rhi-renderer` via `glShaderSource`), cache key}**; **v0.5 (slip note):** variant enumeration (defines from the `.glsl` variant header comment block) + SPIR-V reflection blob (uniform block offsets, samplers, vertex input locations) added to the chunk, with a stored variant table | Why not cook program binaries: `glGetProgramBinary` blobs are driver/version-specific and would break cook determinism (FR-AST-030) and cold-boot on other drivers. Cook *validates*; the driver links at load; hot reload re-links in ms — which is exactly the DX-H1 win this stack was chosen for. Variant precompilation is deferred (ROADMAP M6 slip note) because MVP materials use exactly the uber-sprite + forward-3D families |
 | **Audio** (FR-AST-100) | WAV decode (own 200-line PCM/IEEE-float reader — cook-time only) → resample to 48 kHz (windowed-sinc, fixed 32-tap kernel; < 0.5% THD on a sweep test) → peak-normalize to −1 dBFS → `CHNK_SFX` float32 interleaved; long-form gets `CHNK_AUDP` (packetized 100 ms pages for streaming) → v0.5: IMA-ADPCM variant for size, chosen per-asset in the sidecar | Loop points validated at cook (loop end > start, both in samples) so gapless music is a data guarantee, not a mixer hope (FR-AST-100) |
-| **Font** | stb_truetype bake at cook: chosen codepoints (ASCII + project-supplied ranges) → glyph atlas (skyline packing) + metrics + kerning table → `CHNK_FONT`. v0.5 upgrade path: MSDF via **msdf-atlas-gen** (cook-time dep, vcpkg) for crisp multi-scale rendering — same `CHNK_FONT`, extra payload variant | "Atlas built at cook, not runtime" is the acceptance test (FR-R2D-060) |
+| **Font** | stb_truetype bake at cook: chosen codepoints (ASCII + project-supplied ranges) → glyph atlas (skyline packing) + metrics + kerning table → `CHNK_FONT`; with `"sdf": true` the atlas is a single-channel signed distance field (`FontFlags::Sdf`, the sprite shader thresholds it). v0.5 upgrade path: MSDF via **msdf-atlas-gen** (cook-time dep, vcpkg) for crisp multi-scale rendering — same `CHNK_FONT`, extra payload variant | "Atlas built at cook, not runtime" is the acceptance test (FR-R2D-060) |
 | **Atlas** | `.mcatlas` lists source PNGs + per-sprite regions → hand-written **Skyline** bin pack (deterministic: sources sorted by GUID then name) → `CHNK_ATLAS` = 2D texture-array payload (one layer per page, per ARCHITECTURE CF15) + sprite rect table | Sprite animation (FR-R2D-030) references atlas frame indices |
 | **Scene** | `.mcscene` → per component type, build columnar arrays; remap entity indices → runtime ids; remap asset refs → AssetKeys; validate against registered component metadata → `CHNK_SCENE` (§6 for format) | Scene hash round-trip test (FR-ENT-060) |
 | **Prefab** (v0.5) | `.mcprefab` → same as scene, single root; nested prefab refs **flattened at cook** (binding: no runtime inheritance) → `CHNK_PREFAB` | Editing a prefab re-cooks the prefab chunk; dependent scenes re-cook via reverse-dep edges (FR-ENT-070) |
@@ -306,7 +308,7 @@ The `.mcscene` document is the **only** serialized truth for scenes (binding: ed
   "settings": { "gravity": [0.0, -9.81, 0.0], "ambient": [0.04, 0.04, 0.05] },
 
   "entities": [
-    { "name": "Player",
+    { "id": 1, "name": "Player",   // "id": the editor's persistent entity id (optional; the cook ignores it)
       "components": {
         "LocalTransform": { "position": [0.0, 2.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": 1.0 },
         "Sprite":         { "atlas": "guid:9f2c...", "frame": 0, "sort_layer": 0, "tint": [1,1,1,1] },
@@ -540,7 +542,7 @@ Subsystems per the architecture list: `core`, `rhi-renderer`, `ecs-gameplay`, `p
 | `ecs-gameplay` | Registered component list + column layout contract (the scene chunk format is a function of ECS schema — a new component must require zero asset-system changes, FR-DX-020) |
 | `rhi-renderer` | **Dependency inversion (ARCHITECTURE fix F6):** assets *defines* `IGpuUploadSink` (§7.1); the renderer *implements* it and registers at `Renderer::init`. Through it assets gets staging-ring upload and GPU object creation for hot-reload commits, and GPU object destruction on unload (§7.4). Assets produces bytes; the renderer turns them into GPU state — via the registered sink, never via an include |
 | `editor-tools` | Nothing at runtime (direction is one-way: editor consumes assets). Editor-side only: the cook button/error panel call *into* this subsystem |
-| Third-party (cook-time only, vcpkg-pinned) | nlohmann/json, meshoptimizer, stb_image/stb_truetype, glslangValidator, ispc_texcomp (v0.5) — never linked into `mce_runtime` (FR-AST-010) |
+| Third-party (cook-time only, vcpkg-pinned) | nlohmann/json, meshoptimizer, stb_image/stb_truetype, glslangValidator, ispc_texcomp (v0.5) — never linked into `mce_runtime` (FR-AST-010). *(Dependency mechanism superseded by ADR-0017: CMake FetchContent with pinned tags in `cmake/Dependencies.cmake`; there is no `vcpkg.json`.)* |
 
 **Layering rule** (existing-engines §4 decision #1, enforced by CMake target direction + include-direction CI check): `core → ecs-gameplay → assets → {rhi-renderer, audio, editor}`. Assets depends on `ecs-gameplay` (registered component list + reflection metadata), never the reverse — `mce_ecs` must not include `mce_asset` (the canonical ARCHITECTURE §2.2 rule; it is why `load_scene` takes cooked chunk payloads, not `AssetId`s). Assets never *includes* renderer headers; of the coupling points above, the scene chunk layout is data-shaped, and the upload handoff is the single sanctioned call-shaped seam — **inverted** through the `IGpuUploadSink` interface defined here and implemented by `mce_render` (ARCHITECTURE fix F6), so the include direction remains `mce_render → mce_asset` and no circular dependency exists.
 

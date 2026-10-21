@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.application'@PLUGINS@
+}
+
+android {
+    namespace = "@APP_ID@"
+    compileSdk @ANDROID_API@
+    defaultConfig {
+        applicationId "@APP_ID@"
+        minSdk 29
+        targetSdk @ANDROID_API@
+        versionCode @VERSION_CODE@
+        versionName "@VERSION_NAME@"
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+    signingConfigs {
+        release {
+            storeFile file("@KEYSTORE@")
+            storePassword System.getenv("MCE_ANDROID_STORE_PASSWORD") ?: "android"
+            keyAlias System.getenv("MCE_ANDROID_KEY_ALIAS") ?: "androiddebugkey"
+            keyPassword System.getenv("MCE_ANDROID_KEY_PASSWORD") ?: "android"
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release@CRASHLYTICS@
+        }
+    }
+    androidResources {
+        noCompress 'mce'  // the pack is extracted once, then memory-mapped: no point deflating it
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
+}
+@DEPENDENCIES@

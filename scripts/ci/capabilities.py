@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""The engine's capability table, generated from code (M-DATA-REACH gate).
+
+Writes docs/engine/capabilities.md: every reflected component (where it is declared, whether the
+editor, the MCP server and the cook register it, where the docs describe it), every cooked asset
+type (how it is authored, whether MCP and the editor's asset panel know it, where the docs
+describe it) and every MCP tool (where the docs list it).
+
+  scripts/ci/capabilities.py           # rewrite the table
+  scripts/ci/capabilities.py --check   # local_ci's walls stage: exit 1 on a gap or a stale table
+
+A gap is something a game authored as data cannot reach or an agent cannot learn about:
+  - a component whose header one of the three engine_components.cpp files does not include
+    (the editor, mce_mcp or mce_cook would refuse scenes that use it);
+  - a component, asset type or MCP tool no user-guide or engine doc names;
+  - an asset type with neither an MCP asset kind nor an importer extension.
+"""
+
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+OUT = ROOT / "docs/engine/capabilities.md"
+
+REGISTRIES = {
+    "editor": ROOT / "src/editor/core/src/engine_components.cpp",
+    "mcp": ROOT / "src/editor/mcp/app/engine_components.cpp",
+    "cook": ROOT / "tools/cook/engine_components.cpp",
+}
+DOC_DIRS = [ROOT / "docs/user-guide", ROOT / "docs/engine"]
+
+# Where a game shows a component in use (M-COVER): scenes, prefabs, timelines and the code of the
+# samples, the sample projects and the project templates. A component none of them names is listed
+# with its reason in SAMPLE_ALLOW, or the check fails.
+SAMPLE_ROOTS = [ROOT / "samples", ROOT / "projects", ROOT / "templates"]
+SAMPLE_SUFFIXES = {".mcscene", ".mcprefab", ".mctimeline", ".mcseq", ".mcbt", ".mcui", ".mctest", ".cpp", ".h", ".luau", ".py", ".json"}
+SAMPLE_ALLOW = ROOT / "scripts/ci/sample_coverage.allow"
+
+# Chunk types that are not assets a game authors: pack plumbing and runtime-only payloads.
+INTERNAL_CHUNKS = {
+    "Manifest": "pack index",
+    "ModInfo": "a mod pack's identity, written by the mod cook",
+    "AudioPacket": "reserved",
+    "Atlas": "reserved",
+    "Shader": "engine shaders, cooked from the engine's own sources",
+}
+
+# Asset types imported from a file format (a sidecar picks the importer) rather than a JSON source.
+IMPORTED = {
+    "Mesh": ".gltf / .glb",
+    "Texture": ".png / .jpg / .tga / .bmp",
+    "Sfx": ".wav / .ogg / .mp3 / .flac / .mcsound (sound set)",
+    "Font": ".ttf",
+    "Scene": ".mcscene (scene_* tools)",
+    "Prefab": ".mcprefab (prefab_* tools)",
+    "StringTable": "assets/loc/<locale>.csv",
+    "NavMesh": ".mcnav (the editor's Bake navmesh)",
+    "Video": ".mpg / .mpeg (MPEG-1 + MP2)",
+    "Script": ".luau (Luau source, compiled at cook; MCE_WITH_SCRIPT)",
+}
+
+
+def read(p):
+    return p.read_text(encoding="utf-8")
+
+
+def components():
+    out = []
+    for h in sorted((ROOT / "src/engine").glob("*/include/**/*.h")):
+        for m in re.finditer(r"^MCE_COMPONENT\((\w+)", read(h), re.M):
+            out.append((m.group(1), h.relative_to(ROOT).as_posix()))
+    return out
+
+
+def include_path(header):
+    # src/engine/<lib>/include/<path> -> <path>
+    parts = pathlib.PurePosixPath(header).parts
+    return "/".join(parts[parts.index("include") + 1 :])
+
+
+def chunk_types():
+    text = read(ROOT / "src/engine/asset/include/mce/asset/container.h")
+    body = text[text.index("enum class ChunkType") :]
+    body = body[: body.index("};")]
+    return [m.group(1) for m in re.finditer(r"^\s+(\w+)(?:\s*=\s*\d+)?,", body, re.M)]
+
+
+def mcp_kinds():
+    text = read(ROOT / "src/editor/core/src/asset_kinds.cpp")  # the table the MCP asset tools share (M-ASSETNEW)
+    return {m.group(1): m.group(2) for m in re.finditer(r'^\s*\{"(\w+)", "(\.\w+)", "mce-[\w-]+", \d+,', text, re.M)}
+
+
+def mcp_tools():
+    tools = []
+    for f in sorted((ROOT / "src/editor/mcp/src").glob("*.cpp")):
+        text = read(f)
+        for table in re.finditer(r"const ToolDef k\w+\[\] = \{(.*?)\n\};", text, re.S):
+            tools += [(m.group(1), f.name) for m in re.finditer(r'^\s*\{"([a-z0-9_]+)",', table.group(1), re.M)]
+    return tools
+
+
+def docs():
+    found = {}
+    for d in DOC_DIRS:
+        for p in sorted(d.glob("*.md")):
+            if p == OUT:
+                continue
+            found[p.relative_to(ROOT).as_posix()] = read(p)
+    return found
+
+
+def sample_corpus():
+    found = {}
+    for root in SAMPLE_ROOTS:
+        for p in sorted(root.rglob("*")):
+            if p.suffix not in SAMPLE_SUFFIXES or not p.is_file() or "build" in p.relative_to(ROOT).parts:
+                continue
+            found[p.relative_to(ROOT).as_posix()] = read(p)
+    return found
+
+
+def sample_allow():
+    """`Name | reason` lines; a name without a reason is an error."""
+    allowed, problems = {}, []
+    if not SAMPLE_ALLOW.exists():
+        return allowed, problems
+    for n, line in enumerate(read(SAMPLE_ALLOW).splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, _, reason = (x.strip() for x in line.partition("|"))
+        if not name or not reason:
+            problems.append(f"{SAMPLE_ALLOW.relative_to(ROOT)}:{n}: expected `Component | reason`")
+        else:
+            allowed[name] = reason
+    return allowed, problems
+
+
+def where(name, corpus, pattern=None):
+    rx = re.compile(pattern or (r"`" + re.escape(name) + r"[`.\s({]"))
+    for path, text in corpus.items():
+        if rx.search(text):
+            return path
+    return ""
+
+
+def main():
+    check = "--check" in sys.argv[1:]
+    gaps = []
+    corpus = docs()
+    regs = {k: read(v) for k, v in REGISTRIES.items()}
+    samples = sample_corpus()
+    allowed, allow_problems = sample_allow()
+    gaps += allow_problems
+    known = {name for name, _ in components()}
+
+    lines = [
+        "# Engine capabilities",
+        "",
+        "Generated by `scripts/ci/capabilities.py` from the code; do not edit by hand. `local_ci.sh`'s",
+        "walls stage fails when this table is stale or shows a gap (a component a host does not",
+        "register, or a component, asset type or MCP tool no document names).",
+        "",
+        "## Components",
+        "",
+        "Every reflected component: the scene file, the editor inspector and MCP's `component_*` tools",
+        "reach all of its non-transient fields.",
+        "",
+        "A sample is a file under `samples/`, `projects/` or `templates/` that names the component. A component",
+        "none of them names is listed in `scripts/ci/sample_coverage.allow` with the reason.",
+        "",
+        "| Component | Header | Editor | MCP | Cook | Documented in | Shown in |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for name, header in components():
+        inc = include_path(header)
+        marks = []
+        for host, text in regs.items():
+            ok = f'"{inc}"' in text
+            marks.append("yes" if ok else "**no**")
+            if not ok:
+                gaps.append(f"component {name}: {inc} is not included by {REGISTRIES[host].relative_to(ROOT)}")
+        doc = where(name, corpus)
+        if not doc:
+            gaps.append(f"component {name}: no document under docs/user-guide or docs/engine names `{name}`")
+        shown = where(name, samples, r"\b" + re.escape(name) + r"\b")
+        if shown and name in allowed:
+            gaps.append(f"component {name}: {shown} now shows it; remove it from {SAMPLE_ALLOW.relative_to(ROOT)}")
+        if not shown and name not in allowed:
+            gaps.append(f"component {name}: no sample, project or template names it (show it in one, or add `{name} | reason` to {SAMPLE_ALLOW.relative_to(ROOT)})")
+        lines.append(f"| `{name}` | `{inc}` | {' | '.join(marks)} | {doc or '**none**'} | {shown or ('allowed: ' + allowed[name] if name in allowed else '**none**')} |")
+
+    for name in sorted(set(allowed) - known):
+        gaps.append(f"{SAMPLE_ALLOW.relative_to(ROOT)}: {name} is not a component")
+
+    kinds = mcp_kinds()
+    lines += [
+        "",
+        "## Asset types",
+        "",
+        "| Asset type | Authored as | MCP | Editor asset panel | Documented in |",
+        "|---|---|---|---|---|",
+    ]
+    panel = read(ROOT / "src/editor/layer/src/asset_panel.cpp")
+    for t in chunk_types():
+        if t in INTERNAL_CHUNKS:
+            continue
+        if t in kinds:
+            authored, mcp = f"`{kinds[t]}` (JSON)", "`asset_create` / `asset_write`"
+        elif t in IMPORTED:
+            authored, mcp = IMPORTED[t], "`asset_list`, `asset_set_import_settings`"
+        else:
+            authored, mcp = "**unknown**", "**none**"
+            gaps.append(f"asset type {t}: neither an MCP asset kind nor a known import format")
+        in_panel = "yes" if f'"{t}"' in panel else "no"
+        doc = where(t, corpus, r"\b" + re.escape(t) + r"\b") if t not in kinds else where(t, corpus, re.escape(kinds[t]))
+        if not doc:
+            gaps.append(f"asset type {t}: no document names it")
+        lines.append(f"| {t} | {authored} | {mcp} | {in_panel} | {doc or '**none**'} |")
+
+    lines += ["", "## MCP tools", "", "| Tool | Defined in | Documented in |", "|---|---|---|"]
+    for tool, src in mcp_tools():
+        doc = where(tool, corpus, r"`" + re.escape(tool) + r"`")
+        if not doc:
+            gaps.append(f"MCP tool {tool}: no document names `{tool}`")
+        lines.append(f"| `{tool}` | `{src}` | {doc or '**none**'} |")
+    lines.append("")
+    table = "\n".join(lines)
+
+    stale = not OUT.exists() or read(OUT) != table
+    if check:
+        for g in gaps:
+            print(f"capabilities: {g}")
+        if stale:
+            print("capabilities: docs/engine/capabilities.md is stale; run scripts/ci/capabilities.py")
+        return 1 if gaps or stale else 0
+    OUT.write_text(table, encoding="utf-8")
+    for g in gaps:
+        print(f"capabilities: {g}")
+    return 1 if gaps else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,17 @@
+{
+  "format": "mce-story", "version": 1,
+  "namespace": "@GAME@::story",
+  "output": "games/@GAME@/module/story_data.h",
+  "title": "@TITLE@",
+  "characters": [{"id": "guide", "name": "Guide"}],
+  "cast": ["guide"],
+  "expressions": ["neutral"],
+  "poses": ["stand"],
+  "locations": ["room"],
+  "times": ["day"],
+  "endings": [{"id": "first_page", "title": "The First Page"}],
+  "tags": ["first"],
+  "flags": ["curious"],
+  "title_screen": {"location": "room"},
+  "text": {"font": "assets/fonts/ProggyClean.ttf", "px": 32, "line_px": 860, "lines_per_page": 4}
+}

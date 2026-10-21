@@ -1,0 +1,467 @@
+// M-UI-DATA step 1: a .mcui UI document cooks to CHNK_UIDOC, decodes, builds a ui::Document like
+// the Builder does, and round-trips (cook -> write_ui_document -> cook gives the same bytes;
+// Document -> extract_document -> encode gives them too). Mistakes fail the cook with file:line.
+
+#include <doctest/doctest.h>
+
+#include "cook_test_util.h"
+#include "mce/asset/asset_system.h"
+#include "mce/convar.h"
+#include "mce/cook/cook.h"
+#include "mce/cook/ui_text.h"
+#include "mce/ui/document_data.h"
+#include "mce/ui/ui.h"
+
+using namespace mce;
+using namespace cook_test;
+
+namespace {
+
+ConVar g_volume("test.ui_volume", 0.8f, "a convar the test document binds a slider to");
+
+constexpr const char* kGuid = "5703e000-0000-4000-8000-0000000000e1";
+
+std::string ui_diags(const cook::CookReport& r) {
+    std::string s;
+    for (const auto& d : r.diags.all()) {
+        cook::String line;
+        cook::format_diagnostic(d, line);
+        s += line.c_str();
+        s += "\n";
+    }
+    return s;
+}
+
+// Cooks `source` as assets/menu.mcui in a fresh project and returns the CHNK_UIDOC payload.
+std::vector<byte> cook_ui(const std::string& dir, const std::string& source) {
+    const std::string root = fresh_dir(dir);
+    write_file(root + "/assets/menu.mcui", source);
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+    INFO(ui_diags(r));
+    REQUIRE(r.ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    const asset::AssetKey key = assets.find(asset::parse_guid(kGuid).value());
+    REQUIRE(key != asset::kInvalidAssetKey);
+    CHECK(assets.info(key).type == asset::ChunkType::UiDocument);
+    auto h = assets.load_sync<asset::UiDocument>(key);
+    REQUIRE(h);
+    const Span<const byte> p = assets.resolve(h.value());
+    return std::vector<byte>(p.begin(), p.end());
+}
+
+const char* const kMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1",
+  "white_region": 3,
+  "widgets": [
+    { "name": "bg", "fill": true, "style": { "tint": [0, 0, 0, 0.6] } },
+    { "name": "menu", "kind": "Stack", "at": [0.5, 0.45, 320, 0], "stack": { "spacing": 12, "align": "Center" },
+      "children": [
+        { "name": "title", "kind": "Text", "text": "UNDERTOW", "font_role": "Title", "text_align": "Center", "style": { "text_size": 32, "text_color": [1, 0.8, 0.4, 1], "text_outline": 2, "text_shadow": [2, 3] },
+          "bind": "Score/points", "format": "BEST %.0f" },
+        { "name": "play", "kind": "Button", "text": "PLAY", "default_focus": true, "action": "Play",
+          "styles": { "Hover": { "tint": [0.3, 0.3, 0.4, 1], "slice": { "left": 4, "right": 4 } } },
+          "nav": { "down": "menu/volume" } },
+        { "name": "volume", "kind": "Slider", "range": [0, 1, 0.05], "value": 0.8, "convar": "test.ui_volume",
+          "nav": { "up": "menu/play" } },
+        { "name": "fx", "kind": "Toggle", "text": "EFFECTS", "value": 1 },
+        { "name": "levels", "kind": "Grid", "grid": { "columns": 0, "cell": [48, 48] },
+          "children": [ { "name": "l1", "kind": "Image", "style": { "sprite_region": 7 } } ] },
+        { "name": "options", "kind": "Tabs", "value": 1, "anchors": { "min": [0, 0], "max": [1, 0], "offset_max": [0, 200] },
+          "tabs": [ { "name": "audio", "label": "AUDIO" },
+                    { "name": "video", "label": "VIDEO", "children": [ { "name": "hint", "kind": "Text", "text": "soon" } ] } ] } ] },
+    { "name": "confirm", "modal": true, "children": [ { "name": "yes", "kind": "Button", "text": "YES" } ] },
+    { "name": "log", "kind": "Scroll", "visible": false, "interactable": false } ] })";
+
+}  // namespace
+
+TEST_CASE("ui: .mcui cooks to CHNK_UIDOC, decodes and builds a Document") {
+    const std::vector<byte> bytes = cook_ui("ui_cook", kMenu);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(Span<const byte>(bytes.data(), bytes.size()), d));
+    CHECK(d.white_region == 3);
+    CHECK(d.modal);
+    const u32 play = d.find("menu/play");
+    REQUIRE(play != ui::kNoWidgetIndex);
+    CHECK(d.default_focus == play);
+    CHECK(d.widgets[play].nav[ui::NavDown] == d.find("menu/volume"));
+    CHECK(d.widgets[play].styles[u32(ui::WidgetState::Hover)].slice.left == 4.0f);
+    CHECK(d.widgets[d.find("menu/volume")].step == 0.05f);
+    CHECK(d.widgets[d.find("menu/levels/l1")].styles[0].sprite_region == 7);
+    CHECK(d.widgets[d.find("menu/title")].styles[0].text_outline == 2.0f);
+    CHECK(d.widgets[d.find("menu/title")].font_role == ui::FontRole::Title);
+    CHECK(d.widgets[play].font_role == ui::FontRole::Auto);
+    CHECK(d.widgets[d.find("menu/title")].text_align == ui::TextAlign::Center);
+    CHECK(d.widgets[play].text_align == ui::TextAlign::Left);
+    CHECK(d.widgets[d.find("menu/title")].styles[4].text_shadow.y == 3.0f);
+    CHECK(d.find("menu/options/bar/video") != ui::kNoWidgetIndex);
+    CHECK_FALSE(d.widgets[d.find("menu/options/pages/audio")].visible);
+    CHECK(d.widgets[d.find("menu/options/pages/video")].visible);
+    CHECK_FALSE(d.widgets[d.find("confirm")].visible);
+
+    ui::Document doc;
+    REQUIRE(ui::build_document(d, doc));
+    const ui::WidgetId w = doc.find("menu/play");
+    REQUIRE(doc.valid(w));
+    CHECK(doc.kind(w) == ui::WidgetKind::Button);
+    CHECK(doc.text(w) == "PLAY");
+    CHECK(doc.text_align(doc.find("menu/title")) == ui::TextAlign::Center);
+    CHECK(doc.default_focus() == w);
+    CHECK(doc.nav(w).down == doc.find("menu/volume"));
+    CHECK(doc.convar(doc.find("menu/volume")) == "test.ui_volume");
+    CHECK(doc.value(doc.find("menu/volume")) == doctest::Approx(0.8f));  // the convar's value
+    CHECK(doc.selected_tab(doc.find("menu/options")) == 1);
+    CHECK(doc.blocks_pointer(doc.find("confirm")));
+    CHECK(doc.anchors(doc.find("confirm")).to == ui::AnchorTo::Screen);
+}
+
+TEST_CASE("ui: a widget starts from the look the Builder gives its kind") {
+    const std::vector<byte> bytes = cook_ui("ui_builder", R"({ "format": "mce-ui", "version": 1,
+      "guid": "5703e000-0000-4000-8000-0000000000e1",
+      "widgets": [ { "name": "bg", "fill": true },
+                   { "name": "col", "kind": "Stack", "at": [0.5, 0.5, 320, 0],
+                     "children": [ { "name": "resume", "kind": "Button", "text": "RESUME", "default_focus": true },
+                                   { "name": "music", "kind": "Toggle", "text": "MUSIC", "value": 1 },
+                                   { "name": "speed", "kind": "Slider", "range": [1, 4, 0.5], "value": 2 } ] },
+                   { "name": "tabs", "kind": "Tabs", "tabs": [ { "name": "a", "label": "A" }, { "name": "b", "label": "B" } ] },
+                   { "name": "ask", "modal": true, "children": [ { "name": "ok", "kind": "Button", "text": "OK" } ] },
+                   { "name": "console", "kind": "Console" } ] })");
+
+    ui::Document built;
+    ui::Builder b(built, built.root());
+    b.panel("bg").fill();
+    ui::Builder col = b.stack("col").at({0.5f, 0.5f}, {320, 0});
+    col.button("resume", "RESUME").default_focus();
+    col.toggle("music", "MUSIC", true);
+    col.slider("speed", 1.0f, 4.0f, 0.5f);
+    built.set_value(built.find("col/speed"), 2.0f);
+    ui::Builder tabs = b.tabs("tabs");
+    tabs.tab("a", "A");
+    tabs.tab("b", "B");
+    b.modal("ask").button("ok", "OK");
+    b.console("console");
+
+    ui::DocumentData from_builder;
+    ui::extract_document(built, from_builder);
+    Array<byte> enc;
+    ui::encode_ui_document(from_builder, enc);
+    CHECK(std::vector<byte>(enc.begin(), enc.end()) == bytes);
+}
+
+TEST_CASE("ui: a document round-trips through the cook and through ui::Document unchanged") {
+    const std::vector<byte> first = cook_ui("ui_trip_a", kMenu);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(Span<const byte>(first.data(), first.size()), d));
+
+    // Data -> .mcui text -> cook: the same chunk, and writing it again gives the same text.
+    cook::String text;
+    cook::write_ui_document(d, asset::parse_guid(kGuid).value(), text);
+    const std::vector<byte> second = cook_ui("ui_trip_b", text.c_str());
+    CHECK(second == first);
+    ui::DocumentData d2;
+    REQUIRE(ui::decode_ui_document(Span<const byte>(second.data(), second.size()), d2));
+    cook::String text2;
+    cook::write_ui_document(d2, asset::parse_guid(kGuid).value(), text2);
+    CHECK(std::string(text2.c_str()) == std::string(text.c_str()));
+
+    // Data -> Document -> data: the same chunk too (what an editor saving a document writes).
+    ui::Document doc;
+    REQUIRE(ui::build_document(d, doc));
+    ui::DocumentData back;
+    back.white_region = d.white_region;
+    ui::extract_document(doc, back);
+    Array<byte> enc;
+    ui::encode_ui_document(back, enc);
+    CHECK(std::vector<byte>(enc.begin(), enc.end()) == first);
+}
+
+TEST_CASE("ui: a truncated or tampered chunk does not decode") {
+    const std::vector<byte> bytes = cook_ui("ui_decode", kMenu);
+    ui::DocumentData d;
+    CHECK_FALSE(ui::decode_ui_document(Span<const byte>(bytes.data(), bytes.size() - 1), d));
+    std::vector<byte> bad = bytes;
+    bad[33] = byte{0xFF};  // widget_count past the limit and the payload
+    CHECK_FALSE(ui::decode_ui_document(Span<const byte>(bad.data(), bad.size()), d));
+}
+
+TEST_CASE("ui: authoring mistakes fail the cook with file and line") {
+    struct Bad {
+        const char* widgets;
+        const char* expect;
+    };
+    const Bad bad[] = {
+        {R"([ { "name": "a", "kind": "Buton" } ])", "UiWidgetKind"},
+        {R"([ { "name": "a" }, { "name": "a" } ])", "already named 'a'"},
+        {R"([ { "name": "a/b" } ])", "no '/'"},
+        {R"([ { "name": "a", "colour": 1 } ])", "colour"},
+        {R"([ { "name": "a", "style": { "tnit": [1, 1, 1, 1] } } ])", "tnit"},
+        {R"([ { "name": "a", "styles": { "Count": {} } } ])", "Normal, Hover"},
+        {R"([ { "name": "a", "kind": "Slider", "range": [0, 1, 0.1], "value": 2 } ])", "outside the widget's range"},
+        {R"([ { "name": "a", "nav": { "down": "nowhere" } } ])", "no widget at 'nowhere'"},
+        {R"([ { "name": "a", "default_focus": true }, { "name": "b", "default_focus": true } ])",
+         "already has default_focus"},
+        {R"([ { "name": "a", "fill": true, "at": [0, 0, 1, 1] } ])", "one of"},
+        {R"([ { "name": "a", "kind": "Text", "modal": true } ])", "goes on a Panel"},
+        {R"([ { "name": "t", "kind": "Tabs", "value": 2, "tabs": [ { "name": "x" } ] } ])", "one of its pages"},
+        {R"([ { "name": "t", "kind": "Tabs", "children": [ { "name": "bar", "kind": "Stack" } ] } ])",
+         "Stack of tab buttons"},
+        {R"([ { "name": "a", "anchors": { "to": "Window" } } ])", "enumerator"},
+        {R"([ { "name": "a", "kind": "Text", "bind": "Score/points", "format": "%s" } ])", "number format"},
+        {R"([ { "name": "a", "kind": "Text", "format": "%g" } ])", "needs a 'bind'"},
+        {R"([ { "name": "a", "kind": "Text", "bind": "points" } ])", "<Component>/<field>"},
+        {R"([ { "name": "a", "kind": "Button", "action": "" } ])", "action name"},
+        {R"([ { "name": "a", "kind": "Text", "font_role": "Heading" } ])", "UiFontRole"},
+        {R"([ { "name": "a", "kind": "Text", "text_align": "Middle" } ])", "UiTextAlign"},
+        {R"([ { "name": "a", "own_style": ["colour"] } ])", "own_style"},
+        {R"([ { "name": "a", "own_style": "tint" } ])", "own_style"},
+    };
+    for (const Bad& b : bad) {
+        CAPTURE(b.widgets);
+        const std::string root = fresh_dir("ui_bad");
+        std::string src = "{ \"format\": \"mce-ui\", \"version\": 1, \"guid\": \"";
+        src += kGuid;
+        src += "\",\n  \"widgets\": ";
+        src += b.widgets;
+        src += " }";
+        write_file(root + "/assets/menu.mcui", src);
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        const std::string diags = ui_diags(r);
+        CHECK(diags.find("menu.mcui:2:") != std::string::npos);  // the widgets are on line 2
+        CHECK(diags.find(b.expect) != std::string::npos);
+    }
+    {  // a newer version names the version line
+        const std::string root = fresh_dir("ui_bad");
+        write_file(root + "/assets/menu.mcui",
+                   std::string("{ \"format\": \"mce-ui\", \"guid\": \"") + kGuid + "\",\n\"version\": 2 }");
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        CHECK(ui_diags(r).find("menu.mcui:2:") != std::string::npos);
+    }
+}
+
+// ---- themes (M-UI-DATA step 3) ---------------------------------------------------------------------
+
+namespace {
+
+constexpr const char* kThemeGuid = "5703e000-0000-4000-8000-0000000000f1";
+constexpr const char* kFontGuid = "5703e000-0000-4000-8000-0000000000f2";
+
+const char* const kTheme = R"({ "format": "mce-uitheme", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000f1",
+  "palette": { "panel": [0.1, 0.2, 0.4, 0.9], "button": [0.8, 0.2, 0.2, 1], "accent": [0.2, 1, 0.4, 1] },
+  "fonts": { "title": "guid:5703e000-0000-4000-8000-0000000000f2" },
+  "styles": { "Button": { "style": { "text_size": 20 }, "styles": { "Hover": { "tint": [1, 0.5, 0.5, 1] } } } } })";
+
+const char* const kThemedMenu = R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1",
+  "theme": "guid:5703e000-0000-4000-8000-0000000000f1",
+  "widgets": [
+    { "name": "bg", "fill": true },
+    { "name": "title", "kind": "Text", "text": "TITLE", "font_role": "Title" },
+    { "name": "play", "kind": "Button", "text": "PLAY" },
+    { "name": "quit", "kind": "Button", "text": "QUIT", "style": { "tint": [0, 0, 1, 1] } },
+    { "name": "keep", "kind": "Button", "text": "KEEP", "own_style": ["tint", "text_size"] } ] })";
+
+struct ThemeProject {
+    std::string root;
+    asset::AssetSystem assets;
+};
+
+void cook_theme_project(ThemeProject& p, const std::string& dir) {
+    p.root = fresh_dir(dir);
+    write_file(p.root + "/assets/menu.mcui", kThemedMenu);
+    write_file(p.root + "/assets/night.mcuitheme", kTheme);
+    write_file(p.root + "/assets/title.ttf", read_file(std::string(MCE_TEST_DATA_DIR) + "/fonts/ProggyClean.ttf"));
+    write_file(p.root + "/assets/title.ttf.mceasset", sidecar(kFontGuid, "font", R"({ "size": 26 })"));
+    cook::CookService svc;
+    const cook::CookReport r = svc.cook(StringView(p.root.c_str()), cook::CookOptions{});
+    INFO(ui_diags(r));
+    REQUIRE(r.ok());
+    const std::string cooked = p.root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(p.assets.mount(Span<const StringView>(roots, 1)));
+}
+
+}  // namespace
+
+TEST_CASE("ui theme: the default theme is the Builder's look") {
+    ui::WidgetData button;
+    ui::builder_defaults(ui::WidgetKind::Button, button);
+    const ui::Palette p;
+    CHECK(button.styles[u32(ui::WidgetState::Normal)].tint.r == p.button.r);
+    CHECK(button.styles[u32(ui::WidgetState::Hover)].tint.g == p.button_hover.g);
+    CHECK(button.styles[u32(ui::WidgetState::Focused)].text_color.b == p.text_focused.b);
+    ui::WidgetData text;
+    ui::builder_defaults(ui::WidgetKind::Text, text);
+    CHECK_FALSE(text.styles[0].draw_quad);
+    CHECK(text.styles[0].text_color.r == 1.0f);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Slider, ui::FontRole::Auto) == ui::FontRole::Button);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Text, ui::FontRole::Auto) == ui::FontRole::Body);
+    CHECK(ui::resolve_font_role(ui::WidgetKind::Button, ui::FontRole::Title) == ui::FontRole::Title);
+}
+
+TEST_CASE("ui theme: .mcuitheme cooks; a theme restyles what a document leaves at its kind's look") {
+    ThemeProject p;
+    cook_theme_project(p, "ui_theme");
+    auto th = p.assets.load_sync<asset::UiTheme>(p.assets.find(asset::parse_guid(kThemeGuid).value()));
+    REQUIRE(th);
+    ui::ThemeData theme;
+    REQUIRE(ui::decode_ui_theme(p.assets.resolve(th.value()), theme));
+    const u32 kButton = u32(ui::WidgetKind::Button), kNormal = u32(ui::WidgetState::Normal), kHover = u32(ui::WidgetState::Hover);
+    CHECK(theme.palette.button.r == 0.8f);
+    CHECK(theme.styles[kButton][kNormal].tint.r == 0.8f);  // from the palette
+    CHECK(theme.styles[kButton][kNormal].text_size == 20.0f);
+    CHECK(theme.styles[kButton][kHover].tint.g == 0.5f);  // "styles" over the palette
+    CHECK(theme.styles[kButton][kHover].text_size == 20.0f);
+    CHECK(theme.styles[u32(ui::WidgetKind::Slider)][kNormal].accent.g == 1.0f);
+    CHECK(theme.font(ui::FontRole::Title) == asset::parse_guid(kFontGuid).value());
+    CHECK(theme.font(ui::FontRole::Body).is_null());
+    CHECK(theme.overlay_font() == asset::parse_guid(kFontGuid).value());  // no Body font: the Title font
+    ui::ThemeData with_body = theme;
+    with_body.fonts[u32(ui::FontRole::Body) - 1] = asset::parse_guid(kGuid).value();
+    CHECK(with_body.overlay_font() == asset::parse_guid(kGuid).value());  // Body first
+    CHECK(ui::default_theme().overlay_font().is_null());
+
+    auto dh = p.assets.load_sync<asset::UiDocument>(p.assets.find(asset::parse_guid(kGuid).value()));
+    REQUIRE(dh);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(p.assets.resolve(dh.value()), d));
+    CHECK(d.theme == asset::parse_guid(kThemeGuid).value());
+    CHECK(d.widgets[d.find("title")].font_role == ui::FontRole::Title);
+    ui::apply_theme(theme, d);
+    CHECK(d.widgets[d.find("bg")].styles[kNormal].tint.b == 0.4f);
+    CHECK(d.widgets[d.find("play")].styles[kNormal].tint.r == 0.8f);
+    CHECK(d.widgets[d.find("play")].styles[kHover].tint.g == 0.5f);
+    CHECK(d.widgets[d.find("play")].styles[kNormal].text_size == 20.0f);
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.b == 1.0f);  // the document's own tint stays
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].tint.r == 0.0f);
+    CHECK(d.widgets[d.find("quit")].styles[kNormal].text_size == 20.0f);  // a field it left alone does not
+    // "own_style" resets a field to the kind's default over the theme: the default tint and text size
+    // stay in every state.
+    ui::WidgetData plain;
+    ui::builder_defaults(ui::WidgetKind::Button, plain);
+    const ui::WidgetData& keep = d.widgets[d.find("keep")];
+    CHECK(keep.own_style == (ui::OwnTint | ui::OwnTextSize));
+    CHECK(keep.styles[kNormal].tint.r == plain.styles[kNormal].tint.r);
+    CHECK(keep.styles[kNormal].tint.r != 0.8f);
+    CHECK(keep.styles[kNormal].text_size == plain.styles[kNormal].text_size);
+    CHECK(keep.styles[kNormal].text_size != 20.0f);
+    CHECK(keep.styles[kHover].tint.g == plain.styles[kHover].tint.g);  // every state, not only Normal
+    CHECK(keep.styles[kHover].tint.g != 0.5f);
+    CHECK(d.widgets[d.find("play")].own_style == 0);
+
+    // The theme reference and font roles survive writing the document back.
+    ui::DocumentData again;
+    REQUIRE(ui::decode_ui_document(p.assets.resolve(dh.value()), again));
+    cook::String text;
+    cook::write_ui_document(again, asset::parse_guid(kGuid).value(), text);
+    CHECK(std::string(text.c_str()).find("\"theme\": \"guid:5703e000-0000-4000-8000-0000000000f1\"") != std::string::npos);
+    CHECK(std::string(text.c_str()).find("\"font_role\": \"Title\"") != std::string::npos);
+    CHECK(std::string(text.c_str()).find("\"own_style\": [\"tint\", \"text_size\"]") != std::string::npos);
+
+    // A truncated chunk does not decode.
+    const Span<const byte> bytes = p.assets.resolve(th.value());
+    ui::ThemeData bad;
+    CHECK_FALSE(ui::decode_ui_theme(bytes.subspan(0, bytes.size() - 1), bad));
+}
+
+TEST_CASE("ui theme: authoring mistakes fail the cook with file and line") {
+    struct Bad {
+        const char* body;
+        const char* expect;
+    };
+    const Bad bad[] = {
+        {R"("palette": { "panle": [1, 1, 1, 1] })", "panle"},
+        {R"("fonts": { "heading": null })", "body, title or button"},
+        {R"("fonts": { "body": "Proggy" })", "guid:<uuid>"},
+        {R"("styles": { "Buton": {} })", "UiWidgetKind"},
+        {R"("styles": { "Button": { "style": { "tnit": [1, 1, 1, 1] } } })", "tnit"},
+        {R"("styles": { "Button": { "styles": { "Count": {} } } })", "Normal, Hover"},
+        {R"("colours": {})", "colours"},
+    };
+    for (const Bad& b : bad) {
+        CAPTURE(b.body);
+        const std::string root = fresh_dir("ui_theme_bad");
+        std::string src = "{ \"format\": \"mce-uitheme\", \"version\": 1, \"guid\": \"";
+        src += kThemeGuid;
+        src += "\",\n  ";
+        src += b.body;
+        src += " }";
+        write_file(root + "/assets/look.mcuitheme", src);
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        const std::string diags = ui_diags(r);
+        CHECK(diags.find("look.mcuitheme:2:") != std::string::npos);
+        CHECK(diags.find(b.expect) != std::string::npos);
+    }
+}
+
+// M-MISSION step 2: a Minimap widget keeps its values through the cook, the writer and a Document.
+TEST_CASE("ui: a Minimap widget cooks, round-trips and rejects bad values") {
+    const char* const hud = R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1", "modal": false,
+  "widgets": [
+    { "name": "mini", "kind": "Minimap", "at": [1, 0, 200, 200],
+      "minimap": { "track": "Hero", "radius": 80, "zoom": 2, "rotate_with_heading": true, "clamp_to_rim": true,
+                   "background": [0, 0, 0.5, 1], "marker_px": 12, "layer_mask": 5 } },
+    { "name": "world", "kind": "Minimap", "fill": true,
+      "minimap": { "full_map": true, "world_min": [-100, -200], "world_max": [300, 400] } },
+    { "name": "plain", "kind": "Minimap" } ] })";
+    const std::vector<byte> first = cook_ui("ui_minimap_a", hud);
+    ui::DocumentData d;
+    REQUIRE(ui::decode_ui_document(Span<const byte>(first.data(), first.size()), d));
+    const ui::Minimap& m = d.widgets[d.find("mini")].minimap;
+    CHECK(d.widgets[d.find("mini")].kind == ui::WidgetKind::Minimap);
+    CHECK(m.track.view() == "Hero");
+    CHECK(m.radius == 80.0f);
+    CHECK(m.zoom == 2.0f);
+    CHECK(m.rotate_with_heading);
+    CHECK(m.clamp_to_rim);
+    CHECK_FALSE(m.full_map);
+    CHECK(m.background.b == 0.5f);
+    CHECK(m.marker_px == 12.0f);
+    CHECK(m.layer_mask == 5u);
+    const ui::Minimap& w = d.widgets[d.find("world")].minimap;
+    CHECK(w.full_map);
+    CHECK(w.world_min.x == -100.0f);
+    CHECK(w.world_max.y == 400.0f);
+    CHECK(w.track.view() == "Player");  // the default
+    CHECK(d.widgets[d.find("plain")].minimap.radius == 50.0f);
+
+    cook::String text;
+    cook::write_ui_document(d, asset::parse_guid(kGuid).value(), text);
+    CHECK(cook_ui("ui_minimap_b", text.c_str()) == first);
+    ui::Document doc;
+    REQUIRE(ui::build_document(d, doc));
+    CHECK(doc.minimap(doc.find("mini")).layer_mask == 5u);
+    ui::DocumentData back;
+    ui::extract_document(doc, back);
+    Array<byte> enc;
+    ui::encode_ui_document(back, enc);
+    CHECK(std::vector<byte>(enc.begin(), enc.end()) == first);
+    // The minimap records are the tail of the chunk: cut one and it does not decode.
+    CHECK_FALSE(ui::decode_ui_document(Span<const byte>(first.data(), first.size() - 1), d));
+
+    struct Bad {
+        const char* widget;
+        const char* expect;
+    };
+    const Bad bad[] = {
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "radius": 0 } })", "above 0"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "zoom": -1 } })", "above 0"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "full_map": true, "world_min": [5, 5], "world_max": [5, 9] } })", "world_max above world_min"},
+        {R"({ "name": "a", "kind": "Minimap", "minimap": { "raduis": 5 } })", "raduis"},
+        {R"({ "name": "a", "kind": "Panel", "minimap": {} })", "Minimap widget"},
+    };
+    for (const Bad& b : bad) {
+        const std::string root = fresh_dir("ui_minimap_bad");
+        write_file(root + "/assets/menu.mcui", std::string(R"({ "format": "mce-ui", "version": 1, "guid": "5703e000-0000-4000-8000-0000000000e1", "widgets": [ )") + b.widget + " ] }");
+        cook::CookService svc;
+        const cook::CookReport r = svc.cook(StringView(root.c_str()), cook::CookOptions{});
+        CHECK_FALSE(r.ok());
+        CHECK(ui_diags(r).find(b.expect) != std::string::npos);
+    }
+}

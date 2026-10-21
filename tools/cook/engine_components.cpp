@@ -1,0 +1,67 @@
+// The engine's reflected components, registered with mce_refl in the cook process so scenes that
+// use them cook (the scene importer resolves component types through the registry). Including a
+// header is enough: MCE_COMPONENT emits the registrar next to the type.
+//
+// Game-module components need the module's types in the cook too; that arrives with the project
+// template (M8), until then a game cooks its own scenes with a cook that links its components.
+
+#include "mce/audio/components.h"     // AudioSource
+#include "mce/ecs/hierarchy.h"        // ChildOf, WorldTransform
+#include "mce/ecs/replicated.h"       // NetReplicated, NetOwner (M-NET2)
+#include "mce/ecs/save.h"             // SaveKey
+#include "mce/ecs/transform.h"        // LocalTransform
+#include "mce/kit/anim3d.h"            // AttachToBone, IKTarget3D
+#include "mce/kit/bodies3d.h"          // RigidBody3D, CharacterController3D, Trigger3D
+#include "mce/kit/components.h"       // Sprite, TextLabel, Camera2DComponent, TilemapLayer, ParticleEmitter,
+                                      // Light2D, Parallax, Post2DComponent, SequencePlayer, PathAgent
+#include "mce/kit/captions.h"         // SoundCaption (M-ACCESS)
+#include "mce/kit/presence.h"         // RichPresence (M-STEAM 3)
+#include "mce/kit/proclevel.h"         // ProcLevel (M-PROCGEN 3)
+#include "mce/kit/cinematic.h"        // CameraRail3D, CameraLookAt3D, CameraShake3D, CameraBlend3D, Cutscene (M-CINEMA)
+#include "mce/kit/video.h"            // VideoPlayer (M-CINEMA 5)
+#include "mce/kit/render_textures.h"  // RenderTexture, ShowRenderTexture (M-VIEWS 3)
+#include "mce/kit/views.h"            // CameraView (M-VIEWS)
+#include "mce/kit/inventory.h"        // Inventory, Equipment, ItemPickup3D (M-INVENTORY 2)
+#include "mce/kit/loot.h"              // LootDrop, Container (M-INVENTORY 3)
+#include "mce/kit/craft.h"              // CraftingStation (M-CRAFT 2)
+#include "mce/kit/coop.h"             // CoopGame, PlayerSpawn, LocalPlayer, PlayerCamera, SharedCamera2D (M-VIEWS 5)
+#include "mce/kit/effects.h"          // SfxTrigger, ParticleBurst, ShakeTrigger, CameraShake2D, CameraFollow2D/3D,
+                                      // PhysicsEvents, NavGridSource
+#include "mce/kit/joints3d.h"          // Joint3D
+#include "mce/kit/kit3d.h"            // MeshRef, PointLight3D, SpotLight3D, Camera3DComponent, Animator, Environment3D
+#include "mce/kit/nav3d.h"            // NavMeshSurface3D, NavArea3D, NavLink3D, NavObstacle3D, NavAgent3D
+#include "mce/kit/novel.h"             // Dialogue, DialogueInput (M-NOVEL)
+#include "mce/kit/novel_components.h"  // StagePart, StoryState, ...
+#include "mce/kit/ragdolls3d.h"        // Ragdoll3D
+#include "mce/kit/sensors3d.h"         // Raycast3D, Overlap3D
+#include "mce/kit/chunk_lod3d.h"       // ChunkLod3D (M-OPENWORLD A4)
+#include "mce/kit/static_merge3d.h"    // StaticMerge3D (M-VISUAL3 5b)
+#include "mce/kit/skeleton2d.h"        // Skeleton2D, Bone2DFollow, Skeleton2DAnimator, Skeleton2DSlots, Skeleton2DIK, IKTarget2D (M-ANIM2D)
+#include "mce/kit/timeline.h"          // TimelinePlayer (M-CINEMA)
+#include "mce/kit/ai.h"                // AiBrain, Blackboard (M-AI)
+#include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)
+#include "mce/kit/crowd.h"             // Pedestrian3D, CrowdSpawner3D (M-OPENWORLD B3)
+#include "mce/kit/roads.h"             // RoadNetwork3D (M-OPENWORLD B1)
+#include "mce/kit/traffic.h"           // TrafficDriver3D, TrafficSpawner3D (M-OPENWORLD B2)
+#include "mce/kit/vehicles3d.h"        // Vehicle3D
+#include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
+#include "mce/kit/combat3d.h"          // Health3D, Weapon3D, Projectile3D (M-OPENWORLD C2)
+#include "mce/kit/missions.h"          // Mission, Objective (M-MISSION 1)
+#include "mce/kit/world_clock.h"        // WorldClock (M-DAYNIGHT 1)
+#include "mce/kit/day_cycle.h"          // DayCycle (M-DAYNIGHT 2)
+#include "mce/kit/timed_light.h"       // TimedLight3D (M-DAYNIGHT 3)
+#include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)
+#include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
+#include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)
+#include "mce/kit/snow_cover.h"         // SnowCover (M-SNOWCOVER 6c)
+#include "mce/kit/wind_direction.h"     // WindDirection (M-WINDDIR 8a)
+#include "mce/kit/thunder_delay.h"      // ThunderDelay (M-RAINFX 7e)
+#include "mce/kit/rain_splash.h"        // RainSplash (M-RAINFX 7f)
+#include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)
+#include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
+#include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
+#include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
+#include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)
+#include "mce/kit/ui_flow.h"          // UiFlowRules (M-WORKFLOW 7)
+#include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
+#include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

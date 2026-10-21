@@ -1,0 +1,164 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "13b10000-0000-4000-8000-000000000001",
+ "name": "loot",
+ "entities": [
+  {
+   "name": "Ground",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.5,
+      0
+     ],
+     "scale": [
+      30,
+      1,
+      30
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:13b10000-0000-4000-8000-000000000005",
+     "tint": [
+      0.45,
+      0.5,
+      0.42,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      6,
+      14
+     ]
+    }
+   }
+  },
+  {
+   "name": "Hero",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0
+     ]
+    },
+    "Inventory": {
+     "catalog": "guid:13b10000-0000-4000-8000-000000000002",
+     "max_weight_milli": 20000
+    },
+    "Equipment": {
+     "catalog": "guid:13b10000-0000-4000-8000-000000000002"
+    },
+    "MeshRef": {
+     "mesh": "guid:13b10000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.5,
+      0.8,
+      1
+     ]
+    },
+    "Health3D": {
+     "max": 100,
+     "current": 40
+    }
+   }
+  },
+  {
+   "name": "Chest",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4,
+      0.5,
+      0
+     ]
+    },
+    "Inventory": {
+     "catalog": "guid:13b10000-0000-4000-8000-000000000002"
+    },
+    "Container": {
+     "catalog": "guid:13b10000-0000-4000-8000-000000000002",
+     "table": "chest",
+     "seed": 7
+    },
+    "MeshRef": {
+     "mesh": "guid:13b10000-0000-4000-8000-000000000006",
+     "tint": [
+      0.7,
+      0.5,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Goblin",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -4,
+      0.5,
+      0
+     ]
+    },
+    "Health3D": {
+     "max": 10,
+     "current": 10
+    },
+    "LootDrop": {
+     "catalog": "guid:13b10000-0000-4000-8000-000000000002",
+     "table": "goblin",
+     "seed": 11
+    },
+    "MeshRef": {
+     "mesh": "guid:13b10000-0000-4000-8000-000000000006",
+     "tint": [
+      0.3,
+      0.7,
+      0.3,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Script: loot",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:13b10000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    }
+   }
+  },
+  {
+   "name": "Workbench",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      4,
+      0.5,
+      0
+     ]
+    },
+    "CraftingStation": {
+     "station": "workbench"
+    }
+   }
+  }
+ ]
+}

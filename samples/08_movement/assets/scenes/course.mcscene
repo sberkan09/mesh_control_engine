@@ -1,0 +1,101 @@
+{
+  "format": "mce-scene",
+  "version": 1,
+  "guid": "91c3c2b7-6067-4d80-b0c2-2799ac7b3c35",
+  "name": "course",
+  "entities": [
+    {
+      "id": 1,
+      "name": "Ground",
+      "components": {
+        "BoxCollider3D": { "half": [40, 0.5, 60] },
+        "LocalTransform": { "position": [0, -0.5, -20] },
+        "MeshRef": { "mesh": "guid:2865d412-5bf9-4a6b-b2ff-4c5fa3fb4e11" }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Lift",
+      "components": {
+        "Joint3D": { "kind": "Slider", "motor": "Velocity", "limits": 1, "limit_min": 0, "limit_max": 3, "motor_target": 1 },
+        "LocalTransform": { "position": [0, 0.25, 0] },
+        "MeshRef": { "mesh": "guid:70d6b34b-7a4e-4181-a340-6a7846beb8f3" },
+        "RigidBody3D": { "half": [2, 0.25, 2], "density": 500 }
+      }
+    },
+    {
+      "id": 3,
+      "name": "Deck A",
+      "components": {
+        "BoxCollider3D": { "half": [3, 0.25, 7] },
+        "LocalTransform": { "position": [0, 3.25, -9] },
+        "MeshRef": { "mesh": "guid:ab1f08fc-3e6a-419d-99ab-ddd7c9d9843a" }
+      }
+    },
+    {
+      "id": 4,
+      "name": "Deck B",
+      "components": {
+        "BoxCollider3D": { "half": [3, 0.25, 13.5] },
+        "LocalTransform": { "position": [0, 3.25, -32.5] },
+        "MeshRef": { "mesh": "guid:042b8e4a-0132-4ac8-bbfe-a75519e47a03" }
+      }
+    },
+    {
+      "id": 5,
+      "name": "Tunnel West",
+      "components": {
+        "BoxCollider3D": { "half": [0.25, 1.5, 3] },
+        "LocalTransform": { "position": [-2.5, 5, -29] },
+        "MeshRef": { "mesh": "guid:414d5e1e-d9aa-4e7a-a3e7-3d4212f74782" }
+      }
+    },
+    {
+      "id": 6,
+      "name": "Tunnel East",
+      "components": {
+        "BoxCollider3D": { "half": [0.25, 1.5, 3] },
+        "LocalTransform": { "position": [2.5, 5, -29] },
+        "MeshRef": { "mesh": "guid:414d5e1e-d9aa-4e7a-a3e7-3d4212f74782" }
+      }
+    },
+    {
+      "id": 7,
+      "name": "Tunnel Lintel",
+      "components": {
+        "BoxCollider3D": { "half": [2.75, 0.35, 3] },
+        "LocalTransform": { "position": [0, 5.15, -29] },
+        "MeshRef": { "mesh": "guid:c3aa7811-c078-4912-9871-a01861333c10" }
+      }
+    },
+    {
+      "id": 8,
+      "name": "Goal",
+      "components": {
+        "LocalTransform": { "position": [0, 3.6, -44] },
+        "MeshRef": { "mesh": "guid:a767f7b4-f06b-4a7f-8fea-3ef14c60d18d" },
+        "ShakeTrigger": { "trauma": 0.4, "on": "TriggerEnter" },
+        "Trigger3D": { "half": [3, 2, 1] }
+      }
+    },
+    {
+      "id": 9,
+      "name": "Runner",
+      "components": {
+        "CharacterController3D": { "jump_speed": 6, "use_input": true, "acceleration": 40, "deceleration": 60, "air_acceleration": 12, "coyote_time": 0.15, "jump_buffer": 0.12, "jump_cut": 0.5, "crouch_half_height": 0.3 },
+        "LocalTransform": { "position": [0, 1.45, 0] },
+        "MeshRef": { "mesh": "guid:e7f97d8e-978c-4752-8bac-272f500ba9ce" },
+        "ShakeTrigger": { "trauma": 0.2, "on": "Landed" }
+      }
+    },
+    {
+      "id": 10,
+      "name": "Camera",
+      "components": {
+        "Camera3DComponent": {},
+        "CameraFollow3D": { "target": "$8", "offset": [0, 0.2, 0], "collide": true, "look_ahead": 0.2 },
+        "LocalTransform": {}
+      }
+    }
+  ]
+}

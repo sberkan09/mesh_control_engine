@@ -1,0 +1,1064 @@
+// Sample 03_platformer — Ember Step (ROADMAP M3, full game M6): the playable 2D platformer. The
+// game itself lives in game/platformer.cpp (ECS + physics2d + input actions + audio events, no
+// host knowledge); this file is the host: window, GL renderer, input map, audio device, camera,
+// particles, menus/HUD and the best-times save.
+//
+// Five levels (game/level.h). The player runs, jumps (coyote time, jump buffer), wall-slides and
+// wall-jumps, dashes, rides moving platforms, races over crumbling blocks, collects coins, stomps
+// or dodges enemies whose FSM patrols, chases and returns, avoids spikes and reaches the flag.
+// Menu -> level -> pause -> results; best times persist through the engine's save system.
+//
+//   sample_03_platformer                         play (arrows/WASD move, Space jump, Shift/K dash,
+//                                                Esc pause; gamepad: stick/d-pad, A jump, X/RB dash)
+//   sample_03_platformer -autoplay 1             attract mode: a scripted bot plays
+//   sample_03_platformer -headless 1 -ticks N    determinism run: bot input, prints the state hash
+//   sample_03_platformer -frames 600 -autoplay 1 -capture shot.ppm
+//
+// Where game modules are supported the game is loaded from libplatformer.so (-module <path>
+// overrides the build-tree path); elsewhere it is linked in.
+//
+// The determinism hash folds the ECS state, the physics world, the game state, every tick's
+// input snapshot and the audio command hash (ROADMAP M3: physics + input + audio).
+
+#include <cmath>
+#include <cstdio>
+
+#include "art.h"
+#include "game/level.h"
+#include "game/platformer.h"
+#include "hud_font.h"
+#include "mce/asset/asset_system.h"
+#include "mce/audio/clip_bank.h"
+#include "mce/audio/components.h"
+#include "mce/core.h"
+#include "mce/ecs/save.h"
+#include "mce/ecs/transform.h"
+#include "mce/input/default_map.h"
+#include "mce/input/ecs.h"
+#include "mce/input/input_map.h"
+#include "mce/input/input_system.h"
+#include "mce/kit/particles.h"
+#include "mce/physics/module.h"
+#include "mce/platform/haptics.h"
+#include "mce/platform/platform.h"
+#include "mce/platform/review.h"
+#include "mce/platform/window.h"
+#include "mce/render/renderer.h"
+#include "mce/render/sprite_animation.h"
+#include "mce/rhi/default_device.h"
+#include "ship_paths.h"
+#if defined(MCE_PLATFORMER_MODULE)
+#include "mce/module_host.h"
+#endif
+
+namespace {
+
+using namespace mce;
+using namespace mce::math;
+using namespace mce::render;
+using namespace platformer;
+
+MCE_CVAR(cv_ticks, "ticks", 0, "Headless: ticks to simulate", CVarFlags::None);
+MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
+MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
+MCE_CVAR(cv_autoplay, "autoplay", false, "A scripted bot plays (always on when headless)", CVarFlags::None);
+#if defined(MCE_PLATFORMER_MODULE)
+MCE_CVAR(cv_module, "module", "", "The game module to load (default: next to the executable, then the build tree)",
+         CVarFlags::RequiresRestart);
+#endif
+MCE_CVAR(cv_pack, "pack", "", "Cooked SFX pack (default: assets.mce next to the executable)", CVarFlags::None);
+MCE_CVAR(cv_trace, "trace", 0, "Print the player's state every N ticks", CVarFlags::None);
+MCE_CVAR(cv_save, "save", "ember_step", "Best-times save name (interactive play only; empty = no save)",
+         CVarFlags::None);
+MCE_CVAR(cv_save_dir, "save_dir", "", "Save folder (default: the per-user MCE/EmberStep/saves)", CVarFlags::None);
+MCE_CVAR(cv_level, "level", 1, "Level to start on when skipping the menu (autoplay / headless: 1)", CVarFlags::None);
+MCE_CVAR(cv_gl_debug, "r.gl_debug", true, "Enable the GL_KHR_debug validation callback", CVarFlags::RequiresRestart);
+
+constexpr f32 kPpm = 16.0f;
+constexpr f32 kViewHeightTiles = 14.0f;
+
+// ---- the attract-mode bot ----------------------------------------------------------------------
+// A pure function of the sim state (the previous tick's world), so its input stream is as
+// deterministic as the game. It runs right and jumps at walls, enemies and spikes; at a drop it
+// steps down when there is floor below, and at a pit it jumps only when solid ground is in reach,
+// otherwise it waits at the edge for a moving platform to come by and walks onto it.
+class Bot {
+public:
+    input::InputState sample(World& world, u64 tick) {
+        input::InputState s;
+        s.tick = tick;
+        const GameState& gs = world.resource<GameState>();
+        const physics::World2D& pw = world.resource<physics::World2D>();
+        physics::BodyState ps;
+        if (gs.won || gs.mode != Mode::Playing || !pw.body_state(gs.player, ps)) return s;
+        const Player& pl = *world.try_get<Player>(gs.player);
+        const vec2 at = ps.position;
+
+        physics::QueryFilter solid;
+        solid.layer_mask = 1u << Layer_World;
+        auto floor_at = [&](f32 x, f32 depth) { return pw.raycast({x, at.y}, {0, -1}, depth, solid); };
+
+        // A wall gets a short hop (a step up), everything else a full jump.
+        const bool wall = pw.raycast({at.x, at.y - 0.3f}, {1, 0}, 1.1f, solid).has_value();
+        bool jump = wall && pw.raycast({at.x, at.y + 0.8f}, {1, 0}, 1.1f, solid).has_value();  // tall wall
+        bool hazard_near = false, hazard_below = false;
+        world.query<const Hazard&, const LocalTransform&>().each([&](const Hazard&, const LocalTransform& t) {
+            const f32 dx = t.position.x - at.x, dy = t.position.y - at.y;
+            if (dx > 0.3f && dx < 2.2f && std::fabs(dy) < 1.5f) hazard_near = true;
+            if (dx > 0.0f && dx < 4.0f && dy < 0.0f && dy > -6.0f) hazard_below = true;
+        });
+        world.query<const Enemy&>().each([&](Entity e, const Enemy&) {
+            physics::BodyState es;
+            if (!pw.body_state(e, es)) return;
+            const f32 dx = es.position.x - at.x;
+            if (dx > 0.0f && dx < 2.6f && std::fabs(es.position.y - at.y) < 1.0f) jump = true;
+        });
+        jump = jump || hazard_near;
+
+        f32 move = 1.0f;
+        if (!floor_at(at.x + 0.9f, 1.2f)) {  // the floor ends just ahead
+            if (hazard_below) {
+                jump = true;
+            } else if (!floor_at(at.x + 0.9f, 30.0f)) {  // a pit, not a step down
+                bool landing = false;
+                for (f32 dx = 2.0f; dx <= 5.0f && !landing; dx += 0.5f) {
+                    const auto hit = pw.raycast({at.x + dx, at.y + 1.0f}, {0, -1}, 4.0f, solid);
+                    landing = hit && !world.has<Mover>(hit->entity);
+                }
+                if (landing) jump = true;
+                else move = 0.0f;
+            }
+        }
+
+        // Airborne over a pit with floor behind: steer back rather than fall in.
+        if (!pl.grounded && !floor_at(at.x + 0.5f, 30.0f) && floor_at(at.x - 1.0f, 30.0f)) move = -1.0f;
+
+        s.move.x = move;
+        if ((jump || wall) && pl.grounded && hold_ == 0) {
+            hold_ = jump ? 18u : 7u;
+            s.jump_pressed = true;
+        }
+        s.jump_held = hold_ > 0;
+        if (hold_ > 0) --hold_;
+        return s;
+    }
+
+private:
+    u32 hold_ = 0;
+};
+
+// ---- host ------------------------------------------------------------------------------------------
+
+class PlatformerApp final : public app::Application, public app::IPlatformHooks {
+public:
+    PlatformerApp(platform::Window* window, rhi::RenderDevice* device, audio::AudioDevice& audio, bool autoplay)
+        : window_(window), device_(device), audio_(audio), autoplay_(autoplay) {}
+
+    ResultV on_init(app::Context&) override {
+        art::make_clips(clips_);
+        // SFX: Kenney CC0 clips cooked into the pack (assets/sfx, CREDITS.md); the synthesized set
+        // stands in for any clip the pack lacks, and the win jingle and music stay synthesized.
+        mount_sfx_pack();
+        Sounds sounds;
+        sounds.jump = cooked_or(StringView("sfx/jump.wav"), clips_.jump);
+        sounds.pickup = cooked_or(StringView("sfx/pickup.wav"), clips_.pickup);
+        sounds.hurt = cooked_or(StringView("sfx/hurt.wav"), clips_.hurt);
+        sounds.stomp = cooked_or(StringView("sfx/stomp.wav"), clips_.stomp);
+        sounds.win = register_clip(clips_.win);
+
+        // Engine runtime first, then the game on top (the game-module contract).
+        input::install(world_);
+        physics::install_physics2d(world_);
+        audio::install(world_, audio_);
+        world_.set_resource(sounds);
+#if defined(MCE_PLATFORMER_MODULE)
+        FixedString<1024> module_path;
+        samples::resolve_shipped_path(cv_module.get_string(), MCE_PLATFORMER_MODULE_NAME, MCE_PLATFORMER_MODULE,
+                                      module_path);
+        MCE_TRY_ASSIGN(module_.module, load_game_module(module_path.view(), world_));
+        MCE_LOG_INFO("03_platformer: game module '{}' v{} from {}", module_.module.info->name,
+                     module_.module.info->module_version, module_.module.loaded_path.c_str());
+#else
+        MCE_TRY(platformer::install(world_));
+#endif
+
+        // Music: a streamed clip looping on the music bus through the AudioSource bridge.
+        audio::ClipPayload music;
+        music.frames = clips_.music.data();
+        music.frame_count = static_cast<u32>(clips_.music.size());
+        if (auto h = audio_.register_stream(music)) {
+            owned_clips_.push_back(h.value());
+            audio::AudioSource src;
+            src.clip_handle = h.value();
+            src.loop = true;
+            src.play_on_start = true;
+            src.bus = audio::AudioBus::Music;
+            src.gain_db = -8.0f;
+            src.priority = 0;
+            world_.spawn_with(src);
+        }
+
+        GameState& gs = world_.resource<GameState>();
+        if (cv_level.get_int() > 1) gs.load_request = static_cast<i32>(cv_level.get_int() - 1);
+        interactive_ = window_ && !autoplay_;
+        if (interactive_) {
+            gs.mode = Mode::Menu;
+            gs.paused = true;
+            load_records();
+        }
+
+        if (window_) {
+            Array<byte> map;
+            build_input_map(map);
+            MCE_TRY(input_.load_map(map.span()));
+            window_->set_event_handler(&PlatformerApp::on_event, this);
+            if (pack_mounted_) samples::apply_window_icon(*window_, assets_, "icon.png");
+        }
+        if (device_) {
+            kit::install_particles(world_, nullptr);
+            setup_fx();
+            MCE_TRY(init_render());
+        }
+        return ok();
+    }
+
+    // ---- effects ---------------------------------------------------------------------------------
+    // Four code-built particle presets (burst-only), each with a small ring of emitter entities so
+    // effects of one kind in the same tick do not share a position. The game asks through
+    // GameState::fx; the host moves an emitter there and bursts it.
+    enum FxPreset : u32 { Dust, Spark, Ember, Debris, FxPresetCount };
+    static constexpr u32 kEmittersPerPreset = 4;
+
+    static asset::ParticlePresetChunk preset(f32 life0, f32 life1, f32 speed0, f32 speed1, f32 spread, f32 gravity,
+                                             f32 size0, f32 size1, Color c0, Color c1, bool additive) {
+        asset::ParticlePresetChunk p{};
+        p.max_particles = 256;
+        p.lifetime[0] = life0;
+        p.lifetime[1] = life1;
+        p.speed[0] = speed0;
+        p.speed[1] = speed1;
+        p.direction = 0.5f * kPi;
+        p.spread = spread;
+        p.gravity[1] = gravity;
+        p.drag = 2.0f;
+        p.size_start = size0;
+        p.size_end = size1;
+        p.area[0] = 0.3f;
+        p.area[1] = 0.1f;
+        const f32 start[4] = {c0.r, c0.g, c0.b, c0.a}, end[4] = {c1.r, c1.g, c1.b, c1.a};
+        for (u32 i = 0; i < 4; ++i) {
+            p.color_start[i] = start[i];
+            p.color_end[i] = end[i];
+        }
+        p.flags = additive ? asset::ParticleFlags::Additive : 0u;
+        return p;
+    }
+
+    void setup_fx() {
+        auto& ps = world_.resource<kit::ParticleSystem>();
+        const asset::ParticlePresetChunk presets[FxPresetCount] = {
+            preset(0.3f, 0.6f, 1.0f, 3.0f, 1.3f, -3.0f, 0.35f, 0.1f, Color{0.85f, 0.75f, 0.6f, 0.8f},
+                   Color{0.85f, 0.75f, 0.6f, 0.0f}, false),
+            preset(0.3f, 0.7f, 2.0f, 6.0f, kPi, -6.0f, 0.3f, 0.05f, Color{1.0f, 0.9f, 0.35f, 1.0f},
+                   Color{1.0f, 0.45f, 0.1f, 0.0f}, true),
+            preset(0.25f, 0.55f, 0.5f, 2.5f, kPi, 1.5f, 0.45f, 0.1f, Color{1.0f, 0.55f, 0.15f, 0.9f},
+                   Color{0.8f, 0.1f, 0.05f, 0.0f}, true),
+            preset(0.4f, 0.8f, 2.0f, 5.0f, 1.0f, -20.0f, 0.25f, 0.2f, Color{0.45f, 0.32f, 0.28f, 1.0f},
+                   Color{0.3f, 0.2f, 0.18f, 0.0f}, false),
+        };
+        for (u32 k = 0; k < FxPresetCount; ++k) {
+            const asset::Guid guid{0xE5B0'0000'0000'0000ull, k + 1};
+            ps.set_preset(guid, presets[k]);
+            for (u32 i = 0; i < kEmittersPerPreset; ++i) {
+                kit::ParticleEmitter em;
+                em.preset.guid = guid;
+                em.seed = k * kEmittersPerPreset + i + 1;
+                em.order = k == Dust || k == Debris ? 8 : 12;
+                emitters_[k][i] = world_.spawn_with(em, LocalTransform{});
+            }
+        }
+    }
+
+    void burst(FxPreset k, vec2 at, u32 count) {
+        const Entity e = emitters_[k][next_emitter_[k]++ % kEmittersPerPreset];
+        if (LocalTransform* t = world_.try_get_mut<LocalTransform>(e)) t->position = {at.x, at.y, 0.0f};
+        world_.resource<kit::ParticleSystem>().burst(e, count);
+    }
+
+    void spawn_fx(const GameState& gs) {
+        for (u32 i = 0; i < gs.fx_count; ++i) {
+            const FxRequest& r = gs.fx[i];
+            const vec2 feet = r.pos - vec2{0.0f, 0.4f};
+            switch (r.kind) {
+                case Fx::Jump: burst(Dust, feet, 8); break;
+                case Fx::Land: burst(Dust, feet, 14); break;
+                case Fx::Dash: burst(Ember, r.pos, 18); break;
+                case Fx::WallJump:
+                    burst(Ember, r.pos, 8);
+                    burst(Dust, r.pos - vec2{0.35f * static_cast<f32>(r.dir), 0.0f}, 6);
+                    break;
+                case Fx::Coin:
+                    burst(Spark, r.pos, 14);
+                    platform::haptics::play(platform::haptics::Preset::Light);
+                    break;
+                case Fx::Stomp:
+                    burst(Debris, r.pos, 10);
+                    platform::haptics::play(platform::haptics::Preset::Medium);
+                    break;
+                case Fx::Hurt:
+                    burst(Ember, r.pos, 24);
+                    platform::haptics::play(platform::haptics::Preset::Error);
+                    break;
+                case Fx::Crumble: burst(Debris, r.pos - vec2{0.0f, 0.3f}, 6); break;
+                case Fx::Win:
+                    burst(Spark, r.pos + vec2{0.0f, 0.5f}, 40);
+                    platform::haptics::play(platform::haptics::Preset::Success);
+                    // A won level is the moment platform/review.h asks for; the OS rate-limits the prompt,
+                    // and one ask per run is enough.
+                    if (platform::review_requests() == 0) platform::request_review();
+                    break;
+            }
+        }
+    }
+
+    static SpriteSetId resolve_fx(void* user, asset::Guid) { return static_cast<PlatformerApp*>(user)->fx_set_; }
+
+    // Touch layout (M-MOBILE, window-normalized, y down): a floating stick on the left, JUMP and
+    // DASH buttons bottom right, pause in the top-right corner; in menus the stick moves the
+    // selection, a tap on the right half confirms and the top-left corner goes back.
+    static constexpr input::TouchZoneRect kTouchStick{0.0f, 0.15f, 0.5f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchJump{0.78f, 0.55f, 1.0f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchDash{0.56f, 0.65f, 0.76f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchPause{0.85f, 0.0f, 1.0f, 0.15f};
+    static constexpr input::TouchZoneRect kTouchConfirm{0.5f, 0.15f, 1.0f, 1.0f};
+    static constexpr input::TouchZoneRect kTouchBack{0.0f, 0.0f, 0.15f, 0.15f};
+
+    // The game's actions: Move / Jump / Dash / Pause for play, Confirm / Cancel for the menus, all
+    // on keyboard, gamepad and touch (one map; menus read Move.y, so the stick and d-pad navigate too).
+    static void build_input_map(Array<byte>& out) {
+        using platform::GamepadAxis;
+        using platform::GamepadButton;
+        using platform::Key;
+        input::InputMapBuilder b;
+        b.map(MCE_SID("EmberStep"));
+        b.action(MCE_SID("Move"), input::ActionType::Axis2D)
+            .key(Key::D, 0, +1.f).key(Key::A, 0, -1.f).key(Key::W, 1, +1.f).key(Key::S, 1, -1.f)
+            .key(Key::Right, 0, +1.f).key(Key::Left, 0, -1.f).key(Key::Up, 1, +1.f).key(Key::Down, 1, -1.f)
+            .gamepad_axis(GamepadAxis::LeftX, 0, +1.f).gamepad_axis(GamepadAxis::LeftY, 1, -1.f)
+            .gamepad_button(GamepadButton::DpadRight, 0, +1.f).gamepad_button(GamepadButton::DpadLeft, 0, -1.f)
+            .gamepad_button(GamepadButton::DpadUp, 1, +1.f).gamepad_button(GamepadButton::DpadDown, 1, -1.f)
+            .touch_stick(kTouchStick);
+        b.action(MCE_SID("Jump")).key(Key::Space).key(Key::Z).gamepad_button(GamepadButton::South).touch_zone(kTouchJump);
+        b.action(MCE_SID("Dash")).key(Key::LShift).key(Key::K).key(Key::X)
+            .gamepad_button(GamepadButton::West).gamepad_button(GamepadButton::RightShoulder).touch_zone(kTouchDash);
+        b.action(MCE_SID("Pause")).key(Key::Escape).key(Key::P).gamepad_button(GamepadButton::Start).touch_tap(kTouchPause);
+        b.action(MCE_SID("Confirm")).key(Key::Return).key(Key::Space).gamepad_button(GamepadButton::South)
+            .touch_tap(kTouchConfirm);
+        b.action(MCE_SID("Cancel")).key(Key::Backspace).gamepad_button(GamepadButton::East).touch_tap(kTouchBack);
+        b.encode(out);
+    }
+
+    // Best times: the Records entity (SaveKey 1) through the engine's save files.
+    void load_records() {
+        const StringView name = cv_save.get_string();
+        if (name.empty()) return;
+        if (!cv_save_dir.get_string().empty()) save::set_root(cv_save_dir.get_string());
+        else save::set_root(save::default_root("EmberStep").view());
+        if (save::exists(name)) {
+            if (auto st = save::load_game(world_, name); st) {
+                MCE_LOG_INFO("03_platformer: best times loaded from '{}'", save::path_of(name).view());
+            } else {
+                FixedString<512> msg;
+                format_error(st.error(), msg);
+                MCE_LOG_WARN("03_platformer: ignoring the save: {}", msg.view());
+            }
+        }
+        saved_serial_ = world_.resource<GameState>().records_serial;
+    }
+
+    void save_records() {
+        const StringView name = cv_save.get_string();
+        GameState& gs = world_.resource<GameState>();
+        if (!interactive_ || name.empty() || gs.records_serial == saved_serial_) return;
+        saved_serial_ = gs.records_serial;
+        save::SaveInfo info;
+        info.module_version = 1;
+        info.tick = ticks_;
+        if (Result<void> r = save::save_game(world_, name, info); !r) {
+            FixedString<512> msg;
+            format_error(r.error(), msg);
+            MCE_LOG_WARN("03_platformer: best times not saved: {}", msg.view());
+        }
+    }
+
+    void on_tick(const app::TickContext& t) override {
+        const input::InputState in = (autoplay_ || !t.actions) ? bot_.sample(world_, t.tick_index) : *t.actions;
+        // The on-screen controls appear once a finger has touched the screen (render-only state).
+        if (t.actions && t.actions->touch_count > 0) {
+            touch_seen_ = true;
+            touch_count_ = t.actions->touch_count;
+            for (u32 i = 0; i < touch_count_; ++i) touches_[i] = t.actions->touches[i];
+        } else if (t.actions) {
+            touch_count_ = 0;
+        }
+        input_hash_ = hash_combine(input_hash_, input::hash_state(in));
+        input::publish(world_, in);
+        world_.tick(t.dt, t.tick_index);
+        ++ticks_;
+        if (cv_trace.get_int() > 0 && t.tick_index % static_cast<u64>(cv_trace.get_int()) == 0) trace(t.tick_index);
+
+        GameState& gs = world_.resource<GameState>();
+        if (gs.shake > 0.0f) shake_.add_trauma(gs.shake);
+        gs.shake = 0.0f;
+        if (device_) spawn_fx(gs);
+        gs.fx_count = 0;
+        save_records();
+        shake_.tick(static_cast<f32>(t.dt));
+        if (!device_) audio_.update();  // headless: the Silent backend mixes one block per call
+    }
+
+    void on_render(const app::RenderContext& rc) override {
+        audio_.update();
+        if (!device_) return;
+        render(rc);
+    }
+
+    void on_shutdown() override {
+        save_records();
+        // The mixer reads clips_ and the pack's payloads in place, and the audio device outlives this
+        // app: stop and release every clip before they go (the audio thread read freed music after
+        // the app was gone, a crash on quit in the iOS Simulator).
+        for (const audio::ClipHandle h : owned_clips_) audio_.release_clip(h);
+        audio_.finish_releases();
+        if (device_) renderer_.shutdown();
+    }
+
+    bool pump_events() override {
+        const bool quit_requested = platform::pump_events();
+        return quit_requested;
+    }
+    void present(bool vsync) override { device_->present(vsync); }
+
+    u64 state_hash() { return hash_combine(hash_game(world_, kFnv64Offset), hash_combine(input_hash_, audio_.command_hash())); }
+    const GameState& game() { return world_.resource<GameState>(); }
+    // fn(crate, body state, distance from the crate's bottom to the nearest solid below it).
+    template <class Fn>
+    void each_crate(Fn&& fn) {
+        const auto& pw = world_.resource<physics::World2D>();
+        world_.query<const Crate&>().each([&](Entity e, const Crate& c) {
+            physics::BodyState s;
+            if (!pw.body_state(e, s)) return;
+            physics::QueryFilter below;
+            const Entity self[] = {e};
+            below.exclude = self;
+            const auto hit = pw.raycast(s.position, {0, -1}, 5.0f, below);
+            fn(c, s, hit ? hit->t - 0.5f : -1.0f);
+        });
+    }
+
+    u64 ticks() const { return ticks_; }
+
+private:
+    void trace(u64 tick) {
+        const GameState& gs = world_.resource<GameState>();
+        physics::BodyState ps;
+        const Player* p = world_.try_get<Player>(gs.player);
+        if (!p || !world_.resource<physics::World2D>().body_state(gs.player, ps)) return;
+        std::printf("tick %llu: pos %.2f %.2f vel %.2f %.2f grounded %u coins %u deaths %u\n",
+                    static_cast<unsigned long long>(tick), static_cast<double>(ps.position.x),
+                    static_cast<double>(ps.position.y), static_cast<double>(p->vel.x), static_cast<double>(p->vel.y),
+                    p->grounded, gs.coins, gs.deaths);
+    }
+
+    void mount_sfx_pack() {
+        FixedString<1024> pack;
+        samples::resolve_shipped_path(cv_pack.get_string(), "assets.mce", MCE_SAMPLE_DEV_PACK, pack);
+        asset::MountOptions mo;
+        mo.verify_payload_crc = false;  // a pack verifies once at mount
+        const StringView roots[1] = {pack.view()};
+        if (ResultV r = assets_.mount(Span<const StringView>(roots, 1), mo); !r) {
+            MCE_LOG_WARN("03_platformer: no SFX pack at {} (synthesized sounds)", pack.view());
+            return;
+        }
+        MCE_LOG_INFO("03_platformer: SFX pack {}", pack.view());
+        pack_mounted_ = true;
+    }
+
+    audio::ClipHandle cooked_or(StringView path, const Array<f32>& fallback) {
+        if (pack_mounted_) {
+            for (asset::AssetKey k = 0; k < assets_.asset_count(); ++k) {
+                if (assets_.info(k).path != path) continue;
+                auto h = assets_.load_sync<asset::Sfx>(k);
+                if (!h) break;
+                sfx_handles_.push_back(asset::AnyHandle(h.value()));  // keeps the payload the mixer reads
+                auto clip = audio::clip_payload_from_sfx(assets_.resolve(h.value()));
+                if (!clip) break;
+                auto c = audio_.register_clip(clip.value());
+                if (!c) break;
+                owned_clips_.push_back(c.value());
+                return c.value();
+            }
+            MCE_LOG_WARN("03_platformer: {} missing from the pack (synthesized stand-in)", path);
+        }
+        return register_clip(fallback);
+    }
+
+    audio::ClipHandle register_clip(const Array<f32>& pcm) {
+        audio::ClipPayload p;
+        p.frames = pcm.data();
+        p.frame_count = static_cast<u32>(pcm.size());
+        auto h = audio_.register_clip(p);
+        if (!h) return {};
+        owned_clips_.push_back(h.value());
+        return h.value();
+    }
+
+    // ---- rendering --------------------------------------------------------------------------------
+
+    ResultV init_render() {
+        MCE_TRY(renderer_.init(*device_));
+
+        Array<u8> atlas;
+        art::make_atlas(atlas);
+        const TextureMipUpload mip{art::kTexels, art::kTexels, std::as_bytes(atlas.span())};
+        TextureUpload up;
+        up.format = rhi::TextureFormat::RGBA8_SRGB;
+        up.layers = art::LayerCount;
+        up.mips = Span<const TextureMipUpload>(&mip, 1);
+        up.debug_name = "03_platformer.atlas";
+        const u32 atlas_key = renderer_.textures().allocate_key();
+        MCE_TRY(renderer_.textures().upload(atlas_key, 1, up));
+
+        SpriteRegion regions[art::LayerCount];
+        for (u16 l = 0; l < art::LayerCount; ++l) regions[l] = SpriteRegion{l, 0, 0, 1, 1, 1, 1};
+        SpriteSetDesc sd;
+        sd.texture_key = atlas_key;
+        sd.regions = regions;
+        sd.pixels_per_meter = kPpm;
+        sd.debug_name = "03_platformer.sprites";
+        sprites_ = renderer_.create_sprite_set(sd);
+
+        const SpriteRegion dot = regions[art::Dot];
+        sd.regions = Span<const SpriteRegion>(&dot, 1);
+        sd.debug_name = "03_platformer.fx";
+        fx_set_ = renderer_.create_sprite_set(sd);
+
+        // Tile set: TileGrid value n draws region n-1.
+        const SpriteRegion tile_regions[] = {regions[art::GroundTop], regions[art::GroundFill], regions[art::Plank]};
+        sd.regions = tile_regions;
+        sd.debug_name = "03_platformer.tiles";
+        tiles_set_ = renderer_.create_sprite_set(sd);
+
+        MCE_TRY(build_tilemap());
+
+        samples::HudFont hud;
+        MCE_TRY_ASSIGN(font_, renderer_.create_font(hud.metrics, hud.glyphs.span(), {}, std::as_bytes(hud.atlas.span()),
+                                                    "03_platformer.hud_font"));
+        return ok();
+    }
+
+    // The level's tiles; rebuilt whenever the game loads another level.
+    ResultV build_tilemap() {
+        const GameState& gs = world_.resource<GameState>();
+        if (tilemap_built_) renderer_.destroy_tilemap(tilemap_);
+        tilemap_built_ = false;
+        TileGrid grid;
+        level_tiles(gs.level, grid);
+        TilemapDesc td;
+        td.set = tiles_set_;
+        td.width = grid.width;
+        td.height = grid.height;
+        td.tiles = grid.tiles.span();
+        td.sort_layer = -1;
+        MCE_TRY_ASSIGN(tilemap_, renderer_.create_tilemap(td));
+        tilemap_built_ = true;
+        tile_serial_ = gs.level_serial;
+        camera_init_ = false;
+        return ok();
+    }
+
+    vec2 player_position(f32 alpha) {
+        const GameState& gs = world_.resource<GameState>();
+        const LocalTransform* t = world_.try_get<LocalTransform>(gs.player);
+        const PrevPos* p = world_.try_get<PrevPos>(gs.player);
+        if (!t || !p) return gs.level_size * 0.5f;
+        return lerp(p->p, vec2{t->position.x, t->position.y}, alpha);
+    }
+
+    void render(const app::RenderContext& rc) {
+        device_->begin_frame(rc.frame_index);
+        const rhi::Extent2D bb = device_->backbuffer_size();
+        const GameState& gs = world_.resource<GameState>();
+        if (gs.level_serial != tile_serial_) {
+            if (ResultV r = build_tilemap(); !r) MCE_LOG_ERROR("03_platformer: tilemap rebuild failed");
+        }
+
+        // Camera: follow the player with a little look-ahead, clamped to the level.
+        camera_.zoom = static_cast<f32>(bb.height) / (kViewHeightTiles * kPpm);
+        View2D view = compute_view_2d(camera_, bb, kPpm);
+        const vec2 half{0.5f * static_cast<f32>(bb.width) / view.pixels_per_meter,
+                        0.5f * static_cast<f32>(bb.height) / view.pixels_per_meter};
+        vec2 target = player_position(rc.alpha) + vec2{2.0f, 1.5f};
+        target.x = clamp(target.x, half.x, math::max(half.x, gs.level_size.x - half.x));
+        target.y = clamp(target.y, half.y, math::max(half.y, gs.level_size.y - half.y));
+        if (!camera_init_) {
+            cam_pos_ = target;
+            camera_init_ = true;
+        }
+        const f32 k = 1.0f - std::exp(-8.0f * static_cast<f32>(rc.frame_dt));
+        cam_pos_ = lerp(cam_pos_, target, k);
+        camera_.position = cam_pos_;
+        view = compute_view_2d(camera_, bb, kPpm, scale_shake(shake_.offset(), accessibility_settings().motion_scale));
+
+        SpriteBatch world(renderer_.sprite_sets(), mem::frame());
+        world.begin(view);
+        add_background(world, half);
+        renderer_.add_tilemap(world, tilemap_);
+        add_entities(world, rc.alpha);
+        world_.resource<kit::ParticleSystem>().draw(world, &PlatformerApp::resolve_fx, this);
+        world.build();
+
+        SpriteBatch hud(renderer_.sprite_sets(), mem::frame());
+        hud.begin(compute_screen_view(bb), PassId::Screen2D);
+        add_hud(hud, bb);
+        hud.build();
+
+        rhi::PassAttachment color;
+        // Sky: day on the first level, warming to ember dusk on the climb to the summit.
+        const f32 dusk = static_cast<f32>(gs.level) / static_cast<f32>(kLevelCount - 1);
+        color.clear.color[0] = lerp(0.36f, 0.55f, dusk);
+        color.clear.color[1] = lerp(0.62f, 0.30f, dusk);
+        color.clear.color[2] = lerp(0.92f, 0.38f, dusk);
+        rhi::RenderPassDesc pass;
+        pass.colors = Span<const rhi::PassAttachment>(&color, 1);
+        pass.debug_name = "03_platformer";
+        rhi::CommandBuffer cmd(mem::frame());
+        cmd.begin_pass(pass);
+        renderer_.record_2d(cmd, world);
+        renderer_.record_2d(cmd, hud);
+        cmd.end_pass();
+        device_->submit(cmd);
+
+        const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
+        if (last && !cv_capture.get_string().empty()) capture(cv_capture.get_string().data(), bb);
+        device_->end_frame();
+        if (last) quit(0);
+    }
+
+    void add_background(SpriteBatch& b, vec2 half) {
+        // Parallax: hills at 0.3, clouds at 0.55 of the camera's motion.
+        for (i32 i = 0; i < 12; ++i) {
+            SpriteInstance s;
+            s.set = sprites_;
+            s.region = art::Hill;
+            s.scale = vec2{14.0f, 7.0f};
+            s.pivot = vec2{0.5f, 0.0f};
+            s.position = vec2{static_cast<f32>(i) * 11.0f - 6.0f, 0.0f} + vec2{cam_pos_.x * 0.3f, cam_pos_.y - half.y - 1.0f};
+            s.tint = Color{0.75f, 0.9f, 0.8f, 1};
+            s.sort_layer = -3;
+            s.sort_order = i;
+            b.add(s);
+        }
+        for (i32 i = 0; i < 14; ++i) {
+            SpriteInstance s;
+            s.set = sprites_;
+            s.region = art::Cloud;
+            s.scale = vec2{4.0f + static_cast<f32>(i % 3), 2.5f};
+            s.position = vec2{static_cast<f32>(i) * 9.0f + static_cast<f32>((i * 5) % 7), 12.0f + static_cast<f32>((i * 3) % 4)} +
+                         vec2{cam_pos_.x * 0.55f, 0.0f};
+            s.sort_layer = -2;
+            s.sort_order = i;
+            b.add(s);
+        }
+    }
+
+    void add_entities(SpriteBatch& b, f32 alpha) {
+        const GameState& gs = world_.resource<GameState>();
+        const f64 t = static_cast<f64>(gs.level_ticks) / 60.0;
+        static constexpr u32 kCoinFrames[] = {art::Coin0, art::Coin1, art::Coin2, art::Coin3};
+        static constexpr u32 kRunFrames[] = {art::PlayerRunA, art::PlayerRunB, art::PlayerRunA, art::PlayerIdle};
+        SpriteClip coin_clip;
+        coin_clip.frames = kCoinFrames;
+        coin_clip.fps = 8.0f;
+        SpriteClip run_clip;
+        run_clip.frames = kRunFrames;
+        run_clip.fps = 10.0f;
+
+        world_.query<const Look&, const PrevPos&, const LocalTransform&>().each(
+            [&](Entity e, const Look& l, const PrevPos& prev, const LocalTransform& lt) {
+                SpriteInstance s;
+                s.set = sprites_;
+                s.position = lerp(prev.p, vec2{lt.position.x, lt.position.y}, alpha);
+                s.scale = l.size;
+                s.sort_order = l.order;
+                switch (l.sprite) {
+                    case Sprite::Player: {
+                        const Player& p = *world_.try_get<Player>(e);
+                        s.region = p.dash_ticks > 0 ? art::PlayerDash
+                                   : !p.grounded    ? art::PlayerJump
+                                   : p.running      ? clip_region(run_clip, t)
+                                                    : art::PlayerIdle;
+                        s.flip_x = p.sliding ? p.wall > 0 : p.facing < 0;
+                        s.position.y += 0.5f - 0.45f;  // art feet sit on the collider's bottom
+                        if (!p.dash_ready && !p.grounded) s.tint = Color{0.7f, 0.8f, 1.0f, 1.0f};  // dash spent
+                        if (p.invuln > 0 && (p.invuln / 4) % 2 == 0) s.tint.a = 0.35f;
+                        break;
+                    }
+                    case Sprite::Enemy: {
+                        const Enemy& en = *world_.try_get<Enemy>(e);
+                        s.region = en.state == EnemyState::Chase ? art::EnemyAngry : art::EnemyCalm;
+                        s.flip_x = en.dir < 0.0f;
+                        s.position.y += 0.5f - 0.4f;
+                        break;
+                    }
+                    case Sprite::Coin: {
+                        s.region = clip_region(coin_clip, t + static_cast<f64>(s.position.x) * 0.1);
+                        s.position.y += 0.08f * std::sin(static_cast<f32>(t) * 3.0f + s.position.x);
+                        break;
+                    }
+                    case Sprite::Spike: s.region = art::Spike; break;
+                    case Sprite::Flag: s.region = art::Flag; break;
+                    case Sprite::Platform: s.region = art::Platform; break;
+                    case Sprite::Crumble: {
+                        const Crumble& c = *world_.try_get<Crumble>(e);
+                        if (c.state == CrumbleState::Gone) return;
+                        s.region = art::Crumble;
+                        if (c.state == CrumbleState::Shaking) {
+                            s.position.x += ((c.timer / 2) % 2 ? 0.05f : -0.05f);
+                            const f32 heat = 1.0f - static_cast<f32>(c.timer) / 30.0f;
+                            s.tint = Color{1.0f, 1.0f - 0.4f * heat, 1.0f - 0.6f * heat, 1.0f};
+                        }
+                        break;
+                    }
+                    case Sprite::Crate: {
+                        // Crates rotate: draw the physics angle (no interpolation needed at 60 Hz).
+                        s.region = art::Crate;
+                        s.rotation = angle_z(lt.rotation);
+                        break;
+                    }
+                    case Sprite::Count: return;
+                }
+                b.add(s);
+            });
+    }
+
+    static u32 clip_region(const SpriteClip& clip, f64 time) {
+        SpriteAnimState st;
+        st.frame = clip_frame_at(clip, time);
+        return current_region(clip, st);
+    }
+
+    static void format_time(char (&out)[16], u64 ticks) {
+        if (ticks == 0) std::snprintf(out, sizeof(out), "--.-");
+        else std::snprintf(out, sizeof(out), "%.1f", static_cast<f64>(ticks) / 60.0);
+    }
+
+    void overlay(SpriteBatch& b, f32 w, f32 h, Color c) {
+        SpriteInstance s;
+        s.set = sprites_;
+        s.region = art::White;
+        s.position = vec2{0.5f * w, 0.5f * h};
+        s.scale = vec2{w, h};
+        s.tint = c;
+        s.sort_layer = 9;
+        b.add(s);
+    }
+
+    // A vertical list of entries centred at y; the selected one is gold with a marker.
+    void menu(SpriteBatch& b, f32 w, f32 y, const char* const* items, u32 count, u32 selected) {
+        for (u32 i = 0; i < count; ++i) {
+            char line[96];
+            std::snprintf(line, sizeof(line), "%s %s", i == selected ? ">" : " ", items[i]);
+            const bool sel = i == selected;
+            text(b, line, vec2{0.5f * w - 150.0f, y + 30.0f * static_cast<f32>(i)},
+                 sel ? Color{1, 0.85f, 0.3f, 1} : Color{1, 1, 1, 0.8f});
+        }
+    }
+
+    void add_hud(SpriteBatch& b, rhi::Extent2D bb) {
+        const GameState& gs = world_.resource<GameState>();
+        const Records* rec = world_.try_get<Records>(gs.records);
+        const f32 w = static_cast<f32>(bb.width), h = static_cast<f32>(bb.height);
+        const f32 motion = accessibility_settings().motion_scale;  // reduced motion dims the flash (M-ACCESS)
+        if (gs.flash_ticks > 0 && motion > 0.0f) {
+            SpriteInstance s;
+            s.set = sprites_;
+            s.region = art::White;
+            s.position = vec2{0.5f * w, 0.5f * h};
+            s.scale = vec2{w, h};
+            s.tint = gs.won ? Color{1, 0.95f, 0.6f, 0.03f * motion * static_cast<f32>(gs.flash_ticks)}
+                            : Color{1, 1, 0.8f, 0.05f * motion * static_cast<f32>(gs.flash_ticks)};
+            s.sort_layer = 10;
+            b.add(s);
+        }
+
+        char line[160], now[16], best[16];
+        format_time(now, gs.won ? gs.won_at : gs.level_ticks);
+        format_time(best, rec ? rec->best(gs.level) : 0);
+        const Color gold{1, 0.85f, 0.3f, 1};
+
+        if (gs.mode == Mode::Menu) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.72f});
+            text(b, "EMBER STEP", vec2{0.5f * w - 60, 0.22f * h}, gold);
+            const char* items[kLevelCount];
+            char rows[kLevelCount][64];
+            const u32 open = menu_options(gs, rec);
+            for (u32 i = 0; i < kLevelCount; ++i) {
+                char t[16];
+                format_time(t, rec ? rec->best(i) : 0);
+                if (i < open) std::snprintf(rows[i], sizeof(rows[i]), "%u  %-15s BEST %s", i + 1, kLevels[i].name, t);
+                else std::snprintf(rows[i], sizeof(rows[i]), "%u  LOCKED", i + 1);
+                items[i] = rows[i];
+            }
+            menu(b, w, 0.22f * h + 50.0f, items, kLevelCount, gs.selection);
+            text(b, "UP/DOWN CHOOSE   ENTER/SPACE/A PLAY", vec2{0.5f * w - 210, 0.22f * h + 220.0f},
+                 Color{1, 1, 1, 0.7f});
+            return;
+        }
+
+        std::snprintf(line, sizeof(line), "%u %s   COINS %u/%u   DEATHS %u   TIME %s   BEST %s", gs.level + 1,
+                      kLevels[gs.level].name, gs.coins, gs.coins_total, gs.deaths, now, best);
+        text(b, line, vec2{14, 12}, Color{1, 1, 1, 1});
+        const char* help = touch_seen_ ? "LEFT: MOVE   JUMP / DASH BUTTONS   TOP RIGHT: PAUSE"
+                                       : "MOVE ARROWS/WASD   JUMP SPACE   DASH SHIFT/K   PAUSE ESC   GAMEPAD: A JUMP X DASH";
+        text(b, autoplay_ ? "AUTOPLAY" : help, vec2{14, h - 30}, Color{1, 1, 1, 0.75f});
+        if (touch_seen_ && gs.mode == Mode::Playing) add_touch_controls(b, w, h);
+
+        if (gs.mode == Mode::Paused) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.6f});
+            text(b, "PAUSED", vec2{0.5f * w - 36, 0.35f * h}, gold);
+            const char* items[] = {"RESUME", "RESTART LEVEL", "LEVEL SELECT"};
+            menu(b, w, 0.35f * h + 50.0f, items, 3, gs.selection);
+        } else if (gs.mode == Mode::Results) {
+            overlay(b, w, h, Color{0.05f, 0.03f, 0.08f, 0.6f});
+            std::snprintf(line, sizeof(line), "%s CLEAR!", kLevels[gs.level].name);
+            text(b, line, vec2{0.5f * w - 120, 0.3f * h}, gold);
+            std::snprintf(line, sizeof(line), "TIME %s   BEST %s%s", now, best, gs.new_best ? "   NEW BEST!" : "");
+            text(b, line, vec2{0.5f * w - 170, 0.3f * h + 34}, Color{1, 1, 1, 1});
+            std::snprintf(line, sizeof(line), "COINS %u/%u   STOMPS %u   DEATHS %u", gs.coins, gs.coins_total,
+                          gs.stomps, gs.deaths);
+            text(b, line, vec2{0.5f * w - 170, 0.3f * h + 64}, Color{1, 1, 1, 0.85f});
+            const bool has_next = gs.level + 1 < kLevelCount;
+            const char* with_next[] = {"NEXT LEVEL", "RETRY", "LEVEL SELECT"};
+            const char* last[] = {"RETRY", "LEVEL SELECT"};
+            menu(b, w, 0.3f * h + 114.0f, has_next ? with_next : last, has_next ? 3u : 2u, gs.selection);
+        } else if (gs.won) {
+            text(b, gs.level + 1 == kLevelCount ? "THE SUMMIT IS YOURS!" : "LEVEL CLEAR!",
+                 vec2{0.5f * w - 110, 0.5f * h - 10}, gold);
+        }
+    }
+
+    // Translucent JUMP / DASH buttons, the pause corner and, while a finger holds it, the stick's
+    // base under where that finger started.
+    void add_touch_controls(SpriteBatch& b, f32 w, f32 h) {
+        auto panel = [&](const input::TouchZoneRect& z, const char* label, bool lit) {
+            SpriteInstance s;
+            s.set = sprites_;
+            s.region = art::White;
+            s.position = vec2{0.5f * (z.x0 + z.x1) * w, 0.5f * (z.y0 + z.y1) * h};
+            s.scale = vec2{(z.x1 - z.x0) * w - 8.0f, (z.y1 - z.y0) * h - 8.0f};
+            s.tint = lit ? Color{1, 0.85f, 0.4f, 0.28f} : Color{1, 1, 1, 0.12f};
+            s.sort_layer = 9;
+            b.add(s);
+            text(b, label, s.position - vec2{8.0f * static_cast<f32>(std::strlen(label)), 8.0f}, Color{1, 1, 1, 0.8f});
+        };
+        bool jump = false, dash = false;
+        for (u32 i = 0; i < touch_count_; ++i) {
+            if (!touches_[i].held) continue;
+            jump = jump || kTouchJump.contains(touches_[i].origin.x, touches_[i].origin.y);
+            dash = dash || kTouchDash.contains(touches_[i].origin.x, touches_[i].origin.y);
+            if (kTouchStick.contains(touches_[i].origin.x, touches_[i].origin.y)) {
+                const f32 r = input::InputSystem::kTouchStickRadius * h;
+                SpriteInstance base;
+                base.set = sprites_;
+                base.region = art::Dot;
+                base.position = vec2{touches_[i].origin.x * w, touches_[i].origin.y * h};
+                base.scale = vec2{2.0f * r, 2.0f * r};
+                base.tint = Color{1, 1, 1, 0.18f};
+                base.sort_layer = 9;
+                b.add(base);
+                SpriteInstance knob = base;
+                knob.position = vec2{touches_[i].pos.x * w, touches_[i].pos.y * h};
+                knob.scale = vec2{0.8f * r, 0.8f * r};
+                knob.tint = Color{1, 0.85f, 0.4f, 0.45f};
+                b.add(knob);
+            }
+        }
+        panel(kTouchJump, "JUMP", jump);
+        panel(kTouchDash, "DASH", dash);
+        panel(kTouchPause, "II", false);
+    }
+
+    void text(SpriteBatch& b, const char* s, vec2 at, Color tint) {
+        TextLayout layout(mem::frame());
+        layout_text(font_.face, s, {}, layout);
+        TextPlacement shadow;
+        shadow.origin = at + vec2{2, 2};
+        shadow.tint = Color{0, 0, 0, 0.6f * tint.a};
+        shadow.sort_layer = 11;
+        b.add_text(font_, layout, shadow);
+        TextPlacement p;
+        p.origin = at;
+        p.tint = tint;
+        p.sort_layer = 12;
+        b.add_text(font_, layout, p);
+    }
+
+    void capture(const char* path, rhi::Extent2D size) {
+        Array<u8> px;
+        px.resize(usize(size.width) * size.height * 4);
+        if (!device_->read_pixels({}, rhi::Rect2D{0, 0, size.width, size.height}, px.span())) return;
+        std::FILE* f = std::fopen(path, "wb");
+        if (!f) {
+            MCE_LOG_ERROR("03_platformer: cannot write '{}'", path);
+            return;
+        }
+        std::fprintf(f, "P6\n%u %u\n255\n", size.width, size.height);
+        for (usize i = 0; i < px.size(); i += 4) std::fwrite(&px[i], 1, 3, f);
+        std::fclose(f);
+        MCE_LOG_INFO("03_platformer: wrote {}", path);
+    }
+
+    static void on_event(const platform::Event& e, void* user) { static_cast<PlatformerApp*>(user)->input_.push_event(e); }
+
+public:
+    input::InputSystem input_;
+    bool touch_seen_ = false;  // a finger touched the screen: draw the on-screen controls
+    input::TouchPoint touches_[input::kMaxTouchPoints];
+    u32 touch_count_ = 0;
+
+private:
+    platform::Window* window_;
+    rhi::RenderDevice* device_;
+    audio::AudioDevice& audio_;
+    bool autoplay_;
+    asset::AssetSystem assets_;  // the SFX pack; outlives the World (declared before it)
+    Array<asset::AnyHandle> sfx_handles_;
+    bool pack_mounted_ = false;
+#if defined(MCE_PLATFORMER_MODULE)
+    // Declared before the World so it is destroyed after it: the World holds the module's code.
+    struct ModuleGuard {
+        LoadedModule module;
+        ~ModuleGuard() { unload_game_module(module); }
+    } module_;
+#endif
+    World world_;
+    Bot bot_;
+    art::Clips clips_;
+    Array<audio::ClipHandle> owned_clips_;  // registered with audio_ over clips_ or the pack
+    u64 input_hash_ = kFnv64Offset;
+    u64 ticks_ = 0;
+
+    bool interactive_ = false;  // a person plays: menus on, best times saved
+    u32 saved_serial_ = 0;
+
+    Renderer renderer_;
+    SpriteSetId sprites_;
+    SpriteSetId tiles_set_;
+    SpriteSetId fx_set_;
+    TilemapId tilemap_;
+    bool tilemap_built_ = false;
+    u32 tile_serial_ = 0;
+    Entity emitters_[FxPresetCount][kEmittersPerPreset];
+    u32 next_emitter_[FxPresetCount] = {};
+    Font font_;
+    Camera2D camera_;
+    vec2 cam_pos_;
+    bool camera_init_ = false;
+    ScreenShake shake_;
+};
+
+void report(PlatformerApp& app) {
+    const GameState& gs = app.game();
+    std::printf("03_platformer: %llu ticks | coins %u/%u stomps %u deaths %u won %d | hash %016llx\n",
+                static_cast<unsigned long long>(app.ticks()), gs.coins, gs.coins_total, gs.stomps, gs.deaths,
+                gs.won ? 1 : 0, static_cast<unsigned long long>(app.state_hash()));
+    // Crates (M3.5 demo): where the solver left them, and the gap to whatever they stand on.
+    app.each_crate([](const Crate& c, const physics::BodyState& s, f32 support_gap) {
+        std::printf("  crate %u at (%.3f, %.3f) angle %.4f speed %.4f | gap below %.4f\n", c.id, s.position.x,
+                    s.position.y, s.angle, length(s.linear_velocity), support_gap);
+    });
+}
+
+int fail(const char* what, const Error& e) {
+    FixedString<512> msg;
+    format_error(e, msg);
+    FixedString<640> text;
+    text.append(what);
+    text.append(": ");
+    text.append(msg.view());
+    platform::show_error_box("03_platformer", text.c_str());
+    return 1;
+}
+
+int run_headless() {
+    audio::AudioDesc ad;
+    ad.backend = audio::Backend::Silent;
+    auto audio = audio::AudioDevice::create(ad);
+    if (!audio) return 1;
+    PlatformerApp app(nullptr, nullptr, *audio.value(), true);
+    app::AppDesc desc;
+    desc.name = "03_platformer";
+    desc.headless = true;
+    desc.max_ticks = static_cast<u64>(cv_ticks.get_int() > 0 ? cv_ticks.get_int() : 1800);
+    const int rc = app::run(app, desc);
+    report(app);
+    return rc;
+}
+
+int run_windowed() {
+    int rc = 1;
+    platform::WindowDesc wd;
+    wd.title = "MCE - 03_platformer";
+    wd.width = 1280;
+    wd.height = 720;
+    auto window = platform::Window::create(wd);
+    if (!window) return fail("window creation failed", window.error());
+    rhi::DeviceDesc dd;
+    dd.debug_layer = cv_gl_debug.get_bool();
+    auto device = rhi::create_default_device(*window.value(), dd);
+    if (!device) return fail("render device creation failed", device.error());
+    auto audio = audio::AudioDevice::create({});  // falls back to Silent when no output device opens
+    if (!audio) return fail("audio init failed", audio.error());
+
+    PlatformerApp app(window.value().get(), device.value().get(), *audio.value(), cv_autoplay.get_bool());
+    app::AppDesc desc;
+    desc.name = "03_platformer";
+    desc.platform = &app;
+    desc.fences = device.value().get();
+    desc.input_source = &app.input_;
+    app::RunStats stats;
+    rc = app::run(app, desc, &stats);
+    report(app);
+    const u32 gl_errors = device.value()->validation_error_count();
+    std::printf("03_platformer: %llu frames, %u GL errors\n", static_cast<unsigned long long>(stats.frames), gl_errors);
+    if (rc == 0 && gl_errors != 0) rc = 2;
+    return rc;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    log::LogDesc log_desc;
+    log_desc.app_name = "03_platformer";
+    log::init(log_desc);
+    const samples::BuildInfo build = samples::begin_build();
+    console::parse_command_line(argc, argv);
+    if (!samples::start_build("03_platformer", build)) {
+        log::shutdown();
+        return 0;
+    }
+
+    const ConVar* headless = ConVar::find(StringId("headless"));
+    int rc = 1;
+    if (headless && headless->get_bool()) {
+        rc = run_headless();
+    } else if (ResultV r = platform::init(); !r) {
+        rc = fail("platform init failed", r.error());
+    } else {
+        rc = run_windowed();
+    }
+    if (!(headless && headless->get_bool())) platform::shutdown();
+    log::shutdown();
+    return rc;
+}

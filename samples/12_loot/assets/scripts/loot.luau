@@ -1,0 +1,54 @@
+-- 12_loot: M-INVENTORY's demo. The hero gets items, equips the sword and a helm, drinks a potion (it heals the wounded hero; the helm adds max health and armor), opens the chest (the table rolls
+-- into the chest on the first open, the hero takes what fits), the goblin dies (a scripted Died3D; a real game's
+-- Weapon3D does the same) and drops its table as pickups, and the hero drops two potions, then crafts a tonic by hand and a potion pack at the workbench (M-CRAFT). The script keeps nothing:
+-- everything is the Inventory, Equipment, Container and LootDrop components. Events land a few ticks after the call, so
+-- each step waits for the previous one. The "inv:" lines are what samples/12_loot/loot_test.cmake pins.
+local function report(label, hero)
+    mce.log(string.format("inv: %s coin %d potion %d sword %d gem %d weight %d", label, inventory.count(hero, "coin"),
+        inventory.count(hero, "potion"), inventory.count(hero, "sword"), inventory.count(hero, "gem"), inventory.weight(hero)))
+end
+
+function update()
+    local t = mce.tick()
+    local hero, chest, goblin = mce.find("Hero"), mce.find("Chest"), mce.find("Goblin")
+    if t == 1 then
+        inventory.add(hero, "potion", 7)
+        inventory.add(hero, "sword")
+        inventory.add(hero, "helm")
+        inventory.add(hero, "coin", 30)
+    elseif t == 6 then
+        report("given", hero)
+        local id, qty = inventory.slot(hero, 1)
+        mce.log(string.format("inv: slot 1 is %s x%d", id, qty))
+        inventory.equip(hero, 3, "weapon")
+        inventory.equip(hero, 4, "head")
+        inventory.use(hero, 1)
+    elseif t == 12 then
+        report("equipped and drank", hero)
+        -- M-ITEMFX: the potion healed 25 of the 60 missing and the helm adds 20 max health and 0.2 armor
+        local hp, max, armor = mce.get(hero, "Health3D", "current", "Health3D", "max", "Health3D", "armor")
+        mce.log(string.format("inv: health %d/%d armor %.1f", hp, max, armor))
+        inventory.open(chest, hero)
+    elseif t == 18 then
+        report("opened chest", hero)
+        mce.emit("Died3D", { entity = goblin })
+    elseif t == 24 then
+        local pickups = 0
+        mce.each("ItemPickup3D", function(e) pickups = pickups + 1 end)
+        mce.log(string.format("inv: goblin dropped %d pickups", pickups))
+        mce.log(string.format("inv: dropped %d potions", inventory.drop(hero, 1, 2)))
+        report("dropped", hero)
+    elseif t == 30 then
+        -- M-CRAFT: a tonic by hand (1 potion + 5 coin); the pack needs the workbench, so it is not craftable by hand
+        local bench = mce.find("Workbench")
+        mce.log(string.format("inv: can tonic %s, pack by hand %s, pack at bench %s", tostring(inventory.can_craft(hero, "tonic")),
+            tostring(inventory.can_craft(hero, "pack")), tostring(inventory.can_craft(hero, "pack", bench))))
+        inventory.craft(hero, "tonic")
+    elseif t == 36 then
+        report("crafted tonic", hero)
+        inventory.craft(hero, "pack", mce.find("Workbench"))
+    elseif t == 54 then
+        mce.log(string.format("inv: tonic %d potion_pack %d", inventory.count(hero, "tonic"), inventory.count(hero, "potion_pack")))
+        report("crafted pack", hero)
+    end
+end

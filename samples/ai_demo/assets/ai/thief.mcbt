@@ -1,0 +1,17 @@
+{
+  "format": "mce-bt",
+  "version": 1,
+  "guid": "a1de0000-0000-4000-8000-000000000003",
+  "name": "thief",
+  "blackboard": {
+    "loot": {"type": "vec3", "default": [-3, 0, 0]}
+  },
+  "root": {"sequence": [
+    {"wait": 3},
+    {"task": "log", "text": "sneaking in"},
+    {"task": "make_noise", "loudness": 25},
+    {"task": "move_to", "key": "loot"},
+    {"task": "log", "text": "at the loot"},
+    {"wait": 1000}
+  ]}
+}

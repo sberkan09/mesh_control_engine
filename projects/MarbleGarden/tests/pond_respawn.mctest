@@ -1,0 +1,31 @@
+{
+ "name": "rolling into the pond puts the marble back at the start",
+ "scene": "scenes/garden.mcscene",
+ "ticks": 400,
+ "input": "1-150 Move=0.45,0.8",
+ "actor": "Marble",
+ "assert": [
+  {
+   "entity": "Marble",
+   "field": "MarbleController.respawns",
+   ">=": 1
+  },
+  {
+   "entity": "Game",
+   "field": "GardenGame.falls",
+   ">=": 1
+  },
+  {
+   "event": "marble_garden::MarbleRespawned",
+   ">=": 1
+  },
+  {
+   "entity": "Marble",
+   "field": "LocalTransform.position.y",
+   ">": 0
+  },
+  {
+   "log_errors": 0
+  }
+ ]
+}

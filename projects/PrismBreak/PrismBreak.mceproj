@@ -1,0 +1,10 @@
+{
+  "format": "mce-project",
+  "version": 1,
+  "name": "PrismBreak",
+  "title": "Prism Break",
+  "engine_version": "0.9.0",
+  "games": ["prism_break"],
+  "start_scene": "7a4d6bfa-9198-4b9c-91c3-172bac831b74",
+  "plugins": []
+}
