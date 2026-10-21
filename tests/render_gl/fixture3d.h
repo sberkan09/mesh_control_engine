@@ -99,7 +99,7 @@ struct Fixture3D {
 
     // `setup` runs after the defaults (sun, fog, ground, box) and before build().
     void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
-        camera = orbit_camera(vec3{0, 0.5f, 0} + world_offset, 0.0f, math::radians(pitch_deg), 7.0f);
+        camera = orbit_camera(look_at + world_offset, 0.0f, math::radians(pitch_deg), 7.0f);
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -159,6 +159,7 @@ struct Fixture3D {
     rhi::TextureHandle target;
     Array<u8> pixels;
     f32 pitch_deg = 35.0f;
+    vec3 look_at{0.0f, 0.5f, 0.0f};       // the orbit camera's target (M-CLOUDS 9b: raised for a camera that looks up)
     vec3 world_offset{0.0f, 0.0f, 0.0f};  // moves the camera, the ground and the box (M-WETSURFACE 5b: a rebased world)
     Camera3D camera;
     View3D view;
@@ -651,6 +652,32 @@ inline void ripple_plaza_scene(Scene3D& s, const Ripples& ripples, const WetSurf
     wet_plaza_scene(s, wet, world_offset);
     s.set_time(time, 1.0f / 60.0f);
     s.set_ripples(ripples);
+}
+
+// ---- M-CLOUDS 9b: the cloud layer --------------------------------------------------------------------------------
+
+// The cloud sky: the fixture's box and ground under the default gradient sky, the camera raised and looking 15
+// degrees up (Fixture3D::look_at and pitch_deg, set by cloud_sky_camera) so the frame is two thirds sky; the sun
+// high on the camera's right front, inside the frame's corner region but not in it. `clouds` as given, at scene time
+// `time` (seconds).
+inline void cloud_sky_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -15.0f;
+}
+
+inline Clouds cloud_sky_clouds(f32 coverage) {
+    Clouds c;
+    c.coverage = coverage;
+    return c;
+}
+
+inline void cloud_sky_scene(Scene3D& s, const Clouds& clouds, f32 time) {
+    DirectionalLight sun;
+    sun.direction = {-0.45f, -0.55f, 0.7f};
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
 }
 
 }  // namespace mce::render_test

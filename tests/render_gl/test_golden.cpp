@@ -662,6 +662,17 @@ TEST_CASE("golden: snow_plaza_west: an even snow layer on the plaza, the wind to
     check_golden("snow_plaza_west", f);
 }
 
+// ---- M-CLOUDS 9b: the cloud layer ---------------------------------------------------------------------------------
+
+// Broken clouds (coverage 0.5, density 0.7, 900 m cells at 2000 m) over the default gradient sky, the camera looking
+// up, the sun just off the frame's right edge (the lit side of the clouds), 30 s into a drift toward +x.
+TEST_CASE("golden: cloud_sky: a broken cloud layer over the gradient sky, lit from the sun's side") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cloud_sky_scene(s, cloud_sky_clouds(0.5f), 30.0f); });
+    check_golden("cloud_sky", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

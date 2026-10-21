@@ -94,6 +94,8 @@ struct Forward3DPassU {
     vec4 snow;        // M-SNOWCOVER 6b: x cover (0 = off), y coverage, z 1 / noise cell (m; 0 = no noise), w wind bias
     vec4 ripple;      // M-RAINFX 7b: x strength (0 = off), y density, z ring width (>= 0.01), w speed-scaled time mod 60 s
     vec4 snow2;       // M-WINDDIR 8c: xy the snow wind direction (xz unit vector), zw 0
+    vec4 cloud;       // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
+    vec4 cloud2;      // xy the drift in noise cells mod kCloudPeriod (wind_dir * speed * time), zw 0
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
@@ -101,8 +103,11 @@ static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot)
                   offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
                   offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16 &&
                   offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
-                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, snow2) + 16,
-              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 follow p_sky_rot as in MCE_GLSL_PASS_U");
+                  offsetof(Forward3DPassU, cloud) == offsetof(Forward3DPassU, snow2) + 16 &&
+                  offsetof(Forward3DPassU, cloud2) == offsetof(Forward3DPassU, cloud) + 16 &&
+                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, cloud2) + 16,
+              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 follow p_sky_rot as in "
+              "MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -383,6 +388,27 @@ void ripple_params(const Ripples& r, f32 time, PassU& pu) {
     const f32 ring_width = unit01(r.ring_width);
     pu.ripple = vec4(strength, unit01(r.density), ring_width > 0.01f ? ring_width : 0.01f,
                      f32(t - 60.0 * std::floor(t / 60.0)));
+}
+
+// The main pass's cloud members (M-CLOUDS 9b). Coverage 0 (or `enabled` false) leaves p_cloud and p_cloud2 zero:
+// the sky shader skips its branch and the frame is the cloudless one bit for bit. The layer is camera-relative: the
+// shader projects the view ray onto a plane height_m above the camera, so neither the camera's xz nor the floating
+// origin enters it and a rebase (or a walk) leaves the clouds where they are in the sky. Only the drift moves them:
+// wind_dir * speed * kCloudDrift m/s * the scene clock, in noise cells, wrapped in f64 to the noise's period
+// (kCloudPeriod cells: the shader's octaves fit whole lattices into it), so float precision does not degrade as the
+// clock runs. A non-finite time counts as 0.
+constexpr f64 kCloudDrift = 10.0;   // m/s at speed 1
+constexpr f64 kCloudPeriod = 64.0;  // noise cells of the first octave (kSkyFS's 64.0)
+void cloud_params(const Clouds& c, f32 time, PassU& pu) {
+    const f32 coverage = unit01(c.coverage);
+    if (!c.enabled || coverage <= 0.0f) return;
+    if (!std::isfinite(time)) time = 0.0f;
+    const f32 scale = detail::cloud_scale(c.scale_m);
+    const vec2 dir = unit_wind_dir(c.wind_dir);
+    const f64 cells = f64(time) * f64(detail::cloud_speed(c.speed)) * kCloudDrift / f64(scale);
+    const auto wrap = [](f64 x) { return f32(x - kCloudPeriod * std::floor(x / kCloudPeriod)); };
+    pu.cloud = vec4(coverage, unit01(c.density), 1.0f / scale, detail::cloud_height(c.height_m));
+    pu.cloud2 = vec4(wrap(cells * f64(dir.x)), wrap(cells * f64(dir.y)), 0.0f, 0.0f);
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -1872,6 +1898,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     wet_params(scene.wet_surfaces(), origin_, pu);
     snow_params(scene.snow_cover(), origin_, pu);
     ripple_params(scene.ripples(), scene.time(), pu);
+    cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
