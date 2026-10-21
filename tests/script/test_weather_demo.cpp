@@ -25,6 +25,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
+#include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -161,6 +162,15 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(wd->degrees == 0.0f);
     CHECK(wd->drift_degrees_per_minute == 6.0f);
     CHECK(wd->angle_q == 0u);
+    // M-CLOUDS 9d: ... and a CloudLayer with the authoring defaults.
+    const kit::CloudLayer* cl = d.world.try_get<kit::CloudLayer>(d.e[kWeather]);
+    REQUIRE(cl != nullptr);
+    CHECK(cl->strength == 1.0f);
+    CHECK(cl->fair_coverage == 0.35f);
+    CHECK(cl->overcast_coverage == 0.9f);
+    CHECK(cl->scale_m == 900.0f);
+    CHECK(cl->speed_scale == 1.0f);
+    CHECK(cl->height_m == 2000.0f);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);

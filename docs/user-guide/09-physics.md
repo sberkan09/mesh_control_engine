@@ -682,6 +682,11 @@ speed_scale, and the clock is the scene time, so a paused or replayed frame draw
 `Weather` or a `CloudLayer` has no clouds and renders exactly as before. The Low quality tier and `r.clouds 0` switch
 them off.
 
+From Luau, `weather.cloud_strength()`, `cloud_fair_coverage()`, `cloud_overcast_coverage()`, `cloud_scale()`,
+`cloud_speed_scale()` and `cloud_height()` read the fields and `weather.set_clouds{...}` writes them (section 27.3), for
+example `weather.set_clouds{overcast_coverage = 1, height = 1500}` for a lower, fuller deck in a storm. The `12_weather`
+sample carries a `CloudLayer`, so its sky clouds over as the forecast turns to rain.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
