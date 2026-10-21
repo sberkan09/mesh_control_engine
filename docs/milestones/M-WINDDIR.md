@@ -34,7 +34,7 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 8a | done | #663 | `WindDirection` also carries a saved `frac` (drift remainder) and `seeded` flag |
-| 8b | planned | | |
+| 8b | in progress | | |
 | 8c | planned | | needs 8b |
 | 8d | planned | | needs 8a, 8b |
 | 8e | planned | | needs 8c, 8d |
