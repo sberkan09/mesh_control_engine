@@ -33,7 +33,12 @@ The full flag list (`--module`, `--base`, `--quiet`, ...) is in
 
 ## CI
 
-There is no hosted CI. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux; it prints a pass/fail
+GitHub Actions (`.github/workflows/`) runs the same `scripts/ci/local_ci.sh` on standard GitHub-hosted runners, which
+are free and unmetered for a public repository (limits: 20 concurrent jobs on the Free plan, 6 h per job, 10 GB of
+cache per repository; larger runners are billed and are not used). `ci.yml` runs `--task` on every PR into `dev_claude`
+(a manual run can pick `--premerge` or `--quick`); `integration.yml` runs the full matrix on `dev_claude` every 6 hours
+(and by hand), saves the ccache that PR runs restore, and pushes a `ci/regen-<sha>` branch when generated files are
+stale. Until the Actions runs are proven green, threads keep gating on the local script as below. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux; it prints a pass/fail
 summary and keeps logs in `build/local-ci-logs/`. A thread working through a milestone runs
 `local_ci.sh --task` (walls, gcc debug with GPU tests, clang-tidy, and determinism when the change touches
 simulation code) once on the PR's own base. If `dev_claude` moved before the merge, run `local_ci.sh --premerge`
