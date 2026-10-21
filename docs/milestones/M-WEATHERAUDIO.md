@@ -35,7 +35,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 10a | planned | | |
-| 10b | planned (drop if not needed) | | |
+| 10a | done | TBD | `WeatherAudio` + `kit_weather_audio` (after `kit_weather`, installed by `install_weather`); tests in tests/kit/test_weather_audio.cpp. The no-audio rule is `event_queue<audio::PlaySfx>()` or an `audio::AudioRef` resource present (documented in the header). `AudioSource` is not `Save`, so right after a load the source gains are the scene's; the next tick recomputes them from the saved levels, and the hashes match from then on. |
+| 10b | dropped | | Read `audio_bridge`: for a started source with a live handle it compares the faded gain with `applied_gain_db` every tick and calls `set_handle_gain` when it changed, looping or not, with no device-dependent branch; the order needs no seam in a shared header (the system anchors on `kit_weather`). |
 | 10c | planned | | |
 | 10d | planned | | |

@@ -687,6 +687,22 @@ From Luau, `weather.cloud_strength()`, `cloud_fair_coverage()`, `cloud_overcast_
 example `weather.set_clouds{overcast_coverage = 1, height = 1500}` for a lower, fuller deck in a storm. The `12_weather`
 sample carries a `CloudLayer`, so its sky clouds over as the forecast turns to rain.
 
+## 9.19f Rain and wind ambience (M-WEATHERAUDIO)
+
+An optional `WeatherAudio` entity (one per scene, the first in ECS order drives; it is registered with the weather)
+makes two looping sounds follow the weather. You place two ordinary `AudioSource` entities (`loop`, `play_on_start`,
+a bus, an optional `fade_s`, and your own rain and wind clips) and point `rain_source` and `wind_source` at them; the
+engine ships no clips, and a source without a clip stays silent. The system `kit_weather_audio` only writes their
+`gain_db`: it never starts or stops a source and never writes the `Weather`. The rain level is the weather kind
+(clear 0, overcast 0.15, rain 1, storm 1, snow 0.35) times the weather intensity, and the wind level is `Weather.wind`
+(0..1, so a calm wind is a quiet bed). A level moves toward its target by a fixed step per tick, so a bed fades in and
+out over `fade_seconds` (default 3, 0..60) as a straight ramp, and the gain is `rain_db` or `wind_db` (the gain at
+full level, default 0, -60..12) plus 20 log10 of the level, floored at -60 dB (silent weather is exactly -60). The two
+levels are saved with the scene (`rain_q` and `wind_q`, integers out of 2^24), so a save in the middle of a fade
+resumes on the same ramp. A null, destroyed or non-source entity is skipped, `enabled` 0 switches the system off, and a
+world with no audio, no `Weather` or no `WeatherAudio` is left untouched, so a scene without one hashes and sounds as
+before. A scene with one hashes differently by design, because the source gains are scene data.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
