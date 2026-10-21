@@ -1,0 +1,1 @@
+- Kit (M-STATUS 1): `StatusEffects` (up to 8 timed effects on `Health3D`: `Regen`, `Poison` through `apply_damage`, `Armor`, `MaxHealth` bonuses applied as a remembered change), events `ApplyStatus` / `ClearStatus` in and `StatusApplied` / `StatusEnded` / `StatusRefused` out, system `kit_status`. Installed by `install_stock`. Docs: `docs/engine/kit.md`.
