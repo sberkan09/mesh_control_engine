@@ -142,6 +142,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `IKTarget2D` | `mce/kit/skeleton2d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `SnowCover` | `mce/kit/snow_cover.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
+| `StatusEffects` | `mce/kit/status.h` | yes | yes | yes | docs/user-guide/27-scripting.md | allowed: tested in tests/kit/test_status.cpp; samples/12_loot shows it in M-STATUS 3 |
 | `ThunderDelay` | `mce/kit/thunder_delay.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |

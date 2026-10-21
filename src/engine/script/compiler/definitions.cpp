@@ -155,6 +155,16 @@ declare inventory: {
     craft: (e: Entity, recipe: string, station: Entity?) -> (),
 }
 
+-- Timed status effects (M-STATUS): thin over StatusEffects. `kind` is "regen" or "poison" (amount: hp per second, positive),
+-- "armor" or "max_health" (amount: the value added, +-1000000); seconds 0.01 to 3600. Adding an active id refreshes it.
+declare status: {
+    -- queues an effect; `source` is credited for poison damage
+    add: (e: Entity, id: string, kind: string, amount: number, seconds: number, source: Entity?) -> (),
+    has: (e: Entity, id: string) -> boolean,
+    -- queues the end of one effect, or of every effect when `id` is nil
+    clear: (e: Entity, id: string?) -> (),
+}
+
 -- Map markers (M-MISSION): the MapMarker component, written at the next sync point.
 declare marker: {
     add: (e: Entity, options: MarkerOptions?) -> (),

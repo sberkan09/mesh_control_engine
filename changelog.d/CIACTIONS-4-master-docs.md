@@ -1,0 +1,1 @@
+- Docs: README, CONTRIBUTING.md and VERSIONING.md name `master` as the integration branch (the `dev_claude` branch is gone); the agentgate and CI workflows target `master` only.

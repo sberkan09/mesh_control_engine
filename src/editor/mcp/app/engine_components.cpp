@@ -43,6 +43,7 @@
 #include "mce/kit/inventory.h"         // Inventory, Equipment, ItemPickup3D (M-INVENTORY 2)
 #include "mce/kit/loot.h"              // LootDrop, Container (M-INVENTORY 3)
 #include "mce/kit/craft.h"              // CraftingStation (M-CRAFT 2)
+#include "mce/kit/status.h"             // StatusEffects (M-STATUS 1)
 #include "mce/kit/missions.h"          // Mission, Objective (M-MISSION 1)
 #include "mce/kit/world_clock.h"        // WorldClock (M-DAYNIGHT 1)
 #include "mce/kit/day_cycle.h"          // DayCycle (M-DAYNIGHT 2)
