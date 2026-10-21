@@ -30,6 +30,7 @@ mce_add_library(mce_gameplay_kit
         src/day_cycle.cpp
         src/timed_light.cpp
         src/weather.cpp
+        src/weather_audio.cpp
         src/precipitation.cpp
         src/thunder_delay.cpp
         src/rain_splash.cpp
