@@ -55,6 +55,7 @@
 #include "mce/kit/thunder_delay.h"      // ThunderDelay (M-RAINFX 7e)
 #include "mce/kit/rain_splash.h"        // RainSplash (M-RAINFX 7f)
 #include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)
+#include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
 #include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)

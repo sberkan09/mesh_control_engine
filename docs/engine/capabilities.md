@@ -48,6 +48,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
+| `CloudLayer` | `mce/kit/cloud_layer.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CLOUDS 9c: tested in tests/kit/test_cloud_layer.cpp; step 9d puts it in samples/12_weather (delete this line then) |
 | `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Projectile3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp |
