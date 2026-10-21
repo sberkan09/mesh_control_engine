@@ -11,7 +11,9 @@
 #   5. (M-RAINFX 7d) the "rain fx:" lines: the RainRipples strength, RainSplash rate and ThunderDelay speed the script reads;
 #   6. (M-WINDDIR 8e) the "wind dir:" lines: the WindDirection heading starts at 0 and turns 6 degrees a minute (0.1 degree a
 #      second, so 0.25 degree per 150 ticks);
-#   7. (M-CLOUDS 9d) the "clouds:" lines: the CloudLayer authoring fields the script reads.
+#   7. (M-CLOUDS 9d) the "clouds:" lines: the CloudLayer authoring fields the script reads;
+#   8. (M-WEATHERAUDIO 10c) the "audio:" lines: the rain and wind bed levels the WeatherAudio ramps (3 s fade) toward the
+#      weather's targets (the two looping AudioSource entities have no clip, so the sample is silent).
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -47,7 +49,7 @@ file(MAKE_DIRECTORY "${WORK_DIR}")
 # 1. The first 600 ticks.
 play(first -ticks 600 -input "${INPUT}")
 play(second -ticks 600 -input "${INPUT}")
-expect("${first}" "600 ticks, 12 entities, state_hash" "the run did not end after 600 ticks with 12 entities")
+expect("${first}" "600 ticks, 14 entities, state_hash" "the run did not end after 600 ticks with 14 entities")
 expect_not("${first}" "\\[error\\]|\\[warn\\]|does not load|failed at" "the run logged a problem")
 expect("${first}" "script: weather: clear intensity 0.000 wind 0.100 wetness 0.000 at tick 0\n" "the weather did not start clear")
 expect("${first}" "script: sway: amplitude x1.300 frequency x1.050 at tick 0\n" "the clear sway factor is not 1 + 3 * 0.1")
@@ -57,6 +59,8 @@ expect("${first}" "script: rain fx: ripples 1.00 splash 1.00 thunder 343 at tick
 expect("${first}" "script: wind dir: heading 0.00 drift 6.0 at tick 0\n" "the wind direction did not start at +x")
 expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the wind direction did not turn 6 degrees a minute")
 expect("${first}" "script: clouds: strength 1.00 fair 0.35 overcast 0.90 height 2000 at tick 450\n" "the cloud layer is not wired into the scene")
+expect("${first}" "script: audio: rain 0.000 wind 0.006 max 0/0 dB fade 3 s at tick 0\n" "the audio beds did not start silent")
+expect("${first}" "script: audio: rain 0.650 wind 0.360 max 0/0 dB fade 3 s at tick 450\n" "the rain and wind beds did not follow the weather")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -84,6 +88,8 @@ expect("${forecast}" "script: snow: cover 0.372 at tick 2250\n" "the snow cover 
 expect("${forecast}" "script: snow: cover 0.298 at tick 2400\n" "the snow cover did not start to melt")
 expect("${forecast}" "script: snow: cover 0.048 at tick 2550\n" "the snow cover did not melt away")
 expect("${forecast}" "script: wind dir: heading 4.25 drift 6.0 at tick 2550\n" "the wind direction did not keep turning")
+expect("${forecast}" "script: audio: rain 0.602 wind 0.641 max 0/0 dB fade 3 s at tick 1500\n" "the storm beds are wrong")
+expect("${forecast}" "script: audio: rain 0.000 wind 0.100 max 0/0 dB fade 3 s at tick 2400\n" "the rain bed did not fall silent in clear weather")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

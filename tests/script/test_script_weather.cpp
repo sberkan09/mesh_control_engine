@@ -15,6 +15,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/weather_audio.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -32,11 +33,11 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false, bool with_clouds = false) {
+                  bool with_wind = false, bool with_clouds = false, bool with_audio = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -61,7 +62,9 @@ struct WRig {
         }
         if (with_wind) wind_e = w.spawn_with(kit::WindDirection{});
         if (with_clouds) cloud_e = w.spawn_with(kit::CloudLayer{});
+        if (with_audio) audio_e = w.spawn_with(kit::WeatherAudio{});
     }
+    kit::WeatherAudio& audio() { return *w.try_get_mut<kit::WeatherAudio>(audio_e); }
     kit::CloudLayer& clouds() { return *w.try_get_mut<kit::CloudLayer>(cloud_e); }
     kit::WindDirection& wind() { return *w.try_get_mut<kit::WindDirection>(wind_e); }
     kit::RainRipples& ripples() { return *w.try_get_mut<kit::RainRipples>(ripples_e); }
@@ -83,9 +86,10 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false, bool with_clouds = false) {
+                  bool with_wind = false, bool with_clouds = false, bool with_audio = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
-    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds);
+    WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds,
+           with_audio);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -745,5 +749,88 @@ TEST_CASE("weather api: set_clouds bad arguments raise an error that names the c
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.clouds().strength == 1.0f);
         CHECK(r.clouds().height_m == 2000.0f);
+    }
+}
+
+TEST_CASE("weather api: the audio getters read the first WeatherAudio, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.audio_rain_db() == 0 and weather.audio_wind_db() == 0)
+        assert(weather.audio_fade() == 3 and weather.audio_enabled() == 1)
+        assert(weather.rain_level() == 0 and weather.wind_level() == 0)
+        weather.set_audio{rain_db = -6, fade = 5}
+    end
+    if t == 2 then
+        assert(weather.audio_rain_db() == -6 and weather.audio_fade() == 5)
+        assert(weather.audio_wind_db() == 0 and weather.audio_enabled() == 1)  -- only the given keys changed
+        weather.set_audio{rain_db = 99, wind_db = 99, fade = 1e9, enabled = 0}
+    end
+    if t == 3 then
+        assert(weather.audio_rain_db() == 12 and weather.audio_wind_db() == 12)
+        assert(weather.audio_fade() == 60 and weather.audio_enabled() == 0)
+        weather.set_audio{rain_db = -99, wind_db = -1e9, fade = -5, enabled = 7}
+        weather.set_audio{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.audio_rain_db() == -60 and weather.audio_wind_db() == -60)
+        assert(weather.audio_fade() == 0 and weather.audio_enabled() == 1)
+        -- the levels are engine-written (rain_q, wind_q out of 2^24), read-only
+        assert(weather.rain_level() == 0.5 and weather.wind_level() == 0.25)
+    end
+end
+)",
+           true, true, false, false, false, false, false, false, true);
+    r.step(1);
+    CHECK(r.audio().rain_db == -6.0f);
+    CHECK(r.audio().fade_seconds == 5.0f);
+    r.audio().rain_q = 1u << 23;
+    r.audio().wind_q = 1u << 22;
+    r.step(4);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.audio().rain_db == -60.0f);
+    CHECK(r.audio().wind_db == -60.0f);
+    CHECK(r.audio().fade_seconds == 0.0f);
+    CHECK(r.audio().enabled == 1);
+    CHECK(r.audio().rain_q == 1u << 23);  // the script never writes the levels
+    CHECK(r.audio().wind_q == 1u << 22);
+}
+
+TEST_CASE("weather api: a world without a WeatherAudio raises a named error") {
+    for (const char* name : {"rain_level", "wind_level", "audio_rain_db", "audio_wind_db", "audio_fade", "audio_enabled"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no WeatherAudio entity").c_str());
+    expect_error("weather.set_audio{}", "weather.set_audio: the scene has no WeatherAudio entity");
+    expect_error("weather.rain_level()", "weather.rain_level: this world has no weather", false, false);
+    expect_error("weather.set_audio{}", "weather.set_audio: this world has no weather", false, false);
+    // The other weather components alone are not enough.
+    expect_error("weather.wind_level()", "weather.wind_level: the scene has no WeatherAudio entity", true, true, true,
+                 true, true, true, true, true);
+}
+
+TEST_CASE("weather api: set_audio bad arguments raise an error that names the call and write nothing") {
+    auto bad = [](const char* body, const char* needle) {
+        expect_error(body, needle, true, true, false, false, false, false, false, false, true);
+    };
+    bad("weather.set_audio{bogus = 1}", "weather.set_audio: unknown key 'bogus'");
+    bad("weather.set_audio{rain_q = 1}", "weather.set_audio: unknown key 'rain_q'");
+    bad("weather.set_audio{fade_seconds = 1}", "weather.set_audio: unknown key 'fade_seconds'");
+    bad("weather.set_audio{rain_db = 'loud'}", "weather.set_audio: 'rain_db' is not a number");
+    bad("weather.set_audio{fade = 0/0}", "weather.set_audio: 'fade' is not a number");
+    bad("weather.set_audio{enabled = true}", "weather.set_audio: 'enabled' is not a number");
+    bad("weather.set_audio{[1] = 0.5}", "weather.set_audio: the keys are names");
+    bad("weather.set_audio(0.5)", "table expected");
+    bad("weather.set_audio()", "table expected");
+    for (const char* body : {"weather.set_audio{rain_db = -6, fade = 'slow'}", "weather.set_audio{fade = 'slow', rain_db = -6}",
+                             "weather.set_audio{rain_db = -6, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.audio().rain_db == 0.0f);
+        CHECK(r.audio().fade_seconds == 3.0f);
     }
 }

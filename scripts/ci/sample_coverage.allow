@@ -10,4 +10,3 @@ SharedCamera2D | tested in tests/kit/test_coop.cpp; 09_coop uses one camera per 
 Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp
 UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR
 FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it
-WeatherAudio | tested in tests/kit/test_weather_audio.cpp; M-WEATHERAUDIO 10c shows it in samples/12_weather (delete this line then)

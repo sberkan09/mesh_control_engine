@@ -18,6 +18,7 @@
 #include <string>
 
 #include "asset/cook_test_util.h"
+#include "mce/audio/components.h"
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
 #include "mce/ecs/transform.h"
@@ -26,6 +27,7 @@
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/weather_audio.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -47,7 +49,7 @@ namespace {
 constexpr f32 kDt = 1.0f / 60.0f;
 constexpr const char* kScene = "12d12000-0000-4000-8000-000000000001";
 // Entities in the scene's order.
-constexpr u32 kSky = 1, kClock = 2, kCamera = 3, kWeather = 4, kPrecip = 5, kLightning = 6, kScript = 10, kSplash = 11;
+constexpr u32 kSky = 1, kClock = 2, kCamera = 3, kWeather = 4, kPrecip = 5, kLightning = 6, kScript = 10, kSplash = 11, kRainBed = 12, kWindBed = 13;
 
 u32 bits(f32 v) { return std::bit_cast<u32>(v); }
 
@@ -89,7 +91,7 @@ struct Demo {
         kit::install_stock(world, &assets);
         script::install_scene_scripts(world, &assets);
         REQUIRE(scene::load(world, assets, asset::parse_guid(kScene).value(), &e));
-        REQUIRE(e.size() == 12);
+        REQUIRE(e.size() == 14);
         if (!forecast) world.destroy(e[kScript]);
     }
     void run_to(u64 tick) {
@@ -171,6 +173,24 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(cl->scale_m == 900.0f);
     CHECK(cl->speed_scale == 1.0f);
     CHECK(cl->height_m == 2000.0f);
+    // M-WEATHERAUDIO 10c: ... and a WeatherAudio pointing at two clip-less looping AudioSource entities.
+    const kit::WeatherAudio* wa = d.world.try_get<kit::WeatherAudio>(d.e[kWeather]);
+    REQUIRE(wa != nullptr);
+    CHECK(wa->rain_source == d.e[kRainBed]);
+    CHECK(wa->wind_source == d.e[kWindBed]);
+    CHECK(wa->rain_db == 0.0f);
+    CHECK(wa->wind_db == 0.0f);
+    CHECK(wa->fade_seconds == 3.0f);
+    CHECK(wa->enabled == 1);
+    CHECK(wa->rain_q == 0u);
+    CHECK(wa->wind_q == 0u);
+    for (const u32 bed : {kRainBed, kWindBed}) {
+        const audio::AudioSource* src = d.world.try_get<audio::AudioSource>(d.e[bed]);
+        REQUIRE(src != nullptr);
+        CHECK(src->loop);
+        CHECK(src->play_on_start);
+        CHECK(src->clip.guid.is_null());  // no clip: silent
+    }
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);

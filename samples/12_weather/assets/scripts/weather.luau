@@ -34,5 +34,9 @@ function update()
         mce.log(string.format("clouds: strength %.2f fair %.2f overcast %.2f height %.0f at tick %d",
             weather.cloud_strength(), weather.cloud_fair_coverage(), weather.cloud_overcast_coverage(),
             weather.cloud_height(), t))
+        -- M-WEATHERAUDIO: the rain and wind bed levels follow the weather (the two sources have no clip: silent).
+        mce.log(string.format("audio: rain %.3f wind %.3f max %.0f/%.0f dB fade %.0f s at tick %d",
+            weather.rain_level(), weather.wind_level(), weather.audio_rain_db(), weather.audio_wind_db(),
+            weather.audio_fade(), t))
     end
 end
