@@ -240,6 +240,14 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (speed 1..1000000 m/s, volume 0..4); an unknown
     -- key or a non-number raises
     set_thunder: (settings: { speed: number?, volume: number? }) -> (),
+    -- WindDirection (M-WINDDIR), the first one in the scene; the getters raise when there is none. wind_degrees and
+    -- wind_drift are the authored fields, wind_heading the resolved angle in degrees (0..360, engine-written)
+    wind_degrees: () -> number,
+    wind_drift: () -> number,
+    wind_heading: () -> number,
+    -- every key optional, each value clamped to the field's range (degrees 0..360, drift -3600..3600 degrees per
+    -- minute); an unknown key (angle_q included) or a non-number raises
+    set_wind_direction: (settings: { degrees: number?, drift: number? }) -> (),
 }
 )";
 

@@ -261,6 +261,8 @@ end
 | `weather.set_splash{rate=, height=, life=, radius=, seed=}` | writes those fields; every key is optional and each value is clamped to the field's range (rate 0 to 64, height 0.01 to 5 m, life 0.02 to 5 s, radius 0.5 to 500 m, seed 0 to 4294967295). An unknown key or a value that is not a number is an error that names the call, and nothing is written |
 | `weather.thunder_speed()`, `weather.thunder_volume()` | read the speed of sound in metres per second and the linear volume of the first thunder-delay component (section 9.19b) |
 | `weather.set_thunder{speed=, volume=}` | writes those; every key is optional and each value is clamped to the field's range (speed 1 to 1000000, volume 0 to 4). The thunder clip is set in the scene, not from a script. An unknown key or a value that is not a number is an error that names the call, and nothing is written |
+| `weather.wind_degrees()`, `weather.wind_drift()`, `weather.wind_heading()` | read the first wind-direction component (section 9.19d): the authored heading in degrees (0 is +x, counter-clockwise seen from above), the authored drift in degrees per minute, and the current resolved heading in degrees (0 up to 360, written by the engine as it drifts). A scene without one raises an error that names the call |
+| `weather.set_wind_direction{degrees=, drift=}` | writes the authored heading and drift; every key is optional and each value is clamped to the field's range (degrees 0 to 360, drift -3600 to 3600 degrees per minute). The resolved heading belongs to the engine: an unknown key (angle_q included) or a value that is not a number is an error that names the call, and nothing is written |
 
 ```lua
 -- A storm rolls in when the player enters the harbour.

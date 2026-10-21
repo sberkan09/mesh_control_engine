@@ -69,6 +69,17 @@
 //                                         field's Range; an unknown key or a non-number raises an error that names
 //                                         the call
 //
+// Wind direction (M-WINDDIR step 8e) is the same kind of binding over the first kit::WindDirection
+// (mce/kit/wind_direction.h). Named errors as above. Only the authored degrees and drift are settable: angle_q, frac
+// and seeded are engine-written (kit_wind_direction) and an unknown key names them.
+//
+//   weather.wind_degrees() -> number      WindDirection.degrees (0..360), the authored heading
+//   weather.wind_drift() -> number        WindDirection.drift_degrees_per_minute (-3600..3600)
+//   weather.wind_heading() -> number      the resolved heading in degrees, 0..360 (from the engine-written angle_q)
+//   weather.set_wind_direction{degrees=, drift=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -79,6 +90,7 @@
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
+#include "mce/kit/wind_direction.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -169,6 +181,9 @@ T& check_first(lua_State* L, const char* fn, const char* name) {
 kit::RainRipples& check_ripples(lua_State* L, const char* fn) { return check_first<kit::RainRipples>(L, fn, "RainRipples"); }
 kit::RainSplash& check_splash(lua_State* L, const char* fn) { return check_first<kit::RainSplash>(L, fn, "RainSplash"); }
 kit::ThunderDelay& check_thunder(lua_State* L, const char* fn) { return check_first<kit::ThunderDelay>(L, fn, "ThunderDelay"); }
+kit::WindDirection& check_wind_direction(lua_State* L, const char* fn) {
+    return check_first<kit::WindDirection>(L, fn, "WindDirection");
+}
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -478,6 +493,34 @@ int l_weather_set_thunder(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_WD(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_wind_direction(L, "weather." #luaname).field)); \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_WD(wind_degrees, degrees)
+MCE_WEATHER_GETTER_WD(wind_drift, drift_degrees_per_minute)
+#undef MCE_WEATHER_GETTER_WD
+
+// weather.wind_heading(): the resolved heading in degrees from the quantized angle_q (1/65536 degree), 0..360.
+int l_weather_wind_heading(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_wind_direction(L, "weather.wind_heading").angle_q) / 65536.0);
+    return 1;
+}
+
+// weather.set_wind_direction{degrees=, drift=}: validated before anything is written. (angle_q, frac and seeded are
+// engine-written and not settable.)
+int l_weather_set_wind_direction(lua_State* L) {
+    static const char* const kKeys[2] = {"degrees", "drift"};
+    f64 value[2] = {0, 0};
+    bool given[2] = {false, false};
+    read_settings(L, "weather.set_wind_direction", kKeys, 2, "degrees, drift", value, given);
+    kit::WindDirection& d = check_wind_direction(L, "weather.set_wind_direction");
+    if (given[0]) d.degrees = static_cast<f32>(clamp_range(value[0], 0.0, 360.0));
+    if (given[1]) d.drift_degrees_per_minute = static_cast<f32>(clamp_range(value[1], -3600.0, 3600.0));
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -517,6 +560,10 @@ const luaL_Reg kWeatherLib[] = {
     {"thunder_speed", l_weather_thunder_speed},
     {"thunder_volume", l_weather_thunder_volume},
     {"set_thunder", l_weather_set_thunder},
+    {"wind_degrees", l_weather_wind_degrees},
+    {"wind_drift", l_weather_wind_drift},
+    {"wind_heading", l_weather_wind_heading},
+    {"set_wind_direction", l_weather_set_wind_direction},
     {nullptr, nullptr},
 };
 

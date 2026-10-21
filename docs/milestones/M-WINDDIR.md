@@ -1,6 +1,6 @@
 # M-WINDDIR — A wind with a direction (milestone record)
 
-**Status:** planned 2026-10-21, step 8a next. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY and M-SNOWCOVER: `Weather.wind` is a strength only, foliage sways along a per-batch `wind_direction` the author sets by hand, and the snow layer leans toward a hard-wired +x. A storm that turns, or a scene whose wind blows west, cannot be authored once for the whole world. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done 2026-10-21 (steps 8a to 8e). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY and M-SNOWCOVER: `Weather.wind` is a strength only, foliage sways along a per-batch `wind_direction` the author sets by hand, and the snow layer leans toward a hard-wired +x. A storm that turns, or a scene whose wind blows west, cannot be authored once for the whole world. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** One scene-level wind direction, authored in degrees and optionally drifting, that `Foliage3D` sway and the snow lee bias both follow, deterministically, saved with the scene, opt-in, and a scene without it renders and hashes exactly as today.
 
@@ -37,4 +37,4 @@
 | 8b | done | #664 | |
 | 8c | done | #665 | `p_snow2` after `p_ripple`; all 68 existing goldens byte-identical on both backends; the full-cover `snow_plaza` cap sits in one noise patch (mask 1 either way), so `snow_plaza_west` is the even layer at coverage 0.6; a dark ball's slope whitening mirrors (lee gain 20.5 / 20.2 luma) |
 | 8d | done | #666 | extract: snow `wind_dir` and foliage rotation; the snow carrier still needs a Weather and a SnowCover, the foliage turn needs a Weather |
-| 8e | planned | | needs 8c, 8d |
+| 8e | done | | `weather.wind_degrees()`, `wind_drift()`, `wind_heading()` and `weather.set_wind_direction{degrees=, drift=}` (clamped to the Range, named errors, nothing written on error) in `api_weather.cpp`, typed in `definitions.cpp`; `samples/12_weather`: a `WindDirection` (degrees 0, drift 6 degrees a minute) on the Weather entity, the script logs the heading |

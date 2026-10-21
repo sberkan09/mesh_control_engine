@@ -89,6 +89,10 @@
     },
     "RainRipples": {},
     "ThunderDelay": {},
+    "WindDirection": {
+     "degrees": 0,
+     "drift_degrees_per_minute": 6
+    },
     "Foliage3D": {
      "mesh": "guid:12d12000-0000-4000-8000-000000000006",
      "tint": [

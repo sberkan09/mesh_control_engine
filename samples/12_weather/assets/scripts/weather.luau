@@ -27,5 +27,8 @@ function update()
         -- ThunderDelay has no clip in this sample, so its strikes make no sound).
         mce.log(string.format("rain fx: ripples %.2f splash %.2f thunder %.0f at tick %d",
             weather.ripples_strength(), weather.splash_rate(), weather.thunder_speed(), t))
+        -- M-WINDDIR: the scene wind turns 6 degrees a minute from 0 (+x); the foliage sway and the snow lean follow it.
+        mce.log(string.format("wind dir: heading %.2f drift %.1f at tick %d",
+            weather.wind_heading(), weather.wind_drift(), t))
     end
 end
