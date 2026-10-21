@@ -1,0 +1,1 @@
+- Editor, M-PANELSHOT (planned): a headless test will open every default panel and write one screenshot per panel.
