@@ -15,6 +15,7 @@
 #include "mce/editor/asset_browser.h"
 #include "mce/editor/asset_kinds.h"
 #include "mce/editor/asset_ops.h"
+#include "mce/editor/asset_refs.h"
 #include "mce/editor/source_doc.h"
 #include "mce/editor/asset_thumb.h"
 #include "mce/editor/editor_shell.h"
@@ -51,6 +52,8 @@ public:
 
         ImGui::SameLine();
         if (ImGui::Button("+ New")) begin_new();
+        ImGui::SameLine();
+        if (ImGui::Button("Unused")) begin_unused(session.project());
         ImGui::SameLine();
         ImGui::Checkbox("Grid", &grid_);
         if (grid_) {
@@ -249,6 +252,7 @@ private:
             if (ImGui::MenuItem("Rename / move", "F2")) begin_rename(*a);
             if (ImGui::MenuItem("Duplicate...")) begin_duplicate(*a);
             if (ImGui::MenuItem("Delete...")) begin_delete(shell.session().project(), *a);
+            if (ImGui::MenuItem("Used by...")) begin_used_by(shell.session().project(), *a);
             const AssetDrop kind = asset_drop_kind(a->type);
             if (ImGui::MenuItem("Add to scene", nullptr, false,
                                 !shell.playing() && (kind == AssetDrop::Sprite || kind == AssetDrop::PrefabInstance)))
@@ -316,7 +320,7 @@ private:
     }
 
     // ---- New, Duplicate and Delete (M-ASSETNEW 3): modal dialogs over the asset_ops functions ----
-    enum class Dialog : u8 { None, New, Duplicate, Delete };
+    enum class Dialog : u8 { None, New, Duplicate, Delete, UsedBy, Unused };
 
     void open_dialog(Dialog d) {
         dialog_ = d;
@@ -361,6 +365,55 @@ private:
         open_dialog(Dialog::Delete);
     }
 
+    void begin_used_by(const EditorProject& project, const ProjectAsset& a) {
+        dialog_guid_ = a.guid;
+        refs_.clear();
+        AssetRefs refs;
+        refs.build(project);
+        refs.used_by(a.guid, refs_);
+        open_dialog(Dialog::UsedBy);
+    }
+
+    void begin_unused(const EditorProject& project) {
+        unused_.clear();
+        AssetRefs refs;
+        refs.build(project);
+        refs.unused(unused_);
+        open_dialog(Dialog::Unused);
+    }
+
+    // "Used by" and "Unused": read-only lists (mce/editor/asset_refs.h says what they can and cannot see).
+    void draw_refs_dialog(EditorShell& shell) {
+        EditorSession& session = shell.session();
+        if (dialog_ == Dialog::UsedBy) {
+            const ProjectAsset* a = session.project().find(dialog_guid_);
+            ImGui::Text("%s is named by %u asset(s):", a ? a->path.c_str() : "(gone)", static_cast<unsigned>(refs_.size()));
+            if (refs_.empty()) ImGui::TextDisabled("no asset file names it");
+            for (usize i = 0; i < refs_.size(); ++i) ImGui::BulletText("%s", refs_[i].c_str());
+        } else {
+            ImGui::Text("%u asset(s) that no asset file names (scenes excluded):", static_cast<unsigned>(unused_.size()));
+            ImGui::TextDisabled("Scripts that load by path and the project's start scene are not seen.");
+            if (ImGui::BeginChild("##unused", ImVec2(ImGui::GetFontSize() * 30.0f, ImGui::GetFontSize() * 14.0f), ImGuiChildFlags_Borders)) {
+                for (const asset::Guid g : unused_) {
+                    const ProjectAsset* a = session.project().find(g);
+                    if (!a) continue;
+                    if (ImGui::Selectable(a->path.c_str())) {
+                        selected_ = g;
+                        model_.set_folder(asset_folder(a->path.view()));
+                        dialog_ = Dialog::None;
+                        ImGui::CloseCurrentPopup();
+                        break;
+                    }
+                }
+            }
+            ImGui::EndChild();
+        }
+        if (ImGui::Button("Close")) {
+            dialog_ = Dialog::None;
+            ImGui::CloseCurrentPopup();
+        }
+    }
+
     void finish(EditorShell& shell, asset::Guid select, bool open_it) {
         EditorSession& session = shell.session();
         model_.refresh(session.project());
@@ -381,13 +434,22 @@ private:
     void draw_dialogs(EditorShell& shell) {
         if (dialog_ == Dialog::None) return;
         EditorSession& session = shell.session();
-        const char* title = dialog_ == Dialog::New ? "New asset" : dialog_ == Dialog::Duplicate ? "Duplicate asset" : "Delete asset";
+        const char* title = dialog_ == Dialog::New         ? "New asset"
+                            : dialog_ == Dialog::Duplicate ? "Duplicate asset"
+                            : dialog_ == Dialog::UsedBy    ? "Used by"
+                            : dialog_ == Dialog::Unused    ? "Unused assets"
+                                                           : "Delete asset";
         if (open_dialog_) {
             ImGui::OpenPopup(title);
             open_dialog_ = false;
         }
         if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             dialog_ = Dialog::None;
+            return;
+        }
+        if (dialog_ == Dialog::UsedBy || dialog_ == Dialog::Unused) {
+            draw_refs_dialog(shell);
+            ImGui::EndPopup();
             return;
         }
         if (dialog_ == Dialog::New) {
@@ -502,6 +564,7 @@ private:
     char name_buf_[256] = {};
     cook::String error_;
     Array<cook::String> refs_;
+    Array<asset::Guid> unused_;
 };
 
 }  // namespace

@@ -5,6 +5,7 @@ mce_add_test(test_editor UMBRELLA
         test_asset_browser.cpp
         test_asset_kinds.cpp
         test_asset_ops.cpp
+        test_asset_refs.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp
         test_scene_tabs.cpp
