@@ -1,0 +1,1 @@
+- Editor, M-PANELSHOT (step 1): `mce_editor -editor.panel_shots <dir>` brings every panel to the front in turn, writes one image per panel, and fails on a blank shot or a GL validation error.

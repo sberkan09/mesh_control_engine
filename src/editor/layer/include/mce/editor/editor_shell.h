@@ -102,6 +102,7 @@ public:
     void add_panel(mem::UniquePtr<IEditorPanel> panel);
     IEditorPanel* find_panel(StringView name);
     usize panel_count() const { return panels_.size(); }
+    IEditorPanel* panel_at(usize i) { return i < panels_.size() ? panels_[i].get() : nullptr; }
 
     // Asks before discarding unsaved scene changes (Save / Discard / Cancel).
     void request_quit();

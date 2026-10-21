@@ -14,6 +14,9 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <string>
+#include <system_error>
 
 #include "mce/core.h"
 #include "mce/editor/editor_shell.h"
@@ -30,6 +33,10 @@ using namespace mce;
 MCE_CVAR(cv_frames, "frames", 0, "Quit after N frames (0 = run until the window closes)", CVarFlags::None);
 MCE_CVAR(cv_capture, "capture", "", "Write the last frame (with -frames) to this .ppm path", CVarFlags::None);
 MCE_CVAR(cv_selftest, "selftest", false, "With -frames: verify the viewport and shell pixels on the last frame",
+         CVarFlags::None);
+MCE_CVAR(cv_panel_shots, "editor.panel_shots", "",
+         "Bring every panel's tab to the front in turn and write <dir>/<panel>.ppm for each; quits when done (exit 3 on a "
+         "blank shot or a GL validation error); -frames and -selftest are not needed",
          CVarFlags::None);
 MCE_CVAR(cv_project, "project", "", "Project folder to open (holds assets/)", CVarFlags::None);
 MCE_CVAR(cv_module, "module", "",
@@ -99,8 +106,17 @@ public:
         device_.submit(cmd);
         shell_.end_frame_perf((platform::now_seconds() - t0) * 1000.0);
 
-        const bool last = cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
-        if (last) {
+        const bool shots = !cv_panel_shots.get_string().empty();
+        if (shots) panel_shots(rc.frame_index);
+        const bool last = shots ? shots_done_
+                                : cv_frames.get_int() > 0 && rc.frame_index + 1 >= static_cast<u64>(cv_frames.get_int());
+        if (last && shots) {
+            if (device_.validation_error_count() != 0) {
+                MCE_LOG_ERROR("panel shots: {} GL validation errors", device_.validation_error_count());
+                shots_ok_ = false;
+            }
+            if (!shots_ok_) exit_code_ = 3;
+        } else if (last) {
             if (!cv_capture.get_string().empty()) capture(cv_capture.get_string().data());
             if (cv_selftest.get_bool() && !(shell_.playing() ? play_selftest() : shell_.scene_mode() ? scene_selftest() : selftest()))
                 exit_code_ = 3;
@@ -135,15 +151,68 @@ private:
         const rhi::Extent2D size = device_.backbuffer_size();
         Array<u8> px;
         if (!read({}, size, px)) return;
+        write_ppm(path, size, px);
+    }
+
+    static bool write_ppm(const char* path, rhi::Extent2D size, const Array<u8>& px) {
         std::FILE* f = std::fopen(path, "wb");
         if (!f) {
             MCE_LOG_ERROR("mce_editor: cannot write '{}'", path);
-            return;
+            return false;
         }
         std::fprintf(f, "P6\n%u %u\n255\n", size.width, size.height);
         for (usize i = 0; i < px.size(); i += 4) std::fwrite(&px[i], 1, 3, f);
         std::fclose(f);
         MCE_LOG_INFO("mce_editor: wrote {}", path);
+        return true;
+    }
+
+    // -editor.panel_shots: kShotFrames frames per panel. Frame 0 of a slot asks for the panel's tab, the last frame
+    // of the slot reads the backbuffer back. A shot with fewer than 8 distinct colours is the clear colour with no
+    // dock chrome on it: the shell did not draw.
+    void panel_shots(u64 frame) {
+        constexpr u64 kShotFrames = 6;
+        const u64 slot = frame / kShotFrames;
+        const u64 phase = frame % kShotFrames;
+        if (frame == 0) {
+            std::error_code ec;
+            std::filesystem::create_directories(std::filesystem::path(std::string(cv_panel_shots.get_string())), ec);
+        }
+        editor::IEditorPanel* panel = shell_.panel_at(static_cast<usize>(slot));
+        if (!panel) {
+            shots_done_ = true;
+            return;
+        }
+        if (phase == 0) shell_.focus_panel(panel->name());
+        if (phase != kShotFrames - 1) return;
+        FixedString<512> path;
+        path.append(cv_panel_shots.get_string());
+        path.append("/");
+        for (const char* c = panel->name(); *c; ++c) {
+            const char ch = *c == ' ' ? '_' : *c;
+            path.append(StringView(&ch, 1));
+        }
+        path.append(".ppm");
+        const rhi::Extent2D size = device_.backbuffer_size();
+        Array<u8> px;
+        if (!read({}, size, px)) {
+            MCE_LOG_ERROR("panel shots: read-back failed for '{}'", panel->name());
+            shots_ok_ = false;
+            return;
+        }
+        u32 distinct = 0;
+        u32 seen[16] = {};
+        for (usize i = 0; i + 3 < px.size() && distinct < 8; i += 4 * 5) {
+            const u32 c = px[i] | (u32(px[i + 1]) << 8) | (u32(px[i + 2]) << 16);
+            bool found = false;
+            for (u32 k = 0; k < distinct; ++k) found |= seen[k] == c;
+            if (!found) seen[distinct++] = c;
+        }
+        if (distinct < 8) {
+            MCE_LOG_ERROR("panel shots: '{}' is blank ({} colours)", panel->name(), distinct);
+            shots_ok_ = false;
+        }
+        if (!write_ppm(path.c_str(), size, px)) shots_ok_ = false;
     }
 
     // The viewport target must hold the stub world's triangle (all three vertex colors dominate
@@ -256,6 +325,8 @@ private:
     editor::EditorShell shell_;
     FixedString<64> focus_;
     int exit_code_ = 0;
+    bool shots_done_ = false;
+    bool shots_ok_ = true;
 };
 
 int fail(const char* what, const Error& e) {
