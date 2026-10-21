@@ -50,6 +50,8 @@ struct QualitySettings {
     bool snow_noise = true;
     // M-RAINFX 7a: Ripples are honored (off: strength 0, the ripple-less frame). Low turns them off.
     bool rain_ripples = true;
+    // M-CLOUDS 9a: Clouds are honored (off: coverage 0, the cloudless frame). Low turns them off.
+    bool clouds = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -99,5 +101,10 @@ SnowCover apply_quality(const QualitySettings& q, const SnowCover& snow);
 // strength, density and ring_width are clamped to 0..1 (NaN to 0), speed to 0.1..10 (NaN to 1, the nominal
 // rate); `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
 Ripples apply_quality(const QualitySettings& q, const Ripples& ripples);
+// Clouds: the weather's cloud layer, coverage zeroed when the tier or `r.clouds 0` switches it off. coverage and
+// density are clamped to 0..1 (NaN to 0), scale_m to 50..20000 (NaN to 900), speed to 0..10 (NaN to 1),
+// height_m to 100..20000 (NaN to 2000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes through.
+// Returns a copy for the same reason as the SnowCover overload.
+Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
 
 }  // namespace mce::render

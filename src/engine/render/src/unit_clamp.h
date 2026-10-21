@@ -1,6 +1,6 @@
 #pragma once
 // The clamps apply_quality (quality.cpp) and the pass upload (forward3d.cpp, which clamps again: a caller may skip
-// apply_quality) share for the weather looks (WetSurfaces, SnowCover, Ripples). Internal to mce_render: included
+// apply_quality) share for the weather looks (WetSurfaces, SnowCover, Ripples, Clouds). Internal to mce_render: included
 // by those two .cpp files only, never from a public header.
 
 #include <cmath>
@@ -16,6 +16,12 @@ inline f32 unit01(f32 x) { return x > 0.0f ? (x < 1.0f ? x : 1.0f) : 0.0f; }
 inline f32 noise_cell(f32 m) { return m > 0.25f ? (m < 256.0f ? m : 256.0f) : 0.25f; }
 // A ripple animation rate, 0.1..10 (NaN -> the nominal 1).
 inline f32 ripple_speed(f32 s) { return s == s ? (s > 0.1f ? (s < 10.0f ? s : 10.0f) : 0.1f) : 1.0f; }
+// A cloud noise cell in meters, 50..20000 (NaN -> 900).
+inline f32 cloud_scale(f32 m) { return m == m ? (m > 50.0f ? (m < 20000.0f ? m : 20000.0f) : 50.0f) : 900.0f; }
+// A cloud drift multiplier, 0..10 (NaN -> the nominal 1).
+inline f32 cloud_speed(f32 s) { return s == s ? (s > 0.0f ? (s < 10.0f ? s : 10.0f) : 0.0f) : 1.0f; }
+// A cloud plane height above the camera in meters, 100..20000 (NaN -> 2000).
+inline f32 cloud_height(f32 m) { return m == m ? (m > 100.0f ? (m < 20000.0f ? m : 20000.0f) : 100.0f) : 2000.0f; }
 
 // A wind direction on xz as a unit vector; NaN/inf or length below 1e-6 -> +x (1, 0).
 inline math::vec2 unit_wind_dir(math::vec2 d) {
