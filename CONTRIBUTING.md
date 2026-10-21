@@ -37,7 +37,7 @@ Europe/Istanbul) and labels each one `claude-triaged` plus one of:
 
 | Label | Meaning |
 |-------|---------|
-| `claude-accepted` | Will be (or was) implemented. The PR targets `dev_claude`, says `Fixes #N`, and closes the issue on merge. |
+| `claude-accepted` | Will be (or was) implemented. The PR targets `master`, says `Fixes #N`, and closes the issue on merge. |
 | `claude-declined` | Not doing it; the comment explains why. The issue is closed. |
 | `needs-human` | Needs the maintainer's decision (scope, design, cost). |
 

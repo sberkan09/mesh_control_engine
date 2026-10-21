@@ -35,16 +35,16 @@ The full flag list (`--module`, `--base`, `--quiet`, ...) is in
 
 GitHub Actions (`.github/workflows/`) runs the same `scripts/ci/local_ci.sh` on standard GitHub-hosted runners, which
 are free and unmetered for a public repository (limits: 20 concurrent jobs on the Free plan, 6 h per job, 10 GB of
-cache per repository; larger runners are billed and are not used). `ci.yml` runs `--task` on every PR into `master` (and `dev_claude`, while it exists)
+cache per repository; larger runners are billed and are not used). `ci.yml` runs `--task` on every PR into `master`
 (a manual run can pick `--premerge` or `--quick`); `integration.yml` runs the full matrix on `master` every 6 hours
 (and by hand), saves the ccache that PR runs restore, and pushes a `ci/regen-<sha>` branch when generated files are
-stale. Until the Actions runs are proven green, threads keep gating on the local script as below. Before merging a PR, run `scripts/ci/local_ci.sh` on Linux; it prints a pass/fail
+stale. The same gate runs locally: before merging a PR, run `scripts/ci/local_ci.sh` on Linux; it prints a pass/fail
 summary and keeps logs in `build/local-ci-logs/`. A thread working through a milestone runs
 `local_ci.sh --task` (walls, gcc debug with GPU tests, clang-tidy, and determinism when the change touches
-simulation code) once on the PR's own base. If `dev_claude` moved before the merge, run `local_ci.sh --premerge`
+simulation code) once on the PR's own base. If `master` moved before the merge, run `local_ci.sh --premerge`
 instead of another `--task`: walls, the PR's own tests and the MCP transcript golden (1-3 min), and it says whether
-`dev_claude` changed files the PR also changes (only then is a `--task` re-run needed). The full matrix runs only in
-the integration run on the `dev_claude` head, not in threads. `--quick` is walls + gcc debug only. Its clang-tidy stage checks only the files changed since `origin/dev_claude`;
+`master` changed files the PR also changes (only then is a `--task` re-run needed). The full matrix runs only in
+the integration run on the `master` head, not in threads. `--quick` is walls + gcc debug only. Its clang-tidy stage checks only the files changed since `origin/master`;
 `--tidy-all` checks the whole tree. On a Mac, `scripts/ci/local_ci_macos.sh` (or `--quick`) does the same for the
 `macos-*` presets. Windows/MSVC builds are checked by hand on a Windows machine.
 `scripts/ci/setup_env.sh` installs its Ubuntu 24.04 packages (cloud sessions run it on start through
