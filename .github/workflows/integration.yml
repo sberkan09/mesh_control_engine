@@ -1,0 +1,139 @@
+# The integration run (M1) on master: the full matrix, group by group, mirroring scripts/ci/integration_run.sh.
+# Standard GitHub-hosted runners (free for a public repository). Each group is its own job (fresh runner, own
+# disk); each saves its ccache so PR runs (ci.yml) start warm. Scheduled workflows run from the default
+# branch (master) copy of this file.
+name: Integration
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch to test"
+        default: master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration
+  cancel-in-progress: false
+
+env:
+  INTEGRATION_REF: ${{ github.event.inputs.ref || 'master' }}
+
+jobs:
+  group:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: g1, cache: g1, ccache_max: 3G, stages: "walls linux-gcc-debug slow determinism release-build" }
+          - { name: clang-release, cache: clang, ccache_max: 1500M, stages: "linux-clang-release" }
+          - { name: asan, cache: asan, ccache_max: 1500M, stages: "linux-asan" }
+          - { name: tidy-web, cache: tidy, ccache_max: 2G, stages: "tidy web" }
+    env:
+      CCACHE_MAXSIZE: ${{ matrix.ccache_max }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATION_REF }}
+          fetch-depth: 0
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install dependencies
+        run: scripts/ci/setup_env.sh
+      - name: Restore ccache
+        id: cc
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.cache }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.cache }}-
+      - name: Run ${{ matrix.stages }}
+        run: scripts/ci/local_ci.sh ${{ matrix.stages }}
+      - name: Save ccache (also after a red run, the compiles are still valid)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.cache }}-${{ github.sha }}-${{ github.run_attempt }}
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-ci-logs-${{ matrix.name }}
+          path: build/local-ci-logs
+          retention-days: 14
+
+  regen:
+    name: regenerate generated files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    env:
+      CCACHE_MAXSIZE: 3G
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATION_REF }}
+          fetch-depth: 0
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Install dependencies
+        run: scripts/ci/setup_env.sh
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-regen-${{ github.sha }}
+          restore-keys: |
+            ccache-g1-
+            ccache-regen-
+      - name: Regenerate (capabilities.md, sample coverage allow list, transcript golden)
+        run: scripts/ci/local_ci.sh regen
+      - name: Push ci/regen-<sha> when something changed (merge it into master)
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            sha="$(git rev-parse --short HEAD)"
+            git checkout -b "ci/regen-$sha"
+            git add -A docs/engine/capabilities.md scripts/ci/sample_coverage.allow tests/mcp/transcripts
+            git -c user.name="integration-runner" -c user.email="noreply@anthropic.com" commit \
+              -m "CI: regenerate generated files on master $sha" \
+              -m "Written by the Integration workflow (capabilities.md, sample coverage allow list, transcript golden)."
+            git push origin "ci/regen-$sha"
+            echo "Pushed ci/regen-$sha: merge it into master." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No generated file was stale." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-regen-${{ github.sha }}-${{ github.run_attempt }}
+
+  report:
+    name: suspects
+    needs: [group]
+    if: failure()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATION_REF }}
+          fetch-depth: 50
+      - name: List the suspect merges
+        run: |
+          {
+            echo "## Integration red on $(git rev-parse --short HEAD)"
+            echo "Suspect PRs (last 10 first-parent merges); the culprit's thread fixes forward."
+            git log --first-parent -10 --format='- %h %s'
+          } >> "$GITHUB_STEP_SUMMARY"
