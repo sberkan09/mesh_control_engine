@@ -51,6 +51,7 @@ mce_add_test(test_kit UMBRELLA
         test_wet_surfaces.cpp
         test_snow_cover.cpp
         test_wind_direction.cpp
+        test_wind_direction_extract.cpp
         test_rain_ripples.cpp
         test_wind_sway.cpp
         test_precipitation.cpp

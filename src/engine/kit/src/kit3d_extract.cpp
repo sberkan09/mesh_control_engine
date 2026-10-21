@@ -16,6 +16,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
+#include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/convar.h"
 #include "mce/log.h"
@@ -55,6 +56,15 @@ void apply_wind_sway(f32 wind, const WindSway& s, render::InstanceBatch& b) {
     b.wind_frequency *= 1.0f + (s.frequency_gain - 1.0f) * wind;
     b.wind_ext.y = clamp(b.wind_ext.y + s.gust_gain * wind, 0.0f, 1.0f);
     b.wind_ext.z *= 1.0f + (s.flutter_gain - 1.0f) * wind;
+}
+
+// Wind direction (M-WINDDIR 8d): the batch's authored compass rotated by the scene wind's angle relative to +x, so a
+// batch authored along +x follows the scene wind and one authored along another axis keeps its offset. `wind` is the
+// unit vector (cos a, sin a) from wind_direction_vector. Batch field only, after the cached transforms (the scatter is
+// never touched). Called only when both a WindDirection and a Weather exist.
+void apply_wind_direction(const math::vec2& wind, render::InstanceBatch& b) {
+    const math::vec2 d = b.wind_direction;
+    b.wind_direction = math::vec2{d.x * wind.x - d.y * wind.y, d.x * wind.y + d.y * wind.x};
 }
 
 // The kind (0..3) a scattered copy belongs to: a hash of its origin and the seed against the cumulative weights.
@@ -847,12 +857,17 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         world.query<const SnowCover&>().each([&](const SnowCover& c) {
             if (!snowc) snowc = &c;
         });
+        const WindDirection* snow_wd = nullptr;
+        world.query<const WindDirection&>().each([&](const WindDirection& c) {
+            if (!snow_wd) snow_wd = &c;
+        });
         render::SnowCover snow;  // bare by default (cover 0)
         if (has_weather && snowc) {
             snow.cover = snowc->cover * snowc->strength;
             snow.coverage = snowc->coverage;
             snow.noise_scale = snowc->noise_scale_m;
             snow.wind_bias = snowc->wind_bias;
+            if (snow_wd) snow.wind_dir = wind_direction_vector(*snow_wd);  // else the default +x (M-WINDDIR 8d)
             snow.noise_enabled = true;
         }
         scene.set_snow_cover(render::apply_quality(quality_, snow));
@@ -1282,6 +1297,12 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!sway) sway = &c;
     });
     const f32 sway_wind = sway_weather && sway ? sway_weather->wind : 0.0f;
+    const WindDirection* wind_dir = nullptr;  // wind direction: only a scene with both a Weather and a WindDirection
+    world.query<const WindDirection&>().each([&](const WindDirection& c) {
+        if (!wind_dir) wind_dir = &c;
+    });
+    const bool turn_wind = sway_weather && wind_dir;
+    const math::vec2 scene_wind = turn_wind ? wind_direction_vector(*wind_dir) : math::vec2{1.0f, 0.0f};
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;
         vec3 pos, scale;
@@ -1378,6 +1399,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             b.wind_direction = f.wind_direction;
             foliage_look(f, b);
             if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+            if (turn_wind) apply_wind_direction(scene_wind, b);
             scene.add_batch(b);
             ++stats_.foliage;
             stats_.foliage_instances += static_cast<u32>(copies.size());
@@ -1476,6 +1498,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         b.wind_direction = f.wind_direction;
         foliage_look(f, b);
         if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+        if (turn_wind) apply_wind_direction(scene_wind, b);
         scene.add_batch(b);
         ++stats_.foliage;
         stats_.foliage_instances += static_cast<u32>(entry->transforms.size());
