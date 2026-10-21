@@ -22,6 +22,8 @@ MCE_CVAR(cv_snow_cover, "r.snow_cover", true,
          "Snow cover from the weather (SnowCover; off = the snowless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_rain_ripples, "r.rain_ripples", true,
          "Rain ripples on puddles from the weather (Ripples; off = the ripple-less frame)", CVarFlags::Saved);
+MCE_CVAR(cv_clouds, "r.clouds", true,
+         "Cloud layer in the sky from the weather (Clouds; off = the cloudless frame)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -43,6 +45,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.wet_puddles = false;
             q.snow_noise = false;
             q.rain_ripples = false;
+            q.clouds = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -138,6 +141,17 @@ Ripples apply_quality(const QualitySettings& q, const Ripples& ripples) {
     out.density = unit01(ripples.density);
     out.ring_width = unit01(ripples.ring_width);
     out.speed = detail::ripple_speed(ripples.speed);  // NaN -> the nominal rate 1
+    return out;
+}
+
+Clouds apply_quality(const QualitySettings& q, const Clouds& clouds) {
+    Clouds out = clouds;
+    out.coverage = q.clouds && cv_clouds.get_bool() ? unit01(clouds.coverage) : 0.0f;
+    out.density = unit01(clouds.density);
+    out.scale_m = detail::cloud_scale(clouds.scale_m);
+    out.speed = detail::cloud_speed(clouds.speed);
+    out.wind_dir = detail::unit_wind_dir(clouds.wind_dir);
+    out.height_m = detail::cloud_height(clouds.height_m);
     return out;
 }
 

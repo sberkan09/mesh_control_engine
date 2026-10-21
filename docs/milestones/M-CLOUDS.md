@@ -31,7 +31,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 9a | planned | | |
+| 9a | merged | #671 | `render::Clouds`, `set_clouds()`, `QualitySettings::clouds`, `r.clouds`, `apply_quality` overload, `test_cloud_quality` |
 | 9b | planned | | needs 9a |
 | 9c | planned | | needs 9a |
 | 9d | planned | | needs 9b, 9c |
