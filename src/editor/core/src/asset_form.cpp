@@ -253,7 +253,7 @@ bool validate_and_save_source(EditorProject& project, const ProjectAsset& asset,
     cook::DiagList diags;
     cook::String why;
     if (!check_source(project, asset, text, diags, why)) {
-        if (diags.all().size() == 0) {
+        if (diags.all().empty()) {
             err += why;
             return false;
         }
