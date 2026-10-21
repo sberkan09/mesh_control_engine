@@ -115,7 +115,7 @@ private:
             ImGui::TextDisabled("checking...");
             return;
         }
-        if (doc_.problems().size() == 0) {
+        if (doc_.problems().empty()) {
             ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "the cook accepts this text");
             return;
         }
