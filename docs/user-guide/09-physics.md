@@ -612,6 +612,19 @@ component and an event, and modulates the `Environment3D` resource (see "Environ
   without a `SnowCover` (or without a `Weather`) stays bare and renders exactly as before. The Low quality tier
   keeps the whitening but drops the noise breakup, and `r.snow_cover 0` switches snow off.
 
+## 9.19b Thunder that arrives late (M-RAINFX)
+
+`mce/kit/thunder_delay.h` adds an optional `ThunderDelay` entity (one per scene, registered with the weather) that
+turns each lightning strike into a thunderclap that reaches the listener late, the way sound lags light. Installing
+precipitation adds its system `kit_thunder_delay`. Set `clip` to a cooked Sfx, `speed_mps` (343) and `volume` (1,
+the gain at zero distance). Every `LightningStruck` starts the clip `ceil(distance / speed_mps / dt)` ticks after the
+strike, so a faster `speed_mps` brings the thunder sooner. The event carries no position, so the distance is its
+`thunder_delay_ticks` at 343 m/s (30..300 ticks, about 170 to 1700 m). The sound is quieter the farther the strike:
+linear gain `volume / (1 + distance / 100 m)`, never below -60 dB. A scene needs a 3D camera (the listener), a
+`clip` and the audio system, or nothing sounds. Up to 8 strikes can be in flight; a ninth is dropped. The pending
+strikes are saved, so a save in the middle of a storm resumes with the thunder still on its way. A scene without a
+`ThunderDelay` sounds exactly as before.
+
 ## 9.19a Rain ripples (M-RAINFX)
 
 An optional `RainRipples` entity (one per scene, the first in ECS order is read; it is registered with the weather)

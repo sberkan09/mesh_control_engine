@@ -8,6 +8,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/thunder_delay.h"
 #include "mce/kit/timed_light.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_sway.h"
@@ -205,6 +206,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<WetSurfaces>();  // read by Kit3DExtract (M-WETSURFACE 5c); no system
     world.register_event<WeatherChanged>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit_weather", &kit_weather, "kit_timed_light");
+    world.register_components<ThunderDelay>();  // M-RAINFX 7e: advanced by kit_thunder_delay (install_precipitation)
     world.register_components<SnowCover>();  // M-SNOWCOVER 6c: advanced by kit_snow_cover, read by Kit3DExtract
     world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
