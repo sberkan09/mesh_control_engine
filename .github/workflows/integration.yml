@@ -1,8 +1,7 @@
-# The integration run (M1) on dev_claude: the full matrix, group by group, mirroring scripts/ci/integration_run.sh.
+# The integration run (M1) on master: the full matrix, group by group, mirroring scripts/ci/integration_run.sh.
 # Standard GitHub-hosted runners (free for a public repository). Each group is its own job (fresh runner, own
-# disk); each saves its ccache so PR runs (ci.yml) start warm. Scheduled workflows only run from the default
-# branch's copy of the file on GitHub, so this file also has to exist on the default branch, or be started by
-# hand (workflow_dispatch) with the ref set to dev_claude.
+# disk); each saves its ccache so PR runs (ci.yml) start warm. Scheduled workflows run from the default
+# branch (master) copy of this file.
 name: Integration
 
 on:
@@ -12,7 +11,7 @@ on:
     inputs:
       ref:
         description: "branch to test"
-        default: dev_claude
+        default: master
 
 permissions:
   contents: read
@@ -22,7 +21,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  INTEGRATION_REF: ${{ github.event.inputs.ref || 'dev_claude' }}
+  INTEGRATION_REF: ${{ github.event.inputs.ref || 'master' }}
 
 jobs:
   group:
@@ -100,17 +99,17 @@ jobs:
             ccache-regen-
       - name: Regenerate (capabilities.md, sample coverage allow list, transcript golden)
         run: scripts/ci/local_ci.sh regen
-      - name: Push ci/regen-<sha> when something changed (merge it into dev_claude)
+      - name: Push ci/regen-<sha> when something changed (merge it into master)
         run: |
           if [[ -n "$(git status --porcelain)" ]]; then
             sha="$(git rev-parse --short HEAD)"
             git checkout -b "ci/regen-$sha"
             git add -A docs/engine/capabilities.md scripts/ci/sample_coverage.allow tests/mcp/transcripts
             git -c user.name="integration-runner" -c user.email="noreply@anthropic.com" commit \
-              -m "CI: regenerate generated files on dev_claude $sha" \
+              -m "CI: regenerate generated files on master $sha" \
               -m "Written by the Integration workflow (capabilities.md, sample coverage allow list, transcript golden)."
             git push origin "ci/regen-$sha"
-            echo "Pushed ci/regen-$sha: merge it into dev_claude." >> "$GITHUB_STEP_SUMMARY"
+            echo "Pushed ci/regen-$sha: merge it into master." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No generated file was stale." >> "$GITHUB_STEP_SUMMARY"
           fi
