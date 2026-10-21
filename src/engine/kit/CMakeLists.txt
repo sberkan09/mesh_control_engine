@@ -31,6 +31,7 @@ mce_add_library(mce_gameplay_kit
         src/weather.cpp
         src/precipitation.cpp
         src/thunder_delay.cpp
+        src/rain_splash.cpp
         src/wanted3d.cpp
         src/sensors3d.cpp
         src/particles.cpp
