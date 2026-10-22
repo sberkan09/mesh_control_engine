@@ -57,6 +57,10 @@ inline constexpr f32 kPedestrianFleeScale = 2.5f;
 // A WeaponFired3D within this many metres of a pedestrian scares it the same way (it runs from the muzzle for
 // kPedestrianFleeSeconds). Not saved: a loaded game has calm streets.
 inline constexpr f32 kPedestrianFearRadius = 30.0f;
+// M-PEDFLEE 3: a pedestrian within this many metres of one that is running catches the panic and runs from the same spot, with
+// kPedestrianPanicHop seconds less left each time it is passed on, so a ripple spreads through a crowd and dies out.
+inline constexpr f32 kPedestrianPanicRadius = 8.0f;
+inline constexpr f32 kPedestrianPanicHop = 1.0f;
 
 struct Pedestrian3D {
     u32 crowd = 0;                   // the owning CrowdSpawner3D's entity index + 1; 0: none (uses the defaults)
