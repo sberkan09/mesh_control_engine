@@ -10,6 +10,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
+#include "mce/kit/lightning_bolt.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/timed_light.h"
@@ -272,6 +273,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db
     install_weather_audio(world);
+    world.register_components<LightningBolt>();  // M-LIGHTNINGBOLT 11a: read by kit_lightning
 }
 
 }  // namespace mce::kit

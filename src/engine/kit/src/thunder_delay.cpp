@@ -70,7 +70,8 @@ void kit_thunder_delay(Frame& f) {
     const f64 speed = static_cast<f64>(clamp_speed(td->speed_mps));
     const f64 volume = static_cast<f64>(clamp_volume(td->volume));
     for (const LightningStruck& s : f.events().read<LightningStruck>()) {
-        const f64 d = static_cast<f64>(s.thunder_delay_ticks) * dt * kNominalSpeed;
+        // A positioned strike (LightningBolt) carries its real distance; otherwise the delay at the nominal speed.
+        const f64 d = s.has_pos ? static_cast<f64>(s.distance_m) : static_cast<f64>(s.thunder_delay_ticks) * dt * kNominalSpeed;
         u64 n = 0;
         if (dt > 0.0) {
             const f64 x = d / speed / dt - 1e-6;

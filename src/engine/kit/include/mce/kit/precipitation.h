@@ -94,11 +94,16 @@ MCE_COMPONENT(Lightning, (min_gap_seconds, Save, Range{0.1f, 3600}, Help{"shorte
               (flash_boost, Save, Range{1, 50}, Help{"sun and ambient multiplier at the peak of a flash"}),
               (seed, Save), (counter, Save, ReadOnly), (timer, Save, ReadOnly), (remaining, Save, ReadOnly))
 
-// Event (producer FixedUpdate_Pre): a strike; thunder should sound `thunder_delay_ticks` (30..300) later.
+// Event (producer FixedUpdate_Pre): a strike; thunder should sound `thunder_delay_ticks` (30..300) later. With a
+// LightningBolt in the scene (lightning_bolt.h) `has_pos` is 1, `pos` is the strike point, `distance_m` its 3D distance
+// from the camera and the delay is that distance at 343 m/s (not clamped). `LightningStruck{delay}` means no position.
 struct LightningStruck {
     u32 thunder_delay_ticks = 0;
+    u32 has_pos = 0;
+    f32 distance_m = 0.0f;
+    math::vec3 pos{};
 };
-MCE_EVENT(LightningStruck, thunder_delay_ticks)
+MCE_EVENT(LightningStruck, thunder_delay_ticks, has_pos, distance_m, pos)
 
 // Registers the components and event and adds the systems (after install_weather, which it calls). Idempotent.
 void install_precipitation(World& world, asset::AssetSystem* assets);

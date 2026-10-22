@@ -7,9 +7,12 @@
 //                 thunder Sfx. Engine-written and saved: `pending` (strikes in flight), `due[i]` (ticks left until
 //                 strike i sounds) and `gain_db[i]` (its distance-attenuated gain).
 //
-// Each LightningStruck {thunder_delay_ticks} becomes one delayed one-shot. The event carries no position, only the
-// delay the strike was given (30..300 ticks), so the strike distance is that delay at the nominal speed of sound:
+// Each LightningStruck {thunder_delay_ticks} becomes one delayed one-shot. Without a position (has_pos 0) the event
+// carries only the delay the strike was given (30..300 ticks), so the strike distance is that delay at the nominal
+// speed of sound:
 //   d = thunder_delay_ticks * dt * 343 m.
+// A strike with has_pos 1 (a LightningBolt in the scene, lightning_bolt.h) uses its own distance_m as d, for both the
+// delay (at speed_mps) and the attenuation; the old path is untouched.
 // The sound starts n = ceil(d / speed_mps / dt) ticks after the strike tick, the tick whose FixedUpdate_Pre pushed
 // the event (a quotient within 1e-6 of an integer counts as that integer, so the default speed gives exactly
 // `thunder_delay_ticks`). Events are read one tick after they are pushed, so n of 0 or 1 sounds on the tick after
