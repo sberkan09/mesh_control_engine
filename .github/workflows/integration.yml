@@ -35,7 +35,7 @@ jobs:
           - { name: g1, cache: g1, ccache_max: 3G, stages: "walls linux-gcc-debug slow determinism release-build" }
           - { name: clang-release, cache: clang, ccache_max: 1500M, stages: "linux-clang-release" }
           - { name: asan, cache: asan, ccache_max: 1500M, stages: "linux-asan" }
-          - { name: tidy-web, cache: tidy, ccache_max: 2G, stages: "tidy web" }
+          - { name: tidy-web, cache: tidy, ccache_max: 2G, stages: "--tidy-all tidy web" }
     env:
       CCACHE_MAXSIZE: ${{ matrix.ccache_max }}
     steps:
