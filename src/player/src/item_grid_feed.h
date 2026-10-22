@@ -6,6 +6,7 @@
 //   equip_<where>          the Equipment slot (equip_head, equip_body, equip_hands, equip_feet, equip_weapon,
 //                          equip_offhand, equip_accessory1, equip_accessory2): the item's name, or ""
 //   inventory_weight       "12.5 / 20 kg" with a weight limit, "12.5 kg" without
+//   status_1 .. status_8   slot N of the entity's StatusEffects (M-STATUS HUD): "regen_tonic 3.5s", or "" when it is empty
 //
 // The entity is the screen's own when it has an Inventory, else the first entity in the world that has one (the
 // player's). Text is set only when it changed. A document without such widgets costs nothing: bind() finds them once
@@ -22,7 +23,7 @@ class ItemGridFeed {
 public:
     // Finds the document's widgets by name (call once after it is built).
     void bind(const ui::Document& doc);
-    bool empty() const { return slots_.empty() && equips_.empty() && !has_weight_; }
+    bool empty() const { return slots_.empty() && equips_.empty() && statuses_.empty() && !has_weight_; }
     // Writes the texts for `self`'s Inventory and Equipment (or the first Inventory in the world).
     void feed(World& world, ui::Document& doc, Entity self);
 
@@ -33,6 +34,7 @@ private:
     };
     Array<Bound> slots_;   // index: inventory slot
     Array<Bound> equips_;  // index: EquipSlot
+    Array<Bound> statuses_;  // index: StatusEffects slot
     ui::WidgetId weight_;
     bool has_weight_ = false;
 };

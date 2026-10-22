@@ -6,6 +6,7 @@
 #include "item_grid_feed.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/inventory.h"
+#include "mce/kit/status.h"
 #include "mce/render/sprite_batch.h"
 
 using namespace mce;
@@ -104,4 +105,32 @@ TEST_CASE("item grid feed: slots, equipment and weight show as text") {
     player::ItemGridFeed none;
     none.bind(plain);
     CHECK(none.empty());
+}
+
+TEST_CASE("item grid feed: status_N shows active effects with the time left (M-STATUS HUD)") {
+    SkinFixture f;
+    ui::Document doc;
+    doc.set_skin(f.skin);
+    const ui::WidgetId a = doc.add(doc.root(), ui::WidgetKind::Text, "status_1");
+    const ui::WidgetId b = doc.add(doc.root(), ui::WidgetKind::Text, "status_2");
+    doc.add(doc.root(), ui::WidgetKind::Text, "status_9");  // past the end: ignored
+    World w;
+    kit::install_status(w, nullptr);
+    kit::StatusEffects se;
+    se.key[0] = kit::status_key("elixir");
+    se.id[0] = "elixir";
+    se.left_us[0] = 3450000;
+    se.key[1] = kit::status_key("cd:potion");
+    se.id[1] = "cd:potion";
+    se.left_us[1] = 100000;
+    const Entity hero = w.spawn_with(se);
+    player::ItemGridFeed feed;
+    feed.bind(doc);
+    REQUIRE_FALSE(feed.empty());
+    feed.feed(w, doc, Entity{});  // no screen entity: the first with effects
+    CHECK(doc.text(a) == StringView("elixir 3.5s"));
+    CHECK(doc.text(b) == StringView("cd:potion 0.1s"));
+    w.try_get_mut<kit::StatusEffects>(hero)->key[1] = 0;
+    feed.feed(w, doc, hero);
+    CHECK(doc.text(b) == StringView(""));
 }
