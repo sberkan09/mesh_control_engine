@@ -408,6 +408,30 @@ struct Clouds {
     u8 pad_[3] = {};
 };
 
+// Night sky in the sky pass (M-NIGHTSKY 14c; the kit extract drives it from the Moon, the quality tiers gate it):
+// `moon_dir` is the unit direction toward the moon (not the way its light travels), `moon_cos_size` the cosine of
+// the disk's angular radius (0.9..1; default 0.9995, exaggerated so a phase reads), `moon_intensity` the disk
+// brightness (0..8, 0 = no moon), `moon_color` its linear tint (0..1 per channel), `moon_phase` 0 new, 0.5 full,
+// 1 wraps back to new (clamped to 0..1). `star_density` 0..1 is the share of sky cells that hold a star
+// (0 = no stars), `star_brightness` 0..4 their gain, `star_twinkle` 0..1 the strength of the brightness wobble,
+// `star_time` the twinkle clock in seconds (the caller wraps it; non-finite -> 0). `night_fade` 0..1 scales the
+// whole layer (0 = day). star_density 0 and moon_intensity 0 = off: the frame is the one without it. `enabled` is
+// a pass-through switch for the caller; apply_quality does not change it.
+struct NightSky {
+    math::vec3 moon_dir{0.0f, 1.0f, 0.0f};
+    f32 moon_cos_size = 0.9995f;
+    f32 moon_intensity = 0.0f;
+    math::vec3 moon_color{1.0f, 1.0f, 1.0f};
+    f32 moon_phase = 0.5f;
+    f32 star_density = 0.0f;
+    f32 star_brightness = 1.0f;
+    f32 star_twinkle = 0.5f;
+    f32 star_time = 0.0f;
+    f32 night_fade = 1.0f;
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -723,6 +747,7 @@ public:
     void set_snow_cover(const SnowCover& s) { snow_ = s; }
     void set_ripples(const Ripples& r) { ripples_ = r; }
     void set_clouds(const Clouds& c) { clouds_ = c; }
+    void set_night_sky(const NightSky& n) { night_sky_ = n; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -790,6 +815,7 @@ public:
     const SnowCover& snow_cover() const { return snow_; }
     const Ripples& ripples() const { return ripples_; }
     const Clouds& clouds() const { return clouds_; }
+    const NightSky& night_sky() const { return night_sky_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -882,6 +908,7 @@ private:
     SnowCover snow_;
     Ripples ripples_;
     Clouds clouds_;
+    NightSky night_sky_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

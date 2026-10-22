@@ -24,6 +24,8 @@ MCE_CVAR(cv_rain_ripples, "r.rain_ripples", true,
          "Rain ripples on puddles from the weather (Ripples; off = the ripple-less frame)", CVarFlags::Saved);
 MCE_CVAR(cv_clouds, "r.clouds", true,
          "Cloud layer in the sky from the weather (Clouds; off = the cloudless frame)", CVarFlags::Saved);
+MCE_CVAR(cv_nightsky, "r.nightsky", true,
+         "Moon and stars in the night sky (NightSky; off = the moonless, starless frame)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -46,6 +48,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.snow_noise = false;
             q.rain_ripples = false;
             q.clouds = false;
+            q.night_sky = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -152,6 +155,23 @@ Clouds apply_quality(const QualitySettings& q, const Clouds& clouds) {
     out.speed = detail::cloud_speed(clouds.speed);
     out.wind_dir = detail::unit_wind_dir(clouds.wind_dir);
     out.height_m = detail::cloud_height(clouds.height_m);
+    return out;
+}
+
+NightSky apply_quality(const QualitySettings& q, const NightSky& sky) {
+    NightSky out = sky;
+    const bool on = cv_nightsky.get_bool();
+    out.moon_dir = detail::unit_dir3(sky.moon_dir);
+    out.moon_cos_size = detail::moon_cos_size(sky.moon_cos_size);
+    out.moon_intensity = on ? detail::scaled(sky.moon_intensity, 8.0f, 0.0f) : 0.0f;
+    out.moon_color = math::vec3{detail::scaled(sky.moon_color.x, 1.0f, 0.0f), detail::scaled(sky.moon_color.y, 1.0f, 0.0f),
+                                detail::scaled(sky.moon_color.z, 1.0f, 0.0f)};
+    out.moon_phase = unit01(sky.moon_phase);
+    out.star_density = on && q.night_sky ? unit01(sky.star_density) : 0.0f;
+    out.star_brightness = detail::scaled(sky.star_brightness, 4.0f, 1.0f);
+    out.star_twinkle = q.night_sky ? unit01(sky.star_twinkle) : 0.0f;
+    out.star_time = std::isfinite(sky.star_time) ? sky.star_time : 0.0f;
+    out.night_fade = unit01(sky.night_fade);
     return out;
 }
 
