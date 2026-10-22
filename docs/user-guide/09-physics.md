@@ -774,6 +774,19 @@ writes the authoring (section 27.3), for example `weather.set_gust{seed = 7, str
 its script logs the level and the effective wind every 150 ticks. In its storm (wind near 1) the clamp hides the gusts; in the rain
 and snow they show.
 
+## 9.19i Morning mist (M-GROUNDMIST)
+
+An optional `GroundMist` entity (one per scene, the first in ECS order is read; it is registered with the weather) turns
+the hour of day and the wetness left by rain into a mist level from 0 to 1. The level is thickest at `peak_hour` (6),
+builds up over `rise_hours` (3) before it and burns off over `burn_hours` (3) after it, as a smooth curve that wraps over
+midnight. It is `base_humidity` (0.25, the mist on a dry day) plus `wet_gain` (0.75) times `Weather.wetness`, times
+`strength`, and rain, storm and snow take it away (`weather_damp` 1: overcast 0.8, rain 0.2, storm 0, snow 0.4 of the mist
+at full weather intensity; 0 ignores the weather). Without a `Weather` the wetness counts as 0 and nothing damps. The hour
+is `Environment3D.time_of_day`, written by a `WorldClock`: a scene with no clock (`time_of_day` -1) has no mist. The level
+is a pure function of these values and nothing of it is saved, so a save in the middle of a dawn gives the same level.
+The remaining fields (`density`, `thickness_m`, `base_height_m`, `exp2_density`, `color`, `enabled`) say how the mist is
+drawn; until the extract reads them (a later step) a scene with a `GroundMist` looks and simulates as before.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
