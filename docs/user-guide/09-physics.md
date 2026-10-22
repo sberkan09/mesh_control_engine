@@ -785,7 +785,13 @@ at full weather intensity; 0 ignores the weather). Without a `Weather` the wetne
 is `Environment3D.time_of_day`, written by a `WorldClock`: a scene with no clock (`time_of_day` -1) has no mist. The level
 is a pure function of these values and nothing of it is saved, so a save in the middle of a dawn gives the same level.
 The remaining fields (`density`, `thickness_m`, `base_height_m`, `exp2_density`, `color`, `enabled`) say how the mist is
-drawn; until the extract reads them (a later step) a scene with a `GroundMist` looks and simulates as before.
+drawn. Each frame the extract applies the level to its own copy of the fog, never to `Environment3D`. With
+`volumetric_fog` on (and a tier that keeps it) the level adds `density` to the volumetric density, raises the height
+falloff toward `1 / thickness_m`, puts the base at `base_height_m` and mixes the albedo toward `color` by half the level,
+so the mist lies low and the sun shines through it as shafts. With volumetric fog off, or on the Low tier, it adds
+`exp2_density` times the level to the exp2 fog and mixes the fog colour toward `color`; that fog is uniform in height.
+Exactly one of the two is used per frame, the weather's own fog adds to it, and a level of 0, `enabled` 0 or no
+`GroundMist` leaves the frame bit for bit as it was. The mist is a smooth haze, not banks with edges.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
