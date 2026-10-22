@@ -54,6 +54,9 @@ inline constexpr f32 kPedestrianCorpseSeconds = 10.0f;
 // does not wait for lights. It is a function of Health3D (hits, since_hit, last_attacker), so nothing new is saved.
 inline constexpr f32 kPedestrianFleeSeconds = 5.0f;
 inline constexpr f32 kPedestrianFleeScale = 2.5f;
+// A WeaponFired3D within this many metres of a pedestrian scares it the same way (it runs from the muzzle for
+// kPedestrianFleeSeconds). Not saved: a loaded game has calm streets.
+inline constexpr f32 kPedestrianFearRadius = 30.0f;
 
 struct Pedestrian3D {
     u32 crowd = 0;                   // the owning CrowdSpawner3D's entity index + 1; 0: none (uses the defaults)

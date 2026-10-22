@@ -510,6 +510,9 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A live pedestrian whose `Health3D` was hit in the last 5 s (`kPedestrianFleeSeconds`; `hits > 0` and `since_hit` below it) switches to `PedestrianMode::Flee`: on its pavement edge
   it turns to the end that is farther from `last_attacker`, moves 2.5 times as fast (`kPedestrianFleeScale`, `pace` shows it) and does not wait for lights. At junctions it picks
   its way as usual. After the 5 s it walks again. Nothing new is saved: the state is a function of `Health3D`. A pedestrian hit again keeps running.
+- A `WeaponFired3D` within 30 m (`kPedestrianFearRadius`) of a pedestrian scares it the same way (M-PEDFLEE 2): it runs from the muzzle for 5 s, whichever side the shot came from. The
+  scared list lives in the crowd system, not in the save: a loaded game starts with calm streets. The crowd system reads the event, so the combat kit's `WeaponFired3D` is registered
+  by `install_crowd` too.
 
 ### Hardening (M-GAMEPLAYFIX 1)
 
