@@ -818,10 +818,15 @@ times a smooth rise as the moon climbs above the horizon, times a weather factor
 snow 0.5 at full weather intensity; no `Weather` means no damping). The hour is `Environment3D.time_of_day`, written by a
 `WorldClock`: a scene with no clock (`time_of_day` -1) has no moon, and the day is 0 without one. Phase, direction and
 level are pure functions of these values and nothing of them is saved, so a save at midnight gives the same phase. The
-remaining fields (`light_intensity`, `light_color`, `light_shadows`, `disk_size`, `disk_intensity`, `star_density`,
-`star_brightness`, `star_twinkle`, `enabled`) say how the moonlight and the night sky are drawn; nothing reads them yet
-(M-NIGHTSKY steps 14b to 14e), so a scene with a `Moon` renders as before. The disk is drawn larger than the real moon
-so its phase can be read.
+`light_*` fields are read by the 3D extract. At night `Kit3DExtract` hands the scene's one directional light to the
+moon: the sun keeps it while `sw * sun_intensity` is at least `mw * light_intensity`, where `sw` is a smooth 0 to 1
+ramp of the sun's elevation from -0.05 to 0.1 and `mw` is `(1 - sw)` times the moon level; otherwise the light takes
+the moon's direction, `light_color`, `light_intensity * mw` and `light_shadows`, and the ambient gets a small cool lift
+(`light_color * mw * 0.02`). Only the extract's copy of the light changes, `Environment3D` is never written, and a scene
+with no `Moon`, `enabled` 0, no clock or a zero level (new moon, moon below the horizon) is unchanged. Pair the `Moon`
+with a `DayCycle` so the sun is dim when the hand-off happens: a sun that stays bright below the horizon is handed over
+at full strength and pops. The sky fields (`disk_size`, `disk_intensity`, `star_*`) are not read yet (M-NIGHTSKY steps
+14d and 14e). The disk is drawn larger than the real moon so its phase can be read.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
