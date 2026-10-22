@@ -24,6 +24,16 @@
 // 30..300). Without a LightningBolt, or with `enabled` 0, the event and every byte of the world are as before.
 //
 // `active` follows Lightning.remaining each tick while a bolt exists. A scene without a LightningBolt is unchanged.
+//
+// Geometry and drawing (11b). build_bolt() is a pure function of the authoring, the strike point and the strike id: a
+// polyline from (sx + a hashed offset of at most 3 m, ground_y + height_m, sz) down to exactly (sx, ground_y, sz), made
+// by midpoint displacement (2^segments_log2 segments, at most kBoltMaxPoints points; each round moves every midpoint
+// perpendicular to its segment by jitter * segment length * (2h - 1) * 0.5^round, h hashed from the id, round and
+// segment; jitter 0 is a straight line). build_bolt_fork() makes the optional side polyline (`fork` 1) from a hashed
+// point of the main one, 2^(segments_log2 - 1) segments. The extract (Kit3DExtract, kit3d_extract.h) draws them as
+// stretched emissive boxes of one unit box mesh while `active` > 0, Weather.current is Storm, `enabled` is 1 and the
+// quality tier keeps clouds (not Low); it only reads components. bolt_intensity() is the brightness 0..1 of a flash
+// tick: 1 on the first, then (active / flash_ticks)^2, with a hashed re-strike back to 1 on the second tick.
 
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
@@ -77,5 +87,19 @@ BoltStrike bolt_strike_position(const LightningBolt& b, u32 seed, u32 counter, c
 
 // thunder_delay_ticks for a positioned strike: max(1, ceil(distance_m / 343 / dt)), capped at 2^31.
 u32 bolt_delay_ticks(f32 distance_m, f64 dt);
+
+inline constexpr u32 kBoltMaxPoints = 129;      // 2^7 + 1: the main polyline at segments_log2 7
+inline constexpr u32 kBoltMaxForkPoints = 65;   // 2^6 + 1
+
+// The main polyline into out[0, count); returns count (2^n + 1, n = segments_log2 clamped to 2..7 and lowered until
+// it fits `cap`; 0 when `out` is null or cap < 3). out[0] is the top, out[count - 1] is (sx, ground_y, sz).
+u32 build_bolt(const LightningBolt& b, f32 sx, f32 sz, u32 id, math::vec3* out, u32 cap);
+
+// The side fork of a main polyline `bolt` (as build_bolt wrote it) into out; returns its point count, 0 when `fork` is
+// 0, the main polyline is shorter than 3 points or `out` is null. out[0] is a point of `bolt`.
+u32 build_bolt_fork(const LightningBolt& b, u32 id, const math::vec3* bolt, u32 bolt_count, math::vec3* out, u32 cap);
+
+// Flash brightness 0..1 of the tick with `active` flash ticks left of `flash_ticks` (0 when either is 0).
+f32 bolt_intensity(u32 id, u32 active, u32 flash_ticks);
 
 }  // namespace mce::kit

@@ -200,12 +200,14 @@ void apply_env_override(Environment3D& env, const EnvOverride& o) {
 }  // namespace
 
 void Kit3DExtract::init(const render::MeshStore& meshes, asset::AssetSystem* assets) {
+    release_bolt_mesh();
     meshes_ = &meshes;
     writable_ = nullptr;
     assets_ = assets;
 }
 
 void Kit3DExtract::init(render::MeshStore& meshes, asset::AssetSystem* assets) {
+    release_bolt_mesh();
     meshes_ = &meshes;
     writable_ = &meshes;
     assets_ = assets;
@@ -318,6 +320,7 @@ void Kit3DExtract::release_handles() {
 }
 
 void Kit3DExtract::shutdown() {
+    release_bolt_mesh();
     release_static_merges();
     release_terrains();
     release_handles();
@@ -337,6 +340,7 @@ void Kit3DExtract::note_built(const render::Scene3D& built) {
 }
 
 void Kit3DExtract::reset(asset::AssetSystem* assets) {
+    release_bolt_mesh();
     release_static_merges();
     release_terrains();
     release_handles();
@@ -1266,6 +1270,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             });
     }
     extract_terrains(world, scene);
+    extract_lightning_bolt(world, scene);
 
     world.query<const PointLight3D&>().each([&](Entity e, const PointLight3D& l) {
         if (!l.enabled || l.intensity <= 0.0f) return;

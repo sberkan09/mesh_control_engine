@@ -15,10 +15,14 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/kit3d_extract.h"
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
+#include "mce/render/mesh.h"
+#include "mce/render/quality.h"
+#include "mce/render/scene3d.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -449,4 +453,264 @@ TEST_CASE("lightning_bolt: a scene with no Lightning or never in a storm is unto
     CHECK(c->active == 0);
     CHECK(c->strike_dist_m == 0.0f);
     CHECK(c->strike_x == 0.0f);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 11b: build_bolt, build_bolt_fork, bolt_intensity and the extract draw.
+
+namespace {
+
+bool same_pts(const math::vec3* a, const math::vec3* b, u32 n) {
+    for (u32 i = 0; i < n; ++i)
+        if (a[i].x != b[i].x || a[i].y != b[i].y || a[i].z != b[i].z) return false;
+    return true;
+}
+
+}  // namespace
+
+TEST_CASE("build_bolt: a pure function of the authoring, the strike and the id") {
+    const LightningBolt b;
+    math::vec3 a[kBoltMaxPoints], a2[kBoltMaxPoints], c[kBoltMaxPoints];
+    const u32 n = build_bolt(b, 120.0f, -340.0f, 7, a, kBoltMaxPoints);
+    CHECK(n == 33);  // 2^5 segments
+    CHECK(build_bolt(b, 120.0f, -340.0f, 7, a2, kBoltMaxPoints) == n);
+    CHECK(same_pts(a, a2, n));
+    CHECK(build_bolt(b, 120.0f, -340.0f, 8, c, kBoltMaxPoints) == n);
+    CHECK_FALSE(same_pts(a, c, n));
+    // Points the caller did not ask for are not touched.
+    math::vec3 guard[kBoltMaxPoints];
+    for (math::vec3& g : guard) g = {-77.0f, -77.0f, -77.0f};
+    build_bolt(b, 1.0f, 2.0f, 3, guard, kBoltMaxPoints);
+    CHECK(guard[n].x == -77.0f);
+}
+
+TEST_CASE("build_bolt: the point count is bounded by 2^7 + 1 and by the cap") {
+    LightningBolt b;
+    math::vec3 pts[kBoltMaxPoints + 8];
+    for (u32 L = 0; L < 12; ++L) {
+        b.segments_log2 = L;  // out-of-range values clamp to 2..7
+        const u32 n = build_bolt(b, 5.0f, 5.0f, L, pts, kBoltMaxPoints);
+        const u32 want = (1u << std::min(std::max(L, 2u), 7u)) + 1u;
+        CHECK(n == want);
+        CHECK(n <= 129u);
+    }
+    b.segments_log2 = 7;
+    CHECK(build_bolt(b, 5.0f, 5.0f, 1, pts, 40) == 33);   // lowered until it fits the cap
+    CHECK(build_bolt(b, 5.0f, 5.0f, 1, pts, 3) == 3);
+    CHECK(build_bolt(b, 5.0f, 5.0f, 1, pts, 2) == 0);
+    CHECK(build_bolt(b, 5.0f, 5.0f, 1, nullptr, 129) == 0);
+}
+
+TEST_CASE("build_bolt: the end is on the strike and the top is height_m above it") {
+    LightningBolt b;
+    b.ground_y = 12.0f;
+    b.height_m = 400.0f;
+    for (u32 id = 0; id < 20; ++id) {
+        math::vec3 pts[kBoltMaxPoints];
+        const f32 sx = 10.0f * static_cast<f32>(id) - 80.0f, sz = 300.0f - 7.0f * static_cast<f32>(id);
+        const u32 n = build_bolt(b, sx, sz, id, pts, kBoltMaxPoints);
+        REQUIRE(n == 33);
+        CHECK(pts[n - 1].x == sx);
+        CHECK(pts[n - 1].y == 12.0f);
+        CHECK(pts[n - 1].z == sz);
+        CHECK(pts[0].y == doctest::Approx(412.0f).epsilon(1e-6));
+        CHECK(std::fabs(pts[0].x - sx) <= 3.0f + 1e-3f);  // a few metres sideways
+        CHECK(std::fabs(pts[0].z - sz) <= 3.0f + 1e-3f);
+    }
+}
+
+TEST_CASE("build_bolt: jitter 0 is a straight line, jitter > 0 is not") {
+    LightningBolt b;
+    b.jitter = 0.0f;
+    math::vec3 pts[kBoltMaxPoints];
+    const u32 n = build_bolt(b, 200.0f, 100.0f, 9, pts, kBoltMaxPoints);
+    const math::vec3 d = pts[n - 1] - pts[0];
+    const f32 len = math::length(d);
+    for (u32 i = 0; i < n; ++i) {
+        const f32 t = static_cast<f32>(i) / static_cast<f32>(n - 1);
+        const math::vec3 want = pts[0] + d * t;
+        CHECK(math::length(pts[i] - want) < 1e-3f * len);
+    }
+    b.jitter = 0.25f;
+    const u32 m = build_bolt(b, 200.0f, 100.0f, 9, pts, kBoltMaxPoints);
+    f32 worst = 0.0f;
+    for (u32 i = 0; i < m; ++i) {
+        const f32 t = static_cast<f32>(i) / static_cast<f32>(m - 1);
+        worst = std::max(worst, math::length(pts[i] - (pts[0] + (pts[m - 1] - pts[0]) * t)));
+    }
+    CHECK(worst > 1.0f);
+}
+
+TEST_CASE("build_bolt: NaN authoring falls back and never produces NaN") {
+    LightningBolt b;
+    const f32 nan = std::numeric_limits<f32>::quiet_NaN();
+    b.ground_y = nan;
+    b.height_m = nan;
+    b.jitter = nan;
+    math::vec3 pts[kBoltMaxPoints];
+    const u32 n = build_bolt(b, 1.0f, 2.0f, 3, pts, kBoltMaxPoints);
+    REQUIRE(n == 33);
+    for (u32 i = 0; i < n; ++i) CHECK((std::isfinite(pts[i].x) && std::isfinite(pts[i].y) && std::isfinite(pts[i].z)));
+    CHECK(pts[0].y == doctest::Approx(600.0f));
+}
+
+TEST_CASE("build_bolt_fork: a shorter side polyline from a point of the bolt, only with fork 1") {
+    LightningBolt b;
+    math::vec3 pts[kBoltMaxPoints], fork[kBoltMaxForkPoints], fork2[kBoltMaxForkPoints];
+    const u32 n = build_bolt(b, 0.0f, 400.0f, 4, pts, kBoltMaxPoints);
+    const u32 f = build_bolt_fork(b, 4, pts, n, fork, kBoltMaxForkPoints);
+    CHECK(f == 17);  // half the segments of 2^5
+    CHECK(f <= kBoltMaxForkPoints);
+    bool on_bolt = false;
+    for (u32 i = 1; i + 1 < n; ++i)
+        if (pts[i].x == fork[0].x && pts[i].y == fork[0].y && pts[i].z == fork[0].z) on_bolt = true;
+    CHECK(on_bolt);
+    CHECK(fork[f - 1].y < fork[0].y);
+    CHECK(fork[0].y - fork[f - 1].y < pts[0].y - pts[n - 1].y);  // shorter than the bolt
+    CHECK(build_bolt_fork(b, 4, pts, n, fork2, kBoltMaxForkPoints) == f);
+    CHECK(same_pts(fork, fork2, f));
+    b.fork = 0;
+    CHECK(build_bolt_fork(b, 4, pts, n, fork2, kBoltMaxForkPoints) == 0);
+    b.fork = 1;
+    b.segments_log2 = 7;
+    const u32 n7 = build_bolt(b, 0.0f, 400.0f, 4, pts, kBoltMaxPoints);
+    CHECK(build_bolt_fork(b, 4, pts, n7, fork2, kBoltMaxForkPoints) == 65);
+    CHECK(build_bolt_fork(b, 4, pts, 2, fork2, kBoltMaxForkPoints) == 0);
+}
+
+TEST_CASE("bolt_intensity: full on the first tick, a falloff after, a hashed re-strike on the second") {
+    CHECK(bolt_intensity(1, 0, 8) == 0.0f);
+    CHECK(bolt_intensity(1, 8, 0) == 0.0f);
+    CHECK(bolt_intensity(1, 9, 8) == 0.0f);
+    bool restrike = false, plain = false;
+    for (u32 id = 0; id < 64; ++id) {
+        CHECK(bolt_intensity(id, 8, 8) == 1.0f);
+        const f32 second = bolt_intensity(id, 7, 8);
+        CHECK(second == bolt_intensity(id, 7, 8));  // a function of the id
+        if (second == 1.0f) restrike = true;
+        else plain = true;
+        for (u32 a = 1; a <= 6; ++a) {  // later ticks only fall
+            CHECK(bolt_intensity(id, a, 8) > 0.0f);
+            CHECK(bolt_intensity(id, a, 8) < 1.0f);
+            if (a > 1) CHECK(bolt_intensity(id, a, 8) > bolt_intensity(id, a - 1, 8));
+        }
+    }
+    CHECK(restrike);
+    CHECK(plain);
+}
+
+namespace {
+
+Weather* weather_of(World& w) {
+    Weather* out = nullptr;
+    w.query<Weather>().each([&](Entity, Weather& c) {
+        if (!out) out = &c;
+    });
+    return out;
+}
+
+struct DrawRig {
+    Rig rig;
+    render::MeshStore store;
+    kit::Kit3DExtract extract;
+    explicit DrawRig(const Opts& o = {}) : rig(o) {
+        rig.run(30);  // the storm sets in
+        extract.init(store, nullptr);
+    }
+    // A flash in progress: the engine-written fields as kit_lightning leaves them.
+    void flash(u32 active = 8, u32 id = 3) {
+        LightningBolt& b = rig.b();
+        b.strike_x = 120.0f;
+        b.strike_z = -300.0f;
+        b.strike_id = id;
+        b.active = active;
+    }
+    // The extract into a scene looking at the strike; returns the scene's draw and point light counts.
+    struct Counts {
+        usize draws = 0, lights = 0;
+    };
+    Counts frame() {
+        render::Camera3D cam;
+        cam.position = {};
+        cam.orientation = math::quat_from_axis_angle({0, 1, 0}, static_cast<f32>(std::atan2(-120.0, 300.0)));
+        cam.fov_y = math::radians(120.0f);
+        cam.far_z = 5000.0f;
+        render::Scene3D scene(store, mem::heap());
+        scene.begin(cam, {128, 128});
+        extract.extract(rig.w, scene, 1.0f);
+        scene.build();
+        return {scene.draws().size(), scene.point_lights().size()};
+    }
+};
+
+}  // namespace
+
+TEST_CASE("bolt draw: a flash in a storm draws the segments, light only when light_intensity is set") {
+    DrawRig d;
+    REQUIRE(weather_of(d.rig.w) != nullptr);
+    CHECK(weather_of(d.rig.w)->current == WeatherKind::Storm);
+    d.flash();
+    const DrawRig::Counts on = d.frame();
+    CHECK(on.draws >= 32);  // the main polyline (32 segments) and its fork
+    CHECK(on.lights == 0);
+    d.rig.b().light_intensity = 5000.0f;
+    CHECK(d.frame().lights == 1);
+    d.rig.b().fork = 0;
+    const usize no_fork = d.frame().draws;
+    CHECK(no_fork < on.draws);
+    CHECK(no_fork >= 30);
+}
+
+TEST_CASE("bolt draw: nothing without a flash, outside a storm, with enabled 0 or on the Low tier") {
+    DrawRig d;
+    d.rig.b().light_intensity = 5000.0f;
+    CHECK(d.frame().draws == 0);  // active 0
+    d.flash();
+    REQUIRE(d.frame().draws > 0);
+    d.rig.b().enabled = 0;
+    DrawRig::Counts c = d.frame();
+    CHECK(c.draws == 0);
+    CHECK(c.lights == 0);
+    d.rig.b().enabled = 1;
+    REQUIRE(d.frame().draws > 0);
+    d.extract.set_quality(render::quality_settings(render::QualityTier::Low));
+    c = d.frame();
+    CHECK(c.draws == 0);
+    CHECK(c.lights == 0);
+    d.extract.set_quality(render::quality_settings(render::QualityTier::Medium));
+    CHECK(d.frame().draws > 0);
+    // Weather.current is not Storm.
+    Weather* wx = weather_of(d.rig.w);
+    REQUIRE(wx != nullptr);
+    wx->current = WeatherKind::Rain;
+    c = d.frame();
+    CHECK(c.draws == 0);
+    CHECK(c.lights == 0);
+}
+
+TEST_CASE("bolt draw: a scene without a LightningBolt draws no bolt") {
+    DrawRig d({false, true, {}, false, 5});
+    CHECK(d.frame().draws == 0);
+}
+
+TEST_CASE("bolt draw: the const-store extract draws nothing and does not fail") {
+    DrawRig d;
+    d.extract.init(static_cast<const render::MeshStore&>(d.store), nullptr);
+    d.flash();
+    CHECK(d.frame().draws == 0);
+}
+
+TEST_CASE("bolt draw: drawing writes nothing, the state hash is the same with and without the extract") {
+    DrawRig drawn, plain;
+    drawn.flash();
+    plain.flash();
+    REQUIRE(drawn.rig.w.state_hash() == plain.rig.w.state_hash());
+    const u64 before = drawn.rig.w.state_hash();
+    for (u32 i = 0; i < 5; ++i) REQUIRE(drawn.frame().draws > 0);
+    CHECK(drawn.rig.w.state_hash() == before);
+    CHECK(drawn.rig.w.state_hash() == plain.rig.w.state_hash());
+    // The same ticks after the drawing give the same world as without it.
+    drawn.rig.run(120);
+    plain.rig.run(120);
+    CHECK(drawn.rig.w.state_hash() == plain.rig.w.state_hash());
 }

@@ -207,6 +207,9 @@ private:
     // static_merge3d.cpp
     struct MergeState;
     void update_static_merges(World& world);
+    // lightning_bolt.cpp (M-LIGHTNINGBOLT 11b): the bolt of a flash as emissive box segments; reads components only.
+    void extract_lightning_bolt(World& world, render::Scene3D& scene);
+    void release_bolt_mesh();
     void release_static_merges();
     bool read_mesh_view(asset::Guid guid, asset::MeshView& out);
 
@@ -232,6 +235,9 @@ private:
     Array<u32> world_stamp_;       // per entity index: the extract that last drew it
     Array<u8> prev_ok_;            // per entity index: this frame's draw had last frame's world (worlds_)
     bool extra_view_ = false;      // extract_view(): a later view of the frame
+    u32 bolt_key_ = ~0u;           // the lightning bolt's unit box in the writable store (~0u: not uploaded)
+    bool bolt_failed_ = false;     // its upload failed: not retried until reset
+    render::MaterialOverride bolt_material_;  // emissive white; the instances' emissive_tint sets the brightness
     const RenderTextures* render_textures_ = nullptr;
     Array<render::MaterialOverride> screen_materials_;  // this extract's ShowRenderTexture materials (reserved up front: stable)
     u32 world_parity_ = 0;
