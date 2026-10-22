@@ -106,7 +106,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
-| `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: tested in tests/kit/test_lightning_bolt.cpp; M-LIGHTNINGBOLT 11d shows it in samples/12_weather (delete this line then) |
+| `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |

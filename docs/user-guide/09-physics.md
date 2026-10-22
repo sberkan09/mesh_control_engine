@@ -734,6 +734,15 @@ sits halfway up the bolt, `light_radius_m` wide. Drawing never changes the scene
 unaffected. A scene without a `LightningBolt` draws exactly as before.
 A scene without a `LightningBolt` hashes and sounds as before.
 
+From Luau, `weather.bolt_min_range()`, `bolt_max_range()`, `bolt_ground_y()`, `bolt_height()`, `bolt_width()`,
+`bolt_segments()`, `bolt_jitter()`, `bolt_fork()`, `bolt_enabled()`, `bolt_light()` and `bolt_light_radius()` read the
+authoring fields, `weather.bolt_distance()`, `weather.bolt_pos()` (the ground point as `x, z`) and
+`weather.bolt_active()` (flash ticks left) read the last strike (read-only), and
+`weather.set_bolt{min_range=, max_range=, ground_y=, height=, width=, segments=, jitter=, fork=, light=, light_radius=, enabled=}`
+writes the authoring (section 27.3), for example `weather.set_bolt{light = 3000}` for a flash of light at the strike. The
+`12_weather` sample carries a `LightningBolt` (light off) on its Lightning entity, so its storm strikes have a place and
+draw a bolt; its script logs the last strike every 150 ticks.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
