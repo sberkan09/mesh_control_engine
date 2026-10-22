@@ -743,6 +743,20 @@ writes the authoring (section 27.3), for example `weather.set_bolt{light = 3000}
 `12_weather` sample carries a `LightningBolt` (light off) on its Lightning entity, so its storm strikes have a place and
 draw a bolt; its script logs the last strike every 150 ticks.
 
+## 9.19h Wind gusts (M-WINDGUST)
+
+An optional `WindGust` entity (one per scene, the first in ECS order drives; it is registered with the weather) makes
+the wind come in gusts: a calm gap, a rise, a fall, then the next gap, all drawn from the `seed` so the same seed always
+gives the same gusts. Each gust has its own gap (`min_gap_s` 2 to `max_gap_s` 8), rise (0.4 to 1.5 s), fall (1 to 3 s)
+and height (`min_peak` 0.4 to `max_peak` 1); an inverted pair is swapped and a value outside its range is clamped. The
+level of the gust is saved as integers (`gust_q` out of 2^24 plus the counters of the current gust), so a save in the
+middle of a gust resumes on the same curve and a change of the tick rate cannot make it jump. A `WindGust` never changes
+`Weather.wind`; it only defines the gusted wind `wind * (1 + strength * gust)` (`strength` 0.6, 0 to 3, clamped to 1),
+which later steps feed to foliage sway, rain slant, cloud drift, the snow lee bias and the wind sound. A calm wind
+gusts proportionally less (a clear 0.1 stirs, a storm at 1.0 is already at the clamp). `affects` is a bit mask of those
+consumers (1 sway, 2 rain, 4 clouds, 8 snow, 16 audio, all by default) and `enabled` 0 switches the gusts off. Until the
+consumers are wired a scene with a `WindGust` only changes its own saved state; a scene without one is unchanged.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

@@ -17,6 +17,7 @@
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
+#include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
 
 namespace mce::kit {
@@ -269,6 +270,8 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
     world.register_components<WindDirection>();  // M-WINDDIR 8a: advanced by kit_wind_direction, read by Kit3DExtract (8d)
     world.add_system(Phase::FixedUpdate_Pre, "kit_wind_direction", &kit_wind_direction, "kit_weather");
+    world.register_components<WindGust>();  // M-WINDGUST 12a: advanced by kit_wind_gust, read through effective_wind
+    install_wind_gust(world);                // after kit_wind_direction (and so after kit_weather)
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db
