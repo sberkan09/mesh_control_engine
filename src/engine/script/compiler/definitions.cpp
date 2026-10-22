@@ -320,6 +320,28 @@ declare weather: {
     -- min_rise and max_rise 0.05..30 s, min_fall and max_fall 0.05..60 s, min_peak and max_peak 0..1, seed and affects
     -- u32 rounded down; enabled: any non-zero number is 1); an unknown key or a non-number raises
     set_gust: (settings: { strength: number?, min_gap: number?, max_gap: number?, min_rise: number?, max_rise: number?, min_fall: number?, max_fall: number?, min_peak: number?, max_peak: number?, seed: number?, affects: number?, enabled: number? }) -> (),
+    -- GroundMist (M-GROUNDMIST), the first one in the scene; the getters raise when there is none (set_mist never adds
+    -- one). mist_level (0..1) is the level the mist has now from the hour (Environment3D.time_of_day, -1 = no clock
+    -- gives 0) and the weather, read-only
+    mist_strength: () -> number,
+    mist_peak_hour: () -> number,
+    mist_rise: () -> number,
+    mist_burn: () -> number,
+    mist_base_humidity: () -> number,
+    mist_wet_gain: () -> number,
+    mist_weather_damp: () -> number,
+    mist_density: () -> number,
+    mist_thickness: () -> number,
+    mist_base_height: () -> number,
+    mist_exp2_density: () -> number,
+    mist_color: () -> (number, number, number),
+    mist_enabled: () -> number,
+    mist_level: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..2, peak_hour 0..24, rise_hours and
+    -- burn_hours 0.1..12, base_humidity, wet_gain, weather_damp and density 0..1, thickness 0.5..200 m, base_height
+    -- -1000..1000 m, exp2_density 0..0.2, color three lanes 0..1; enabled: any non-zero number is 1); an unknown key,
+    -- a non-number or a color that is not three numbers raises
+    set_mist: (settings: { strength: number?, peak_hour: number?, rise_hours: number?, burn_hours: number?, base_humidity: number?, wet_gain: number?, weather_damp: number?, density: number?, thickness: number?, base_height: number?, exp2_density: number?, color: { number }?, enabled: number? }) -> (),
 }
 )";
 
