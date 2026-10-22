@@ -86,7 +86,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
-| `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: tested in tests/kit/test_ground_mist.cpp; M-GROUNDMIST step 13c shows it in samples/12_weather |
+| `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |

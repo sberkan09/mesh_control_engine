@@ -22,6 +22,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/ground_mist.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/precipitation.h"
@@ -118,9 +119,9 @@ struct Demo {
 
 TEST_CASE("weather demo: the sample's assets cook") { CHECK(!project().empty()); }
 
-TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emitter, and the sun is the authored one at tick 0") {
+TEST_CASE("weather demo: the scene loads with a dawn clock, a Weather and an emitter, and the sun is the authored one at tick 0") {
     Demo d;
-    CHECK(d.world.try_get<kit::WorldClock>(d.e[kClock])->hour == 12.0f);
+    CHECK(d.world.try_get<kit::WorldClock>(d.e[kClock])->hour == 5.0f);  // M-GROUNDMIST 13c: dawn, the mist builds toward 6:00
     CHECK(d.world.try_get<kit::DayCycle>(d.e[kClock]) != nullptr);
     CHECK(d.world.try_get<kit::Precipitation3D>(d.e[kPrecip]) != nullptr);
     CHECK(d.world.try_get<kit::Lightning>(d.e[kLightning]) != nullptr);
@@ -212,6 +213,13 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(wg->affects == kit::kGustAll);
     CHECK(wg->enabled == 1);
     CHECK(wg->seeded == 0);
+    // M-GROUNDMIST 13c: ... and a GroundMist (defaults) on the Weather entity; the clock starts at 5:00.
+    const kit::GroundMist* gm = d.world.try_get<kit::GroundMist>(d.e[kWeather]);
+    REQUIRE(gm != nullptr);
+    CHECK(gm->strength == 1.0f);
+    CHECK(gm->peak_hour == 6.0f);
+    CHECK(gm->base_humidity == 0.25f);
+    CHECK(gm->enabled == 1);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);
@@ -220,8 +228,11 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(d.em().emitting == 0);  // as authored: dry until the weather says otherwise
     CHECK(d.em().max_particles == 4096);
     d.run_to(1);
-    // The noon DayCycle key is 2.0; one tick later the hour is 12 + 1/1500 and the sun has only just left the key.
-    CHECK(d.env().sun_intensity == doctest::Approx(2.0f).epsilon(1e-3));
+    // The clock starts at 5:00 (M-GROUNDMIST 13c): the mist is building toward its 6:00 peak (a dry clear dawn, so
+    // base_humidity 0.25 times the rise bump 0.74 at 5:00).
+    CHECK(d.env().time_of_day == doctest::Approx(5.0f).epsilon(1e-3));
+    CHECK(kit::mist_level(*gm, d.env().time_of_day, d.world.try_get<kit::Weather>(d.e[kWeather])) ==
+          doctest::Approx(0.25f * 0.7407f).epsilon(1e-2));
     CHECK(d.em().emitting == 0);
     CHECK(d.em().rate == 0.0f);
 }

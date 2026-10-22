@@ -18,7 +18,10 @@
 #      (0 before the first strike at tick 1392, then a hashed point 150..900 m from the camera that stays until the next);
 #  10. (M-WINDGUST 12d) the "gust:" lines: the WindGust level (0 in the calm gaps) and the effective wind the wind bed,
 #      rain slant and sway read; Weather.wind stays smooth, and the wind bed in the "audio:" lines follows the gusted
-#      wind (e.g. 0.371 at tick 450 where the smooth wind is 0.360).
+#      wind (e.g. 0.371 at tick 450 where the smooth wind is 0.360);
+#  11. (M-GROUNDMIST 13c) the "mist:" lines: the clock starts at 5:00 (a 600 s day, 1 h = 1500 ticks), so the GroundMist level
+#      starts at 0.185 (a dry dawn on the rise toward the 6:00 peak), falls while the rain and its damping set in, and
+#      climbs again as the ground gets wet (0.312 at 5.80 h, tick 1200).
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -69,6 +72,8 @@ expect("${first}" "script: audio: rain 0.650 wind 0.371 max 0/0 dB fade 3 s at t
 expect("${first}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 450\n" "the bolt is not wired into the scene or struck without a storm")
 expect("${first}" "script: gust: level 0.000 wind 0.100 effective 0.100 strength 0.60 at tick 0\n" "the gust did not start calm")
 expect("${first}" "script: gust: level 0.053 wind 0.360 effective 0.371 strength 0.60 at tick 450\n" "the gust is not wired into the scene")
+expect("${first}" "script: mist: level 0.185 hour 5.00 strength 1.00 peak 6.0 h at tick 0\n" "the mist did not start at the dawn level")
+expect("${first}" "script: mist: level 0.114 hour 5.30 strength 1.00 peak 6.0 h at tick 450\n" "the rain did not damp the mist")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -104,6 +109,9 @@ expect("${forecast}" "script: bolt: strike at -312, 720 dist 754 m range 150-900
 expect("${forecast}" "script: gust: level 0.062 wind 0.460 effective 0.477 strength 0.60 at tick 600\n" "the gust did not follow the rain")
 expect("${forecast}" "script: gust: level 0.493 wind 0.641 effective 0.831 strength 0.60 at tick 1500\n" "the storm gust is wrong")
 expect("${forecast}" "script: gust: level 0.807 wind 0.100 effective 0.148 strength 0.60 at tick 2400\n" "a gust did not stir the clear day")
+expect("${forecast}" "script: mist: level 0.075 hour 5.40 strength 1.00 peak 6.0 h at tick 600\n" "the mist is wrong when the storm is called")
+expect("${forecast}" "script: mist: level 0.312 hour 5.80 strength 1.00 peak 6.0 h at tick 1200\n" "the wet ground did not feed the mist")
+expect("${forecast}" "script: mist: level 0.367 hour 6.60 strength 1.00 peak 6.0 h at tick 2400\n" "the mist is wrong at the end of the forecast")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

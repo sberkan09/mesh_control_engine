@@ -43,7 +43,7 @@
    "name": "Clock",
    "components": {
     "WorldClock": {
-     "hour": 12,
+     "hour": 5,
      "day_length_seconds": 600
     },
     "DayCycle": {},
@@ -78,6 +78,7 @@
      "transition_seconds": 10
     },
     "WindGust": {},
+    "GroundMist": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

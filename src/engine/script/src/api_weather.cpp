@@ -147,6 +147,28 @@
 //                                         (seed and affects rounded down; enabled: any non-zero number is 1); an
 //                                         unknown key or a non-number raises an error that names the call
 //
+// Ground mist (M-GROUNDMIST step 13c) is the same kind of binding over the first kit::GroundMist
+// (mce/kit/ground_mist.h). Named errors as above; the setter never adds the component. mist_level is derived, read-only.
+//
+//   weather.mist_strength() -> number                       GroundMist.strength (0..2)
+//   weather.mist_peak_hour() -> number                      peak_hour (0..24)
+//   weather.mist_rise() / mist_burn() -> number             rise_hours / burn_hours (0.1..12)
+//   weather.mist_base_humidity() / mist_wet_gain() -> number  base_humidity / wet_gain (0..1)
+//   weather.mist_weather_damp() -> number                   weather_damp (0..1)
+//   weather.mist_density() -> number                        density (0..1)
+//   weather.mist_thickness() -> number                      thickness_m (0.5..200)
+//   weather.mist_base_height() -> number                    base_height_m (-1000..1000)
+//   weather.mist_exp2_density() -> number                   exp2_density (0..0.2)
+//   weather.mist_color() -> r, g, b                         color
+//   weather.mist_enabled() -> number                        0 or 1
+//   weather.mist_level() -> number                          kit::mist_level on Environment3D.time_of_day and the first
+//                                                           Weather (none: no damping), 0 without a clock; read-only
+//   weather.set_mist{strength=, peak_hour=, rise_hours=, burn_hours=, base_humidity=, wet_gain=, weather_damp=,
+//                    density=, thickness=, base_height=, exp2_density=, color={r,g,b}, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range (color
+//                                         lanes 0..1; enabled: any non-zero number is 1); an unknown key, a non-number
+//                                         or a color that is not three numbers raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -165,6 +187,8 @@
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/wind_gust.h"
+#include "mce/kit/ground_mist.h"
+#include "mce/kit/kit3d.h"
 
 namespace mce::script::detail {
 
@@ -263,6 +287,8 @@ kit::WeatherAudio& check_audio(lua_State* L, const char* fn) { return check_firs
 kit::LightningBolt& check_bolt(lua_State* L, const char* fn) { return check_first<kit::LightningBolt>(L, fn, "LightningBolt"); }
 
 kit::WindGust& check_gust(lua_State* L, const char* fn) { return check_first<kit::WindGust>(L, fn, "WindGust"); }
+
+kit::GroundMist& check_mist(lua_State* L, const char* fn) { return check_first<kit::GroundMist>(L, fn, "GroundMist"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -493,7 +519,7 @@ int l_weather_set_snow(lua_State* L) {
 // Reads the settings table at index 1 into value[]/given[] (slot i is keys[i]); raises on a non-name key, an unknown
 // key or a non-number (NaN included) before anything is written. `list` is the key list for the messages.
 void read_settings(lua_State* L, const char* fn, const char* const* keys, int n, const char* list, f64* value,
-                   bool* given) {
+                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr) {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_pushnil(L);
     while (lua_next(L, 1) != 0) {
@@ -504,6 +530,19 @@ void read_settings(lua_State* L, const char* fn, const char* const* keys, int n,
             if (std::strcmp(key, keys[i]) == 0) slot = i;
         }
         if (slot < 0) luaL_error(L, "%s: unknown key '%s' (%s)", fn, key, list);
+        if (slot == vec3_slot && vec3) {  // a {r, g, b} table of three numbers
+            if (lua_type(L, -1) != LUA_TTABLE) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
+            for (int i = 0; i < 3; ++i) {
+                lua_rawgeti(L, -1, i + 1);
+                const f64 c = lua_type(L, -1) == LUA_TNUMBER ? lua_tonumber(L, -1) : std::nan("");
+                lua_pop(L, 1);
+                if (std::isnan(c)) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
+                vec3[i] = c;
+            }
+            given[slot] = true;
+            lua_pop(L, 1);
+            continue;
+        }
         if (lua_type(L, -1) != LUA_TNUMBER) luaL_error(L, "%s: '%s' is not a number", fn, key);
         const f64 v = lua_tonumber(L, -1);
         if (std::isnan(v)) luaL_error(L, "%s: '%s' is not a number", fn, key);
@@ -777,6 +816,93 @@ int l_weather_set_gust(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_GM(luaname, field)                                                      \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_mist(L, "weather." #luaname).field));            \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_GM(mist_strength, strength)
+MCE_WEATHER_GETTER_GM(mist_peak_hour, peak_hour)
+MCE_WEATHER_GETTER_GM(mist_rise, rise_hours)
+MCE_WEATHER_GETTER_GM(mist_burn, burn_hours)
+MCE_WEATHER_GETTER_GM(mist_base_humidity, base_humidity)
+MCE_WEATHER_GETTER_GM(mist_wet_gain, wet_gain)
+MCE_WEATHER_GETTER_GM(mist_weather_damp, weather_damp)
+MCE_WEATHER_GETTER_GM(mist_density, density)
+MCE_WEATHER_GETTER_GM(mist_thickness, thickness_m)
+MCE_WEATHER_GETTER_GM(mist_base_height, base_height_m)
+MCE_WEATHER_GETTER_GM(mist_exp2_density, exp2_density)
+MCE_WEATHER_GETTER_GM(mist_enabled, enabled)
+#undef MCE_WEATHER_GETTER_GM
+
+int l_weather_mist_color(lua_State* L) {
+    const kit::GroundMist& m = check_mist(L, "weather.mist_color");
+    lua_pushnumber(L, static_cast<double>(m.color.x));
+    lua_pushnumber(L, static_cast<double>(m.color.y));
+    lua_pushnumber(L, static_cast<double>(m.color.z));
+    return 3;
+}
+
+// The level the extract would apply now: the Environment3D resource (else the first component, else the default,
+// which has no clock) gives the hour; the first Weather, if any, the wetness and the damping.
+int l_weather_mist_level(lua_State* L) {
+    const kit::GroundMist& m = check_mist(L, "weather.mist_level");
+    World& w = world_of(L);
+    f32 hour = kit::Environment3D{}.time_of_day;
+    if (const kit::Environment3D* r = w.try_resource<kit::Environment3D>()) {
+        hour = r->time_of_day;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            hour = c.time_of_day;
+        });
+    }
+    const kit::Weather* wx = nullptr;
+    const refl::TypeRecord* type = refl::find_type(StringId("Weather"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        w.query<kit::Weather>().each([&](Entity, kit::Weather& c) {
+            if (!wx) wx = &c;
+        });
+    }
+    lua_pushnumber(L, static_cast<double>(kit::mist_level(m, hour, wx)));
+    return 1;
+}
+
+// weather.set_mist{...}: validated before anything is written.
+int l_weather_set_mist(lua_State* L) {
+    static const char* const kKeys[13] = {"strength", "peak_hour", "rise_hours", "burn_hours", "base_humidity",
+                                          "wet_gain", "weather_damp", "density", "thickness", "base_height",
+                                          "exp2_density", "color", "enabled"};
+    f64 value[13] = {};
+    bool given[13] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_mist", kKeys, 13,
+                  "strength, peak_hour, rise_hours, burn_hours, base_humidity, wet_gain, weather_damp, density, "
+                  "thickness, base_height, exp2_density, color, enabled",
+                  value, given, 11, color);
+    kit::GroundMist& m = check_mist(L, "weather.set_mist");
+    if (given[0]) m.strength = static_cast<f32>(clamp_range(value[0], 0.0, 2.0));
+    if (given[1]) m.peak_hour = static_cast<f32>(clamp_range(value[1], 0.0, 24.0));
+    if (given[2]) m.rise_hours = static_cast<f32>(clamp_range(value[2], 0.1, 12.0));
+    if (given[3]) m.burn_hours = static_cast<f32>(clamp_range(value[3], 0.1, 12.0));
+    if (given[4]) m.base_humidity = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) m.wet_gain = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) m.weather_damp = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) m.density = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) m.thickness_m = static_cast<f32>(clamp_range(value[8], 0.5, 200.0));
+    if (given[9]) m.base_height_m = static_cast<f32>(clamp_range(value[9], -1000.0, 1000.0));
+    if (given[10]) m.exp2_density = static_cast<f32>(clamp_range(value[10], 0.0, 0.2));
+    if (given[11]) {
+        m.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        m.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        m.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[12]) m.enabled = value[12] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -864,6 +990,21 @@ const luaL_Reg kWeatherLib[] = {
     {"gust_level", l_weather_gust_level},
     {"effective_wind", l_weather_effective_wind},
     {"set_gust", l_weather_set_gust},
+    {"mist_strength", l_weather_mist_strength},
+    {"mist_peak_hour", l_weather_mist_peak_hour},
+    {"mist_rise", l_weather_mist_rise},
+    {"mist_burn", l_weather_mist_burn},
+    {"mist_base_humidity", l_weather_mist_base_humidity},
+    {"mist_wet_gain", l_weather_mist_wet_gain},
+    {"mist_weather_damp", l_weather_mist_weather_damp},
+    {"mist_density", l_weather_mist_density},
+    {"mist_thickness", l_weather_mist_thickness},
+    {"mist_base_height", l_weather_mist_base_height},
+    {"mist_exp2_density", l_weather_mist_exp2_density},
+    {"mist_color", l_weather_mist_color},
+    {"mist_enabled", l_weather_mist_enabled},
+    {"mist_level", l_weather_mist_level},
+    {"set_mist", l_weather_set_mist},
     {nullptr, nullptr},
 };
 
