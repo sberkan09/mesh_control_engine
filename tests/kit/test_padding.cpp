@@ -23,6 +23,7 @@
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
+#include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/refl/field_traits.h"
 
@@ -81,6 +82,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<RainRipples>("RainRipples", 0);  // rain_ripples.h (M-RAINFX 7c): four f32, no padding
     expect_pad<WeatherAudio>("WeatherAudio", sizeof(WeatherAudio::pad_));  // weather_audio.h (M-WEATHERAUDIO 10a)
     expect_pad<LightningBolt>("LightningBolt", sizeof(LightningBolt::pad_));  // lightning_bolt.h (M-LIGHTNINGBOLT 11a)
+    expect_pad<WindGust>("WindGust", sizeof(WindGust::pad_));  // wind_gust.h (M-WINDGUST 12a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 
