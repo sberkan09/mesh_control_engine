@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "mce/containers/array.h"
+
 #include "kit3d_internal.h"
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/world.h"
@@ -299,6 +301,7 @@ void kit_inventory(Frame& f) {
         const bool known = valid_item(*c, item - 1u);
         if (equipment_unequip(*inv, *eq, *c, q.equip_slot) && known) ev.push(ItemUnequipped{q.owner, c->items()[item - 1u].id, q.equip_slot});
     }
+    Array<u32> cd_started;  // cooldown keys begun in this tick's UseItem loop: a second use in the same tick is refused (M-GAMEPLAYFIX)
     apply_equipment_stats(w, reg);  // heals are judged against the max the worn items give right now
     for (const UseItem& u : ev.read<UseItem>()) {
         Inventory* inv = inventory_of(w, u.owner);
@@ -318,7 +321,10 @@ void kit_inventory(Frame& f) {
             cd_id.append(d.id.view());
             const StatusEffects* cds = cooldown > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get<StatusEffects>(u.owner) : nullptr;
             const bool cd_on = cds && w.event_queue<ApplyStatus>() != nullptr;
-            if (cd_on && status_find(*cds, status_key(cd_id.view())) >= 0) refused = true;  // still cooling down: not wasted
+            const u32 cd_key = status_key(cd_id.view());
+            bool cd_this_tick = false;
+            for (const u32 k : cd_started) cd_this_tick = cd_this_tick || k == cd_key;
+            if (cd_on && (cd_this_tick || status_find(*cds, cd_key) >= 0)) refused = true;  // still cooling down: not wasted
             const f32 heal = c->stat(d, "heal", 0.0f);
             Health3D* hp = heal > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get_mut<Health3D>(u.owner) : nullptr;
             if (hp && !refused) {
@@ -363,6 +369,7 @@ void kit_inventory(Frame& f) {
                     }
                 }
                 if (cd_on) {
+                    cd_started.push_back(cd_key);
                     ApplyStatus a;
                     a.target = u.owner;
                     a.source = u.owner;

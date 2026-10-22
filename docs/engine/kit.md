@@ -505,3 +505,7 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
   `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
 
+### Hardening (M-GAMEPLAYFIX 1)
+
+- The part of a Poison pulse that was under way when the effect ends is dealt in proportion. Two `UseItem` events for one cooldown item in the same tick pass once.
+
