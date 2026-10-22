@@ -825,9 +825,22 @@ the moon's direction, `light_color`, `light_intensity * mw` and `light_shadows`,
 (`light_color * mw * 0.02`). Only the extract's copy of the light changes, `Environment3D` is never written, and a scene
 with no `Moon`, `enabled` 0, no clock or a zero level (new moon, moon below the horizon) is unchanged. Pair the `Moon`
 with a `DayCycle` so the sun is dim when the hand-off happens: a sun that stays bright below the horizon is handed over
-at full strength and pops. The sky fields (`disk_size`, `disk_intensity`, `star_*`) are not read yet: the renderer
-draws the moon disk and the stars (`render::NightSky`, 8.5 "Night sky", M-NIGHTSKY 14d), and the extract feeds them
-from the `Moon` in step 14e. The disk is drawn larger than the real moon so its phase can be read.
+at full strength and pops. The sky fields feed the night sky: `Kit3DExtract` fills `render::NightSky` (8.5 "Night sky") from the `Moon`, the clock,
+the clouds and the fog. `moon_dir` is the direction toward the moon (the light's travel direction negated, the same
+value the light uses when the moon holds it), `moon_phase` the phase, `moon_cos_size` is `disk_size`, `moon_intensity`
+is `disk_intensity`, `moon_color` is `light_color`, and `star_density`, `star_brightness` and `star_twinkle` are the
+`Moon`'s; `star_time` is the scene clock in seconds. The whole layer is scaled by
+`night_fade = (1 - smoothstep(-0.1, 0.1, sun_elevation)) * (1 - cloud_coverage) * (1 - smoothstep(0, 0.05, fog_density))`:
+0 by day, 1 on a clear unfogged night, and lower under a cloud deck (the coverage the clouds block derived, 0 when the
+tier or `r.clouds` turns the clouds off) and in fog (the exp² fog density the extract hands on, weather and morning mist
+included, 0.05 and up hides the sky entirely; the volumetric fog is not counted). Rain or a storm dim the sky through
+the `CloudLayer` coverage and the weather's fog density, not through `moon_level`, which only dims the light. The night
+sky is not set (density and intensity 0, as a scene without a `Moon`) with no `Moon`, `enabled` 0, no clock
+(`time_of_day` below 0) or an equirect `sky_texture` on the environment (the texture wins). It goes through
+`render::apply_quality`: the Low tier keeps the moon and drops the stars. While the moon holds the directional light the
+extract also drops the sky's own sun disk (it would sit on the phased moon; the extract's copy of `Sky.sun_intensity`
+becomes 0, `Environment3D` is not written); by day and whenever the sun holds the light the disk is as before. The
+disk is drawn larger than the real moon so its phase can be read.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
