@@ -18,6 +18,12 @@ Deterministic: effect time is integer microseconds like `CraftingStation`, per-t
 | 2 | Items apply effects: a consumable's `regen` + `regen_seconds` (and `armor_boost`, `boost_seconds`) stats start the matching effect on use; Luau `status.add(e, id, kind, amount, seconds)`, `status.has(e, id)`, `status.clear(e, id?)`, typed with a check test | kit, script | Sonnet | built (this PR): `inventory.cpp` use handler, `script/src/api_status.cpp`, tests in `test_inventory.cpp`, `test_script_inventory.cpp`, `test_script_check.cpp` |
 | 3 | `samples/12_loot`: a regeneration tonic and a poisoned goblin strike, pinned log lines; user-guide text, close | samples, docs | Sonnet | built (this PR): `12_loot` drinks an elixir (regen, armor boost) while a poisoned strike runs; two pinned `status:` lines, run extended to 150 ticks |
 
+## Step 4 — HUD text feed (built 2026-10-22)
+
+| # | Step | Modules | Model | State |
+|---|---|---|---|---|
+| 4 | `ItemGridFeed` (stock player) fills Text widgets `status_1` to `status_8` from `StatusEffects`: `<id> <seconds>s`, time rounded up to tenths with integer arithmetic; empty slots blank; `tests/player/test_item_grid_feed.cpp` | player, docs | Sonnet | built (this PR) |
+
 ## Decisions
 
 - Effect time is `u32` microseconds with the fixed step rounded to whole microseconds (as in `craft.cpp`), so a long effect ends a few
@@ -30,7 +36,7 @@ Deterministic: effect time is integer microseconds like `CraftingStation`, per-t
 ## Open items
 
 - Resistances, immunities and effect types beyond health and armor.
-- Effect icons in the HUD (a Text feed like `slot_N` could list active ids).
+- Effect icons (images) in the HUD; the Text feed `status_1` to `status_8` is built (see Step 4).
 
 ## Review notes (step 1)
 

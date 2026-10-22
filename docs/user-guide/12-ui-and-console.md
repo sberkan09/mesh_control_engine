@@ -113,7 +113,7 @@ ui::build_document(data, doc);                          // the skin (data.font, 
   *names* the stock player recognizes anywhere in the tree. `slot_1` to `slot_24` show the entity's `Inventory` slots
   (`Potion x5`, `Iron Sword`, or nothing), `equip_head`, `equip_body`, `equip_hands`, `equip_feet`, `equip_weapon`,
   `equip_offhand`, `equip_accessory1` and `equip_accessory2` show its `Equipment`, and `inventory_weight` shows
-  `3.5 / 20.0 kg` (or `3.5 kg` without a limit). The entity is the `UiScreen`'s own when it has an `Inventory`, else the
+  `3.5 / 20.0 kg` (or `3.5 kg` without a limit). `status_1` to `status_8` show the entity's `StatusEffects` slots as `elixir 3.5s` (an item cooldown reads `cd:potion 1.2s`; empty slots are blank). The entity is the `UiScreen`'s own when it has an `Inventory`, else the
   first one in the world (the player's). The texts are the catalog's item names as they are; a localized game keeps
   localization keys there and maps them itself. Lay the slots out with a Grid or Stack like any Text widgets.
 - A Text widget's `"text_align"` (`Left`, the default, `Center` or `Right`) places its lines

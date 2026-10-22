@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "mce/kit/inventory.h"
+#include "mce/kit/status.h"
 
 namespace mce::player {
 
@@ -21,6 +22,20 @@ bool slot_index(StringView name, u32& out) {
         n = n * 10u + static_cast<u32>(c - '0');
     }
     if (n < 1 || n > kit::kInventorySlots) return false;
+    out = n - 1u;
+    return true;
+}
+
+bool status_index(StringView name, u32& out) {
+    constexpr usize kPrefix = 7;  // "status_"
+    if (name.size() <= kPrefix || std::strncmp(name.data(), "status_", kPrefix) != 0) return false;
+    u32 n = 0;
+    for (usize i = kPrefix; i < name.size(); ++i) {
+        const char c = name.data()[i];
+        if (c < '0' || c > '9' || n > 100) return false;
+        n = n * 10u + static_cast<u32>(c - '0');
+    }
+    if (n < 1 || n > kit::kStatusSlots) return false;
     out = n - 1u;
     return true;
 }
@@ -47,6 +62,7 @@ void set_if_changed(ui::Document& doc, ui::WidgetId w, const char* text) {
 void ItemGridFeed::bind(const ui::Document& doc) {
     slots_.clear();
     equips_.clear();
+    statuses_.clear();
     weight_ = ui::WidgetId{};
     has_weight_ = false;
     Array<ui::WidgetId> stack;
@@ -59,6 +75,7 @@ void ItemGridFeed::bind(const ui::Document& doc) {
         if (doc.kind(w) == ui::WidgetKind::Text) {
             if (slot_index(name, i)) slots_.push_back(Bound{w, i});
             else if (equip_index(name, i)) equips_.push_back(Bound{w, i});
+            else if (status_index(name, i)) statuses_.push_back(Bound{w, i});
             else if (name == StringView("inventory_weight")) {
                 weight_ = w;
                 has_weight_ = true;
@@ -105,6 +122,27 @@ void ItemGridFeed::feed(World& world, ui::Document& doc, Entity self) {
             if (ecat && eq->item[b.index] != 0 && eq->item[b.index] - 1u < ecat->items().size()) {
                 const StringView name = ecat->items()[eq->item[b.index] - 1u].name.view();
                 std::snprintf(buf, sizeof buf, "%.*s", static_cast<int>(name.size()), name.data());
+            }
+            set_if_changed(doc, b.widget, buf);
+        }
+    }
+    if (!statuses_.empty()) {
+        // the screen's own entity, else the inventory's owner, else the first entity that carries effects
+        const kit::StatusEffects* se = !self.is_null() && world.alive(self) ? world.try_get<kit::StatusEffects>(self) : nullptr;
+        if (!se && !owner.is_null()) se = world.try_get<kit::StatusEffects>(owner);
+        if (!se) {
+            world.query<const kit::StatusEffects>().each([&](Entity, const kit::StatusEffects& s) {
+                if (!se) se = &s;
+            });
+        }
+        for (const Bound& b : statuses_) {
+            if (!doc.valid(b.widget)) continue;
+            buf[0] = '\0';
+            if (se && se->key[b.index] != 0) {
+                // Tenths of a second rounded up, integer arithmetic so the text is the same everywhere.
+                const u32 tenths = (se->left_us[b.index] + 99999u) / 100000u;
+                const StringView id = se->id[b.index].view();
+                std::snprintf(buf, sizeof buf, "%.*s %u.%us", static_cast<int>(id.size()), id.data(), tenths / 10u, tenths % 10u);
             }
             set_if_changed(doc, b.widget, buf);
         }
