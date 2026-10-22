@@ -1,6 +1,6 @@
 # M-QUICKOPEN — One box to open anything (milestone record)
 
-**Status:** step 1 done, step 2 open. **Owner: the "Geliştirme rutini 3" thread** (the editor and asset tools are its area; the routine had no Linear work left and the coordinator asked for a new milestone). No Linear issues (Linear is unreachable from this thread and the workspace is at its free issue limit); this record is the tracker.
+**Status:** step 1 and 2 done (the milestone is complete). **Owner: the "Geliştirme rutini 3" thread** (the editor and asset tools are its area; the routine had no Linear work left and the coordinator asked for a new milestone). No Linear issues (Linear is unreachable from this thread and the workspace is at its free issue limit); this record is the tracker.
 
 **Goal.** The editor has about two dozen panels, a project's assets in a tree, and entities in a hierarchy, and every one of them is reached by mouse. Ctrl+P opens a small search box that finds an asset, an entity, a panel or a menu command by typing a few letters, and Enter takes you there. Unreal has the same in Ctrl+P and the content browser search; Unity has Ctrl+K.
 

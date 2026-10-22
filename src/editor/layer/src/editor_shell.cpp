@@ -7,11 +7,13 @@
 
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
+#include "mce/editor/quick_open.h"
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/process.h"
+#include "scene_panels.h"
 
 namespace mce::editor {
 
@@ -21,6 +23,10 @@ struct EditorShell::Impl {
     ImGuiRhiRenderer renderer;
     platform::Process player;
     bool layout_checked = false;
+    // Ctrl+P (M-QUICKOPEN): the searchable items, filled when the popup opens, and the query box state.
+    QuickOpen quick;
+    char quick_query[128] = {};
+    i32 quick_sel = 0;
 };
 
 namespace {
@@ -469,6 +475,7 @@ void EditorShell::update_title() {
 
 void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Q)) request_quit();
+    if (popup_ == Popup::None && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_P)) popup_ = Popup::QuickOpen;
     if (!scene_mode()) return;
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) save_scene();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S)) popup_ = Popup::SaveAs;
@@ -519,9 +526,80 @@ void EditorShell::request_open_scene(StringView path) {
     open_scene(path);
 }
 
+namespace {
+
+// The Quick Open commands (the ids of QuickOpenKind::Command items), in menu order.
+enum QuickCommand : u64 { kCmdSave, kCmdNew, kCmdCook, kCmdPlay, kCmdStop, kCmdUndo, kCmdRedo, kCmdFrame, kCmdRescan, kCmdLayout };
+
+}  // namespace
+
+void EditorShell::fill_quick_open() {
+    QuickOpen& q = impl_->quick;
+    q.clear();
+    const bool proj = scene_mode();
+    const bool edit = proj && !playing();
+    if (edit) {
+        for (usize i = 0; i < session_.project().assets().size(); ++i)
+            q.add(QuickOpenKind::Asset, session_.project().assets()[i].path.view(), i);
+        for (const DocEntity& e : scene().doc().entities()) q.add(QuickOpenKind::Entity, e.name.view(), e.id);
+    }
+    for (usize i = 0; i < panels_.size(); ++i) q.add(QuickOpenKind::Panel, panels_[i]->name(), i);
+    if (edit) {
+        q.add(QuickOpenKind::Command, "Save Scene", kCmdSave);
+        q.add(QuickOpenKind::Command, "New Scene", kCmdNew);
+        q.add(QuickOpenKind::Command, "Cook", kCmdCook);
+        q.add(QuickOpenKind::Command, "Play in editor", kCmdPlay);
+        if (scene().can_undo()) q.add(QuickOpenKind::Command, "Undo", kCmdUndo);
+        if (scene().can_redo()) q.add(QuickOpenKind::Command, "Redo", kCmdRedo);
+        q.add(QuickOpenKind::Command, "Frame scene", kCmdFrame);
+        q.add(QuickOpenKind::Command, "Rescan assets", kCmdRescan);
+    }
+    if (proj && playing()) q.add(QuickOpenKind::Command, "Stop play", kCmdStop);
+    q.add(QuickOpenKind::Command, "Reset layout", kCmdLayout);
+}
+
+void EditorShell::run_quick_open(const QuickOpenItem& item) {
+    switch (item.kind) {
+        case QuickOpenKind::Asset: {
+            const auto assets = session_.project().assets();
+            if (item.id >= assets.size()) return;
+            const ProjectAsset& a = assets[static_cast<usize>(item.id)];
+            asset::Guid open;
+            open_asset_in_editor(*this, a, open);
+            if (!open.is_null()) request_open_scene(a.path.view());
+            break;
+        }
+        case QuickOpenKind::Entity:
+            scene().selection().set(static_cast<EntityId>(item.id));
+            break;
+        case QuickOpenKind::Panel:
+            if (IEditorPanel* p = panel_at(static_cast<usize>(item.id))) {
+                p->open = true;
+                focus_panel(p->name());
+            }
+            break;
+        case QuickOpenKind::Command:
+            switch (item.id) {
+                case kCmdSave: save_scene(); break;
+                case kCmdNew: new_scene(); break;
+                case kCmdCook: cook(false); break;
+                case kCmdPlay: play_in_editor(); break;
+                case kCmdStop: stop_play(); break;
+                case kCmdUndo: scene().undo(); break;
+                case kCmdRedo: scene().redo(); break;
+                case kCmdFrame: frame_scene(); break;
+                case kCmdRescan: session_.project().rescan(); break;
+                case kCmdLayout: reset_layout(); break;
+                default: break;
+            }
+            break;
+    }
+}
+
 void EditorShell::draw_popups() {
     static constexpr const char* kIds[] = {"", "Open Scene", "Save Scene As", "Unsaved changes##quit",
-                                           "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes"};
+                                           "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes",
+                                           "Quick Open"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -625,6 +703,52 @@ void EditorShell::draw_popups() {
         ImGui::SameLine();
         if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
         ImGui::EndPopup();
+    }
+
+    // Ctrl+P: type to search assets, entities, panels and commands; Up/Down pick, Enter runs, Esc closes.
+    {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(center.x, vp->Pos.y + vp->Size.y * 0.15f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(520.0f, 0.0f));
+        if (ImGui::BeginPopup("Quick Open", ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize)) {
+            QuickOpen& q = impl_->quick;
+            if (ImGui::IsWindowAppearing()) {
+                fill_quick_open();
+                impl_->quick_query[0] = '\0';
+                impl_->quick_sel = 0;
+                ImGui::SetKeyboardFocusHere();
+            }
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::InputText("##query", impl_->quick_query, sizeof(impl_->quick_query))) impl_->quick_sel = 0;
+            Array<u32> hits;
+            q.search(StringView(impl_->quick_query), 12, hits);
+            const i32 n = static_cast<i32>(hits.size());
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow) && n > 0) impl_->quick_sel = (impl_->quick_sel + 1) % n;
+            if (ImGui::IsKeyPressed(ImGuiKey_UpArrow) && n > 0) impl_->quick_sel = (impl_->quick_sel + n - 1) % n;
+            if (impl_->quick_sel >= n) impl_->quick_sel = n > 0 ? n - 1 : 0;
+            if (n == 0) ImGui::TextDisabled("(no match)");
+            i32 run = -1;
+            for (i32 i = 0; i < n; ++i) {
+                const QuickOpenItem& it = q.items()[hits[static_cast<usize>(i)]];
+                ImGui::PushID(i);
+                if (ImGui::Selectable(it.label.c_str(), i == impl_->quick_sel, ImGuiSelectableFlags_NoAutoClosePopups)) run = i;
+                ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f);
+                ImGui::TextDisabled("%s", quick_open_kind_name(it.kind));
+                ImGui::PopID();
+            }
+            if (n > 0 && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))) run = impl_->quick_sel;
+            if (run >= 0) {
+                const QuickOpenItem item = q.items()[hits[static_cast<usize>(run)]];
+                close();
+                run_quick_open(item);
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                close();
+            }
+            ImGui::EndPopup();
+        } else if (popup_ == Popup::QuickOpen && popup_opened_) {
+            popup_ = Popup::None;  // a click outside closed it
+            popup_opened_ = false;
+        }
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
