@@ -825,8 +825,9 @@ the moon's direction, `light_color`, `light_intensity * mw` and `light_shadows`,
 (`light_color * mw * 0.02`). Only the extract's copy of the light changes, `Environment3D` is never written, and a scene
 with no `Moon`, `enabled` 0, no clock or a zero level (new moon, moon below the horizon) is unchanged. Pair the `Moon`
 with a `DayCycle` so the sun is dim when the hand-off happens: a sun that stays bright below the horizon is handed over
-at full strength and pops. The sky fields (`disk_size`, `disk_intensity`, `star_*`) are not read yet (M-NIGHTSKY steps
-14d and 14e). The disk is drawn larger than the real moon so its phase can be read.
+at full strength and pops. The sky fields (`disk_size`, `disk_intensity`, `star_*`) are not read yet: the renderer
+draws the moon disk and the stars (`render::NightSky`, 8.5 "Night sky", M-NIGHTSKY 14d), and the extract feeds them
+from the `Moon` in step 14e. The disk is drawn larger than the real moon so its phase can be read.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 

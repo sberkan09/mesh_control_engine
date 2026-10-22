@@ -96,6 +96,10 @@ struct Forward3DPassU {
     vec4 snow2;       // M-WINDDIR 8c: xy the snow wind direction (xz unit vector), zw 0
     vec4 cloud;       // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
     vec4 cloud2;      // xy the drift in noise cells mod kCloudPeriod (wind_dir * speed * time), zw 0
+    vec4 night;       // M-NIGHTSKY 14d: x moon cos size, y moon intensity (0 = no moon), z phase, w night fade
+    vec4 night2;      // x star density (0 = no stars), y star brightness, z twinkle, w star time mod kStarPeriod (s)
+    vec4 moon;        // xyz the unit direction toward the moon, w cos(2 pi phase) (the sun-moon elongation)
+    vec4 moon2;       // rgb the moon's tint, w sin(2 pi phase)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
@@ -105,9 +109,13 @@ static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot)
                   offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
                   offsetof(Forward3DPassU, cloud) == offsetof(Forward3DPassU, snow2) + 16 &&
                   offsetof(Forward3DPassU, cloud2) == offsetof(Forward3DPassU, cloud) + 16 &&
-                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, cloud2) + 16,
-              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 follow p_sky_rot as in "
-              "MCE_GLSL_PASS_U");
+                  offsetof(Forward3DPassU, night) == offsetof(Forward3DPassU, cloud2) + 16 &&
+                  offsetof(Forward3DPassU, night2) == offsetof(Forward3DPassU, night) + 16 &&
+                  offsetof(Forward3DPassU, moon) == offsetof(Forward3DPassU, night2) + 16 &&
+                  offsetof(Forward3DPassU, moon2) == offsetof(Forward3DPassU, moon) + 16 &&
+                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, moon2) + 16,
+              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
+              "p_moon2 follow p_sky_rot as in MCE_GLSL_PASS_U");
 
 namespace {
 
@@ -409,6 +417,35 @@ void cloud_params(const Clouds& c, f32 time, PassU& pu) {
     const auto wrap = [](f64 x) { return f32(x - kCloudPeriod * std::floor(x / kCloudPeriod)); };
     pu.cloud = vec4(coverage, unit01(c.density), 1.0f / scale, detail::cloud_height(c.height_m));
     pu.cloud2 = vec4(wrap(cells * f64(dir.x)), wrap(cells * f64(dir.y)), 0.0f, 0.0f);
+}
+
+// The main pass's night sky members (M-NIGHTSKY 14d). Moon intensity 0 and star density 0 (or `enabled` false, or a
+// night fade of 0) leave p_night, p_night2, p_moon and p_moon2 zero: the sky shader skips its branch and the frame is
+// the one without a night sky bit for bit. The values are clamped again (apply_quality's clamps: a caller may skip
+// it); the cos size stops short of 1 so the shader's disk radius never reaches 0. The moon's lit side: the sun sits
+// 2 pi * phase ahead of the moon along the moon's daily path (moon.h puts the moon on the sun's arc, phase * 24 h
+// behind it), so the shader takes the elongation's cos and sin, evaluated here in f64. The twinkle clock is wrapped
+// in f64 to kStarPeriod: every star's twinkle rate is a whole number of cycles per period (kSkyFS), so the wrap does
+// not show and the clock never costs precision; a non-finite time counts as 0. The layer is direction-only (no
+// camera position, no floating origin).
+constexpr f64 kStarPeriod = 60.0;  // seconds (kSkyFS's twinkle rates are k / 60 Hz)
+constexpr f64 kTau64 = 6.283185307179586477;
+void night_sky_params(const NightSky& n, PassU& pu) {
+    const f32 moon = detail::scaled(n.moon_intensity, 8.0f, 0.0f);
+    const f32 stars = unit01(n.star_density);
+    const f32 fade = unit01(n.night_fade);
+    if (!n.enabled || fade <= 0.0f || (moon <= 0.0f && stars <= 0.0f)) return;
+    const f32 phase = unit01(n.moon_phase);
+    const f32 cos_size = min(detail::moon_cos_size(n.moon_cos_size), 0.99999f);
+    const f64 t = std::isfinite(n.star_time) ? f64(n.star_time) : 0.0;
+    const f64 elong = kTau64 * f64(phase);
+    const vec3 dir = detail::unit_dir3(n.moon_dir);
+    pu.night = vec4(cos_size, moon, phase, fade);
+    pu.night2 = vec4(stars, detail::scaled(n.star_brightness, 4.0f, 1.0f), unit01(n.star_twinkle),
+                     f32(t - kStarPeriod * std::floor(t / kStarPeriod)));
+    pu.moon = vec4(dir, f32(std::cos(elong)));
+    pu.moon2 = vec4(detail::scaled(n.moon_color.x, 1.0f, 0.0f), detail::scaled(n.moon_color.y, 1.0f, 0.0f),
+                    detail::scaled(n.moon_color.z, 1.0f, 0.0f), f32(std::sin(elong)));
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -1899,6 +1936,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     snow_params(scene.snow_cover(), origin_, pu);
     ripple_params(scene.ripples(), scene.time(), pu);
     cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
+    night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);

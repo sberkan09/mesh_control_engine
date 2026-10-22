@@ -673,6 +673,25 @@ TEST_CASE("golden: cloud_sky: a broken cloud layer over the gradient sky, lit fr
     check_golden("cloud_sky", f);
 }
 
+// ---- M-NIGHTSKY 14d: the moon and the stars ------------------------------------------------------------------------
+
+// A full moon 25 degrees up on the right and the star field (density 0.6, twinkle 0.3 at 12.25 s) over a dark
+// gradient night sky, the camera looking up (night_sky_scene).
+TEST_CASE("golden: night_sky: a full moon and the star field over the night sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { night_sky_scene(s, night_sky_carrier(0.5f, 0.6f)); });
+    check_golden("night_sky", f);
+}
+
+// The same sky three days after the new moon (phase 0.1): a waxing crescent lit on the side the moon travels toward.
+TEST_CASE("golden: night_sky_crescent: a waxing crescent moon and the star field") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { night_sky_scene(s, night_sky_carrier(0.1f, 0.6f)); });
+    check_golden("night_sky_crescent", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

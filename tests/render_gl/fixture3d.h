@@ -99,7 +99,7 @@ struct Fixture3D {
 
     // `setup` runs after the defaults (sun, fog, ground, box) and before build().
     void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
-        camera = orbit_camera(look_at + world_offset, 0.0f, math::radians(pitch_deg), 7.0f);
+        camera = orbit_camera(look_at + world_offset, math::radians(yaw_deg), math::radians(pitch_deg), 7.0f);
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -159,6 +159,7 @@ struct Fixture3D {
     rhi::TextureHandle target;
     Array<u8> pixels;
     f32 pitch_deg = 35.0f;
+    f32 yaw_deg = 0.0f;                   // the orbit camera's yaw (M-NIGHTSKY 14d: the star field under a slow turn)
     vec3 look_at{0.0f, 0.5f, 0.0f};       // the orbit camera's target (M-CLOUDS 9b: raised for a camera that looks up)
     vec3 world_offset{0.0f, 0.0f, 0.0f};  // moves the camera, the ground and the box (M-WETSURFACE 5b: a rebased world)
     Camera3D camera;
@@ -678,6 +679,44 @@ inline void cloud_sky_scene(Scene3D& s, const Clouds& clouds, f32 time) {
     s.set_exposure(0.6f);
     s.set_time(time, 1.0f / 60.0f);
     s.set_clouds(clouds);
+}
+
+// ---- M-NIGHTSKY 14d: the moon and the stars ----------------------------------------------------------------------
+
+// The night sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z), a dark gradient
+// sky and ambient, the frame's light a dim cool one from below the horizon behind the camera (its disk out of view, as
+// the night key of a DayCycle), and the moon 25 degrees up on the camera's right front. `night` as given.
+inline constexpr vec3 kNightMoonDir{0.25f, 0.42f, -0.87f};  // toward the moon (normalized by the upload)
+
+inline NightSky night_sky_carrier(f32 phase, f32 star_density, f32 moon_intensity = 6.0f) {
+    NightSky n;
+    n.moon_dir = kNightMoonDir;
+    n.moon_cos_size = 0.998f;  // about 3.6 degrees across: a 19 pixel disk in the 160 x 120 frame
+    n.moon_intensity = moon_intensity;
+    n.moon_color = {0.9f, 0.93f, 1.0f};
+    n.moon_phase = phase;
+    n.star_density = star_density;
+    n.star_brightness = 1.0f;
+    n.star_twinkle = 0.3f;
+    n.star_time = 12.25f;
+    return n;
+}
+
+inline void night_sky_scene(Scene3D& s, const NightSky& night) {
+    DirectionalLight light;
+    light.direction = {0.0f, 0.5f, -0.8660254f};  // from a source 30 degrees under the horizon behind the camera
+    light.color = {0.55f, 0.65f, 1.0f};
+    light.intensity = 0.05f;
+    light.ambient_sky = {0.01f, 0.012f, 0.02f};
+    light.ambient_ground = {0.005f, 0.005f, 0.005f};
+    s.set_light(light);
+    Sky sky;
+    sky.zenith = {0.004f, 0.005f, 0.012f};
+    sky.horizon = {0.01f, 0.012f, 0.02f};
+    sky.ground = {0.005f, 0.005f, 0.005f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_night_sky(night);
 }
 
 }  // namespace mce::render_test
