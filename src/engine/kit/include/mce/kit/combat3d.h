@@ -62,7 +62,8 @@ struct Health3D {
     u8 dead = 0;                    // engine-written
     u8 ragdoll_on_death = 0;        // 1: the Ragdoll3D goes limp when it dies
     u8 destroy_on_death = 0;        // 1: destroyed `linger` s after dying
-    u8 pad_[3] = {};
+    u8 bonus_mark = 0;              // engine-written: bit 0 = Equipment's, bit 1 = StatusEffects' armor/max bonus sits on this value (M-GAMEPLAYFIX)
+    u8 pad_[2] = {};
     f32 linger = 3.0f;              // s a dead entity stays before destroy_on_death takes it
     f32 stagger_damage = 0.0f;      // one hit this big staggers (a Ragdoll3D goes limp for stagger_time); 0 = off
     f32 stagger_time = 1.0f;        // s
@@ -79,7 +80,7 @@ MCE_COMPONENT(Health3D, (max, Range{1, 1000000}), (current, Range{0, 1000000}), 
               (destroy_on_death, Help{"1: destroyed `linger` seconds after it dies"}), (linger, Range{0, 600}),
               (stagger_damage, Range{0, 1000000}, Help{"one hit this big staggers it; 0 = off"}), (stagger_time, Range{0, 60}),
               (since_hit, ReadOnly, Transient), (stagger_left, ReadOnly, Transient), (dead_time, ReadOnly, Transient),
-              (last_attacker, ReadOnly, Transient), (hits, ReadOnly, Transient))
+              (last_attacker, ReadOnly, Transient), (hits, ReadOnly, Transient), (bonus_mark, ReadOnly, Transient))
 
 enum class WeaponKind3D : u8 { Hitscan, Projectile };
 MCE_ENUM(WeaponKind3D, Hitscan, Projectile)
@@ -121,6 +122,8 @@ struct Weapon3D {
     math::vec3 last_point;          // engine-written
     u8 primed = 0;                  // engine-written
     u8 pad_[3] = {};
+    f32 bonus_applied = 0.0f;       // engine-written: what the wielder's worn items' "damage" stats have added to `damage` (M-GAMEPLAYFIX)
+    u32 pad2_ = 0;                  // explicit tail padding: state_hash hashes the raw bytes
 };
 MCE_COMPONENT(Weapon3D, kind, (use_input, Help{"1: Fire (held with `automatic`) and Reload drive it"}), automatic,
               (fire, Help{"set to shoot (the engine clears it)"}), (reload, Help{"set to reload (the engine clears it)"}), friendly_fire,
@@ -132,7 +135,7 @@ MCE_COMPONENT(Weapon3D, kind, (use_input, Help{"1: Fire (held with `automatic`) 
               (splash_radius, Range{0, 1000}, Help{"m: > 0 explodes where the projectile lands"}), (projectile_scale, Range{0.01f, 100}),
               (muzzle, Help{"entity space"}), (direction, Help{"entity space; forward is -Z"}), (cooldown, ReadOnly, Transient),
               (reload_left, ReadOnly, Transient), (shots, ReadOnly, Transient), (seed, ReadOnly, Transient), (last_hit, ReadOnly, Transient),
-              (last_point, ReadOnly, Transient), (primed, ReadOnly, Transient))
+              (last_point, ReadOnly, Transient), (primed, ReadOnly, Transient), (bonus_applied, ReadOnly, Transient))
 
 // A shot in flight. The engine steps it (a ray along each tick's move, gravity on its velocity).
 struct Projectile3D {

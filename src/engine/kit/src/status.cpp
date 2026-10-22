@@ -40,6 +40,12 @@ void settle_bonus(Health3D& hp, StatusKind kind, f32& applied, f32 want) {
     }
 }
 
+// A Health3D that does not carry the status bonus (replaced at run time) forgets what the slots say they added.
+void drop_stale(StatusEffects& s, const Health3D* hp) {
+    if (!hp || (hp->bonus_mark & 2u) != 0) return;
+    for (u32 i = 0; i < kStatusSlots; ++i) s.applied[i] = 0.0f;
+}
+
 void clear_slot(StatusEffects& s, u32 i) {
     s.key[i] = 0;
     s.id[i].clear();
@@ -59,6 +65,7 @@ void kit_status(Frame& f) {
         StatusEffects* s = c.target.is_null() || !w.alive(c.target) ? nullptr : w.try_get_mut<StatusEffects>(c.target);
         if (!s) continue;
         Health3D* hp = w.try_get_mut<Health3D>(c.target);
+        drop_stale(*s, hp);
         const u32 key = c.id.empty() ? 0u : status_key(c.id.view());
         for (u32 i = 0; i < kStatusSlots; ++i) {
             if (s->key[i] == 0 || (key != 0 && s->key[i] != key)) continue;
@@ -89,7 +96,10 @@ void kit_status(Frame& f) {
         }
         const u32 i = static_cast<u32>(slot);
         if (refreshed && s->kind[i] != static_cast<u8>(a.kind)) {  // a new kind: give back what the old one added first
-            if (Health3D* hp = w.try_get_mut<Health3D>(a.target)) settle_bonus(*hp, static_cast<StatusKind>(s->kind[i]), s->applied[i], 0.0f);
+            if (Health3D* hp = w.try_get_mut<Health3D>(a.target)) {
+                drop_stale(*s, hp);
+                settle_bonus(*hp, static_cast<StatusKind>(s->kind[i]), s->applied[i], 0.0f);
+            }
             s->applied[i] = 0.0f;
         }
         if (!refreshed) s->applied[i] = 0.0f;
@@ -105,6 +115,7 @@ void kit_status(Frame& f) {
     const u32 dt_us = step_us(f.dt);
     f.query<StatusEffects>().each([&](Entity e, StatusEffects& s) {
         Health3D* hp = w.try_get_mut<Health3D>(e);
+        drop_stale(s, hp);
         for (u32 i = 0; i < kStatusSlots; ++i) {
             if (s.key[i] == 0) continue;
             const StatusKind kind = static_cast<StatusKind>(s.kind[i]);
@@ -144,6 +155,9 @@ void kit_status(Frame& f) {
             ev.push(StatusEnded{e, s.id[i], 1});
             clear_slot(s, i);
         }
+        if (hp)
+            for (u32 i = 0; i < kStatusSlots; ++i)
+                if (s.key[i] != 0 && s.applied[i] != 0.0f) hp->bonus_mark |= 2u;
     });
 }
 

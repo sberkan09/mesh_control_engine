@@ -418,7 +418,7 @@ sample adds `extras_2d_player_600` and the GPU run `extras_2d_player_gpu`.
 - Events, processed in `FixedUpdate_Pre` (push them one tick before you need the result; they are swapped at the sync point):
   `GiveItem`, `TakeItem`, `MoveItem`, `SplitItem`, `EquipItem`, `UnequipItem`, `UseItem` in; `ItemAdded` (with the remainder that did
   not fit), `ItemRemoved`, `ItemEquipped`, `ItemUnequipped`, `ItemUsed` out. `UseItem` on an item tagged `consumable` takes one unit; if the item has a `heal` stat it also heals the user's `Health3D` (capped at `max`, `ItemHealed{owner, item, amount}` out), and a heal at full health or on a dead body is refused: nothing is consumed and `ItemUsed.consumed` is 0 (M-ITEMFX 1). Without a `Health3D` the item is consumed as before.
-- Worn items change the wearer's `Health3D` (M-ITEMFX 2): the `armor` stats of the equipped items add to `Health3D.armor` (kept within 0..1) and their `max_health` stats to `Health3D.max` (never below 1; `current` is clamped down when `max` falls). Only the change is applied each tick and `Equipment.armor_applied` / `max_applied` remember what was added (not saved: `Health3D` is not in a save game either, so both load at the authored values and the bonus is applied again; a `Health3D` overwritten at run time loses the bonus until the equipment changes), so the authored base is never overwritten, a level-up that raises `max` stays on top, and unequipping gives back what was added (within float rounding). An entity with `Equipment` but no `Health3D` is left alone.
+- Worn items change the wearer's `Health3D` (M-ITEMFX 2): the `armor` stats of the equipped items add to `Health3D.armor` (kept within 0..1) and their `max_health` stats to `Health3D.max` (never below 1; `current` is clamped down when `max` falls). Only the change is applied each tick and `Equipment.armor_applied` / `max_applied` remember what was added (not saved: `Health3D` is not in a save game either, so both load at the authored values and the bonus is applied again; a `Health3D` replaced at run time is noticed through `Health3D::bonus_mark` and gets the bonus again (a copy that is changed and written back keeps the old mark and is not noticed)), so the authored base is never overwritten, a level-up that raises `max` stays on top, and unequipping gives back what was added (within float rounding). An entity with `Equipment` but no `Health3D` is left alone.
 - Loot tables and chests: see the next section. Not yet: Luau and the `ItemGrid` widget (step 4), a sample (step 5).
 
 ## Loot tables, drops and chests (M-INVENTORY 3)
@@ -475,7 +475,7 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
   either, so the bonus applies again on the first tick after a load.
 - Events: `ApplyStatus{target, id, kind, amount, seconds, source}` and `ClearStatus{target, id}` (empty id: all) in; `StatusApplied`
   (`refreshed` when the id was active), `StatusEnded` (`expired` 1 or 0 when cleared) and `StatusRefused` (all 8 slots busy, or bad
-  input: seconds outside 0.01 to 3600, a non-finite amount, an unknown kind) out. Applying an id that is active refreshes it (a refresh that changes the kind first gives back what the old kind added); nothing stacks. Regen and Poison need a positive amount, amounts are limited to ±1e6, clears are handled before applies in a tick (a cleanse then a re-apply ends with the effect on), and each effect remembers who applied it, so a poison kill credits the poisoner. A corrupt saved slot (non-finite amount, unknown kind) is dropped. A `Health3D` overwritten at run time loses the bonus kinds until they end: clear the effects when respawning.
+  input: seconds outside 0.01 to 3600, a non-finite amount, an unknown kind) out. Applying an id that is active refreshes it (a refresh that changes the kind first gives back what the old kind added); nothing stacks. Regen and Poison need a positive amount, amounts are limited to ±1e6, clears are handled before applies in a tick (a cleanse then a re-apply ends with the effect on), and each effect remembers who applied it, so a poison kill credits the poisoner. A corrupt saved slot (non-finite amount, unknown kind) is dropped. A `Health3D` replaced at run time is noticed through `Health3D::bonus_mark` and the bonus kinds are applied to it again (a copy written back with the old mark is not noticed).
 - System `kit_status` (FixedUpdate_Pre, after `kit_craft`). Items and Luau: the next step.
 
 ### Items and Luau start effects (M-STATUS 2)
@@ -498,7 +498,7 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 ### Stat-driven weapon damage (M-WEAPONSTAT)
 
 - Worn items' `damage` stats are added to the `damage` of a `Weapon3D` on the same entity as the `Equipment`, like `armor` and `max_health` (a remembered
-  change, applied once, given back on unequip, never below 0). A weapon on a separate entity does not get it yet.
+  change, applied once, given back on unequip, never below 0). A `Weapon3D` on a separate entity gets the bonus of its wielder (its `owner`, else its own entity); the weapon remembers the change in `Weapon3D::bonus_applied`, so a new owner takes it over and several weapons each get it (M-GAMEPLAYFIX).
 
 ### Dead pedestrians (M-PEDDEAD)
 

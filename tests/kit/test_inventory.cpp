@@ -728,3 +728,108 @@ TEST_CASE("inventory: two uses of a cooldown item in one tick only pass once (M-
     CHECK(r.inv().qty[0] == 4);
     CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(15.0f));
 }
+
+namespace {
+void add_gear(asset::ItemCatalog& c, const char* id, const char* tag, std::initializer_list<std::pair<const char*, f32>> stats) {
+    asset::ItemDef d;
+    d.id = id;
+    d.name = id;
+    d.stack_max = 1;
+    const FixedString<32> t(tag);
+    Array<asset::ItemStat> st;
+    for (const auto& kv : stats) {
+        asset::ItemStat s;
+        s.key = kv.first;
+        s.value = kv.second;
+        st.push_back(s);
+    }
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st.data(), st.size()), Span<const FixedString<32>>(&t, 1)));
+}
+void wear(Rig& r, const char* id) {
+    r.give(id, 1);
+    EquipItem q;
+    q.owner = r.hero;
+    q.slot = 0;
+    EventAccess(r.w).push(q);
+    r.tick(4);
+}
+}  // namespace
+
+TEST_CASE("inventory: a weapon on its own entity gets the wielder's damage bonus, and a new owner takes it over (M-GAMEPLAYFIX)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    add_gear(c, "blade", "equip.weapon", {{"damage", 12.0f}});
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Equipment bare;
+    bare.catalog.guid = kCat;
+    const Entity other = r.w.spawn_with(bare);
+    Weapon3D wp;
+    wp.damage = 20.0f;
+    wp.owner = r.hero;
+    const Entity gun = r.w.spawn_with(wp);
+    auto dmg = [&] { return r.w.try_get<Weapon3D>(gun)->damage; };
+    wear(r, "blade");
+    CHECK(dmg() == doctest::Approx(32.0f));
+    r.tick(20);
+    CHECK(dmg() == doctest::Approx(32.0f));  // once, not every tick
+    r.w.try_get_mut<Weapon3D>(gun)->owner = other;  // passed to somebody who wears nothing
+    r.tick(3);
+    CHECK(dmg() == doctest::Approx(20.0f));
+    r.w.try_get_mut<Weapon3D>(gun)->owner = r.hero;
+    r.tick(3);
+    CHECK(dmg() == doctest::Approx(32.0f));
+    UnequipItem u;
+    u.owner = r.hero;
+    u.equip_slot = static_cast<u32>(EquipSlot::Weapon);
+    EventAccess(r.w).push(u);
+    r.tick(6);
+    CHECK(dmg() == doctest::Approx(20.0f));
+    CHECK(r.w.try_get<Weapon3D>(gun)->bonus_applied == doctest::Approx(0.0f));
+}
+
+TEST_CASE("inventory: a weapon's damage bonus never takes it below 0 (M-GAMEPLAYFIX)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    add_gear(c, "curse", "equip.weapon", {{"damage", -30.0f}});
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Weapon3D wp;
+    wp.damage = 20.0f;
+    r.w.set(r.hero, wp);
+    wear(r, "curse");
+    CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(0.0f));
+    UnequipItem u;
+    u.owner = r.hero;
+    u.equip_slot = static_cast<u32>(EquipSlot::Weapon);
+    EventAccess(r.w).push(u);
+    r.tick(6);
+    CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(20.0f));
+}
+
+TEST_CASE("inventory: a Health3D replaced at run time gets the equipment bonus again (M-GAMEPLAYFIX)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    add_gear(c, "plate", "equip.body", {{"armor", 0.25f}, {"max_health", 20.0f}});
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 100.0f;
+    hp.armor = 0.125f;
+    r.w.set(r.hero, hp);
+    wear(r, "plate");
+    auto health = [&]() -> const Health3D& { return *r.w.try_get<Health3D>(r.hero); };
+    CHECK(health().armor == doctest::Approx(0.375f));
+    CHECK(health().max == doctest::Approx(120.0f));
+    r.w.set(r.hero, hp);  // a respawn: the authored value, no bonus
+    r.tick(3);
+    CHECK(health().armor == doctest::Approx(0.375f));  // back, and not twice
+    CHECK(health().max == doctest::Approx(120.0f));
+    r.tick(10);
+    CHECK(health().max == doctest::Approx(120.0f));
+    UnequipItem u;
+    u.owner = r.hero;
+    u.equip_slot = static_cast<u32>(EquipSlot::Body);
+    EventAccess(r.w).push(u);
+    r.tick(6);
+    CHECK(health().armor == doctest::Approx(0.125f));  // exactly the base after a respawn
+    CHECK(health().max == doctest::Approx(100.0f));
+}
