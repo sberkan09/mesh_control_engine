@@ -1,0 +1,1 @@
+- Editor, M-QUICKOPEN 1: `QuickOpen` ranks assets, entities, panels and commands by a fuzzy match on their labels (every letter in order, word starts and runs score higher); the Ctrl+P popup follows.
