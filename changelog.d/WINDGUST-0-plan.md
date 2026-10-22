@@ -1,0 +1,1 @@
+- M-WINDGUST plan (docs only): `docs/milestones/M-WINDGUST.md` adds an opt-in `WindGust` component and system that produce seeded, integer-state gusts modulating an effective wind for foliage sway, cloud drift, snow bias, rain slant and the wind audio bed without changing `Weather.wind`; steps 12a to 12d.
