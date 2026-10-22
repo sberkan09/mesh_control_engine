@@ -296,7 +296,7 @@ TEST_CASE("crowd: a hurt pedestrian runs from its attacker, ignores the light an
         const f32 d0 = std::fabs(start.z - attacker_z), d1 = std::fabs(now.z - attacker_z);
         CHECK(d1 > d0);  // farther from the attacker than a moment ago
         s.w.try_get_mut<Health3D>(e)->since_hit = kPedestrianFleeSeconds + 1.0f;
-        s.run(2);
+        s.run(60 * 6);  // the warning it gave the others has run out too
         CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
         CHECK(s.w.try_get<Pedestrian3D>(e)->pace == doctest::Approx(1.5f));
     }
@@ -330,4 +330,25 @@ TEST_CASE("crowd: a shot nearby sends pedestrians running, a far one does not, a
     EventAccess(far.w).push(shot);
     far.run(5);
     CHECK(far.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+}
+
+TEST_CASE("crowd: panic spreads to close neighbours of a running pedestrian and not to far ones (M-PEDFLEE 3)") {
+    Scene s(spawner(0));
+    Pedestrian3D p;
+    p.speed = 1.5f;
+    const auto walker = [&](f32 z) { return s.w.spawn_with(LocalTransform{{4.0f, 0.0f, z}, math::quat::identity(), {1, 1, 1}}, p); };
+    const Entity a = walker(-30.0f), b = walker(-37.0f), c = walker(-70.0f);
+    s.run(10);
+    WeaponFired3D shot;
+    shot.origin = {4.0f, 1.0f, -5.0f};  // 25 m from a: inside the fear radius; b is 32 m away, c 65 m
+    shot.end = {4.0f, 1.0f, -55.0f};
+    EventAccess(s.w).push(shot);
+    s.run(3);
+    CHECK(s.w.try_get<Pedestrian3D>(a)->mode == PedestrianMode::Flee);
+    s.run(3);
+    CHECK(s.w.try_get<Pedestrian3D>(b)->mode == PedestrianMode::Flee);  // caught from a
+    CHECK(s.w.try_get<Pedestrian3D>(c)->mode != PedestrianMode::Flee);
+    s.run(60 * 8);
+    CHECK(s.w.try_get<Pedestrian3D>(a)->mode != PedestrianMode::Flee);
+    CHECK(s.w.try_get<Pedestrian3D>(b)->mode != PedestrianMode::Flee);  // a ripple that dies out
 }
