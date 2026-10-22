@@ -67,6 +67,10 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_snow2;          // M-WINDDIR 8c: xy the snow wind direction (xz unit vector the wind blows toward), zw 0
     vec4 p_cloud;          // M-CLOUDS 9b: x coverage (0 = off), y density, z 1 / noise cell (1/m), w plane height (m)
     vec4 p_cloud2;         // xy: the drift in noise cells mod 64 (wind_dir * speed * time), zw 0
+    vec4 p_night;          // M-NIGHTSKY 14d: x moon cos size, y moon intensity (0 = no moon), z phase, w night fade
+    vec4 p_night2;         // x star density (0 = no stars), y star brightness, z twinkle, w star time mod 60 s
+    vec4 p_moon;           // xyz the unit direction toward the moon, w cos(2 pi phase)
+    vec4 p_moon2;          // rgb the moon's tint, w sin(2 pi phase)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1595,6 +1599,111 @@ vec3 apply_clouds(vec3 c, vec3 d, vec3 sun, float cs) {
     vec3 cloud = 0.9 * (ambient + 0.5 * direct);
     return mix(c, cloud, a);
 }
+// ---- the night sky (M-NIGHTSKY 14d), behind p_night.y > 0 || p_night2.x > 0 (moon intensity, star density; both 0 =
+// the frame without it bit for bit). A function of the view direction only (no camera position, no floating origin)
+// and of the twinkle clock p_night2.w (wrapped on the CPU to 60 s). Up-going rays only, scaled by the night fade.
+// Stars: the direction is cut into an integer cell grid on the six cube faces (kStarCells cells per face edge; no
+// sin()), and each cell is hashed with cloud_hash: a star when its 24-bit hash is under the density times the cell's
+// solid angle relative to a face-centre cell ((1 + |c|^2)^-1.5, c the cell centre in -1..1 face coordinates; the
+// gnomonic cells shrink about 5x toward the cube corners, so this keeps the stars per steradian even), its position
+// (inset to the middle 70% of the cell), a magnitude (u^5: a few bright, many faint), a slight warm-to-cool colour,
+// a twinkle phase and rate. The point is a smoothstep blob 1.5 pixels in radius (the pixel footprint comes from the
+// neighbouring pixel's ray), never wider than 0.45 of a cell, so it neither aliases nor reaches past the 2 x 2
+// cells searched (a star sits at least 0.15 cells inside its cell); where the cells shrink under 4 pixels the layer
+// fades out instead of crawling. A star's blob does not cross a cube face's edge (the neighbour face is not searched):
+// at most its outer part is cut, and only where a cell is under ten pixels.
+const float kStarCells = 32.0;
+uint star_face(vec3 d, out vec2 uv) {  // the cube face (0..5: +x -x +y -y +z -z) and its -1..1 coordinates
+    vec3 a = abs(d);
+    if (a.x >= a.y && a.x >= a.z) { uv = d.yz / a.x; return d.x > 0.0 ? 0u : 1u; }
+    if (a.y >= a.z) { uv = d.xz / a.y; return d.y > 0.0 ? 2u : 3u; }
+    uv = d.xy / a.z;
+    return d.z > 0.0 ? 4u : 5u;
+}
+vec3 star_face_dir(uint face, vec2 uv) {  // star_face's inverse (unnormalized)
+    float s = (face & 1u) == 0u ? 1.0 : -1.0;
+    return face < 2u ? vec3(s, uv) : face < 4u ? vec3(uv.x, s, uv.y) : vec3(uv, s);
+}
+// The stars along d (y > 0), pix: radians per pixel. Twinkle: brightness * (1 - twinkle * 0.6 * w), w a smoothed
+// triangle wave of fract(t * rate + phase) with rate (30 + k) / 60 Hz, k 0..63 from the hash, so 60 s is a whole
+// number of cycles for every star and the CPU's wrap is seamless.
+vec3 night_stars(vec3 d, float pix) {
+    vec2 uv;
+    uint face = star_face(d, uv);
+    vec2 g = (uv * 0.5 + 0.5) * kStarCells;
+    vec2 i0 = clamp(floor(g), vec2(0.0), vec2(kStarCells - 1.0));
+    vec2 step_to = mix(vec2(-1.0), vec2(1.0), step(vec2(0.5), g - i0));  // toward the nearer neighbours
+    float cell = 2.0 / (kStarCells * (1.0 + dot(uv, uv)));  // a cell's angular size here (radians, conservative)
+    float lod = smoothstep(2.0, 4.0, cell / pix);
+    if (lod <= 0.0) return vec3(0.0);
+    float rad = min(1.5 * pix, 0.45 * cell);
+    vec3 sum = vec3(0.0);
+    for (int k = 0; k < 4; ++k) {
+        vec2 ic = i0 + vec2(float(k & 1), float(k >> 1)) * step_to;
+        if (any(lessThan(ic, vec2(0.0))) || any(greaterThan(ic, vec2(kStarCells - 1.0)))) continue;  // a face edge
+        uvec2 cc = uvec2(ic) + uvec2(face * 64u, 0u);
+        uint h0 = cloud_hash(cc + uvec2(0x9E3779B9u, 0u));
+        vec2 cuv = (ic + 0.5) * (2.0 / kStarCells) - 1.0;
+        if (float(h0 >> 8u) * (1.0 / 16777216.0) >= p_night2.x * pow(1.0 + dot(cuv, cuv), -1.5)) continue;
+        uint h1 = cloud_hash(uvec2(h0, cc.y ^ 0x85EBCA6Bu));
+        vec2 at = (ic + 0.15 + 0.7 * vec2(float(h1 & 0xFFFu), float((h1 >> 12u) & 0xFFFu)) * (1.0 / 4096.0)) /
+                  kStarCells * 2.0 - 1.0;
+        float dist = length(d - normalize(star_face_dir(face, at)));
+        if (dist >= rad) continue;
+        uint h2 = cloud_hash(uvec2(h1, h0));
+        float u = float(h2 & 0xFFFu) * (1.0 / 4096.0);
+        float mag = 0.06 + 0.94 * u * u * u * u * u;
+        vec3 col = mix(vec3(1.0, 0.8, 0.62), vec3(0.72, 0.84, 1.0), float((h2 >> 12u) & 0x3Fu) * (1.0 / 63.0));
+        col = mix(vec3(1.0), col, 0.45);
+        float x = fract(p_night2.w * (float(30u + (h2 >> 26u)) * (1.0 / 60.0)) +
+                        float((h2 >> 18u) & 0xFFu) * (1.0 / 256.0));
+        float tri = abs(2.0 * x - 1.0);
+        float tw = 1.0 - p_night2.z * 0.6 * tri * tri * (3.0 - 2.0 * tri);
+        sum += col * (mag * tw * (1.0 - smoothstep(0.0, rad, dist)));
+    }
+    return sum * (1.5 * p_night2.y * lod);
+}
+// The moon and the stars over sky colour c along d. Moon: a disk of cos size p_night.x around p_moon.xyz, shaded as a
+// sphere facing the camera: (q.x, q.y) the disk coordinates (1 at the rim) on the basis t (the moon's daily motion,
+// the sun's default arc's axis kMoonArc x moon) and b = moon x t, the normal (q, sqrt(1 - |q|^2)) toward the viewer,
+// and the sun at the elongation 2 pi phase ahead of the moon along t: s = (sin, 0, -cos) on (t, b, toward the
+// viewer) (p_moon2.w, p_moon.w), so phase 0.25 lights the +t half, 0.5 all of it. A soft terminator, a slight limb
+// darkening, a faint earthshine on the dark side, a limb 1.5 pixels soft, and a faint additive halo scaled by the
+// lit fraction (1 - cos) / 2. The disk hides the stars behind it. The moon is cut at the horizon, the stars fade
+// into its haze; both are scaled by the night fade p_night.w.
+const vec3 kMoonArc = vec3(0.0, 0.5, 0.8660254);  // render::sun_direction_at's default arc axis (noon elevation 60)
+vec3 apply_night(vec3 c, vec3 d) {
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    vec3 stars = p_night2.x > 0.0 ? night_stars(d, pix) * smoothstep(0.0, 0.25, d.y) : vec3(0.0);
+    vec3 moon = vec3(0.0);
+    float cover = 0.0;
+    if (p_night.y > 0.0) {
+        vec3 m = p_moon.xyz;
+        float cm = dot(d, m);
+        float sr = sqrt(1.0 - p_night.x * p_night.x);  // sin of the disk's angular radius
+        float hz = smoothstep(0.0, 0.02, d.y);
+        float lit_share = 0.5 - 0.5 * p_moon.w;
+        float a2 = (1.0 - cm) / (1.0 - p_night.x);  // ~ (angle / radius)^2
+        moon = p_moon2.rgb * (p_night.y * 0.02 * lit_share * exp2(-0.4 * a2) * hz);
+        if (cm > 0.0 && a2 < 1.5) {
+            vec3 t = cross(kMoonArc, m);
+            t = dot(t, t) > 1e-8 ? normalize(t) : normalize(cross(m, vec3(1.0, 0.0, 0.0)));
+            vec3 b = cross(m, t);
+            vec2 q = vec2(dot(d, t), dot(d, b)) / sr;
+            float rho2 = dot(q, q);
+            float e = clamp(1.5 * pix / sr, 0.02, 0.5);
+            cover = (1.0 - smoothstep(1.0 - e, 1.0, sqrt(rho2))) * hz;
+            if (cover > 0.0) {
+                float z = sqrt(max(1.0 - rho2, 0.0));
+                float lit = smoothstep(-0.08, 0.12, q.x * p_moon2.w - z * p_moon.w);
+                moon += p_moon2.rgb * (p_night.y * cover * (lit * (0.8 + 0.2 * z) + 0.005));
+            }
+        }
+    }
+    return c + (stars * (1.0 - cover) + moon) * p_night.w;
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1603,6 +1712,7 @@ void main() {
     float cs = dot(d, sun);
     float edge = 1.0 - p_sun.x;
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
+    if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night(c, d);  // under the clouds and the fog, as the sun is
     if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
