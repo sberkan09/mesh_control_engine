@@ -52,6 +52,9 @@ jobs:
             ccache-tidy-
       - name: Run the gate
         run: scripts/ci/local_ci.sh ${{ github.event.inputs.gate || '--task' }}
+      - name: Count the panel shots (editor_panel_shots runs only when the change can reach the GPU tests)
+        if: always()
+        run: echo "::notice title=panel shots::$(ls build/panel-shots 2>/dev/null | wc -l) files in build/panel-shots"
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
