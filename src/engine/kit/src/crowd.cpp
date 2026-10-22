@@ -379,6 +379,10 @@ struct Crowd {
     const CrowdSpawner3D* params = nullptr;
     const RoadNet* net = nullptr;
     const Graph* graph = nullptr;
+    f32 speed_scale = 1.0f;  // M-PEDFLEE: > 1 while fleeing
+    bool flee = false;       // does not wait for lights
+    bool turn = false;       // on this step, head for the edge end farther from `threat`
+    vec3 threat;             // network space
 };
 
 // The nearest pavement point to `p` (network space); false when the graph has none.
@@ -409,6 +413,7 @@ void step_pedestrian(Pedestrian3D& p, LocalTransform& t, const Crowd& c, f32 dt)
     const Graph& g = *c.graph;
     const RoadRegistry::Def& d = *c.net->def;
     if (p.speed < 0.05f) p.speed = 0.05f;
+    const f32 spd = p.speed * c.speed_scale;
     bool fresh = false;
     if (p.edge >= g.edges.size()) {
         const vec3 local = t.position - c.net->origin;
@@ -422,9 +427,15 @@ void step_pedestrian(Pedestrian3D& p, LocalTransform& t, const Crowd& c, f32 dt)
     f32 hx = 0.0f, hz = 0.0f;
     vec3 where;
 
+    if (c.turn && p.target == kNone) {  // M-PEDFLEE: run from the threat along this edge
+        f32 tx = 0.0f, tz = 0.0f;
+        const vec3 a0 = edge_point(g, e, 0.0f, tx, tz), a1 = edge_point(g, e, e.length, tx, tz);
+        p.dir = flat_len(a1.x - c.threat.x, a1.z - c.threat.z) >= flat_len(a0.x - c.threat.x, a0.z - c.threat.z) ? 1 : 0;
+    }
+
     if (p.target == kNone) {
-        p.pace = p.speed;
-        p.s += (p.dir ? 1.0f : -1.0f) * p.speed * dt;
+        p.pace = spd;
+        p.s += (p.dir ? 1.0f : -1.0f) * spd * dt;
         const bool at_end = p.dir ? p.s >= e.length : p.s <= 0.0f;
         if (at_end) {
             p.s = p.dir ? e.length : 0.0f;
@@ -457,18 +468,18 @@ void step_pedestrian(Pedestrian3D& p, LocalTransform& t, const Crowd& c, f32 dt)
             p.mode = PedestrianMode::Walk;
             p.dir = static_cast<u8>(!p.dir);
         } else {
-            const f32 hop_time = hop->length / p.speed;
+            const f32 hop_time = hop->length / spd;
             if (hop->n_crossed && p.hop <= 0.0f && p.mode != PedestrianMode::Cross) {
                 bool clear = true;
                 const u16 node = end_node_of(g, from);
-                for (u32 k = 0; k < hop->n_crossed && clear; ++k) clear = crossing_clear(d, c.net->time, node, hop->crossed[k], hop_time + 1.0f);
+                for (u32 k = 0; k < hop->n_crossed && clear; ++k) clear = c.flee || crossing_clear(d, c.net->time, node, hop->crossed[k], hop_time + 1.0f);
                 p.mode = clear ? PedestrianMode::Cross : PedestrianMode::Wait;
             }
             if (p.mode == PedestrianMode::Wait) {
                 p.pace = 0.0f;
             } else {
-                p.pace = p.speed;
-                p.hop += hop->length > 0.01f ? p.speed * dt / hop->length : 1.0f;
+                p.pace = spd;
+                p.hop += hop->length > 0.01f ? spd * dt / hop->length : 1.0f;
             }
             const vec3 a = end_position(g, from), b = end_position(g, p.target);
             if (p.hop >= 1.0f) {  // arrived: walk the new edge away from this end
@@ -652,6 +663,10 @@ void kit_crowd(Frame& f) {
             return;
         }
         if (p.mode == PedestrianMode::Down) p.mode = PedestrianMode::Walk;
+        // M-PEDFLEE: hurt and alive: run from the attacker for kPedestrianFleeSeconds
+        const bool scared = hp && hp->hits > 0 && hp->since_hit < kPedestrianFleeSeconds;
+        const bool was_fleeing = p.mode == PedestrianMode::Flee;
+        if (!scared && was_fleeing) p.mode = PedestrianMode::Walk;
         const bool focused = in == &loose ? loose_ok : focus_ok[index] != 0;
         const vec3 focus = in == &loose ? loose_focus : focus_pos[index];
         ++st.stats.pedestrians;
@@ -680,7 +695,17 @@ void kit_crowd(Frame& f) {
         c.params = &in->params;
         c.net = &in->net;
         c.graph = in->graph;
+        if (scared) {
+            c.flee = true;
+            c.speed_scale = kPedestrianFleeScale;
+            const LocalTransform* at = hp->last_attacker.is_null() || !w.alive(hp->last_attacker) ? nullptr : w.try_get<LocalTransform>(hp->last_attacker);
+            if (at && !was_fleeing) {
+                c.turn = true;
+                c.threat = at->position - in->net.origin;
+            }
+        }
         step_pedestrian(p, t, c, p.lag);
+        if (scared) p.mode = PedestrianMode::Flee;
         p.lag = 0.0f;
         ++st.stats.stepped;
     });

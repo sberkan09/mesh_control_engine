@@ -43,11 +43,17 @@ struct Prefab;
 
 namespace mce::kit {
 
-enum class PedestrianMode : u8 { Walk, Wait, Cross, Down };  // Down: its Health3D is dead (M-PEDDEAD)
-MCE_ENUM(PedestrianMode, Walk, Wait, Cross, Down)
+enum class PedestrianMode : u8 { Walk, Wait, Cross, Down, Flee };  // Down: its Health3D is dead (M-PEDDEAD); Flee: it was hurt (M-PEDFLEE)
+MCE_ENUM(PedestrianMode, Walk, Wait, Cross, Down, Flee)
 
 // How long a pedestrian whose Health3D is dead lies where it fell before it is removed.
 inline constexpr f32 kPedestrianCorpseSeconds = 10.0f;
+
+// M-PEDFLEE: a pedestrian whose Health3D was hit in the last kPedestrianFleeSeconds (and is still alive) runs from whoever hit it:
+// it turns to the end of its pavement edge that is farther from the attacker, moves kPedestrianFleeScale times as fast and
+// does not wait for lights. It is a function of Health3D (hits, since_hit, last_attacker), so nothing new is saved.
+inline constexpr f32 kPedestrianFleeSeconds = 5.0f;
+inline constexpr f32 kPedestrianFleeScale = 2.5f;
 
 struct Pedestrian3D {
     u32 crowd = 0;                   // the owning CrowdSpawner3D's entity index + 1; 0: none (uses the defaults)
@@ -67,7 +73,7 @@ struct Pedestrian3D {
 };
 MCE_COMPONENT(Pedestrian3D, (crowd, Save, ReadOnly), (edge, Save), (target, Save), (s, Save), (hop, Save),
               (speed, Save, Range{0.1f, 10}, Help{"m/s the pedestrian walks at"}), (pace, Save, ReadOnly, Help{"m/s it moves at now; read it to pick an animation"}),
-              (yaw, Save), (lag, Save, ReadOnly), (rng, Save), (dir, Save), (mode, Save, ReadOnly, Help{"Walk, Wait (at a kerb for a light), Cross or Down (dead)"}),
+              (yaw, Save), (lag, Save, ReadOnly), (rng, Save), (dir, Save), (mode, Save, ReadOnly, Help{"Walk, Wait (at a kerb for a light), Cross, Down (dead) or Flee (hurt, running)"}),
               (lod, Save, ReadOnly, Help{"0 near, 1 mid, 2 far from the focus"}))
 
 struct CrowdSpawner3D {
