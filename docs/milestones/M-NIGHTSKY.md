@@ -53,7 +53,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 14a | planned | none | |
+| 14a | done | PR TBD | `Moon` (pure data, 12 f32 incl. `light_color` vec3 + `light_shadows` + `enabled` + explicit 2-byte pad), registered in `install_weather`; header-only `moon_phase(Moon, day, hour)`, `moon_illumination(phase)`, `moon_direction(Moon, hour, phase)`, `moon_level(Moon, day, hour, Weather*)` in `mce/kit/moon.h`. Interpretation notes: `moon_level` takes the day and hour and derives the phase itself; the elevation ramp is `smoothstep(0, 0.2, elevation)`; weather factors Clear 1, Overcast 0.5, Rain 0.3, Storm 0.15, Snow 0.5 (the spec names none for snow), blended `1 + (kind - 1) * intensity`; the illumination is `sin^2` of a fixed polynomial (no cos), the direction uses `render::sun_direction_at` (std trig, not hashed) tilted toward the sun arc normal by `inclination_deg`; `freeze_phase` 1 wraps to 0; NaN or negative hour counts as 0 for phase and direction (level is 0 for them). Tests in `tests/kit/test_moon.cpp`; guide 9.19j |
 | 14b | planned | none | |
 | 14c | planned | none | seam PR for `scene3d.h` |
 | 14d | planned | none | Opus writes, independent Opus review |
