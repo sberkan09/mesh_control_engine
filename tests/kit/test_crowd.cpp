@@ -12,6 +12,7 @@
 #include "mce/cook/importer.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
 
@@ -225,4 +226,44 @@ TEST_CASE("crowd: pedestrians wait at the kerb for the light") {
     }
     CHECK(waited > 0);
     CHECK(crossed > 0);
+}
+
+TEST_CASE("crowd: a dead pedestrian stops, lies about for ten seconds and is replaced (M-PEDDEAD)") {
+    Scene s(spawner(0));
+    Pedestrian3D p;
+    p.speed = 1.5f;
+    Health3D hp;
+    hp.max = 50.0f;
+    hp.current = 50.0f;
+    const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p, hp);
+    s.run(30);
+    const vec3 before = s.w.try_get<LocalTransform>(e)->position;
+    s.w.try_get_mut<Health3D>(e)->dead = 1;
+    s.run(2);
+    CHECK(s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Down);
+    CHECK(s.stats().down == 1);
+    CHECK(s.stats().pedestrians == 0);
+    const vec3 fell = s.w.try_get<LocalTransform>(e)->position;
+    s.run(60 * 5);
+    const vec3 later = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(later.x == doctest::Approx(fell.x));
+    CHECK(later.z == doctest::Approx(fell.z));
+    CHECK(std::fabs(fell.z - before.z) < 1.0f);
+    s.run(60 * 6);
+    CHECK_FALSE(s.w.alive(e));  // gone after the corpse time
+}
+
+TEST_CASE("crowd: a revived pedestrian walks again (M-PEDDEAD)") {
+    Scene s(spawner(0));
+    Health3D hp;
+    hp.max = 50.0f;
+    hp.current = 50.0f;
+    hp.dead = 1;
+    const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, Pedestrian3D{}, hp);
+    s.run(10);
+    CHECK(s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Down);
+    s.w.try_get_mut<Health3D>(e)->dead = 0;
+    s.run(30);
+    CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Down);
+    CHECK(s.w.try_get<Pedestrian3D>(e)->pace > 0.0f);
 }

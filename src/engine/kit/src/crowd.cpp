@@ -7,6 +7,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/hash.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
 #include "mce/log.h"
@@ -631,6 +632,26 @@ void kit_crowd(Frame& f) {
         } else {
             in = &loose;
         }
+        // A pedestrian whose Health3D is dead stops where it fell and is removed after kPedestrianCorpseSeconds; it does not count
+        // toward the crowd's population, so the spawner refills the street. A revived one walks again.
+        const Health3D* hp = w.try_get<Health3D>(e);
+        if (hp && hp->dead) {
+            if (p.mode != PedestrianMode::Down) {
+                p.mode = PedestrianMode::Down;
+                p.pace = 0.0f;
+                p.lag = 0.0f;
+            } else {
+                p.lag += f.dt;
+            }
+            if (p.lag >= kPedestrianCorpseSeconds) {
+                f.commands().destroy(e);
+                ++st.stats.despawned;
+                return;
+            }
+            ++st.stats.down;
+            return;
+        }
+        if (p.mode == PedestrianMode::Down) p.mode = PedestrianMode::Walk;
         const bool focused = in == &loose ? loose_ok : focus_ok[index] != 0;
         const vec3 focus = in == &loose ? loose_focus : focus_pos[index];
         ++st.stats.pedestrians;

@@ -500,3 +500,8 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - Worn items' `damage` stats are added to the `damage` of a `Weapon3D` on the same entity as the `Equipment`, like `armor` and `max_health` (a remembered
   change, applied once, given back on unequip, never below 0). A weapon on a separate entity does not get it yet.
 
+### Dead pedestrians (M-PEDDEAD)
+
+- A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
+  `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
+

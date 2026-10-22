@@ -43,8 +43,11 @@ struct Prefab;
 
 namespace mce::kit {
 
-enum class PedestrianMode : u8 { Walk, Wait, Cross };
-MCE_ENUM(PedestrianMode, Walk, Wait, Cross)
+enum class PedestrianMode : u8 { Walk, Wait, Cross, Down };  // Down: its Health3D is dead (M-PEDDEAD)
+MCE_ENUM(PedestrianMode, Walk, Wait, Cross, Down)
+
+// How long a pedestrian whose Health3D is dead lies where it fell before it is removed.
+inline constexpr f32 kPedestrianCorpseSeconds = 10.0f;
 
 struct Pedestrian3D {
     u32 crowd = 0;                   // the owning CrowdSpawner3D's entity index + 1; 0: none (uses the defaults)
@@ -64,7 +67,7 @@ struct Pedestrian3D {
 };
 MCE_COMPONENT(Pedestrian3D, (crowd, Save, ReadOnly), (edge, Save), (target, Save), (s, Save), (hop, Save),
               (speed, Save, Range{0.1f, 10}, Help{"m/s the pedestrian walks at"}), (pace, Save, ReadOnly, Help{"m/s it moves at now; read it to pick an animation"}),
-              (yaw, Save), (lag, Save, ReadOnly), (rng, Save), (dir, Save), (mode, Save, ReadOnly, Help{"Walk, Wait (at a kerb for a light) or Cross"}),
+              (yaw, Save), (lag, Save, ReadOnly), (rng, Save), (dir, Save), (mode, Save, ReadOnly, Help{"Walk, Wait (at a kerb for a light), Cross or Down (dead)"}),
               (lod, Save, ReadOnly, Help{"0 near, 1 mid, 2 far from the focus"}))
 
 struct CrowdSpawner3D {
@@ -102,6 +105,7 @@ struct CrowdStats {
     u32 pedestrians = 0;
     u32 near = 0, mid = 0, far = 0;  // by level of detail
     u32 waiting = 0, crossing = 0;
+    u32 down = 0;                    // dead pedestrians lying about (not counted in `pedestrians`)
     u32 stepped = 0;                 // pedestrians stepped this tick
     u32 spawned = 0, despawned = 0;
 };
