@@ -6,6 +6,7 @@ mce_add_test(test_editor UMBRELLA
         test_asset_kinds.cpp
         test_asset_ops.cpp
         test_asset_refs.cpp
+        test_camera_bookmarks.cpp
         test_quick_open.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp

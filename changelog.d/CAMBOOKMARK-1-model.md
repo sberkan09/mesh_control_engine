@@ -1,0 +1,1 @@
+- Editor, M-CAMBOOKMARK 1: `CameraBookmarks` stores nine viewpoints (the 2D and the orbit camera per slot) and saves them as text; the Ctrl+1..9 / 1..9 keys follow.
