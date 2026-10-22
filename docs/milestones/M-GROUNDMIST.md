@@ -1,6 +1,6 @@
 # M-GROUNDMIST — Morning mist banks and ground fog from the clock and the weather (milestone record)
 
-**Status:** planned (2026-10-22). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WETSURFACE, M-DAYNIGHT (`WorldClock`, `DayCycle`) and the volumetric fog of M-VISUAL 7. Today fog is a single global number: `Weather` adds a kind-dependent `fog_density` to the exp² fog and `DayCycle` keys it by the hour, both uniform in height and distance, so a clear dawn after a rainy night looks like noon with a bit more haze. Real mornings have mist that lies in the low ground, burns off as the sun rises and is thickest when the ground is still wet. No Linear issues (free issue limit); this record is the tracker.
+**Status:** in progress, 13a done (2026-10-22). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WETSURFACE, M-DAYNIGHT (`WorldClock`, `DayCycle`) and the volumetric fog of M-VISUAL 7. Today fog is a single global number: `Weather` adds a kind-dependent `fog_density` to the exp² fog and `DayCycle` keys it by the hour, both uniform in height and distance, so a clear dawn after a rainy night looks like noon with a bit more haze. Real mornings have mist that lies in the low ground, burns off as the sun rises and is thickest when the ground is still wet. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `GroundMist` turns the hour of day (`Environment3D.time_of_day`, written by `WorldClock`) and the wetness left by rain (`Weather.wetness`) into a mist level, and `Kit3DExtract` feeds that level into the *existing* volumetric height fog (density, falloff, base height) so the mist hugs the ground and the sun shines through it as light shafts. Where volumetric fog is off (Low tier, or a scene that did not enable it) the same level raises the exp² fog density and pulls its colour toward the mist colour instead. No new shader, pass or render field. A scene without `GroundMist` hashes, simulates and renders exactly as today.
 
@@ -45,6 +45,6 @@ No step needs Opus: nothing writes a shader or a draw path. If review of 13b fin
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 13a | planned | none | |
+| 13a | done | PR TBD | `GroundMist` (pure data, 11 f32 + `color` vec3 + `enabled` + explicit 3-byte pad), registered in `install_weather`; header-only `mist_level` in `mce/kit/ground_mist.h`. Interpretation notes: weather factor is `1 + weather_damp * (kind - 1) * intensity` (a lerp from 1 to the kind factor, so Clear at intensity 0 is not 0); a NaN or negative hour (including -1) gives 0, an hour above 24 wraps; NaN authoring means the default, others clamp to the Range (zero widths become 0.1 h); `enabled` is the extract's to read, not `mist_level`'s. Tests in `tests/kit/test_ground_mist.cpp`; guide 9.19i |
 | 13b | planned | none | |
 | 13c | planned | none | |

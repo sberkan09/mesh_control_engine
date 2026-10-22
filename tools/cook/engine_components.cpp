@@ -62,6 +62,7 @@
 #include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
 #include "mce/kit/weather_audio.h"       // WeatherAudio (M-WEATHERAUDIO 10a)
 #include "mce/kit/lightning_bolt.h"      // LightningBolt (M-LIGHTNINGBOLT 11a)
+#include "mce/kit/ground_mist.h"         // GroundMist (M-GROUNDMIST 13a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
