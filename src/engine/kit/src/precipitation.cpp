@@ -11,6 +11,7 @@
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_direction.h"
+#include "mce/kit/wind_gust.h"
 
 namespace mce::kit {
 namespace {
@@ -116,7 +117,15 @@ void kit_precipitation(Frame& f) {
     if (!wx) return;
     const WeatherKind kind = wx->current;
     const f32 intensity = wx->intensity;
-    const f32 wind = wx->wind;
+    // The gusted wind (M-WINDGUST 12c): the first WindGust in ECS order. With none that applies the wind is
+    // Weather.wind itself, bit for bit; a gust that applies is quantised to 1/64 so the emitter fields change in steps
+    // and not on every tick of a gust.
+    const WindGust* gust = nullptr;
+    w.query<const WindGust>().each([&](Entity, const WindGust& c) {
+        if (!gust) gust = &c;
+    });
+    f32 wind = effective_wind(*wx, gust, kGustRain);
+    if (std::bit_cast<u32>(wind) != std::bit_cast<u32>(wx->wind)) wind = std::round(wind * 64.0f) / 64.0f;
     // The scene wind heading (M-WINDDIR 8f): the first WindDirection in ECS order, only together with a Weather.
     math::vec2 wdir{1.0f, 0.0f};
     bool wd_found = false;

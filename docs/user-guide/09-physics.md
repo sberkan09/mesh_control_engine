@@ -758,7 +758,10 @@ consumers (1 sway, 2 rain, 4 clouds, 8 snow, 16 audio, all by default) and `enab
 sway (bit 1) already follows the gusted wind (the batch wind fields scale with it; nothing is re-scattered) and so does
 the snow lee bias (bit 8: `wind_bias * (1 + strength * gust)`, clamped to 0..1). Cloud drift is not gusted: the render
 side computes the cloud offset as `speed * time`, so a changing speed would make the layer jump (bit 4 is unused).
-A scene without a `WindGust` is unchanged, bit for bit.
+Rain and snow slant (bit 2) and the wind sound (bit 16) follow the gusted wind too: `kit_precipitation` and
+`kit_weather_audio` run after `kit_wind_gust` in the same tick. While a gust applies, the wind fed to the emitter is
+rounded to steps of 1/64 so the emitter changes in steps, and the wind sound moves toward the gusted level through its
+usual fade (`fade_seconds`). A scene without a `WindGust` is unchanged, bit for bit.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
