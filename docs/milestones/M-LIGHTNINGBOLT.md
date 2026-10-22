@@ -42,7 +42,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 11a | planned | | |
+| 11a | done | PR TBD | `LightningBolt` (state, authoring, padding audit), strike position in `kit_lightning`, `LightningStruck.{has_pos,distance_m,pos}`, `ThunderDelay` on `distance_m`; guide 9.19g |
 | 11b | planned | | draw path chosen here: emissive box segments, else a particle chain, else 11c |
 | 11c | planned (probably dropped) | | only if 11b finds neither path draws a continuous bolt |
 | 11d | planned | | |

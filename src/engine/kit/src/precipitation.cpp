@@ -6,6 +6,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/lightning_bolt.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/weather.h"
@@ -154,6 +155,10 @@ void kit_lightning(Frame& f) {
         if (!wx) wx = &c;
     });
     if (!wx) return;
+    LightningBolt* bolt = nullptr;  // M-LIGHTNINGBOLT 11a: the first in ECS order
+    w.query<LightningBolt>().each([&](Entity, LightningBolt& c) {
+        if (!bolt) bolt = &c;
+    });
     bool first = true;
     f.query<Lightning>().each([&](Entity, Lightning& l) {
         if (!first) return;
@@ -180,10 +185,32 @@ void kit_lightning(Frame& f) {
             if (strike) {
                 l.remaining = l.flash_ticks;
                 const u32 delay = 30u + hash_mix(l.seed, l.counter * 2u + 1u) % 271u;
+                LightningStruck ev{delay};
+                if (bolt && bolt->enabled) {  // own hash stream (counter * 4 + 2, + 3); times and delays above are unchanged
+                    math::vec3 origin{};
+                    bool cam_found = false, cam_primary = false;
+                    w.query<const Camera3DComponent&, const LocalTransform&>().each(
+                        [&](Entity, const Camera3DComponent& c, const LocalTransform& t) {
+                            if (cam_found && (cam_primary || !c.primary)) return;
+                            cam_found = true;
+                            cam_primary = c.primary != 0;
+                            origin = t.position;
+                        });
+                    const BoltStrike sp = bolt_strike_position(*bolt, l.seed, l.counter, origin);
+                    ev.has_pos = 1;
+                    ev.distance_m = sp.distance_m;
+                    ev.pos = math::vec3{sp.x, std::isnan(bolt->ground_y) ? 0.0f : bolt->ground_y, sp.z};
+                    ev.thunder_delay_ticks = bolt_delay_ticks(sp.distance_m, dt);
+                    set(bolt->strike_x, sp.x);
+                    set(bolt->strike_z, sp.z);
+                    set(bolt->strike_dist_m, sp.distance_m);
+                    set(bolt->strike_id, l.counter);
+                }
                 ++l.counter;
-                f.events().push(LightningStruck{delay});
+                f.events().push(ev);
             }
         }
+        if (bolt) set(bolt->active, bolt->enabled ? l.remaining : 0u);
         f32 mul = 1.0f;
         if (l.remaining > 0 && l.flash_ticks > 0)
             mul = 1.0f + (l.flash_boost - 1.0f) * (static_cast<f32>(l.remaining) / static_cast<f32>(l.flash_ticks));

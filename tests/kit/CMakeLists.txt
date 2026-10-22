@@ -59,6 +59,7 @@ mce_add_test(test_kit UMBRELLA
         test_precipitation.cpp
         test_precipitation_wind.cpp
         test_thunder_delay.cpp
+        test_lightning_bolt.cpp
         test_weather_audio.cpp
         test_rain_splash.cpp
         test_map_markers.cpp

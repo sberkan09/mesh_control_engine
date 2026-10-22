@@ -709,6 +709,21 @@ From Luau, `weather.rain_level()` and `weather.wind_level()` read the two bed le
 `weather.set_audio{fade = 8}` for a slower change of the beds. The `12_weather` sample carries a `WeatherAudio` and two
 clip-less looping `AudioSource` entities, so it stays silent; give them your own rain and wind clips to hear the beds.
 
+## 9.19g Strikes with a place (M-LIGHTNINGBOLT)
+
+An optional `LightningBolt` entity (one per scene, the first in ECS order drives; it is registered with the weather)
+gives every lightning strike a position, so thunder arrives after the real distance. Without it a strike only has a
+delay of 30 to 300 ticks. With it, `kit_lightning` picks a bearing and a distance from the camera for each strike
+(`min_range_m` 150 and `max_range_m` 900, 10..5000, swapped if inverted) from the `Lightning` seed and strike count,
+on its own hash stream, so the strike times of a scene do not move. The point lies on the plane `ground_y` around the
+primary camera as it was at the strike, and stays there. The `LightningStruck` event then carries `has_pos`, `pos` and
+`distance_m`, and the delay is `ceil(distance_m / 343 / dt)` ticks (no 30..300 clamp). `ThunderDelay` uses that
+distance for its delay, at its own `speed_mps`, and for its gain; an event without a position is handled as before.
+The last strike is saved on the component (`strike_x`, `strike_z`, `strike_dist_m`, `strike_id`, `active`), so a save
+during a flash resumes on the same state. `enabled` 0 switches positions off; the other fields (`height_m`, `width_m`,
+`segments_log2`, `jitter`, `fork`, `light_intensity`, `light_radius_m`) are authoring for the bolt drawing that follows.
+A scene without a `LightningBolt` hashes and sounds as before.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
