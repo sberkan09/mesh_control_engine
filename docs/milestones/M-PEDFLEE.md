@@ -15,5 +15,8 @@ not saved). Test: `test_crowd.cpp` (both sides of the shooter, a far shot, calmi
 **Step 3.** A running pedestrian is also a source: neighbours within 8 m catch the panic with one second less to run per hop (so it dies out), and a hurt pedestrian warns the
 ones near it. The scared list now holds every runner with its last position. Test: `test_crowd.cpp` (a close neighbour catches it, a far one does not, the ripple ends).
 
+**Step 4 (scenario).** `test_mcp_openworld` fires the player's gun in the `09_openworld` plaza and reads `Pedestrian3D.mode` through `inspect`: without shots no walker flees,
+with shots 17 of 61 do (measured 2026-10-22; the test needs at least 1), so the whole stack (crowd, weapon, event, mode) is covered in the real city.
+
 ## Open items
 - Tuning the radii and the hop decay against a dense street (needs a measured crowd, not a unit test).

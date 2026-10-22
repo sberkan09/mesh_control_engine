@@ -66,6 +66,17 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[20.263,0.95,22]})");
     c.ok("component_set", R"({"entity":"Camera","component":"CameraFollow3D","value":{"pitch":0.0,"min_pitch":0.0,"offset":[0,0.05,0]}})");
     c.ok("scene_save");
+    // M-PEDFLEE: the shots send the walkers near the plaza running; with no shots nobody runs.
+    const auto fleeing = [&](const char* input) {
+        auto r = c.ok("run_headless", std::string(R"({"ticks":100,"log_lines":0,"input":")") + input +
+                                          R"(","inspect":{"component":"Pedestrian3D","show":["Pedestrian3D"]}})");
+        u32 n = 0;
+        for (u32 i = 0; i < count(r); ++i) n += str(comps(r, i).get("Pedestrian3D").get("mode")) == "Flee" ? 1u : 0u;
+        MESSAGE("walkers: " << count(r) << " fleeing: " << n);
+        return n;
+    };
+    CHECK(fleeing("") == 0);
+    CHECK(fleeing("20-80 Fire") >= 1);
     auto police = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Police3D","show":["Police3D"]}})");
     CHECK(police.v().get("log").get("errors").as_number() == 0);
     CHECK(count(police) == 3);  // the officer that was shot is gone
