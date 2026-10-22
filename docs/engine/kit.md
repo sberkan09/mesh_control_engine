@@ -505,6 +505,12 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
   `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
 
+### Fleeing pedestrians (M-PEDFLEE)
+
+- A live pedestrian whose `Health3D` was hit in the last 5 s (`kPedestrianFleeSeconds`; `hits > 0` and `since_hit` below it) switches to `PedestrianMode::Flee`: on its pavement edge
+  it turns to the end that is farther from `last_attacker`, moves 2.5 times as fast (`kPedestrianFleeScale`, `pace` shows it) and does not wait for lights. At junctions it picks
+  its way as usual. After the 5 s it walks again. Nothing new is saved: the state is a function of `Health3D`. A pedestrian hit again keeps running.
+
 ### Hardening (M-GAMEPLAYFIX 1)
 
 - The part of a Poison pulse that was under way when the effect ends is dealt in proportion. Two `UseItem` events for one cooldown item in the same tick pass once.

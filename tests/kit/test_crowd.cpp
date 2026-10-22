@@ -267,3 +267,37 @@ TEST_CASE("crowd: a revived pedestrian walks again (M-PEDDEAD)") {
     CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Down);
     CHECK(s.w.try_get<Pedestrian3D>(e)->pace > 0.0f);
 }
+
+TEST_CASE("crowd: a hurt pedestrian runs from its attacker, ignores the light and calms down (M-PEDFLEE)") {
+    for (const f32 attacker_z : {-10.0f, -50.0f}) {
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        Health3D hp;
+        hp.max = 50.0f;
+        hp.current = 50.0f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p, hp);
+        const Entity foe = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, attacker_z}, math::quat::identity(), {1, 1, 1}});
+        s.run(30);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);  // never hurt: walks
+        {
+            Health3D* h = s.w.try_get_mut<Health3D>(e);
+            h->hits = 1;
+            h->since_hit = 0.0f;
+            h->last_attacker = foe;
+        }
+        s.run(2);
+        const Pedestrian3D* pe = s.w.try_get<Pedestrian3D>(e);
+        CHECK(pe->mode == PedestrianMode::Flee);
+        CHECK(pe->pace == doctest::Approx(1.5f * kPedestrianFleeScale));
+        const vec3 start = s.w.try_get<LocalTransform>(e)->position;
+        s.run(20);
+        const vec3 now = s.w.try_get<LocalTransform>(e)->position;
+        const f32 d0 = std::fabs(start.z - attacker_z), d1 = std::fabs(now.z - attacker_z);
+        CHECK(d1 > d0);  // farther from the attacker than a moment ago
+        s.w.try_get_mut<Health3D>(e)->since_hit = kPedestrianFleeSeconds + 1.0f;
+        s.run(2);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->pace == doctest::Approx(1.5f));
+    }
+}
