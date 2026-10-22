@@ -385,6 +385,23 @@ void kit_inventory(Frame& f) {
 
 // Brings Health3D in line with what the worn items' stats say, applying only the change since last tick.
 void apply_equipment_stats(World& w, ItemRegistry& reg) {
+    // M-WEAPONSTAT: worn items' "damage" stats add to a Weapon3D on the same entity, as a remembered change like armor below
+    w.query<Equipment, Weapon3D>().each([&](Entity, Equipment& eq, Weapon3D& wp) {
+        f32 damage = 0.0f;
+        const asset::ItemCatalog* c = reg.resolve(eq.catalog);
+        if (!c && eq.damage_applied != 0.0f) return;  // catalog not loaded: keep what is applied
+        if (c) {
+            for (u32 s = 0; s < kEquipSlots; ++s) {
+                if (eq.item[s] == 0 || !valid_item(*c, eq.item[s] - 1u)) continue;
+                damage += c->stat(c->items()[eq.item[s] - 1u], "damage", 0.0f);
+            }
+        }
+        if (!std::isfinite(damage) || (damage == 0.0f && eq.damage_applied == 0.0f)) return;
+        const f32 now = wp.damage + (damage - eq.damage_applied);
+        const f32 next = now < 0.0f ? 0.0f : now;
+        eq.damage_applied += next - wp.damage;  // what really changed, so the clamp at 0 is not remembered as added
+        wp.damage = next;
+    });
     w.query<Equipment, Health3D>().each([&](Entity, Equipment& eq, Health3D& hp) {
         f32 armor = 0.0f;
         f32 max_health = 0.0f;

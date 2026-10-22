@@ -663,3 +663,36 @@ TEST_CASE("inventory: a consumable with a cooldown stat cannot be used again unt
     CHECK(r.inv().qty[0] == 1);
     CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(50.0f));
 }
+
+TEST_CASE("inventory: a worn weapon's damage stat adds to Weapon3D.damage and is given back (M-WEAPONSTAT)") {
+    Rig r;
+    asset::ItemCatalog c = r.cat;
+    const FixedString<32> tag("equip.weapon");
+    asset::ItemDef d;
+    d.id = "blade";
+    d.name = "blade";
+    d.stack_max = 1;
+    asset::ItemStat st;
+    st.key = "damage";
+    st.value = 12.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(&st, 1), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Weapon3D wp;
+    wp.damage = 20.0f;
+    r.w.set(r.hero, wp);
+    r.give("blade", 1);
+    CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(20.0f));  // carried, not worn
+    EquipItem q;
+    q.owner = r.hero;
+    q.slot = 0;
+    q.equip_slot = static_cast<u32>(EquipSlot::Weapon);
+    EventAccess(r.w).push(q);
+    r.tick(6);
+    CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(32.0f));  // once, not every tick
+    UnequipItem u;
+    u.owner = r.hero;
+    u.equip_slot = static_cast<u32>(EquipSlot::Weapon);
+    EventAccess(r.w).push(u);
+    r.tick(6);
+    CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(20.0f));
+}

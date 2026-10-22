@@ -82,9 +82,10 @@ struct Equipment {
     u16 item[kEquipSlots] = {};  // by EquipSlot: catalog index + 1, 0: empty
     f32 armor_applied = 0.0f;    // engine-written, not saved: what worn items' "armor" stats have added to Health3D.armor (M-ITEMFX 2)
     f32 max_applied = 0.0f;      // engine-written, not saved: the same for "max_health" and Health3D.max
+    f32 damage_applied = 0.0f;   // engine-written, not saved: the same for "damage" and Weapon3D.damage on the same entity (M-WEAPONSTAT)
 };
 MCE_COMPONENT(Equipment, (catalog, Save, Help{"the .mcitems catalog the item numbers index (the inventory's)"}), (item, Save, ReadOnly),
-              (armor_applied, ReadOnly), (max_applied, ReadOnly))
+              (armor_applied, ReadOnly), (max_applied, ReadOnly), (damage_applied, ReadOnly))
 
 struct ItemPickup3D {
     FixedString<64> item;  // the item's id in the collector's catalog

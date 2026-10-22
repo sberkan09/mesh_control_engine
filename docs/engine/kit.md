@@ -495,3 +495,8 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
   Two `UseItem` events for the same item in one tick both pass, since the cooldown starts a tick later. Luau: `status.has(e, "cd:potion")` tells a
   script (and a HUD) the item is cooling down; `status.add(e, id, "cooldown", 1, seconds)` makes a cooldown by hand.
 
+### Stat-driven weapon damage (M-WEAPONSTAT)
+
+- Worn items' `damage` stats are added to the `damage` of a `Weapon3D` on the same entity as the `Equipment`, like `armor` and `max_health` (a remembered
+  change, applied once, given back on unequip, never below 0). A weapon on a separate entity does not get it yet.
+
