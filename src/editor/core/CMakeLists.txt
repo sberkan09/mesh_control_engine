@@ -17,6 +17,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/asset_ops.cpp
         src/asset_refs.cpp
         src/quick_open.cpp
+        src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp
         src/strings_grid.cpp

@@ -1,0 +1,1 @@
+- Editor, M-RECENT 1: `RecentList` keeps the most recently used scene files (newest first, no duplicates, capped) and saves them as one path per line; File > Open Recent follows.

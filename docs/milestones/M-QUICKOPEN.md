@@ -11,7 +11,7 @@
 | # | Step | State |
 |---|---|---|
 | 1 | `QuickOpen` in editor core (`mce/editor/quick_open.h`): items of four kinds (asset, entity, panel, command) built from the session, the scene and a list of names; `search(query, limit)` ranks by fuzzy match (every query letter in order; a prefix, a word start and a short label rank higher; case ignored), with a test (`test_quick_open.cpp`) | done |
-| 2 | Shell: Ctrl+P popup with a text field, up/down/Enter/Esc; an asset opens like a double-click in the Assets panel, an entity is selected, a panel is brought to the front, a command runs; user guide row | open |
+| 2 | Shell: Ctrl+P popup with a text field, up/down/Enter/Esc; an asset opens like a double-click in the Assets panel, an entity is selected, a panel is brought to the front, a command runs; user guide row | done |
 
 **What the box searches.** The project's assets by path, the open scene's entities by name, every panel by its title, and the File/Edit/View commands. It reads the same lists the panels read; it adds none of its own.
 
