@@ -301,3 +301,33 @@ TEST_CASE("crowd: a hurt pedestrian runs from its attacker, ignores the light an
         CHECK(s.w.try_get<Pedestrian3D>(e)->pace == doctest::Approx(1.5f));
     }
 }
+
+TEST_CASE("crowd: a shot nearby sends pedestrians running, a far one does not, and they calm down (M-PEDFLEE 2)") {
+    for (const f32 shot_z : {-20.0f, -40.0f}) {
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+        s.run(30);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        WeaponFired3D shot;
+        shot.origin = {4.0f, 1.0f, shot_z};
+        shot.end = {4.0f, 1.0f, shot_z + 50.0f};
+        EventAccess(s.w).push(shot);
+        s.run(3);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee);
+        const f32 d0 = std::fabs(s.w.try_get<LocalTransform>(e)->position.z - shot_z);
+        s.run(20);
+        CHECK(std::fabs(s.w.try_get<LocalTransform>(e)->position.z - shot_z) > d0);  // away from the muzzle, whichever side it is on
+        s.run(60 * 6);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+    }
+    Scene far(spawner(0));
+    Pedestrian3D p;
+    const Entity e = far.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+    WeaponFired3D shot;
+    shot.origin = {4.0f, 1.0f, -30.0f + kPedestrianFearRadius + 20.0f};
+    EventAccess(far.w).push(shot);
+    far.run(5);
+    CHECK(far.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+}

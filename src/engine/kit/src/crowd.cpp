@@ -299,7 +299,16 @@ struct Candidates {
     Array<u32> edges;
 };
 
+// A pedestrian scared by a shot (M-PEDFLEE 2): where the shot came from and how long it keeps running.
+struct Fear {
+    Entity ped;
+    vec3 threat;  // world space
+    f32 left = 0.0f;
+};
+constexpr usize kMaxFears = 512;
+
 struct CrowdState {
+    Array<Fear> fears;
     asset::AssetSystem* assets = nullptr;
     Array<Graph> graphs;
     Array<Candidates> candidates;
@@ -574,6 +583,17 @@ void kit_crowd(Frame& f) {
     CrowdState& st = *w.try_resource<CrowdState>();
     st.stats = CrowdStats{};
 
+    // M-PEDFLEE 2: scared pedestrians count down; this tick's shots are the new scares
+    {
+        Array<Fear> keep;
+        for (Fear& fr : st.fears) {
+            fr.left -= f.dt;
+            if (fr.left > 0.0f && w.alive(fr.ped)) keep.push_back(fr);
+        }
+        st.fears = static_cast<Array<Fear>&&>(keep);
+    }
+    Span<const WeaponFired3D> shots = f.events().read<WeaponFired3D>();
+
     // The spawners, with the network each walks on.
     Array<Info> infos;
     w.query<const CrowdSpawner3D&>().each([&](Entity e, const CrowdSpawner3D& s) {
@@ -664,8 +684,23 @@ void kit_crowd(Frame& f) {
         }
         if (p.mode == PedestrianMode::Down) p.mode = PedestrianMode::Walk;
         // M-PEDFLEE: hurt and alive: run from the attacker for kPedestrianFleeSeconds
-        const bool scared = hp && hp->hits > 0 && hp->since_hit < kPedestrianFleeSeconds;
+        bool scared = hp && hp->hits > 0 && hp->since_hit < kPedestrianFleeSeconds;
         const bool was_fleeing = p.mode == PedestrianMode::Flee;
+        Fear* fear = nullptr;
+        for (Fear& fr : st.fears)
+            if (fr.ped == e) fear = &fr;
+        for (const WeaponFired3D& sh : shots) {  // a shot nearby: run from the muzzle (the last close one wins)
+            const f32 dx = t.position.x - sh.origin.x, dz = t.position.z - sh.origin.z;
+            if (dx * dx + dz * dz > kPedestrianFearRadius * kPedestrianFearRadius) continue;
+            if (!fear) {
+                if (st.fears.size() >= kMaxFears) break;
+                st.fears.push_back(Fear{e, sh.origin, kPedestrianFleeSeconds});
+                fear = &st.fears.back();
+            }
+            fear->threat = sh.origin;
+            fear->left = kPedestrianFleeSeconds;
+        }
+        if (fear) scared = true;
         if (!scared && was_fleeing) p.mode = PedestrianMode::Walk;
         const bool focused = in == &loose ? loose_ok : focus_ok[index] != 0;
         const vec3 focus = in == &loose ? loose_focus : focus_pos[index];
@@ -698,10 +733,15 @@ void kit_crowd(Frame& f) {
         if (scared) {
             c.flee = true;
             c.speed_scale = kPedestrianFleeScale;
-            const LocalTransform* at = hp->last_attacker.is_null() || !w.alive(hp->last_attacker) ? nullptr : w.try_get<LocalTransform>(hp->last_attacker);
-            if (at && !was_fleeing) {
-                c.turn = true;
-                c.threat = at->position - in->net.origin;
+            if (!was_fleeing) {
+                const LocalTransform* at = !hp || hp->last_attacker.is_null() || !w.alive(hp->last_attacker) ? nullptr : w.try_get<LocalTransform>(hp->last_attacker);
+                if (fear) {  // a shot is the fresher news
+                    c.turn = true;
+                    c.threat = fear->threat - in->net.origin;
+                } else if (at) {
+                    c.turn = true;
+                    c.threat = at->position - in->net.origin;
+                }
             }
         }
         step_pedestrian(p, t, c, p.lag);
@@ -802,6 +842,7 @@ void install_crowd(World& world, asset::AssetSystem* assets) {
         return;
     }
     world.register_components<Pedestrian3D, CrowdSpawner3D, LocalTransform, Camera3DComponent>();
+    world.register_event<WeaponFired3D>(Phase::FixedUpdate_Pre);  // the combat kit's; registering twice is a no-op
     CrowdState st;
     st.assets = assets;
     world.set_resource(static_cast<CrowdState&&>(st));
