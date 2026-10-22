@@ -12,6 +12,7 @@
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
+#include "mce/editor/selection_history.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -36,6 +37,9 @@ struct EditorShell::Impl {
     cook::String recent_last;  // the scene path last added to it
     // Camera bookmarks (M-CAMBOOKMARK): the open project's nine slots, <root>/.mce/camera_bookmarks.txt.
     CameraBookmarks bookmarks;
+    // Alt+Left / Alt+Right (M-SELHISTORY): the entities selected in the open scene.
+    SelectionHistory sel_history;
+    const EditorScene* sel_scene = nullptr;  // the scene `sel_history` belongs to
 };
 
 namespace {
@@ -172,6 +176,7 @@ void EditorShell::build_ui(f64 frame_dt) {
     }
     handle_shortcuts();
     track_recent_scenes();
+    track_selection_history();
     draw_menu_bar();
     draw_dockspace();
     viewport_ = ViewportInfo{};  // the viewport panel republishes it when visible
@@ -513,6 +518,8 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z)) scene().undo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z))
         scene().redo();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow)) selection_back();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow)) selection_forward();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) copy_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
@@ -567,6 +574,34 @@ void EditorShell::track_recent_scenes() {
             file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
         !r)
         MCE_LOG_WARN("editor: cannot save the recent scenes list");
+}
+
+// Feeds the selection's anchor to the history; the history starts over when another scene becomes the open one.
+void EditorShell::track_selection_history() {
+    if (!scene_mode()) {
+        impl_->sel_history.clear();
+        impl_->sel_scene = nullptr;
+        return;
+    }
+    if (impl_->sel_scene != &scene()) {
+        impl_->sel_history.clear();
+        impl_->sel_scene = &scene();
+    }
+    impl_->sel_history.visit(scene().selection().anchor());
+}
+
+void EditorShell::selection_back() {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const EntityId id = impl_->sel_history.back([&](EntityId e) { return doc.find(e) != nullptr; });
+    if (id != kNoEntity) scene().selection().set(id);
+}
+
+void EditorShell::selection_forward() {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const EntityId id = impl_->sel_history.forward([&](EntityId e) { return doc.find(e) != nullptr; });
+    if (id != kNoEntity) scene().selection().set(id);
 }
 
 void EditorShell::save_bookmark(u32 slot) {
@@ -973,6 +1008,10 @@ void EditorShell::draw_menu_bar() {
         redo_text.append(scene().redo_label());
         if (ImGui::MenuItem(undo_text.c_str(), "Ctrl+Z", false, scene().can_undo())) scene().undo();
         if (ImGui::MenuItem(redo_text.c_str(), "Ctrl+Y", false, scene().can_redo())) scene().redo();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Previous selection", "Alt+Left", false, impl_->sel_history.can_back())) selection_back();
+        if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
+            selection_forward();
         ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
