@@ -215,6 +215,9 @@ private:
     void draw_popups();
     void handle_shortcuts();
     void track_recent_scenes();
+    void track_selection_history();
+    void selection_back();
+    void selection_forward();
     void save_bookmark(u32 slot);
     void recall_bookmark(u32 slot);
     void fill_quick_open();
