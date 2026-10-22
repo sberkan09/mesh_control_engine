@@ -9,6 +9,7 @@
 #include "imgui_renderer.h"
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
 #include "mce/log.h"
@@ -33,6 +34,8 @@ struct EditorShell::Impl {
     RecentList recent;
     cook::String recent_root;  // the project `recent` was loaded for
     cook::String recent_last;  // the scene path last added to it
+    // Camera bookmarks (M-CAMBOOKMARK): the open project's nine slots, <root>/.mce/camera_bookmarks.txt.
+    CameraBookmarks bookmarks;
 };
 
 namespace {
@@ -514,6 +517,16 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    // Camera bookmarks: Ctrl+1..9 stores the viewport's view, 1..9 flies back to it.
+    if (viewport_.focused) {
+        for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+            const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
+            if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | key))
+                save_bookmark(i);
+            else if (ImGui::IsKeyChordPressed(key))
+                recall_bookmark(i);
+        }
+    }
     if (ImGui::IsKeyChordPressed(ImGuiKey_W)) view_.gizmo = GizmoMode::Move;
     if (ImGui::IsKeyChordPressed(ImGuiKey_E)) view_.gizmo = GizmoMode::Rotate;
     if (ImGui::IsKeyChordPressed(ImGuiKey_R)) view_.gizmo = GizmoMode::Scale;
@@ -539,6 +552,11 @@ void EditorShell::track_recent_scenes() {
         impl_->recent.clear();
         cook::String text;
         if (cook::fs::read_text(file.view(), text)) impl_->recent.parse(text.view());
+        impl_->bookmarks.clear_all();
+        cook::String marks;
+        marks = session_.project().root();
+        marks += "/.mce/camera_bookmarks.txt";
+        if (cook::fs::read_text(marks.view(), text)) impl_->bookmarks.parse(text.view());
     }
     const StringView cur = scene().path();
     if (cur.empty() || cur == impl_->recent_last.view()) return;
@@ -549,6 +567,22 @@ void EditorShell::track_recent_scenes() {
             file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
         !r)
         MCE_LOG_WARN("editor: cannot save the recent scenes list");
+}
+
+void EditorShell::save_bookmark(u32 slot) {
+    if (!scene_mode()) return;
+    impl_->bookmarks.save(slot, camera_, orbit_);
+    cook::String file = session_.project().root();
+    file += "/.mce/camera_bookmarks.txt";
+    const cook::String text = impl_->bookmarks.serialize();
+    if (Result<void> r = cook::fs::write_file_atomic(
+            file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
+        !r)
+        MCE_LOG_WARN("editor: cannot save the camera bookmarks");
+}
+
+void EditorShell::recall_bookmark(u32 slot) {
+    if (scene_mode()) impl_->bookmarks.recall(slot, camera_, orbit_);
 }
 
 void EditorShell::request_open_scene(StringView path) {
@@ -971,6 +1005,22 @@ void EditorShell::draw_menu_bar() {
         ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
         ImGui::DragFloat("Collider depth", &view_.orbit_depth, 0.05f, 0.05f, 50.0f, "%.2f m");
         if (ImGui::MenuItem("Frame scene", "F", false, scene_mode())) frame_scene();
+        if (ImGui::BeginMenu("Camera bookmarks", scene_mode())) {
+            for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+                char label[32], key[8];
+                std::snprintf(label, sizeof(label), "Go to %u", i + 1);
+                std::snprintf(key, sizeof(key), "%u", i + 1);
+                if (ImGui::MenuItem(label, key, false, impl_->bookmarks.has(i))) recall_bookmark(i);
+            }
+            ImGui::Separator();
+            for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
+                char label[32], key[16];
+                std::snprintf(label, sizeof(label), "Save view as %u", i + 1);
+                std::snprintf(key, sizeof(key), "Ctrl+%u", i + 1);
+                if (ImGui::MenuItem(label, key)) save_bookmark(i);
+            }
+            ImGui::EndMenu();
+        }
         ImGui::MenuItem("ImGui demo", nullptr, &show_demo_);
         ImGui::EndMenu();
     }

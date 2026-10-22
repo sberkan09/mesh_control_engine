@@ -215,6 +215,8 @@ private:
     void draw_popups();
     void handle_shortcuts();
     void track_recent_scenes();
+    void save_bookmark(u32 slot);
+    void recall_bookmark(u32 slot);
     void fill_quick_open();
     void run_quick_open(const QuickOpenItem& item);
     void update_title();
