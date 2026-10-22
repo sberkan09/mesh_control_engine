@@ -793,6 +793,18 @@ so the mist lies low and the sun shines through it as shafts. With volumetric fo
 Exactly one of the two is used per frame, the weather's own fog adds to it, and a level of 0, `enabled` 0 or no
 `GroundMist` leaves the frame bit for bit as it was. The mist is a smooth haze, not banks with edges.
 
+From Luau, `weather.mist_strength()`, `mist_peak_hour()`, `mist_rise()`, `mist_burn()`, `mist_base_humidity()`,
+`mist_wet_gain()`, `mist_weather_damp()`, `mist_density()`, `mist_thickness()`, `mist_base_height()`,
+`mist_exp2_density()`, `mist_color()` (three numbers `r, g, b`) and `mist_enabled()` read the authoring,
+`weather.mist_level()` (0 to 1) is the level the mist has now from the current `time_of_day` and the first `Weather`
+(read-only; 0 when the scene has no clock), and
+`weather.set_mist{strength=, peak_hour=, rise_hours=, burn_hours=, base_humidity=, wet_gain=, weather_damp=, density=, thickness=, base_height=, exp2_density=, color={r, g, b}, enabled=}`
+writes the authoring (section 27.3), for example `weather.set_mist{peak_hour = 7, color = {0.8, 0.8, 0.85}}`. It never
+adds a `GroundMist`: a scene without one raises an error. A scene needs a clock (`WorldClock`) for any mist, so set one
+before expecting `mist_level()` above 0. The `12_weather` sample carries a `GroundMist` on its Weather entity and starts
+its clock at 5:00 (a 600 s day, 1 h = 1500 ticks) so the mist builds toward its 6:00 peak while the weather turns to
+rain; its script logs the level every 150 ticks.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

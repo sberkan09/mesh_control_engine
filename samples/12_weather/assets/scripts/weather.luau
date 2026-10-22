@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, and the "mist:" lines, the GroundMist level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -48,5 +48,9 @@ function update()
         -- (Weather.wind itself stays smooth).
         mce.log(string.format("gust: level %.3f wind %.3f effective %.3f strength %.2f at tick %d",
             weather.gust_level(), weather.wind(), weather.effective_wind(), weather.gust_strength(), t))
+        -- M-GROUNDMIST: the clock starts at 5:00 (a 600 s day: 1 h is 1500 ticks) so the mist is building toward its
+        -- 6:00 peak; the level is the hour and the weather's wetness through kit mist_level (0 without a clock).
+        mce.log(string.format("mist: level %.3f hour %.2f strength %.2f peak %.1f h at tick %d",
+            weather.mist_level(), clock.hour(), weather.mist_strength(), weather.mist_peak_hour(), t))
     end
 end

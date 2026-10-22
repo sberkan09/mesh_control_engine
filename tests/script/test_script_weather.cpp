@@ -19,6 +19,8 @@
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
+#include "mce/kit/ground_mist.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/script/compiler.h"
@@ -35,12 +37,12 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, gust_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, gust_e, mist_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
                   bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
-                  bool with_gust = false) {
+                  bool with_gust = false, bool with_mist = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -68,7 +70,9 @@ struct WRig {
         if (with_audio) audio_e = w.spawn_with(kit::WeatherAudio{});
         if (with_bolt) bolt_e = w.spawn_with(kit::LightningBolt{});
         if (with_gust) gust_e = w.spawn_with(kit::WindGust{});
+        if (with_mist) mist_e = w.spawn_with(kit::GroundMist{});
     }
+    kit::GroundMist& mist() { return *w.try_get_mut<kit::GroundMist>(mist_e); }
     kit::WindGust& gust() { return *w.try_get_mut<kit::WindGust>(gust_e); }
     kit::LightningBolt& bolt() { return *w.try_get_mut<kit::LightningBolt>(bolt_e); }
     kit::WeatherAudio& audio() { return *w.try_get_mut<kit::WeatherAudio>(audio_e); }
@@ -94,10 +98,10 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
                   bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
-                  bool with_gust = false) {
+                  bool with_gust = false, bool with_mist = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
     WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds,
-           with_audio, with_bolt, with_gust);
+           with_audio, with_bolt, with_gust, with_mist);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -1040,5 +1044,128 @@ TEST_CASE("weather api: set_gust bad arguments raise an error that names the cal
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.gust().strength == 0.6f);
         CHECK(r.gust().seed == 0u);
+    }
+}
+
+TEST_CASE("weather api: the mist getters read the first GroundMist, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.mist_strength() == 1 and weather.mist_peak_hour() == 6)
+        assert(weather.mist_rise() == 3 and weather.mist_burn() == 3)
+        assert(weather.mist_base_humidity() == 0.25 and weather.mist_wet_gain() == 0.75)
+        assert(weather.mist_weather_damp() == 1 and weather.mist_enabled() == 1)
+        assert(weather.mist_density() > 0.059 and weather.mist_density() < 0.061)
+        assert(weather.mist_thickness() == 6 and weather.mist_base_height() == 0)
+        assert(weather.mist_exp2_density() > 0.019 and weather.mist_exp2_density() < 0.021)
+        local r, g, b = weather.mist_color()
+        assert(r > 0.77 and r < 0.79 and g > 0.81 and g < 0.83 and b > 0.87 and b < 0.89)
+        weather.set_mist{strength = 1.5, peak_hour = 5.5, thickness = 12, color = {0.5, 0.25, 1}}
+    end
+    if t == 2 then
+        assert(weather.mist_strength() == 1.5 and weather.mist_peak_hour() == 5.5 and weather.mist_thickness() == 12)
+        local r, g, b = weather.mist_color()
+        assert(r == 0.5 and g == 0.25 and b == 1)
+        assert(weather.mist_rise() == 3 and weather.mist_density() < 0.061)  -- only the given keys changed
+        weather.set_mist{strength = 1e9, peak_hour = 1e9, rise_hours = 1e9, burn_hours = 1e9, base_humidity = 1e9,
+                         wet_gain = 1e9, weather_damp = 1e9, density = 1e9, thickness = 1e9, base_height = 1e9,
+                         exp2_density = 1e9, color = {9, 9, 9}, enabled = 0}
+    end
+    if t == 3 then
+        assert(weather.mist_strength() == 2 and weather.mist_peak_hour() == 24)
+        assert(weather.mist_rise() == 12 and weather.mist_burn() == 12)
+        assert(weather.mist_base_humidity() == 1 and weather.mist_wet_gain() == 1 and weather.mist_weather_damp() == 1)
+        assert(weather.mist_density() == 1 and weather.mist_thickness() == 200 and weather.mist_base_height() == 1000)
+        assert(weather.mist_exp2_density() > 0.199 and weather.mist_exp2_density() < 0.201)
+        local r, g, b = weather.mist_color()
+        assert(r == 1 and g == 1 and b == 1 and weather.mist_enabled() == 0)
+        weather.set_mist{strength = -1, peak_hour = -1, rise_hours = 0, burn_hours = -5, base_humidity = -1,
+                         wet_gain = -1, weather_damp = -1, density = -1, thickness = 0, base_height = -1e9,
+                         exp2_density = -1, color = {-1, -1, -1}, enabled = 7}
+        weather.set_mist{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.mist_strength() == 0 and weather.mist_peak_hour() == 0)
+        assert(weather.mist_rise() > 0.099 and weather.mist_rise() < 0.101 and weather.mist_burn() > 0.099)
+        assert(weather.mist_base_humidity() == 0 and weather.mist_wet_gain() == 0 and weather.mist_weather_damp() == 0)
+        assert(weather.mist_density() == 0 and weather.mist_thickness() == 0.5 and weather.mist_base_height() == -1000)
+        assert(weather.mist_exp2_density() == 0 and weather.mist_enabled() == 1)
+        local r, g, b = weather.mist_color()
+        assert(r == 0 and g == 0 and b == 0)
+    end
+end
+)",
+           true, true, false, false, false, false, false, false, false, false, false, true);
+    r.step(5);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.mist().thickness_m == 0.5f);
+    CHECK(r.mist().enabled == 1);
+}
+
+TEST_CASE("weather api: mist_level follows the hour and the weather and is read-only") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    local level = weather.mist_level()
+    assert(level >= 0 and level <= 1)
+    if t == 1 then assert(level == 0, "no clock, no mist") end
+    if t == 2 then assert(level > 0.24 and level < 0.26, "dawn peak on a dry day: " .. level) end
+    if t == 3 then assert(level == 0, "noon") end
+end
+)",
+           false, true, false, false, false, false, false, false, false, false, false, true);
+    kit::Environment3D env;
+    r.w.set_resource(env);
+    r.step(1);
+    r.w.try_resource<kit::Environment3D>()->time_of_day = 6.0f;
+    r.step(1);
+    CHECK(r.mist().strength == 1.0f);
+    r.w.try_resource<kit::Environment3D>()->time_of_day = 12.0f;
+    r.step(1);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    kit::Weather wx;
+    wx.wetness = 1.0f;
+    CHECK(kit::mist_level(r.mist(), 6.0f, &wx) == 1.0f);
+}
+
+TEST_CASE("weather api: a world without a GroundMist raises a named error") {
+    for (const char* name : {"mist_strength", "mist_peak_hour", "mist_rise", "mist_burn", "mist_base_humidity",
+                             "mist_wet_gain", "mist_weather_damp", "mist_density", "mist_thickness", "mist_base_height",
+                             "mist_exp2_density", "mist_color", "mist_enabled", "mist_level"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no GroundMist entity").c_str());
+    expect_error("weather.set_mist{}", "weather.set_mist: the scene has no GroundMist entity");
+    expect_error("weather.mist_level()", "weather.mist_level: this world has no weather", false, false);
+    expect_error("weather.set_mist{}", "weather.set_mist: this world has no weather", false, false);
+}
+
+TEST_CASE("weather api: set_mist bad arguments raise an error that names the call and write nothing") {
+    auto bad = [](const char* body, const char* needle) {
+        expect_error(body, needle, true, true, false, false, false, false, false, false, false, false, false, true);
+    };
+    bad("weather.set_mist{bogus = 1}", "weather.set_mist: unknown key 'bogus'");
+    bad("weather.set_mist{thickness_m = 1}", "weather.set_mist: unknown key 'thickness_m'");
+    bad("weather.set_mist{strength = 'thick'}", "weather.set_mist: 'strength' is not a number");
+    bad("weather.set_mist{density = 0/0}", "weather.set_mist: 'density' is not a number");
+    bad("weather.set_mist{enabled = true}", "weather.set_mist: 'enabled' is not a number");
+    bad("weather.set_mist{color = 1}", "weather.set_mist: 'color' is not a table of three numbers");
+    bad("weather.set_mist{color = {1, 2}}", "weather.set_mist: 'color' is not a table of three numbers");
+    bad("weather.set_mist{color = {1, 'x', 3}}", "weather.set_mist: 'color' is not a table of three numbers");
+    bad("weather.set_mist{[1] = 0.5}", "weather.set_mist: the keys are names");
+    bad("weather.set_mist(0.5)", "table expected");
+    bad("weather.set_mist()", "table expected");
+    for (const char* body : {"weather.set_mist{strength = 2, density = 'x'}", "weather.set_mist{density = 'x', strength = 2}",
+                             "weather.set_mist{strength = 2, nope = 1}", "weather.set_mist{strength = 2, color = {1, 1}}",
+                             "weather.set_mist{color = {1, 1}, strength = 2}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, false, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.mist().strength == 1.0f);
+        CHECK(r.mist().color.x == 0.78f);
     }
 }
