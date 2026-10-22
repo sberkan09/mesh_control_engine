@@ -33,7 +33,7 @@ public:
     }
     template <class Alive>
     EntityId forward(Alive&& alive) {
-        for (usize i = static_cast<usize>(pos_ + 1); i < items_.size(); ++i)
+        for (usize i = (static_cast<usize>(pos_) + 1); i < items_.size(); ++i)
             if (alive(items_[i])) {
                 pos_ = static_cast<i32>(i);
                 return items_[i];
