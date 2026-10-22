@@ -1,0 +1,1 @@
+- Fixed the `Equipment` padding again: removing `damage_applied` on master left four implicit bytes next to the explicit `pad_`, so the clang Release inventory determinism test failed in the third Actions integration run; `pad_` is now two words and a `static_assert` guards against implicit padding.
