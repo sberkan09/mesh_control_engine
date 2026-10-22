@@ -63,6 +63,7 @@ mce_add_test(test_kit UMBRELLA
         test_weather_audio.cpp
         test_wind_gust.cpp
         test_ground_mist.cpp
+        test_moon.cpp
         test_ground_mist_extract.cpp
         test_wind_gust_extract.cpp
         test_wind_gust_systems.cpp

@@ -805,6 +805,24 @@ before expecting `mist_level()` above 0. The `12_weather` sample carries a `Grou
 its clock at 5:00 (a 600 s day, 1 h = 1500 ticks) so the mist builds toward its 6:00 peak while the weather turns to
 rain; its script logs the level every 150 ticks.
 
+## 9.19j Moon and phases (M-NIGHTSKY)
+
+An optional `Moon` entity (one per scene, the first in ECS order is read; it is registered with the weather) turns the
+`WorldClock` day count and hour into a moon phase, a direction and a brightness. The phase is 0 at a new moon, 0.5 at a
+full moon and wraps at 1: it follows the clock over `cycle_days` (29.53, so a short in-game day still cycles through all
+the phases) starting from `phase_offset` (0.5, a full moon on day 0 hour 0), or is pinned by `freeze_phase` (0 to 1; a
+negative value follows the clock), which is handy for a screenshot. The lit fraction of the disk is 0 at new and 1 at
+full. The moon sits `phase * 24` hours behind the sun on the sun's own arc, so a full moon rises at sunset and a new moon
+is up with the sun, and `inclination_deg` (5) tilts its path off that arc. The level, from 0 to 1, is the lit fraction
+times a smooth rise as the moon climbs above the horizon, times a weather factor (overcast 0.5, rain 0.3, storm 0.15,
+snow 0.5 at full weather intensity; no `Weather` means no damping). The hour is `Environment3D.time_of_day`, written by a
+`WorldClock`: a scene with no clock (`time_of_day` -1) has no moon, and the day is 0 without one. Phase, direction and
+level are pure functions of these values and nothing of them is saved, so a save at midnight gives the same phase. The
+remaining fields (`light_intensity`, `light_color`, `light_shadows`, `disk_size`, `disk_intensity`, `star_density`,
+`star_brightness`, `star_twinkle`, `enabled`) say how the moonlight and the night sky are drawn; nothing reads them yet
+(M-NIGHTSKY steps 14b to 14e), so a scene with a `Moon` renders as before. The disk is drawn larger than the real moon
+so its phase can be read.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

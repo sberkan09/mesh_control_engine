@@ -23,6 +23,7 @@
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/ground_mist.h"
+#include "mce/kit/moon.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -85,6 +86,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LightningBolt>("LightningBolt", sizeof(LightningBolt::pad_));  // lightning_bolt.h (M-LIGHTNINGBOLT 11a)
     expect_pad<WindGust>("WindGust", sizeof(WindGust::pad_));  // wind_gust.h (M-WINDGUST 12a)
     expect_pad<GroundMist>("GroundMist", sizeof(GroundMist::pad_));  // ground_mist.h (M-GROUNDMIST 13a)
+    expect_pad<Moon>("Moon", sizeof(Moon::pad_));  // moon.h (M-NIGHTSKY 14a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 
