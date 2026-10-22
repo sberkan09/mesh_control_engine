@@ -163,6 +163,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WetSurfaces` | `mce/kit/wet_surfaces.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WindDirection` | `mce/kit/wind_direction.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `WindGust` | `mce/kit/wind_gust.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: tested in tests/kit/test_wind_gust.cpp; M-WINDGUST step 12d shows it in samples/12_weather |
 | `WindSway` | `mce/kit/wind_sway.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |

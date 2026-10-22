@@ -1,6 +1,6 @@
 # M-WINDGUST — Seeded wind gusts that modulate an effective wind (milestone record)
 
-**Status:** planned 2026-10-22 (plan only: steps 12a to 12d not started). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY, M-WINDDIR, M-CLOUDS and M-WEATHERAUDIO: wind is a smooth function of the weather kind (`Weather.wind`, 0.1 clear to 1.0 storm), so foliage, rain, clouds and the wind bed all breathe at one constant strength. No Linear issues (free issue limit); this record is the tracker.
+**Status:** planned 2026-10-22 (12a done, 12b to 12d not started). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY, M-WINDDIR, M-CLOUDS and M-WEATHERAUDIO: wind is a smooth function of the weather kind (`Weather.wind`, 0.1 clear to 1.0 storm), so foliage, rain, clouds and the wind bed all breathe at one constant strength. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `WindGust` and one system produce deterministic gusts (rise, hold, fall, then a calm gap) from the seed and integer state. They raise an *effective* wind read by foliage sway, rain slant, cloud drift, the snow lee bias and the `WeatherAudio` wind gain, without ever writing `Weather.wind`. A scene without `WindGust` hashes, simulates and renders exactly as today.
 
@@ -51,7 +51,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 12a | planned | | |
+| 12a | done | PR TBD (plan #705) | `WindGust` (state, authoring, padding audit), `kit_wind_gust`, `effective_wind` in `mce/kit/wind_gust.h`; registered in `install_weather` right after `kit_wind_direction`. Order confirmed from `install_weather`: `kit_timed_light` > `kit_weather` > `kit_snow_cover` > `kit_wind_direction` > `kit_wind_gust` > (`CloudLayer` registration) > `kit_weather_audio` (`install_weather_audio`, anchored after `kit_weather` but registered after the gust system) > `LightningBolt`; so audio is already after the gust system by registration order, 12c still checks `install_precipitation` for `kit_precipitation`. Phase lengths are capped at 65536 ticks so the Q24 smoothstep stays in u64; a 1e6-tick run test uses a bare world (gust system only); guide 9.19h |
 | 12b | planned | | |
 | 12c | planned | | |
 | 12d | planned | | |
