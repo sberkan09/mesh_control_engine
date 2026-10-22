@@ -52,6 +52,9 @@ struct QualitySettings {
     bool rain_ripples = true;
     // M-CLOUDS 9a: Clouds are honored (off: coverage 0, the cloudless frame). Low turns them off.
     bool clouds = true;
+    // M-NIGHTSKY 14c: the night sky is honored (off: no moon, no stars). Low keeps the moon disk but drops the
+    // stars and the twinkle.
+    bool night_sky = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -106,5 +109,12 @@ Ripples apply_quality(const QualitySettings& q, const Ripples& ripples);
 // height_m to 100..20000 (NaN to 2000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes through.
 // Returns a copy for the same reason as the SnowCover overload.
 Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
+// NightSky: the moon and stars. `r.nightsky 0` zeroes moon_intensity and star_density (the frame without it);
+// the Low tier (night_sky false) keeps the moon disk but zeroes star_density and star_twinkle. moon_dir is
+// normalized (NaN / zero to +y), moon_cos_size is clamped to 0.9..1 (NaN to 0.9995), moon_intensity to 0..8,
+// moon_color per channel, moon_phase, star_density, star_twinkle and night_fade to 0..1, star_brightness to 0..4
+// (all NaN to 0, except star_brightness NaN to 1); a non-finite star_time becomes 0; `enabled` passes through.
+// Returns a copy for the same reason as the SnowCover overload.
+NightSky apply_quality(const QualitySettings& q, const NightSky& sky);
 
 }  // namespace mce::render
