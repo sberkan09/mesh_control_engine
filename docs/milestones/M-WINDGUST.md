@@ -1,6 +1,6 @@
 # M-WINDGUST — Seeded wind gusts that modulate an effective wind (milestone record)
 
-**Status:** planned 2026-10-22 (12a done, 12b to 12d not started). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY, M-WINDDIR, M-CLOUDS and M-WEATHERAUDIO: wind is a smooth function of the weather kind (`Weather.wind`, 0.1 clear to 1.0 storm), so foliage, rain, clouds and the wind bed all breathe at one constant strength. No Linear issues (free issue limit); this record is the tracker.
+**Status:** planned 2026-10-22 (12a, 12b done, 12c to 12d not started). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-WINDSWAY, M-WINDDIR, M-CLOUDS and M-WEATHERAUDIO: wind is a smooth function of the weather kind (`Weather.wind`, 0.1 clear to 1.0 storm), so foliage, rain, clouds and the wind bed all breathe at one constant strength. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `WindGust` and one system produce deterministic gusts (rise, hold, fall, then a calm gap) from the seed and integer state. They raise an *effective* wind read by foliage sway, rain slant, cloud drift, the snow lee bias and the `WeatherAudio` wind gain, without ever writing `Weather.wind`. A scene without `WindGust` hashes, simulates and renders exactly as today.
 
@@ -52,6 +52,6 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 12a | done | PR TBD (plan #705) | `WindGust` (state, authoring, padding audit), `kit_wind_gust`, `effective_wind` in `mce/kit/wind_gust.h`; registered in `install_weather` right after `kit_wind_direction`. Order confirmed from `install_weather`: `kit_timed_light` > `kit_weather` > `kit_snow_cover` > `kit_wind_direction` > `kit_wind_gust` > (`CloudLayer` registration) > `kit_weather_audio` (`install_weather_audio`, anchored after `kit_weather` but registered after the gust system) > `LightningBolt`; so audio is already after the gust system by registration order, 12c still checks `install_precipitation` for `kit_precipitation`. Phase lengths are capped at 65536 ticks so the Q24 smoothstep stays in u64; a 1e6-tick run test uses a bare world (gust system only); guide 9.19h |
-| 12b | planned | | |
+| 12b | done | PR TBD | `Kit3DExtract` reads the first `WindGust` (read only): the foliage sway scalar is `effective_wind(..., kGustSway)` (both batch paths, `entry->version` unchanged) and the snow `wind_bias` is `clamp(bias * (1 + strength * gust_q / 2^24), 0, 1)` with `kGustSnow` (early return of the same f32 without a gust). **Clouds dropped from 12b:** `cloud_params` in `forward3d.cpp` computes the drift as `time * speed * kCloudDrift / scale` wrapped in f64, i.e. speed * time and not an integral, so a gust in `clouds.speed` would teleport the layer; bit 4 (`kGustClouds`) stays defined but nothing reads it (integrating would need a render-side accumulator, out of scope). Tests in `tests/kit/test_wind_gust_extract.cpp`; guide 9.19h |
 | 12c | planned | | |
 | 12d | planned | | |
