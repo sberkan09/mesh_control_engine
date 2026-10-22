@@ -1,0 +1,1 @@
+- Editor, M-RECENT 2: File > Open Recent lists the project's last ten scenes (opened or saved), newest first, and opens one on a click; the list is kept per project in `.mce/recent_scenes.txt`.

@@ -8,7 +8,9 @@
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
 #include "mce/convar.h"
+#include "mce/cook/fs.h"
 #include "mce/editor/quick_open.h"
+#include "mce/editor/recent_list.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -27,6 +29,10 @@ struct EditorShell::Impl {
     QuickOpen quick;
     char quick_query[128] = {};
     i32 quick_sel = 0;
+    // File > Open Recent (M-RECENT): the open project's list, <root>/.mce/recent_scenes.txt.
+    RecentList recent;
+    cook::String recent_root;  // the project `recent` was loaded for
+    cook::String recent_last;  // the scene path last added to it
 };
 
 namespace {
@@ -162,6 +168,7 @@ void EditorShell::build_ui(f64 frame_dt) {
         perf_pending_.sim_ticks = session_.play().last_advance_ticks();
     }
     handle_shortcuts();
+    track_recent_scenes();
     draw_menu_bar();
     draw_dockspace();
     viewport_ = ViewportInfo{};  // the viewport panel republishes it when visible
@@ -517,6 +524,33 @@ void EditorShell::handle_shortcuts() {
     }
 }
 
+// Keeps the Open Recent list of the open project: loaded when a project opens, the open scene's file moves to the
+// front whenever it changes (opened, saved as), and the list is saved with it.
+void EditorShell::track_recent_scenes() {
+    if (!scene_mode()) {
+        impl_->recent_root = cook::String();
+        return;
+    }
+    cook::String file = session_.project().root();
+    file += "/.mce/recent_scenes.txt";
+    if (impl_->recent_root.view() != session_.project().root()) {
+        impl_->recent_root = session_.project().root();
+        impl_->recent_last = cook::String();
+        impl_->recent.clear();
+        cook::String text;
+        if (cook::fs::read_text(file.view(), text)) impl_->recent.parse(text.view());
+    }
+    const StringView cur = scene().path();
+    if (cur.empty() || cur == impl_->recent_last.view()) return;
+    impl_->recent_last = cur;
+    impl_->recent.touch(cur);
+    const cook::String text = impl_->recent.serialize();
+    if (Result<void> r = cook::fs::write_file_atomic(
+            file.view(), Span<const byte>(reinterpret_cast<const byte*>(text.view().data()), text.view().size()));
+        !r)
+        MCE_LOG_WARN("editor: cannot save the recent scenes list");
+}
+
 void EditorShell::request_open_scene(StringView path) {
     if (scene().dirty() && scene().path().empty()) {  // a scene with a file parks in its tab; this one has none
         pending_open_.assign(path);
@@ -842,6 +876,23 @@ void EditorShell::draw_menu_bar() {
         const bool proj = scene_mode();
         if (ImGui::MenuItem("New Scene", "Ctrl+N", false, proj)) new_scene();
         if (ImGui::MenuItem("Open Scene...", "Ctrl+O", false, proj)) popup_ = Popup::OpenScene;
+        if (ImGui::BeginMenu("Open Recent", proj && !impl_->recent.items().empty())) {
+            cook::String chosen;
+            for (const cook::String& path : impl_->recent.items()) {
+                cook::String rel;
+                const bool has_rel = session_.project().relative_asset_path(path.view(), rel);
+                if (ImGui::MenuItem(has_rel ? rel.c_str() : path.c_str())) chosen = path;
+            }
+            if (!chosen.empty()) {
+                if (cook::fs::exists(chosen.view())) {
+                    request_open_scene(chosen.view());
+                } else {  // deleted or moved since: forget it
+                    MCE_LOG_WARN("editor: {} no longer exists", chosen.view());
+                    impl_->recent.remove(chosen.view());
+                }
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, proj)) save_scene();
         if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S", false, proj)) popup_ = Popup::SaveAs;
         ImGui::Separator();
