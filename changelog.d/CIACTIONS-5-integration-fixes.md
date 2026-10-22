@@ -1,0 +1,1 @@
+- CI: the Integration workflow runs clang-tidy over the whole tree (`--tidy-all`; without it the stage was scoped to an empty diff and checked nothing), and `tests/editor/test_scene_editing.cpp` includes `<algorithm>` so the clang Release tree builds with libstdc++ 14.
