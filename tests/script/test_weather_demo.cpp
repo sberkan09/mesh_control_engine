@@ -25,6 +25,7 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/moon.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/stock.h"
 #include "mce/kit/cloud_layer.h"
@@ -220,6 +221,13 @@ TEST_CASE("weather demo: the scene loads with a dawn clock, a Weather and an emi
     CHECK(gm->peak_hour == 6.0f);
     CHECK(gm->base_humidity == 0.25f);
     CHECK(gm->enabled == 1);
+    // M-NIGHTSKY 14f: ... and a Moon (defaults) on the Weather entity: a full moon that sets through the dawn.
+    const kit::Moon* mn = d.world.try_get<kit::Moon>(d.e[kWeather]);
+    REQUIRE(mn != nullptr);
+    CHECK(mn->phase_offset == 0.5f);
+    CHECK(mn->freeze_phase == -1.0f);
+    CHECK(mn->star_density == 0.6f);
+    CHECK(mn->enabled == 1);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);
@@ -233,6 +241,12 @@ TEST_CASE("weather demo: the scene loads with a dawn clock, a Weather and an emi
     CHECK(d.env().time_of_day == doctest::Approx(5.0f).epsilon(1e-3));
     CHECK(kit::mist_level(*gm, d.env().time_of_day, d.world.try_get<kit::Weather>(d.e[kWeather])) ==
           doctest::Approx(0.25f * 0.7407f).epsilon(1e-2));
+    // The moon at 5:00 on day 0 (clear sky): phase 0.507 (a full moon), up in the west, level near 1.
+    const f32 phase = kit::moon_phase(*mn, 0, d.env().time_of_day);
+    CHECK(phase == doctest::Approx(0.507f).epsilon(1e-3));
+    CHECK(kit::moon_illumination(phase) > 0.99f);
+    CHECK(kit::moon_direction(*mn, d.env().time_of_day, phase).y < 0.0f);  // the light travels downward: the moon is up
+    CHECK(kit::moon_level(*mn, 0, d.env().time_of_day, d.world.try_get<kit::Weather>(d.e[kWeather])) > 0.95f);
     CHECK(d.em().emitting == 0);
     CHECK(d.em().rate == 0.0f);
 }

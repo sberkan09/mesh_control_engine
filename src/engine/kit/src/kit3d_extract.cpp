@@ -817,8 +817,11 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sun.ambient_sky = env.ambient_sky;
     sun.ambient_ground = env.ambient_ground;
     sun.shadows = env.sun_shadows != 0;
+    const Moon* moon = nullptr;  // the first Moon (14b light hand-off, 14e night sky)
+    u32 moon_day = 0;
+    bool moon_holds_light = false;
+    const f32 sun_elevation_natural = -sun.direction.y;  // the sun's own elevation, before any hand-off
     {  // moonlight (M-NIGHTSKY 14b): hand the one directional slot to the moon at night; local copy only, never Environment3D
-        const Moon* moon = nullptr;
         world.query<const Moon&>().each([&](const Moon& c) {
             if (!moon) moon = &c;
         });
@@ -827,7 +830,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             world.query<const Weather&>().each([&](const Weather& c) {
                 if (!moon_weather) moon_weather = &c;
             });
-            u32 day = 0;
+            u32& day = moon_day;
             bool have_clock = false;
             world.query<const WorldClock&>().each([&](const WorldClock& c) {
                 if (have_clock) return;
@@ -847,6 +850,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
                     sun.color = moon->light_color;
                     sun.intensity = moon_intensity * mw;
                     sun.shadows = moon->light_shadows != 0;
+                    moon_holds_light = true;
                     const f32 lift = mw * 0.02f;  // a small cool ambient lift so shadowed ground is not pure black
                     sun.ambient_sky = sun.ambient_sky + moon->light_color * lift;
                     sun.ambient_ground = sun.ambient_ground + moon->light_color * lift;
@@ -870,6 +874,9 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sky.ibl_texture = texture_key(env.ibl_texture.guid);
     sky.ibl_texture_intensity = env.ibl_texture_intensity;
     sky.rotation = env.sky_rotation_deg * (3.14159265358979f / 180.0f);
+    // The sky pass draws its sun disk at -light.direction; while the moon holds the light that disk would sit on the
+    // phased moon, so the local Sky copy drops it (M-NIGHTSKY 14e). Never Environment3D; unchanged otherwise.
+    if (moon_holds_light) sky.sun_intensity = 0.0f;
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;
@@ -921,6 +928,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     }
     scene.set_fog(fog);
     scene.set_volumetrics(vol);
+    f32 cloud_cover = 0.0f;  // filled by the clouds block below, read by the night sky
     {  // wet surfaces (M-WETSURFACE 5c): only a scene with both a Weather and a WetSurfaces gets wet
         const Weather* weather = nullptr;
         const WetSurfaces* wetc = nullptr;
@@ -1021,7 +1029,32 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             if (cloud_wd) clouds.wind_dir = wind_direction_vector(*cloud_wd);  // else the default +x
             clouds.enabled = true;
         }
-        scene.set_clouds(render::apply_quality(quality_, clouds));
+        const render::Clouds shown = render::apply_quality(quality_, clouds);
+        scene.set_clouds(shown);
+        cloud_cover = shown.coverage;
+    }
+    {  // night sky (M-NIGHTSKY 14e): moon, stars and their fade from the Moon, the clock, the clouds and the fog
+        render::NightSky night;  // density and intensity 0: off
+        if (moon && moon->enabled && env.time_of_day >= 0.0f && env.sky_texture.guid == asset::Guid{}) {
+            const f32 phase = moon_phase(*moon, moon_day, env.time_of_day);
+            night.moon_dir = -moon_direction(*moon, env.time_of_day, phase);  // toward the moon
+            night.moon_phase = phase;
+            night.moon_cos_size = moon->disk_size;
+            night.moon_intensity = moon->disk_intensity;
+            night.moon_color = moon->light_color;
+            night.star_density = moon->star_density;
+            night.star_brightness = moon->star_brightness;
+            night.star_twinkle = moon->star_twinkle;
+            // the value set_time() gets later in this extract (scene.time() would still be last frame's)
+            night.star_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
+            const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);
+            const f32 dark = 1.0f - t * t * (3.0f - 2.0f * t);  // 0 by day, 1 at night
+            const f32 clear = 1.0f - clamp(cloud_cover, 0.0f, 1.0f);
+            const f32 f = clamp(fog.density / 0.05f, 0.0f, 1.0f);  // fog is the local copy (weather and mist included)
+            const f32 unfogged = 1.0f - f * f * (3.0f - 2.0f * f);
+            night.night_fade = dark * clear * unfogged;
+        }
+        scene.set_night_sky(render::apply_quality(quality_, night));
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;

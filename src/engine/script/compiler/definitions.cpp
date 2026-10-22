@@ -342,6 +342,33 @@ declare weather: {
     -- -1000..1000 m, exp2_density 0..0.2, color three lanes 0..1; enabled: any non-zero number is 1); an unknown key,
     -- a non-number or a color that is not three numbers raises
     set_mist: (settings: { strength: number?, peak_hour: number?, rise_hours: number?, burn_hours: number?, base_humidity: number?, wet_gain: number?, weather_damp: number?, density: number?, thickness: number?, base_height: number?, exp2_density: number?, color: { number }?, enabled: number? }) -> (),
+    -- Moon (M-NIGHTSKY), the first one in the scene; the getters raise when there is none (set_moon never adds one).
+    -- moon_phase (0 new, 0.5 full), moon_illumination (0..1), moon_direction (the unit direction the moonlight
+    -- travels; negate it for the direction toward the moon) and moon_level (0..1) are derived from the clock
+    -- (Environment3D.time_of_day, -1 = no clock gives level 0 and no moon; WorldClock.day) and the weather, read-only
+    moon_phase_offset: () -> number,
+    moon_cycle_days: () -> number,
+    moon_freeze_phase: () -> number,
+    moon_inclination: () -> number,
+    moon_light_intensity: () -> number,
+    moon_light_color: () -> (number, number, number),
+    moon_light_shadows: () -> number,
+    moon_disk_size: () -> number,
+    moon_disk_intensity: () -> number,
+    moon_star_density: () -> number,
+    moon_star_brightness: () -> number,
+    moon_star_twinkle: () -> number,
+    moon_enabled: () -> number,
+    moon_phase: () -> number,
+    moon_illumination: () -> number,
+    moon_direction: () -> (number, number, number),
+    moon_level: () -> number,
+    -- every key optional, each value clamped to the field's range (phase_offset 0..1, cycle_days 2..120, freeze_phase
+    -- -1..1 where 0..1 pins the phase and a negative follows the clock, inclination 0..30 degrees (Moon.inclination_deg),
+    -- light_intensity 0..2, light_color three lanes 0..1, disk_size 0.99..1, disk_intensity 0..50, star_density 0..1,
+    -- star_brightness 0..4, star_twinkle 0..1; light_shadows and enabled: any non-zero number is 1); an unknown key, a
+    -- non-number or a color that is not three numbers raises
+    set_moon: (settings: { phase_offset: number?, cycle_days: number?, freeze_phase: number?, inclination: number?, light_intensity: number?, light_color: { number }?, light_shadows: number?, disk_size: number?, disk_intensity: number?, star_density: number?, star_brightness: number?, star_twinkle: number?, enabled: number? }) -> (),
 }
 )";
 

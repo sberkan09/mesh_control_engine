@@ -825,9 +825,38 @@ the moon's direction, `light_color`, `light_intensity * mw` and `light_shadows`,
 (`light_color * mw * 0.02`). Only the extract's copy of the light changes, `Environment3D` is never written, and a scene
 with no `Moon`, `enabled` 0, no clock or a zero level (new moon, moon below the horizon) is unchanged. Pair the `Moon`
 with a `DayCycle` so the sun is dim when the hand-off happens: a sun that stays bright below the horizon is handed over
-at full strength and pops. The sky fields (`disk_size`, `disk_intensity`, `star_*`) are not read yet: the renderer
-draws the moon disk and the stars (`render::NightSky`, 8.5 "Night sky", M-NIGHTSKY 14d), and the extract feeds them
-from the `Moon` in step 14e. The disk is drawn larger than the real moon so its phase can be read.
+at full strength and pops. The sky fields feed the night sky: `Kit3DExtract` fills `render::NightSky` (8.5 "Night sky") from the `Moon`, the clock,
+the clouds and the fog. `moon_dir` is the direction toward the moon (the light's travel direction negated, the same
+value the light uses when the moon holds it), `moon_phase` the phase, `moon_cos_size` is `disk_size`, `moon_intensity`
+is `disk_intensity`, `moon_color` is `light_color`, and `star_density`, `star_brightness` and `star_twinkle` are the
+`Moon`'s; `star_time` is the scene clock in seconds. The whole layer is scaled by
+`night_fade = (1 - smoothstep(-0.1, 0.1, sun_elevation)) * (1 - cloud_coverage) * (1 - smoothstep(0, 0.05, fog_density))`:
+0 by day, 1 on a clear unfogged night, and lower under a cloud deck (the coverage the clouds block derived, 0 when the
+tier or `r.clouds` turns the clouds off) and in fog (the exp² fog density the extract hands on, weather and morning mist
+included, 0.05 and up hides the sky entirely; the volumetric fog is not counted). Rain or a storm dim the sky through
+the `CloudLayer` coverage and the weather's fog density, not through `moon_level`, which only dims the light. The night
+sky is not set (density and intensity 0, as a scene without a `Moon`) with no `Moon`, `enabled` 0, no clock
+(`time_of_day` below 0) or an equirect `sky_texture` on the environment (the texture wins). It goes through
+`render::apply_quality`: the Low tier keeps the moon and drops the stars. While the moon holds the directional light the
+extract also drops the sky's own sun disk (it would sit on the phased moon; the extract's copy of `Sky.sun_intensity`
+becomes 0, `Environment3D` is not written); by day and whenever the sun holds the light the disk is as before. The
+disk is drawn larger than the real moon so its phase can be read.
+
+From Luau, `weather.moon_phase_offset()`, `moon_cycle_days()`, `moon_freeze_phase()`, `moon_inclination()`,
+`moon_light_intensity()`, `moon_light_color()` (three numbers `r, g, b`), `moon_light_shadows()`, `moon_disk_size()`,
+`moon_disk_intensity()`, `moon_star_density()`, `moon_star_brightness()`, `moon_star_twinkle()` and `moon_enabled()`
+read the authoring, and `weather.set_moon{phase_offset=, cycle_days=, freeze_phase=, inclination=, light_intensity=, light_color={r, g, b}, light_shadows=, disk_size=, disk_intensity=, star_density=, star_brightness=, star_twinkle=, enabled=}`
+writes it (section 27.3), for example `weather.set_moon{freeze_phase = 0.1, star_density = 1}` for a crescent over a full
+star field. `inclination` is the `inclination_deg` field in degrees. The four read-only values come from the same
+helpers the extract uses, on the current `Environment3D.time_of_day`, the first `WorldClock`'s day (0 without a clock) and
+the first `Weather`: `weather.moon_phase()` (0 new, 0.5 full), `weather.moon_illumination()` (0 to 1),
+`weather.moon_direction()` (three numbers `x, y, z`, the unit direction the moonlight travels, so negate it for the
+direction toward the moon) and `weather.moon_level()` (0 to 1; 0 when the scene has no clock or the moon is below the
+horizon). `set_moon` never adds a `Moon`: a scene without one raises an error. A scene needs a clock for any moon, so
+set one before expecting `moon_level()` above 0. The `12_weather` sample carries a default `Moon` on its Weather entity
+and, since its clock starts at 5:00 on day 0, the moon is a full one in the western sky that sinks through the dawn
+(level 1.000 at tick 0, 0.469 at tick 450 with the rain damping it, 0.000 from tick 1500); the sample was not moved to
+a night hour so the mist keeps its dawn numbers, and the script logs `moon:` every 150 ticks.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
