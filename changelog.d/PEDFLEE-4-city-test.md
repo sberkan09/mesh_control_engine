@@ -1,0 +1,1 @@
+- Tests (M-PEDFLEE 4): the 09_openworld city test checks that shots send walkers running and no shots do not. Record: `docs/milestones/M-PEDFLEE.md`.
