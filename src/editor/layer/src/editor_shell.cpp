@@ -7,8 +7,8 @@
 
 #include "imgui_platform.h"
 #include "imgui_renderer.h"
-#include "mce/editor/quick_open.h"
 #include "mce/convar.h"
+#include "mce/editor/quick_open.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -529,7 +529,18 @@ void EditorShell::request_open_scene(StringView path) {
 namespace {
 
 // The Quick Open commands (the ids of QuickOpenKind::Command items), in menu order.
-enum QuickCommand : u64 { kCmdSave, kCmdNew, kCmdCook, kCmdPlay, kCmdStop, kCmdUndo, kCmdRedo, kCmdFrame, kCmdRescan, kCmdLayout };
+enum QuickCommand : u64 {
+    kCmdSave,
+    kCmdNew,
+    kCmdCook,
+    kCmdPlay,
+    kCmdStop,
+    kCmdUndo,
+    kCmdRedo,
+    kCmdFrame,
+    kCmdRescan,
+    kCmdLayout
+};
 
 }  // namespace
 
@@ -580,25 +591,51 @@ void EditorShell::run_quick_open(const QuickOpenItem& item) {
             break;
         case QuickOpenKind::Command:
             switch (item.id) {
-                case kCmdSave: save_scene(); break;
-                case kCmdNew: new_scene(); break;
-                case kCmdCook: cook(false); break;
-                case kCmdPlay: play_in_editor(); break;
-                case kCmdStop: stop_play(); break;
-                case kCmdUndo: scene().undo(); break;
-                case kCmdRedo: scene().redo(); break;
-                case kCmdFrame: frame_scene(); break;
-                case kCmdRescan: session_.project().rescan(); break;
-                case kCmdLayout: reset_layout(); break;
-                default: break;
+                case kCmdSave:
+                    save_scene();
+                    break;
+                case kCmdNew:
+                    new_scene();
+                    break;
+                case kCmdCook:
+                    cook(false);
+                    break;
+                case kCmdPlay:
+                    play_in_editor();
+                    break;
+                case kCmdStop:
+                    stop_play();
+                    break;
+                case kCmdUndo:
+                    scene().undo();
+                    break;
+                case kCmdRedo:
+                    scene().redo();
+                    break;
+                case kCmdFrame:
+                    frame_scene();
+                    break;
+                case kCmdRescan:
+                    session_.project().rescan();
+                    break;
+                case kCmdLayout:
+                    reset_layout();
+                    break;
+                default:
+                    break;
             }
             break;
     }
 }
 
 void EditorShell::draw_popups() {
-    static constexpr const char* kIds[] = {"", "Open Scene", "Save Scene As", "Unsaved changes##quit",
-                                           "Unsaved changes##new", "Unsaved changes##open", "Recover unsaved changes",
+    static constexpr const char* kIds[] = {"",
+                                           "Open Scene",
+                                           "Save Scene As",
+                                           "Unsaved changes##quit",
+                                           "Unsaved changes##new",
+                                           "Unsaved changes##open",
+                                           "Recover unsaved changes",
                                            "Quick Open"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
@@ -731,12 +768,14 @@ void EditorShell::draw_popups() {
             for (i32 i = 0; i < n; ++i) {
                 const QuickOpenItem& it = q.items()[hits[static_cast<usize>(i)]];
                 ImGui::PushID(i);
-                if (ImGui::Selectable(it.label.c_str(), i == impl_->quick_sel, ImGuiSelectableFlags_NoAutoClosePopups)) run = i;
+                if (ImGui::Selectable(it.label.c_str(), i == impl_->quick_sel, ImGuiSelectableFlags_NoAutoClosePopups))
+                    run = i;
                 ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60.0f);
                 ImGui::TextDisabled("%s", quick_open_kind_name(it.kind));
                 ImGui::PopID();
             }
-            if (n > 0 && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter))) run = impl_->quick_sel;
+            if (n > 0 && (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))
+                run = impl_->quick_sel;
             if (run >= 0) {
                 const QuickOpenItem item = q.items()[hits[static_cast<usize>(run)]];
                 close();

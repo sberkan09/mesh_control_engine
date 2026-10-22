@@ -38,8 +38,7 @@ static bool has_own_editor(asset::ChunkType t) {
 void open_asset_in_editor(EditorShell& shell, const ProjectAsset& asset, asset::Guid& open_scene) {
     const ProjectAsset* a = &asset;
     // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
-    if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab)
-        open_scene = a->guid;
+    if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab) open_scene = a->guid;
     // A UI document opens in the UI Document panel.
     if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
     // A timeline opens in the Timeline panel.
@@ -233,7 +232,6 @@ private:
         }
         cache_.trim();
     }
-
 
     // The click, double-click, tooltip, drag source and context menu of the item just drawn (a row or a grid cell).
     void item_interactions(EditorShell& shell, const ProjectAsset& asset, const char* label, asset::Guid& open_scene) {
