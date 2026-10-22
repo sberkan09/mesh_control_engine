@@ -7,6 +7,7 @@
 #include "mce/audio/components.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/wind_gust.h"
 
 namespace mce::kit {
 namespace {
@@ -58,7 +59,11 @@ void kit_weather_audio(Frame& f) {
     const u32 kind = static_cast<u32>(weather->current);
     const f64 weight = kind < kKinds ? kRainWeight[kind] : 0.0;
     const u32 rain_target = target_q(weight * clamp_unit(static_cast<f64>(weather->intensity)));
-    const u32 wind_target = target_q(clamp_unit(static_cast<f64>(weather->wind)));
+    const WindGust* gust = nullptr;  // M-WINDGUST 12c: the first in ECS order; the fade ramp below smooths the gust
+    w.query<const WindGust>().each([&](Entity, const WindGust& c) {
+        if (!gust) gust = &c;
+    });
+    const u32 wind_target = target_q(clamp_unit(static_cast<f64>(effective_wind(*weather, gust, kGustAudio))));
 
     const f64 dt = static_cast<f64>(f.dt);
     const f64 fade = std::isnan(wa->fade_seconds) ? 3.0 : std::clamp(static_cast<f64>(wa->fade_seconds), 0.0, 60.0);
