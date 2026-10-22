@@ -20,6 +20,8 @@
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/ground_mist.h"
+#include "mce/kit/moon.h"
+#include "mce/kit/world_clock.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
@@ -37,12 +39,12 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, gust_e, mist_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, gust_e, mist_e, moon_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
                   bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
-                  bool with_gust = false, bool with_mist = false) {
+                  bool with_gust = false, bool with_mist = false, bool with_moon = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -71,7 +73,9 @@ struct WRig {
         if (with_bolt) bolt_e = w.spawn_with(kit::LightningBolt{});
         if (with_gust) gust_e = w.spawn_with(kit::WindGust{});
         if (with_mist) mist_e = w.spawn_with(kit::GroundMist{});
+        if (with_moon) moon_e = w.spawn_with(kit::Moon{});
     }
+    kit::Moon& moon() { return *w.try_get_mut<kit::Moon>(moon_e); }
     kit::GroundMist& mist() { return *w.try_get_mut<kit::GroundMist>(mist_e); }
     kit::WindGust& gust() { return *w.try_get_mut<kit::WindGust>(gust_e); }
     kit::LightningBolt& bolt() { return *w.try_get_mut<kit::LightningBolt>(bolt_e); }
@@ -98,10 +102,10 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
                   bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
-                  bool with_gust = false, bool with_mist = false) {
+                  bool with_gust = false, bool with_mist = false, bool with_moon = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
     WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds,
-           with_audio, with_bolt, with_gust, with_mist);
+           with_audio, with_bolt, with_gust, with_mist, with_moon);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -1167,5 +1171,181 @@ TEST_CASE("weather api: set_mist bad arguments raise an error that names the cal
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.mist().strength == 1.0f);
         CHECK(r.mist().color.x == 0.78f);
+    }
+}
+
+// ---- M-NIGHTSKY 14f: weather.set_moon, the Moon getters and moon_phase / illumination / direction / level ----
+
+namespace {
+void bad_moon(const char* body, const char* needle) {
+    expect_error(body, needle, true, true, false, false, false, false, false, false, false, false, false, false, true);
+}
+}  // namespace
+
+TEST_CASE("weather api: the moon getters read the first Moon, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.moon_phase_offset() == 0.5 and weather.moon_freeze_phase() == -1)
+        assert(weather.moon_cycle_days() > 29.52 and weather.moon_cycle_days() < 29.54)
+        assert(weather.moon_inclination() == 5 and weather.moon_disk_intensity() == 6)
+        assert(weather.moon_light_intensity() > 0.119 and weather.moon_light_intensity() < 0.121)
+        assert(weather.moon_disk_size() > 0.9989 and weather.moon_disk_size() < 0.9991)
+        assert(weather.moon_star_density() > 0.59 and weather.moon_star_density() < 0.61)
+        assert(weather.moon_star_brightness() == 1 and weather.moon_star_twinkle() > 0.29 and weather.moon_star_twinkle() < 0.31)
+        assert(weather.moon_light_shadows() == 1 and weather.moon_enabled() == 1)
+        local r, g, b = weather.moon_light_color()
+        assert(r > 0.54 and r < 0.56 and g > 0.64 and g < 0.66 and b == 1)
+        weather.set_moon{phase_offset = 0.25, cycle_days = 10, inclination = 12, light_color = {0.5, 0.25, 1}, star_density = 0.1}
+    end
+    if t == 2 then
+        assert(weather.moon_phase_offset() == 0.25 and weather.moon_cycle_days() == 10 and weather.moon_inclination() == 12)
+        assert(weather.moon_star_density() > 0.099 and weather.moon_star_density() < 0.101)
+        local r, g, b = weather.moon_light_color()
+        assert(r == 0.5 and g == 0.25 and b == 1)
+        assert(weather.moon_disk_intensity() == 6 and weather.moon_enabled() == 1)  -- only the given keys changed
+        weather.set_moon{phase_offset = 1e9, cycle_days = 1e9, freeze_phase = 1e9, inclination = 1e9, light_intensity = 1e9,
+                         light_color = {9, 9, 9}, light_shadows = 0, disk_size = 1e9, disk_intensity = 1e9,
+                         star_density = 1e9, star_brightness = 1e9, star_twinkle = 1e9, enabled = 0}
+    end
+    if t == 3 then
+        assert(weather.moon_phase_offset() == 1 and weather.moon_cycle_days() == 120 and weather.moon_freeze_phase() == 1)
+        assert(weather.moon_inclination() == 30 and weather.moon_light_intensity() == 2)
+        local r, g, b = weather.moon_light_color()
+        assert(r == 1 and g == 1 and b == 1 and weather.moon_light_shadows() == 0 and weather.moon_enabled() == 0)
+        assert(weather.moon_disk_size() == 1 and weather.moon_disk_intensity() == 50)
+        assert(weather.moon_star_density() == 1 and weather.moon_star_brightness() == 4 and weather.moon_star_twinkle() == 1)
+        weather.set_moon{phase_offset = -1, cycle_days = 0, freeze_phase = -9, inclination = -1, light_intensity = -1,
+                         light_color = {-1, -1, -1}, light_shadows = 5, disk_size = 0, disk_intensity = -1,
+                         star_density = -1, star_brightness = -1, star_twinkle = -1, enabled = 7}
+        weather.set_moon{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.moon_phase_offset() == 0 and weather.moon_cycle_days() == 2 and weather.moon_freeze_phase() == -1)
+        assert(weather.moon_inclination() == 0 and weather.moon_light_intensity() == 0)
+        local r, g, b = weather.moon_light_color()
+        assert(r == 0 and g == 0 and b == 0 and weather.moon_light_shadows() == 1 and weather.moon_enabled() == 1)
+        assert(weather.moon_disk_size() > 0.989 and weather.moon_disk_size() < 0.991 and weather.moon_disk_intensity() == 0)
+        assert(weather.moon_star_density() == 0 and weather.moon_star_brightness() == 0 and weather.moon_star_twinkle() == 0)
+    end
+end
+)",
+           true, true, false, false, false, false, false, false, false, false, false, false, true);
+    r.step(5);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.moon().cycle_days == 2.0f);
+    CHECK(r.moon().enabled == 1);
+}
+
+TEST_CASE("weather api: moon_phase, moon_illumination, moon_direction and moon_level are the kit helpers on the clock") {
+    // Every tick the script writes (phase, illumination, level) to the probe's position and the direction to its scale.
+    WRig r(R"(
+function update()
+    local x, y, z = weather.moon_direction()
+    mce.each("LocalTransform", function(e)
+        mce.set(e, "LocalTransform", "position", vector.create(weather.moon_phase(), weather.moon_illumination(), weather.moon_level()))
+        mce.set(e, "LocalTransform", "scale", vector.create(x, y, z))
+    end)
+end
+)",
+           true, true, false, false, false, false, false, false, false, false, false, false, true);
+    kit::Environment3D env;
+    r.w.set_resource(env);
+    r.w.register_components<kit::WorldClock>();
+    kit::WorldClock clock;
+    clock.day = 3;
+    clock.drive_environment = 0;  // the test sets time_of_day itself
+    r.w.spawn_with(clock);
+    const kit::Moon moon;
+    for (const f32 hour : {-1.0f, 0.0f, 6.0f, 12.0f, 18.0f, 21.0f, 23.5f}) {
+        r.w.try_resource<kit::Environment3D>()->time_of_day = hour;
+        r.step(1);
+        INFO("hour " << hour << ": " << err(r.h()));
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+        const f32 phase = kit::moon_phase(moon, 3, hour);
+        const math::vec3 dir = kit::moon_direction(moon, hour, phase);
+        CHECK(r.p().position.x == doctest::Approx(phase).epsilon(1e-5));
+        CHECK(r.p().position.y == doctest::Approx(kit::moon_illumination(phase)).epsilon(1e-5));
+        CHECK(r.p().position.z == doctest::Approx(kit::moon_level(moon, 3, hour, r.w.try_get<kit::Weather>(r.wx_e))).epsilon(1e-5));
+        CHECK(r.p().scale.x == doctest::Approx(dir.x).epsilon(1e-5));
+        CHECK(r.p().scale.y == doctest::Approx(dir.y).epsilon(1e-5));
+        CHECK(r.p().scale.z == doctest::Approx(dir.z).epsilon(1e-5));
+    }
+    // No clock (time_of_day -1) gives level 0; a full moon pinned by freeze_phase is fully lit, a new one is not.
+    r.w.try_resource<kit::Environment3D>()->time_of_day = -1.0f;
+    r.step(1);
+    CHECK(r.p().position.z == 0.0f);
+    r.moon().freeze_phase = 0.5f;
+    r.w.try_resource<kit::Environment3D>()->time_of_day = 0.0f;
+    r.step(1);
+    CHECK(r.p().position.x == 0.5f);
+    CHECK(r.p().position.y == 1.0f);
+    r.moon().freeze_phase = 0.0f;
+    r.step(1);
+    CHECK(r.p().position.y == 0.0f);
+    CHECK(r.p().position.z == 0.0f);
+    // The weather damps the level: a full moon at hour 0 (the moon sits on the sun's far side) under a storm.
+    r.moon().freeze_phase = 0.5f;
+    r.moon().inclination_deg = 0.0f;
+    for (const f32 hour : {0.0f, 1.0f, 2.0f, 22.0f, 23.0f}) {
+        r.w.try_resource<kit::Environment3D>()->time_of_day = hour;
+        r.wx().current = kit::WeatherKind::Clear;
+        r.wx().target = kit::WeatherKind::Clear;
+        r.wx().intensity = 0.0f;
+        r.step(1);
+        const f32 clear = r.p().position.z;
+        CHECK(clear > 0.5f);
+        r.wx().current = kit::WeatherKind::Storm;
+        r.wx().target = kit::WeatherKind::Storm;
+        r.wx().intensity = 1.0f;
+        r.step(1);
+        const kit::Weather* now = r.w.try_get<kit::Weather>(r.wx_e);
+        CHECK(r.p().position.z == doctest::Approx(kit::moon_level(r.moon(), 3, hour, now)).epsilon(1e-5));
+        CHECK(r.p().position.z < clear);
+    }
+}
+
+TEST_CASE("weather api: a world without a Moon raises a named error and the setter never adds one") {
+    for (const char* name : {"moon_phase_offset", "moon_cycle_days", "moon_freeze_phase", "moon_inclination",
+                             "moon_light_intensity", "moon_light_color", "moon_light_shadows", "moon_disk_size",
+                             "moon_disk_intensity", "moon_star_density", "moon_star_brightness", "moon_star_twinkle",
+                             "moon_enabled", "moon_phase", "moon_illumination", "moon_direction", "moon_level"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no Moon entity").c_str());
+    expect_error("weather.set_moon{}", "weather.set_moon: the scene has no Moon entity");
+    expect_error("weather.moon_level()", "weather.moon_level: this world has no weather", false, false);
+    expect_error("weather.set_moon{}", "weather.set_moon: this world has no weather", false, false);
+    WRig r("function update()\n    if mce.tick() == 1 then weather.set_moon{enabled = 0} end\nend\n");
+    r.step(2);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    usize n = 0;
+    r.w.query<kit::Moon>().each([&](Entity, kit::Moon&) { ++n; });
+    CHECK(n == 0);
+}
+
+TEST_CASE("weather api: set_moon bad arguments raise an error that names the call and write nothing") {
+    bad_moon("weather.set_moon{bogus = 1}", "weather.set_moon: unknown key 'bogus'");
+    bad_moon("weather.set_moon{inclination_deg = 1}", "weather.set_moon: unknown key 'inclination_deg'");
+    bad_moon("weather.set_moon{phase_offset = 'full'}", "weather.set_moon: 'phase_offset' is not a number");
+    bad_moon("weather.set_moon{star_density = 0/0}", "weather.set_moon: 'star_density' is not a number");
+    bad_moon("weather.set_moon{enabled = true}", "weather.set_moon: 'enabled' is not a number");
+    bad_moon("weather.set_moon{light_color = 1}", "weather.set_moon: 'light_color' is not a table of three numbers");
+    bad_moon("weather.set_moon{light_color = {1, 2}}", "weather.set_moon: 'light_color' is not a table of three numbers");
+    bad_moon("weather.set_moon{light_color = {1, 'x', 3}}", "weather.set_moon: 'light_color' is not a table of three numbers");
+    bad_moon("weather.set_moon{[1] = 0.5}", "weather.set_moon: the keys are names");
+    bad_moon("weather.set_moon(0.5)", "table expected");
+    bad_moon("weather.set_moon()", "table expected");
+    for (const char* body : {"weather.set_moon{cycle_days = 10, star_density = 'x'}", "weather.set_moon{star_density = 'x', cycle_days = 10}",
+                             "weather.set_moon{cycle_days = 10, nope = 1}", "weather.set_moon{cycle_days = 10, light_color = {1, 1}}",
+                             "weather.set_moon{light_color = {1, 1}, cycle_days = 10}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, false, false, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.moon().cycle_days == 29.53f);
+        CHECK(r.moon().light_color.x == 0.55f);
     }
 }

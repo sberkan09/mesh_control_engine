@@ -842,6 +842,22 @@ extract also drops the sky's own sun disk (it would sit on the phased moon; the 
 becomes 0, `Environment3D` is not written); by day and whenever the sun holds the light the disk is as before. The
 disk is drawn larger than the real moon so its phase can be read.
 
+From Luau, `weather.moon_phase_offset()`, `moon_cycle_days()`, `moon_freeze_phase()`, `moon_inclination()`,
+`moon_light_intensity()`, `moon_light_color()` (three numbers `r, g, b`), `moon_light_shadows()`, `moon_disk_size()`,
+`moon_disk_intensity()`, `moon_star_density()`, `moon_star_brightness()`, `moon_star_twinkle()` and `moon_enabled()`
+read the authoring, and `weather.set_moon{phase_offset=, cycle_days=, freeze_phase=, inclination=, light_intensity=, light_color={r, g, b}, light_shadows=, disk_size=, disk_intensity=, star_density=, star_brightness=, star_twinkle=, enabled=}`
+writes it (section 27.3), for example `weather.set_moon{freeze_phase = 0.1, star_density = 1}` for a crescent over a full
+star field. `inclination` is the `inclination_deg` field in degrees. The four read-only values come from the same
+helpers the extract uses, on the current `Environment3D.time_of_day`, the first `WorldClock`'s day (0 without a clock) and
+the first `Weather`: `weather.moon_phase()` (0 new, 0.5 full), `weather.moon_illumination()` (0 to 1),
+`weather.moon_direction()` (three numbers `x, y, z`, the unit direction the moonlight travels, so negate it for the
+direction toward the moon) and `weather.moon_level()` (0 to 1; 0 when the scene has no clock or the moon is below the
+horizon). `set_moon` never adds a `Moon`: a scene without one raises an error. A scene needs a clock for any moon, so
+set one before expecting `moon_level()` above 0. The `12_weather` sample carries a default `Moon` on its Weather entity
+and, since its clock starts at 5:00 on day 0, the moon is a full one in the western sky that sinks through the dawn
+(level 1.000 at tick 0, 0.469 at tick 450 with the rain damping it, 0.000 from tick 1500); the sample was not moved to
+a night hour so the mist keeps its dawn numbers, and the script logs `moon:` every 150 ticks.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

@@ -21,7 +21,12 @@
 #      wind (e.g. 0.371 at tick 450 where the smooth wind is 0.360);
 #  11. (M-GROUNDMIST 13c) the "mist:" lines: the clock starts at 5:00 (a 600 s day, 1 h = 1500 ticks), so the GroundMist level
 #      starts at 0.185 (a dry dawn on the rise toward the 6:00 peak), falls while the rain and its damping set in, and
-#      climbs again as the ground gets wet (0.312 at 5.80 h, tick 1200).
+#      climbs again as the ground gets wet (0.312 at 5.80 h, tick 1200);
+#  12. (M-NIGHTSKY 14f) the "moon:" lines: the Weather entity carries a default Moon (a full moon, 0.5 is the default phase
+#      offset, so phase 0.507 on day 0 at 5:00): its path is the sun's, 12 h behind, so it hangs in the west and sets
+#      through the dawn. The level starts at 1.000 (full, well up), falls with its height and the rain's damping
+#      (0.469 at tick 450, 0.270 at 600 where the storm is called, 0.121 at 1200) and is 0.000 from tick 1500 (below the
+#      horizon, the sun is coming up). The Moon is pure data: it changes the state hash (a new column) and nothing else.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -74,6 +79,8 @@ expect("${first}" "script: gust: level 0.000 wind 0.100 effective 0.100 strength
 expect("${first}" "script: gust: level 0.053 wind 0.360 effective 0.371 strength 0.60 at tick 450\n" "the gust is not wired into the scene")
 expect("${first}" "script: mist: level 0.185 hour 5.00 strength 1.00 peak 6.0 h at tick 0\n" "the mist did not start at the dawn level")
 expect("${first}" "script: mist: level 0.114 hour 5.30 strength 1.00 peak 6.0 h at tick 450\n" "the rain did not damp the mist")
+expect("${first}" "script: moon: phase 0.507 illumination 1.000 level 1.000 dir 0.95 -0.22 0.23 at tick 0\n" "the moon did not start full and up")
+expect("${first}" "script: moon: phase 0.507 illumination 0.999 level 0.469 dir 0.97 -0.15 0.19 at tick 450\n" "the rain did not damp the moon as it sinks")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -112,6 +119,9 @@ expect("${forecast}" "script: gust: level 0.807 wind 0.100 effective 0.148 stren
 expect("${forecast}" "script: mist: level 0.075 hour 5.40 strength 1.00 peak 6.0 h at tick 600\n" "the mist is wrong when the storm is called")
 expect("${forecast}" "script: mist: level 0.312 hour 5.80 strength 1.00 peak 6.0 h at tick 1200\n" "the wet ground did not feed the mist")
 expect("${forecast}" "script: mist: level 0.367 hour 6.60 strength 1.00 peak 6.0 h at tick 2400\n" "the mist is wrong at the end of the forecast")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.270 dir 0.98 -0.13 0.18 at tick 600\n" "the moon is wrong when the storm is called")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.121 dir 0.99 -0.05 0.13 at tick 1200\n" "the moon did not keep sinking")
+expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.000 dir 0.99 -0.00 0.10 at tick 1500\n" "the moon did not set by tick 1500")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

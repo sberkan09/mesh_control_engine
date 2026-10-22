@@ -169,6 +169,32 @@
 //                                         lanes 0..1; enabled: any non-zero number is 1); an unknown key, a non-number
 //                                         or a color that is not three numbers raises an error that names the call
 //
+// Moon (M-NIGHTSKY step 14f) is the same kind of binding over the first kit::Moon (mce/kit/moon.h). Named errors as
+// above; the setter never adds the component. The moon_phase / moon_illumination / moon_direction / moon_level values
+// are derived with the moon.h helpers on the current clock and are read-only. The clock is the hour mist_level uses
+// (Environment3D.time_of_day; -1 = no clock) and the first WorldClock's day (0 without one); the first Weather, if any,
+// damps the level. Authoring names follow the component, `inclination` is Moon.inclination_deg (degrees).
+//
+//   weather.moon_phase_offset() / moon_cycle_days() / moon_freeze_phase() -> number   phase_offset, cycle_days, freeze_phase
+//   weather.moon_inclination() -> number                    inclination_deg (0..30)
+//   weather.moon_light_intensity() -> number                light_intensity (0..2)
+//   weather.moon_light_color() -> r, g, b                   light_color
+//   weather.moon_light_shadows() / moon_enabled() -> number 0 or 1
+//   weather.moon_disk_size() / moon_disk_intensity() -> number   disk_size (0.99..1), disk_intensity (0..50)
+//   weather.moon_star_density() / moon_star_brightness() / moon_star_twinkle() -> number
+//   weather.moon_phase() -> number                          kit::moon_phase, 0..1 (0 new, 0.5 full)
+//   weather.moon_illumination() -> number                   kit::moon_illumination of that phase, 0..1
+//   weather.moon_direction() -> x, y, z                     kit::moon_direction: the unit direction the moonlight
+//                                                           travels (negate it for the direction toward the moon)
+//   weather.moon_level() -> number                          kit::moon_level, 0..1, 0 without a clock or below the horizon
+//   weather.set_moon{phase_offset=, cycle_days=, freeze_phase=, inclination=, light_intensity=, light_color={r,g,b},
+//                    light_shadows=, disk_size=, disk_intensity=, star_density=, star_brightness=, star_twinkle=,
+//                    enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range (color
+//                                         lanes 0..1; light_shadows and enabled: any non-zero number is 1); an unknown
+//                                         key, a non-number or a color that is not three numbers raises an error that
+//                                         names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -189,6 +215,8 @@
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/moon.h"
+#include "mce/kit/world_clock.h"
 
 namespace mce::script::detail {
 
@@ -289,6 +317,8 @@ kit::LightningBolt& check_bolt(lua_State* L, const char* fn) { return check_firs
 kit::WindGust& check_gust(lua_State* L, const char* fn) { return check_first<kit::WindGust>(L, fn, "WindGust"); }
 
 kit::GroundMist& check_mist(lua_State* L, const char* fn) { return check_first<kit::GroundMist>(L, fn, "GroundMist"); }
+
+kit::Moon& check_moon(lua_State* L, const char* fn) { return check_first<kit::Moon>(L, fn, "Moon"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -843,11 +873,9 @@ int l_weather_mist_color(lua_State* L) {
     return 3;
 }
 
-// The level the extract would apply now: the Environment3D resource (else the first component, else the default,
-// which has no clock) gives the hour; the first Weather, if any, the wetness and the damping.
-int l_weather_mist_level(lua_State* L) {
-    const kit::GroundMist& m = check_mist(L, "weather.mist_level");
-    World& w = world_of(L);
+// The hour the extract would use now: the Environment3D resource (else the first component, else the default, which
+// has no clock) gives it.
+f32 current_hour(World& w) {
     f32 hour = kit::Environment3D{}.time_of_day;
     if (const kit::Environment3D* r = w.try_resource<kit::Environment3D>()) {
         hour = r->time_of_day;
@@ -859,6 +887,11 @@ int l_weather_mist_level(lua_State* L) {
             hour = c.time_of_day;
         });
     }
+    return hour;
+}
+
+// The first Weather, if the world has any (the damping source of mist_level and moon_level); nullptr otherwise.
+const kit::Weather* first_weather(World& w) {
     const kit::Weather* wx = nullptr;
     const refl::TypeRecord* type = refl::find_type(StringId("Weather"));
     if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
@@ -866,7 +899,14 @@ int l_weather_mist_level(lua_State* L) {
             if (!wx) wx = &c;
         });
     }
-    lua_pushnumber(L, static_cast<double>(kit::mist_level(m, hour, wx)));
+    return wx;
+}
+
+// The level the extract would apply now: the current hour, and the first Weather's wetness and damping.
+int l_weather_mist_level(lua_State* L) {
+    const kit::GroundMist& m = check_mist(L, "weather.mist_level");
+    World& w = world_of(L);
+    lua_pushnumber(L, static_cast<double>(kit::mist_level(m, current_hour(w), first_weather(w))));
     return 1;
 }
 
@@ -899,6 +939,114 @@ int l_weather_set_mist(lua_State* L) {
         m.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
         m.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
     }
+    if (given[12]) m.enabled = value[12] != 0.0 ? 1 : 0;
+    return 0;
+}
+
+#define MCE_WEATHER_GETTER_MOON(luaname, field)                                                   \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_moon(L, "weather." #luaname).field));            \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_MOON(moon_phase_offset, phase_offset)
+MCE_WEATHER_GETTER_MOON(moon_cycle_days, cycle_days)
+MCE_WEATHER_GETTER_MOON(moon_freeze_phase, freeze_phase)
+MCE_WEATHER_GETTER_MOON(moon_inclination, inclination_deg)
+MCE_WEATHER_GETTER_MOON(moon_light_intensity, light_intensity)
+MCE_WEATHER_GETTER_MOON(moon_light_shadows, light_shadows)
+MCE_WEATHER_GETTER_MOON(moon_disk_size, disk_size)
+MCE_WEATHER_GETTER_MOON(moon_disk_intensity, disk_intensity)
+MCE_WEATHER_GETTER_MOON(moon_star_density, star_density)
+MCE_WEATHER_GETTER_MOON(moon_star_brightness, star_brightness)
+MCE_WEATHER_GETTER_MOON(moon_star_twinkle, star_twinkle)
+MCE_WEATHER_GETTER_MOON(moon_enabled, enabled)
+#undef MCE_WEATHER_GETTER_MOON
+
+int l_weather_moon_light_color(lua_State* L) {
+    const kit::Moon& m = check_moon(L, "weather.moon_light_color");
+    lua_pushnumber(L, static_cast<double>(m.light_color.x));
+    lua_pushnumber(L, static_cast<double>(m.light_color.y));
+    lua_pushnumber(L, static_cast<double>(m.light_color.z));
+    return 3;
+}
+
+// WorldClock.day of the first WorldClock (0 without one), the day the extract hands to the moon helpers.
+u32 current_day(World& w) {
+    u32 day = 0;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+        });
+    }
+    return day;
+}
+
+int l_weather_moon_phase(lua_State* L) {
+    const kit::Moon& m = check_moon(L, "weather.moon_phase");
+    World& w = world_of(L);
+    lua_pushnumber(L, static_cast<double>(kit::moon_phase(m, current_day(w), current_hour(w))));
+    return 1;
+}
+
+int l_weather_moon_illumination(lua_State* L) {
+    const kit::Moon& m = check_moon(L, "weather.moon_illumination");
+    World& w = world_of(L);
+    lua_pushnumber(L, static_cast<double>(kit::moon_illumination(kit::moon_phase(m, current_day(w), current_hour(w)))));
+    return 1;
+}
+
+int l_weather_moon_direction(lua_State* L) {
+    const kit::Moon& m = check_moon(L, "weather.moon_direction");
+    World& w = world_of(L);
+    const f32 hour = current_hour(w);
+    const math::vec3 d = kit::moon_direction(m, hour, kit::moon_phase(m, current_day(w), hour));
+    lua_pushnumber(L, static_cast<double>(d.x));
+    lua_pushnumber(L, static_cast<double>(d.y));
+    lua_pushnumber(L, static_cast<double>(d.z));
+    return 3;
+}
+
+int l_weather_moon_level(lua_State* L) {
+    const kit::Moon& m = check_moon(L, "weather.moon_level");
+    World& w = world_of(L);
+    lua_pushnumber(L, static_cast<double>(kit::moon_level(m, current_day(w), current_hour(w), first_weather(w))));
+    return 1;
+}
+
+// weather.set_moon{...}: validated before anything is written.
+int l_weather_set_moon(lua_State* L) {
+    static const char* const kKeys[13] = {"phase_offset", "cycle_days", "freeze_phase", "inclination",
+                                          "light_intensity", "light_color", "light_shadows", "disk_size",
+                                          "disk_intensity", "star_density", "star_brightness", "star_twinkle",
+                                          "enabled"};
+    f64 value[13] = {};
+    bool given[13] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_moon", kKeys, 13,
+                  "phase_offset, cycle_days, freeze_phase, inclination, light_intensity, light_color, light_shadows, "
+                  "disk_size, disk_intensity, star_density, star_brightness, star_twinkle, enabled",
+                  value, given, 5, color);
+    kit::Moon& m = check_moon(L, "weather.set_moon");
+    if (given[0]) m.phase_offset = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) m.cycle_days = static_cast<f32>(clamp_range(value[1], 2.0, 120.0));
+    if (given[2]) m.freeze_phase = static_cast<f32>(clamp_range(value[2], -1.0, 1.0));
+    if (given[3]) m.inclination_deg = static_cast<f32>(clamp_range(value[3], 0.0, 30.0));
+    if (given[4]) m.light_intensity = static_cast<f32>(clamp_range(value[4], 0.0, 2.0));
+    if (given[5]) {
+        m.light_color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        m.light_color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        m.light_color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[6]) m.light_shadows = value[6] != 0.0 ? 1 : 0;
+    if (given[7]) m.disk_size = static_cast<f32>(clamp_range(value[7], 0.99, 1.0));
+    if (given[8]) m.disk_intensity = static_cast<f32>(clamp_range(value[8], 0.0, 50.0));
+    if (given[9]) m.star_density = static_cast<f32>(clamp_range(value[9], 0.0, 1.0));
+    if (given[10]) m.star_brightness = static_cast<f32>(clamp_range(value[10], 0.0, 4.0));
+    if (given[11]) m.star_twinkle = static_cast<f32>(clamp_range(value[11], 0.0, 1.0));
     if (given[12]) m.enabled = value[12] != 0.0 ? 1 : 0;
     return 0;
 }
@@ -1005,6 +1153,24 @@ const luaL_Reg kWeatherLib[] = {
     {"mist_enabled", l_weather_mist_enabled},
     {"mist_level", l_weather_mist_level},
     {"set_mist", l_weather_set_mist},
+    {"moon_phase_offset", l_weather_moon_phase_offset},
+    {"moon_cycle_days", l_weather_moon_cycle_days},
+    {"moon_freeze_phase", l_weather_moon_freeze_phase},
+    {"moon_inclination", l_weather_moon_inclination},
+    {"moon_light_intensity", l_weather_moon_light_intensity},
+    {"moon_light_color", l_weather_moon_light_color},
+    {"moon_light_shadows", l_weather_moon_light_shadows},
+    {"moon_disk_size", l_weather_moon_disk_size},
+    {"moon_disk_intensity", l_weather_moon_disk_intensity},
+    {"moon_star_density", l_weather_moon_star_density},
+    {"moon_star_brightness", l_weather_moon_star_brightness},
+    {"moon_star_twinkle", l_weather_moon_star_twinkle},
+    {"moon_enabled", l_weather_moon_enabled},
+    {"moon_phase", l_weather_moon_phase},
+    {"moon_illumination", l_weather_moon_illumination},
+    {"moon_direction", l_weather_moon_direction},
+    {"moon_level", l_weather_moon_level},
+    {"set_moon", l_weather_set_moon},
     {nullptr, nullptr},
 };
 

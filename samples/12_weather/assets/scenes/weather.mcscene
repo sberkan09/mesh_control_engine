@@ -79,6 +79,7 @@
     },
     "WindGust": {},
     "GroundMist": {},
+    "Moon": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
