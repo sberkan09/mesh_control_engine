@@ -15,6 +15,8 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/ground_mist.h"
+#include "mce/kit/moon.h"
+#include "mce/kit/world_clock.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
@@ -815,6 +817,43 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     sun.ambient_sky = env.ambient_sky;
     sun.ambient_ground = env.ambient_ground;
     sun.shadows = env.sun_shadows != 0;
+    {  // moonlight (M-NIGHTSKY 14b): hand the one directional slot to the moon at night; local copy only, never Environment3D
+        const Moon* moon = nullptr;
+        world.query<const Moon&>().each([&](const Moon& c) {
+            if (!moon) moon = &c;
+        });
+        if (moon && moon->enabled && env.time_of_day >= 0.0f) {
+            const Weather* moon_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!moon_weather) moon_weather = &c;
+            });
+            u32 day = 0;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+            });
+            const f32 level = moon_level(*moon, day, env.time_of_day, moon_weather);
+            if (level > 0.0f) {
+                const f32 sun_elevation = -sun.direction.y;
+                const f32 t = clamp((sun_elevation + 0.05f) / 0.15f, 0.0f, 1.0f);
+                const f32 sw = t * t * (3.0f - 2.0f * t);
+                const f32 mw = (1.0f - sw) * level;
+                const f32 moon_intensity = clamp(moon->light_intensity, 0.0f, 2.0f);
+                if (mw > 0.0f && sw * sun.intensity < mw * moon_intensity) {
+                    const f32 phase = moon_phase(*moon, day, env.time_of_day);
+                    sun.direction = moon_direction(*moon, env.time_of_day, phase);
+                    sun.color = moon->light_color;
+                    sun.intensity = moon_intensity * mw;
+                    sun.shadows = moon->light_shadows != 0;
+                    const f32 lift = mw * 0.02f;  // a small cool ambient lift so shadowed ground is not pure black
+                    sun.ambient_sky = sun.ambient_sky + moon->light_color * lift;
+                    sun.ambient_ground = sun.ambient_ground + moon->light_color * lift;
+                }
+            }
+        }
+    }
     scene.set_light(sun);
     render::Sky sky;
     sky.zenith = env.sky_zenith;
