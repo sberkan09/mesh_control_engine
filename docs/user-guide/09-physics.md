@@ -721,7 +721,17 @@ primary camera as it was at the strike, and stays there. The `LightningStruck` e
 distance for its delay, at its own `speed_mps`, and for its gain; an event without a position is handled as before.
 The last strike is saved on the component (`strike_x`, `strike_z`, `strike_dist_m`, `strike_id`, `active`), so a save
 during a flash resumes on the same state. `enabled` 0 switches positions off; the other fields (`height_m`, `width_m`,
-`segments_log2`, `jitter`, `fork`, `light_intensity`, `light_radius_m`) are authoring for the bolt drawing that follows.
+`segments_log2`, `jitter`, `fork`, `light_intensity`, `light_radius_m`) author the bolt that is drawn.
+
+While a flash lasts (`active` above 0, the weather is a Storm, `enabled` 1 and the quality tier is not Low) the scene
+draws the bolt: a jagged line from `height_m` above the strike down to it, made of `2^segments_log2` emissive box
+segments (`jitter` is the sideways wander as a fraction of a segment, 0 is a straight line; `width_m` is the width at
+100 m and grows with the distance so far bolts stay readable) and, with `fork` 1, one shorter side branch. The shape is
+fixed by the strike number, so a given strike always looks the same, and it is drawn with the existing mesh path (no
+new shader), bright enough to bloom. It is brightest on the first flash tick and fades with the flash; on some strikes,
+chosen by the strike number, the second tick flashes again. With `light_intensity` above 0 a blue-white point light
+sits halfway up the bolt, `light_radius_m` wide. Drawing never changes the scene, so saves and state hashes are
+unaffected. A scene without a `LightningBolt` draws exactly as before.
 A scene without a `LightningBolt` hashes and sounds as before.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)

@@ -42,7 +42,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 11a | done | PR TBD | `LightningBolt` (state, authoring, padding audit), strike position in `kit_lightning`, `LightningStruck.{has_pos,distance_m,pos}`, `ThunderDelay` on `distance_m`; guide 9.19g |
-| 11b | planned | | draw path chosen here: emissive box segments, else a particle chain, else 11c |
-| 11c | planned (probably dropped) | | only if 11b finds neither path draws a continuous bolt |
+| 11a | done | #699 | `LightningBolt` (state, authoring, padding audit), strike position in `kit_lightning`, `LightningStruck.{has_pos,distance_m,pos}`, `ThunderDelay` on `distance_m`; guide 9.19g |
+| 11b | done | PR TBD | Draw path decided: (1) emissive box segments. `Kit3DExtract` already holds the writable `MeshStore` (`init(MeshStore&)`, as terrains and the static merge use it), `MaterialOverride` carries an emissive colour and `MeshInstance::emissive_tint` takes HDR values, so one unit box mesh (`asset::write_mesh`, uploaded once under `allocate_key()`, released in `reset`/`shutdown`) is stretched per segment with a black tint and an emissive-only material; no particle chain, shader or pass, so 11c is dropped. With a const store (no writable store) nothing is drawn. `build_bolt`, `build_bolt_fork`, `bolt_intensity` are pure in `lightning_bolt.cpp`; the draw is `Kit3DExtract::extract_lightning_bolt` (reads only), gated by `active`, Storm, `enabled` and the `clouds` tier switch (off on Low). Guide 9.19g |
+| 11c | dropped (11b's box segments draw a continuous bolt) | | only if 11b finds neither path draws a continuous bolt |
 | 11d | planned | | |
