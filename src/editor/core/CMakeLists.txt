@@ -19,6 +19,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/camera_bookmarks.cpp
         src/quick_open.cpp
         src/selection_history.cpp
+        src/selection_sets.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp

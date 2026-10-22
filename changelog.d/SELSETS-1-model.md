@@ -1,0 +1,1 @@
+- Editor, M-SELSETS 1: `SelectionSets` keeps nine numbered groups of selected entities and recalls the ones that still exist; Ctrl+Shift+1..9 / Alt+1..9 follow.

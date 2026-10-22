@@ -9,6 +9,7 @@ mce_add_test(test_editor UMBRELLA
         test_camera_bookmarks.cpp
         test_quick_open.cpp
         test_selection_history.cpp
+        test_selection_sets.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp
