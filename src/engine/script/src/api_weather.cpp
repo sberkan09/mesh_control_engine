@@ -128,6 +128,25 @@
 //                                         (segments rounded down; fork and enabled: any non-zero number is 1); an
 //                                         unknown key or a non-number raises an error that names the call
 //
+// Wind gusts (M-WINDGUST step 12d) are the same kind of binding over the first kit::WindGust
+// (mce/kit/wind_gust.h). Named errors as above; the setter never adds the component, and the gust state is
+// engine-written and read-only.
+//
+//   weather.gust_strength() -> number                       WindGust.strength (0..3)
+//   weather.gust_min_gap() / gust_max_gap() -> number       min_gap_s / max_gap_s (0..120)
+//   weather.gust_min_rise() / gust_max_rise() -> number     min_rise_s / max_rise_s (0.05..30)
+//   weather.gust_min_fall() / gust_max_fall() -> number     min_fall_s / max_fall_s (0.05..60)
+//   weather.gust_min_peak() / gust_max_peak() -> number     min_peak / max_peak (0..1)
+//   weather.gust_seed() / gust_affects() -> number          seed / affects (u32)
+//   weather.gust_enabled() -> number                        0 or 1
+//   weather.gust_level() -> number                          gust_q / 2^24 (0..1), read-only
+//   weather.effective_wind() -> number                      effective_wind(Weather, WindGust, all consumer bits)
+//   weather.set_gust{strength=, min_gap=, max_gap=, min_rise=, max_rise=, min_fall=, max_fall=, min_peak=,
+//                    max_peak=, seed=, affects=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (seed and affects rounded down; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -145,6 +164,7 @@
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/lightning_bolt.h"
+#include "mce/kit/wind_gust.h"
 
 namespace mce::script::detail {
 
@@ -241,6 +261,8 @@ kit::CloudLayer& check_clouds(lua_State* L, const char* fn) { return check_first
 kit::WeatherAudio& check_audio(lua_State* L, const char* fn) { return check_first<kit::WeatherAudio>(L, fn, "WeatherAudio"); }
 
 kit::LightningBolt& check_bolt(lua_State* L, const char* fn) { return check_first<kit::LightningBolt>(L, fn, "LightningBolt"); }
+
+kit::WindGust& check_gust(lua_State* L, const char* fn) { return check_first<kit::WindGust>(L, fn, "WindGust"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -697,6 +719,64 @@ int l_weather_set_bolt(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_WG(luaname, field)                                                      \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_gust(L, "weather." #luaname).field));            \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_WG(gust_strength, strength)
+MCE_WEATHER_GETTER_WG(gust_min_gap, min_gap_s)
+MCE_WEATHER_GETTER_WG(gust_max_gap, max_gap_s)
+MCE_WEATHER_GETTER_WG(gust_min_rise, min_rise_s)
+MCE_WEATHER_GETTER_WG(gust_max_rise, max_rise_s)
+MCE_WEATHER_GETTER_WG(gust_min_fall, min_fall_s)
+MCE_WEATHER_GETTER_WG(gust_max_fall, max_fall_s)
+MCE_WEATHER_GETTER_WG(gust_min_peak, min_peak)
+MCE_WEATHER_GETTER_WG(gust_max_peak, max_peak)
+MCE_WEATHER_GETTER_WG(gust_seed, seed)
+MCE_WEATHER_GETTER_WG(gust_affects, affects)
+MCE_WEATHER_GETTER_WG(gust_enabled, enabled)
+#undef MCE_WEATHER_GETTER_WG
+
+int l_weather_gust_level(lua_State* L) {
+    const kit::WindGust& g = check_gust(L, "weather.gust_level");
+    lua_pushnumber(L, static_cast<double>(g.gust_q) / 16777216.0);
+    return 1;
+}
+
+int l_weather_effective_wind(lua_State* L) {
+    const kit::Weather& wx = check_weather(L, "weather.effective_wind");
+    const kit::WindGust& g = check_gust(L, "weather.effective_wind");
+    lua_pushnumber(L, static_cast<double>(kit::effective_wind(wx, &g, kit::kGustAll)));
+    return 1;
+}
+
+// weather.set_gust{...}: validated before anything is written. (The gust state is engine-written, not settable.)
+int l_weather_set_gust(lua_State* L) {
+    static const char* const kKeys[12] = {"strength", "min_gap", "max_gap", "min_rise", "max_rise", "min_fall",
+                                          "max_fall", "min_peak", "max_peak", "seed", "affects", "enabled"};
+    f64 value[12] = {};
+    bool given[12] = {};
+    read_settings(L, "weather.set_gust", kKeys, 12,
+                  "strength, min_gap, max_gap, min_rise, max_rise, min_fall, max_fall, min_peak, max_peak, seed, "
+                  "affects, enabled",
+                  value, given);
+    kit::WindGust& g = check_gust(L, "weather.set_gust");
+    if (given[0]) g.strength = static_cast<f32>(clamp_range(value[0], 0.0, 3.0));
+    if (given[1]) g.min_gap_s = static_cast<f32>(clamp_range(value[1], 0.0, 120.0));
+    if (given[2]) g.max_gap_s = static_cast<f32>(clamp_range(value[2], 0.0, 120.0));
+    if (given[3]) g.min_rise_s = static_cast<f32>(clamp_range(value[3], 0.05, 30.0));
+    if (given[4]) g.max_rise_s = static_cast<f32>(clamp_range(value[4], 0.05, 30.0));
+    if (given[5]) g.min_fall_s = static_cast<f32>(clamp_range(value[5], 0.05, 60.0));
+    if (given[6]) g.max_fall_s = static_cast<f32>(clamp_range(value[6], 0.05, 60.0));
+    if (given[7]) g.min_peak = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) g.max_peak = static_cast<f32>(clamp_range(value[8], 0.0, 1.0));
+    if (given[9]) g.seed = static_cast<u32>(std::floor(clamp_range(value[9], 0.0, 4294967295.0)));
+    if (given[10]) g.affects = static_cast<u32>(std::floor(clamp_range(value[10], 0.0, 4294967295.0)));
+    if (given[11]) g.enabled = value[11] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -769,6 +849,21 @@ const luaL_Reg kWeatherLib[] = {
     {"bolt_pos", l_weather_bolt_pos},
     {"bolt_active", l_weather_bolt_active},
     {"set_bolt", l_weather_set_bolt},
+    {"gust_strength", l_weather_gust_strength},
+    {"gust_min_gap", l_weather_gust_min_gap},
+    {"gust_max_gap", l_weather_gust_max_gap},
+    {"gust_min_rise", l_weather_gust_min_rise},
+    {"gust_max_rise", l_weather_gust_max_rise},
+    {"gust_min_fall", l_weather_gust_min_fall},
+    {"gust_max_fall", l_weather_gust_max_fall},
+    {"gust_min_peak", l_weather_gust_min_peak},
+    {"gust_max_peak", l_weather_gust_max_peak},
+    {"gust_seed", l_weather_gust_seed},
+    {"gust_affects", l_weather_gust_affects},
+    {"gust_enabled", l_weather_gust_enabled},
+    {"gust_level", l_weather_gust_level},
+    {"effective_wind", l_weather_effective_wind},
+    {"set_gust", l_weather_set_gust},
     {nullptr, nullptr},
 };
 

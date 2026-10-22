@@ -300,6 +300,26 @@ declare weather: {
     -- 50..3000 m, width 0.05..20 m, segments 2..7, jitter 0..0.6, light 0..100000, light_radius 1..5000 m;
     -- fork and enabled: any non-zero number is 1); an unknown key or a non-number raises
     set_bolt: (settings: { min_range: number?, max_range: number?, ground_y: number?, height: number?, width: number?, segments: number?, jitter: number?, fork: number?, light: number?, light_radius: number?, enabled: number? }) -> (),
+    -- WindGust (M-WINDGUST), the first one in the scene; the getters raise when there is none (set_gust never adds
+    -- one). gust_level (0..1) and effective_wind (the gusted wind, all consumer bits) are engine-derived, read-only
+    gust_strength: () -> number,
+    gust_min_gap: () -> number,
+    gust_max_gap: () -> number,
+    gust_min_rise: () -> number,
+    gust_max_rise: () -> number,
+    gust_min_fall: () -> number,
+    gust_max_fall: () -> number,
+    gust_min_peak: () -> number,
+    gust_max_peak: () -> number,
+    gust_seed: () -> number,
+    gust_affects: () -> number,
+    gust_enabled: () -> number,
+    gust_level: () -> number,
+    effective_wind: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..3, min_gap and max_gap 0..120 s,
+    -- min_rise and max_rise 0.05..30 s, min_fall and max_fall 0.05..60 s, min_peak and max_peak 0..1, seed and affects
+    -- u32 rounded down; enabled: any non-zero number is 1); an unknown key or a non-number raises
+    set_gust: (settings: { strength: number?, min_gap: number?, max_gap: number?, min_rise: number?, max_rise: number?, min_fall: number?, max_fall: number?, min_peak: number?, max_peak: number?, seed: number?, affects: number?, enabled: number? }) -> (),
 }
 )";
 

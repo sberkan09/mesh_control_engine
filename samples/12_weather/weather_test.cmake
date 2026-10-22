@@ -15,7 +15,10 @@
 #   8. (M-WEATHERAUDIO 10c) the "audio:" lines: the rain and wind bed levels the WeatherAudio ramps (3 s fade) toward the
 #      weather's targets (the two looping AudioSource entities have no clip, so the sample is silent);
 #   9. (M-LIGHTNINGBOLT 11d) the "bolt:" lines: the LightningBolt authoring the script reads and the last strike's place
-#      (0 before the first strike at tick 1392, then a hashed point 150..900 m from the camera that stays until the next).
+#      (0 before the first strike at tick 1392, then a hashed point 150..900 m from the camera that stays until the next);
+#  10. (M-WINDGUST 12d) the "gust:" lines: the WindGust level (0 in the calm gaps) and the effective wind the wind bed,
+#      rain slant and sway read; Weather.wind stays smooth, and the wind bed in the "audio:" lines follows the gusted
+#      wind (e.g. 0.371 at tick 450 where the smooth wind is 0.360).
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -62,8 +65,10 @@ expect("${first}" "script: wind dir: heading 0.00 drift 6.0 at tick 0\n" "the wi
 expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the wind direction did not turn 6 degrees a minute")
 expect("${first}" "script: clouds: strength 1.00 fair 0.35 overcast 0.90 height 2000 at tick 450\n" "the cloud layer is not wired into the scene")
 expect("${first}" "script: audio: rain 0.000 wind 0.006 max 0/0 dB fade 3 s at tick 0\n" "the audio beds did not start silent")
-expect("${first}" "script: audio: rain 0.650 wind 0.360 max 0/0 dB fade 3 s at tick 450\n" "the rain and wind beds did not follow the weather")
+expect("${first}" "script: audio: rain 0.650 wind 0.371 max 0/0 dB fade 3 s at tick 450\n" "the rain and wind beds did not follow the weather")
 expect("${first}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 450\n" "the bolt is not wired into the scene or struck without a storm")
+expect("${first}" "script: gust: level 0.000 wind 0.100 effective 0.100 strength 0.60 at tick 0\n" "the gust did not start calm")
+expect("${first}" "script: gust: level 0.053 wind 0.360 effective 0.371 strength 0.60 at tick 450\n" "the gust is not wired into the scene")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -91,11 +96,14 @@ expect("${forecast}" "script: snow: cover 0.372 at tick 2250\n" "the snow cover 
 expect("${forecast}" "script: snow: cover 0.298 at tick 2400\n" "the snow cover did not start to melt")
 expect("${forecast}" "script: snow: cover 0.048 at tick 2550\n" "the snow cover did not melt away")
 expect("${forecast}" "script: wind dir: heading 4.25 drift 6.0 at tick 2550\n" "the wind direction did not keep turning")
-expect("${forecast}" "script: audio: rain 0.602 wind 0.641 max 0/0 dB fade 3 s at tick 1500\n" "the storm beds are wrong")
-expect("${forecast}" "script: audio: rain 0.000 wind 0.100 max 0/0 dB fade 3 s at tick 2400\n" "the rain bed did not fall silent in clear weather")
+expect("${forecast}" "script: audio: rain 0.602 wind 0.813 max 0/0 dB fade 3 s at tick 1500\n" "the storm beds are wrong")
+expect("${forecast}" "script: audio: rain 0.000 wind 0.148 max 0/0 dB fade 3 s at tick 2400\n" "the rain bed did not fall silent in clear weather")
 expect("${forecast}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 1350\n" "a strike had a place before the storm")
 expect("${forecast}" "script: bolt: strike at -730, -478 dist 892 m range 150-900 m height 600 m at tick 1500\n" "the first storm strike has the wrong place")
 expect("${forecast}" "script: bolt: strike at -312, 720 dist 754 m range 150-900 m height 600 m at tick 2550\n" "the last strike did not stay where it struck")
+expect("${forecast}" "script: gust: level 0.062 wind 0.460 effective 0.477 strength 0.60 at tick 600\n" "the gust did not follow the rain")
+expect("${forecast}" "script: gust: level 0.493 wind 0.641 effective 0.831 strength 0.60 at tick 1500\n" "the storm gust is wrong")
+expect("${forecast}" "script: gust: level 0.807 wind 0.100 effective 0.148 strength 0.60 at tick 2400\n" "a gust did not stir the clear day")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

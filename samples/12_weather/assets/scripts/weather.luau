@@ -44,5 +44,9 @@ function update()
         mce.log(string.format("bolt: strike at %.0f, %.0f dist %.0f m range %.0f-%.0f m height %.0f m at tick %d",
             bx, bz, weather.bolt_distance(), weather.bolt_min_range(), weather.bolt_max_range(),
             weather.bolt_height(), t))
+        -- M-WINDGUST: the seeded gust level (0 in the calm gaps) and the gusted wind that sway, rain and the wind bed read
+        -- (Weather.wind itself stays smooth).
+        mce.log(string.format("gust: level %.3f wind %.3f effective %.3f strength %.2f at tick %d",
+            weather.gust_level(), weather.wind(), weather.effective_wind(), weather.gust_strength(), t))
     end
 end
