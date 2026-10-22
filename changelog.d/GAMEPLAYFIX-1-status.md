@@ -1,0 +1,1 @@
+- Kit (M-GAMEPLAYFIX 1): the last part of a poison pulse is dealt when the effect ends, and a cooldown item used twice in one tick passes once. Record: `docs/milestones/M-GAMEPLAYFIX.md`.

@@ -134,6 +134,12 @@ void kit_status(Frame& f) {
             }
             s.left_us[i] -= used;
             if (s.left_us[i] != 0) continue;
+            if (kind == StatusKind::Poison && hp && !hp->dead && s.pulse_us[i] > 0) {
+                DamageInfo d;  // the part of a pulse that was under way when the effect ran out (M-GAMEPLAYFIX)
+                d.amount = s.amount[i] * (static_cast<f32>(s.pulse_us[i]) * 1.0e-6f);
+                d.instigator = s.source[i];
+                apply_damage(w, e, d);
+            }
             if (hp) settle_bonus(*hp, kind, s.applied[i], 0.0f);
             ev.push(StatusEnded{e, s.id[i], 1});
             clear_slot(s, i);

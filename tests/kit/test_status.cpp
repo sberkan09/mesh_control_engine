@@ -241,3 +241,16 @@ TEST_CASE("status: kill credit is per effect, and bad amounts and corrupt saved 
     q.tick(2);
     CHECK(q.active() == 0);
 }
+
+TEST_CASE("status: the part of a poison pulse under way when the effect ends is still dealt (M-GAMEPLAYFIX)") {
+    auto taken = [](f32 seconds) {
+        Rig r;
+        r.hp().current = 100.0f;
+        r.apply("venom", StatusKind::Poison, 10.0f, seconds, r.other);
+        r.tick(60 * 3);
+        return 100.0f - r.hp().current;
+    };
+    const f32 pulse = taken(0.5f);  // exactly one pulse
+    CHECK(pulse > 0.0f);
+    CHECK(taken(0.75f) == doctest::Approx(pulse * 1.5f).epsilon(0.02));  // one pulse and half of the next
+}

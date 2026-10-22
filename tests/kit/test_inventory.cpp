@@ -696,3 +696,35 @@ TEST_CASE("inventory: a worn weapon's damage stat adds to Weapon3D.damage and is
     r.tick(6);
     CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(20.0f));
 }
+
+TEST_CASE("inventory: two uses of a cooldown item in one tick only pass once (M-GAMEPLAYFIX)") {
+    Rig r;
+    install_status(r.w, nullptr);
+    asset::ItemCatalog c = r.cat;
+    const FixedString<32> tag("consumable");
+    asset::ItemDef d;
+    d.id = "gel";
+    d.name = "gel";
+    d.stack_max = 9;
+    asset::ItemStat st[2];
+    st[0].key = "heal";
+    st[0].value = 5.0f;
+    st[1].key = "cooldown";
+    st[1].value = 2.0f;
+    REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st, 2), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("gel", 5);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 10.0f;
+    r.w.set(r.hero, hp);
+    r.w.set(r.hero, StatusEffects{});
+    UseItem u;
+    u.owner = r.hero;
+    u.slot = 0;
+    EventAccess(r.w).push(u);
+    EventAccess(r.w).push(u);
+    r.tick(4);
+    CHECK(r.inv().qty[0] == 4);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(15.0f));
+}
