@@ -77,6 +77,7 @@
     "Weather": {
      "transition_seconds": 10
     },
+    "WindGust": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

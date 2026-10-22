@@ -18,6 +18,7 @@
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/wind_direction.h"
+#include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/script/compiler.h"
@@ -34,11 +35,12 @@ struct WRig {
     World w;
     ScriptHost host;
     u64 tick = 0;
-    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, probe;
+    Entity wx_e, wet_e, sway_e, snow_e, ripples_e, splash_e, thunder_e, wind_e, cloud_e, audio_e, bolt_e, gust_e, probe;
 
     explicit WRig(const char* source, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false) {
+                  bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
+                  bool with_gust = false) {
         w.register_components<LocalTransform>();
         if (install) kit::install_weather(w, nullptr);
         INFO(source);
@@ -65,7 +67,9 @@ struct WRig {
         if (with_clouds) cloud_e = w.spawn_with(kit::CloudLayer{});
         if (with_audio) audio_e = w.spawn_with(kit::WeatherAudio{});
         if (with_bolt) bolt_e = w.spawn_with(kit::LightningBolt{});
+        if (with_gust) gust_e = w.spawn_with(kit::WindGust{});
     }
+    kit::WindGust& gust() { return *w.try_get_mut<kit::WindGust>(gust_e); }
     kit::LightningBolt& bolt() { return *w.try_get_mut<kit::LightningBolt>(bolt_e); }
     kit::WeatherAudio& audio() { return *w.try_get_mut<kit::WeatherAudio>(audio_e); }
     kit::CloudLayer& clouds() { return *w.try_get_mut<kit::CloudLayer>(cloud_e); }
@@ -89,10 +93,11 @@ std::string err(const ScriptHost& h) { return h.scripts()[0].error.c_str(); }
 // A script that runs `body` once on tick 1 and must fail with `needle`.
 void expect_error(const char* body, const char* needle, bool with_weather = true, bool install = true,
                   bool with_wet = false, bool with_sway = false, bool with_snow = false, bool with_rainfx = false,
-                  bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false) {
+                  bool with_wind = false, bool with_clouds = false, bool with_audio = false, bool with_bolt = false,
+                  bool with_gust = false) {
     const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
     WRig r(src.c_str(), with_weather, install, with_wet, with_sway, with_snow, with_rainfx, with_wind, with_clouds,
-           with_audio, with_bolt);
+           with_audio, with_bolt, with_gust);
     r.step(2);
     INFO(body);
     REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
@@ -425,7 +430,7 @@ end
            true, true, false, false, true);
     r.step(1);
     CHECK(r.snow().cover == 0.0f);  // the script has not run yet on tick 1's weather pass
-    r.step(121);
+    r.step(601);  // the first gap was built before set_gust: at most 8 s
     INFO("cover " << r.snow().cover);
     CHECK(r.snow().cover > 0.5f);
 }
@@ -927,5 +932,113 @@ TEST_CASE("weather api: set_bolt bad arguments raise an error that names the cal
         REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
         CHECK(r.bolt().height_m == 600.0f);
         CHECK(r.bolt().width_m == 1.5f);
+    }
+}
+
+TEST_CASE("weather api: the gust getters read the first WindGust, the setter writes and clamps to the Range") {
+    WRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.gust_strength() > 0.59 and weather.gust_strength() < 0.61)
+        assert(weather.gust_min_gap() == 2 and weather.gust_max_gap() == 8)
+        assert(weather.gust_min_rise() > 0.39 and weather.gust_min_rise() < 0.41 and weather.gust_max_rise() == 1.5)
+        assert(weather.gust_min_fall() == 1 and weather.gust_max_fall() == 3)
+        assert(weather.gust_min_peak() > 0.39 and weather.gust_min_peak() < 0.41 and weather.gust_max_peak() == 1)
+        assert(weather.gust_seed() == 0 and weather.gust_affects() == 31 and weather.gust_enabled() == 1)
+        weather.set_gust{strength = 1.5, min_gap = 1, seed = 41.9, affects = 3}
+    end
+    if t == 2 then
+        assert(weather.gust_strength() == 1.5 and weather.gust_min_gap() == 1)
+        assert(weather.gust_seed() == 41 and weather.gust_affects() == 3)
+        assert(weather.gust_max_gap() == 8 and weather.gust_max_fall() == 3)  -- only the given keys changed
+        weather.set_gust{strength = 1e9, min_gap = 1e9, max_gap = 1e9, min_rise = 1e9, max_rise = 1e9, min_fall = 1e9,
+                         max_fall = 1e9, min_peak = 1e9, max_peak = 1e9, seed = 1e12, affects = 1e12, enabled = 0}
+    end
+    if t == 3 then
+        assert(weather.gust_strength() == 3 and weather.gust_min_gap() == 120 and weather.gust_max_gap() == 120)
+        assert(weather.gust_min_rise() == 30 and weather.gust_max_rise() == 30)
+        assert(weather.gust_min_fall() == 60 and weather.gust_max_fall() == 60)
+        assert(weather.gust_min_peak() == 1 and weather.gust_max_peak() == 1)
+        assert(weather.gust_seed() == 4294967295 and weather.gust_affects() == 4294967295 and weather.gust_enabled() == 0)
+        weather.set_gust{strength = -1, min_gap = -1, min_rise = 0, min_fall = -5, min_peak = -1, max_peak = -1,
+                         seed = -3, affects = -1, enabled = 7}
+        weather.set_gust{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.gust_strength() == 0 and weather.gust_min_gap() == 0)
+        assert(weather.gust_min_rise() > 0.049 and weather.gust_min_rise() < 0.051)
+        assert(weather.gust_min_fall() > 0.049 and weather.gust_min_fall() < 0.051)
+        assert(weather.gust_min_peak() == 0 and weather.gust_max_peak() == 0)
+        assert(weather.gust_seed() == 0 and weather.gust_affects() == 0 and weather.gust_enabled() == 1)
+        assert(weather.gust_level() >= 0 and weather.gust_level() <= 1)
+    end
+end
+)",
+           true, true, false, false, false, false, false, false, false, false, true);
+    r.step(5);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.gust().max_fall_s == 60.0f);
+    CHECK(r.gust().enabled == 1);
+}
+
+TEST_CASE("weather api: gust_level and effective_wind follow the engine-written gust") {
+    WRig r(R"(
+local peak = 0
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        weather.set_gust{strength = 1, min_gap = 0, max_gap = 0, min_rise = 0.05, max_rise = 0.05, min_fall = 0.1,
+                         max_fall = 0.1, min_peak = 1, max_peak = 1}
+    end
+    local level = weather.gust_level()
+    local w = weather.wind()
+    assert(level >= 0 and level <= 1)
+    assert(math.abs(weather.effective_wind() - math.min(1, w * (1 + level))) < 1e-6)
+    if level > peak then peak = level end
+    if t == 600 then assert(peak > 0.5, "no gust rose") end
+end
+)",
+           true, true, false, false, false, false, false, false, false, false, true);
+    r.step(121);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.gust().seeded == 1);
+}
+
+TEST_CASE("weather api: a world without a WindGust raises a named error") {
+    for (const char* name : {"gust_strength", "gust_min_gap", "gust_max_gap", "gust_min_rise", "gust_max_rise",
+                             "gust_min_fall", "gust_max_fall", "gust_min_peak", "gust_max_peak", "gust_seed",
+                             "gust_affects", "gust_enabled", "gust_level", "effective_wind"})
+        expect_error((std::string("weather.") + name + "()").c_str(),
+                     (std::string("weather.") + name + ": the scene has no WindGust entity").c_str());
+    expect_error("weather.set_gust{}", "weather.set_gust: the scene has no WindGust entity");
+    expect_error("weather.gust_level()", "weather.gust_level: this world has no weather", false, false);
+    expect_error("weather.set_gust{}", "weather.set_gust: this world has no weather", false, false);
+}
+
+TEST_CASE("weather api: set_gust bad arguments raise an error that names the call and write nothing") {
+    auto bad = [](const char* body, const char* needle) {
+        expect_error(body, needle, true, true, false, false, false, false, false, false, false, false, true);
+    };
+    bad("weather.set_gust{bogus = 1}", "weather.set_gust: unknown key 'bogus'");
+    bad("weather.set_gust{gust_q = 1}", "weather.set_gust: unknown key 'gust_q'");
+    bad("weather.set_gust{segment = 1}", "weather.set_gust: unknown key 'segment'");
+    bad("weather.set_gust{strength = 'strong'}", "weather.set_gust: 'strength' is not a number");
+    bad("weather.set_gust{seed = 0/0}", "weather.set_gust: 'seed' is not a number");
+    bad("weather.set_gust{enabled = true}", "weather.set_gust: 'enabled' is not a number");
+    bad("weather.set_gust{[1] = 0.5}", "weather.set_gust: the keys are names");
+    bad("weather.set_gust(0.5)", "table expected");
+    bad("weather.set_gust()", "table expected");
+    for (const char* body : {"weather.set_gust{strength = 2, seed = 'x'}", "weather.set_gust{seed = 'x', strength = 2}",
+                             "weather.set_gust{strength = 2, nope = 1}"}) {
+        const std::string src = std::string("function update()\n    if mce.tick() == 1 then ") + body + " end\nend\n";
+        WRig r(src.c_str(), true, true, false, false, false, false, false, false, false, false, true);
+        r.step(2);
+        INFO(body);
+        REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+        CHECK(r.gust().strength == 0.6f);
+        CHECK(r.gust().seed == 0u);
     }
 }

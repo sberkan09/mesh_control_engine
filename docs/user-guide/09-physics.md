@@ -763,6 +763,17 @@ Rain and snow slant (bit 2) and the wind sound (bit 16) follow the gusted wind t
 rounded to steps of 1/64 so the emitter changes in steps, and the wind sound moves toward the gusted level through its
 usual fade (`fade_seconds`). A scene without a `WindGust` is unchanged, bit for bit.
 
+From Luau, `weather.gust_strength()`, `gust_min_gap()`, `gust_max_gap()`, `gust_min_rise()`, `gust_max_rise()`,
+`gust_min_fall()`, `gust_max_fall()`, `gust_min_peak()`, `gust_max_peak()`, `gust_seed()`, `gust_affects()` and
+`gust_enabled()` read the authoring fields, `weather.gust_level()` (the current level, 0 to 1) and
+`weather.effective_wind()` (the gusted wind with every consumer bit applied, so it ignores `affects`; `weather.wind()`
+stays the smooth value) are read-only, and
+`weather.set_gust{strength=, min_gap=, max_gap=, min_rise=, max_rise=, min_fall=, max_fall=, min_peak=, max_peak=, seed=, affects=, enabled=}`
+writes the authoring (section 27.3), for example `weather.set_gust{seed = 7, strength = 1.2}`. It never adds a
+`WindGust`: a scene without one raises an error. The `12_weather` sample carries a `WindGust` on its Weather entity and
+its script logs the level and the effective wind every 150 ticks. In its storm (wind near 1) the clamp hides the gusts; in the rain
+and snow they show.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

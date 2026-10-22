@@ -29,6 +29,7 @@
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/weather_audio.h"
 #include "mce/kit/lightning_bolt.h"
+#include "mce/kit/wind_gust.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -201,6 +202,16 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
     CHECK(lb->light_intensity == 0.0f);
     CHECK(lb->enabled == 1);
     CHECK(lb->active == 0u);
+    // M-WINDGUST 12d: ... and a WindGust (defaults) on the Weather entity, still at rest before the first tick.
+    const kit::WindGust* wg = d.world.try_get<kit::WindGust>(d.e[kWeather]);
+    REQUIRE(wg != nullptr);
+    CHECK(wg->strength == 0.6f);
+    CHECK(wg->min_gap_s == 2.0f);
+    CHECK(wg->max_gap_s == 8.0f);
+    CHECK(wg->seed == 0u);
+    CHECK(wg->affects == kit::kGustAll);
+    CHECK(wg->enabled == 1);
+    CHECK(wg->seeded == 0);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);
