@@ -85,7 +85,7 @@ the player and the collision see exactly what you sculpted.
 
 | Shortcut | Action |
 |---|---|
-| Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S | new, open, save, save as |
+| Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S | new, open, save, save as (File > Open Recent lists the last ten scenes of the project, newest first; a scene that was deleted drops off the list when you click it) |
 | Ctrl+P | Quick Open: type to search assets, entities, panels and commands; Up/Down pick, Enter runs (an asset opens like a double-click in Assets, an entity is selected, a panel comes to the front), Esc closes |
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |
 | Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D | copy, cut, paste, duplicate the selection |

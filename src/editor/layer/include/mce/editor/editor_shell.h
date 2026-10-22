@@ -214,6 +214,7 @@ private:
     void draw_dockspace();
     void draw_popups();
     void handle_shortcuts();
+    void track_recent_scenes();
     void fill_quick_open();
     void run_quick_open(const QuickOpenItem& item);
     void update_title();
