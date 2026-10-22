@@ -1603,7 +1603,9 @@ vec3 apply_clouds(vec3 c, vec3 d, vec3 sun, float cs) {
 // the frame without it bit for bit). A function of the view direction only (no camera position, no floating origin)
 // and of the twinkle clock p_night2.w (wrapped on the CPU to 60 s). Up-going rays only, scaled by the night fade.
 // Stars: the direction is cut into an integer cell grid on the six cube faces (kStarCells cells per face edge; no
-// sin()), and each cell is hashed with cloud_hash: a star when its 24-bit hash is under the density, its position
+// sin()), and each cell is hashed with cloud_hash: a star when its 24-bit hash is under the density times the cell's
+// solid angle relative to a face-centre cell ((1 + |c|^2)^-1.5, c the cell centre in -1..1 face coordinates; the
+// gnomonic cells shrink about 5x toward the cube corners, so this keeps the stars per steradian even), its position
 // (inset to the middle 70% of the cell), a magnitude (u^5: a few bright, many faint), a slight warm-to-cool colour,
 // a twinkle phase and rate. The point is a smoothstep blob 1.5 pixels in radius (the pixel footprint comes from the
 // neighbouring pixel's ray), never wider than 0.45 of a cell, so it neither aliases nor reaches past the 2 x 2
@@ -1641,7 +1643,8 @@ vec3 night_stars(vec3 d, float pix) {
         if (any(lessThan(ic, vec2(0.0))) || any(greaterThan(ic, vec2(kStarCells - 1.0)))) continue;  // a face edge
         uvec2 cc = uvec2(ic) + uvec2(face * 64u, 0u);
         uint h0 = cloud_hash(cc + uvec2(0x9E3779B9u, 0u));
-        if (float(h0 >> 8u) * (1.0 / 16777216.0) >= p_night2.x) continue;
+        vec2 cuv = (ic + 0.5) * (2.0 / kStarCells) - 1.0;
+        if (float(h0 >> 8u) * (1.0 / 16777216.0) >= p_night2.x * pow(1.0 + dot(cuv, cuv), -1.5)) continue;
         uint h1 = cloud_hash(uvec2(h0, cc.y ^ 0x85EBCA6Bu));
         vec2 at = (ic + 0.15 + 0.7 * vec2(float(h1 & 0xFFFu), float((h1 >> 12u) & 0xFFFu)) * (1.0 / 4096.0)) /
                   kStarCells * 2.0 - 1.0;

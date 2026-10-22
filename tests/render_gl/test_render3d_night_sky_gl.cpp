@@ -199,6 +199,51 @@ TEST_CASE("render3d_gl: the stars change only the sky above the horizon, and mor
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("render3d_gl: the stars are as dense toward a cube corner of the cell grid as toward a face centre") {
+    // The star cells are gnomonic cube-face cells, about 5x smaller in solid angle at the cube's corners than at a
+    // face's centre; the presence threshold scales with the cell's solid angle, so the stars per steradian are even.
+    // Two views of the same field of view, high above the ground: one straight up (the +y face's centre), one toward
+    // the corner (1, 1, -1) (35.3 degrees up, 45 degrees of yaw). Measured: the share of sky pixels a star lights
+    // (over the rays that climb more than 0.3, clear of the horizon fade), at density 0.5 and 1.
+    Fixture3D f;
+    f.look_at = {0.0f, 20.0f, 0.0f};
+    const auto share = [&](f32 yaw, f32 pitch, f32 density, vec3& center) {
+        f.yaw_deg = yaw;
+        f.pitch_deg = pitch;
+        const Array<u8> bare = draw_night(f, nullptr);
+        const Array<vec3> dirs = ray_dirs(f);
+        const NightSky n = stars_only(density);
+        const Array<u8> px = draw_night(f, &n);
+        u32 lit = 0, sky = 0;
+        for (usize p = 0; p < dirs.size(); ++p) {
+            if (dirs[p].y <= 0.3f) continue;
+            ++sky;
+            lit += same_px(px, bare, p * 4) ? 0u : 1u;
+        }
+        center = dirs[usize(kH / 2) * kW + kW / 2];
+        return sky > 0 ? f64(lit) / f64(sky) : 0.0;
+    };
+    for (const f32 density : {0.5f, 1.0f}) {
+        vec3 c_face, c_corner_a, c_corner_b;
+        const f64 face = share(0.0f, -89.0f, density, c_face);
+        const f64 corner_a = share(45.0f, -35.26f, density, c_corner_a);
+        const f64 corner_b = share(-45.0f, -35.26f, density, c_corner_b);
+        MESSAGE("density " << density << ": star pixel share face centre " << face << ", corners " << corner_a << " / "
+                           << corner_b << " (view centres " << c_face.x << " " << c_face.y << " " << c_face.z << " / "
+                           << c_corner_a.x << " " << c_corner_a.y << " " << c_corner_a.z << ")");
+        CHECK(c_face.y > 0.99f);                                           // straight up
+        CHECK(std::fabs(std::fabs(c_corner_a.x) - c_corner_a.y) < 0.02f);  // a cube corner direction
+        CHECK(std::fabs(std::fabs(c_corner_a.z) - c_corner_a.y) < 0.02f);
+        REQUIRE(face > 0.0);
+        for (const f64 corner : {corner_a, corner_b}) {
+            CHECK(corner / face < 1.5);
+            CHECK(face / corner < 1.5);
+        }
+    }
+    f.yaw_deg = 0.0f;
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render3d_gl: the moon disk is brighter than the sky around it, and its lit share follows the phase") {
     Fixture3D f;
     cloud_sky_camera(f);
