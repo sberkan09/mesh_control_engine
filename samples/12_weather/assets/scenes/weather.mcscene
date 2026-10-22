@@ -94,6 +94,10 @@
      "drift_degrees_per_minute": 6
     },
     "CloudLayer": {},
+    "WeatherAudio": {
+     "rain_source": "$12",
+     "wind_source": "$13"
+    },
     "Foliage3D": {
      "mesh": "guid:12d12000-0000-4000-8000-000000000006",
      "tint": [
@@ -320,6 +324,24 @@
      "rate": 0
     },
     "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Rain Bed",
+   "components": {
+    "AudioSource": {
+     "loop": true,
+     "play_on_start": true
+    }
+   }
+  },
+  {
+   "name": "Wind Bed",
+   "components": {
+    "AudioSource": {
+     "loop": true,
+     "play_on_start": true
+    }
    }
   }
  ]

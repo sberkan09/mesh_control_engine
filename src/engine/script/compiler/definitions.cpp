@@ -268,6 +268,17 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength, fair_coverage and overcast_coverage
     -- 0..1, scale 50..20000 m, speed_scale 0..10, height 100..20000 m); an unknown key or a non-number raises
     set_clouds: (settings: { strength: number?, fair_coverage: number?, overcast_coverage: number?, scale: number?, speed_scale: number?, height: number? }) -> (),
+    -- WeatherAudio (M-WEATHERAUDIO), the first one in the scene; the getters raise when there is none.
+    -- rain_level and wind_level are the engine-written bed levels (0..1), read-only
+    rain_level: () -> number,
+    wind_level: () -> number,
+    audio_rain_db: () -> number,
+    audio_wind_db: () -> number,
+    audio_fade: () -> number,
+    audio_enabled: () -> number,
+    -- every key optional, each value clamped to the field's range (rain_db and wind_db -60..12 dB, fade 0..60 s;
+    -- enabled: any non-zero number is 1); an unknown key or a non-number raises
+    set_audio: (settings: { rain_db: number?, wind_db: number?, fade: number?, enabled: number? }) -> (),
 }
 )";
 

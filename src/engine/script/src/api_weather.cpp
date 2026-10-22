@@ -93,6 +93,21 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Rain and wind ambience (M-WEATHERAUDIO step 10c) is the same kind of binding over the first kit::WeatherAudio
+// (mce/kit/weather_audio.h). Named errors as above. The two sources and the fade levels belong to the scene and the
+// engine, so they are not settable; the levels are read-only.
+//
+//   weather.rain_level() -> number        the current rain bed level (WeatherAudio.rain_q / 2^24, 0..1)
+//   weather.wind_level() -> number        the current wind bed level (WeatherAudio.wind_q / 2^24, 0..1)
+//   weather.audio_rain_db() -> number     WeatherAudio.rain_db (-60..12)
+//   weather.audio_wind_db() -> number     WeatherAudio.wind_db (-60..12)
+//   weather.audio_fade() -> number        WeatherAudio.fade_seconds (0..60)
+//   weather.audio_enabled() -> number     WeatherAudio.enabled (0 or 1)
+//   weather.set_audio{rain_db=, wind_db=, fade=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (enabled: any non-zero number is 1); an unknown key or a non-number
+//                                         raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -108,6 +123,7 @@
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
+#include "mce/kit/weather_audio.h"
 
 namespace mce::script::detail {
 
@@ -200,6 +216,8 @@ kit::WindDirection& check_wind_direction(lua_State* L, const char* fn) {
 }
 
 kit::CloudLayer& check_clouds(lua_State* L, const char* fn) { return check_first<kit::CloudLayer>(L, fn, "CloudLayer"); }
+
+kit::WeatherAudio& check_audio(lua_State* L, const char* fn) { return check_first<kit::WeatherAudio>(L, fn, "WeatherAudio"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -568,6 +586,43 @@ int l_weather_set_clouds(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_WA(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_audio(L, "weather." #luaname).field));         \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_WA(audio_rain_db, rain_db)
+MCE_WEATHER_GETTER_WA(audio_wind_db, wind_db)
+MCE_WEATHER_GETTER_WA(audio_fade, fade_seconds)
+MCE_WEATHER_GETTER_WA(audio_enabled, enabled)
+#undef MCE_WEATHER_GETTER_WA
+
+// The levels are saved as integers out of 2^24 (the Weather.wet_q convention).
+int l_weather_rain_level(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_audio(L, "weather.rain_level").rain_q) / 16777216.0);
+    return 1;
+}
+
+int l_weather_wind_level(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(check_audio(L, "weather.wind_level").wind_q) / 16777216.0);
+    return 1;
+}
+
+// weather.set_audio{rain_db=, wind_db=, fade=, enabled=}: validated before anything is written. (The sources and the
+// levels are not settable.)
+int l_weather_set_audio(lua_State* L) {
+    static const char* const kKeys[4] = {"rain_db", "wind_db", "fade", "enabled"};
+    f64 value[4] = {0, 0, 0, 0};
+    bool given[4] = {false, false, false, false};
+    read_settings(L, "weather.set_audio", kKeys, 4, "rain_db, wind_db, fade, enabled", value, given);
+    kit::WeatherAudio& a = check_audio(L, "weather.set_audio");
+    if (given[0]) a.rain_db = static_cast<f32>(clamp_range(value[0], -60.0, 12.0));
+    if (given[1]) a.wind_db = static_cast<f32>(clamp_range(value[1], -60.0, 12.0));
+    if (given[2]) a.fade_seconds = static_cast<f32>(clamp_range(value[2], 0.0, 60.0));
+    if (given[3]) a.enabled = value[3] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -618,6 +673,13 @@ const luaL_Reg kWeatherLib[] = {
     {"cloud_speed_scale", l_weather_cloud_speed_scale},
     {"cloud_height", l_weather_cloud_height},
     {"set_clouds", l_weather_set_clouds},
+    {"rain_level", l_weather_rain_level},
+    {"wind_level", l_weather_wind_level},
+    {"audio_rain_db", l_weather_audio_rain_db},
+    {"audio_wind_db", l_weather_audio_wind_db},
+    {"audio_fade", l_weather_audio_fade},
+    {"audio_enabled", l_weather_audio_enabled},
+    {"set_audio", l_weather_set_audio},
     {nullptr, nullptr},
 };
 

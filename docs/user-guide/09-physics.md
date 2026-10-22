@@ -703,6 +703,12 @@ resumes on the same ramp. A null, destroyed or non-source entity is skipped, `en
 world with no audio, no `Weather` or no `WeatherAudio` is left untouched, so a scene without one hashes and sounds as
 before. A scene with one hashes differently by design, because the source gains are scene data.
 
+From Luau, `weather.rain_level()` and `weather.wind_level()` read the two bed levels (0 to 1, read-only),
+`weather.audio_rain_db()`, `audio_wind_db()`, `audio_fade()` and `audio_enabled()` read the authoring fields and
+`weather.set_audio{rain_db=, wind_db=, fade=, enabled=}` writes them (section 27.3), for example
+`weather.set_audio{fade = 8}` for a slower change of the beds. The `12_weather` sample carries a `WeatherAudio` and two
+clip-less looping `AudioSource` entities, so it stays silent; give them your own rain and wind clips to hear the beds.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

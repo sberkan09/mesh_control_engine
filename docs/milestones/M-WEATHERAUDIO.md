@@ -1,6 +1,6 @@
 # M-WEATHERAUDIO — Rain and wind ambience beds that follow the weather (milestone record)
 
-**Status:** planned 2026-10-21 (steps 10a to 10c; 10b is a drop-if-not-needed step). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-RAINFX (7e `ThunderDelay`) and M-WINDDIR: weather has visuals (rain, snow, ripples, splash, clouds, wind direction) and one delayed thunder one-shot, but no ambience beds, so a storm is silent apart from thunder. M-WINDDIR listed a wind audio loop as not in scope; this is that loop, kept small. No Linear issues (free issue limit); this record is the tracker. No render or shader work, so no Opus step.
+**Status:** done 2026-10-21 (steps 10a to 10c; 10b dropped, 10d folded into 10c). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WEATHER, M-RAINFX (7e `ThunderDelay`) and M-WINDDIR: weather has visuals (rain, snow, ripples, splash, clouds, wind direction) and one delayed thunder one-shot, but no ambience beds, so a storm is silent apart from thunder. M-WINDDIR listed a wind audio loop as not in scope; this is that loop, kept small. No Linear issues (free issue limit); this record is the tracker. No render or shader work, so no Opus step.
 
 **Goal.** Looping rain and wind ambience whose loudness follows `Weather` (kind, intensity, wind), fading smoothly, deterministic, saved with the scene, opt-in, and a scene without it hashes, sounds and renders exactly as today. Clips are user-supplied (`AssetRef<Sfx>` on ordinary `AudioSource` entities); a source without a clip is silent, and the engine ships no new audio assets.
 
@@ -35,7 +35,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 10a | done | TBD | `WeatherAudio` + `kit_weather_audio` (after `kit_weather`, installed by `install_weather`); tests in tests/kit/test_weather_audio.cpp. The no-audio rule is `event_queue<audio::PlaySfx>()` or an `audio::AudioRef` resource present (documented in the header). `AudioSource` is not `Save`, so right after a load the source gains are the scene's; the next tick recomputes them from the saved levels, and the hashes match from then on. |
+| 10a | done | #687 | `WeatherAudio` + `kit_weather_audio` (after `kit_weather`, installed by `install_weather`); tests in tests/kit/test_weather_audio.cpp. The no-audio rule is `event_queue<audio::PlaySfx>()` or an `audio::AudioRef` resource present (documented in the header). `AudioSource` is not `Save`, so right after a load the source gains are the scene's; the next tick recomputes them from the saved levels, and the hashes match from then on. |
 | 10b | dropped | | Read `audio_bridge`: for a started source with a live handle it compares the faded gain with `applied_gain_db` every tick and calls `set_handle_gain` when it changed, looping or not, with no device-dependent branch; the order needs no seam in a shared header (the system anchors on `kit_weather`). |
-| 10c | planned | | |
-| 10d | planned | | |
+| 10c | done | TBD | `weather.rain_level()`, `weather.wind_level()` (read-only, `rain_q` / `wind_q` over 2^24), `weather.audio_rain_db()`, `audio_wind_db()`, `audio_fade()`, `audio_enabled()` and `weather.set_audio{rain_db=, wind_db=, fade=, enabled=}` (clamped to the Range, `enabled` any non-zero number is 1, named errors, nothing written on error) in `api_weather.cpp`, typed in `definitions.cpp`; `samples/12_weather`: a `WeatherAudio` on the Weather entity and two clip-less looping `AudioSource` entities (entity count 12 to 14), the script logs `audio:` every 150 ticks; user guide 9.19f, 18 and 27.3 |
+| 10d | done | | folded into 10c: the status line, the ROADMAP row and the `sample_coverage.allow` line; `capabilities.md` regenerated for the `WeatherAudio` row |
