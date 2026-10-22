@@ -31,6 +31,7 @@
 namespace mce::editor {
 
 class EditorShell;
+struct QuickOpenItem;
 
 class IEditorPanel {
 public:
@@ -213,6 +214,8 @@ private:
     void draw_dockspace();
     void draw_popups();
     void handle_shortcuts();
+    void fill_quick_open();
+    void run_quick_open(const QuickOpenItem& item);
     void update_title();
     // `e` as the play world's input sees it (on_event, while playing).
     platform::Event game_event(const platform::Event& e) const;
@@ -254,7 +257,7 @@ private:
     const char* focus_panel_ = nullptr;
     FixedString<256> perf_capture_request_;
     // Pending modal popups (opened on the next frame, inside the ImGui frame).
-    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover };
+    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover, QuickOpen };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
     char save_as_buf_[256] = {};

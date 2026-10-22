@@ -50,6 +50,9 @@ void add_source_panel(EditorShell& shell);
 inline constexpr const char* kSourcePanel = "Source";
 // Opens the Source panel on an asset (a no-op when the panel is not registered).
 void open_source_panel(EditorShell& shell, asset::Guid guid);
+// What a double click on an asset in the Assets panel does (asset_panel.cpp): the asset opens in its own panel, or
+// `open_scene` is set to it when it is a scene or prefab (the caller then request_open_scene()s it).
+void open_asset_in_editor(EditorShell& shell, const ProjectAsset& asset, asset::Guid& open_scene);
 // The Scenes panel (scenes_panel.cpp): a tab per open scene file (M-SCENETABS).
 void add_scenes_panel(EditorShell& shell);
 inline constexpr const char* kScenesPanel = "Scenes";

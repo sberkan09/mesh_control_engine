@@ -24,6 +24,44 @@
 #include "scene_panels.h"
 
 namespace mce::editor {
+
+// The types a double click opens somewhere other than the Source panel.
+static bool has_own_editor(asset::ChunkType t) {
+    using asset::ChunkType;
+    return asset_drop_kind(t) == AssetDrop::OpenScene || t == ChunkType::Prefab || t == ChunkType::UiDocument ||
+           t == ChunkType::Timeline || t == ChunkType::AnimGraph || t == ChunkType::BehaviorTree ||
+           t == ChunkType::Skeleton2D || t == ChunkType::Material || t == ChunkType::ParticlePreset ||
+           t == ChunkType::Sequence || t == ChunkType::StringTable;
+}
+
+// What a double click on an asset does: a scene or prefab opens, the rest open in their own panel.
+void open_asset_in_editor(EditorShell& shell, const ProjectAsset& asset, asset::Guid& open_scene) {
+    const ProjectAsset* a = &asset;
+    // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
+    if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab) open_scene = a->guid;
+    // A UI document opens in the UI Document panel.
+    if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
+    // A timeline opens in the Timeline panel.
+    if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
+    // An animation graph opens in the Animation panel.
+    if (a->type == asset::ChunkType::AnimGraph) shell.open_anim_graph(a->guid);
+    // A behavior tree opens in the Behavior Tree panel.
+    if (a->type == asset::ChunkType::BehaviorTree) shell.open_bt(a->guid);
+    // A 2D skeleton opens in the Skeleton panel.
+    if (a->type == asset::ChunkType::Skeleton2D) shell.open_skeleton2d(a->guid);
+    // A material opens in the Material panel.
+    if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
+    if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
+    if (a->type == asset::ChunkType::Sequence) shell.open_sequence(a->guid);
+    // A string table opens the Strings panel (every locale in one grid).
+    if (a->type == asset::ChunkType::StringTable) {
+        if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
+        shell.focus_panel(kStringsPanel);
+    }
+    // A JSON kind with no panel of its own opens as text.
+    if (!has_own_editor(a->type) && source_editable(*a)) open_source_panel(shell, a->guid);
+}
+
 namespace {
 
 class AssetPanel final : public IEditorPanel {
@@ -195,51 +233,13 @@ private:
         cache_.trim();
     }
 
-    // What a double click on an asset does: a scene or prefab opens, the rest open in their own panel.
-    void open_in_editor(EditorShell& shell, const ProjectAsset& asset, asset::Guid& open_scene) {
-        const ProjectAsset* a = &asset;
-        // A scene opens; so does a prefab, for editing the asset itself (FR-EDT-080).
-        if (asset_drop_kind(a->type) == AssetDrop::OpenScene || a->type == asset::ChunkType::Prefab)
-            open_scene = a->guid;
-        // A UI document opens in the UI Document panel.
-        if (a->type == asset::ChunkType::UiDocument) shell.open_ui_document(a->guid);
-        // A timeline opens in the Timeline panel.
-        if (a->type == asset::ChunkType::Timeline) shell.open_timeline(a->guid);
-        // An animation graph opens in the Animation panel.
-        if (a->type == asset::ChunkType::AnimGraph) shell.open_anim_graph(a->guid);
-        // A behavior tree opens in the Behavior Tree panel.
-        if (a->type == asset::ChunkType::BehaviorTree) shell.open_bt(a->guid);
-        // A 2D skeleton opens in the Skeleton panel.
-        if (a->type == asset::ChunkType::Skeleton2D) shell.open_skeleton2d(a->guid);
-        // A material opens in the Material panel.
-        if (a->type == asset::ChunkType::Material) shell.open_material(a->guid);
-        if (a->type == asset::ChunkType::ParticlePreset) shell.open_particle(a->guid);
-        if (a->type == asset::ChunkType::Sequence) shell.open_sequence(a->guid);
-        // A string table opens the Strings panel (every locale in one grid).
-        if (a->type == asset::ChunkType::StringTable) {
-            if (IEditorPanel* p = shell.find_panel(kStringsPanel)) p->open = true;
-            shell.focus_panel(kStringsPanel);
-        }
-        // A JSON kind with no panel of its own opens as text.
-        if (!has_own_editor(a->type) && source_editable(*a)) open_source_panel(shell, a->guid);
-    }
-
-    // The types a double click opens somewhere other than the Source panel.
-    static bool has_own_editor(asset::ChunkType t) {
-        using asset::ChunkType;
-        return asset_drop_kind(t) == AssetDrop::OpenScene || t == ChunkType::Prefab || t == ChunkType::UiDocument ||
-               t == ChunkType::Timeline || t == ChunkType::AnimGraph || t == ChunkType::BehaviorTree ||
-               t == ChunkType::Skeleton2D || t == ChunkType::Material || t == ChunkType::ParticlePreset ||
-               t == ChunkType::Sequence || t == ChunkType::StringTable;
-    }
-
     // The click, double-click, tooltip, drag source and context menu of the item just drawn (a row or a grid cell).
     void item_interactions(EditorShell& shell, const ProjectAsset& asset, const char* label, asset::Guid& open_scene) {
         const ProjectAsset* a = &asset;
         const char* type = asset_type_name(a->type);
         if (ImGui::IsItemClicked()) selected_ = a->guid;
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            open_in_editor(shell, *a, open_scene);
+            open_asset_in_editor(shell, *a, open_scene);
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s  %s\n%s", type, a->path.c_str(), asset::to_string(a->guid).c_str());
         if (ImGui::BeginDragDropSource()) {
@@ -426,7 +426,7 @@ private:
             model_.set_folder(asset_folder(a->path.view()));
             if (open_it) {
                 asset::Guid unused;
-                open_in_editor(shell, *a, unused);
+                open_asset_in_editor(shell, *a, unused);
             }
         }
     }
