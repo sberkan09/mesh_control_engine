@@ -84,8 +84,10 @@ struct Equipment {
     u16 item[kEquipSlots] = {};  // by EquipSlot: catalog index + 1, 0: empty
     f32 armor_applied = 0.0f;    // engine-written, not saved: what worn items' "armor" stats have added to Health3D.armor (M-ITEMFX 2)
     f32 max_applied = 0.0f;      // engine-written, not saved: the same for "max_health" and Health3D.max
-    u32 pad_ = 0;                // explicit tail padding: state_hash hashes the raw bytes
+    u32 pad_[2] = {};            // explicit tail padding: state_hash hashes the raw bytes
 };
+static_assert(sizeof(Equipment) == sizeof(asset::AssetRef<asset::ItemCatalogChunk>) + sizeof(u16) * kEquipSlots + 2 * sizeof(f32) + sizeof(u32) * 2,
+              "Equipment must have no implicit padding: state_hash hashes the raw bytes");
 MCE_COMPONENT(Equipment, (catalog, Save, Help{"the .mcitems catalog the item numbers index (the inventory's)"}), (item, Save, ReadOnly),
               (armor_applied, ReadOnly), (max_applied, ReadOnly))
 
