@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, and the "mist:" lines, the GroundMist level).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, and the "moon:" lines, the Moon's phase and level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -52,5 +52,10 @@ function update()
         -- 6:00 peak; the level is the hour and the weather's wetness through kit mist_level (0 without a clock).
         mce.log(string.format("mist: level %.3f hour %.2f strength %.2f peak %.1f h at tick %d",
             weather.mist_level(), clock.hour(), weather.mist_strength(), weather.mist_peak_hour(), t))
+        -- M-NIGHTSKY: the Moon on the Weather entity. phase and illumination follow the clock (day 0, hour 5 to 6.6: a
+        -- full moon, 0.5 is the default offset); the level is that light times the moon's height and the weather's damping.
+        local mx, my, mz = weather.moon_direction()
+        mce.log(string.format("moon: phase %.3f illumination %.3f level %.3f dir %.2f %.2f %.2f at tick %d",
+            weather.moon_phase(), weather.moon_illumination(), weather.moon_level(), mx, my, mz, t))
     end
 end
