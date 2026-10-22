@@ -28,6 +28,7 @@
 #include "mce/kit/stock.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/weather_audio.h"
+#include "mce/kit/lightning_bolt.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -191,6 +192,15 @@ TEST_CASE("weather demo: the scene loads with a noon clock, a Weather and an emi
         CHECK(src->play_on_start);
         CHECK(src->clip.guid.is_null());  // no clip: silent
     }
+    // M-LIGHTNINGBOLT 11d: ... and a LightningBolt (defaults, light off) on the Lightning entity.
+    const kit::LightningBolt* lb = d.world.try_get<kit::LightningBolt>(d.e[kLightning]);
+    REQUIRE(lb != nullptr);
+    CHECK(lb->min_range_m == 150.0f);
+    CHECK(lb->max_range_m == 900.0f);
+    CHECK(lb->height_m == 600.0f);
+    CHECK(lb->light_intensity == 0.0f);
+    CHECK(lb->enabled == 1);
+    CHECK(lb->active == 0u);
     // ... and a Splash entity: a RainSplash on its own ParticleEmitter3D.
     CHECK(d.world.try_get<kit::RainSplash>(d.e[kSplash]) != nullptr);
     CHECK(d.world.try_get<kit::ParticleEmitter3D>(d.e[kSplash]) != nullptr);

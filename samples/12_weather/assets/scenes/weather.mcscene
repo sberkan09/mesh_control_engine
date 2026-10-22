@@ -207,6 +207,7 @@
      "flash_boost": 4,
      "seed": 7
     },
+    "LightningBolt": {},
     "LocalTransform": {}
    }
   },

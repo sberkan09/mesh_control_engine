@@ -38,5 +38,11 @@ function update()
         mce.log(string.format("audio: rain %.3f wind %.3f max %.0f/%.0f dB fade %.0f s at tick %d",
             weather.rain_level(), weather.wind_level(), weather.audio_rain_db(), weather.audio_wind_db(),
             weather.audio_fade(), t))
+        -- M-LIGHTNINGBOLT: the last strike's ground position and distance from the camera (the bolt is drawn for the
+        -- flash ticks; the light is off). Before the first strike they are 0.
+        local bx, bz = weather.bolt_pos()
+        mce.log(string.format("bolt: strike at %.0f, %.0f dist %.0f m range %.0f-%.0f m height %.0f m at tick %d",
+            bx, bz, weather.bolt_distance(), weather.bolt_min_range(), weather.bolt_max_range(),
+            weather.bolt_height(), t))
     end
 end

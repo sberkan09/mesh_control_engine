@@ -279,6 +279,27 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (rain_db and wind_db -60..12 dB, fade 0..60 s;
     -- enabled: any non-zero number is 1); an unknown key or a non-number raises
     set_audio: (settings: { rain_db: number?, wind_db: number?, fade: number?, enabled: number? }) -> (),
+    -- LightningBolt (M-LIGHTNINGBOLT), the first one in the scene; the getters raise when there is none.
+    -- bolt_distance, bolt_pos (x, z of the ground point) and bolt_active (flash ticks left) are the engine-written
+    -- last strike, read-only
+    bolt_min_range: () -> number,
+    bolt_max_range: () -> number,
+    bolt_ground_y: () -> number,
+    bolt_height: () -> number,
+    bolt_width: () -> number,
+    bolt_segments: () -> number,
+    bolt_jitter: () -> number,
+    bolt_fork: () -> number,
+    bolt_enabled: () -> number,
+    bolt_light: () -> number,
+    bolt_light_radius: () -> number,
+    bolt_distance: () -> number,
+    bolt_pos: () -> (number, number),
+    bolt_active: () -> number,
+    -- every key optional, each value clamped to the field's range (min_range and max_range 10..5000 m, height
+    -- 50..3000 m, width 0.05..20 m, segments 2..7, jitter 0..0.6, light 0..100000, light_radius 1..5000 m;
+    -- fork and enabled: any non-zero number is 1); an unknown key or a non-number raises
+    set_bolt: (settings: { min_range: number?, max_range: number?, ground_y: number?, height: number?, width: number?, segments: number?, jitter: number?, fork: number?, light: number?, light_radius: number?, enabled: number? }) -> (),
 }
 )";
 

@@ -13,7 +13,9 @@
 #      second, so 0.25 degree per 150 ticks);
 #   7. (M-CLOUDS 9d) the "clouds:" lines: the CloudLayer authoring fields the script reads;
 #   8. (M-WEATHERAUDIO 10c) the "audio:" lines: the rain and wind bed levels the WeatherAudio ramps (3 s fade) toward the
-#      weather's targets (the two looping AudioSource entities have no clip, so the sample is silent).
+#      weather's targets (the two looping AudioSource entities have no clip, so the sample is silent);
+#   9. (M-LIGHTNINGBOLT 11d) the "bolt:" lines: the LightningBolt authoring the script reads and the last strike's place
+#      (0 before the first strike at tick 1392, then a hashed point 150..900 m from the camera that stays until the next).
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -61,6 +63,7 @@ expect("${first}" "script: wind dir: heading 0.75 drift 6.0 at tick 450\n" "the 
 expect("${first}" "script: clouds: strength 1.00 fair 0.35 overcast 0.90 height 2000 at tick 450\n" "the cloud layer is not wired into the scene")
 expect("${first}" "script: audio: rain 0.000 wind 0.006 max 0/0 dB fade 3 s at tick 0\n" "the audio beds did not start silent")
 expect("${first}" "script: audio: rain 0.650 wind 0.360 max 0/0 dB fade 3 s at tick 450\n" "the rain and wind beds did not follow the weather")
+expect("${first}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 450\n" "the bolt is not wired into the scene or struck without a storm")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -90,6 +93,9 @@ expect("${forecast}" "script: snow: cover 0.048 at tick 2550\n" "the snow cover 
 expect("${forecast}" "script: wind dir: heading 4.25 drift 6.0 at tick 2550\n" "the wind direction did not keep turning")
 expect("${forecast}" "script: audio: rain 0.602 wind 0.641 max 0/0 dB fade 3 s at tick 1500\n" "the storm beds are wrong")
 expect("${forecast}" "script: audio: rain 0.000 wind 0.100 max 0/0 dB fade 3 s at tick 2400\n" "the rain bed did not fall silent in clear weather")
+expect("${forecast}" "script: bolt: strike at 0, 0 dist 0 m range 150-900 m height 600 m at tick 1350\n" "a strike had a place before the storm")
+expect("${forecast}" "script: bolt: strike at -730, -478 dist 892 m range 150-900 m height 600 m at tick 1500\n" "the first storm strike has the wrong place")
+expect("${forecast}" "script: bolt: strike at -312, 720 dist 754 m range 150-900 m height 600 m at tick 2550\n" "the last strike did not stay where it struck")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

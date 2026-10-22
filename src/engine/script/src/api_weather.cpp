@@ -108,6 +108,26 @@
 //                                         (enabled: any non-zero number is 1); an unknown key or a non-number
 //                                         raises an error that names the call
 //
+// Lightning bolts (M-LIGHTNINGBOLT step 11d) are the same kind of binding over the first kit::LightningBolt
+// (mce/kit/lightning_bolt.h). Named errors as above; the last strike belongs to the engine and is read-only.
+//
+//   weather.bolt_min_range() / bolt_max_range() -> number   LightningBolt.min_range_m / max_range_m (10..5000)
+//   weather.bolt_ground_y() -> number                       LightningBolt.ground_y
+//   weather.bolt_height() -> number                         LightningBolt.height_m (50..3000)
+//   weather.bolt_width() -> number                          LightningBolt.width_m (0.05..20)
+//   weather.bolt_segments() -> number                       LightningBolt.segments_log2 (2..7)
+//   weather.bolt_jitter() -> number                         LightningBolt.jitter (0..0.6)
+//   weather.bolt_fork() / bolt_enabled() -> number          0 or 1
+//   weather.bolt_light() / bolt_light_radius() -> number    light_intensity (0..100000) / light_radius_m (1..5000)
+//   weather.bolt_distance() -> number                       strike_dist_m, the last strike's distance from the camera
+//   weather.bolt_pos() -> x, z                              strike_x, strike_z, the last strike's ground position
+//   weather.bolt_active() -> number                         active, the flash ticks left
+//   weather.set_bolt{min_range=, max_range=, ground_y=, height=, width=, segments=, jitter=, fork=, light=,
+//                    light_radius=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (segments rounded down; fork and enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -124,6 +144,7 @@
 #include "mce/kit/wind_sway.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/weather_audio.h"
+#include "mce/kit/lightning_bolt.h"
 
 namespace mce::script::detail {
 
@@ -218,6 +239,8 @@ kit::WindDirection& check_wind_direction(lua_State* L, const char* fn) {
 kit::CloudLayer& check_clouds(lua_State* L, const char* fn) { return check_first<kit::CloudLayer>(L, fn, "CloudLayer"); }
 
 kit::WeatherAudio& check_audio(lua_State* L, const char* fn) { return check_first<kit::WeatherAudio>(L, fn, "WeatherAudio"); }
+
+kit::LightningBolt& check_bolt(lua_State* L, const char* fn) { return check_first<kit::LightningBolt>(L, fn, "LightningBolt"); }
 
 int l_weather_kind(lua_State* L) {
     lua_pushstring(L, kind_name(check_weather(L, "weather.kind").current));
@@ -623,6 +646,57 @@ int l_weather_set_audio(lua_State* L) {
     return 0;
 }
 
+#define MCE_WEATHER_GETTER_LB(luaname, field)                                                      \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_bolt(L, "weather." #luaname).field));           \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_LB(bolt_min_range, min_range_m)
+MCE_WEATHER_GETTER_LB(bolt_max_range, max_range_m)
+MCE_WEATHER_GETTER_LB(bolt_ground_y, ground_y)
+MCE_WEATHER_GETTER_LB(bolt_height, height_m)
+MCE_WEATHER_GETTER_LB(bolt_width, width_m)
+MCE_WEATHER_GETTER_LB(bolt_segments, segments_log2)
+MCE_WEATHER_GETTER_LB(bolt_jitter, jitter)
+MCE_WEATHER_GETTER_LB(bolt_fork, fork)
+MCE_WEATHER_GETTER_LB(bolt_enabled, enabled)
+MCE_WEATHER_GETTER_LB(bolt_light, light_intensity)
+MCE_WEATHER_GETTER_LB(bolt_light_radius, light_radius_m)
+MCE_WEATHER_GETTER_LB(bolt_distance, strike_dist_m)
+MCE_WEATHER_GETTER_LB(bolt_active, active)
+#undef MCE_WEATHER_GETTER_LB
+
+int l_weather_bolt_pos(lua_State* L) {
+    const kit::LightningBolt& b = check_bolt(L, "weather.bolt_pos");
+    lua_pushnumber(L, static_cast<double>(b.strike_x));
+    lua_pushnumber(L, static_cast<double>(b.strike_z));
+    return 2;
+}
+
+// weather.set_bolt{...}: validated before anything is written. (The last strike is engine-written, not settable.)
+int l_weather_set_bolt(lua_State* L) {
+    static const char* const kKeys[11] = {"min_range", "max_range", "ground_y", "height", "width", "segments",
+                                          "jitter", "fork", "light", "light_radius", "enabled"};
+    f64 value[11] = {};
+    bool given[11] = {};
+    read_settings(L, "weather.set_bolt", kKeys, 11,
+                  "min_range, max_range, ground_y, height, width, segments, jitter, fork, light, light_radius, enabled",
+                  value, given);
+    kit::LightningBolt& b = check_bolt(L, "weather.set_bolt");
+    if (given[0]) b.min_range_m = static_cast<f32>(clamp_range(value[0], 10.0, 5000.0));
+    if (given[1]) b.max_range_m = static_cast<f32>(clamp_range(value[1], 10.0, 5000.0));
+    if (given[2]) b.ground_y = static_cast<f32>(clamp_range(value[2], -1.0e6, 1.0e6));
+    if (given[3]) b.height_m = static_cast<f32>(clamp_range(value[3], 50.0, 3000.0));
+    if (given[4]) b.width_m = static_cast<f32>(clamp_range(value[4], 0.05, 20.0));
+    if (given[5]) b.segments_log2 = static_cast<u32>(std::floor(clamp_range(value[5], 2.0, 7.0)));
+    if (given[6]) b.jitter = static_cast<f32>(clamp_range(value[6], 0.0, 0.6));
+    if (given[7]) b.fork = value[7] != 0.0 ? 1 : 0;
+    if (given[8]) b.light_intensity = static_cast<f32>(clamp_range(value[8], 0.0, 100000.0));
+    if (given[9]) b.light_radius_m = static_cast<f32>(clamp_range(value[9], 1.0, 5000.0));
+    if (given[10]) b.enabled = value[10] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -680,6 +754,21 @@ const luaL_Reg kWeatherLib[] = {
     {"audio_fade", l_weather_audio_fade},
     {"audio_enabled", l_weather_audio_enabled},
     {"set_audio", l_weather_set_audio},
+    {"bolt_min_range", l_weather_bolt_min_range},
+    {"bolt_max_range", l_weather_bolt_max_range},
+    {"bolt_ground_y", l_weather_bolt_ground_y},
+    {"bolt_height", l_weather_bolt_height},
+    {"bolt_width", l_weather_bolt_width},
+    {"bolt_segments", l_weather_bolt_segments},
+    {"bolt_jitter", l_weather_bolt_jitter},
+    {"bolt_fork", l_weather_bolt_fork},
+    {"bolt_enabled", l_weather_bolt_enabled},
+    {"bolt_light", l_weather_bolt_light},
+    {"bolt_light_radius", l_weather_bolt_light_radius},
+    {"bolt_distance", l_weather_bolt_distance},
+    {"bolt_pos", l_weather_bolt_pos},
+    {"bolt_active", l_weather_bolt_active},
+    {"set_bolt", l_weather_set_bolt},
     {nullptr, nullptr},
 };
 
