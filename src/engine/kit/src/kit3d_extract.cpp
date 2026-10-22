@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include "mce/kit/kit3d_extract.h"
 
@@ -18,6 +19,7 @@
 #include "mce/kit/weather.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
+#include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
 #include "mce/convar.h"
 #include "mce/log.h"
@@ -57,6 +59,18 @@ void apply_wind_sway(f32 wind, const WindSway& s, render::InstanceBatch& b) {
     b.wind_frequency *= 1.0f + (s.frequency_gain - 1.0f) * wind;
     b.wind_ext.y = clamp(b.wind_ext.y + s.gust_gain * wind, 0.0f, 1.0f);
     b.wind_ext.z *= 1.0f + (s.flutter_gain - 1.0f) * wind;
+}
+
+// Snow lee bias under a gust (M-WINDGUST 12b): clamp(bias * (1 + strength * gust_q / 2^24), 0, 1) with the snow bit; with
+// no gust, `enabled` 0, the bit clear or a zero level it returns `bias` itself (the same f32). Same clamps as
+// effective_wind (NaN strength counts as the default 0.6).
+f32 gusted_snow_bias(f32 bias, const WindGust* gust) {
+    if (!gust || !gust->enabled || (gust->affects & kGustSnow) == 0 || gust->gust_q == 0) return bias;
+    const f64 strength = std::isnan(gust->strength) ? 0.6 : std::clamp(static_cast<f64>(gust->strength), 0.0, 3.0);
+    const f64 level = static_cast<f64>(std::min<u32>(gust->gust_q, 1u << 24)) / 16777216.0;
+    const f64 v = static_cast<f64>(bias) * (1.0 + strength * level);
+    if (std::isnan(v)) return bias;
+    return static_cast<f32>(std::clamp(v, 0.0, 1.0));
 }
 
 // Wind direction (M-WINDDIR 8d): the batch's authored compass rotated by the scene wind's angle relative to +x, so a
@@ -862,6 +876,10 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         world.query<const SnowCover&>().each([&](const SnowCover& c) {
             if (!snowc) snowc = &c;
         });
+        const WindGust* snow_gust = nullptr;  // read only: the first WindGust raises the lee bias (M-WINDGUST 12b)
+        world.query<const WindGust&>().each([&](const WindGust& c) {
+            if (!snow_gust) snow_gust = &c;
+        });
         const WindDirection* snow_wd = nullptr;
         world.query<const WindDirection&>().each([&](const WindDirection& c) {
             if (!snow_wd) snow_wd = &c;
@@ -871,7 +889,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             snow.cover = snowc->cover * snowc->strength;
             snow.coverage = snowc->coverage;
             snow.noise_scale = snowc->noise_scale_m;
-            snow.wind_bias = snowc->wind_bias;
+            snow.wind_bias = gusted_snow_bias(snowc->wind_bias, snow_gust);
             if (snow_wd) snow.wind_dir = wind_direction_vector(*snow_wd);  // else the default +x (M-WINDDIR 8d)
             snow.noise_enabled = true;
         }
@@ -1336,7 +1354,11 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     world.query<const WindSway&>().each([&](const WindSway& c) {
         if (!sway) sway = &c;
     });
-    const f32 sway_wind = sway_weather && sway ? sway_weather->wind : 0.0f;
+    const WindGust* sway_gust = nullptr;  // read only: the first WindGust gusts the sway (M-WINDGUST 12b)
+    world.query<const WindGust&>().each([&](const WindGust& c) {
+        if (!sway_gust) sway_gust = &c;
+    });
+    const f32 sway_wind = sway_weather && sway ? effective_wind(*sway_weather, sway_gust, kGustSway) : 0.0f;
     const WindDirection* wind_dir = nullptr;  // wind direction: only a scene with both a Weather and a WindDirection
     world.query<const WindDirection&>().each([&](const WindDirection& c) {
         if (!wind_dir) wind_dir = &c;

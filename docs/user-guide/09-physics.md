@@ -754,8 +754,11 @@ middle of a gust resumes on the same curve and a change of the tick rate cannot 
 `Weather.wind`; it only defines the gusted wind `wind * (1 + strength * gust)` (`strength` 0.6, 0 to 3, clamped to 1),
 which later steps feed to foliage sway, rain slant, cloud drift, the snow lee bias and the wind sound. A calm wind
 gusts proportionally less (a clear 0.1 stirs, a storm at 1.0 is already at the clamp). `affects` is a bit mask of those
-consumers (1 sway, 2 rain, 4 clouds, 8 snow, 16 audio, all by default) and `enabled` 0 switches the gusts off. Until the
-consumers are wired a scene with a `WindGust` only changes its own saved state; a scene without one is unchanged.
+consumers (1 sway, 2 rain, 4 clouds, 8 snow, 16 audio, all by default) and `enabled` 0 switches the gusts off. Foliage
+sway (bit 1) already follows the gusted wind (the batch wind fields scale with it; nothing is re-scattered) and so does
+the snow lee bias (bit 8: `wind_bias * (1 + strength * gust)`, clamped to 0..1). Cloud drift is not gusted: the render
+side computes the cloud offset as `speed * time`, so a changing speed would make the layer jump (bit 4 is unused).
+A scene without a `WindGust` is unchanged, bit for bit.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
