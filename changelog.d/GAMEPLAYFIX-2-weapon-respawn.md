@@ -1,0 +1,1 @@
+- Kit (M-GAMEPLAYFIX 2): a `Weapon3D` on its own entity gets its wielder's `damage` bonus (`Weapon3D::bonus_applied`, replaces `Equipment::damage_applied`), and a `Health3D` replaced at run time gets the equipment and status armor/max bonuses again (`Health3D::bonus_mark`). Record: `docs/milestones/M-GAMEPLAYFIX.md`.

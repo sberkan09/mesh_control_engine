@@ -19,7 +19,7 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Health3D) == 64);
-static_assert(sizeof(Weapon3D) == 160);
+static_assert(sizeof(Weapon3D) == 168);
 static_assert(sizeof(Projectile3D) == 44);
 
 namespace {

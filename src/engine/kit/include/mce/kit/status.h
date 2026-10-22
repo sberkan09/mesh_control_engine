@@ -19,8 +19,8 @@
 // Input events: ApplyStatus, ClearStatus (an empty id clears everything; clears are handled before applies in a tick, so a
 // cleanse followed by a re-apply in the same tick ends with the effect on). Regen and Poison need a positive amount; amounts
 // are limited to +-1e6.
-// A Health3D replaced at run time (a respawn that overwrites the component) loses the bonus kinds until they end, and the
-// end then subtracts what the old one had: clear the effects when respawning. Output events: StatusApplied, StatusEnded
+// A Health3D replaced at run time (a respawn that overwrites the component) is noticed through Health3D::bonus_mark and the bonus
+// kinds are applied to it again in full; a copy that keeps the old mark is not noticed. Output events: StatusApplied, StatusEnded
 // (`expired` 1: ran out, 0: cleared), StatusRefused. System "kit_status" (FixedUpdate_Pre, after "kit_craft").
 
 #include "mce/ecs/entity.h"

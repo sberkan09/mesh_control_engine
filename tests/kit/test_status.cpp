@@ -254,3 +254,23 @@ TEST_CASE("status: the part of a poison pulse under way when the effect ends is 
     CHECK(pulse > 0.0f);
     CHECK(taken(0.75f) == doctest::Approx(pulse * 1.5f).epsilon(0.02));  // one pulse and half of the next
 }
+
+TEST_CASE("status: a Health3D replaced at run time gets the bonus again and loses it when the effect ends (M-GAMEPLAYFIX)") {
+    Rig r;
+    r.apply("shield", StatusKind::Armor, 0.5f, 1.0f);
+    r.apply("vigor", StatusKind::MaxHealth, 40.0f, 1.0f);
+    r.tick(3);
+    CHECK(r.hp().max == doctest::Approx(140.0f));
+    Health3D fresh;  // a respawn
+    fresh.max = 100.0f;
+    fresh.current = 100.0f;
+    fresh.armor = 0.25f;
+    r.w.set(r.hero, fresh);
+    r.tick(3);
+    CHECK(r.hp().armor == doctest::Approx(0.75f));
+    CHECK(r.hp().max == doctest::Approx(140.0f));
+    r.tick(100);
+    CHECK(r.active() == 0);
+    CHECK(r.hp().armor == doctest::Approx(0.25f));  // the base, not below it
+    CHECK(r.hp().max == doctest::Approx(100.0f));
+}

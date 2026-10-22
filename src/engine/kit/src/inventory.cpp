@@ -392,27 +392,34 @@ void kit_inventory(Frame& f) {
 
 // Brings Health3D in line with what the worn items' stats say, applying only the change since last tick.
 void apply_equipment_stats(World& w, ItemRegistry& reg) {
-    // M-WEAPONSTAT: worn items' "damage" stats add to a Weapon3D on the same entity, as a remembered change like armor below
-    w.query<Equipment, Weapon3D>().each([&](Entity, Equipment& eq, Weapon3D& wp) {
+    // M-WEAPONSTAT / M-GAMEPLAYFIX: worn items' "damage" stats add to a Weapon3D of the wielder (its owner, else the weapon's own
+    // entity), as a remembered change kept on the weapon like the armor below
+    w.query<Weapon3D>().each([&](Entity e, Weapon3D& wp) {
+        const Entity wielder = wp.owner.is_null() || !w.alive(wp.owner) ? e : wp.owner;
+        const Equipment* eq = w.try_get<Equipment>(wielder);
+        const asset::ItemCatalog* c = eq ? reg.resolve(eq->catalog) : nullptr;
+        if (eq && !c && wp.bonus_applied != 0.0f) return;  // catalog not loaded: keep what is applied
         f32 damage = 0.0f;
-        const asset::ItemCatalog* c = reg.resolve(eq.catalog);
-        if (!c && eq.damage_applied != 0.0f) return;  // catalog not loaded: keep what is applied
         if (c) {
             for (u32 s = 0; s < kEquipSlots; ++s) {
-                if (eq.item[s] == 0 || !valid_item(*c, eq.item[s] - 1u)) continue;
-                damage += c->stat(c->items()[eq.item[s] - 1u], "damage", 0.0f);
+                if (eq->item[s] == 0 || !valid_item(*c, eq->item[s] - 1u)) continue;
+                damage += c->stat(c->items()[eq->item[s] - 1u], "damage", 0.0f);
             }
         }
-        if (!std::isfinite(damage) || (damage == 0.0f && eq.damage_applied == 0.0f)) return;
-        const f32 now = wp.damage + (damage - eq.damage_applied);
+        if (!std::isfinite(damage) || (damage == 0.0f && wp.bonus_applied == 0.0f)) return;
+        const f32 now = wp.damage + (damage - wp.bonus_applied);
         const f32 next = now < 0.0f ? 0.0f : now;
-        eq.damage_applied += next - wp.damage;  // what really changed, so the clamp at 0 is not remembered as added
+        wp.bonus_applied += next - wp.damage;  // what really changed, so the clamp at 0 is not remembered as added
         wp.damage = next;
     });
     w.query<Equipment, Health3D>().each([&](Entity, Equipment& eq, Health3D& hp) {
         f32 armor = 0.0f;
         f32 max_health = 0.0f;
         bool any = false;
+        if ((hp.bonus_mark & 1u) == 0) {  // a Health3D that never carried this bonus (replaced at run time): start from the base again
+            eq.armor_applied = 0.0f;
+            eq.max_applied = 0.0f;
+        }
         const asset::ItemCatalog* c = reg.resolve(eq.catalog);
         if (!c && (eq.armor_applied != 0.0f || eq.max_applied != 0.0f)) return;  // catalog not loaded: keep what is applied
         if (c) {
@@ -435,6 +442,7 @@ void apply_equipment_stats(World& w, ItemRegistry& reg) {
         eq.max_applied += max_new - hp.max;
         hp.max = max_new;
         if (hp.current > hp.max) hp.current = hp.max;
+        if (eq.armor_applied != 0.0f || eq.max_applied != 0.0f) hp.bonus_mark |= 1u;
     });
 }
 

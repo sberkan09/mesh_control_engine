@@ -42,6 +42,6 @@ Deterministic: effect time is integer microseconds like `CraftingStation`, per-t
 
 - Opus review: one blocker, fixed (a refresh that changed an effect's kind kept the old `applied`, leaking the old bonus). Also fixed:
   non-finite and unknown-kind saved slots are dropped, kill credit is per effect, clears run before applies, a hostile `pulse_us` is reset,
-  Regen and Poison need positive amounts and amounts are limited to ±1e6. Left (documented): a `Health3D` overwritten at run time loses
-  the bonus kinds, and two ids with the same 32-bit hash share a slot.
+  Regen and Poison need positive amounts and amounts are limited to ±1e6. Left (documented): a `Health3D` overwritten at run time is handled since M-GAMEPLAYFIX 2 (`Health3D::bonus_mark`),
+  and two ids with the same 32-bit hash share a slot.
 

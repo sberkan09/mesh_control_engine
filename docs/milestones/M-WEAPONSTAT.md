@@ -5,7 +5,7 @@
 **Why.** M-ITEMFX left "stat-driven weapon damage" open: `armor` and `max_health` stats change `Health3D`, but a sword's `damage` stat did nothing.
 
 **What.** `apply_equipment_stats` also sums the worn items' `damage` stats and adds them to a `Weapon3D` on the same entity as the `Equipment`, as a remembered
-change (`Equipment::damage_applied`, not saved) like armor: applied once, given back on unequip, clamped at 0, kept while the catalog is not loaded. Test:
+change (first on `Equipment::damage_applied`; since M-GAMEPLAYFIX 2 on `Weapon3D::bonus_applied`, so a weapon on its own entity works too) like armor: applied once, given back on unequip, clamped at 0, kept while the catalog is not loaded. Test:
 `tests/kit/test_inventory.cpp`.
 
 ## Open items
