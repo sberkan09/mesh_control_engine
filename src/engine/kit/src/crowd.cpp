@@ -303,6 +303,7 @@ struct Candidates {
 struct Fear {
     Entity ped;
     vec3 threat;  // world space
+    vec3 pos;     // where the pedestrian was when last seen (world space): its neighbours catch the panic from here
     f32 left = 0.0f;
 };
 constexpr usize kMaxFears = 512;
@@ -593,6 +594,10 @@ void kit_crowd(Frame& f) {
         st.fears = static_cast<Array<Fear>&&>(keep);
     }
     Span<const WeaponFired3D> shots = f.events().read<WeaponFired3D>();
+    // M-PEDFLEE 3: those who ran last tick and still have time to run pass the panic on (one second less per hop, so it dies out)
+    Array<Fear> spreaders;
+    for (const Fear& fr : st.fears)
+        if (fr.left > kPedestrianPanicHop + 0.5f) spreaders.push_back(fr);
 
     // The spawners, with the network each walks on.
     Array<Info> infos;
@@ -694,13 +699,30 @@ void kit_crowd(Frame& f) {
             if (dx * dx + dz * dz > kPedestrianFearRadius * kPedestrianFearRadius) continue;
             if (!fear) {
                 if (st.fears.size() >= kMaxFears) break;
-                st.fears.push_back(Fear{e, sh.origin, kPedestrianFleeSeconds});
+                st.fears.push_back(Fear{e, sh.origin, t.position, kPedestrianFleeSeconds});
                 fear = &st.fears.back();
             }
             fear->threat = sh.origin;
             fear->left = kPedestrianFleeSeconds;
         }
-        if (fear) scared = true;
+        if (!fear && !scared)  // a neighbour is running: so do I (the shot's or the attacker's side)
+            for (const Fear& sp : spreaders) {
+                const f32 dx = t.position.x - sp.pos.x, dz = t.position.z - sp.pos.z;
+                if (dx * dx + dz * dz > kPedestrianPanicRadius * kPedestrianPanicRadius || st.fears.size() >= kMaxFears) continue;
+                st.fears.push_back(Fear{e, sp.threat, t.position, sp.left - kPedestrianPanicHop});
+                fear = &st.fears.back();
+                break;
+            }
+        if (!fear && scared && hp && !hp->last_attacker.is_null() && w.alive(hp->last_attacker) && st.fears.size() < kMaxFears) {
+            if (const LocalTransform* at = w.try_get<LocalTransform>(hp->last_attacker)) {  // the hurt one also warns the others
+                st.fears.push_back(Fear{e, at->position, t.position, kPedestrianFleeSeconds - hp->since_hit});
+                fear = &st.fears.back();
+            }
+        }
+        if (fear) {
+            scared = true;
+            fear->pos = t.position;
+        }
         if (!scared && was_fleeing) p.mode = PedestrianMode::Walk;
         const bool focused = in == &loose ? loose_ok : focus_ok[index] != 0;
         const vec3 focus = in == &loose ? loose_focus : focus_pos[index];
