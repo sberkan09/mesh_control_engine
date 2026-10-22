@@ -1,0 +1,1 @@
+- Editor, M-SELSETS 2: Ctrl+Shift+1..9 stores the selection in a numbered set and Alt+1..9 selects it again; Edit > Selection sets lists them.
