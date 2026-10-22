@@ -14,6 +14,7 @@
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/ground_mist.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
@@ -834,7 +835,6 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     render::Fog fog;
     fog.color = env.fog_color;
     fog.density = env.fog_density;
-    scene.set_fog(fog);
     render::Atmosphere atmosphere;
     atmosphere.enabled = env.atmosphere != 0;
     atmosphere.intensity = env.atmosphere_intensity;
@@ -847,7 +847,40 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     vol.anisotropy = env.volumetric_anisotropy;
     vol.albedo = env.volumetric_albedo;
     vol.max_distance = env.volumetric_distance;
-    render::apply_quality(quality_, vol);
+    {  // morning mist (M-GROUNDMIST 13b): the level feeds the local fog or volumetrics, never Environment3D
+        const GroundMist* mist = nullptr;
+        world.query<const GroundMist&>().each([&](const GroundMist& c) {
+            if (!mist) mist = &c;
+        });
+        f32 level = 0.0f;
+        if (mist && mist->enabled) {
+            const Weather* mist_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!mist_weather) mist_weather = &c;
+            });
+            level = mist_level(*mist, env.time_of_day, mist_weather);
+        }
+        if (level > 0.0f) {
+            const render::Volumetrics plain = vol;
+            if (env.volumetric_fog != 0) {  // volumetric path; kept only if the tier leaves the volumetrics on
+                const f32 falloff = 1.0f / clamp(mist->thickness_m, 0.5f, 200.0f);
+                vol.density = min(1.0f, vol.density + level * clamp(mist->density, 0.0f, 1.0f));
+                vol.height_falloff = lerp(vol.height_falloff, max(vol.height_falloff, falloff), level);
+                vol.base_height = clamp(mist->base_height_m, -1000.0f, 1000.0f);
+                vol.albedo = lerp(vol.albedo, mist->color, level * 0.5f);
+            }
+            render::apply_quality(quality_, vol);
+            if (!vol.enabled) {  // exp2 path (volumetric fog off, or dropped by the tier): exactly one path per frame
+                vol = plain;
+                render::apply_quality(quality_, vol);
+                fog.density += level * clamp(mist->exp2_density, 0.0f, 0.2f);
+                fog.color = lerp(fog.color, mist->color, level);
+            }
+        } else {
+            render::apply_quality(quality_, vol);
+        }
+    }
+    scene.set_fog(fog);
     scene.set_volumetrics(vol);
     {  // wet surfaces (M-WETSURFACE 5c): only a scene with both a Weather and a WetSurfaces gets wet
         const Weather* weather = nullptr;
