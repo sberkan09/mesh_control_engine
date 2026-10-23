@@ -161,7 +161,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
-| `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/09-physics.md | projects/MarbleGarden/assets/scenes/garden.mcscene |
+| `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/13_water/assets/scenes/water.mcscene |
 | `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WetSurfaces` | `mce/kit/wet_surfaces.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |

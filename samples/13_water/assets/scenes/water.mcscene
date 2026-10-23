@@ -1,0 +1,147 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "13d13000-0000-4000-8000-000000000001",
+ "name": "water",
+ "entities": [
+  {
+   "name": "Seabed",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -8,
+      0
+     ],
+     "scale": [
+      3,
+      1,
+      3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:13d13000-0000-4000-8000-000000000005",
+     "tint": [
+      0.62,
+      0.58,
+      0.45,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Island",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      26.7,
+      -5.25,
+      0
+     ],
+     "scale": [
+      1,
+      10,
+      0.4
+     ],
+     "rotation": [
+      0,
+      0,
+      0.069756,
+      0.997564
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:13d13000-0000-4000-8000-000000000005",
+     "tint": [
+      0.68,
+      0.62,
+      0.46,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Sky",
+   "components": {
+    "Environment3D": {
+     "sun_direction": [
+      -0.5,
+      -0.45,
+      -0.4
+     ],
+     "sun_intensity": 2.2,
+     "fog_density": 0.004,
+     "bloom": 1,
+     "bloom_intensity": 0.08
+    },
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      14,
+      5,
+      22
+     ],
+     "rotation": [
+      -0.109144,
+      -0.089265,
+      -0.009841,
+      0.989961
+     ]
+    }
+   }
+  },
+  {
+   "name": "Water",
+   "components": {
+    "Water": {},
+    "LocalTransform": {}
+   }
+  },
+  {
+   "name": "Crate",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      8,
+      0.1,
+      4
+     ],
+     "scale": [
+      0.4,
+      0.8,
+      0.4
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:13d13000-0000-4000-8000-000000000006",
+     "tint": [
+      0.6,
+      0.38,
+      0.2,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "Script: water",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:13d13000-0000-4000-8000-000000000003",
+     "phase": "Post"
+    },
+    "LocalTransform": {}
+   }
+  }
+ ]
+}
