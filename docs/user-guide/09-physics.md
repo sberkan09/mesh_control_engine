@@ -901,6 +901,8 @@ is below the surface there. `water.set{...}` and the getters (`water.level()`, `
 like the set keys) act on the first `Water`; every set key is optional and clamped to the component's range, an unknown
 key, a value that is not a number or a scene without the component raises an error that names the call, and nothing is
 written. The setter never adds the component. The queries work with `enabled` 0 too, and they pause with the scene time.
+The `13_water` sample (`ctest -R water`) is the worked example: a default `Water` off a sloped sand island, and a crate whose
+script sets its `y` to `water.height_at(x, z)` and tilts it to `water.normal_at(x, z)` every tick, logging `water:` every 150 ticks.
 
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
