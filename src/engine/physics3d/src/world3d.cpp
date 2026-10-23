@@ -13,6 +13,7 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/GroupFilter.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -38,6 +39,7 @@
 #include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
 #include <Jolt/RegisterTypes.h>
 
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <cstdarg>
@@ -344,10 +346,99 @@ struct World3D::Impl {
         --live_vehicles;
     }
 
+    // Contact events (M-CONTACTEVENTS 2). Jolt calls the listener from Update, single-threaded here
+    // (JobSystemSingleThreaded); it only reads the Body arguments and appends to `raw`.
+    struct ContactCollector : JPH::ContactListener {
+        Impl* owner = nullptr;
+        void OnContactAdded(const JPH::Body& b1, const JPH::Body& b2, const JPH::ContactManifold& m,
+                            JPH::ContactSettings&) override {
+            owner->collect(b1, b2, m);
+        }
+    };
+    struct Throttle {
+        u64 key = 0;      // lo entity index << 32 | hi entity index
+        u32 tick = 0;     // the step it was last reported
+        f32 speed = 0.0f;
+    };
+    static constexpr u32 kContactRehitTicks = 6;  // 0.1 s: a bouncing crate makes one sound
+    ContactCollector collector;
+    Array<ContactEvent3D> raw;      // this step's, in callback order
+    Array<ContactEvent3D> events;   // the last step's, sorted by (a, b)
+    Array<Throttle> throttle;
+    u32 step_count = 0;
+    bool had_contact_events = false;
+
+    static bool entity_less(Entity a, Entity b) {
+        return a.index != b.index ? a.index < b.index : a.generation < b.generation;
+    }
+
+    void collect(const JPH::Body& b1, const JPH::Body& b2, const JPH::ContactManifold& m) {
+        const u64 u1 = b1.GetUserData(), u2 = b2.GetUserData();
+        if (u1 == 0 || u2 == 0 || !had_contact_events) return;
+        const Entity e1 = unpack(u1), e2 = unpack(u2);
+        const Slot* s1 = find(e1);
+        const Slot* s2 = find(e2);
+        f32 threshold = -1.0f;
+        if (s1 && s1->contact_min_speed >= 0.0f) threshold = s1->contact_min_speed;
+        if (s2 && s2->contact_min_speed >= 0.0f)
+            threshold = threshold < 0.0f ? s2->contact_min_speed : std::min(threshold, s2->contact_min_speed);
+        if (threshold < 0.0f || m.mRelativeContactPointsOn1.empty()) return;
+        const JPH::RVec3 p1 = m.mBaseOffset + m.mRelativeContactPointsOn1[0];
+        const JPH::Vec3 n = m.mWorldSpaceNormal;  // from body 1 to body 2
+        const f32 approach = (b1.GetPointVelocity(p1) - b2.GetPointVelocity(p1)).Dot(n);
+        if (!(approach >= threshold)) return;
+        const f32 inv1 = b1.IsDynamic() ? b1.GetMotionProperties()->GetInverseMass() : 0.0f;
+        const f32 inv2 = b2.IsDynamic() ? b2.GetMotionProperties()->GetInverseMass() : 0.0f;
+        ContactEvent3D ev;
+        ev.approach_speed = approach;
+        ev.impulse = inv1 + inv2 > 0.0f ? approach / (inv1 + inv2) : 0.0f;
+        const bool swap = entity_less(e2, e1);
+        ev.a = swap ? e2 : e1;
+        ev.b = swap ? e1 : e2;
+        ev.normal = to_mce(swap ? -n : n);
+        ev.point = to_mce(JPH::Vec3(swap ? m.mBaseOffset + m.mRelativeContactPointsOn2[0] : p1));
+        raw.push_back(ev);
+    }
+
+    // After Update: sort by pair, keep the fastest manifold of a pair, apply the per-pair throttle, cap.
+    void finish_contacts() {
+        events.clear();
+        ++step_count;
+        std::sort(raw.begin(), raw.end(), [](const ContactEvent3D& x, const ContactEvent3D& y) {
+            if (x.a != y.a) return entity_less(x.a, y.a);
+            if (x.b != y.b) return entity_less(x.b, y.b);
+            return x.approach_speed > y.approach_speed;
+        });
+        usize keep = 0;
+        for (usize i = 0; i < throttle.size(); ++i)
+            if (step_count - throttle[i].tick <= kContactRehitTicks) throttle[keep++] = throttle[i];
+        throttle.resize(keep);
+        for (usize i = 0; i < raw.size(); ++i) {
+            const ContactEvent3D& ev = raw[i];
+            if (i > 0 && raw[i - 1].a == ev.a && raw[i - 1].b == ev.b) continue;  // slower manifold of the same pair
+            if (events.size() >= config.max_contact_events_per_tick) break;
+            const u64 key = (static_cast<u64>(ev.a.index) << 32) | ev.b.index;
+            Throttle* t = nullptr;
+            for (Throttle& c : throttle)
+                if (c.key == key) t = &c;
+            if (t && ev.approach_speed < 2.0f * t->speed) continue;
+            if (t) {
+                t->tick = step_count;
+                t->speed = ev.approach_speed;
+            } else {
+                throttle.push_back(Throttle{key, step_count, ev.approach_speed});
+            }
+            events.push_back(ev);
+        }
+        raw.clear();
+    }
+
     explicit Impl(const PhysicsConfig3D& c) : config(c), temp(static_cast<JPH::uint>(c.temp_allocator_bytes)) {
         system.Init(c.max_bodies, 0, c.max_body_pairs, c.max_contact_constraints, bp_layers, object_vs_bp,
                     object_pairs);
         system.SetGravity(to_jph(c.gravity));
+        collector.owner = this;
+        system.SetContactListener(&collector);
     }
 
     ~Impl() {
@@ -633,7 +724,9 @@ bool World3D::has_body(Entity e) const { return impl_->find(e) != nullptr; }
 void World3D::step(f32 dt) {
     Impl& w = *impl_;
     MCE_ASSERT_MSG(dt == w.config.fixed_dt, "World3D::step: dt must equal the fixed step (physics.md D7)");
+    w.raw.clear();
     w.system.Update(w.config.fixed_dt, 1, &w.temp, &w.jobs);
+    w.finish_contacts();
     w.check_joints();
 }
 
@@ -641,10 +734,13 @@ bool World3D::set_contact_events(Entity e, f32 min_speed) {
     Impl::Slot* s = impl_->find(e);
     if (!s) return false;
     s->contact_min_speed = min_speed;
+    if (min_speed >= 0.0f) impl_->had_contact_events = true;
     return true;
 }
 
-Span<const ContactEvent3D> World3D::contact_events() const { return {}; }
+Span<const ContactEvent3D> World3D::contact_events() const {
+    return Span<const ContactEvent3D>(impl_->events.data(), impl_->events.size());
+}
 
 void World3D::set_linear_velocity(Entity e, vec3 v) {
     Impl& w = *impl_;
