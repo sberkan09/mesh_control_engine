@@ -74,6 +74,7 @@ mce_add_test(test_kit UMBRELLA
         test_rain_splash.cpp
         test_map_markers.cpp
         test_wanted3d.cpp
+        test_vehicle_ram.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_procgen.cpp

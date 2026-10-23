@@ -506,6 +506,14 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
   `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
 
+### Vehicle ram (M-VEHICLEHIT)
+
+`VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car
+while it moves faster than `min_speed` m/s (reversing: the box is behind). The box runs `zone_start` to `zone_end` metres along the travel direction and `half_width` to each side.
+Damage is `(speed - min_speed + 1) * damage_per_ms`, with an impulse of `speed * impulse_per_ms` along the travel direction, through `apply_damage`; the instigator is the
+`VehicleSeat3D` driver when there is one (so `Wanted3D` sees a crime), else the car. The car, the driver and the dead are skipped, and one car hurts a victim once a second at most.
+Record: `docs/milestones/M-VEHICLEHIT.md`.
+
 ### Fleeing pedestrians (M-PEDFLEE)
 
 - A live pedestrian whose `Health3D` was hit in the last 5 s (`kPedestrianFleeSeconds`; `hits > 0` and `since_hit` below it) switches to `PedestrianMode::Flee`: on its pavement edge
