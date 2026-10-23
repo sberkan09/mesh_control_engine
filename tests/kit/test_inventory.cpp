@@ -697,6 +697,56 @@ TEST_CASE("inventory: a worn weapon's damage stat adds to Weapon3D.damage and is
     CHECK(r.w.try_get<Weapon3D>(r.hero)->damage == doctest::Approx(20.0f));
 }
 
+TEST_CASE("inventory: items of one cooldown group share a cooldown (M-ITEMCD)") {
+    Rig r;
+    install_status(r.w, nullptr);
+    asset::ItemCatalog c = r.cat;
+    const FixedString<32> tag("consumable");
+    const auto add = [&](const char* id, f32 group) {
+        asset::ItemDef d;
+        d.id = id;
+        d.name = id;
+        d.stack_max = 9;
+        asset::ItemStat st[3];
+        st[0].key = "heal";
+        st[0].value = 5.0f;
+        st[1].key = "cooldown";
+        st[1].value = 2.0f;
+        st[2].key = "cooldown_group";
+        st[2].value = group;
+        REQUIRE(c.add_item(d, Span<const asset::ItemStat>(st, 3), Span<const FixedString<32>>(&tag, 1)));
+    };
+    add("tonic", 12.0f);
+    add("salve", 12.0f);
+    add("stim", 0.0f);  // no group: its own cooldown
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    r.give("tonic", 3);
+    r.give("salve", 3);
+    r.give("stim", 3);
+    Health3D hp;
+    hp.max = 100.0f;
+    hp.current = 10.0f;
+    r.w.set(r.hero, hp);
+    r.w.set(r.hero, StatusEffects{});
+    const auto use = [&](u32 slot) {
+        UseItem u;
+        u.owner = r.hero;
+        u.slot = slot;
+        EventAccess(r.w).push(u);
+        r.tick(4);
+    };
+    use(0);  // tonic: heals, starts the group's cooldown
+    CHECK(r.inv().qty[0] == 2);
+    use(1);  // salve is in the same group: refused, not wasted
+    CHECK(r.inv().qty[1] == 3);
+    use(2);  // stim has no group: unaffected
+    CHECK(r.inv().qty[2] == 2);
+    CHECK(r.w.try_get<Health3D>(r.hero)->current == doctest::Approx(20.0f));
+    r.tick(60 * 3);
+    use(1);  // the group is free again
+    CHECK(r.inv().qty[1] == 2);
+}
+
 TEST_CASE("inventory: two uses of a cooldown item in one tick only pass once (M-GAMEPLAYFIX)") {
     Rig r;
     install_status(r.w, nullptr);

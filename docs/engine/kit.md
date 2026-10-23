@@ -492,7 +492,8 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 
 - A consumable with a `cooldown` stat (seconds, up to 3600) starts a `Cooldown` status named `cd:<item>` when used, and a use while it runs is refused and
   not consumed (nothing heals either). The user needs `StatusEffects`; without it the stat is ignored. A refused use (full health, dead) starts no cooldown.
-  Two `UseItem` events for the same item in one tick both pass, since the cooldown starts a tick later. Luau: `status.has(e, "cd:potion")` tells a
+  Two `UseItem` events for the same item in one tick pass only once (M-GAMEPLAYFIX). A `cooldown_group` stat (1 to 999999) names the status `cdg:<group>` instead, so every
+  item of the group shares one cooldown (all potions). Luau: `status.has(e, "cd:potion")` tells a
   script (and a HUD) the item is cooling down; `status.add(e, id, "cooldown", 1, seconds)` makes a cooldown by hand.
 
 ### Stat-driven weapon damage (M-WEAPONSTAT)

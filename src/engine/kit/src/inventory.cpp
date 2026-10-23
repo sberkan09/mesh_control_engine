@@ -314,11 +314,22 @@ void kit_inventory(Frame& f) {
             bool refused = false;
             f32 healed = 0.0f;
             // cooldown (M-ITEMCD): a `cooldown` stat (seconds) keeps the same item from being used again until a Cooldown effect named
-            // "cd:<item>" ends; it needs StatusEffects on the user and is skipped without it
+            // "cd:<item>" ends; it needs StatusEffects on the user and is skipped without it. A `cooldown_group` stat (1 to 999999) makes
+            // the effect "cdg:<group>" instead, so every item of the group shares one cooldown (all potions)
             const f32 cooldown = c->stat(d, "cooldown", 0.0f);
+            const f32 group = c->stat(d, "cooldown_group", 0.0f);
             FixedString<32> cd_id;
-            cd_id.assign("cd:");
-            cd_id.append(d.id.view());
+            if (group >= 1.0f && group < 1.0e6f) {
+                u32 g = static_cast<u32>(group);
+                char digits[8];
+                u32 n = 0;
+                for (; g > 0; g /= 10) digits[n++] = static_cast<char>('0' + g % 10);
+                cd_id.assign("cdg:");
+                while (n > 0) cd_id.append(StringView(&digits[--n], 1));
+            } else {
+                cd_id.assign("cd:");
+                cd_id.append(d.id.view());
+            }
             const StatusEffects* cds = cooldown > 0.0f && !u.owner.is_null() && w.alive(u.owner) ? w.try_get<StatusEffects>(u.owner) : nullptr;
             const bool cd_on = cds && w.event_queue<ApplyStatus>() != nullptr;
             const u32 cd_key = status_key(cd_id.view());

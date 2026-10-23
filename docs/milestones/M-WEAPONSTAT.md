@@ -10,5 +10,5 @@ change (first on `Equipment::damage_applied`; since M-GAMEPLAYFIX 2 on `Weapon3D
 
 ## Open items
 
-- A `Weapon3D` on a separate weapon entity (owner = the wielder) does not get the bonus; only a weapon on the equipped entity does.
+- (done in M-GAMEPLAYFIX 2: a `Weapon3D` on its own entity gets the wielder's bonus.)
 - Per-slot weapon swaps that replace `Weapon3D` fields (kind, rate) from the item.
