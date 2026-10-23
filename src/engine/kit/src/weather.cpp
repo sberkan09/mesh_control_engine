@@ -18,6 +18,7 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/water.h"
+#include "mce/kit/aurora.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -278,6 +279,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<GroundMist>();  // M-GROUNDMIST 13a: read by Kit3DExtract (13b); no system
     world.register_components<Moon>();        // M-NIGHTSKY 14a: read by Kit3DExtract (14b, 14e); no system
     world.register_components<Water>();       // M-WATER 15a: read by Kit3DExtract (15b) and the water helpers; no system
+    world.register_components<Aurora>();      // M-AURORA 16a: read by Kit3DExtract (16b) and the aurora helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db
