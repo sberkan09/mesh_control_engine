@@ -101,7 +101,19 @@ TEST_CASE("water: the wave set comes from fixed tables") {
         CHECK(v.omega == doctest::Approx(water_phase_speed(v.k)).epsilon(0.5 * base / water_phase_speed(v.k)));
     }
     const WaterWaveSet again = water_wave_set(w);  // no rand, no state: the same set every time
-    CHECK(std::memcmp(&s, &again, sizeof(WaterWaveSet)) == 0);
+    CHECK(same_bits(s.level_y, again.level_y));
+    CHECK(s.count == again.count);
+    for (u32 i = 0; i < s.count; ++i) {
+        const WaterWave& a = s.wave[i];
+        const WaterWave& b = again.wave[i];
+        CHECK(same_bits(a.dir.x, b.dir.x));
+        CHECK(same_bits(a.dir.y, b.dir.y));
+        CHECK(same_bits(a.k, b.k));
+        CHECK(same_bits(a.amplitude, b.amplitude));
+        CHECK(same_bits(a.steepness, b.steepness));
+        CHECK(same_bits(a.omega, b.omega));
+        CHECK(same_bits(a.phase_seed, b.phase_seed));
+    }
     Water many = w;
     many.wave_count = 8;
     CHECK(water_wave_set(many).count == 8);
