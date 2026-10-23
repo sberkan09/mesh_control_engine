@@ -18,5 +18,8 @@ ones near it. The scared list now holds every runner with its last position. Tes
 **Step 4 (scenario).** `test_mcp_openworld` fires the player's gun in the `09_openworld` plaza and reads `Pedestrian3D.mode` through `inspect`: without shots no walker flees,
 with shots 17 of 61 do (measured 2026-10-22; the test needs at least 1), so the whole stack (crowd, weapon, event, mode) is covered in the real city.
 
+**Step 5.** A fleeing pedestrian skips the wait at crossings, so its mode says Flee, not Cross, while it is on the road; `traffic_drivers` now counts Flee like Cross, so cars give way to a
+runner (a runner on the pavement is not in any lane and changes nothing). Test: `test_traffic.cpp`.
+
 ## Open items
 - Tuning the radii and the hop decay against a dense street (needs a measured crowd, not a unit test).

@@ -196,6 +196,21 @@ TEST_CASE("traffic: a car stops for a pedestrian crossing in front, then drives 
     CHECK(s.pos(c).z < 100.0f);
 }
 
+TEST_CASE("traffic: a car also stops for a fleeing pedestrian on the road (M-PEDFLEE)") {
+    Scene s(kStreet);
+    const Entity c = s.car(1.75f, 185.0f);
+    Pedestrian3D p;
+    p.mode = PedestrianMode::Flee;
+    const Entity runner = s.w.spawn_with(pose({1.75f, 0.0f, 120.0f}), p);
+    s.run(60 * 12);
+    CHECK(s.drv(c).state == TrafficState::Yielding);
+    CHECK(std::fabs(s.speed(c)) < 0.5f);
+    CHECK(s.pos(c).z > 122.0f);  // short of the runner
+    s.w.try_get_mut<Pedestrian3D>(runner)->mode = PedestrianMode::Walk;
+    s.run(60 * 10);
+    CHECK(s.pos(c).z < 100.0f);
+}
+
 TEST_CASE("traffic: a spawner keeps cars around the focus and removes the far ones") {
     Scene s(kCross);
     TrafficSpawnHook hook;
