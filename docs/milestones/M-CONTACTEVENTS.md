@@ -79,6 +79,11 @@ by the physics module in `FixedUpdate_Physics` and counted by `PhysicsEvents` / 
 5. **Optional polish:** `CharacterContactListener` in `move_character` (characters hit by bodies) and a capsule body for crowd pedestrians;
    only then can the vehicle_ram zone retire. Separate milestone if wanted.
 
+**Step 2 (done 2026-10-23).** `ContactCollector` in `World3D::Impl` (`OnContactAdded`), per-slot `contact_min_speed`, `finish_contacts` after `Update`
+(sort by pair, fastest manifold per pair, 6-tick throttle with the twice-as-fast exception, cap). Two deviations from the plan above: the throttle list is
+not folded into `hash_state` (it only filters the events, never the simulation), and the 500-box `test_budget` check is not added (the listener returns at
+once while no body has opted in). Tests: `test_contacts.cpp` (speed and normal, no opt-in, threshold, either body opting in, sorted and capped, two runs equal).
+
 ## Open items / risks
 
 - **Threading.** Jolt calls listeners from physics jobs, concurrently under a multi-threaded job system and under body locks. Today it is
