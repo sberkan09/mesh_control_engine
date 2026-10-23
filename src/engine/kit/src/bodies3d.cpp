@@ -302,6 +302,20 @@ void kit3d_writeback(Frame& f) {
     });
 }
 
+// FixedUpdate_Physics, after the write-back: the opt-in flags into the world (taking effect from the next
+// step), then the step's contacts as ContactBegin3D.
+void kit3d_contacts(Frame& f) {
+    Physics3D& phys = f.resource<Physics3D>();
+    constexpr f32 kDefaultContactSpeed = 2.0f;
+    f.query<const RigidBody3D>().each([&](Entity e, const RigidBody3D& b) {
+        const f32 min_speed = !b.contact_events ? -1.0f : (b.contact_min_speed > 0.0f ? b.contact_min_speed : kDefaultContactSpeed);
+        phys.world.set_contact_events(e, min_speed);
+    });
+    auto events = f.events();
+    for (const physics::ContactEvent3D& c : phys.world.contact_events())
+        events.push(ContactBegin3D{c.a, c.b, c.point, c.normal, c.approach_speed, c.impulse});
+}
+
 bool overlaps(const Trigger3D& tr, const math::vec3& center, const math::vec3& scale, const math::vec3& p, f32 r) {
     if (tr.shape == TriggerShape3D::Sphere) {
         const f32 rr = tr.radius * math::max(std::fabs(scale.x), math::max(std::fabs(scale.y), std::fabs(scale.z))) + r;
@@ -386,6 +400,7 @@ void install_bodies3d(World& world, asset::AssetSystem* assets) {
     on_origin_shift(world, &bodies3d_origin_shift);
     world.register_components<RigidBody3D, CharacterController3D, Trigger3D>();
     world.register_event<TriggerEnter3D>(Phase::FixedUpdate_Physics);
+    world.register_event<ContactBegin3D>(Phase::FixedUpdate_Physics);
     world.register_event<TriggerExit3D>(Phase::FixedUpdate_Physics);
     world.register_event<Landed3D>(Phase::FixedUpdate_Pre);
     world.set_hooks<RigidBody3D>(nullptr, &on_body_removed);
@@ -396,6 +411,7 @@ void install_bodies3d(World& world, asset::AssetSystem* assets) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_bodies", &kit3d_bodies);
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_writeback", &kit3d_writeback, "kit3d_physics");
     world.add_system(Phase::FixedUpdate_Physics, "kit3d_triggers", &kit3d_triggers, "kit3d_writeback");
+    world.add_system(Phase::FixedUpdate_Physics, "kit3d_contacts", &kit3d_contacts, "kit3d_writeback");
 }
 
 }  // namespace mce::kit

@@ -506,6 +506,14 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
   `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
 
+### Contact events (M-CONTACTEVENTS)
+
+A `RigidBody3D` with `contact_events = 1` raises `ContactBegin3D { a, b, point, normal, approach_speed, impulse }` (producer `FixedUpdate_Physics`, so read it in `FixedUpdate_Post`
+or in `FixedUpdate_Pre` of the next tick) when it closes on another body faster than `contact_min_speed` m/s (0 means 2). `a` sorts before `b`, `normal` points from `a` to `b`;
+one event per pair per step, the same pair is not reported again for 0.1 s unless it hits twice as fast. A `SfxTrigger` / `ParticleBurst` with `FireOn::ContactBegin` fires on it
+and `PhysicsEvents` counts `contact_begins` / `last_contact` / `contact_speed` (point and normal stay 2D). Only `RigidBody3D` entities opt in; characters, crowd pedestrians and ragdoll parts do not report.
+Record: `docs/milestones/M-CONTACTEVENTS.md`.
+
 ### Vehicle ram (M-VEHICLEHIT)
 
 `VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car
