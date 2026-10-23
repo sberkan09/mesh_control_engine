@@ -472,3 +472,21 @@ TEST_CASE("water: the helpers at fixed ticks are the same in one go and in two h
     REQUIRE(halves.size() == whole.size());
     for (usize i = 0; i < whole.size(); ++i) CHECK(whole[i] == halves[i]);
 }
+
+TEST_CASE("water_height_at and water_normal_at wrap the raw scene time and match the wave-set helpers") {
+    kit::Water w;
+    w.amplitude = 1.2f;
+    w.level_y = -3.0f;
+    w.wind_dir_deg = 25.0f;
+    for (const f64 t : {0.0, 1.37, 63.9, 64.0, 100.25, 64000.0 + 5.5, 1.0e6}) {
+        for (const math::vec2 p : {math::vec2{0.0f, 0.0f}, math::vec2{12.5f, -7.25f}, math::vec2{-300.0f, 41.0f}}) {
+            const f32 tw = kit::water_wrap_time(t);
+            CHECK(kit::water_height_at(w, p, t) == kit::water_height(w, p, tw));
+            const math::vec3 a = kit::water_normal_at(w, p, t);
+            const math::vec3 b = kit::water_normal(w, p, tw);
+            CHECK((a.x == b.x && a.y == b.y && a.z == b.z));
+            CHECK(kit::water_height_at(w, p, t, 25.0f) == kit::water_height_at(w, p, t));
+        }
+    }
+    CHECK(kit::water_height_at(w, math::vec2{3.0f, 4.0f}, 7.0, 25.0f) != kit::water_height_at(w, math::vec2{3.0f, 4.0f}, 7.0, 115.0f));
+}

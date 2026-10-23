@@ -370,6 +370,39 @@ declare weather: {
     -- non-number or a color that is not three numbers raises
     set_moon: (settings: { phase_offset: number?, cycle_days: number?, freeze_phase: number?, inclination: number?, light_intensity: number?, light_color: { number }?, light_shadows: number?, disk_size: number?, disk_intensity: number?, star_density: number?, star_brightness: number?, star_twinkle: number?, enabled: number? }) -> (),
 }
+
+declare water: {
+    -- Water (M-WATER), the first one in the scene; every function raises when there is none (set never adds one).
+    -- The getters use the set keys' names; height_at, normal_at and submerged are the drawn surface at the scene time
+    -- (tick * dt), with the WindDirection heading as the main direction when wind_follow > 0 and the scene has one;
+    -- read-only, and they read the authoring even when enabled is 0. submerged is true when y is below height_at.
+    level: () -> number,
+    half_extent: () -> number,
+    wave_count: () -> number,
+    amplitude: () -> number,
+    wavelength: () -> number,
+    steepness: () -> number,
+    wind_dir: () -> number,
+    wind_follow: () -> number,
+    speed_scale: () -> number,
+    shallow_color: () -> (number, number, number),
+    deep_color: () -> (number, number, number),
+    depth_scale: () -> number,
+    reflectivity: () -> number,
+    roughness: () -> number,
+    foam_amount: () -> number,
+    foam_width: () -> number,
+    enabled: () -> number,
+    height_at: (x: number, z: number) -> number,
+    normal_at: (x: number, z: number) -> (number, number, number),
+    submerged: (x: number, y: number, z: number) -> boolean,
+    -- every key optional, each value clamped to the field's range (level -1000..1000 m, half_extent 1..20000 m,
+    -- wave_count 1..8 rounded down, amplitude 0..10 m, wavelength 1..500 m, steepness 0..1, wind_dir 0..360 degrees,
+    -- wind_follow 0..1, speed_scale 0..4, shallow_color and deep_color three lanes 0..1, depth_scale 0.1..200 m,
+    -- reflectivity 0..1, roughness 0..1, foam_amount 0..1, foam_width 0.05..20 m; enabled: any non-zero number is 1);
+    -- an unknown key, a non-number or a colour that is not three numbers raises and nothing is written
+    set: (settings: { level: number?, half_extent: number?, wave_count: number?, amplitude: number?, wavelength: number?, steepness: number?, wind_dir: number?, wind_follow: number?, speed_scale: number?, shallow_color: { number }?, deep_color: { number }?, depth_scale: number?, reflectivity: number?, roughness: number?, foam_amount: number?, foam_width: number?, enabled: number? }) -> (),
+}
 )";
 
 const char* luau_type(const refl::FieldRecord& f) {

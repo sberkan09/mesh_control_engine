@@ -213,4 +213,22 @@ inline math::vec3 water_normal(const WaterWaveSet& s, math::vec2 xz, f32 t) {
 inline f32 water_height(const Water& w, math::vec2 xz, f32 t) { return water_height(water_wave_set(w), xz, t); }
 inline math::vec3 water_normal(const Water& w, math::vec2 xz, f32 t) { return water_normal(water_wave_set(w), xz, t); }
 
+// Gameplay queries (step 15d): the drawn surface at the world position `xz` at the scene time `scene_time` seconds,
+// wrapped to the period in f64 here, so a caller passes its raw clock. `wind_dir_deg` is the main direction the extract
+// uses (the WindDirection heading when wind_follow > 0, see Kit3DExtract); the overloads without it use the authored
+// `wind_dir_deg`. Pure: the same inputs give the same bits. (The scene time lives outside the World, so there is no
+// world-reading convenience here; the Luau binding feeds tick * dt.)
+inline f32 water_height_at(const Water& w, math::vec2 xz, f64 scene_time, f32 wind_dir_deg) {
+    return water_height(water_wave_set(w, wind_dir_deg), xz, water_wrap_time(scene_time));
+}
+inline math::vec3 water_normal_at(const Water& w, math::vec2 xz, f64 scene_time, f32 wind_dir_deg) {
+    return water_normal(water_wave_set(w, wind_dir_deg), xz, water_wrap_time(scene_time));
+}
+inline f32 water_height_at(const Water& w, math::vec2 xz, f64 scene_time) {
+    return water_height_at(w, xz, scene_time, w.wind_dir_deg);
+}
+inline math::vec3 water_normal_at(const Water& w, math::vec2 xz, f64 scene_time) {
+    return water_normal_at(w, xz, scene_time, w.wind_dir_deg);
+}
+
 }  // namespace mce::kit

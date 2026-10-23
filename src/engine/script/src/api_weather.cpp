@@ -195,6 +195,29 @@
 //                                         key, a non-number or a color that is not three numbers raises an error that
 //                                         names the call
 //
+// Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
+// ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
+// evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
+// with the main wave direction the extract uses: the WindDirection heading when wind_follow > 0 and the scene has one,
+// else wind_dir. They read the authoring even when `enabled` is 0. Authoring names follow the set keys.
+//
+//   water.level() / half_extent() / wave_count() / amplitude() / wavelength() / steepness() / wind_dir() /
+//   water.wind_follow() / speed_scale() / depth_scale() / reflectivity() / roughness() / foam_amount() /
+//   water.foam_width() / enabled() -> number    level_y, half_extent, wave_count, amplitude, wavelength, steepness,
+//                                               wind_dir_deg, wind_follow, speed_scale, depth_scale_m, reflectivity,
+//                                               roughness, foam_amount, foam_width_m, enabled
+//   water.shallow_color() / deep_color() -> r, g, b
+//   water.height_at(x, z) -> number             the surface height at that world position now
+//   water.normal_at(x, z) -> x, y, z            the unit surface normal there
+//   water.submerged(x, y, z) -> boolean         y < height_at(x, z)
+//   water.set{level=, half_extent=, wave_count=, amplitude=, wavelength=, steepness=, wind_dir=, wind_follow=,
+//             speed_scale=, shallow_color={r,g,b}, deep_color={r,g,b}, depth_scale=, reflectivity=, roughness=,
+//             foam_amount=, foam_width=, enabled=}
+//                                         a table, every key optional, each value clamped to the component's Range
+//                                         (wave_count rounded down; colour lanes 0..1; enabled: any non-zero number
+//                                         is 1); an unknown key, a non-number or a colour that is not three numbers
+//                                         raises an error that names the call and nothing is written
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -216,6 +239,7 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
+#include "mce/kit/water.h"
 #include "mce/kit/world_clock.h"
 
 namespace mce::script::detail {
@@ -549,7 +573,7 @@ int l_weather_set_snow(lua_State* L) {
 // Reads the settings table at index 1 into value[]/given[] (slot i is keys[i]); raises on a non-name key, an unknown
 // key or a non-number (NaN included) before anything is written. `list` is the key list for the messages.
 void read_settings(lua_State* L, const char* fn, const char* const* keys, int n, const char* list, f64* value,
-                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr) {
+                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr, int vec3b_slot = -1, f64* vec3b = nullptr) {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_pushnil(L);
     while (lua_next(L, 1) != 0) {
@@ -560,14 +584,15 @@ void read_settings(lua_State* L, const char* fn, const char* const* keys, int n,
             if (std::strcmp(key, keys[i]) == 0) slot = i;
         }
         if (slot < 0) luaL_error(L, "%s: unknown key '%s' (%s)", fn, key, list);
-        if (slot == vec3_slot && vec3) {  // a {r, g, b} table of three numbers
+        f64* const triple = slot == vec3_slot && vec3 ? vec3 : (slot == vec3b_slot && vec3b ? vec3b : nullptr);
+        if (triple) {  // a {r, g, b} table of three numbers
             if (lua_type(L, -1) != LUA_TTABLE) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
             for (int i = 0; i < 3; ++i) {
                 lua_rawgeti(L, -1, i + 1);
                 const f64 c = lua_type(L, -1) == LUA_TNUMBER ? lua_tonumber(L, -1) : std::nan("");
                 lua_pop(L, 1);
                 if (std::isnan(c)) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
-                vec3[i] = c;
+                triple[i] = c;
             }
             given[slot] = true;
             lua_pop(L, 1);
@@ -1051,6 +1076,172 @@ int l_weather_set_moon(lua_State* L) {
     return 0;
 }
 
+// ---- Water (M-WATER step 15d) ----
+
+kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
+
+#define MCE_WATER_GETTER(luaname, field)                                                    \
+    int l_water_##luaname(lua_State* L) {                                                     \
+        lua_pushnumber(L, static_cast<double>(check_water(L, "water." #luaname).field));       \
+        return 1;                                                                             \
+    }
+MCE_WATER_GETTER(level, level_y)
+MCE_WATER_GETTER(half_extent, half_extent)
+MCE_WATER_GETTER(wave_count, wave_count)
+MCE_WATER_GETTER(amplitude, amplitude)
+MCE_WATER_GETTER(wavelength, wavelength)
+MCE_WATER_GETTER(steepness, steepness)
+MCE_WATER_GETTER(wind_dir, wind_dir_deg)
+MCE_WATER_GETTER(wind_follow, wind_follow)
+MCE_WATER_GETTER(speed_scale, speed_scale)
+MCE_WATER_GETTER(depth_scale, depth_scale_m)
+MCE_WATER_GETTER(reflectivity, reflectivity)
+MCE_WATER_GETTER(roughness, roughness)
+MCE_WATER_GETTER(foam_amount, foam_amount)
+MCE_WATER_GETTER(foam_width, foam_width_m)
+MCE_WATER_GETTER(enabled, enabled)
+#undef MCE_WATER_GETTER
+
+int push_water_color(lua_State* L, const math::vec3& c) {
+    lua_pushnumber(L, static_cast<double>(c.x));
+    lua_pushnumber(L, static_cast<double>(c.y));
+    lua_pushnumber(L, static_cast<double>(c.z));
+    return 3;
+}
+int l_water_shallow_color(lua_State* L) { return push_water_color(L, check_water(L, "water.shallow_color").shallow_color); }
+int l_water_deep_color(lua_State* L) { return push_water_color(L, check_water(L, "water.deep_color").deep_color); }
+
+// The main wave direction the extract uses: the first WindDirection's heading when wind_follow > 0, else wind_dir_deg.
+f32 water_main_direction(World& w, const kit::Water& water) {
+    if (water.wind_follow > 0.0f) {
+        const refl::TypeRecord* type = refl::find_type(StringId("WindDirection"));
+        if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+            bool found = false;
+            f32 deg = 0.0f;
+            w.query<kit::WindDirection>().each([&](Entity, kit::WindDirection& c) {
+                if (found) return;
+                found = true;
+                deg = static_cast<f32>(static_cast<f64>(c.angle_q) / 65536.0);
+            });
+            if (found) return deg;
+        }
+    }
+    return water.wind_dir_deg;
+}
+
+// The scene time the queries use: the running tick times the fixed step, in seconds.
+f64 water_scene_time(lua_State* L) {
+    const Frame& f = frame_of(L);
+    return static_cast<f64>(f.tick) * static_cast<f64>(f.dt);
+}
+
+// A finite number argument, or a named error.
+f64 check_water_coord(lua_State* L, int idx, const char* fn, const char* what) {
+    const f64 v = luaL_checknumber(L, idx);
+    if (!std::isfinite(v)) luaL_error(L, "%s: %s is not a finite number", fn, what);
+    return v;
+}
+
+int l_water_height_at(lua_State* L) {
+    const f64 x = check_water_coord(L, 1, "water.height_at", "x");
+    const f64 z = check_water_coord(L, 2, "water.height_at", "z");
+    World& w = world_of(L);
+    const kit::Water& water = check_water(L, "water.height_at");
+    const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
+    lua_pushnumber(L, static_cast<double>(kit::water_height_at(water, p, water_scene_time(L), water_main_direction(w, water))));
+    return 1;
+}
+
+int l_water_normal_at(lua_State* L) {
+    const f64 x = check_water_coord(L, 1, "water.normal_at", "x");
+    const f64 z = check_water_coord(L, 2, "water.normal_at", "z");
+    World& w = world_of(L);
+    const kit::Water& water = check_water(L, "water.normal_at");
+    const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
+    return push_water_color(L, kit::water_normal_at(water, p, water_scene_time(L), water_main_direction(w, water)));
+}
+
+int l_water_submerged(lua_State* L) {
+    const f64 x = check_water_coord(L, 1, "water.submerged", "x");
+    const f64 y = check_water_coord(L, 2, "water.submerged", "y");
+    const f64 z = check_water_coord(L, 3, "water.submerged", "z");
+    World& w = world_of(L);
+    const kit::Water& water = check_water(L, "water.submerged");
+    const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
+    const f32 h = kit::water_height_at(water, p, water_scene_time(L), water_main_direction(w, water));
+    lua_pushboolean(L, static_cast<f32>(y) < h ? 1 : 0);
+    return 1;
+}
+
+// water.set{...}: validated before anything is written.
+int l_water_set(lua_State* L) {
+    static const char* const kKeys[17] = {"level", "half_extent", "wave_count", "amplitude", "wavelength", "steepness",
+                                          "wind_dir", "wind_follow", "speed_scale", "shallow_color", "deep_color",
+                                          "depth_scale", "reflectivity", "roughness", "foam_amount", "foam_width",
+                                          "enabled"};
+    f64 value[17] = {};
+    bool given[17] = {};
+    f64 shallow[3] = {};
+    f64 deep[3] = {};
+    read_settings(L, "water.set", kKeys, 17,
+                  "level, half_extent, wave_count, amplitude, wavelength, steepness, wind_dir, wind_follow, "
+                  "speed_scale, shallow_color, deep_color, depth_scale, reflectivity, roughness, foam_amount, "
+                  "foam_width, enabled",
+                  value, given, 9, shallow, 10, deep);
+    kit::Water& m = check_water(L, "water.set");
+    if (given[0]) m.level_y = static_cast<f32>(clamp_range(value[0], -1000.0, 1000.0));
+    if (given[1]) m.half_extent = static_cast<f32>(clamp_range(value[1], 1.0, 20000.0));
+    if (given[2]) m.wave_count = static_cast<u8>(std::floor(clamp_range(value[2], 1.0, 8.0)));
+    if (given[3]) m.amplitude = static_cast<f32>(clamp_range(value[3], 0.0, 10.0));
+    if (given[4]) m.wavelength = static_cast<f32>(clamp_range(value[4], 1.0, 500.0));
+    if (given[5]) m.steepness = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) m.wind_dir_deg = static_cast<f32>(clamp_range(value[6], 0.0, 360.0));
+    if (given[7]) m.wind_follow = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) m.speed_scale = static_cast<f32>(clamp_range(value[8], 0.0, 4.0));
+    if (given[9]) {
+        m.shallow_color.x = static_cast<f32>(clamp_range(shallow[0], 0.0, 1.0));
+        m.shallow_color.y = static_cast<f32>(clamp_range(shallow[1], 0.0, 1.0));
+        m.shallow_color.z = static_cast<f32>(clamp_range(shallow[2], 0.0, 1.0));
+    }
+    if (given[10]) {
+        m.deep_color.x = static_cast<f32>(clamp_range(deep[0], 0.0, 1.0));
+        m.deep_color.y = static_cast<f32>(clamp_range(deep[1], 0.0, 1.0));
+        m.deep_color.z = static_cast<f32>(clamp_range(deep[2], 0.0, 1.0));
+    }
+    if (given[11]) m.depth_scale_m = static_cast<f32>(clamp_range(value[11], 0.1, 200.0));
+    if (given[12]) m.reflectivity = static_cast<f32>(clamp_range(value[12], 0.0, 1.0));
+    if (given[13]) m.roughness = static_cast<f32>(clamp_range(value[13], 0.0, 1.0));
+    if (given[14]) m.foam_amount = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    if (given[15]) m.foam_width_m = static_cast<f32>(clamp_range(value[15], 0.05, 20.0));
+    if (given[16]) m.enabled = value[16] != 0.0 ? 1 : 0;
+    return 0;
+}
+
+const luaL_Reg kWaterLib[] = {
+    {"level", l_water_level},
+    {"half_extent", l_water_half_extent},
+    {"wave_count", l_water_wave_count},
+    {"amplitude", l_water_amplitude},
+    {"wavelength", l_water_wavelength},
+    {"steepness", l_water_steepness},
+    {"wind_dir", l_water_wind_dir},
+    {"wind_follow", l_water_wind_follow},
+    {"speed_scale", l_water_speed_scale},
+    {"shallow_color", l_water_shallow_color},
+    {"deep_color", l_water_deep_color},
+    {"depth_scale", l_water_depth_scale},
+    {"reflectivity", l_water_reflectivity},
+    {"roughness", l_water_roughness},
+    {"foam_amount", l_water_foam_amount},
+    {"foam_width", l_water_foam_width},
+    {"enabled", l_water_enabled},
+    {"height_at", l_water_height_at},
+    {"normal_at", l_water_normal_at},
+    {"submerged", l_water_submerged},
+    {"set", l_water_set},
+    {nullptr, nullptr},
+};
+
 const luaL_Reg kWeatherLib[] = {
     {"kind", l_weather_kind},
     {"target", l_weather_target},
@@ -1180,6 +1371,9 @@ void register_weather_api(lua_State* L) {
     lua_newtable(L);
     luaL_register(L, nullptr, kWeatherLib);
     lua_setglobal(L, "weather");
+    lua_newtable(L);
+    luaL_register(L, nullptr, kWaterLib);
+    lua_setglobal(L, "water");
 }
 
 }  // namespace mce::script::detail
