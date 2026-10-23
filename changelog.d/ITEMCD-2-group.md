@@ -1,0 +1,1 @@
+- Kit (M-ITEMCD 2): a `cooldown_group` item stat makes every item of the group share one cooldown (`cdg:<group>`). Record: `docs/milestones/M-ITEMCD.md`.
