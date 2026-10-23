@@ -87,6 +87,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample |
 | `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |

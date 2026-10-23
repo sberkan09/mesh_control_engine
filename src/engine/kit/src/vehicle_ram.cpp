@@ -6,6 +6,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 
@@ -47,7 +48,7 @@ void kit_vehicle_ram(Frame& f) {
                 if (!seat->driver.is_null() && w.alive(seat->driver)) instigator = seat->driver;
             const f32 amount = (speed - ram.min_speed + 1.0f) * ram.damage_per_ms;
             f.query<const Health3D, const LocalTransform>().each([&](Entity e, const Health3D& hp, const LocalTransform& ht) {
-                if (e == car || e == instigator || hp.dead) return;
+                if (e == car || e == instigator || hp.dead || w.try_get<ImpactDamage3D>(e)) return;  // crash damage owns those
                 if (hp.hits > 0 && hp.last_attacker == instigator && hp.since_hit < kRehitSeconds) return;
                 const math::vec3 d = ht.position - lt.position;
                 const f32 along = d.x * fwd.x + d.z * fwd.z;

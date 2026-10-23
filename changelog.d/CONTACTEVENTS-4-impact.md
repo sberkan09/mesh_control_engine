@@ -1,0 +1,1 @@
+- Kit (M-CONTACTEVENTS 4): `ImpactDamage3D` turns `ContactBegin3D` into `Health3D` damage (crash damage); `kit_vehicle_ram` skips such bodies. Record: `docs/milestones/M-CONTACTEVENTS.md`.

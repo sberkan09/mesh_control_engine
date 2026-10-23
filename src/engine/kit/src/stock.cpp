@@ -36,6 +36,7 @@
 #include "mce/kit/world_clock.h"
 #include "mce/kit/wanted3d.h"
 #include "mce/kit/vehicle_ram.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/particles.h"
 #include "mce/kit/presence.h"
@@ -154,6 +155,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_map_markers(world, assets);
     install_wanted3d(world);
     install_vehicle_ram(world, assets);
+    install_impact_damage(world, assets);
     install_sensors3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
