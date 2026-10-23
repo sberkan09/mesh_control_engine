@@ -870,6 +870,26 @@ fixed tables, all waves repeat together after 64 s so the time wraps seamlessly,
 never folds over, and a zero `amplitude` gives exactly the level and an up normal. Nothing is stored between ticks and
 the weather, clock and wind are never written.
 
+## 9.19l Drawing the water (M-WATER)
+
+The renderer draws the plane of 9.19k in the main pass, after the opaque geometry and before the sky and the
+transparent draws, as a flat square that follows the camera (normals only: the surface never moves up and down, so its
+silhouette stays flat and close to the horizon it shows no parallax). The waves shade it with the same Gerstner sum
+`water_normal` returns; each wave fades to flat where it is under a few pixels long, so the far sea is smooth and the sun
+path widens instead of sparkling. It reflects the sky through the sky's own code: the gradient or sky texture, the
+clouds, the moon and the stars, and the horizon haze, more toward the horizon (fresnel), blurred by `roughness` and
+scaled by `reflectivity`; the sun (or, at night, the moon holding the light) adds a glint. Geometry is not reflected.
+The body runs from `shallow_color` to `deep_color` over `depth_scale_m` metres of water between the surface and the
+ground seen through it, and `foam_amount` lays foam within `foam_width_m` of that ground along the view (the shore line on
+a steep shore; on a gentle beach the band widens where the water is shallow). Both read the opaque depth of a half-size
+prepass, which the renderer also runs for SSAO; with the SSAO, SSR and contact-shadow resources all off in the renderer's
+creation settings the water has no depth to read: it takes the deep tint (lighter near the camera) and draws no foam. The
+Low tier draws a flat plane with the same deep tint and no foam (and so does a calm sea authored with `amplitude` and
+`foam_amount` both 0: the renderer cannot tell the two apart); `r.water 0` draws no plane. Fog and mist cover the water
+as they cover the ground. A scene without a plane renders exactly as before. Transparent things under the surface (glass,
+particles) are hidden by it, and with temporal anti-aliasing the moving waves can smear a little, since the plane is not
+in the motion pass.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

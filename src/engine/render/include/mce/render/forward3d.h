@@ -415,6 +415,9 @@ private:
     rhi::PipelineHandle skinned_two_sided_;
     rhi::PipelineHandle skinned_blend_;
     rhi::PipelineHandle sky_;
+    rhi::PipelineHandle water_;  // M-WATER 15c: made on the first frame with a water plane
+    bool water_failed_ = false;  // ... and not again after the driver refused it
+    bool water_depth_ = false;   // this frame's water reads the prepass's view depth (ao_gbuf_)
     rhi::PipelineHandle bloom_down_;
     rhi::PipelineHandle bloom_up_;       // additive
     rhi::PipelineHandle tonemap_;

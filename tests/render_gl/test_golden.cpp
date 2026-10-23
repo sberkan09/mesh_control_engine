@@ -692,6 +692,35 @@ TEST_CASE("golden: night_sky_crescent: a waxing crescent moon and the star field
     check_golden("night_sky_crescent", f);
 }
 
+// ---- M-WATER 15c: the water plane ----------------------------------------------------------------------------------
+
+// A calm sea (amplitude 0: a flat mirror of the sky) around the box, the ground slab 0.6 m under it (the shallow
+// tint over it, the deep one past its edge), shore foam at the box (water_day_scene, water_camera).
+TEST_CASE("golden: water_calm: a flat sea mirroring the day sky around the box") {
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.0f)); });
+    check_golden("water_calm", f);
+}
+
+// The default waves (four Gerstner waves, 0.4 m, 24 m) at 12.5 s under the day sky, the sun's glint in front.
+TEST_CASE("golden: water_sea: the default waves under the day sky with the sun's glint") {
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.4f)); });
+    check_golden("water_sea", f);
+}
+
+// The night sky's full moon and stars (night_sky_carrier) over a gentle swell (0.05 m): the moon, its glint and the
+// stars in the water.
+TEST_CASE("golden: water_night: the moon and the stars in a gentle swell") {
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true,
+             [&](Scene3D& s) { water_night_scene(s, night_sky_carrier(0.5f, 0.6f), water_carrier(0.05f)); });
+    check_golden("water_night", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

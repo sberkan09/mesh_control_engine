@@ -719,4 +719,48 @@ inline void night_sky_scene(Scene3D& s, const NightSky& night) {
     s.set_night_sky(night);
 }
 
+// ---- M-WATER 15c: the water plane --------------------------------------------------------------------------------
+
+// The water scene: the fixture's box and ground under a sea at `level_y` 0.6 (the ground slab's top 0.6 m under water,
+// the box standing 0.4 m out of it: a steep shore for the foam; past the slab's 6 m edge nothing is behind the water,
+// the open sea), seen from a low camera (water_camera: 2.5 m up, looking 8 degrees down, so the sea runs to the
+// horizon in the upper third of the frame).
+inline void water_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 1.5f, 0.0f};
+    f.pitch_deg = 8.0f;
+}
+
+inline WaterSurface water_carrier(f32 amplitude, f32 time = 12.5f) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = 0.6f;
+    w.amplitude = amplitude;
+    w.time = time;
+    return w;
+}
+
+// The day sea: the default gradient sky, the sun 20 degrees up in front of the camera and to its left (its disk out
+// of the frame, its glint on the water).
+inline void water_day_scene(Scene3D& s, const WaterSurface& w) {
+    DirectionalLight sun;
+    sun.direction = {0.25f, -0.35f, 0.9f};
+    s.set_light(sun);
+    s.set_exposure(0.7f);
+    s.set_water(w);
+}
+
+// The night sea: night_sky_scene's sky, moon and stars, with the frame's light handed to the moon (as the kit's moon
+// does at night: M-NIGHTSKY 14b), so the moon's glint lies on the water under its reflection.
+inline void water_night_scene(Scene3D& s, const NightSky& night, const WaterSurface& w) {
+    night_sky_scene(s, night);
+    DirectionalLight moon;
+    moon.direction = {-kNightMoonDir.x, -kNightMoonDir.y, -kNightMoonDir.z};
+    moon.color = {0.55f, 0.65f, 1.0f};
+    moon.intensity = 0.15f;
+    moon.ambient_sky = {0.01f, 0.012f, 0.02f};
+    moon.ambient_ground = {0.005f, 0.005f, 0.005f};
+    s.set_light(moon);
+    s.set_water(w);
+}
+
 }  // namespace mce::render_test

@@ -100,22 +100,38 @@ struct Forward3DPassU {
     vec4 night2;      // x star density (0 = no stars), y star brightness, z twinkle, w star time mod kStarPeriod (s)
     vec4 moon;        // xyz the unit direction toward the moon, w cos(2 pi phase) (the sun-moon elongation)
     vec4 moon2;       // rgb the moon's tint, w sin(2 pi phase)
+    vec4 water;       // M-WATER 15c: x level (local y), y wave count (0 = flat), z steepness, w half extent (m)
+    vec4 water2;      // rgb the shallow tint, w depth scale (m)
+    vec4 water3;      // rgb the deep tint, w reflectivity
+    vec4 water4;      // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound
+    vec4 water5;      // xy the detail ripples' phases (rad), z detail slope (0 = none), w 0
+    vec4 wave[8];     // per Gerstner wave: xy the wave vector on xz (rad/m), z amplitude (m), w phase (rad)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
-static_assert(offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
-                  offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
-                  offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
-                  offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16 &&
-                  offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
-                  offsetof(Forward3DPassU, cloud) == offsetof(Forward3DPassU, snow2) + 16 &&
-                  offsetof(Forward3DPassU, cloud2) == offsetof(Forward3DPassU, cloud) + 16 &&
-                  offsetof(Forward3DPassU, night) == offsetof(Forward3DPassU, cloud2) + 16 &&
-                  offsetof(Forward3DPassU, night2) == offsetof(Forward3DPassU, night) + 16 &&
-                  offsetof(Forward3DPassU, moon) == offsetof(Forward3DPassU, night2) + 16 &&
-                  offsetof(Forward3DPassU, moon2) == offsetof(Forward3DPassU, moon) + 16 &&
-                  sizeof(Forward3DPassU) == offsetof(Forward3DPassU, moon2) + 16,
-              "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
-              "p_moon2 follow p_sky_rot as in MCE_GLSL_PASS_U");
+static_assert(
+    offsetof(Forward3DPassU, wet) == offsetof(Forward3DPassU, sky_rot) + 16 &&
+        offsetof(Forward3DPassU, wet2) == offsetof(Forward3DPassU, wet) + 16 &&
+        offsetof(Forward3DPassU, snow) == offsetof(Forward3DPassU, wet2) + 16 &&
+        offsetof(Forward3DPassU, ripple) == offsetof(Forward3DPassU, snow) + 16 &&
+        offsetof(Forward3DPassU, snow2) == offsetof(Forward3DPassU, ripple) + 16 &&
+        offsetof(Forward3DPassU, cloud) == offsetof(Forward3DPassU, snow2) + 16 &&
+        offsetof(Forward3DPassU, cloud2) == offsetof(Forward3DPassU, cloud) + 16 &&
+        offsetof(Forward3DPassU, night) == offsetof(Forward3DPassU, cloud2) + 16 &&
+        offsetof(Forward3DPassU, night2) == offsetof(Forward3DPassU, night) + 16 &&
+        offsetof(Forward3DPassU, moon) == offsetof(Forward3DPassU, night2) + 16 &&
+        offsetof(Forward3DPassU, moon2) == offsetof(Forward3DPassU, moon) + 16 &&
+        offsetof(Forward3DPassU, water) == offsetof(Forward3DPassU, moon2) + 16 &&
+        offsetof(Forward3DPassU, water2) == offsetof(Forward3DPassU, water) + 16 &&
+        offsetof(Forward3DPassU, water3) == offsetof(Forward3DPassU, water2) + 16 &&
+        offsetof(Forward3DPassU, water4) == offsetof(Forward3DPassU, water3) + 16 &&
+        offsetof(Forward3DPassU, water5) == offsetof(Forward3DPassU, water4) + 16 &&
+        offsetof(Forward3DPassU, wave) == offsetof(Forward3DPassU, water5) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, wave) + 8 * 16,
+    "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
+    "p_moon2 / p_water .. p_water5 / p_wave[8] follow p_sky_rot as in MCE_GLSL_PASS_U");
+// M-WATER 15c: the water members keep PassU at 1280 bytes, a whole number of the 256-byte uniform alignment, so the
+// ring does not grow per upload.
+static_assert(sizeof(Forward3DPassU) == 1280, "PassU: 80 vec4 (the water members filled the last 256-byte slot)");
 
 namespace {
 
@@ -446,6 +462,88 @@ void night_sky_params(const NightSky& n, PassU& pu) {
     pu.moon = vec4(dir, f32(std::cos(elong)));
     pu.moon2 = vec4(detail::scaled(n.moon_color.x, 1.0f, 0.0f), detail::scaled(n.moon_color.y, 1.0f, 0.0f),
                     detail::scaled(n.moon_color.z, 1.0f, 0.0f), f32(std::sin(elong)));
+}
+
+// ---- the water plane (M-WATER 15c). The wave tables are kit::water_wave_set's (mce/kit/water.h; the renderer does not
+// include the kit): a change there goes here too, and test_render3d_water_gl's normal probes compare the drawn surface
+// with kit::water_normal, so the two cannot drift apart unnoticed.
+constexpr f64 kWaterPeriod = 64.0;  // kit::kWaterPeriodSeconds: every omega is a whole multiple of 2 pi / this
+constexpr u32 kWaterWaves = 8;
+constexpr f32 kWaterGravity = 9.81f;
+constexpr f32 kWaterDirDeg[kWaterWaves] = {0.0f, 17.0f, -23.0f, 41.0f, -52.0f, 66.0f, -78.0f, 90.0f};
+constexpr f32 kWaterLenRatio[kWaterWaves] = {1.0f, 0.62f, 0.41f, 0.27f, 0.19f, 0.13f, 0.09f, 0.06f};
+constexpr f32 kWaterAmpRatio[kWaterWaves] = {1.0f, 0.6f, 0.4f, 0.27f, 0.18f, 0.12f, 0.08f, 0.05f};
+constexpr f32 kWaterPhaseSeed[kWaterWaves] = {0.0f, 1.3f, 2.7f, 4.1f, 5.2f, 0.9f, 3.6f, 5.9f};
+// The two detail ripples (kWaterFS kWaterDetailK: the same directions and wavelengths): a unit direction on xz, the
+// wavelength (m) and the whole cycles per kWaterPeriod at speed 1. Their slope is kWaterDetailSlope at an amplitude of
+// 0.2 m and above, less below, none on a flat plane.
+struct WaterDetail {
+    f32 x, z, wavelength;
+    f64 cycles;
+};
+constexpr WaterDetail kWaterDetail[2] = {{0.8f, 0.6f, 1.7f, 61.0}, {-0.6f, 0.8f, 1.1f, 77.0}};
+constexpr f32 kWaterDetailSlope = 0.03f;
+
+// x mod 2 pi in [0, 2 pi), in f64.
+f32 wrap_tau(f64 x) { return f32(x - kTau64 * std::floor(x / kTau64)); }
+
+// Whether the frame draws the plane: `enabled` and a finite level (apply_quality's r.water 0 clears `enabled`).
+bool water_on(const WaterSurface& w) { return w.enabled && std::isfinite(w.level_y); }
+constexpr u32 kWaterGrid = 16;  // kWaterVS's cells per side: the draw is 6 * kWaterGrid^2 vertices
+
+// The main pass's water members. Clamped again (apply_quality's clamps: a caller may skip it). The wave set is
+// kit::water_wave_set's, evaluated here in the same f32 steps: wave i travels along the main direction (the
+// carrier's unit wind_dir, as an angle) turned by kWaterDirDeg[i], k = 2 pi / (wavelength * kWaterLenRatio[i]),
+// A = amplitude * kWaterAmpRatio[i], omega = speed * sqrt(g k) rounded to a whole multiple of 2 pi / kWaterPeriod (at
+// least one; 0 at speed 0). The shader gets K = k * dir and one phase per wave, seed + K . origin - omega * t, summed
+// in f64 and wrapped to 2 pi, so neither the floating origin nor the clock ever reaches the GPU as a large float and
+// a rebase leaves the pattern where it is; the shader works in the pass's local coordinates. The steepness goes as
+// authored: the shader derives Q = min(1, steepness / (count k A)) per wave as the kit does. An amplitude of 0 (the
+// Low tier, or calm water) uploads no waves (count 0): a flat mirror. `depth_read`: the opaque depth is bound at
+// bank 6 (p_water4.w).
+void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, PassU& pu) {
+    using detail::ranged;
+    const f32 level = ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
+    const u32 count = static_cast<u32>(ranged(static_cast<f32>(w.wave_count), 1.0f, 8.0f, 4.0f));
+    const f32 amp = ranged(w.amplitude, 0.0f, 10.0f, 0.0f);
+    const f32 len = ranged(w.wavelength, 1.0f, 500.0f, 24.0f);
+    const f32 speed = ranged(w.speed_scale, 0.0f, 4.0f, 1.0f);
+    const vec2 wind = unit_wind_dir(w.wind_dir);
+    const f64 t0 = std::isfinite(w.time) ? f64(w.time) : 0.0;
+    const f64 t = t0 - kWaterPeriod * std::floor(t0 / kWaterPeriod);
+    const bool waves = amp > 0.0f;
+    pu.water = vec4(f32(f64(level) - origin[1]), waves ? f32(count) : 0.0f, unit01(w.steepness),
+                    ranged(w.half_extent, 1.0f, 20000.0f, 500.0f));
+    pu.water2 = vec4(unit01(w.shallow_color.x), unit01(w.shallow_color.y), unit01(w.shallow_color.z),
+                     ranged(w.depth_scale_m, 0.1f, 200.0f, 8.0f));
+    pu.water3 = vec4(unit01(w.deep_color.x), unit01(w.deep_color.y), unit01(w.deep_color.z),
+                     ranged(w.reflectivity, 0.0f, 1.0f, 1.0f));
+    pu.water4 = vec4(ranged(w.roughness, 0.0f, 1.0f, 0.08f), unit01(w.foam_amount),
+                     ranged(w.foam_width_m, 0.05f, 20.0f, 1.5f), depth_read ? 1.0f : 0.0f);
+    if (!waves) return;
+    const f64 base = kTau64 / kWaterPeriod;
+    const f32 main_deg = math::degrees(std::atan2(wind.y, wind.x));
+    for (u32 i = 0; i < count; ++i) {
+        const f32 a = math::radians(main_deg + kWaterDirDeg[i]);
+        const f32 dx = std::cos(a), dz = std::sin(a);
+        const f32 k = static_cast<f32>(kTau64) / (len * kWaterLenRatio[i]);
+        const f64 omega = f64(speed) * f64(std::sqrt(kWaterGravity * k));
+        const f64 mult = omega > 0.0 ? std::max(1.0, std::round(omega / base)) : 0.0;
+        // omega * t mod 2 pi = 2 pi * frac(mult * t / period): exact for the whole multiple, in f64
+        const f64 turns = mult * t / kWaterPeriod;
+        const f64 phase = f64(kWaterPhaseSeed[i]) + f64(k) * (f64(dx) * origin[0] + f64(dz) * origin[2]) -
+                          kTau64 * (turns - std::floor(turns));
+        pu.wave[i] = vec4(k * dx, k * dz, amp * kWaterAmpRatio[i], wrap_tau(phase));
+    }
+    f32 ph[2];
+    for (u32 j = 0; j < 2; ++j) {
+        const WaterDetail& d = kWaterDetail[j];
+        const f32 k = static_cast<f32>(kTau64) / d.wavelength;
+        const f64 cycles = speed > 0.0f ? std::max(1.0, std::round(f64(speed) * d.cycles)) : 0.0;
+        const f64 turns = cycles * t / kWaterPeriod;
+        ph[j] = wrap_tau(f64(k) * (f64(d.x) * origin[0] + f64(d.z) * origin[2]) - kTau64 * (turns - std::floor(turns)));
+    }
+    pu.water5 = vec4(ph[0], ph[1], kWaterDetailSlope * min(amp / 0.2f, 1.0f), 0.0f);
 }
 
 // IEEE half from a finite float, round to nearest (the atmosphere's RGBA16F upload).
@@ -790,8 +888,8 @@ ResultV Forward3D::create_pipelines() {
         }
         if (!ok_all) {
             MCE_LOG_WARN("render3d: automatic instancing unavailable (its pipelines failed), drawing single draws");
-            for (rhi::PipelineHandle* p :
-                 {&mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_, &shadow_inst_, &velocity_inst_}) {
+            for (rhi::PipelineHandle* p : {&mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_, &shadow_inst_,
+                                           &velocity_inst_, &water_}) {
                 if (!p->is_null()) device_->destroy_pipeline(*p);
                 *p = {};
             }
@@ -959,6 +1057,7 @@ void Forward3D::shutdown() {
                                   &fx_[0], &fx_[1]})
         destroy(*device_, *t);
     atmo_key_ = 0;
+    water_failed_ = false;
     gi_size_ = {};
     gi_face_layers_ = gi_shadow_layer_ = gi_cursor_ = gi_filled_ = 0;
     gi_key_ = 0;
@@ -1937,6 +2036,8 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     ripple_params(scene.ripples(), scene.time(), pu);
     cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
     night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
+    if (apply_fog && water_on(scene.water()) && !water_.is_null())
+        water_params(scene.water(), origin_, water_depth_, pu);  // the water plane (M-WATER 15c): the main pass only
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -1977,6 +2078,34 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     depth.texture = depth_;
     depth.clear.depth = 1.0f;
     depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
+    // The water plane (M-WATER 15c): its pipeline is made on the first frame that has one (a scene without water
+    // never compiles it). Its depth tint and shore foam read the opaques' view depth from the half-size prepass (the
+    // one SSAO, SSR and contact shadows share; drawn here when none of them ran it this frame). The main depth
+    // target is a multisampled, depth-only attachment on both backends, so it cannot be sampled while the pass
+    // writes it; the prepass is what can. Not read for the Low tier's look (amplitude and foam both 0, the
+    // distance tint) or without the prepass pipelines (Forward3DDesc ssao, ssr and contact_shadows all off).
+    const WaterSurface& water = scene.water();
+    bool water_drawn = water_on(water);
+    if (water_drawn && water_.is_null() && !water_failed_) {
+        rhi::GraphicsPipelineDesc wp;
+        wp.vertex_shader = {shaders3d::kWaterVS, "water.vert"};
+        wp.fragment_shader = {shaders3d::kWaterFS, "water.frag"};
+        wp.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        wp.state.raster.cull = rhi::CullMode::None;  // seen from above or below
+        wp.debug_name = "water";
+        if (auto p = device_->create_pipeline(wp)) {
+            water_ = p.value();
+        } else {
+            water_failed_ = true;
+            MCE_LOG_WARN("render3d: the water shader failed, drawing scenes without their water plane");
+        }
+    }
+    water_drawn = water_drawn && !water_.is_null();
+    water_depth_ = false;
+    if (water_drawn && !ao_prepass_.is_null() && (water.amplitude > 0.0f || water.foam_amount > 0.0f)) {
+        record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR or contact shadows drew it already
+        water_depth_ = true;
+    }
     rhi::RenderPassDesc mp;
     mp.colors = Span<const rhi::PassAttachment>(&color, 1);
     mp.depth = depth;
@@ -1989,6 +2118,14 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
     draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
     draw_batches(cmd, scene, cache, false);
+    if (water_drawn) {  // after the opaques (it reads their depth and they occlude it), before the sky and the blends
+        cmd.bind_pipeline(water_);
+        ++stats_.pipeline_binds;
+        cmd.bind_texture(rhi::bank::kAlbedo, water_depth_ ? ao_gbuf_ : ao_off_, point_sampler_);
+        cmd.draw_non_indexed(6 * kWaterGrid * kWaterGrid);
+        cache = DrawCache{};  // bank 6 holds the depth now: the blended draws bind their maps again
+        cache.pipe = water_;
+    }
     if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
         cmd.bind_pipeline(sky_);
         cache.pipe = sky_;
