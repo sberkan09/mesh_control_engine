@@ -1,4 +1,4 @@
-// M-SELALL 1: select all and invert the selection.
+// M-SELALL 1: select all and invert the selection. M-SELMATCH: select by name.
 
 #include <doctest/doctest.h>
 
@@ -34,4 +34,20 @@ TEST_CASE("select_all and invert_selection") {
     s.selection().toggle(b);
     s.selection().toggle(c);
     CHECK(invert_selection(s).empty());  // all selected: none
+}
+
+TEST_CASE("select_matching returns the named entities in document order") {
+    EditorScene s;
+    const EntityId a = s.create_entity("Wall North");
+    s.create_entity("Player");
+    const EntityId c = s.create_entity("wall south");
+    CHECK(select_matching(s, "").empty());  // blank: nothing (the filter box shows everything, selecting would not)
+    CHECK(select_matching(s, "  ").empty());
+    CHECK(select_matching(s, "nothing").empty());
+
+    const Array<EntityId> walls = select_matching(s, "WALL");
+    REQUIRE(walls.size() == 2);
+    CHECK(walls[0] == a);
+    CHECK(walls[1] == c);
+    CHECK(select_matching(s, "wall south").size() == 1);
 }

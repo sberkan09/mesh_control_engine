@@ -1,0 +1,1 @@
+- Editor, M-SELMATCH: the Hierarchy filter box has a "Select N matches" button that selects every entity whose name matches.
