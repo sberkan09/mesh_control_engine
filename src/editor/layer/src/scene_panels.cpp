@@ -15,6 +15,7 @@
 #include "mce/editor/console_model.h"
 #include "mce/editor/editor_shell.h"
 #include "mce/editor/hierarchy_filter.h"
+#include "mce/editor/select_all.h"
 #include "mce/log.h"
 #include "scene_panels.h"
 
@@ -60,6 +61,17 @@ public:
         ImGui::SetNextItemWidth(-FLT_MIN);
         ImGui::InputTextWithHint("##hfilter", "Filter by name", query_, sizeof query_);
         filter_.rebuild(scene, query_);
+        if (filter_.active() && filter_.match_count() > 0) {
+            char label[48];
+            std::snprintf(label, sizeof label, "Select %zu match%s", filter_.match_count(),
+                          filter_.match_count() == 1 ? "" : "es");
+            if (ImGui::SmallButton(label)) {  // the hits become the selection (first one the anchor)
+                const Array<EntityId> hits = select_matching(scene, query_);
+                scene.selection().clear();
+                scene.selection().set(hits[0]);
+                for (usize i = 1; i < hits.size(); ++i) scene.selection().toggle(hits[i]);
+            }
+        }
         ImGui::Separator();
 
         if (ImGui::BeginChild("##entities")) {
