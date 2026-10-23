@@ -96,6 +96,7 @@ the player and the collision see exactly what you sculpted.
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |
 | Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D | copy, cut, paste, duplicate the selection |
 | Ctrl+G / Ctrl+Shift+G | group the selection under a new parent / dissolve the selected parents (their children move up one level); the entities stay where they are in the scene |
+| Edit > Align | with two or more entities selected: line them up on the left, middle or right (x) or bottom, middle or top (y) of the selection, or (three or more) space them evenly between the outermost two; one undo step, the other axis stays |
 | Del | delete the selection (with its subtree) |
 | F2 or double-click | rename (in the Hierarchy; also rename / move an asset in the Assets panel) |
 | F5 | play in editor / stop |

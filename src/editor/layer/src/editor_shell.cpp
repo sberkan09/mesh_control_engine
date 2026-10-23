@@ -9,6 +9,7 @@
 #include "imgui_renderer.h"
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/editor/align_entities.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/group_entities.h"
@@ -53,6 +54,16 @@ struct EditorShell::Impl {
 };
 
 namespace {
+
+// Edit > Align: lines the selection up on `axis` (`distribute`: spaces it evenly instead).
+void align_selection(EditorScene& scene, AlignAxis axis, AlignMode mode, bool distribute = false) {
+    Array<EntityId> ids;  // a copy: the edits below touch the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    if (distribute)
+        distribute_entities(scene, ids.span(), axis);
+    else
+        align_entities(scene, ids.span(), axis, mode);
+}
 
 // Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
 // dissolve and their children are selected.
@@ -1148,6 +1159,21 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
         if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
+        if (ImGui::BeginMenu("Align", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Left")) align_selection(scene(), AlignAxis::X, AlignMode::Min);
+            if (ImGui::MenuItem("Center horizontally")) align_selection(scene(), AlignAxis::X, AlignMode::Center);
+            if (ImGui::MenuItem("Right")) align_selection(scene(), AlignAxis::X, AlignMode::Max);
+            if (ImGui::MenuItem("Bottom")) align_selection(scene(), AlignAxis::Y, AlignMode::Min);
+            if (ImGui::MenuItem("Center vertically")) align_selection(scene(), AlignAxis::Y, AlignMode::Center);
+            if (ImGui::MenuItem("Top")) align_selection(scene(), AlignAxis::Y, AlignMode::Max);
+            ImGui::Separator();
+            const bool three = scene().selection().items().size() >= 3;
+            if (ImGui::MenuItem("Distribute horizontally", nullptr, false, three))
+                align_selection(scene(), AlignAxis::X, AlignMode::Min, true);
+            if (ImGui::MenuItem("Distribute vertically", nullptr, false, three))
+                align_selection(scene(), AlignAxis::Y, AlignMode::Min, true);
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("Select")) {
             if (ImGui::MenuItem("All", "Ctrl+A")) select_ids(scene(), select_all(scene()));
             if (ImGui::MenuItem("Invert", "Ctrl+I")) select_ids(scene(), invert_selection(scene()));
