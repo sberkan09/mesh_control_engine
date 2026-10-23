@@ -254,6 +254,7 @@ struct World3D::Impl {
         JPH::Ref<JPH::CharacterVirtual> character;  // characters
         JPH::ObjectLayer character_layer = 0;
         MoveResult3D last;
+        f32 contact_min_speed = -1.0f;          // < 0: no contact events (M-CONTACTEVENTS)
     };
 
     PhysicsConfig3D config;
@@ -635,6 +636,15 @@ void World3D::step(f32 dt) {
     w.system.Update(w.config.fixed_dt, 1, &w.temp, &w.jobs);
     w.check_joints();
 }
+
+bool World3D::set_contact_events(Entity e, f32 min_speed) {
+    Impl::Slot* s = impl_->find(e);
+    if (!s) return false;
+    s->contact_min_speed = min_speed;
+    return true;
+}
+
+Span<const ContactEvent3D> World3D::contact_events() const { return {}; }
 
 void World3D::set_linear_velocity(Entity e, vec3 v) {
     Impl& w = *impl_;
