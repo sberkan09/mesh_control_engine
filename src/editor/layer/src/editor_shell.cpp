@@ -13,6 +13,7 @@
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
+#include "mce/editor/select_related.h"
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
 #include "mce/log.h"
@@ -50,6 +51,14 @@ struct EditorShell::Impl {
 };
 
 namespace {
+
+// Replaces the selection with the entities `relation` names around it; nothing related leaves it alone.
+void select_around(EditorScene& scene, Relation relation) {
+    const Array<EntityId> ids = select_related(scene, scene.selection().items(), relation);
+    if (ids.empty()) return;
+    scene.selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene.selection().toggle(ids[i]);
+}
 
 MCE_CVAR(cv_autosave_interval, "editor.autosave_interval", 300.0f,
          "Seconds of unsaved changes before the editor autosaves (0 = only on focus loss)", CVarFlags::None);
@@ -527,6 +536,11 @@ void EditorShell::handle_shortcuts() {
         scene().redo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow)) selection_back();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow)) selection_forward();
+    // Alt+Up selects the parents, Alt+Down the children, Alt+Shift+Down everything below.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_UpArrow)) select_around(scene(), Relation::Parent);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_DownArrow)) select_around(scene(), Relation::Children);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiMod_Shift | ImGuiKey_DownArrow))
+        select_around(scene(), Relation::Descendants);
     // Selection sets: Ctrl+Shift+number stores the selection, Alt+number selects it again.
     for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
         const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
@@ -1100,6 +1114,13 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
         if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
+        if (ImGui::BeginMenu("Select", sel)) {
+            if (ImGui::MenuItem("Parent", "Alt+Up")) select_around(scene(), Relation::Parent);
+            if (ImGui::MenuItem("Children", "Alt+Down")) select_around(scene(), Relation::Children);
+            if (ImGui::MenuItem("All descendants", "Alt+Shift+Down")) select_around(scene(), Relation::Descendants);
+            if (ImGui::MenuItem("Siblings")) select_around(scene(), Relation::Siblings);
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("Selection sets")) {
             for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
                 FixedString<32> label;
