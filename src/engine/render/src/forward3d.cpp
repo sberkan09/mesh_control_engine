@@ -889,7 +889,7 @@ ResultV Forward3D::create_pipelines() {
         if (!ok_all) {
             MCE_LOG_WARN("render3d: automatic instancing unavailable (its pipelines failed), drawing single draws");
             for (rhi::PipelineHandle* p : {&mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_, &shadow_inst_,
-                                           &velocity_inst_, &water_}) {
+                                           &velocity_inst_}) {
                 if (!p->is_null()) device_->destroy_pipeline(*p);
                 *p = {};
             }
@@ -1048,7 +1048,7 @@ void Forward3D::shutdown() {
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
           &exposure_reduce_, &dof_pipe_, &motion_blur_pipe_, &mesh_cull_inst_, &mesh_two_sided_inst_, &ao_prepass_inst_,
-          &shadow_inst_, &velocity_inst_}) {
+          &shadow_inst_, &velocity_inst_, &water_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
     }
@@ -2706,8 +2706,10 @@ void Forward3D::reserve_instancing(const Scene3D& scene) {
     const u32 align = max(device_->caps().storage_buffer_alignment, 16u);
     const u32 lit = ring_bytes(copies * 2u * u32(sizeof(mat4)), align);
     const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
-    const bool prepass =
-        scene.ambient_occlusion().enabled || scene.reflections().enabled || scene.contact_shadows().enabled;
+    const WaterSurface& water = scene.water();  // the water's depth read runs the prepass too (record_main)
+    const bool prepass = scene.ambient_occlusion().enabled || scene.reflections().enabled ||
+                         scene.contact_shadows().enabled ||
+                         (water_on(water) && (water.amplitude > 0.0f || water.foam_amount > 0.0f));
     const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
                                    ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
                                    velocity_inst_.is_null() || !scene.post().needs_velocity() ? 0u : vel};
