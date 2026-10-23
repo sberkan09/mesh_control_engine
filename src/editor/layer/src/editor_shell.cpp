@@ -11,6 +11,7 @@
 #include "mce/cook/fs.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
+#include "mce/editor/group_entities.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
 #include "mce/editor/select_all.h"
@@ -52,6 +53,25 @@ struct EditorShell::Impl {
 };
 
 namespace {
+
+// Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
+// dissolve and their children are selected.
+void group_selection(EditorScene& scene) {
+    if (scene.selection().empty()) return;
+    Array<EntityId> ids;  // a copy: the edits below change the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const EntityId g = group_entities(scene, ids.span());
+    if (g != kNoEntity) scene.selection().set(g);
+}
+
+void ungroup_selection(EditorScene& scene) {
+    Array<EntityId> ids;
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const Array<EntityId> freed = ungroup_entities(scene, ids.span());
+    if (freed.empty()) return;
+    scene.selection().set(freed[0]);
+    for (usize i = 1; i < freed.size(); ++i) scene.selection().toggle(freed[i]);
+}
 
 // Replaces the selection with the entities `relation` names around it; nothing related leaves it alone.
 void select_around(EditorScene& scene, Relation relation) {
@@ -565,6 +585,8 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_G)) group_selection(scene());
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_G)) ungroup_selection(scene());
     // Camera bookmarks: Ctrl+1..9 stores the viewport's view, 1..9 flies back to it.
     if (viewport_.focused) {
         for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
@@ -1156,6 +1178,8 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
+        if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
         if (ImGui::MenuItem("Move tool", "W", view_.gizmo == GizmoMode::Move)) view_.gizmo = GizmoMode::Move;
         if (ImGui::MenuItem("Rotate tool", "E", view_.gizmo == GizmoMode::Rotate)) view_.gizmo = GizmoMode::Rotate;

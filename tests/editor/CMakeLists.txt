@@ -14,6 +14,7 @@ mce_add_test(test_editor UMBRELLA
         test_batch_rename.cpp
         test_select_related.cpp
         test_select_all.cpp
+        test_group_entities.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp

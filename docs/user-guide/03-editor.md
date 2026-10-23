@@ -95,6 +95,7 @@ the player and the collision see exactly what you sculpted.
 | Edit > Rename selection... | names every selected entity from a pattern in one undo step: `##` is a number (`Torch_##` gives Torch_01, Torch_02, ... in scene order, from the "First number" you set), `*` is the current name (`Old_*` keeps it); the box previews the first four results |
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |
 | Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D | copy, cut, paste, duplicate the selection |
+| Ctrl+G / Ctrl+Shift+G | group the selection under a new parent / dissolve the selected parents (their children move up one level); the entities stay where they are in the scene |
 | Del | delete the selection (with its subtree) |
 | F2 or double-click | rename (in the Hierarchy; also rename / move an asset in the Assets panel) |
 | F5 | play in editor / stop |
