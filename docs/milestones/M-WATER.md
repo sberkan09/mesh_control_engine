@@ -52,7 +52,7 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 15a | done | PR TBD | `Water` and the pure wave helpers in `water.h`; registered in `install_weather` (the weather install, next to `GroundMist` and `Moon`) |
-| 15b | planned | none | none |
+| 15b | done (seam half) | PR TBD | Seam half only; the kit feed (`Kit3DExtract`) is the second half and stays planned. `render::WaterSurface` POD (explicit zeroed `pad_[3]`, default `enabled` false, other defaults mirror `Water`), `Scene3D::set_water()` / `water()`, `QualitySettings::water` (Low false), cvar `r.water`, by-value `apply_quality(q, WaterSurface)` overload, `test_water_quality` in `tests/render`. Data only: no shader, no draw path, nothing reads the carrier, so no frame changes. `scene3d.h` include fan-out measured with `include_fanout.py`: 139 of 828 TUs (under the 150 warning; 136 of 822 at 14c). Interpretation notes: `r.water 0` turns `enabled` off (no plane); Low (`water` false) keeps the plane enabled but zeroes `amplitude` and `foam_amount` (flat, foamless); clamps: `level_y` -1000..1000 (NaN 0), `half_extent` 1..20000 (NaN 500), `wave_count` 1..8, `amplitude` 0..10 (NaN 0), `wavelength` 1..500 (NaN 24), `steepness` / `foam_amount` 0..1 (NaN 0), `reflectivity` 0..1 (NaN 1), `roughness` 0..1 (NaN 0.08), `speed_scale` 0..4 (NaN 1), colors 0..1 (NaN 0), `depth_scale_m` 0.1..200 (NaN 8), `foam_width_m` 0.05..20 (NaN 1.5), `wind_dir` normalized (NaN or zero to +x), non-finite `time` 0; new `detail::ranged` in `unit_clamp.h` |
 | 15c | planned | none | none |
 | 15d | planned | none | none |
 | 15e | planned | none | none |
