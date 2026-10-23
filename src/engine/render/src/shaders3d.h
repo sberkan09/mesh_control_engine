@@ -71,6 +71,12 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_night2;         // x star density (0 = no stars), y star brightness, z twinkle, w star time mod 60 s
     vec4 p_moon;           // xyz the unit direction toward the moon, w cos(2 pi phase)
     vec4 p_moon2;          // rgb the moon's tint, w sin(2 pi phase)
+    vec4 p_water;          // M-WATER 15c: x level (local y), y wave count (0 = flat), z steepness, w half extent (m)
+    vec4 p_water2;         // rgb the shallow tint, w depth scale (m)
+    vec4 p_water3;         // rgb the deep tint, w reflectivity
+    vec4 p_water4;         // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound (u_water_depth)
+    vec4 p_water5;         // xy the two detail ripples' phases (rad), z detail slope (0 = none), w 0
+    vec4 p_wave[8];        // per Gerstner wave: xy the wave vector k * dir on xz (rad/m), z amplitude (m), w phase (rad)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1543,9 +1549,11 @@ void main() {
 }
 )";
 
-constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
-layout(location = 0) in vec2 v_ndc;
-layout(location = 0) out vec4 o_color;
+// The sky's layers over sky_radiance(), shared by the sky pass (kSkyFS) and the water's reflection (kWaterFS, M-WATER
+// 15c): the cloud layer, the stars and the moon. Functions of a direction (and, for the night layer, the angular size
+// of a pixel along it), so the water reflects them through the same code rather than a copy.
+#define MCE_GLSL_SKY_LAYERS \
+    R"(
 // ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
 // ray meets a plane p_cloud.w meters above the camera (up-going rays only), camera-relative: the camera's xz and the
 // floating origin never enter, only the drift p_cloud2.xy (noise cells, wrapped on the CPU to the 64-cell period).
@@ -1672,10 +1680,10 @@ vec3 night_stars(vec3 d, float pix) {
 // lit fraction (1 - cos) / 2. The disk hides the stars behind it. The moon is cut at the horizon, the stars fade
 // into its haze; both are scaled by the night fade p_night.w.
 const vec3 kMoonArc = vec3(0.0, 0.5, 0.8660254);  // render::sun_direction_at's default arc axis (noon elevation 60)
-vec3 apply_night(vec3 c, vec3 d) {
+// pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray, apply_night; the water: the reflected
+// ray's screen derivative).
+vec3 apply_night_at(vec3 c, vec3 d, float pix) {
     if (d.y <= 0.0) return c;
-    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
-    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
     vec3 stars = p_night2.x > 0.0 ? night_stars(d, pix) * smoothstep(0.0, 0.25, d.y) : vec3(0.0);
     vec3 moon = vec3(0.0);
     float cover = 0.0;
@@ -1704,6 +1712,18 @@ vec3 apply_night(vec3 c, vec3 d) {
     }
     return c + (stars * (1.0 - cover) + moon) * p_night.w;
 }
+)"
+
+constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
+layout(location = 0) in vec2 v_ndc;
+layout(location = 0) out vec4 o_color;
+)" MCE_GLSL_SKY_LAYERS R"(
+vec3 apply_night(vec3 c, vec3 d) {
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return apply_night_at(c, d, pix);
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1723,6 +1743,173 @@ void main() {
     o_color = vec4(c, 1.0);
 }
 )";
+
+// ---- the water plane (M-WATER 15c), drawn by the main pass after the opaques and before the sky and the blended
+// draws, only while Scene3D::water() is on (p_water* and p_wave are zero otherwise and nothing reads them). A flat,
+// camera-following square of kWaterGrid x kWaterGrid cells at the level p_water.x (floating-origin local), p_water.w
+// meters in half size, its centre snapped to whole cells so the vertices never swim; depth-tested and depth-written.
+constexpr const char* kWaterVS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U R"(
+layout(location = 0) out vec3 v_world;
+out gl_PerVertex { vec4 gl_Position; };
+const int kWaterGrid = 16;  // Forward3D draws 6 * kWaterGrid^2 vertices
+void main() {
+    const ivec2 kCorner[6] = ivec2[6](ivec2(0, 0), ivec2(1, 0), ivec2(1, 1), ivec2(0, 0), ivec2(1, 1), ivec2(0, 1));
+    int q = gl_VertexID / 6;
+    ivec2 c = ivec2(q % kWaterGrid, q / kWaterGrid) + kCorner[gl_VertexID % 6];
+    float cell = 2.0 * p_water.w / float(kWaterGrid);
+    vec2 centre = floor(u_camera_pos.xz / cell + 0.5) * cell;
+    vec2 xz = centre + (vec2(c) - 0.5 * float(kWaterGrid)) * cell;
+    v_world = vec3(xz.x, p_water.x, xz.y);
+    gl_Position = u_view_proj * vec4(v_world, 1.0);
+}
+)";
+
+// The water's surface. Normals only (the plane stays flat):
+//   waves   p_water.y Gerstner waves (forward3d.cpp water_params expands the authoring with the kit's tables:
+//           kit::water_wave_set), each a wave vector K, amplitude A and phase (the floating origin and the wrapped
+//           clock folded in on the CPU in f64), Q = min(1, steepness / (count k A)) as the kit computes it; the
+//           horizontal displacement is undone by the kit's two fixed-point steps and the normal is taken at the
+//           source point, so it is kit::water_normal's. Each wave fades to flat where its wavelength covers fewer
+//           than 8 pixels (gone under 3): no sparkle toward the horizon, no aliasing of the short waves; the faded
+//           slope variance roughens the glint instead. Two fixed small ripples (kWaterDetailK, slope p_water5.z)
+//           add detail near the camera and fade the same way.
+//   sky     the reflected ray (kept above the horizon) through sky_radiance at the roughness' lod and the sky's own
+//           layers (MCE_GLSL_SKY_LAYERS: stars and moon, clouds) and its exp2 horizon haze, not a copy of them; the
+//           sun disk is replaced by the glint. Schlick fresnel, F0 0.02, scaled by the reflectivity.
+//   glint   GGX from the frame's directional light (the sun, or the moon while the kit hands it the light).
+//   body    the shallow-to-deep tint by the optical depth along the view ray to the opaque surface behind the water
+//           (u_water_depth: the half-size prepass's view depth, p_water4.w 1), else (and with nothing behind) deep,
+//           with a shallow hint fading out with distance; lit by the hemisphere ambient and the light.
+//   foam    within p_water4.z meters of the opaque surface behind (along the view ray: the shore line on a steep
+//           shore), stripes moving in and the wave crests break it up; needs the depth read.
+//   fog     last, as kMeshFS does (volumetric or exp2), so mist and fog hide the water with distance.
+constexpr const char* kWaterFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
+layout(location = 0) in vec3 v_world;
+layout(location = 0) out vec4 o_color;
+layout(binding = 6) uniform sampler2D u_water_depth;  // half size; a: the opaques' view depth (0 = nothing drawn)
+)" MCE_GLSL_SKY_LAYERS R"(
+// The detail ripples' wave vectors (rad/m on xz): forward3d.cpp kWaterDetail (directions and wavelengths) folds the
+// origin into their phases with these exact values, so a change here goes there too.
+const vec2 kWaterDetailK[2] = vec2[2](vec2(0.8, 0.6) * (6.2831853 / 1.7), vec2(-0.6, 0.8) * (6.2831853 / 1.1));
+vec3 water_sky(vec3 r, float pix, float lod) {
+    if (p_sky_zenith.w < 0.5) return p_fog.rgb;  // no sky: the frame's clear colour is behind everything
+    vec3 c = sky_radiance(r, lod);
+    vec3 sun = -p_light_dir.xyz;
+    if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night_at(c, r, pix);
+    if (p_cloud.x > 0.0) c = apply_clouds(c, r, sun, dot(r, sun));
+    if (p_vol.x <= 0.5 && p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, r.y));
+    return c;
+}
+// The view depth of the opaque surface behind view depth zw at screen uv: the half-size texel under the pixel, or
+// where that one holds a nearer object (its half-size edge), the nearest surface behind among the 2 x 2 texels
+// around; 0 when there is none.
+float water_floor_depth(vec2 uv, float zw) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    float z0 = texelFetch(u_water_depth, clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1), 0).a;
+    if (z0 > zw) return z0;
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float best = 0.0;
+    for (int k = 0; k < 4; ++k) {
+        ivec2 t = clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1);
+        float z = texelFetch(u_water_depth, t, 0).a;
+        if (z > zw && (best == 0.0 || z < best)) best = z;
+    }
+    return best;
+}
+void main() {
+    vec3 p = v_world;
+    float foot = max(length(dFdx(p)), length(dFdy(p)));  // meters per pixel on the plane
+    vec3 to_cam = u_camera_pos.xyz - p;
+    float dist = length(to_cam);
+    vec3 v = to_cam / max(dist, 1e-6);
+    int count = int(p_water.y);
+    float fade[8];
+    float q[8];
+    float lost = 0.0;  // slope variance of what the fades removed
+    for (int i = 0; i < count; ++i) {
+        float k = length(p_wave[i].xy);
+        float ka = k * p_wave[i].z * float(count);
+        q[i] = ka > p_water.z ? p_water.z / ka : 1.0;
+        fade[i] = smoothstep(3.0, 8.0, 6.2831853 / (k * max(foot, 1e-6)));
+        float s = k * p_wave[i].z * (1.0 - fade[i]);
+        lost += s * s;
+    }
+    vec2 u = p.xz;
+    for (int it = 0; it < 2; ++it) {
+        vec2 dsp = vec2(0.0);
+        for (int i = 0; i < count; ++i) {
+            vec2 K = p_wave[i].xy;
+            dsp += K * (q[i] * p_wave[i].z * fade[i] / length(K) * cos(dot(K, u) + p_wave[i].w));
+        }
+        u = p.xz - dsp;
+    }
+    vec3 nrm = vec3(0.0, 1.0, 0.0);
+    for (int i = 0; i < count; ++i) {
+        vec2 K = p_wave[i].xy;
+        float th = dot(K, u) + p_wave[i].w;
+        float a = p_wave[i].z * fade[i];
+        nrm.xz -= K * (a * cos(th));
+        nrm.y -= q[i] * length(K) * a * sin(th);
+    }
+    float fold = 1.0 - nrm.y;  // 0 flat .. the steepness at a fully folded crest
+    for (int j = 0; j < 2; ++j) {
+        vec2 K = kWaterDetailK[j];
+        float f = smoothstep(3.0, 8.0, 6.2831853 / (length(K) * max(foot, 1e-6)));
+        nrm.xz -= normalize(K) * (p_water5.z * f * cos(dot(K, p.xz) + p_water5[j]));
+        float s = p_water5.z * (1.0 - f);
+        lost += s * s;
+    }
+    nrm.y = max(nrm.y, 1e-4);
+    vec3 n = normalize(nrm);
+    vec3 r = reflect(-v, n);
+    r = normalize(vec3(r.x, max(r.y, 0.002), r.z));  // a ray tipped under the horizon reads the horizon
+    float pix = max(max(length(dFdx(r)), length(dFdy(r))), 1e-6);  // radians per pixel along r (the stars' footprint)
+    float NoV = clamp(dot(n, v), 1e-4, 1.0);
+    float F = (0.02 + 0.98 * pow(1.0 - NoV, 5.0)) * p_water3.w;
+    float rough = p_water4.x;
+    vec3 sky = water_sky(r, pix, rough * 8.0);
+    // the glint
+    vec3 l = -p_light_dir.xyz;
+    vec3 h = normalize(l + v);
+    float NoL = max(dot(n, l), 0.0), NoH = max(dot(n, h), 0.0), LoH = max(dot(l, h), 0.0);
+    float alpha = max(rough * rough, 0.02);
+    float a2 = alpha * alpha + lost;
+    float dd = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / (PI * dd * dd);
+    float Fh = (0.02 + 0.98 * pow(1.0 - LoH, 5.0)) * p_water3.w;
+    vec3 glint = p_light_color.rgb * (D * Fh * 0.25 / max(LoH * LoH, 0.1) * NoL * smoothstep(-0.02, 0.05, l.y));
+    // the body: the tint by the optical depth to the opaque surface behind
+    float zw = -(u_view * vec4(p, 1.0)).z;
+    float path = -1.0;  // meters along the view ray to the opaque surface behind; -1 = none (or not read)
+    if (p_water4.w > 0.5) {
+        vec4 cp = u_view_proj * vec4(p, 1.0);
+        float zo = water_floor_depth(cp.xy / cp.w * 0.5 + 0.5, zw);
+        if (zo > 0.0) path = dist * (zo / zw - 1.0);
+    }
+    float t = path >= 0.0 ? 1.0 - exp(-3.0 * path / p_water2.w) : 1.0 - 0.3 * exp(-dist / (10.0 * p_water2.w));
+    vec3 light = mix(p_amb_ground.rgb, p_amb_sky.rgb, 0.75) + p_light_color.rgb * (max(l.y, 0.0) / PI);
+    vec3 body = mix(p_water2.rgb, p_water3.rgb, t) * light;
+    vec3 color = body * (1.0 - F) + sky * F + glint;
+    // the shore foam
+    if (p_water4.y > 0.0 && path >= 0.0 && path < p_water4.z) {
+        float band = 1.0 - smoothstep(0.0, p_water4.z, path);  // 1 at the shore line, 0 at the band's edge
+        float crest = clamp(fold / max(p_water.z, 1e-3), 0.0, 1.0);
+        float stripe = 0.5 + 0.5 * sin(6.2831853 * path / max(0.35 * p_water4.z, 0.02) + p_water5.x);
+        float foam = p_water4.y * smoothstep(0.35, 0.75, band * (0.55 + 0.45 * stripe + 0.35 * crest));
+        color = mix(color, vec3(0.9) * light, foam);
+    }
+    if (p_vol.x > 0.5) {  // as kMeshFS
+        vec4 c = u_view_proj * vec4(p, 1.0);
+        vec4 f = vol_fog(c.xy / c.w * 0.5 + 0.5, zw);
+        color = color * f.a + f.rgb;
+    } else {
+        float fog = 1.0 - exp(-(p_fog.w * dist) * (p_fog.w * dist));
+        color = mix(color, p_fog.rgb, clamp(fog, 0.0, 1.0));
+    }
+    o_color = vec4(color, 1.0);
+}
+)";
+#undef MCE_GLSL_SKY_LAYERS
 
 // ---- post chain. PostU rides bank 1 for the post passes.
 // Auto exposure (M-VISUAL 8): Forward3D::exposure_buffer(), bank kExposure.
