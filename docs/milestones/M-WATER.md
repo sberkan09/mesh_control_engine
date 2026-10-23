@@ -51,7 +51,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 15a | planned | none | none |
+| 15a | done | PR TBD | `Water` and the pure wave helpers in `water.h`; registered in `install_weather` (the weather install, next to `GroundMist` and `Moon`) |
 | 15b | planned | none | none |
 | 15c | planned | none | none |
 | 15d | planned | none | none |

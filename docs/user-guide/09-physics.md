@@ -858,6 +858,18 @@ and, since its clock starts at 5:00 on day 0, the moon is a full one in the west
 (level 1.000 at tick 0, 0.469 at tick 450 with the rain damping it, 0.000 from tick 1500); the sample was not moved to
 a night hour so the mist keeps its dawn numbers, and the script logs `moon:` every 150 ticks.
 
+## 9.19k Water surface data (M-WATER)
+
+An optional `Water` entity (one per scene, the first in ECS order is read; it is registered with the weather) describes
+one horizontal water plane: the calm `level_y`, the `half_extent` of the camera-following square, `wave_count` (1 to 8)
+Gerstner waves of up to `amplitude` metres and `wavelength` metres, `steepness` (0 to 1), a main direction `wind_dir_deg`
+(0 is +x, counter-clockwise from above, like `WindDirection`) with `wind_follow`, `speed_scale`, the two tint colours,
+`reflectivity`, `roughness` and the shore foam. This step only stores the data and ships the pure helpers
+`water_height` and `water_normal` in `mce/kit/water.h`; nothing draws or reads the component yet. The wave set comes from
+fixed tables, all waves repeat together after 64 s so the time wraps seamlessly, `steepness` is shared out so the surface
+never folds over, and a zero `amplitude` gives exactly the level and an up normal. Nothing is stored between ticks and
+the weather, clock and wind are never written.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
