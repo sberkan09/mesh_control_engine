@@ -20,6 +20,7 @@
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/water.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -1055,6 +1056,44 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             night.night_fade = dark * clear * unfogged;
         }
         scene.set_night_sky(render::apply_quality(quality_, night));
+    }
+    {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
+        const Water* water = nullptr;
+        const WindDirection* water_wd = nullptr;
+        world.query<const Water&>().each([&](const Water& c) {
+            if (!water) water = &c;
+        });
+        if (water && water->enabled && std::isfinite(water->level_y)) {
+            world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                if (!water_wd) water_wd = &c;
+            });
+            render::WaterSurface surf;
+            surf.level_y = water->level_y;
+            surf.half_extent = water->half_extent;
+            surf.wave_count = static_cast<i32>(water->wave_count);
+            surf.amplitude = water->amplitude;
+            surf.wavelength = water->wavelength;
+            surf.steepness = water->steepness;
+            // main direction in degrees (0 = +x, counter-clockwise, as water_wave_set expects): the WindDirection heading
+            // when following, else the authored one
+            const f64 deg = water_wd && water->wind_follow > 0.0f ? static_cast<f64>(water_wd->angle_q) / 65536.0
+                                                                   : static_cast<f64>(water->wind_dir_deg);
+            const f64 rad = deg * (3.14159265358979323846 / 180.0);
+            surf.wind_dir = math::vec2{static_cast<f32>(std::cos(rad)), static_cast<f32>(std::sin(rad))};
+            // the value set_time() gets later in this extract (scene.time() would still be last frame's), wrapped in f64
+            const f32 frame_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
+            surf.time = water_wrap_time(static_cast<f64>(frame_time));
+            surf.speed_scale = water->speed_scale;
+            surf.shallow_color = water->shallow_color;
+            surf.deep_color = water->deep_color;
+            surf.depth_scale_m = water->depth_scale_m;
+            surf.reflectivity = water->reflectivity;
+            surf.roughness = water->roughness;
+            surf.foam_amount = water->foam_amount;
+            surf.foam_width_m = water->foam_width_m;
+            surf.enabled = true;
+            scene.set_water(render::apply_quality(quality_, surf));
+        }
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
     render::PostFx post;
