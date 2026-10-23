@@ -453,7 +453,8 @@ void traffic_drivers(Frame& f) {
     std::sort(occ.slots.begin(), occ.slots.end(), slot_less);
     Array<math::vec3> walkers;
     f.query<const Pedestrian3D, const LocalTransform>().each([&](Entity, const Pedestrian3D& p, const LocalTransform& lt) {
-        if (p.mode == PedestrianMode::Cross) walkers.push_back(lt.position);
+        // a fleeing pedestrian (M-PEDFLEE) runs over crossings without waiting, so its mode no longer says Cross: cars give way to it too
+        if (p.mode == PedestrianMode::Cross || p.mode == PedestrianMode::Flee) walkers.push_back(lt.position);
     });
     Drive drive{w, f.dt, cars, occ, walkers};
     for (u32 i = 0; i < cars.size(); ++i) {
