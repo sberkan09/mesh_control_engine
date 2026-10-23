@@ -432,6 +432,37 @@ struct NightSky {
     u8 pad_[3] = {};
 };
 
+// A water plane for the forward pass (M-WATER 15b; the kit extract drives it from the Water component, the quality
+// tiers gate it). One horizontal square of `half_extent` meters centred on the camera, at `level_y`. The wave set is
+// carried as authoring parameters (the shader and the kit re-derive the same tables): `wave_count` 1..8 Gerstner
+// waves, `amplitude` 0..10 m the largest wave's height (0 = a flat plane), `wavelength` 1..500 m the longest,
+// `steepness` 0..1, `wind_dir` the main travel direction on xz (unit; NaN / zero -> +x), `time` the wave clock in
+// seconds (the caller wraps it; non-finite -> 0), `speed_scale` 0..4. `shallow_color` / `deep_color` are linear
+// tints (0..1 per channel), `depth_scale_m` 0.1..200 the depth of a fully deep tint, `reflectivity` and `roughness`
+// 0..1, `foam_amount` 0..1 (0 = no foam), `foam_width_m` 0.05..20 the shore band. Default disabled: the frame is
+// the one without it. apply_quality turns `enabled` off for `r.water 0`; the Low tier keeps the plane flat and
+// foamless.
+struct WaterSurface {
+    f32 level_y = 0.0f;
+    f32 half_extent = 500.0f;
+    i32 wave_count = 4;
+    f32 amplitude = 0.4f;
+    f32 wavelength = 24.0f;
+    f32 steepness = 0.6f;
+    math::vec2 wind_dir{1.0f, 0.0f};
+    f32 time = 0.0f;
+    f32 speed_scale = 1.0f;
+    math::vec3 shallow_color{0.10f, 0.38f, 0.40f};
+    math::vec3 deep_color{0.01f, 0.08f, 0.15f};
+    f32 depth_scale_m = 8.0f;
+    f32 reflectivity = 1.0f;
+    f32 roughness = 0.08f;
+    f32 foam_amount = 0.5f;
+    f32 foam_width_m = 1.5f;
+    bool enabled = false;
+    u8 pad_[3] = {};
+};
+
 // A splat-layered terrain's look (M-TERRAIN 2): up to kMaxLayers materials blended by a weight map.
 // Forward3D draws an instance carrying one with the terrain shader: each layer's maps come from one
 // layer of the texture arrays below (TextureStore keys; ~0u = no layer has that map), tiled in the
@@ -748,6 +779,7 @@ public:
     void set_ripples(const Ripples& r) { ripples_ = r; }
     void set_clouds(const Clouds& c) { clouds_ = c; }
     void set_night_sky(const NightSky& n) { night_sky_ = n; }
+    void set_water(const WaterSurface& w) { water_ = w; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -816,6 +848,7 @@ public:
     const Ripples& ripples() const { return ripples_; }
     const Clouds& clouds() const { return clouds_; }
     const NightSky& night_sky() const { return night_sky_; }
+    const WaterSurface& water() const { return water_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -909,6 +942,7 @@ private:
     Ripples ripples_;
     Clouds clouds_;
     NightSky night_sky_;
+    WaterSurface water_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

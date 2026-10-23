@@ -26,6 +26,8 @@ MCE_CVAR(cv_clouds, "r.clouds", true,
          "Cloud layer in the sky from the weather (Clouds; off = the cloudless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_nightsky, "r.nightsky", true,
          "Moon and stars in the night sky (NightSky; off = the moonless, starless frame)", CVarFlags::Saved);
+MCE_CVAR(cv_water, "r.water", true,
+         "Water plane from the Water component (WaterSurface; off = the frame without a plane)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -49,6 +51,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.rain_ripples = false;
             q.clouds = false;
             q.night_sky = false;
+            q.water = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -172,6 +175,32 @@ NightSky apply_quality(const QualitySettings& q, const NightSky& sky) {
     out.star_twinkle = q.night_sky ? unit01(sky.star_twinkle) : 0.0f;
     out.star_time = std::isfinite(sky.star_time) ? sky.star_time : 0.0f;
     out.night_fade = unit01(sky.night_fade);
+    return out;
+}
+
+WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water) {
+    WaterSurface out = water;
+    const auto unit = [](f32 x, f32 nan_to) { return detail::ranged(x, 0.0f, 1.0f, nan_to); };
+    out.enabled = water.enabled && cv_water.get_bool();
+    out.level_y = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+    out.half_extent = detail::ranged(water.half_extent, 1.0f, 20000.0f, 500.0f);
+    const f32 count = detail::ranged(static_cast<f32>(water.wave_count), 1.0f, 8.0f, 4.0f);
+    out.wave_count = static_cast<i32>(count);
+    out.amplitude = q.water ? detail::ranged(water.amplitude, 0.0f, 10.0f, 0.0f) : 0.0f;
+    out.wavelength = detail::ranged(water.wavelength, 1.0f, 500.0f, 24.0f);
+    out.steepness = unit(water.steepness, 0.0f);
+    out.wind_dir = detail::unit_wind_dir(water.wind_dir);
+    out.time = std::isfinite(water.time) ? water.time : 0.0f;
+    out.speed_scale = detail::ranged(water.speed_scale, 0.0f, 4.0f, 1.0f);
+    out.shallow_color = math::vec3{unit(water.shallow_color.x, 0.0f), unit(water.shallow_color.y, 0.0f),
+                                   unit(water.shallow_color.z, 0.0f)};
+    out.deep_color = math::vec3{unit(water.deep_color.x, 0.0f), unit(water.deep_color.y, 0.0f),
+                                unit(water.deep_color.z, 0.0f)};
+    out.depth_scale_m = detail::ranged(water.depth_scale_m, 0.1f, 200.0f, 8.0f);
+    out.reflectivity = unit(water.reflectivity, 1.0f);
+    out.roughness = unit(water.roughness, 0.08f);
+    out.foam_amount = q.water ? unit(water.foam_amount, 0.0f) : 0.0f;
+    out.foam_width_m = detail::ranged(water.foam_width_m, 0.05f, 20.0f, 1.5f);
     return out;
 }
 

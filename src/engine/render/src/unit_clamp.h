@@ -1,6 +1,6 @@
 #pragma once
 // The clamps apply_quality (quality.cpp) and the pass upload (forward3d.cpp, which clamps again: a caller may skip
-// apply_quality) share for the weather looks (WetSurfaces, SnowCover, Ripples, Clouds, NightSky). Internal to mce_render: included
+// apply_quality) share for the weather looks (WetSurfaces, SnowCover, Ripples, Clouds, NightSky, WaterSurface). Internal to mce_render: included
 // by those two .cpp files only, never from a public header.
 
 #include <cmath>
@@ -34,6 +34,9 @@ inline math::vec3 unit_dir3(math::vec3 d) {
     const f32 len = std::sqrt(len2);
     return math::vec3{d.x / len, d.y / len, d.z / len};
 }
+
+// lo..hi, NaN -> `nan_to` (the water plane's scalars).
+inline f32 ranged(f32 x, f32 lo, f32 hi, f32 nan_to) { return x == x ? (x > lo ? (x < hi ? x : hi) : lo) : nan_to; }
 
 // A wind direction on xz as a unit vector; NaN/inf or length below 1e-6 -> +x (1, 0).
 inline math::vec2 unit_wind_dir(math::vec2 d) {

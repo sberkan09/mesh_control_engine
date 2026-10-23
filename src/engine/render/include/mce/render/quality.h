@@ -55,6 +55,9 @@ struct QualitySettings {
     // M-NIGHTSKY 14c: the night sky is honored (off: no moon, no stars). Low keeps the moon disk but drops the
     // stars and the twinkle.
     bool night_sky = true;
+    // M-WATER 15b: the water plane is honored (off: no plane). Low keeps a flat tinted plane with the sky
+    // reflection: no animated normals, no foam.
+    bool water = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -116,5 +119,12 @@ Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
 // (all NaN to 0, except star_brightness NaN to 1); a non-finite star_time becomes 0; `enabled` passes through.
 // Returns a copy for the same reason as the SnowCover overload.
 NightSky apply_quality(const QualitySettings& q, const NightSky& sky);
+// WaterSurface: `r.water 0` turns `enabled` off (no plane, the frame without it); the Low tier (water false) zeroes
+// amplitude and foam_amount (flat plane, no foam). Clamps: level_y -1000..1000 (NaN 0), half_extent 1..20000 (NaN
+// 500), wave_count 1..8, amplitude 0..10 (NaN 0), wavelength 1..500 (NaN 24), steepness / reflectivity / roughness /
+// foam_amount 0..1 (NaN 0, roughness NaN 0.08, reflectivity NaN 1), speed_scale 0..4 (NaN 1), colors 0..1 per
+// channel (NaN 0), depth_scale_m 0.1..200 (NaN 8), foam_width_m 0.05..20 (NaN 1.5); wind_dir is normalized (NaN /
+// zero -> +x) and a non-finite time becomes 0. Returns a copy for the same reason as the SnowCover overload.
+WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water);
 
 }  // namespace mce::render
