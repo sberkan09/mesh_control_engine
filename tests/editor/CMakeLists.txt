@@ -13,6 +13,7 @@ mce_add_test(test_editor UMBRELLA
         test_hierarchy_filter.cpp
         test_batch_rename.cpp
         test_select_related.cpp
+        test_select_all.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp
