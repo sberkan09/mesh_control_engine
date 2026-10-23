@@ -90,6 +90,7 @@ the player and the collision see exactly what you sculpted.
 | Ctrl+1..9 / 1..9 | camera bookmarks (Viewport focused): Ctrl+number stores the current view (the 2D camera and the 3D orbit camera together) in a slot, the number alone flies back to it; View > Camera bookmarks lists them; slots are kept per project |
 | Alt+Left / Alt+Right | step back and forward through the entities you selected, like a browser's history (Edit > Previous selection / Next selection); entities that have been deleted are skipped; the history is per open scene and not saved |
 | Ctrl+Shift+1..9 / Alt+1..9 | selection sets: Ctrl+Shift+number stores the entities you have selected in a numbered slot, Alt+number selects them again (entities deleted since are left out); Edit > Selection sets lists the slots; the sets belong to the open scene and are not saved |
+| Edit > Rename selection... | names every selected entity from a pattern in one undo step: `##` is a number (`Torch_##` gives Torch_01, Torch_02, ... in scene order, from the "First number" you set), `*` is the current name (`Old_*` keeps it); the box previews the first four results |
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |
 | Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+D | copy, cut, paste, duplicate the selection |
 | Del | delete the selection (with its subtree) |
