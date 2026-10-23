@@ -23,6 +23,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/hierarchy_filter.cpp
         src/batch_rename.cpp
         src/select_related.cpp
+        src/select_all.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp
