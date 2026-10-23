@@ -890,6 +890,18 @@ as they cover the ground. A scene without a plane renders exactly as before. Tra
 particles) are hidden by it, and with temporal anti-aliasing the moving waves can smear a little, since the plane is not
 in the motion pass.
 
+## 9.19m Water from Luau (M-WATER)
+
+Scripts read and tune the water of 9.19k through the `water` table (section 27.3). `water.height_at(x, z)`,
+`water.normal_at(x, z)` (three numbers) and `water.submerged(x, y, z)` evaluate the same wave sum the renderer draws, at
+the scene time `mce.tick() * mce.dt` and with the main direction the renderer uses (the `WindDirection` heading when
+`wind_follow` is above 0 and the scene has one, else `wind_dir`), so a float or a boat that follows `height_at` bobs on
+exactly what is on screen; the engine applies no buoyancy force, the script moves the object. `submerged` is true when `y`
+is below the surface there. `water.set{...}` and the getters (`water.level()`, `water.shallow_color()` and so on, named
+like the set keys) act on the first `Water`; every set key is optional and clamped to the component's range, an unknown
+key, a value that is not a number or a scene without the component raises an error that names the call, and nothing is
+written. The setter never adds the component. The queries work with `enabled` 0 too, and they pause with the scene time.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both
