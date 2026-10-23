@@ -61,7 +61,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 16a | planned | | |
+| 16a | done | | `Aurora` component in `mce/kit/aurora.h` with the six pure helpers, registered in `install_weather` after `Water`, explicit zero pad, padding test, three `engine_components.cpp` includes, `capabilities.md` row, guide 9.19n, `tests/kit/test_aurora.cpp`. The helpers wrap the time inside (like the water ones) and quantise `speed` to quarters so every rate is a whole number of cycles per 64 s; `aurora_curtain_intensity` is 0..1 and does not apply `strength` (that is `aurora_level`'s gain) but is exactly 0 when off, gated or at zero strength. |
 | 16b | planned | | |
 | 16c | planned | | |
 | 16d | planned | | |
