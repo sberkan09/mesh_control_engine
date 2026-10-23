@@ -218,6 +218,7 @@ private:
     void track_selection_history();
     void selection_back();
     void selection_forward();
+    void rename_selection(StringView pattern, u32 first);
     void save_selection_set(u32 slot);
     void recall_selection_set(u32 slot);
     void save_bookmark(u32 slot);
@@ -265,7 +266,17 @@ private:
     const char* focus_panel_ = nullptr;
     FixedString<256> perf_capture_request_;
     // Pending modal popups (opened on the next frame, inside the ImGui frame).
-    enum class Popup : u8 { None, OpenScene, SaveAs, ConfirmQuit, ConfirmNew, ConfirmOpen, Recover, QuickOpen };
+    enum class Popup : u8 {
+        None,
+        OpenScene,
+        SaveAs,
+        ConfirmQuit,
+        ConfirmNew,
+        ConfirmOpen,
+        Recover,
+        QuickOpen,
+        BatchRename
+    };
     Popup popup_ = Popup::None;
     bool popup_opened_ = false;
     char save_as_buf_[256] = {};

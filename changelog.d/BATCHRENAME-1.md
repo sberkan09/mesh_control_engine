@@ -1,0 +1,1 @@
+- Editor, M-BATCHRENAME: Edit > Rename selection... names every selected entity from a pattern (`##` is a number, `*` the old name) in one undo step.

@@ -9,6 +9,7 @@
 #include "imgui_renderer.h"
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
@@ -43,6 +44,9 @@ struct EditorShell::Impl {
     const EditorScene* sel_scene = nullptr;  // the scene `sel_history` and `sel_sets` belong to
     // Ctrl+Shift+1..9 / Alt+1..9 (M-SELSETS): numbered groups of selected entities.
     SelectionSets sel_sets;
+    // Edit > Rename Selection (M-BATCHRENAME): the pattern box and the first number.
+    char rename_pattern[64] = {};
+    i32 rename_start = 1;
 };
 
 namespace {
@@ -617,6 +621,25 @@ void EditorShell::selection_forward() {
     if (id != kNoEntity) scene().selection().set(id);
 }
 
+// Gives the selected entities names from `pattern`, numbered from `first` in document order; one undo step.
+void EditorShell::rename_selection(StringView pattern, u32 first) {
+    if (!scene_mode()) return;
+    EditorScene& s = scene();
+    Array<EntityId> ids;
+    for (const DocEntity& e : s.doc().entities())
+        if (s.selection().contains(e.id)) ids.push_back(e.id);
+    if (ids.empty()) return;
+    s.begin_edit("Rename selection");
+    u32 n = 0;
+    for (const EntityId id : ids) {
+        const DocEntity* e = s.doc().find(id);
+        if (!e) continue;
+        const FixedString<64> name = batch_rename_expand(pattern, e->name.view(), n++, first);
+        s.rename_entity(id, name.view());
+    }
+    s.end_edit();
+}
+
 void EditorShell::save_selection_set(u32 slot) {
     if (scene_mode()) impl_->sel_sets.save(slot, scene().selection().items());
 }
@@ -765,7 +788,8 @@ void EditorShell::draw_popups() {
                                            "Unsaved changes##new",
                                            "Unsaved changes##open",
                                            "Recover unsaved changes",
-                                           "Quick Open"};
+                                           "Quick Open",
+                                           "Rename Selection"};
     if (popup_ != Popup::None && !popup_opened_) {
         ImGui::OpenPopup(kIds[static_cast<int>(popup_)]);
         popup_opened_ = true;
@@ -920,6 +944,43 @@ void EditorShell::draw_popups() {
     }
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Rename Selection", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::IsWindowAppearing()) {
+            std::snprintf(impl_->rename_pattern, sizeof impl_->rename_pattern, "%s", "*_##");
+            impl_->rename_start = 1;
+            ImGui::SetKeyboardFocusHere();
+        }
+        ImGui::TextUnformatted("Pattern: ## is the number, * the current name");
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 16.0f);
+        const bool enter = ImGui::InputText("##pattern", impl_->rename_pattern, sizeof impl_->rename_pattern,
+                                            ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::InputInt("First number", &impl_->rename_start);
+        if (impl_->rename_start < 0) impl_->rename_start = 0;
+        const StringView pattern(impl_->rename_pattern);
+        const u32 first = static_cast<u32>(impl_->rename_start);
+        u32 n = 0;
+        for (const DocEntity& e : scene().doc().entities()) {
+            if (!scene().selection().contains(e.id)) continue;
+            if (n < 4)
+                ImGui::TextDisabled("%s -> %s", e.name.c_str(),
+                                    batch_rename_expand(pattern, e.name.view(), n, first).c_str());
+            ++n;
+        }
+        if (n > 4) ImGui::TextDisabled("... and %u more", n - 4);
+        const bool valid = !pattern.empty() && n > 0;
+        ImGui::BeginDisabled(!valid);
+        if (ImGui::Button("Rename") || (enter && valid)) {
+            rename_selection(pattern, first);
+            close();
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) close();
+        ImGui::EndPopup();
+    }
+
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::BeginPopupModal("Recover unsaved changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         const cook::String path = session_.autosave_path();
         ImGui::TextUnformatted("The editor closed without saving this scene.");
@@ -1038,6 +1099,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Previous selection", "Alt+Left", false, impl_->sel_history.can_back())) selection_back();
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
+        if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
         if (ImGui::BeginMenu("Selection sets")) {
             for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
                 FixedString<32> label;
