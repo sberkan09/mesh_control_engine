@@ -88,6 +88,10 @@ once while no body has opted in). Tests: `test_contacts.cpp` (speed and normal, 
 from the next step). `RigidBody3D::pad_` / `pad2_` became `contact_events` / `contact_min_speed`; the size stays 112 and `contact_min_speed = 0` means 2 m/s so existing scenes keep
 their state hash. `FireOn::ContactBegin` and `PhysicsEvents` read the 3D event. Test: `tests/kit/test_contacts3d.cpp`.
 
+**Step 4 (done 2026-10-23).** `ImpactDamage3D` (12 bytes, saved: `enabled`, `min_speed`, `damage_per_ms`; no `impulse_scale`, the event's impulse is passed as is) and `kit_impact_damage`.
+`kit_vehicle_ram` skips targets that have it. Test: `tests/kit/test_impact_damage.cpp` (a landing hurts once, slow or disabled or absent takes nothing, the other body's driver is the instigator).
+The player's own car hitting a wall is hurt but the driver is not (damage to occupants is not wired).
+
 ## Open items / risks
 
 - **Threading.** Jolt calls listeners from physics jobs, concurrently under a multi-threaded job system and under body locks. Today it is

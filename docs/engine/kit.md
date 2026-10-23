@@ -514,6 +514,13 @@ one event per pair per step, the same pair is not reported again for 0.1 s unles
 and `PhysicsEvents` counts `contact_begins` / `last_contact` / `contact_speed` (point and normal stay 2D). Only `RigidBody3D` entities opt in; characters, crowd pedestrians and ragdoll parts do not report.
 Record: `docs/milestones/M-CONTACTEVENTS.md`.
 
+### Crash damage (M-CONTACTEVENTS 4)
+
+`ImpactDamage3D` on an entity with `Health3D` and a `RigidBody3D` whose `contact_events` is on (a car, a crate): every `ContactBegin3D` it is in that closes at least `min_speed` m/s costs
+`(speed - min_speed + 1) * damage_per_ms` hp through `apply_damage`, once per second at most. The instigator is the other body or its `VehicleSeat3D` driver, so ramming a traffic car as a wanted
+player is a crime. `kit_impact_damage` (FixedUpdate_Pre) reads the previous tick's events. `kit_vehicle_ram` skips bodies that have `ImpactDamage3D`, so one touch is not two hits; the ram zone
+stays the way cars hurt pedestrians, who have no physics body.
+
 ### Vehicle ram (M-VEHICLEHIT)
 
 `VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car

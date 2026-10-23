@@ -11,3 +11,4 @@ Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/t
 UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR
 FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it
 VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample
+ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
