@@ -84,6 +84,10 @@ by the physics module in `FixedUpdate_Physics` and counted by `PhysicsEvents` / 
 not folded into `hash_state` (it only filters the events, never the simulation), and the 500-box `test_budget` check is not added (the listener returns at
 once while no body has opted in). Tests: `test_contacts.cpp` (speed and normal, no opt-in, threshold, either body opting in, sorted and capped, two runs equal).
 
+**Step 3 (done 2026-10-23).** `ContactBegin3D` and `kit3d_contacts` (FixedUpdate_Physics, after the write-back; it also syncs the opt-in each tick, so a flag change takes effect
+from the next step). `RigidBody3D::pad_` / `pad2_` became `contact_events` / `contact_min_speed`; the size stays 112 and `contact_min_speed = 0` means 2 m/s so existing scenes keep
+their state hash. `FireOn::ContactBegin` and `PhysicsEvents` read the 3D event. Test: `tests/kit/test_contacts3d.cpp`.
+
 ## Open items / risks
 
 - **Threading.** Jolt calls listeners from physics jobs, concurrently under a multi-threaded job system and under body locks. Today it is
