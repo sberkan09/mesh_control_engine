@@ -13,6 +13,7 @@
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
 #include "mce/editor/selection_history.h"
+#include "mce/editor/selection_sets.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -39,7 +40,9 @@ struct EditorShell::Impl {
     CameraBookmarks bookmarks;
     // Alt+Left / Alt+Right (M-SELHISTORY): the entities selected in the open scene.
     SelectionHistory sel_history;
-    const EditorScene* sel_scene = nullptr;  // the scene `sel_history` belongs to
+    const EditorScene* sel_scene = nullptr;  // the scene `sel_history` and `sel_sets` belong to
+    // Ctrl+Shift+1..9 / Alt+1..9 (M-SELSETS): numbered groups of selected entities.
+    SelectionSets sel_sets;
 };
 
 namespace {
@@ -520,6 +523,14 @@ void EditorShell::handle_shortcuts() {
         scene().redo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow)) selection_back();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow)) selection_forward();
+    // Selection sets: Ctrl+Shift+number stores the selection, Alt+number selects it again.
+    for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
+        const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
+        if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | key))
+            save_selection_set(i);
+        else if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | key))
+            recall_selection_set(i);
+    }
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_C)) copy_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
@@ -580,11 +591,13 @@ void EditorShell::track_recent_scenes() {
 void EditorShell::track_selection_history() {
     if (!scene_mode()) {
         impl_->sel_history.clear();
+        impl_->sel_sets.clear_all();
         impl_->sel_scene = nullptr;
         return;
     }
     if (impl_->sel_scene != &scene()) {
         impl_->sel_history.clear();
+        impl_->sel_sets.clear_all();
         impl_->sel_scene = &scene();
     }
     impl_->sel_history.visit(scene().selection().anchor());
@@ -602,6 +615,19 @@ void EditorShell::selection_forward() {
     const SceneDocument& doc = scene().doc();
     const EntityId id = impl_->sel_history.forward([&](EntityId e) { return doc.find(e) != nullptr; });
     if (id != kNoEntity) scene().selection().set(id);
+}
+
+void EditorShell::save_selection_set(u32 slot) {
+    if (scene_mode()) impl_->sel_sets.save(slot, scene().selection().items());
+}
+
+void EditorShell::recall_selection_set(u32 slot) {
+    if (!scene_mode()) return;
+    const SceneDocument& doc = scene().doc();
+    const Array<EntityId> ids = impl_->sel_sets.recall(slot, [&](EntityId e) { return doc.find(e) != nullptr; });
+    if (ids.empty()) return;
+    scene().selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene().selection().toggle(ids[i]);
 }
 
 void EditorShell::save_bookmark(u32 slot) {
@@ -1012,6 +1038,19 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Previous selection", "Alt+Left", false, impl_->sel_history.can_back())) selection_back();
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
+        if (ImGui::BeginMenu("Selection sets")) {
+            for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
+                FixedString<32> label;
+                char text[32];
+                std::snprintf(text, sizeof text, "Set %u (%zu)", i + 1, impl_->sel_sets.size(i));
+                label.append(text);
+                char keys[24];
+                std::snprintf(keys, sizeof keys, "Alt+%u", i + 1);
+                if (ImGui::MenuItem(label.c_str(), keys, false, impl_->sel_sets.has(i))) recall_selection_set(i);
+            }
+            ImGui::TextDisabled("Ctrl+Shift+1..9 stores the selection");
+            ImGui::EndMenu();
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
