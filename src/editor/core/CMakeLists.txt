@@ -25,6 +25,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/select_related.cpp
         src/select_all.cpp
         src/group_entities.cpp
+        src/align_entities.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp
