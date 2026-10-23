@@ -37,6 +37,7 @@ mce_add_library(mce_gameplay_kit
         src/thunder_delay.cpp
         src/rain_splash.cpp
         src/wanted3d.cpp
+        src/vehicle_ram.cpp
         src/sensors3d.cpp
         src/particles.cpp
         src/pathfinding.cpp
