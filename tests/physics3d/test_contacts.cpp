@@ -138,3 +138,53 @@ TEST_CASE("contacts: two runs report the same events and keep the same hash") {
     }
     CHECK(h1 == h2);
 }
+
+TEST_CASE("contacts: a character landing on the floor reports one hit with its fall speed") {
+    World3D w;
+    add_floor(w);
+    REQUIRE(w.create_character(ent(1), {0, 3, 0}));
+    REQUIRE(w.set_contact_events(ent(1), 2.0f));
+    Array<ContactEvent3D> all;
+    f32 vy = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        vy -= 9.81f * kDt;
+        const MoveResult3D r = w.move_character(ent(1), {0, vy * kDt, 0});
+        if (r.flags & ControllerFlags3D::Ground) vy = 0.0f;
+        w.step(kDt);
+        for (const ContactEvent3D& e : w.contact_events()) all.push_back(e);
+    }
+    REQUIRE(all.size() == 1);
+    CHECK(all[0].a == ent(1));
+    CHECK(all[0].b == ent(1000));
+    CHECK(math::near(all[0].normal, {0, -1, 0}, 1e-2f));  // from the character down to the floor
+    CHECK(all[0].approach_speed > 4.0f);
+    CHECK(all[0].impulse > 0.0f);
+}
+
+TEST_CASE("contacts: a box thrown at a standing character reports the hit, a character not opted in is silent") {
+    for (const bool opt_in : {true, false}) {
+        World3D w;
+        add_floor(w);
+        const ControllerParams3D p;
+        const f32 stand = p.half_height + p.radius;
+        REQUIRE(w.create_character(ent(1), {0, stand, 0}, p));
+        REQUIRE(add_box(w, ent(2), BodyType3D::Dynamic, {0, stand, 3}, {0.25f, 0.25f, 0.25f}));
+        if (opt_in) REQUIRE(w.set_contact_events(ent(1), 2.0f));
+        w.set_linear_velocity(ent(2), {0, 0, -10});
+        Array<ContactEvent3D> all;
+        for (int i = 0; i < 60; ++i) {
+            w.move_character(ent(1), {0, 0, 0}, p);
+            w.step(kDt);
+            for (const ContactEvent3D& e : w.contact_events()) all.push_back(e);
+        }
+        if (!opt_in) {
+            CHECK(all.size() == 0);
+            continue;
+        }
+        REQUIRE(all.size() >= 1);
+        CHECK(all[0].a == ent(1));
+        CHECK(all[0].b == ent(2));
+        CHECK(all[0].approach_speed > 5.0f);
+        CHECK(all[0].normal.z > 0.5f);  // from the character towards the box
+    }
+}

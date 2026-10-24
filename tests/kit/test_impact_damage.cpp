@@ -101,3 +101,28 @@ TEST_CASE("impact damage: the driver takes their share of a crash, and none with
         CHECK(lost_driver == doctest::Approx(lost_car * share).epsilon(0.01));
     }
 }
+
+TEST_CASE("impact damage: a character with ImpactDamage3D is hurt by a body that lands on it, the driver is blamed") {
+    Scene s;
+    Health3D h;
+    h.max = 1000.0f;
+    h.current = 1000.0f;
+    const Entity ped = s.w.spawn_with(at(0, 0.91f, 0), CharacterController3D{}, h, ImpactDamage3D{});
+    const Entity driver = s.w.spawn_with(at(30, 1, 0), Health3D{});
+    VehicleSeat3D seat;
+    seat.driver = driver;
+    s.w.spawn_with(at(0, 6.0f, 0), RigidBody3D{}, seat);  // no opt-in of its own: the character's is enough
+    s.run(240);
+    REQUIRE(s.hp(ped).hits >= 1);
+    CHECK(s.hp(ped).last_attacker == driver);
+    CHECK(s.hp(ped).current < 1000.0f);
+}
+
+TEST_CASE("impact damage: a character without ImpactDamage3D takes nothing from the same crate") {
+    Scene s;
+    Health3D h;
+    const Entity ped = s.w.spawn_with(at(0, 0.91f, 0), CharacterController3D{}, h);
+    s.w.spawn_with(at(0, 6.0f, 0), RigidBody3D{});
+    s.run(240);
+    CHECK(s.hp(ped).hits == 0);
+}

@@ -4,6 +4,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 
 namespace mce::kit {
@@ -50,6 +51,11 @@ void hit(World& w, Entity self, Entity other, const ContactBegin3D& ev, f32 norm
 
 void kit_impact_damage(Frame& f) {
     World& w = f.world();
+    // A character (a pedestrian, the player) has no RigidBody3D flag to opt in with: ImpactDamage3D is the opt-in.
+    if (Physics3D* phys = w.try_resource<Physics3D>())
+        f.query<const ImpactDamage3D, const CharacterController3D>().each([&](Entity e, const ImpactDamage3D& d, const CharacterController3D&) {
+            phys->world.set_contact_events(e, d.enabled ? d.min_speed : -1.0f);
+        });
     if (!w.event_queue<ContactBegin3D>()) return;
     // Copy first: apply_damage pushes events of its own.
     Array<ContactBegin3D> seen;

@@ -519,7 +519,8 @@ Record: `docs/milestones/M-CONTACTEVENTS.md`.
 `ImpactDamage3D` on an entity with `Health3D` and a `RigidBody3D` whose `contact_events` is on (a car, a crate): every `ContactBegin3D` it is in that closes at least `min_speed` m/s costs
 `(speed - min_speed + 1) * damage_per_ms` hp through `apply_damage`, once per second at most. The instigator is the other body or its `VehicleSeat3D` driver, so ramming a traffic car as a wanted
 player is a crime. `kit_impact_damage` (FixedUpdate_Pre) reads the previous tick's events. `kit_vehicle_ram` skips bodies that have `ImpactDamage3D`, so one touch is not two hits; the ram zone
-stays the way cars hurt pedestrians, who have no physics body. The car's `VehicleSeat3D` driver takes `occupant_share` (default 0.5) of the same blow.
+stays the way cars hurt crowd pedestrians, who have no physics body. The car's `VehicleSeat3D` driver takes `occupant_share` (default 0.5) of the same blow.
+On an entity with a `CharacterController3D` the component is also the contact opt-in (a character is no `RigidBody3D`), so a character landed on, run over or hit by a thrown crate takes the same crash damage.
 
 ### Vehicle ram (M-VEHICLEHIT)
 
