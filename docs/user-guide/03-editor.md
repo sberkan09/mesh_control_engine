@@ -96,6 +96,7 @@ the player and the collision see exactly what you sculpted.
 | Edit > Copy path | puts the hierarchy path of each selected entity (`Room/Wall/Torch`, one per line) on the system clipboard, for bug reports, scripts and MCP clients |
 | Edit > Reset transform | puts position, rotation and scale of each selected entity back to the identity (0, no rotation, 1) relative to its parent; one undo step |
 | Edit > Flip horizontally / vertically | mirrors the selected entities across the middle of the selection (world positions) and negates their scale on that axis; one entity flips in place; one undo step |
+| Edit > Snap to grid | rounds the world X and Y of each selected entity to a multiple of the snap step (the **Snap step** in the View menu); one undo step |
 | Ctrl+Shift+1..9 / Alt+1..9 | selection sets: Ctrl+Shift+number stores the entities you have selected in a numbered slot, Alt+number selects them again (entities deleted since are left out); Edit > Selection sets lists the slots; the sets belong to the open scene and are not saved |
 | Edit > Rename selection... | names every selected entity from a pattern in one undo step: `##` is a number (`Torch_##` gives Torch_01, Torch_02, ... in scene order, from the "First number" you set), `*` is the current name (`Old_*` keeps it); the box previews the first four results |
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |
