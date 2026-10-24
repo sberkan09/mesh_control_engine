@@ -20,6 +20,7 @@ mce_add_test(test_editor UMBRELLA
         test_align_entities.cpp
         test_reset_transform.cpp
         test_flip_entities.cpp
+        test_snap_entities.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp

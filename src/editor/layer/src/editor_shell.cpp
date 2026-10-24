@@ -20,6 +20,7 @@
 #include "mce/editor/reset_transform.h"
 #include "mce/editor/select_all.h"
 #include "mce/editor/select_related.h"
+#include "mce/editor/snap_entities.h"
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
 #include "mce/editor/unique_names.h"
@@ -84,6 +85,13 @@ void flip_selection(EditorScene& scene, AlignAxis axis) {
     Array<EntityId> ids;  // a copy: the edit below touches the scene
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     flip_entities(scene, ids.span(), axis);
+}
+
+// Edit > Snap to grid: the selection's world X and Y go to multiples of the snap step.
+void snap_selection(EditorScene& scene, f32 step) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    snap_entities(scene, ids.span(), step);
 }
 
 // Edit > Reset transform: the selection's local transforms go back to the identity.
@@ -1241,6 +1249,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
         if (ImGui::MenuItem("Flip horizontally", nullptr, false, sel)) flip_selection(scene(), AlignAxis::X);
         if (ImGui::MenuItem("Flip vertically", nullptr, false, sel)) flip_selection(scene(), AlignAxis::Y);
+        if (ImGui::MenuItem("Snap to grid", nullptr, false, sel)) snap_selection(scene(), view_.snap_step);
         if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
