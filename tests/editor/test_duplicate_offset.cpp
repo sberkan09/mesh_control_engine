@@ -50,15 +50,15 @@ TEST_CASE("duplicate_offset copies the entities, shifts the copies and leaves th
     CHECK(close(world_x(s, a), 0.0f));
 }
 
-TEST_CASE("duplicate_offset moves a copied child once, with its parent") {
+TEST_CASE("duplicate_offset moves a copied child once, with its copied parent") {
     EditorScene s;
     const EntityId parent = place(s, "Parent", 0.0f, 0.0f);
     const EntityId child = place(s, "Child", 1.0f, 0.0f);
     REQUIRE(s.set_parent(child, parent));
-    const EntityId ids[] = {parent};
+    const EntityId ids[] = {parent, child};  // Edit > Duplicate copies exactly the listed entities
     Array<EntityId> made;
 
-    CHECK(duplicate_offset(s, Span<const EntityId>(ids, 1), 10.0f, 0.0f, &made) == 2);
+    CHECK(duplicate_offset(s, Span<const EntityId>(ids, 2), 10.0f, 0.0f, &made) == 2);
     f32 parent_x = -1.0f, child_x = -1.0f;
     for (EntityId id : made) {
         if (s.parent_of(id) == kNoEntity) parent_x = world_x(s, id);

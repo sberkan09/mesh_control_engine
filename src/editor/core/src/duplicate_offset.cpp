@@ -19,7 +19,7 @@ usize duplicate_offset(EditorScene& scene, Span<const EntityId> ids, f32 dx, f32
     scene.begin_edit("Duplicate offset");
     scene.duplicate_entities(ids, &made);
     for (EntityId id : made) {
-        if (contains(made, scene.parent_of(id))) continue;  // a child of a copy travels with its parent
+        if (contains(made, scene.parent_of(id))) continue;  // a copy under a copied parent travels with it
         if (!scene.get<LocalTransform>(id)) continue;
         WorldTransform w = scene.world_transform(id);
         w.position.x += dx;

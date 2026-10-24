@@ -8,9 +8,9 @@
 
 namespace mce::editor {
 
-// Duplicates `ids` (each with its subtree, as Edit > Duplicate does) and moves the top-level copies by (dx, dy) in
-// world space; their children travel with them. Returns how many entities were created (0: nothing to duplicate, and
-// no undo entry). `created`, when given, receives every new entity.
+// Duplicates exactly `ids` (as Edit > Duplicate does) and moves the copies by (dx, dy) in world space; a copy whose
+// parent is also a copy travels with that parent and is not moved twice. Returns how many entities were created
+// (0: nothing to duplicate, and no undo entry). `created`, when given, receives every new entity.
 usize duplicate_offset(EditorScene& scene, Span<const EntityId> ids, f32 dx, f32 dy, Array<EntityId>* created = nullptr);
 
 }  // namespace mce::editor
