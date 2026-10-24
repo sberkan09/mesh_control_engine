@@ -25,6 +25,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/select_related.cpp
         src/select_all.cpp
         src/group_entities.cpp
+        src/entity_path.cpp
         src/unique_names.cpp
         src/align_entities.cpp
         src/recent_list.cpp

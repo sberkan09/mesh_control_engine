@@ -12,6 +12,7 @@
 #include "mce/editor/align_entities.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
+#include "mce/editor/entity_path.h"
 #include "mce/editor/group_entities.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
@@ -74,6 +75,12 @@ void unique_names_in(EditorScene& scene) {
     else
         for (EntityId id : scene.selection().items()) ids.push_back(id);
     make_names_unique(scene, ids.span());
+}
+
+// Edit > Copy path: the hierarchy paths of the selection (Room/Wall/Torch), one per line, on the clipboard.
+void copy_selection_paths(const EditorScene& scene) {
+    const cook::String text = entity_paths(scene, scene.selection().items());
+    if (!text.empty()) ImGui::SetClipboardText(text.c_str());
 }
 
 // Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
@@ -1215,6 +1222,7 @@ void EditorShell::draw_menu_bar() {
         ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
+        if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
