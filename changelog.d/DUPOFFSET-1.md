@@ -1,0 +1,1 @@
+- Editor, M-DUPOFFSET: Edit > Duplicate right / up duplicates the selection and moves the copies by one snap step, as one undo step.
