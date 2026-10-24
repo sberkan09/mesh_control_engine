@@ -19,6 +19,7 @@
 #include "mce/editor/select_related.h"
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
+#include "mce/editor/unique_names.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -63,6 +64,16 @@ void align_selection(EditorScene& scene, AlignAxis axis, AlignMode mode, bool di
         distribute_entities(scene, ids.span(), axis);
     else
         align_entities(scene, ids.span(), axis, mode);
+}
+
+// Edit > Make names unique: numbers the duplicates among the selection, or among every entity when nothing is selected.
+void unique_names_in(EditorScene& scene) {
+    Array<EntityId> ids;
+    if (scene.selection().empty())
+        ids = select_all(scene);
+    else
+        for (EntityId id : scene.selection().items()) ids.push_back(id);
+    make_names_unique(scene, ids.span());
 }
 
 // Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
@@ -1159,6 +1170,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
         if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
+        if (ImGui::MenuItem("Make names unique")) unique_names_in(scene());
         if (ImGui::BeginMenu("Align", scene().selection().items().size() >= 2)) {
             if (ImGui::MenuItem("Left")) align_selection(scene(), AlignAxis::X, AlignMode::Min);
             if (ImGui::MenuItem("Center horizontally")) align_selection(scene(), AlignAxis::X, AlignMode::Center);
