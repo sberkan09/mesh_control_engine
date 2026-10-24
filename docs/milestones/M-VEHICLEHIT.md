@@ -8,6 +8,8 @@
 (or behind it when reversing) instead of a collision callback. Details in `docs/engine/kit.md` ("Vehicle ram"). Test: `tests/kit/test_vehicle_ram.cpp`
 (fast hit, slow / behind / side / far misses, reversing, the once-a-second guard, the driver as instigator and spared).
 
+**Slice test.** `tests/kit/test_gta_slice.cpp` drives the whole loop across modules: a driver runs a civilian over, a police unit witnesses it, the wanted level rises and the unit leaves Idle.
+
 ## Open items
 
 - A zone is not a contact: a car sliding sideways past a body can miss, a body at the zone's far edge can be hit a frame early. Tuning needs a street scene.

@@ -1,0 +1,1 @@
+- Tests (M-VEHICLEHIT): `tests/kit/test_gta_slice.cpp` runs the open-world loop across modules (car runs a civilian over, police witness, wanted level, chase).
