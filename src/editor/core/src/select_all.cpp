@@ -27,4 +27,24 @@ Array<EntityId> select_matching(const EditorScene& scene, StringView query) {
     return out;
 }
 
+namespace {
+
+bool same_components(const DocEntity& a, const DocEntity& b) {
+    if (a.components.size() != b.components.size()) return false;
+    for (usize i = 0; i < a.components.size(); ++i)  // both lists are sorted by type name
+        if (a.components[i].type != b.components[i].type) return false;
+    return true;
+}
+
+}  // namespace
+
+Array<EntityId> select_similar(const EditorScene& scene) {
+    Array<EntityId> out;
+    const DocEntity* anchor = scene.doc().find(scene.selection().anchor());
+    if (anchor == nullptr) return out;
+    for (const DocEntity& e : scene.doc().entities())
+        if (same_components(*anchor, e)) out.push_back(e.id);
+    return out;
+}
+
 }  // namespace mce::editor

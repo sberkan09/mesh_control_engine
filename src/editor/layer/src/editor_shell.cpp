@@ -1183,6 +1183,7 @@ void EditorShell::draw_menu_bar() {
             if (ImGui::MenuItem("Children", "Alt+Down")) select_around(scene(), Relation::Children);
             if (ImGui::MenuItem("All descendants", "Alt+Shift+Down")) select_around(scene(), Relation::Descendants);
             if (ImGui::MenuItem("Siblings")) select_around(scene(), Relation::Siblings);
+            if (ImGui::MenuItem("Similar")) select_ids(scene(), select_similar(scene()));
             ImGui::EndDisabled();
             ImGui::EndMenu();
         }

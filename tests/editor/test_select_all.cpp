@@ -1,8 +1,9 @@
-// M-SELALL 1: select all and invert the selection. M-SELMATCH: select by name.
+// M-SELALL 1: select all and invert the selection. M-SELMATCH: select by name. M-SELSIMILAR: select the same kind.
 
 #include <doctest/doctest.h>
 
 #include "mce/editor/select_all.h"
+#include "mce/kit/components.h"
 
 using namespace mce;
 using namespace mce::editor;
@@ -50,4 +51,32 @@ TEST_CASE("select_matching returns the named entities in document order") {
     CHECK(walls[0] == a);
     CHECK(walls[1] == c);
     CHECK(select_matching(s, "wall south").size() == 1);
+}
+
+TEST_CASE("select_similar picks the entities with the anchor's components") {
+    EditorScene s;
+    CHECK(select_similar(s).empty());
+    const EntityId a = s.create_entity("A");  // a transform only
+    const EntityId b = s.create_entity("B");
+    const EntityId bare = s.create_entity("Bare", false);  // no components
+    const EntityId bare2 = s.create_entity("Bare2", false);
+    const EntityId c = s.create_entity("C");
+    CHECK(s.add_component(c, refl::type_of<kit::Sprite>()));  // one more component than A
+
+    CHECK(select_similar(s).empty());  // nothing selected
+
+    s.selection().set(a);
+    const Array<EntityId> like_a = select_similar(s);
+    REQUIRE(like_a.size() == 2);
+    CHECK(like_a[0] == a);
+    CHECK(like_a[1] == b);
+
+    s.selection().set(bare);
+    const Array<EntityId> like_bare = select_similar(s);
+    REQUIRE(like_bare.size() == 2);
+    CHECK(like_bare[0] == bare);
+    CHECK(like_bare[1] == bare2);
+
+    s.selection().set(c);
+    CHECK(select_similar(s).size() == 1);  // only itself
 }
