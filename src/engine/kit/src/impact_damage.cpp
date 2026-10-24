@@ -9,7 +9,7 @@
 namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(ImpactDamage3D) == 12);
+static_assert(sizeof(ImpactDamage3D) == 16);
 
 namespace {
 
@@ -39,6 +39,13 @@ void hit(World& w, Entity self, Entity other, const ContactBegin3D& ev, f32 norm
     d.direction = ev.normal * normal_sign;  // from the other body towards this one
     d.impulse = ev.impulse;
     apply_damage(w, self, d);
+    // The person inside feels it too: the driver, when the car has one (never the instigator's own seat).
+    if (dmg->occupant_share <= 0.0f) return;
+    const VehicleSeat3D* seat = w.try_get<VehicleSeat3D>(self);
+    if (!seat || seat->driver.is_null() || !w.alive(seat->driver) || seat->driver == who) return;
+    DamageInfo od = d;
+    od.amount = d.amount * dmg->occupant_share;
+    apply_damage(w, seat->driver, od);
 }
 
 void kit_impact_damage(Frame& f) {
