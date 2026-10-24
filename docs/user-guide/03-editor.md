@@ -91,6 +91,7 @@ the player and the collision see exactly what you sculpted.
 | Alt+Left / Alt+Right | step back and forward through the entities you selected, like a browser's history (Edit > Previous selection / Next selection); entities that have been deleted are skipped; the history is per open scene and not saved |
 | Alt+Up / Alt+Down / Alt+Shift+Down | select around the selection in the parent/child tree: Alt+Up the parents, Alt+Down the children, Alt+Shift+Down everything below; Edit > Select also has Siblings. Nothing related leaves the selection as it is |
 | Ctrl+A / Ctrl+I | select every entity of the scene / every entity that is not selected now (Edit > Select > All, Invert); not while a text field owns the keyboard |
+| Edit > Select > Similar | select every entity that has exactly the same components as the primary selection (the one clicked last) |
 | Ctrl+Shift+1..9 / Alt+1..9 | selection sets: Ctrl+Shift+number stores the entities you have selected in a numbered slot, Alt+number selects them again (entities deleted since are left out); Edit > Selection sets lists the slots; the sets belong to the open scene and are not saved |
 | Edit > Rename selection... | names every selected entity from a pattern in one undo step: `##` is a number (`Torch_##` gives Torch_01, Torch_02, ... in scene order, from the "First number" you set), `*` is the current name (`Old_*` keeps it); the box previews the first four results |
 | Ctrl+Z / Ctrl+Y | undo / redo (the Edit menu names the step) |

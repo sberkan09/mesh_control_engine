@@ -1,6 +1,7 @@
 #pragma once
 // select_all / invert_selection — the two whole-scene selections (M-SELALL); select_matching — every entity whose name
-// matches a Hierarchy filter query (M-SELMATCH). Both return the entities in document
+// matches a Hierarchy filter query (M-SELMATCH); select_similar — every entity with the same components as the
+// anchor (M-SELSIMILAR). Both return the entities in document
 // order; the shell turns the result into the selection (Ctrl+A, Ctrl+I, Edit > Select). Headless, tested in CI.
 
 #include "mce/containers/array.h"
@@ -17,5 +18,9 @@ Array<EntityId> invert_selection(const EditorScene& scene);
 // Every entity whose own name matches `query` (HierarchyFilter rules: all words, case-insensitive), in document
 // order. A blank query matches nothing here (unlike the filter box, which then shows everything).
 Array<EntityId> select_matching(const EditorScene& scene, StringView query);
+
+// Every entity that has exactly the component types of the selection's anchor (prefab link ignored), the anchor
+// included, in document order. Nothing selected (or an anchor that is not in the scene): nothing.
+Array<EntityId> select_similar(const EditorScene& scene);
 
 }  // namespace mce::editor
