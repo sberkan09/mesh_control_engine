@@ -83,3 +83,21 @@ TEST_CASE("impact damage: the driver of the other body is the instigator") {
     CHECK(s.hp(victim).last_attacker == driver);
     CHECK(s.hp(victim).current < 1000.0f);
 }
+
+TEST_CASE("impact damage: the driver takes their share of a crash, and none with occupant_share 0") {
+    for (const f32 share : {0.5f, 0.0f}) {
+        Scene s;
+        Health3D h;
+        const Entity driver = s.w.spawn_with(at(30, 1, 0), h);
+        VehicleSeat3D seat;
+        seat.driver = driver;
+        ImpactDamage3D dmg;
+        dmg.occupant_share = share;
+        const Entity car = s.w.spawn_with(at(0, 3.5f, 0), opted_in(), h, dmg, seat);
+        s.run(240);
+        REQUIRE(s.hp(car).hits == 1);
+        const f32 lost_car = h.max - s.hp(car).current;
+        const f32 lost_driver = h.max - s.hp(driver).current;
+        CHECK(lost_driver == doctest::Approx(lost_car * share).epsilon(0.01));
+    }
+}

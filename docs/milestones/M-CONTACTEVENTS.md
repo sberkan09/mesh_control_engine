@@ -90,7 +90,7 @@ their state hash. `FireOn::ContactBegin` and `PhysicsEvents` read the 3D event. 
 
 **Step 4 (done 2026-10-23).** `ImpactDamage3D` (12 bytes, saved: `enabled`, `min_speed`, `damage_per_ms`; no `impulse_scale`, the event's impulse is passed as is) and `kit_impact_damage`.
 `kit_vehicle_ram` skips targets that have it. Test: `tests/kit/test_impact_damage.cpp` (a landing hurts once, slow or disabled or absent takes nothing, the other body's driver is the instigator).
-The player's own car hitting a wall is hurt but the driver is not (damage to occupants is not wired).
+Follow-up (same day): `occupant_share` (default 0.5) on `ImpactDamage3D` hurts the car's `VehicleSeat3D` driver by that fraction of the same blow (component 16 bytes); passengers are not modelled.
 
 ## Open items / risks
 
