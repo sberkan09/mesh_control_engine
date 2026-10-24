@@ -355,6 +355,13 @@ struct World3D::Impl {
             owner->collect(b1, b2, m);
         }
     };
+    struct CharacterCollector : JPH::CharacterContactListener {
+        Impl* owner = nullptr;
+        void OnContactAdded(const JPH::CharacterVirtual* ch, const JPH::CharacterContact& c,
+                            JPH::CharacterContactSettings&) override {
+            owner->collect_character(*ch, c);
+        }
+    };
     struct Throttle {
         u64 key = 0;      // lo entity index << 32 | hi entity index
         u32 tick = 0;     // the step it was last reported
@@ -362,6 +369,7 @@ struct World3D::Impl {
     };
     static constexpr u32 kContactRehitTicks = 6;  // 0.1 s: a bouncing crate makes one sound
     ContactCollector collector;
+    CharacterCollector character_collector;
     Array<ContactEvent3D> raw;      // this step's, in callback order
     Array<ContactEvent3D> events;   // the last step's, sorted by (a, b)
     Array<Throttle> throttle;
@@ -389,14 +397,41 @@ struct World3D::Impl {
         if (!(approach >= threshold)) return;
         const f32 inv1 = b1.IsDynamic() ? b1.GetMotionProperties()->GetInverseMass() : 0.0f;
         const f32 inv2 = b2.IsDynamic() ? b2.GetMotionProperties()->GetInverseMass() : 0.0f;
+        const JPH::Vec3 p2 = m.mBaseOffset + m.mRelativeContactPointsOn2[0];
+        emit(e1, e2, JPH::Vec3(p1), JPH::Vec3(p2), n, approach, inv1 + inv2);
+    }
+
+    // A character (a CharacterVirtual is not a body) touching a body: the same event, the same opt-in.
+    // `n` points from the body towards the character (Jolt's contact normal); the pair is (character, body).
+    void collect_character(const JPH::CharacterVirtual& ch, const JPH::CharacterContact& c) {
+        const u64 u1 = ch.GetUserData(), u2 = c.mUserData;
+        if (u1 == 0 || u2 == 0 || !had_contact_events) return;
+        const Entity e1 = unpack(u1), e2 = unpack(u2);
+        const Slot* s1 = find(e1);
+        const Slot* s2 = find(e2);
+        f32 threshold = -1.0f;
+        if (s1 && s1->contact_min_speed >= 0.0f) threshold = s1->contact_min_speed;
+        if (s2 && s2->contact_min_speed >= 0.0f)
+            threshold = threshold < 0.0f ? s2->contact_min_speed : std::min(threshold, s2->contact_min_speed);
+        if (threshold < 0.0f) return;
+        const JPH::Vec3 n = -c.mContactNormal;  // from the character (1) to the body (2)
+        const f32 approach = (ch.GetLinearVelocity() - c.mLinearVelocity).Dot(n);
+        if (!(approach >= threshold)) return;
+        const f32 mass = ch.GetMass();
+        const f32 inv1 = mass > 0.0f ? 1.0f / mass : 0.0f;
+        emit(e1, e2, JPH::Vec3(c.mPosition), JPH::Vec3(c.mPosition), n, approach, inv1);
+    }
+
+    void emit(Entity e1, Entity e2, JPH::Vec3 p1, JPH::Vec3 p2, JPH::Vec3 n, f32 approach, f32 inv_sum) {
+        if (raw.size() >= 4 * static_cast<usize>(config.max_contact_events_per_tick)) return;  // a world that never steps
         ContactEvent3D ev;
         ev.approach_speed = approach;
-        ev.impulse = inv1 + inv2 > 0.0f ? approach / (inv1 + inv2) : 0.0f;
+        ev.impulse = inv_sum > 0.0f ? approach / inv_sum : 0.0f;
         const bool swap = entity_less(e2, e1);
         ev.a = swap ? e2 : e1;
         ev.b = swap ? e1 : e2;
         ev.normal = to_mce(swap ? -n : n);
-        ev.point = to_mce(JPH::Vec3(swap ? m.mBaseOffset + m.mRelativeContactPointsOn2[0] : p1));
+        ev.point = to_mce(swap ? p2 : p1);
         raw.push_back(ev);
     }
 
@@ -438,6 +473,7 @@ struct World3D::Impl {
                     object_pairs);
         system.SetGravity(to_jph(c.gravity));
         collector.owner = this;
+        character_collector.owner = this;
         system.SetContactListener(&collector);
     }
 
@@ -687,6 +723,7 @@ bool World3D::create_character(Entity e, vec3 position, const ControllerParams3D
     JPH::Ref<JPH::CharacterVirtual> ch =
         new JPH::CharacterVirtual(cs, to_jph(position), JPH::Quat::sIdentity(), pack(e), &w.system);
     ch->SetCharacterVsCharacterCollision(&w.char_vs_char);
+    ch->SetListener(&w.character_collector);
     w.char_vs_char.Add(ch);
 
     Impl::Slot& s = w.claim(e);
@@ -724,7 +761,7 @@ bool World3D::has_body(Entity e) const { return impl_->find(e) != nullptr; }
 void World3D::step(f32 dt) {
     Impl& w = *impl_;
     MCE_ASSERT_MSG(dt == w.config.fixed_dt, "World3D::step: dt must equal the fixed step (physics.md D7)");
-    w.raw.clear();
+    // `raw` is not cleared here: move_character (before the step) has already added the characters' contacts.
     w.system.Update(w.config.fixed_dt, 1, &w.temp, &w.jobs);
     w.finish_contacts();
     w.check_joints();

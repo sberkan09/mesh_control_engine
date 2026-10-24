@@ -92,6 +92,15 @@ their state hash. `FireOn::ContactBegin` and `PhysicsEvents` read the 3D event. 
 `kit_vehicle_ram` skips targets that have it. Test: `tests/kit/test_impact_damage.cpp` (a landing hurts once, slow or disabled or absent takes nothing, the other body's driver is the instigator).
 Follow-up (same day): `occupant_share` (default 0.5) on `ImpactDamage3D` hurts the car's `VehicleSeat3D` driver by that fraction of the same blow (component 16 bytes); passengers are not modelled.
 
+**Step 5, characters (done 2026-10-24).** `CharacterVirtual` has its own listener: `World3D` registers one on every character (`create_character`) and reports a contact
+with a body as the same `ContactEvent3D` (the pair is sorted like any other; `normal` runs from `a` to `b`; approach = relative velocity of the character
+and the contact point along the contact normal, impulse = approach x the character's mass). The opt-in is `set_contact_events` on the character's entity. Events raised
+inside `move_character` wait in the collector until the next `step` sorts, throttles and publishes them, so `step` no longer clears the raw list first. In the kit,
+`ImpactDamage3D` on a `CharacterController3D` entity is its own opt-in (`kit_impact_damage` calls `set_contact_events` with `min_speed`), so a pedestrian or the player that is
+landed on, run over or hit by a thrown crate takes crash damage with the other body's driver as instigator. Crowd pedestrians (`Pedestrian3D`) still have no physics body, so
+for them `vehicle_ram` stays; a capsule body for the crowd is left out. Tests: `test_contacts.cpp` (a character landing, a box thrown at a character, no opt-in is silent),
+`test_impact_damage.cpp` (a character hurt by a body that lands on it, none without the component).
+
 ## Open items / risks
 
 - **Threading.** Jolt calls listeners from physics jobs, concurrently under a multi-threaded job system and under body locks. Today it is
