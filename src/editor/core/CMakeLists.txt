@@ -28,6 +28,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/entity_path.cpp
         src/unique_names.cpp
         src/align_entities.cpp
+        src/reset_transform.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp

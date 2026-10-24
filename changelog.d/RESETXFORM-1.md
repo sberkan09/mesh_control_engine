@@ -1,0 +1,1 @@
+- Editor, M-RESETXFORM: Edit > Reset transform puts the selected entities' position, rotation and scale back to the identity.

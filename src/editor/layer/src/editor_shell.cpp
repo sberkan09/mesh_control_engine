@@ -15,6 +15,7 @@
 #include "mce/editor/entity_path.h"
 #include "mce/editor/group_entities.h"
 #include "mce/editor/quick_open.h"
+#include "mce/editor/reset_transform.h"
 #include "mce/editor/recent_list.h"
 #include "mce/editor/select_all.h"
 #include "mce/editor/select_related.h"
@@ -75,6 +76,13 @@ void unique_names_in(EditorScene& scene) {
     else
         for (EntityId id : scene.selection().items()) ids.push_back(id);
     make_names_unique(scene, ids.span());
+}
+
+// Edit > Reset transform: the selection's local transforms go back to the identity.
+void reset_selection_transforms(EditorScene& scene) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    reset_transforms(scene, ids.span());
 }
 
 // Edit > Copy path: the hierarchy paths of the selection (Room/Wall/Torch), one per line, on the clipboard.
@@ -1223,6 +1231,7 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
         if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
+        if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
