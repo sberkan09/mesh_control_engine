@@ -13,6 +13,7 @@
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
 #include "mce/editor/entity_path.h"
+#include "mce/editor/flip_entities.h"
 #include "mce/editor/group_entities.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
@@ -76,6 +77,13 @@ void unique_names_in(EditorScene& scene) {
     else
         for (EntityId id : scene.selection().items()) ids.push_back(id);
     make_names_unique(scene, ids.span());
+}
+
+// Edit > Flip: mirrors the selection across its middle on `axis`.
+void flip_selection(EditorScene& scene, AlignAxis axis) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    flip_entities(scene, ids.span(), axis);
 }
 
 // Edit > Reset transform: the selection's local transforms go back to the identity.
@@ -1231,6 +1239,8 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
         if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
+        if (ImGui::MenuItem("Flip horizontally", nullptr, false, sel)) flip_selection(scene(), AlignAxis::X);
+        if (ImGui::MenuItem("Flip vertically", nullptr, false, sel)) flip_selection(scene(), AlignAxis::Y);
         if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
