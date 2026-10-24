@@ -9,6 +9,8 @@
 #include "mce/kit/impact_damage.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
+#include "mce/kit/traffic.h"
+#include "mce/kit/vehicles3d.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -125,4 +127,28 @@ TEST_CASE("impact damage: a character without ImpactDamage3D takes nothing from 
     s.w.spawn_with(at(0, 6.0f, 0), RigidBody3D{});
     s.run(240);
     CHECK(s.hp(ped).hits == 0);
+}
+
+TEST_CASE("wreck: a dead car lets go of its driver and rolls on the handbrake, a live one is left alone") {
+    Scene s;
+    Vehicle3D v;
+    v.use_input = 1;
+    v.throttle = 0.7f;
+    v.steer = 0.3f;
+    Health3D dead;
+    dead.current = 0.0f;
+    dead.dead = 1;
+    TrafficDriver3D ai;
+    const Entity wreck = s.w.spawn_with(at(0, 3, 0), v, dead, ai);
+    const Entity live = s.w.spawn_with(at(10, 3, 0), v, Health3D{}, ai);
+    s.run(3);
+    const Vehicle3D& vw = *s.w.try_get<Vehicle3D>(wreck);
+    CHECK(vw.use_input == 0);
+    CHECK(vw.handbrake == doctest::Approx(1.0f));
+    CHECK(vw.throttle == doctest::Approx(0.0f));
+    CHECK(s.w.try_get<TrafficDriver3D>(wreck)->drive == 0);
+    const Vehicle3D& vl = *s.w.try_get<Vehicle3D>(live);
+    CHECK(vl.use_input == 1);
+    CHECK(vl.handbrake == doctest::Approx(0.0f));
+    CHECK(s.w.try_get<TrafficDriver3D>(live)->drive == 1);
 }

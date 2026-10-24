@@ -1,0 +1,23 @@
+# M-CARWRECK — a destroyed car is a wreck
+
+Status: step 1 done (2026-10-24). Own milestone, defined by the gameplay thread after M-CONTACTEVENTS (the feasibility assessment lists traffic and
+car combat as the open "game kit" layer).
+
+## Why
+
+`ImpactDamage3D` and `VehicleRam3D` can now kill a car (`Health3D::dead`), but nothing reacted: a dead traffic car kept its `TrafficDriver3D` throttle, a dead
+player car kept answering input. A wreck must stop being driven.
+
+## What
+
+1. **`kit_wreck`** (FixedUpdate_Pre, in `impact_damage.cpp`, installed with `install_impact_damage`; no new component, so no saved-format or golden churn):
+   for every dead `Health3D` entity that has a `Vehicle3D`: `use_input = 0`, throttle / steer / brake 0, handbrake 1, and `TrafficDriver3D::drive` /
+   `VehicleDriver3D::drive` = 0. Removal is the existing `Health3D::destroy_on_death` + `linger`, or the wreck stays as scenery. Test:
+   `tests/kit/test_impact_damage.cpp` ("wreck: ...").
+
+## Open items
+
+- A wreck stays in its traffic lane and the cars behind it queue (the leader logic sees a car ahead); a spawner removes it beyond `despawn_radius`. A tow-away or
+  a go-around is a follow-up.
+- Fire, smoke and an explosion on death (effects from `Died3D`) are content, not code: a `FireOn::...` emitter on the prefab; no engine change planned.
+- The driver is not thrown out when the car dies (the seat is freed by `kit3d_seats` when the car is destroyed); stepping out of a wreck needs `max_exit_speed`, which a stopped wreck meets.
