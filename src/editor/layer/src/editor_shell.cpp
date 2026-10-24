@@ -12,6 +12,7 @@
 #include "mce/editor/align_entities.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
+#include "mce/editor/duplicate_offset.h"
 #include "mce/editor/entity_path.h"
 #include "mce/editor/flip_entities.h"
 #include "mce/editor/group_entities.h"
@@ -92,6 +93,13 @@ void snap_selection(EditorScene& scene, f32 step) {
     Array<EntityId> ids;  // a copy: the edit below touches the scene
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     snap_entities(scene, ids.span(), step);
+}
+
+// Edit > Duplicate right / up: duplicates the selection and steps the copies by `dx`, `dy` (the copies are selected).
+void duplicate_stepped(EditorScene& scene, f32 dx, f32 dy) {
+    Array<EntityId> ids;  // a copy: the edit below changes the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    duplicate_offset(scene, ids.span(), dx, dy);
 }
 
 // Edit > Reset transform: the selection's local transforms go back to the identity.
@@ -1253,6 +1261,8 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
+        if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
         if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
         if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
