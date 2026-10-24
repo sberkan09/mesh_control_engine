@@ -32,6 +32,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/flip_entities.cpp
         src/snap_entities.cpp
         src/duplicate_offset.cpp
+        src/match_transform.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp

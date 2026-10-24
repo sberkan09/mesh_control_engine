@@ -16,6 +16,7 @@
 #include "mce/editor/entity_path.h"
 #include "mce/editor/flip_entities.h"
 #include "mce/editor/group_entities.h"
+#include "mce/editor/match_transform.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
 #include "mce/editor/reset_transform.h"
@@ -100,6 +101,13 @@ void duplicate_stepped(EditorScene& scene, f32 dx, f32 dy) {
     Array<EntityId> ids;  // a copy: the edit below changes the selection
     for (EntityId id : scene.selection().items()) ids.push_back(id);
     duplicate_offset(scene, ids.span(), dx, dy);
+}
+
+// Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
+void match_selection(EditorScene& scene, MatchPart part) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    match_transforms(scene, ids.span(), scene.selection().anchor(), part);
 }
 
 // Edit > Reset transform: the selection's local transforms go back to the identity.
@@ -1257,6 +1265,12 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
         if (ImGui::MenuItem("Flip horizontally", nullptr, false, sel)) flip_selection(scene(), AlignAxis::X);
         if (ImGui::MenuItem("Flip vertically", nullptr, false, sel)) flip_selection(scene(), AlignAxis::Y);
+        if (ImGui::BeginMenu("Match to anchor", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Position")) match_selection(scene(), MatchPart::Position);
+            if (ImGui::MenuItem("Rotation")) match_selection(scene(), MatchPart::Rotation);
+            if (ImGui::MenuItem("Scale")) match_selection(scene(), MatchPart::Scale);
+            ImGui::EndMenu();
+        }
         if (ImGui::MenuItem("Snap to grid", nullptr, false, sel)) snap_selection(scene(), view_.snap_step);
         if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
