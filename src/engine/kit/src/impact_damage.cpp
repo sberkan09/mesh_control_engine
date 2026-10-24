@@ -6,6 +6,8 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
+#include "mce/kit/traffic.h"
+#include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
 
@@ -67,6 +69,24 @@ void kit_impact_damage(Frame& f) {
     }
 }
 
+// A car whose Health3D is dead is a wreck: nobody drives it any more (an AI driver lets go, the player's input is off),
+// it rolls with no throttle and the handbrake on. Health3D::destroy_on_death / linger then remove it, or it stays as scenery.
+void kit_wreck(Frame& f) {
+    World& w = f.world();
+    f.query<const Health3D>().each([&](Entity e, const Health3D& hp) {
+        if (!hp.dead) return;
+        Vehicle3D* v = w.try_get_mut<Vehicle3D>(e);
+        if (!v) return;
+        v->use_input = 0;
+        v->throttle = 0.0f;
+        v->steer = 0.0f;
+        v->brake = 0.0f;
+        v->handbrake = 1.0f;
+        if (TrafficDriver3D* t = w.try_get_mut<TrafficDriver3D>(e)) t->drive = 0;
+        if (VehicleDriver3D* d = w.try_get_mut<VehicleDriver3D>(e)) d->drive = 0;
+    });
+}
+
 }  // namespace
 
 void install_impact_damage(World& world, asset::AssetSystem* assets) {
@@ -76,6 +96,7 @@ void install_impact_damage(World& world, asset::AssetSystem* assets) {
     world.set_resource(ImpactDamageState{});
     world.register_components<ImpactDamage3D>();
     world.add_system(Phase::FixedUpdate_Pre, "kit_impact_damage", &kit_impact_damage);
+    world.add_system(Phase::FixedUpdate_Pre, "kit_wreck", &kit_wreck);
 }
 
 }  // namespace mce::kit

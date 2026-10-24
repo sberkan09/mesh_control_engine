@@ -522,6 +522,8 @@ player is a crime. `kit_impact_damage` (FixedUpdate_Pre) reads the previous tick
 stays the way cars hurt crowd pedestrians, who have no physics body. The car's `VehicleSeat3D` driver takes `occupant_share` (default 0.5) of the same blow.
 On an entity with a `CharacterController3D` the component is also the contact opt-in (a character is no `RigidBody3D`), so a character landed on, run over or hit by a thrown crate takes the same crash damage.
 
+`kit_wreck` (installed with it, FixedUpdate_Pre): a car whose `Health3D` is dead (it has a `Vehicle3D`) is a wreck: `use_input` off, throttle and steer zero, handbrake on, and a `TrafficDriver3D` / `VehicleDriver3D` on it lets go (`drive = 0`). Set `Health3D::destroy_on_death` to remove it after `linger`, or leave it as scenery (M-CARWRECK).
+
 ### Vehicle ram (M-VEHICLEHIT)
 
 `VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car
