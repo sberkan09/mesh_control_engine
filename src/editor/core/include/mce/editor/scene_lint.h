@@ -2,7 +2,8 @@
 // lint_scene / format_lint — mistakes in a scene document that load fine and misbehave later (M-SCENELINT): an
 // entity without a name, two siblings with one name (a path like Room/Wall then names both), a scale of zero on an
 // axis (the entity has no volume and cannot be picked), a position, rotation or scale that is not a number, a parent
-// that does not exist. Headless, document-level (no ECS), tested in CI.
+// that does not exist, a reference from another component (a follow target, a trigger link) to an entity the scene
+// lacks. Headless, document-level (no ECS), tested in CI.
 
 #include "mce/containers/array.h"
 #include "mce/cook/string.h"
@@ -16,6 +17,7 @@ enum class LintKind : u8 {
     ZeroScale,
     NonFiniteTransform,
     MissingParent,  // ChildOf names an entity the scene lacks, or the entity itself
+    DanglingRef,    // another component refers to an entity the scene lacks (prefab instances are not checked)
 };
 
 struct LintFinding {

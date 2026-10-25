@@ -308,8 +308,9 @@ const ToolDef kAgentTools[] = {
     {"scene_lint",
      "Mistakes in a scene that load fine and misbehave later: an entity without a name, siblings that share a name "
      "(a path like Room/Wall then names both), a scale of zero on an axis, a position, rotation or scale that is not "
-     "a number, a parent that does not exist. 'path' is a scene under assets/; left out, the open scene (unsaved "
-     "edits included). Returns clean, the findings (entity, name, kind) and a text report, one line per finding.",
+     "a number, a parent that does not exist, a reference to an entity the scene lacks. 'path' is a scene under "
+     "assets/; left out, the open scene (unsaved edits included). Returns clean, the findings (entity, name, kind) "
+     "and a text report, one line per finding.",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
      scene_lint},
     {"scene_stats",

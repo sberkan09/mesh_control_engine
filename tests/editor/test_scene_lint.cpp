@@ -9,6 +9,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/editor/editor_scene.h"
 #include "mce/editor/scene_lint.h"
+#include "mce/kit/anim3d.h"
 
 using namespace mce;
 using namespace mce::editor;
@@ -80,4 +81,24 @@ TEST_CASE("a parent the scene lacks is reported") {
     s.add_component(orphan, refl::type_of<ChildOf>());
     REQUIRE(s.set(orphan, ChildOf{doc_entity_ref(999)}));
     CHECK(has(lint_scene(s.doc()), orphan, LintKind::MissingParent));
+}
+
+TEST_CASE("a reference to an entity the scene lacks is reported; a null one and a present one are not") {
+    EditorScene s;
+    const EntityId hand = s.create_entity("Hand");
+    const EntityId gun = s.create_entity("Gun");
+    s.add_component(gun, refl::type_of<kit::AttachToBone>());
+    CHECK_FALSE(has(lint_scene(s.doc()), gun, LintKind::DanglingRef));  // a null target
+
+    kit::AttachToBone a;
+    a.target = doc_entity_ref(hand);
+    REQUIRE(s.set(gun, a));
+    CHECK_FALSE(has(lint_scene(s.doc()), gun, LintKind::DanglingRef));
+
+    a.target = doc_entity_ref(999);
+    REQUIRE(s.set(gun, a));
+    const Array<LintFinding> f = lint_scene(s.doc());
+    CHECK(has(f, gun, LintKind::DanglingRef));
+    CHECK_FALSE(has(f, gun, LintKind::MissingParent));  // a parent is reported as MissingParent, not twice
+    CHECK(std::string_view(format_lint(f.span()).c_str()).find("Gun (id ") != std::string_view::npos);
 }
