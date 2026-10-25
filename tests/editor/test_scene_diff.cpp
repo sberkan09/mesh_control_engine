@@ -81,7 +81,7 @@ TEST_CASE("component changes name the field; added and removed components are re
     LocalTransform t = *s.get<LocalTransform>(a);
     t.position.x = 3.0f;
     REQUIRE(s.set(a, t));
-    REQUIRE(s.set(a, kit::Sprite{}));
+    REQUIRE(s.add_component(a, refl::type_of<kit::Sprite>()));
 
     const SceneDiff d = diff_scenes(before, s.doc());
     const EntityDiff* e = find(d, a);
