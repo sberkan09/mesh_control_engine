@@ -313,8 +313,8 @@ const ToolDef kAgentTools[] = {
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
      scene_lint},
     {"scene_stats",
-     "What a scene holds at a glance: entity count, roots, hierarchy depth, prefab instances, the box the local  "
-     "positions span and the components in use (most used first). 'path' is a scene under assets/; left out, the  "
+     "What a scene holds at a glance: entity count, roots, hierarchy depth, prefab instances, the box the local "
+     "positions span and the components in use (most used first). 'path' is a scene under assets/; left out, the "
      "open scene (unsaved edits included). Returns the numbers and a text report (the same as `mce scene stats`).",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
      scene_stats},
