@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "mce/ecs/transform.h"
+#include "mce/editor/editor_scene.h"
 #include "mce/editor/scene_diff.h"
 #include "mce/kit/components.h"
 
