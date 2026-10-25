@@ -53,7 +53,7 @@ Array<FindHit> find_entities(const SceneDocument& doc, const FindQuery& q) {
     Array<FindHit> hits;
     for (const DocEntity& e : doc.entities()) {
         if (!q.name.empty() && !contains_ignoring_case(e.name.view(), q.name)) continue;
-        if (q.component != nullptr && e.find(q.component) == nullptr) continue;
+        if (q.component != nullptr && e.find(*q.component) == nullptr) continue;
         if (q.prefab_instances_only && e.prefab == asset::Guid{}) continue;
         FindHit h;
         h.id = e.id;
