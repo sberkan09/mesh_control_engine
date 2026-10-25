@@ -35,6 +35,7 @@ mce_add_library(mce_mcp_core UMBRELLA
         src/tools_scene_diff.cpp
         src/tools_scene_lint.cpp
         src/tools_scene_stats.cpp
+        src/tools_scene_find.cpp
         src/tools_code.cpp
         src/tools_import.cpp
         src/tools_views.cpp
