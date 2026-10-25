@@ -1,6 +1,6 @@
 # M-TRAFFICAVOID — traffic goes around a wreck
 
-Status: steps 1 and 2a done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
+Status: steps 1, 2a and 3 done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
 
 ## Why
 
@@ -46,4 +46,6 @@ Not in step 1: oncoming-lane overtakes on single-lane roads (needs the oncoming 
 
 **Step 1 (done 2026-10-25).** `Drive::dodge` and `Drive::neighbour` in `traffic.cpp`: a car whose leader is a stopped (`< 0.5 m/s`) car with `drive = 0` within `max(30 m, braking distance + 10 m)` switches `lane` to a free same-direction neighbour (lower index first), `next` / `after` cleared. No new field. Tests in `tests/kit/test_traffic.cpp` ("traffic avoid": two lanes go around, one lane queues, the other lane blocked waits). Known limit (closed by step 2): two cars dodging in the same tick read the same occupancy table.
 
-**Step 2a (done 2026-10-25).** `Drive::claimed`: a lane a car changed into this tick is recorded with its `s`, and a later car in the same tick treats that window as occupied, so a platoon queued behind a wreck goes around one after the other instead of side by side. Test: "traffic avoid: two cars queued behind a wreck both get around it". Still open: returning to the original lane (needs a saved field), oncoming-lane overtake on one-lane roads.
+**Step 2a (done 2026-10-25).** `Drive::claimed`: a lane a car changed into this tick is recorded with its `s`, and a later car in the same tick treats that window as occupied, so a platoon queued behind a wreck goes around one after the other instead of side by side. Test: "traffic avoid: two cars queued behind a wreck both get around it". Still open: oncoming-lane overtake on one-lane roads.
+
+**Step 3 (done 2026-10-25).** `TrafficDriver3D::home` (saved, engine-written): the lane a car left to go round a wreck. `Drive::rejoin` puts it back there once nobody is within 10 m behind / 12 m ahead of it in that lane, no other undriven stopped car lies within 60 m ahead there (it would only dodge again), and no other car claimed that gap this tick; it forgets `home` if it drives on to another road piece. Test: "traffic avoid: once past the wreck the car returns to the lane it left"; the earlier dodge tests now check that the car was in another lane on the way.

@@ -21,7 +21,7 @@ using asset::RoadLane;
 using asset::RoadLaneKind;
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(TrafficDriver3D) == 100);
+static_assert(sizeof(TrafficDriver3D) == 104);
 static_assert(sizeof(TrafficSpawner3D) == 88);
 
 namespace {
@@ -327,6 +327,7 @@ struct Drive {
             for (const Slot& k : claimed) taken |= k.lane == n && k.s > lo && k.s < hi;
             if (taken) continue;
             claimed.push_back(Slot{n, s_n, ci});
+            if (t.home == kRoadNone) t.home = t.lane;
             t.lane = n;
             t.s = math::clamp(s_n, 0.0f, d.lanes[n].length);
             t.next = kRoadNone;
@@ -336,12 +337,55 @@ struct Drive {
         }
     }
 
+    // A car that went round a wreck returns to the lane it left once it is clear of it: nobody in the way
+    // beside it, no other stopped car undriven ahead in that lane (it would only dodge again).
+    void rejoin(u32 ci) {
+        Car& c = cars[ci];
+        TrafficDriver3D& t = *c.d;
+        const RoadRegistry::Def& d = *c.net->def;
+        const u32 h = t.home;
+        if (h >= d.lanes.size() || t.lane >= d.lanes.size() || h == t.lane) {
+            t.home = kRoadNone;
+            return;
+        }
+        const RoadLane& l = d.lanes[t.lane];
+        const RoadLane& o = d.lanes[h];
+        // It drove on to another road piece, or the lane is no longer beside its own: forget the way back.
+        if (l.kind != RoadLaneKind::Road || o.kind != RoadLaneKind::Road || o.road != l.road || o.node != l.node ||
+            std::abs(static_cast<int>(o.index) - static_cast<int>(l.index)) != 1) {
+            t.home = kRoadNone;
+            return;
+        }
+        f32 s_h = 0.0f, dist = 0.0f;
+        project(*c.net, h, c.pos, s_h, dist);
+        const f32 lo = s_h - 10.0f;
+        const f32 hi = s_h + 12.0f;
+        const Slot* other = occ.ahead(h, lo, ci);
+        if (other && other->lane == h && other->s < hi) return;
+        if (other && other->lane == h && other->s < s_h + 60.0f) {
+            const Car& oc = cars[other->car];
+            if (oc.d->drive == 0 && std::fabs(oc.speed) <= 0.5f) return;
+        }
+        for (const Slot& k : claimed)
+            if (k.lane == h && k.s > lo && k.s < hi) return;
+        claimed.push_back(Slot{h, s_h, ci});
+        t.lane = h;
+        t.s = math::clamp(s_h, 0.0f, o.length);
+        t.next = kRoadNone;
+        t.after = kRoadNone;
+        t.stopped_for = 0.0f;
+        t.home = kRoadNone;
+    }
+
     void drive(u32 ci) {
         Car& c = cars[ci];
         TrafficDriver3D& t = *c.d;
         Vehicle3D& v = *c.v;
         const RoadRegistry::Def& d = *c.net->def;
-        if (t.state != TrafficState::Lost && t.lane < d.lanes.size()) dodge(ci);
+        if (t.state != TrafficState::Lost && t.lane < d.lanes.size()) {
+            if (t.home != kRoadNone) rejoin(ci);
+            dodge(ci);
+        }
         if (t.state == TrafficState::Lost || t.lane >= d.lanes.size()) {
             t.target_speed = 0.0f;
             v.throttle = v.steer = 0.0f;

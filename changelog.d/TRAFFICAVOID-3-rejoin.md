@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): a car that went round a wreck returns to the lane it left once it is clear (new saved field `TrafficDriver3D::home`). Record: `docs/milestones/M-TRAFFICAVOID.md`.
