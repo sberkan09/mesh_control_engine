@@ -303,3 +303,20 @@ TEST_CASE("traffic avoid: the other lane blocked beside the wreck means waiting"
     s.run(60 * 25);
     CHECK(s.pos(c).z > 100.0f + 2.0f);
 }
+
+TEST_CASE("traffic avoid: two cars queued behind a wreck both get around it, one after the other") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity first = s.car(1.75f, 150.0f);
+    const Entity second = s.car(1.75f, 170.0f);
+    f32 closest = 1e9f;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        closest = math::min(closest, math::length(s.pos(first) - s.pos(second)));
+    }
+    CHECK(s.pos(first).z < 80.0f);
+    CHECK(s.pos(second).z < 80.0f);
+    CHECK(s.drv(first).lane != s.drv(wreck).lane);
+    CHECK(s.drv(second).lane != s.drv(wreck).lane);
+    CHECK(closest > 4.5f);  // never overlapping
+}
