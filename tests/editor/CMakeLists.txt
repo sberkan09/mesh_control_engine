@@ -74,3 +74,15 @@ if(MCE_GPU_TESTS)
     add_test(NAME test_editor_gl COMMAND test_editor_gl)
     set_tests_properties(test_editor_gl PROPERTIES LABELS gpu)
 endif()
+
+# mce_scene_diff (M-SCENEDIFF 2): the report over two fixture scenes, and the exit code (1 when they differ).
+add_test(NAME scene_diff_cli_report
+         COMMAND mce_scene_diff "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_b.mcscene")
+set_tests_properties(scene_diff_cli_report PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\+ Wall \\(id 4\\).*- Torch \\(id 3\\)|- Torch \\(id 3\\).*\\+ Wall \\(id 4\\)")
+add_test(NAME scene_diff_cli_exit_code
+         COMMAND mce_scene_diff "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_b.mcscene")
+set_tests_properties(scene_diff_cli_exit_code PROPERTIES WILL_FAIL TRUE)
+add_test(NAME scene_diff_cli_identical
+         COMMAND mce_scene_diff "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene")
+set_tests_properties(scene_diff_cli_identical PROPERTIES PASS_REGULAR_EXPRESSION "scenes are identical")
