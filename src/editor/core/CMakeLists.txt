@@ -34,6 +34,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/duplicate_offset.cpp
         src/match_transform.cpp
         src/scene_diff.cpp
+        src/scene_lint.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp
