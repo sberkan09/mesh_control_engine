@@ -312,6 +312,20 @@ const ToolDef kAgentTools[] = {
      "edits included). Returns clean, the findings (entity, name, kind) and a text report, one line per finding.",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
      scene_lint},
+    {"scene_stats",
+     "What a scene holds at a glance: entity count, roots, hierarchy depth, prefab instances, the box the local "
+     "positions span and the components in use (most used first). 'path' is a scene under assets/; left out, the "
+     "open scene (unsaved edits included). Returns the numbers and a text report (the same as `mce scene stats`).",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
+     scene_stats},
+    {"scene_find",
+     "The entities of a scene that match a question: 'name' is a part of the entity name (ignoring case), "
+     "'component' a component type the entity carries, 'prefab' keeps only prefab instances; every condition "
+     "given must hold, none given lists every entity. 'path' is a scene under assets/; left out, the open scene "
+     "(unsaved edits included). Returns count, the hits (entity id, name, hierarchy path such as Room/Wall/Torch) "
+     "and a text report.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"},"name":{"type":"string","description":"Part of the entity name, ignoring case"},"component":{"type":"string","description":"A component type the entity carries, e.g. Sprite"},"prefab":{"type":"boolean","description":"Only prefab instances"}}})j",
+     scene_find},
     {"report_friction",
      "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
      "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "

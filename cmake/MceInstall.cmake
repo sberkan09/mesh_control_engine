@@ -1,6 +1,6 @@
 # The installable engine (the SDK): `cmake --install <build> --prefix <dir>` lays out
 #
-#   bin/        mce_player, mce_editor, mce_mcp, mce_scene_diff, mce_scene_lint, mce_cook, mce_devhost and the `mce` command
+#   bin/        mce_player, mce_editor, mce_mcp, mce_scene_diff, mce_scene_lint, mce_scene_stats, mce_scene_find, mce_cook, mce_devhost and the `mce` command
 #   lib/        libmce_engine (the umbrella every tool and game module shares),
 #               libmce_player_runtime (what a project's host links), libmce_net (the opt-in
 #               networking module, when built with MCE_WITH_NET), libmce_kit_novel (the opt-in
@@ -25,7 +25,7 @@ endif()
 include(GNUInstallDirs)
 
 set(_mce_sdk_tools mce_player mce_cook)
-foreach(t mce_editor mce_mcp mce_scene_diff mce_scene_lint mce_devhost)
+foreach(t mce_editor mce_mcp mce_scene_diff mce_scene_lint mce_scene_stats mce_scene_find mce_devhost)
     if(TARGET ${t})
         list(APPEND _mce_sdk_tools ${t})
     endif()

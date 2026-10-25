@@ -78,4 +78,10 @@ bool scene_diff(ToolCall& c);
 // tools_scene_lint.cpp (M-SCENELINT 3): mistakes in a scene that load fine.
 bool scene_lint(ToolCall& c);
 
+// tools_scene_stats.cpp (M-SCENESTATS 3): what a scene holds at a glance.
+bool scene_stats(ToolCall& c);
+
+// tools_scene_find.cpp (M-SCENEFIND 3): the entities of a scene that match a question.
+bool scene_find(ToolCall& c);
+
 }  // namespace mce::mcp

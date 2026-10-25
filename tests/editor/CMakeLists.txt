@@ -25,6 +25,8 @@ mce_add_test(test_editor UMBRELLA
         test_match_transform.cpp
         test_scene_diff.cpp
         test_scene_lint.cpp
+        test_scene_stats.cpp
+        test_scene_find.cpp
         test_recent_list.cpp
         test_asset_thumb.cpp
         test_asset_form.cpp
@@ -96,3 +98,20 @@ add_test(NAME scene_lint_cli_exit_code COMMAND mce_scene_lint "${CMAKE_CURRENT_S
 set_tests_properties(scene_lint_cli_exit_code PROPERTIES WILL_FAIL TRUE)
 add_test(NAME scene_lint_cli_clean COMMAND mce_scene_lint "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_clean.mcscene")
 set_tests_properties(scene_lint_cli_clean PROPERTIES PASS_REGULAR_EXPRESSION "no findings")
+
+# mce_scene_stats (M-SCENESTATS 2): the report over a fixture scene, and the heading when there are several.
+add_test(NAME scene_stats_cli_report COMMAND mce_scene_stats "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene")
+set_tests_properties(scene_stats_cli_report PROPERTIES
+    PASS_REGULAR_EXPRESSION "entities: 3 \\(3 roots, depth 0\\).*bounds: \\(0, 0, 0\\) to \\(4, 0, 0\\).*LocalTransform: 3")
+add_test(NAME scene_stats_cli_several COMMAND mce_scene_stats "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_clean.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene")
+set_tests_properties(scene_stats_cli_several PROPERTIES PASS_REGULAR_EXPRESSION "lint_clean.mcscene:.*entities: 2.*lint_bad.mcscene:.*entities: 3")
+
+# mce_scene_find (M-SCENEFIND 2): a name part, a component, no match (exit 1) and an unknown component (exit 2).
+add_test(NAME scene_find_cli_name COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" --name WALL)
+set_tests_properties(scene_find_cli_name PROPERTIES PASS_REGULAR_EXPRESSION "Wall \\(id 1\\).*Wall \\(id 2\\)")
+add_test(NAME scene_find_cli_component COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_clean.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" --component Camera2DComponent)
+set_tests_properties(scene_find_cli_component PROPERTIES PASS_REGULAR_EXPRESSION "lint_clean.mcscene: Camera \\(id 1\\)")
+add_test(NAME scene_find_cli_none COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" --name Camera)
+set_tests_properties(scene_find_cli_none PROPERTIES WILL_FAIL TRUE)
+add_test(NAME scene_find_cli_unknown_component COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" --component NoSuchThing)
+set_tests_properties(scene_find_cli_unknown_component PROPERTIES WILL_FAIL TRUE)

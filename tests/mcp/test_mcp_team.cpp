@@ -351,6 +351,53 @@ TEST_CASE("scene_diff: unsaved edits against the file, then two saved scenes, th
     CHECK(alice.fails("scene_diff", R"({"b":"scenes/demo.mcscene"})").find("'a'") != std::string::npos);
 }
 
+TEST_CASE("scene_stats: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_stats");
+    Agent alice(root, "alice");
+    const double before = alice.ok("scene_stats").v().get("entities").as_number();
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    auto open = alice.ok("scene_stats");
+    CHECK(open.v().get("entities").as_number() == before + 1);
+    CHECK(open.v().get("has_bounds").as_bool());
+    CHECK(open.v().get("components").size() > 0);
+    CHECK(str(open.v().get("report")).find("entities: ") == 0);
+
+    // The file on disk has none of the edits yet.
+    auto disk = alice.ok("scene_stats", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(str(disk.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(disk.v().get("entities").as_number() == before);
+    alice.ok("scene_save");
+    CHECK(alice.ok("scene_stats", R"({"path":"scenes/demo.mcscene"})").v().get("entities").as_number() == before + 1);
+
+    CHECK(alice.fails("scene_stats", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
+TEST_CASE("scene_find: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_find");
+    Agent alice(root, "alice");
+    const double before = alice.ok("scene_find").v().get("count").as_number();  // no condition: every entity
+    alice.ok("entity_create", R"({"name":"Lantern Post"})");
+    alice.ok("entity_create", R"({"name":"Lantern","components":{"LocalTransform":{"position":[3,1,0]}}})");
+    auto open = alice.ok("scene_find", R"({"name":"LANTERN"})");
+    CHECK(open.v().get("count").as_number() == 2);
+    CHECK(str(open.v().get("hits").at(0).get("name")) == "Lantern Post");
+    CHECK(str(open.v().get("hits").at(0).get("path")) == "Lantern Post");
+    CHECK(str(open.v().get("report")).find("Lantern (id ") != std::string::npos);
+    CHECK(alice.ok("scene_find").v().get("count").as_number() == before + 2);
+    CHECK(alice.ok("scene_find", R"({"name":"Lantern","component":"LocalTransform"})").v().get("count").as_number() == 2);
+    CHECK(alice.ok("scene_find", R"({"name":"Lantern","prefab":true})").v().get("count").as_number() == 0);
+
+    // The file on disk has none of the edits yet.
+    CHECK(alice.ok("scene_find", R"({"path":"scenes/demo.mcscene","name":"Lantern"})").v().get("count").as_number() == 0);
+    alice.ok("scene_save");
+    auto saved = alice.ok("scene_find", R"({"path":"scenes/demo.mcscene","name":"Lantern"})");
+    CHECK(str(saved.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(saved.v().get("count").as_number() == 2);
+
+    CHECK(alice.fails("scene_find", R"({"component":"NoSuchThing"})").find("unknown component") != std::string::npos);
+    CHECK(alice.fails("scene_find", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
 TEST_CASE("scene_lint: the open scene with unsaved edits, then a saved file by path") {
     const std::string root = demo_project("mcp_team_scene_lint");
     Agent alice(root, "alice");
