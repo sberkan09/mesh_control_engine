@@ -1,0 +1,1 @@
+- Tests (M-CARWRECK): a scenario test drives a car into a wall (crash damage, wreck, driver hurt) next to the existing GTA-slice test.
