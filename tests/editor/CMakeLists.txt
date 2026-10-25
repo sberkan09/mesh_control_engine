@@ -87,3 +87,12 @@ set_tests_properties(scene_diff_cli_exit_code PROPERTIES WILL_FAIL TRUE)
 add_test(NAME scene_diff_cli_identical
          COMMAND mce_scene_diff "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene" "${CMAKE_CURRENT_SOURCE_DIR}/data/diff_a.mcscene")
 set_tests_properties(scene_diff_cli_identical PROPERTIES PASS_REGULAR_EXPRESSION "scenes are identical")
+
+# mce_scene_lint (M-SCENELINT 2): findings over a fixture scene, none over a tidy one.
+add_test(NAME scene_lint_cli_findings COMMAND mce_scene_lint "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene")
+set_tests_properties(scene_lint_cli_findings PROPERTIES
+    PASS_REGULAR_EXPRESSION "Wall \\(id 2\\): duplicate name among its siblings.*Flat \\(id 3\\): scale of zero on an axis")
+add_test(NAME scene_lint_cli_exit_code COMMAND mce_scene_lint "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene")
+set_tests_properties(scene_lint_cli_exit_code PROPERTIES WILL_FAIL TRUE)
+add_test(NAME scene_lint_cli_clean COMMAND mce_scene_lint "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_clean.mcscene")
+set_tests_properties(scene_lint_cli_clean PROPERTIES PASS_REGULAR_EXPRESSION "no findings")

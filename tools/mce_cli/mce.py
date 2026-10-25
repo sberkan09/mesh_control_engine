@@ -31,6 +31,7 @@
     mce serve <zip | folder | project> [--port N] [--lan] [--open]   play a web build locally (the right
                                                 MIME types and headers; browsers do not run file:// pages)
     mce scene diff <before> <after>             what changed between two .mcscene files (exit 1 when they differ)
+    mce scene lint <scene>...                   mistakes in scenes that load fine (exit 1 when there are findings)
     mce perf [<project | file.mcperf>] [--json]   read a perf capture (perf_run's cooked/.perf/last.mcperf, or the player's
                                                 -perf_capture file): the frame cost and the draw calls by cause
     mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
@@ -981,7 +982,10 @@ def cmd_perf(args):
 
 
 def cmd_scene(args):
-    # mce_scene_diff owns stdout and the exit code (0 identical, 1 differ, 2 unreadable), so no "mce:" command line.
+    # The tools own stdout and the exit code (diff: 0 identical, 1 differ; lint: 0 none, 1 findings; 2 unreadable),
+    # so no "mce:" command line.
+    if args.scene_command == "lint":
+        return subprocess.call([tool("mce_scene_lint")] + args.scenes)
     return subprocess.call([tool("mce_scene_diff"), args.before, args.after])
 
 
@@ -1052,11 +1056,14 @@ def main(argv):
     s.add_argument("--remove", action="store_true", help="remove the entry instead")
     s.set_defaults(fn=cmd_mcp_config)
 
-    s = sub.add_parser("scene", help="scene tools (mce scene diff <before> <after>)")
-    scene = s.add_subparsers(dest="scene_command", metavar="diff", required=True)
+    s = sub.add_parser("scene", help="scene tools (mce scene diff <before> <after>, mce scene lint <scene>...)")
+    scene = s.add_subparsers(dest="scene_command", metavar="diff|lint", required=True)
     s = scene.add_parser("diff", help="what changed between two .mcscene files: entities added, removed or changed; exit 1 when they differ")
     s.add_argument("before")
     s.add_argument("after")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("lint", help="mistakes in scenes that load fine: unnamed or same-named siblings, zero scale, bad transforms, missing parents; exit 1 on findings")
+    s.add_argument("scenes", nargs="+")
     s.set_defaults(fn=cmd_scene)
 
     s = sub.add_parser("headless", help="run the game without a window and print the state hash")
