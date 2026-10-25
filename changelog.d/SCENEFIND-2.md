@@ -1,0 +1,1 @@
+- Editor, M-SCENEFIND step 2: `mce scene find <scene>... [--name] [--component] [--prefab]` prints the entities that match.
