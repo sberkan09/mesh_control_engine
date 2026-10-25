@@ -289,11 +289,54 @@ struct Drive {
         return false;
     }
 
+    // M-TRAFFICAVOID: the road lane beside `lane` going the same way (`side` +-1 in lane index), or kRoadNone.
+    static u32 neighbour(const RoadRegistry::Def& d, u32 lane, int side) {
+        const RoadLane& l = d.lanes[lane];
+        if (l.kind != RoadLaneKind::Road) return kRoadNone;
+        for (u32 i = 0; i < d.lanes.size(); ++i) {
+            const RoadLane& o = d.lanes[i];
+            if (o.kind == RoadLaneKind::Road && o.road == l.road && o.node == l.node && static_cast<int>(o.index) == static_cast<int>(l.index) + side) return i;
+        }
+        return kRoadNone;
+    }
+
+    // A car stuck behind a stopped car that nobody drives (a wreck, a parked car) takes a free lane beside it.
+    void dodge(u32 ci) {
+        Car& c = cars[ci];
+        TrafficDriver3D& t = *c.d;
+        const RoadRegistry::Def& d = *c.net->def;
+        if (t.lane >= d.lanes.size() || d.lanes[t.lane].kind != RoadLaneKind::Road) return;
+        const Slot* ahead = occ.ahead(t.lane, t.s, ci);
+        if (!ahead) return;
+        const Car& lc = cars[ahead->car];
+        if (lc.d->drive || std::fabs(lc.speed) > 0.5f) return;
+        const f32 gap = ahead->s - t.s - lc.d->length;
+        const f32 v = math::max(c.speed, 0.0f);
+        if (gap > math::max(30.0f, v * v / (2.0f * t.decel) + 10.0f)) return;
+        for (const int side : {-1, 1}) {
+            const u32 n = neighbour(d, t.lane, side);
+            if (n == kRoadNone) continue;
+            f32 s_n = 0.0f, dist = 0.0f;
+            project(*c.net, n, c.pos, s_n, dist);
+            const f32 lo = s_n - 10.0f;
+            const f32 hi = s_n + (ahead->s - t.s) + 8.0f;
+            const Slot* other = occ.ahead(n, lo, ci);
+            if (other && other->lane == n && other->s < hi) continue;
+            t.lane = n;
+            t.s = math::clamp(s_n, 0.0f, d.lanes[n].length);
+            t.next = kRoadNone;
+            t.after = kRoadNone;
+            t.stopped_for = 0.0f;
+            return;
+        }
+    }
+
     void drive(u32 ci) {
         Car& c = cars[ci];
         TrafficDriver3D& t = *c.d;
         Vehicle3D& v = *c.v;
         const RoadRegistry::Def& d = *c.net->def;
+        if (t.state != TrafficState::Lost && t.lane < d.lanes.size()) dodge(ci);
         if (t.state == TrafficState::Lost || t.lane >= d.lanes.size()) {
             t.target_speed = 0.0f;
             v.throttle = v.steer = 0.0f;

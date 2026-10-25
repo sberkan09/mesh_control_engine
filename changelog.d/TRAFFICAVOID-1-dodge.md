@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): a traffic car stuck behind a stopped car nobody drives (a wreck) takes a free lane beside it on a road with two lanes in its direction. Record: `docs/milestones/M-TRAFFICAVOID.md`.
