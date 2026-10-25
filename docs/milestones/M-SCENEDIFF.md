@@ -1,6 +1,6 @@
 # M-SCENEDIFF — Semantic scene diff (milestone record)
 
-**Status:** step 1 done; steps 2 and 3 open. **Owner: the "Geliştirme rutini 3" thread** (editor and asset tools). Defined 2026-10-25 on the coordinator's request for a new area that needs no real account or device (tooling for review and merge checks; outside gameplay and the traffic work). Linear issues: see the ROADMAP row.
+**Status:** step 1 done; steps 2 and 3 open. **Owner: the "Geliştirme rutini 3" thread** (editor and asset tools). Defined 2026-10-25 on the coordinator's request for a new area that needs no real account or device (tooling for review and merge checks; outside gameplay and the traffic work). No Linear issues (Linear is at its free issue limit; creating one was refused); this record is the tracker.
 
 **Goal.** A line diff of a `.mcscene` is hard to read after a reorder or a renumbering, and reviewers and agents cannot tell "Door got a new Collider" from "the file was reformatted". `diff_scenes` matches entities by their persistent id and reports entities added or removed, renames, prefab link changes, components added or removed, and the changed fields by reflected name; entity order is reported once. The same report serves a command line, the MCP tools and a review step in CI.
 
