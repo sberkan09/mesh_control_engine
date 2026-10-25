@@ -199,7 +199,7 @@ connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawne
 before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
 removes far, lost or flipped ones. All driver state is in the component (saved, hashed). A `Pedestrian3D` in `Cross` mode
 within a car's lanes ahead (lane half width + 1.2 m, checked every 1.5 m up to its stopping distance + 15 m) stops it
-3 m short. A car stuck behind a stopped car that nobody drives (`drive = 0`, a wreck) takes a free lane beside it when its road has a second lane in its direction (M-TRAFFICAVOID); once past, it returns to the lane it left (`TrafficDriver3D::home`); on a one-lane road it queues.
+3 m short. A car stuck behind a stopped car that nobody drives (`drive = 0`, a wreck) takes a free lane beside it when its road has a second lane in its direction (M-TRAFFICAVOID); once past, it returns to the lane it left (`TrafficDriver3D::home`); on a road with one lane each way it passes through the oncoming lane when that is empty (`TrafficDriver3D::offset`), otherwise it queues.
 
 `crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the

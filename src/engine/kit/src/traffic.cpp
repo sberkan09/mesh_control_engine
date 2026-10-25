@@ -32,6 +32,10 @@ constexpr f32 kStopLine = 1.0f;     // m short of a connector's start a car stop
 constexpr f32 kStandAtStop = 1.0f;  // s a car stands at a stop line before it may go
 constexpr f32 kWalkerClear = 1.2f;  // m beside its lane a crossing pedestrian still stops a car
 constexpr f32 kWalkerGap = 3.0f;    // m short of a crossing pedestrian a car stops
+constexpr f32 kOvertakeSpan = 100.0f;  // m of the oncoming lane that must be empty before a car pulls out round a wreck
+constexpr f32 kOffsetRate = 2.5f;      // m/s a car moves sideways round a wreck
+constexpr f32 kPassGap = 3.2f;         // m between a car's centre line and the wreck it passes
+constexpr f32 kClearOffset = 3.0f;     // m to the left of a wreck at which a car no longer treats it as its leader
 constexpr f32 kWalkerStep = 1.5f;   // m between the points of its lanes a car checks
 
 struct TrafficAssets {
@@ -337,6 +341,78 @@ struct Drive {
         }
     }
 
+    // A car nobody drives that stands still (a wreck, a parked car).
+    static bool still(const Car& k) { return k.d->drive == 0 && std::fabs(k.speed) <= 0.5f; }
+
+    // The next car after slot `k` on `lane` that is not `self`; null when none.
+    const Slot* following(const Slot* k, u32 lane, u32 self) const {
+        for (++k; k != occ.slots.end() && k->lane == lane; ++k)
+            if (k->car != self) return k;
+        return nullptr;
+    }
+
+    // The first standing undriven car on `lane` with s above `after`; null when none.
+    const Slot* wreck_from(u32 lane, f32 after, u32 self) const {
+        for (const Slot* k = occ.ahead(lane, after, self); k && k != occ.slots.end() && k->lane == lane; ++k)
+            if (k->car != self && still(cars[k->car])) return k;
+        return nullptr;
+    }
+
+    // Metres car `other` stands to the right of the centre line of car `ci`'s lane (negative: to its left).
+    f32 side_of(u32 ci, u32 other) const {
+        const Car& c = cars[ci];
+        f32 s_o = 0.0f, dist = 0.0f;
+        project(*c.net, c.d->lane, cars[other].pos, s_o, dist);
+        const math::vec3 p = road_lane_point(*c.net, c.d->lane, s_o);
+        const math::vec3 dir = flat(road_lane_point(*c.net, c.d->lane, s_o + 1.0f) - p);
+        if (math::length(dir) < 1e-3f) return 0.0f;
+        const math::vec3 n = math::normalize(dir);
+        return math::dot(flat(cars[other].pos - p), math::vec3{-n.z, 0.0f, n.x});
+    }
+
+    // M-TRAFFICAVOID 4b: the lane going the other way on the same road (its innermost), or kRoadNone.
+    static u32 oncoming(const RoadRegistry::Def& d, u32 lane) {
+        const RoadLane& l = d.lanes[lane];
+        for (u32 i = 0; i < d.lanes.size(); ++i) {
+            const RoadLane& o = d.lanes[i];
+            if (o.kind == RoadLaneKind::Road && o.road == l.road && o.node != l.node && o.index == 0) return i;
+        }
+        return kRoadNone;
+    }
+
+    // On a road with one lane each way a car stuck behind a wreck steers round it through the oncoming lane
+    // (`offset` to the left) when no oncoming car is within kOvertakeSpan, and back once it is past.
+    // Once it is level with the wreck it carries on whatever comes.
+    void overtake(u32 ci) {
+        Car& c = cars[ci];
+        TrafficDriver3D& t = *c.d;
+        if (t.offset > 0.0f) return;  // an offset to the right is the game's own; only leftward ones are managed here
+        const RoadRegistry::Def& d = *c.net->def;
+        f32 want = 0.0f;
+        if (t.lane < d.lanes.size() && d.lanes[t.lane].kind == RoadLaneKind::Road && neighbour(d, t.lane, -1) == kRoadNone &&
+            neighbour(d, t.lane, 1) == kRoadNone) {
+            const Slot* wk = wreck_from(t.lane, t.s - 10.0f, ci);
+            const u32 o = oncoming(d, t.lane);
+            if (wk && o != kRoadNone) {
+                const f32 gap = wk->s - t.s - cars[wk->car].d->length;
+                const f32 v = math::max(c.speed, 0.0f);
+                const bool near = gap <= math::max(45.0f, v * v / (2.0f * t.decel) + 10.0f);
+                const bool going = t.offset < -0.1f;
+                if (near || going) {
+                    f32 s_o = 0.0f, dist = 0.0f;
+                    project(*c.net, o, c.pos, s_o, dist);
+                    const Slot* in = occ.ahead(o, s_o - kOvertakeSpan, ci);
+                    const bool free = !(in && in->s < s_o + 10.0f);
+                    const bool level = going && wk->s - t.s < 8.0f;
+                    if (free || level)
+                        want = math::max(math::min(-(d.lanes[t.lane].width + d.lanes[o].width) * 0.5f, side_of(ci, wk->car) - kPassGap), -8.0f);
+                }
+            }
+        }
+        const f32 step = kOffsetRate * dt;
+        t.offset += math::clamp(want - t.offset, -step, step);
+    }
+
     // A car that went round a wreck returns to the lane it left once it is clear of it: nobody in the way
     // beside it, no other stopped car undriven ahead in that lane (it would only dodge again).
     void rejoin(u32 ci) {
@@ -385,6 +461,7 @@ struct Drive {
         if (t.state != TrafficState::Lost && t.lane < d.lanes.size()) {
             if (t.home != kRoadNone) rejoin(ci);
             dodge(ci);
+            overtake(ci);
         }
         if (t.state == TrafficState::Lost || t.lane >= d.lanes.size()) {
             t.target_speed = 0.0f;
@@ -426,6 +503,8 @@ struct Drive {
             // The car ahead.
             if (!found_leader) {
                 const Slot* s = occ.ahead(lanes[i], i == 0 ? t.s : -1e30f, ci);
+                // Once it has pulled out round a wreck, the wreck is no longer its leader.
+                while (s && i == 0 && still(cars[s->car]) && t.offset - side_of(ci, s->car) < -kClearOffset) s = following(s, lanes[i], ci);
                 if (s) {
                     const Car& lc = cars[s->car];
                     obstacle(start[i] + s->s - lc.d->length, math::max(lc.speed, 0.0f));
