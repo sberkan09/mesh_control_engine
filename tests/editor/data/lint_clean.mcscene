@@ -1,0 +1,6 @@
+{ "format": "mce-scene", "version": 1, "guid": "5ce2e000-0000-4000-8000-000000000002", "name": "lint_clean",
+  "entities": [
+    { "name": "Camera", "id": 1, "components": { "Camera2DComponent": { "pixels_per_meter": 48 }, "LocalTransform": { "position": [0, 0, 0] } } },
+    { "name": "Hero", "id": 2, "components": { "LocalTransform": { "position": [1, 0, 0] } } }
+  ]
+}

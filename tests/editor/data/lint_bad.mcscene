@@ -1,0 +1,7 @@
+{ "format": "mce-scene", "version": 1, "guid": "5ce2e000-0000-4000-8000-000000000003", "name": "lint_bad",
+  "entities": [
+    { "name": "Wall", "id": 1, "components": { "LocalTransform": { "position": [0, 0, 0] } } },
+    { "name": "Wall", "id": 2, "components": { "LocalTransform": { "position": [2, 0, 0] } } },
+    { "name": "Flat", "id": 3, "components": { "LocalTransform": { "position": [4, 0, 0], "scale": [1, 0, 1] } } }
+  ]
+}
