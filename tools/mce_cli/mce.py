@@ -34,6 +34,7 @@
     mce scene lint <scene>...                   mistakes in scenes that load fine (exit 1 when there are findings)
     mce scene stats <scene>...                  what a scene holds: entities, depth, components in use, bounds
     mce scene find <scene>... [--name P] [--component T] [--prefab]   the entities that match (exit 1 when none)
+    mce scene fmt <scene>... [--write]          check scenes are in the canonical text, or rewrite them (exit 1 when not)
     mce perf [<project | file.mcperf>] [--json]   read a perf capture (perf_run's cooked/.perf/last.mcperf, or the player's
                                                 -perf_capture file): the frame cost and the draw calls by cause
     mce friction [<project>...] [--out file] [--json]   collect the agents' friction notes (friction.jsonl,
@@ -990,6 +991,8 @@ def cmd_scene(args):
         return subprocess.call([tool("mce_scene_lint")] + args.scenes)
     if args.scene_command == "stats":
         return subprocess.call([tool("mce_scene_stats")] + args.scenes)
+    if args.scene_command == "fmt":
+        return subprocess.call([tool("mce_scene_fmt")] + args.scenes + (["--write"] if args.write else []))
     if args.scene_command == "find":
         cmd = [tool("mce_scene_find")] + args.scenes
         if args.name:
@@ -1069,8 +1072,8 @@ def main(argv):
     s.add_argument("--remove", action="store_true", help="remove the entry instead")
     s.set_defaults(fn=cmd_mcp_config)
 
-    s = sub.add_parser("scene", help="scene tools (mce scene diff <before> <after>, mce scene lint <scene>..., mce scene stats <scene>..., mce scene find <scene>...)")
-    scene = s.add_subparsers(dest="scene_command", metavar="diff|lint|stats|find", required=True)
+    s = sub.add_parser("scene", help="scene tools (mce scene diff <before> <after>, mce scene lint <scene>..., mce scene stats <scene>..., mce scene find <scene>..., mce scene fmt <scene>...)")
+    scene = s.add_subparsers(dest="scene_command", metavar="diff|lint|stats|find|fmt", required=True)
     s = scene.add_parser("diff", help="what changed between two .mcscene files: entities added, removed or changed; exit 1 when they differ")
     s.add_argument("before")
     s.add_argument("after")
@@ -1086,6 +1089,10 @@ def main(argv):
     s.add_argument("--name", help="part of the entity name, ignoring case")
     s.add_argument("--component", help="a component type the entity carries")
     s.add_argument("--prefab", action="store_true", help="only prefab instances")
+    s.set_defaults(fn=cmd_scene)
+    s = scene.add_parser("fmt", help="check that scenes are in the canonical text the editor saves; --write rewrites them; exit 1 when some are not")
+    s.add_argument("scenes", nargs="+")
+    s.add_argument("--write", action="store_true", help="rewrite the scenes that are not canonical")
     s.set_defaults(fn=cmd_scene)
 
     s = sub.add_parser("headless", help="run the game without a window and print the state hash")

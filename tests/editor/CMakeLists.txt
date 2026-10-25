@@ -115,3 +115,11 @@ add_test(NAME scene_find_cli_none COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE
 set_tests_properties(scene_find_cli_none PROPERTIES WILL_FAIL TRUE)
 add_test(NAME scene_find_cli_unknown_component COMMAND mce_scene_find "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" --component NoSuchThing)
 set_tests_properties(scene_find_cli_unknown_component PROPERTIES WILL_FAIL TRUE)
+
+# mce_scene_fmt (M-SCENEFMT 1): report, rewrite and re-check a copy of a scene with a default field spelled out;
+# a file that does not exist is exit 2.
+add_test(NAME scene_fmt_cli_roundtrip
+    COMMAND ${CMAKE_COMMAND} -DFMT=$<TARGET_FILE:mce_scene_fmt> -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/data/fmt_loose.mcscene
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/scene_fmt -P ${CMAKE_CURRENT_SOURCE_DIR}/scene_fmt_roundtrip.cmake)
+add_test(NAME scene_fmt_cli_unreadable COMMAND mce_scene_fmt "${CMAKE_CURRENT_SOURCE_DIR}/data/no_such_scene.mcscene")
+set_tests_properties(scene_fmt_cli_unreadable PROPERTIES WILL_FAIL TRUE)
