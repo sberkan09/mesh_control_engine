@@ -155,6 +155,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `asset_lock` / `asset_unlock` / `asset_locks` | `path`, `note?`, `ttl?` (1800 s) / `path`, `force?` / — | while you hold a lock, other agents' writes to that file are refused |
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
 | | `scene_switch` / `scene_documents` | `path` / — | several scenes open at once, each keeping its unsaved edits |
+| | `scene_diff` | `a`, `b?` (default: the open scene) | what changed between two scenes: entities added, removed or changed by id, renames, components and fields by name; `identical`, counts and a text `report` (the same as `mce scene diff`) |
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |

@@ -72,4 +72,7 @@ bool scene_documents(ToolCall& c);
 // tools_friction.cpp (SBA-55): friction notes for the engine's backlog.
 bool report_friction(ToolCall& c);
 
+// tools_scene_diff.cpp (M-SCENEDIFF 3): what changed between two scenes.
+bool scene_diff(ToolCall& c);
+
 }  // namespace mce::mcp
