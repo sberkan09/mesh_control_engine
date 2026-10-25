@@ -33,6 +33,11 @@ constexpr const char* kStreet = R"({ "format": "mce-roads", "version": 1,
   "nodes": [{"name": "s", "at": [0, 0, 200]}, {"name": "n", "at": [0, 0, -200]}],
   "roads": [{"name": "main", "from": "s", "to": "n", "lanes": 1, "speed": 12}] })";
 
+// The same street with two lanes in each direction.
+constexpr const char* kStreet2 = R"({ "format": "mce-roads", "version": 1,
+  "nodes": [{"name": "s", "at": [0, 0, 200]}, {"name": "n", "at": [0, 0, -200]}],
+  "roads": [{"name": "main", "from": "s", "to": "n", "lanes": 2, "speed": 12}] })";
+
 // A signalled crossroads, arms 120 m; east-west green first (24 s until north-south's green).
 constexpr const char* kCross = R"({ "format": "mce-roads", "version": 1,
   "nodes": [{"name": "c", "at": [0, 0, 0]}, {"name": "n", "at": [0, 0, -120]}, {"name": "s", "at": [0, 0, 120]},
@@ -121,6 +126,14 @@ struct Scene {
         TrafficDriver3D d;
         d.max_speed = max_speed;
         return w.spawn_with(pose({x, 1.2f, z}, yaw), car_body(), car_vehicle(), d);
+    }
+    // A wrecked/parked car: nobody drives it and its handbrake is on (M-TRAFFICAVOID).
+    Entity wreck(f32 x, f32 z) {
+        TrafficDriver3D d;
+        d.drive = 0;
+        Vehicle3D v = car_vehicle();
+        v.handbrake = 1.0f;
+        return w.spawn_with(pose({x, 1.2f, z}), car_body(), v, d);
     }
     vec3 pos(Entity e) { return w.try_get<LocalTransform>(e)->position; }
     const TrafficDriver3D& drv(Entity e) { return *w.try_get<TrafficDriver3D>(e); }
@@ -260,4 +273,33 @@ TEST_CASE("traffic: the same traffic replays to the same hash") {
         return s.w.state_hash();
     };
     CHECK(run() == run());
+}
+
+TEST_CASE("traffic avoid: on a two-lane road a car goes around a wreck by taking the other lane") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.run(60 * 25);
+    CHECK(s.pos(c).z < 80.0f);                      // it got past
+    CHECK(s.drv(c).lane != s.drv(wreck).lane);     // by another lane
+    CHECK(s.drv(c).state != TrafficState::Lost);
+    CHECK(s.speed(wreck) < 0.5f);
+}
+
+TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck as before") {
+    Scene s(kStreet);
+    s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.run(60 * 25);
+    CHECK(s.pos(c).z > 100.0f + 2.0f);
+    CHECK(s.speed(c) < 0.5f);
+}
+
+TEST_CASE("traffic avoid: the other lane blocked beside the wreck means waiting") {
+    Scene s(kStreet2);
+    s.wreck(1.75f, 100.0f);
+    s.wreck(5.25f, 98.0f);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.run(60 * 25);
+    CHECK(s.pos(c).z > 100.0f + 2.0f);
 }
