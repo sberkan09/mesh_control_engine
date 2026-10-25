@@ -49,3 +49,15 @@ Not in step 1: oncoming-lane overtakes on single-lane roads (needs the oncoming 
 **Step 2a (done 2026-10-25).** `Drive::claimed`: a lane a car changed into this tick is recorded with its `s`, and a later car in the same tick treats that window as occupied, so a platoon queued behind a wreck goes around one after the other instead of side by side. Test: "traffic avoid: two cars queued behind a wreck both get around it". Still open: oncoming-lane overtake on one-lane roads.
 
 **Step 3 (done 2026-10-25).** `TrafficDriver3D::home` (saved, engine-written): the lane a car left to go round a wreck. `Drive::rejoin` puts it back there once nobody is within 10 m behind / 12 m ahead of it in that lane, no other undriven stopped car lies within 60 m ahead there (it would only dodge again), and no other car claimed that gap this tick; it forgets `home` if it drives on to another road piece. Test: "traffic avoid: once past the wreck the car returns to the lane it left"; the earlier dodge tests now check that the car was in another lane on the way.
+
+## Step 4 design: oncoming-lane overtake on one-lane roads (not built yet)
+
+A road with `lanes: 1` has no same-direction neighbour, so a car behind a wreck queues. The only free asphalt is the oncoming lane (the road lane of the same `road` with the opposite `node`, `index` 0).
+
+- **Model.** The car keeps its own `lane` and `s` (all lane following, queueing and junction logic stay as they are) and gets a saved lateral offset `TrafficDriver3D::offset` (m, 0 = centred in its lane). Pure pursuit aims at the lane point shifted sideways by `offset`; nothing else reads it. A new saved field, so a saved-format and state-hash change: its own seam PR first (the header is included by 10 files).
+- **When.** Its leader is a stopped car with `drive = 0` (as in step 1), the oncoming lane has no car within `v * t + 60 m` of the passing window (both directions are read from the occupancy table: oncoming `s` runs the other way, so the window is `L - s`), and the wreck is not in or near a junction connector.
+- **While passing.** `offset` moves to the oncoming lane's centre at a bounded rate; the car ignores the wreck as a leader only while its lateral distance is above a car width. If an oncoming car turns up inside the safe distance, it brakes and moves back (or stops) rather than finishing the pass.
+- **Return.** Once its rear is past the wreck by a car length, `offset` goes back to 0 at the same rate.
+- **Tests.** One-lane road with a wreck and an empty oncoming lane: the car passes it. Oncoming car arriving: the pass is not started or is abandoned and the two never overlap. Two runs equal.
+
+Steps: 4a the `offset` field and pursuit (seam), 4b the decision and its tests, 4c polish (several cars in a row, the oncoming flow side).
