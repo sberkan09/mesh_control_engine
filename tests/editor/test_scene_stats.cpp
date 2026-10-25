@@ -61,7 +61,7 @@ TEST_CASE("entities, roots, depth and the components in use are counted") {
     CHECK(st.max_depth == 2);  // Torch under Wall under Room
     CHECK(st.prefab_instances == 0);
     CHECK(uses_of(st, "Sprite") == 2);
-    CHECK(uses_of(st, "LocalTransform") == 3);
+    CHECK(uses_of(st, "LocalTransform") == 4);  // new entities start with one
     CHECK(st.has_bounds);
     CHECK(st.min.x == 0.0f);
     CHECK(st.min.y == -2.0f);
