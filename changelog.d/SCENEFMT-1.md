@@ -1,0 +1,1 @@
+- Editor, M-SCENEFMT step 1: `mce scene fmt <scene>... [--write]` checks that scenes are in the canonical text, or rewrites them.
