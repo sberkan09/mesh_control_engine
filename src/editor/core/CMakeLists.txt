@@ -36,6 +36,7 @@ mce_add_library(mce_editor_core UMBRELLA
         src/scene_diff.cpp
         src/scene_lint.cpp
         src/scene_stats.cpp
+        src/scene_find.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp
