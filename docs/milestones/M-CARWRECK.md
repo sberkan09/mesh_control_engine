@@ -17,7 +17,10 @@ player car kept answering input. A wreck must stop being driven.
 
 ## Open items
 
-- A wreck stays in its traffic lane and the cars behind it queue (the leader logic sees a car ahead); a spawner removes it beyond `despawn_radius`. A tow-away or
-  a go-around is a follow-up.
+- A wreck stays in its traffic lane and the cars behind it queue (the leader logic sees a car ahead); a spawner removes it beyond `despawn_radius`. Clearing it is
+  already a prefab setting: `Health3D::destroy_on_death` with a `linger` removes the dead car and the spawner fills the slot. Going around it (a lane change) is a
+  follow-up and a design task in `traffic.cpp`.
 - Fire, smoke and an explosion on death (effects from `Died3D`) are content, not code: a `FireOn::...` emitter on the prefab; no engine change planned.
 - The driver is not thrown out when the car dies (the seat is freed by `kit3d_seats` when the car is destroyed); stepping out of a wreck needs `max_exit_speed`, which a stopped wreck meets.
+
+Slice test: `tests/kit/test_gta_slice.cpp` (a car driven into a wall: wrecked, driver hurt, input off).

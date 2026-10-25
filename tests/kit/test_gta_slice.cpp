@@ -5,7 +5,9 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicle_ram.h"
@@ -59,4 +61,40 @@ TEST_CASE("gta slice: running a civilian over in front of police raises the want
     CHECK(crimes >= 1);
     CHECK(w.try_get<Wanted3D>(player)->level >= 1);
     CHECK(w.try_get<Police3D>(cop)->state != PoliceState::Idle);
+}
+
+TEST_CASE("gta slice: a car driven into a wall is wrecked, its driver is hurt and no longer in control") {
+    World w;
+    w.register_components<LocalTransform>();
+    install_impact_damage(w, nullptr);
+    BoxCollider3D ground;
+    ground.half = {300.0f, 0.5f, 300.0f};
+    w.spawn_with(at(0, -0.5f, 0), ground);
+    BoxCollider3D wall;
+    wall.half = {5.0f, 2.0f, 0.5f};
+    w.spawn_with(at(0, 2.0f, -10.0f), wall);
+
+    Health3D dh;
+    const Entity driver = w.spawn_with(at(40, 1, 0), dh);
+    VehicleSeat3D seat;
+    seat.driver = driver;
+    Health3D ch;
+    ch.max = 8.0f;
+    ch.current = 8.0f;
+    RigidBody3D body;
+    body.contact_events = 1;
+    body.set_velocity = true;
+    body.velocity = {0, 0, -14.0f};
+    Vehicle3D v;
+    v.use_input = 1;
+    v.throttle = 1.0f;
+    const Entity car = w.spawn_with(at(0, 0.5f, 0), body, v, ch, ImpactDamage3D{}, seat);
+
+    u64 t = 0;
+    for (u32 i = 0; i < 240; ++i) w.tick(kDt, t++);
+    const Health3D& hp = *w.try_get<Health3D>(car);
+    CHECK(hp.dead);
+    CHECK(w.try_get<Vehicle3D>(car)->use_input == 0);
+    CHECK(w.try_get<Vehicle3D>(car)->handbrake == doctest::Approx(1.0f));
+    CHECK(w.try_get<Health3D>(driver)->current < dh.max);
 }
