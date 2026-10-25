@@ -279,11 +279,31 @@ TEST_CASE("traffic avoid: on a two-lane road a car goes around a wreck by taking
     Scene s(kStreet2);
     const Entity wreck = s.wreck(1.75f, 100.0f);
     const Entity c = s.car(1.75f, 180.0f);
-    s.run(60 * 25);
+    bool other_lane = false;
+    for (u32 i = 0; i < 60 * 25; ++i) {
+        s.run(1);
+        other_lane |= s.drv(c).lane != s.drv(wreck).lane;
+    }
     CHECK(s.pos(c).z < 80.0f);                      // it got past
-    CHECK(s.drv(c).lane != s.drv(wreck).lane);     // by another lane
+    CHECK(other_lane);                              // by another lane
     CHECK(s.drv(c).state != TrafficState::Lost);
     CHECK(s.speed(wreck) < 0.5f);
+}
+
+TEST_CASE("traffic avoid: once past the wreck the car returns to the lane it left") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 150.0f);
+    bool left = false;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        left |= s.drv(c).lane != s.drv(wreck).lane;
+    }
+    CHECK(left);                                    // it did go round
+    CHECK(s.pos(c).z < 70.0f);                      // and is well past
+    CHECK(s.drv(c).lane == s.drv(wreck).lane);     // back where it started
+    CHECK(s.drv(c).home == 0xFFFFFFFFu);
+    CHECK(s.drv(c).state != TrafficState::Lost);
 }
 
 TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck as before") {
@@ -310,13 +330,16 @@ TEST_CASE("traffic avoid: two cars queued behind a wreck both get around it, one
     const Entity first = s.car(1.75f, 150.0f);
     const Entity second = s.car(1.75f, 170.0f);
     f32 closest = 1e9f;
+    bool first_around = false, second_around = false;
     for (u32 i = 0; i < 60 * 30; ++i) {
         s.run(1);
+        first_around |= s.drv(first).lane != s.drv(wreck).lane;
+        second_around |= s.drv(second).lane != s.drv(wreck).lane;
         closest = math::min(closest, math::length(s.pos(first) - s.pos(second)));
     }
     CHECK(s.pos(first).z < 80.0f);
     CHECK(s.pos(second).z < 80.0f);
-    CHECK(s.drv(first).lane != s.drv(wreck).lane);
-    CHECK(s.drv(second).lane != s.drv(wreck).lane);
+    CHECK(first_around);
+    CHECK(second_around);
     CHECK(closest > 4.5f);  // never overlapping
 }
