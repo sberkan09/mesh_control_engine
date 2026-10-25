@@ -305,6 +305,13 @@ const ToolDef kAgentTools[] = {
      "Returns identical, counts and a text report, one line per entity.",
      R"j({"type":"object","properties":{"a":{"type":"string","description":"Scene path under assets/ (before)"},"b":{"type":"string","description":"Scene path under assets/ (after); default: the open scene"}},"required":["a"]})j",
      scene_diff},
+    {"scene_lint",
+     "Mistakes in a scene that load fine and misbehave later: an entity without a name, siblings that share a name "
+     "(a path like Room/Wall then names both), a scale of zero on an axis, a position, rotation or scale that is not "
+     "a number, a parent that does not exist. 'path' is a scene under assets/; left out, the open scene (unsaved "
+     "edits included). Returns clean, the findings (entity, name, kind) and a text report, one line per finding.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
+     scene_lint},
     {"report_friction",
      "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
      "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "

@@ -75,4 +75,7 @@ bool report_friction(ToolCall& c);
 // tools_scene_diff.cpp (M-SCENEDIFF 3): what changed between two scenes.
 bool scene_diff(ToolCall& c);
 
+// tools_scene_lint.cpp (M-SCENELINT 3): mistakes in a scene that load fine.
+bool scene_lint(ToolCall& c);
+
 }  // namespace mce::mcp

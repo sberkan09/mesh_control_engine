@@ -156,6 +156,7 @@ each result's `content[0].text` is the tool's JSON).
 | | `task_list` / `task_add` / `task_claim` / `task_update` | `status?` / `title`, `notes?`, `depends?`, `files?` / `id?` / `id`, `status?`, `notes?` | the shared `tasks.mctasks`; a claim is never granted twice, and waits for its dependencies |
 | | `scene_switch` / `scene_documents` | `path` / — | several scenes open at once, each keeping its unsaved edits |
 | | `scene_diff` | `a`, `b?` (default: the open scene) | what changed between two scenes: entities added, removed or changed by id, renames, components and fields by name; `identical`, counts and a text `report` (the same as `mce scene diff`) |
+| | `scene_lint` | `path?` (default: the open scene) | mistakes that load fine: unnamed or same-named siblings, zero scale, a transform that is not a number, a missing parent; `clean`, `findings` (entity, name, kind) and a text `report` (the same as `mce scene lint`) |
 | | `report_friction` | `summary`, `area`, `severity?` (major), `tool?`, `expected?`, `actual?`, `workaround?`, `details?` | appends a note on what the engine made hard to the project's `friction.jsonl`; `mce friction` collects them |
 | Console | `console_list` | `prefix?` | convars and functions |
 | | `console_exec` | `line` | cheat and restart-only convars refused without `--allow-cheats` |

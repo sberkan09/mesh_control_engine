@@ -351,6 +351,33 @@ TEST_CASE("scene_diff: unsaved edits against the file, then two saved scenes, th
     CHECK(alice.fails("scene_diff", R"({"b":"scenes/demo.mcscene"})").find("'a'") != std::string::npos);
 }
 
+TEST_CASE("scene_lint: the open scene with unsaved edits, then a saved file by path") {
+    const std::string root = demo_project("mcp_team_scene_lint");
+    Agent alice(root, "alice");
+    CHECK(alice.ok("scene_lint").v().get("clean").as_bool());  // the demo scene is tidy
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");  // a second sibling called Crate A
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    auto open = alice.ok("scene_lint");
+    CHECK_FALSE(open.v().get("clean").as_bool());
+    const std::string report = str(open.v().get("report"));
+    CHECK(report.find("Crate A") != std::string::npos);
+    CHECK(report.find("duplicate name among its siblings") != std::string::npos);
+    CHECK(report.find("Flat") != std::string::npos);
+    CHECK(report.find("scale of zero on an axis") != std::string::npos);
+    CHECK(open.v().get("findings").size() == 2);
+    CHECK(str(open.v().get("findings").at(0).get("kind")) == "duplicate_sibling_name");
+
+    // The file on disk has none of the edits yet.
+    CHECK(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+    alice.ok("scene_save");
+    auto saved = alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(str(saved.v().get("scene")) == "scenes/demo.mcscene");
+    CHECK(saved.v().get("findings").size() == 2);
+
+    CHECK(alice.fails("scene_lint", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+}
+
 // ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
 
 TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {
