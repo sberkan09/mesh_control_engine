@@ -298,6 +298,13 @@ const ToolDef kAgentTools[] = {
      scene_switch},
     {"scene_documents", "The scenes this server has open: the current one and the ones scene_switch parked, each with dirty.",
      R"j({"type":"object","properties":{}})j", scene_documents},
+    {"scene_diff",
+     "What changed between two versions of a scene: entities added, removed or changed (matched by id), renames, "
+     "components added or removed and the changed fields by name, a reorder, a header change. 'a' is the before "
+     "(a scene path under assets/); 'b' the after, or the open scene (unsaved edits included) when left out. "
+     "Returns identical, counts and a text report, one line per entity.",
+     R"j({"type":"object","properties":{"a":{"type":"string","description":"Scene path under assets/ (before)"},"b":{"type":"string","description":"Scene path under assets/ (after); default: the open scene"}},"required":["a"]})j",
+     scene_diff},
     {"report_friction",
      "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
      "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "

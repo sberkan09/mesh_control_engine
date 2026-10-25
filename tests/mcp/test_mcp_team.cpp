@@ -323,6 +323,34 @@ TEST_CASE("report_friction: notes from several agents append to the project's fr
     CHECK(alice.fails("report_friction", R"({"summary":"x"})").find("area") != std::string::npos);
 }
 
+TEST_CASE("scene_diff: unsaved edits against the file, then two saved scenes, then identical after a save") {
+    const std::string root = demo_project("mcp_team_scene_diff");
+    Agent alice(root, "alice");
+    alice.ok("component_set", R"({"entity":"Crate A","component":"LocalTransform","path":"position","value":[5,5,0]})");
+    alice.ok("entity_create", R"({"name":"Gem"})");
+    alice.ok("entity_delete", R"({"entity":"Crate B"})");
+
+    auto d = alice.ok("scene_diff", R"({"a":"scenes/demo.mcscene"})");  // the file on disk against the open scene
+    CHECK_FALSE(d.v().get("identical").as_bool());
+    CHECK(d.v().get("added").as_number() == 1);
+    CHECK(d.v().get("removed").as_number() == 1);
+    CHECK(d.v().get("changed").as_number() == 1);
+    const std::string report = str(d.v().get("report"));
+    CHECK(report.find("+ Gem") != std::string::npos);
+    CHECK(report.find("- Crate B") != std::string::npos);
+    CHECK(report.find("~ Crate A") != std::string::npos);
+    CHECK(report.find("LocalTransform.position") != std::string::npos);
+
+    alice.ok("scene_save", R"({"path":"scenes/edited.mcscene"})");  // a second file: the saved edits
+    auto files = alice.ok("scene_diff", R"({"a":"scenes/demo.mcscene","b":"scenes/edited.mcscene"})");
+    CHECK(str(files.v().get("against")) == "scenes/edited.mcscene");
+    CHECK(str(files.v().get("report")).find("+ Gem") != std::string::npos);
+    CHECK(alice.ok("scene_diff", R"({"a":"scenes/edited.mcscene"})").v().get("identical").as_bool());  // nothing unsaved now
+
+    CHECK(alice.fails("scene_diff", R"({"a":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+    CHECK(alice.fails("scene_diff", R"({"b":"scenes/demo.mcscene"})").find("'a'") != std::string::npos);
+}
+
 // ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
 
 TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {

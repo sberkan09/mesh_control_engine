@@ -295,6 +295,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `task_update` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `bt_create` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_add_node` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
