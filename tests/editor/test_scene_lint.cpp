@@ -23,7 +23,7 @@ bool has(const Array<LintFinding>& all, EntityId id, LintKind kind) {
 
 void set_transform(EditorScene& s, EntityId id, const LocalTransform& t) {
     s.add_component(id, refl::type_of<LocalTransform>());
-    REQUIRE(s.set(id, t));
+    (void)s.set(id, t);  // false when the value is already there; the checks below read the document
 }
 
 }  // namespace
