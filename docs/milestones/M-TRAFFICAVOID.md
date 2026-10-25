@@ -1,6 +1,6 @@
 # M-TRAFFICAVOID — traffic goes around a wreck
 
-Status: steps 1, 2a, 3 and 4a done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
+Status: steps 1, 2a, 3, 4a and 4b done. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
 
 ## Why
 
@@ -63,3 +63,5 @@ A road with `lanes: 1` has no same-direction neighbour, so a car behind a wreck 
 Steps: 4a the `offset` field and pursuit (seam), 4b the decision and its tests, 4c polish (several cars in a row, the oncoming flow side).
 
 **Step 4a (done 2026-10-25).** `TrafficDriver3D::offset` (saved, settable, `Range{-8, 8}`): metres to the right of the lane centre line that pure pursuit aims for; the car's `lane` and `s` are unchanged. Nothing sets it yet (4b does). Test: "traffic: offset shifts where a car drives inside its lane".
+
+**Step 4b (done 2026-10-26).** `Drive::overtake`: on a road with no same-direction neighbour lane, a car whose lane holds a standing undriven car ahead (same trigger as step 1, but 45 m at least) moves `offset` to the left, to the oncoming lane's centre (further if the wreck has drifted: it aims 3.2 m left of the wreck's measured side), at 2.5 m/s, when the oncoming lane has no car within 100 m ahead of the car's position (read from the occupancy table, `s` of the oncoming lane runs the other way). Once `offset` puts the car 3 m to the left of the wreck, the wreck is skipped as its leader and the IDM lets it accelerate past. Level with the wreck (within 8 m ahead of it) it carries on whatever comes; if an oncoming car appears while it is still further back, `offset` returns to 0 and it queues. Once the wreck is 10 m behind, `offset` returns to 0. A rightward (positive) offset is left alone. Tests: \"traffic avoid: on a one-lane road a car passes the wreck through an empty oncoming lane and comes back\" and \"... queues behind the wreck while the oncoming lane is blocked\". Known limits: an oncoming car that appears after the car is level with the wreck is not avoided (the IDM still brakes for it as a leader only in its own lane); the pass does not start inside a junction connector; several cars in a row (4c).

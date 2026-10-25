@@ -128,12 +128,12 @@ struct Scene {
         return w.spawn_with(pose({x, 1.2f, z}, yaw), car_body(), car_vehicle(), d);
     }
     // A wrecked/parked car: nobody drives it and its handbrake is on (M-TRAFFICAVOID).
-    Entity wreck(f32 x, f32 z) {
+    Entity wreck(f32 x, f32 z, f32 yaw = 0.0f) {
         TrafficDriver3D d;
         d.drive = 0;
         Vehicle3D v = car_vehicle();
         v.handbrake = 1.0f;
-        return w.spawn_with(pose({x, 1.2f, z}), car_body(), v, d);
+        return w.spawn_with(pose({x, 1.2f, z}, yaw), car_body(), v, d);
     }
     vec3 pos(Entity e) { return w.try_get<LocalTransform>(e)->position; }
     const TrafficDriver3D& drv(Entity e) { return *w.try_get<TrafficDriver3D>(e); }
@@ -316,13 +316,34 @@ TEST_CASE("traffic avoid: once past the wreck the car returns to the lane it lef
     CHECK(s.drv(c).state != TrafficState::Lost);
 }
 
-TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck as before") {
+TEST_CASE("traffic avoid: on a one-lane road a car passes the wreck through an empty oncoming lane and comes back") {
+    Scene s(kStreet);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 160.0f);
+    f32 closest = 1e9f, most_left = 0.0f;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        most_left = math::min(most_left, s.drv(c).offset);
+    }
+    CHECK(s.pos(c).z < 60.0f);                      // it got past
+    CHECK(most_left < -3.0f);                       // through the oncoming lane
+    CHECK(closest > 2.8f);                          // never touching it
+    CHECK(std::fabs(s.drv(c).offset) < 0.1f);       // and back in its lane
+    CHECK(s.drv(c).lane == s.drv(wreck).lane);
+    CHECK(s.drv(c).state != TrafficState::Lost);
+}
+
+TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck while the oncoming lane is blocked") {
     Scene s(kStreet);
     s.wreck(1.75f, 100.0f);
+    s.wreck(-1.75f, 60.0f, 3.14159265f);  // a wreck in the oncoming lane
     const Entity c = s.car(1.75f, 180.0f);
     s.run(60 * 25);
     CHECK(s.pos(c).z > 100.0f + 2.0f);
     CHECK(s.speed(c) < 0.5f);
+    CHECK(s.drv(c).offset == 0.0f);
 }
 
 TEST_CASE("traffic avoid: the other lane blocked beside the wreck means waiting") {

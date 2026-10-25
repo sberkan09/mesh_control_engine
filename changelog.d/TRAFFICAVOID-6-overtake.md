@@ -1,0 +1,1 @@
+- Kit (M-TRAFFICAVOID): on a one-lane road a car stuck behind a wreck now passes it through the oncoming lane when that is empty, and comes back. Record: `docs/milestones/M-TRAFFICAVOID.md`.
