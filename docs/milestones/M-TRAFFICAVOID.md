@@ -1,6 +1,6 @@
 # M-TRAFFICAVOID — traffic goes around a wreck
 
-Status: steps 1, 2a and 3 done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
+Status: steps 1, 2a, 3 and 4a done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
 
 ## Why
 
@@ -49,3 +49,5 @@ Not in step 1: oncoming-lane overtakes on single-lane roads (needs the oncoming 
 **Step 2a (done 2026-10-25).** `Drive::claimed`: a lane a car changed into this tick is recorded with its `s`, and a later car in the same tick treats that window as occupied, so a platoon queued behind a wreck goes around one after the other instead of side by side. Test: "traffic avoid: two cars queued behind a wreck both get around it". Still open: oncoming-lane overtake on one-lane roads.
 
 **Step 3 (done 2026-10-25).** `TrafficDriver3D::home` (saved, engine-written): the lane a car left to go round a wreck. `Drive::rejoin` puts it back there once nobody is within 10 m behind / 12 m ahead of it in that lane, no other undriven stopped car lies within 60 m ahead there (it would only dodge again), and no other car claimed that gap this tick; it forgets `home` if it drives on to another road piece. Test: "traffic avoid: once past the wreck the car returns to the lane it left"; the earlier dodge tests now check that the car was in another lane on the way.
+
+**Step 4a (done 2026-10-25).** `TrafficDriver3D::offset` (saved, settable, `Range{-8, 8}`): metres to the right of the lane centre line that pure pursuit aims for; the car's `lane` and `s` are unchanged. Nothing sets it yet (4b does). Test: "traffic: offset shifts where a car drives inside its lane".
