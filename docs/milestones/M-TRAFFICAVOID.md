@@ -1,6 +1,6 @@
 # M-TRAFFICAVOID — traffic goes around a wreck
 
-Status: step 1 done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
+Status: steps 1 and 2a done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
 
 ## Why
 
@@ -44,4 +44,6 @@ Not in step 1: oncoming-lane overtakes on single-lane roads (needs the oncoming 
 - Cars already inside a connector (a junction) do not dodge; a wreck in a junction blocks it until it is removed. Tow-away through `Health3D::destroy_on_death` is the answer there.
 - The follower's pedals are written by the same IDM; a very short gap at the moment the wreck appears can still end in a touch. Acceptable: `ImpactDamage3D` makes that a crash like any other.
 
-**Step 1 (done 2026-10-25).** `Drive::dodge` and `Drive::neighbour` in `traffic.cpp`: a car whose leader is a stopped (`< 0.5 m/s`) car with `drive = 0` within `max(30 m, braking distance + 10 m)` switches `lane` to a free same-direction neighbour (lower index first), `next` / `after` cleared. No new field. Tests in `tests/kit/test_traffic.cpp` ("traffic avoid": two lanes go around, one lane queues, the other lane blocked waits). Known limit: two cars dodging in the same tick read the same occupancy table, so they may pick the same neighbour lane one behind the other (the IDM then follows).
+**Step 1 (done 2026-10-25).** `Drive::dodge` and `Drive::neighbour` in `traffic.cpp`: a car whose leader is a stopped (`< 0.5 m/s`) car with `drive = 0` within `max(30 m, braking distance + 10 m)` switches `lane` to a free same-direction neighbour (lower index first), `next` / `after` cleared. No new field. Tests in `tests/kit/test_traffic.cpp` ("traffic avoid": two lanes go around, one lane queues, the other lane blocked waits). Known limit (closed by step 2): two cars dodging in the same tick read the same occupancy table.
+
+**Step 2a (done 2026-10-25).** `Drive::claimed`: a lane a car changed into this tick is recorded with its `s`, and a later car in the same tick treats that window as occupied, so a platoon queued behind a wreck goes around one after the other instead of side by side. Test: "traffic avoid: two cars queued behind a wreck both get around it". Still open: returning to the original lane (needs a saved field), oncoming-lane overtake on one-lane roads.

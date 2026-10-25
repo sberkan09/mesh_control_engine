@@ -202,6 +202,7 @@ struct Drive {
     Array<Car>& cars;
     const Occupancy& occ;
     const Array<math::vec3>& walkers;  // pedestrians crossing a road now (B3), world positions
+    Array<Slot> claimed;               // lanes cars changed into this tick (the occupancy table is from before), M-TRAFFICAVOID
 
     // How far down its lanes (`lanes`, starting `start` metres ahead) car `ci` first passes a crossing
     // pedestrian, within `reach` metres; a negative number when none.
@@ -322,6 +323,10 @@ struct Drive {
             const f32 hi = s_n + (ahead->s - t.s) + 8.0f;
             const Slot* other = occ.ahead(n, lo, ci);
             if (other && other->lane == n && other->s < hi) continue;
+            bool taken = false;
+            for (const Slot& k : claimed) taken |= k.lane == n && k.s > lo && k.s < hi;
+            if (taken) continue;
+            claimed.push_back(Slot{n, s_n, ci});
             t.lane = n;
             t.s = math::clamp(s_n, 0.0f, d.lanes[n].length);
             t.next = kRoadNone;
@@ -499,7 +504,7 @@ void traffic_drivers(Frame& f) {
         // a fleeing pedestrian (M-PEDFLEE) runs over crossings without waiting, so its mode no longer says Cross: cars give way to it too
         if (p.mode == PedestrianMode::Cross || p.mode == PedestrianMode::Flee) walkers.push_back(lt.position);
     });
-    Drive drive{w, f.dt, cars, occ, walkers};
+    Drive drive{w, f.dt, cars, occ, walkers, {}};
     for (u32 i = 0; i < cars.size(); ++i) {
         Car& c = cars[i];
         if (!c.net || !c.d->drive) continue;
