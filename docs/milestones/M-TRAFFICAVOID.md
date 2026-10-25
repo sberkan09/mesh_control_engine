@@ -1,6 +1,6 @@
 # M-TRAFFICAVOID — traffic goes around a wreck
 
-Status: steps 1, 2a and 3 done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
+Status: steps 1, 2a, 3 and 4a done 2026-10-25. Own gameplay milestone (coordinator: "start the lane change, short design note first, then step-by-step PRs").
 
 ## Why
 
@@ -61,3 +61,5 @@ A road with `lanes: 1` has no same-direction neighbour, so a car behind a wreck 
 - **Tests.** One-lane road with a wreck and an empty oncoming lane: the car passes it. Oncoming car arriving: the pass is not started or is abandoned and the two never overlap. Two runs equal.
 
 Steps: 4a the `offset` field and pursuit (seam), 4b the decision and its tests, 4c polish (several cars in a row, the oncoming flow side).
+
+**Step 4a (done 2026-10-25).** `TrafficDriver3D::offset` (saved, settable, `Range{-8, 8}`): metres to the right of the lane centre line that pure pursuit aims for; the car's `lane` and `s` are unchanged. Nothing sets it yet (4b does). Test: "traffic: offset shifts where a car drives inside its lane".

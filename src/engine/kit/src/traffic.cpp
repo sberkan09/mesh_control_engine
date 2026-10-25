@@ -21,7 +21,7 @@ using asset::RoadLane;
 using asset::RoadLaneKind;
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(TrafficDriver3D) == 104);
+static_assert(sizeof(TrafficDriver3D) == 108);
 static_assert(sizeof(TrafficSpawner3D) == 88);
 
 namespace {
@@ -457,7 +457,11 @@ struct Drive {
             along -= d.lanes[aim_lane].length;
             aim_lane = lanes[i];
         }
-        const math::vec3 aim = road_lane_point(*c.net, aim_lane, along);
+        math::vec3 aim = road_lane_point(*c.net, aim_lane, along);
+        if (t.offset != 0.0f) {
+            const math::vec3 dir = flat(road_lane_point(*c.net, aim_lane, along + 1.0f) - aim);
+            if (math::length(dir) > 1e-3f) aim += math::normalize(math::vec3{-dir.z, 0.0f, dir.x}) * t.offset;
+        }
         const math::vec3 ahead = flat(math::rotate(c.rot, math::vec3{0.0f, 0.0f, -1.0f}));
         const math::vec3 right{-ahead.z, 0.0f, ahead.x};
         const math::vec3 to = flat(aim - c.pos);

@@ -154,6 +154,16 @@ TEST_CASE("traffic: a car keeps to its lane at the lane's speed") {
     CHECK(s.speed(c) == doctest::Approx(12.0f).epsilon(0.15));
 }
 
+TEST_CASE("traffic: offset shifts where a car drives inside its lane") {
+    Scene s(kStreet);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.w.try_get_mut<TrafficDriver3D>(c)->offset = 1.5f;  // to the right of travel (+x going -z)
+    s.run(60 * 12);
+    CHECK(s.drv(c).state != TrafficState::Lost);
+    CHECK(s.pos(c).z < 120.0f);
+    CHECK(std::fabs(s.pos(c).x - 3.25f) < 0.6f);
+}
+
 TEST_CASE("traffic: a faster car follows a slow one without hitting it") {
     Scene s(kStreet);
     const Entity slow = s.car(1.75f, 140.0f, 0.0f, 5.0f);
