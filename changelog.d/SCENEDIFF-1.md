@@ -1,0 +1,1 @@
+- Editor, M-SCENEDIFF step 1: `diff_scenes` / `format_diff` compare two scene documents by entity id and reflected field.
