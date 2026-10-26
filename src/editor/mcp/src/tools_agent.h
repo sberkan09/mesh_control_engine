@@ -84,4 +84,7 @@ bool scene_stats(ToolCall& c);
 // tools_scene_find.cpp (M-SCENEFIND 3): the entities of a scene that match a question.
 bool scene_find(ToolCall& c);
 
+// tools_asset_used_by.cpp (M-ASSETUSEDBY): the assets whose files name a given asset.
+bool asset_used_by(ToolCall& c);
+
 }  // namespace mce::mcp

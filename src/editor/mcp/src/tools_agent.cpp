@@ -327,6 +327,13 @@ const ToolDef kAgentTools[] = {
      "and a text report.",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"},"name":{"type":"string","description":"Part of the entity name, ignoring case"},"component":{"type":"string","description":"A component type the entity carries, e.g. Sprite"},"prefab":{"type":"boolean","description":"Only prefab instances"}}})j",
      scene_find},
+    {"asset_used_by",
+     "The assets whose files name a given asset, so you can see what deleting or rewriting it would "
+     "break. Give 'path' (under assets/) or 'guid' (\"guid:<uuid>\"). Returns count and used_by, the paths "
+     "of the assets that name it (the same answer as the Assets panel's Used by...). Only asset files are "
+     "read: a script that loads by path, the start scene and files outside assets/ are not seen.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Asset path under assets/"},"guid":{"type":"string","description":"guid:<uuid>"}}})j",
+     asset_used_by},
     {"report_friction",
      "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
      "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "

@@ -398,6 +398,31 @@ TEST_CASE("scene_find: the open scene with unsaved edits, then a saved file by p
     CHECK(alice.fails("scene_find", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
 }
 
+TEST_CASE("asset_used_by: the assets that name an asset, by path or by guid") {
+    const std::string root = demo_project("mcp_team_asset_used_by");
+    Agent alice(root, "alice");
+    auto all = alice.ok("asset_list");
+    const cook::JsonValue assets = all.v().get("assets");
+    REQUIRE(assets.size() > 0);
+    bool scene_names_one = false;
+    for (u32 i = 0; i < assets.size(); ++i) {
+        const std::string guid = str(assets.at(i).get("guid"));
+        const std::string path = str(assets.at(i).get("path"));
+        auto by_guid = alice.ok("asset_used_by", std::string(R"({"guid":")") + guid + R"("})");
+        auto by_path = alice.ok("asset_used_by", std::string(R"({"path":")") + path + R"("})");
+        const double count = by_guid.v().get("count").as_number();
+        CHECK(count == by_path.v().get("count").as_number());
+        const cook::JsonValue users = by_guid.v().get("used_by");
+        CHECK(static_cast<double>(users.size()) == count);
+        for (u32 u = 0; u < users.size(); ++u)
+            if (str(users.at(u)) == "scenes/demo.mcscene") scene_names_one = true;
+    }
+    CHECK(scene_names_one);  // the demo scene names its textures
+    CHECK(alice.fails("asset_used_by").find("give one of") != std::string::npos);
+    CHECK(alice.fails("asset_used_by", R"({"path":"textures/nope.png"})").find("no registered asset") != std::string::npos);
+    CHECK(alice.fails("asset_used_by", R"({"guid":"nonsense"})").find("guid:<uuid>") != std::string::npos);
+}
+
 TEST_CASE("scene_lint: the open scene with unsaved edits, then a saved file by path") {
     const std::string root = demo_project("mcp_team_scene_lint");
     Agent alice(root, "alice");
