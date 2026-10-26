@@ -1,0 +1,1 @@
+- Kit (M-PEDCRASH): pedestrians in the path of a fast vehicle run from it. Record: `docs/milestones/M-PEDCRASH.md`.

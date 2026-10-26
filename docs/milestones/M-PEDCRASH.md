@@ -1,6 +1,6 @@
 # M-PEDCRASH — pedestrians run from a car crash
 
-Status: step 1 done (2026-10-26). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; pedestrians reacting to traffic or crashes was one of the examples).
+Status: steps 1 and 2 done (2026-10-26). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; pedestrians reacting to traffic or crashes was one of the examples).
 
 ## Why
 
@@ -19,7 +19,10 @@ Contacts exist only for bodies with `RigidBody3D::contact_events` (M-CONTACTEVEN
 Test: `tests/kit/test_crowd.cpp` ("a hard vehicle crash nearby sends pedestrians running, a soft one or a far one does not"): a 9 m/s crash 10 m away sends the pedestrian away from it and it calms
 down; a 2 m/s one and a crash 50 m away do not; a hard contact between two non-vehicles is not a crash.
 
+Step 2. A vehicle moving at 6 m/s or more (`kRunDownSpeed`) makes the pedestrians in its path jump clear: within `speed * 2 s + 3 m` ahead of it (along its heading, backwards when reversing) and 2.5 m either side of its line, a pedestrian runs from the vehicle's position for 3 s,
+through the same fear list (so the neighbours catch the panic). At most 64 such vehicles per tick; no new field. Test: "a fast vehicle bearing down on a pedestrian sends it running, a slow, a departing or a passing one does not".
+
 ## Open items
 
-- Pedestrians do not jump out of a car's path or run from a car driven at them without a contact (a near miss); that needs a speed/heading test against the pedestrian's edge and belongs to a later step.
+- The pedestrian runs along its pavement edge away from the vehicle; it does not leave the pavement or cross the road to dodge.
 - A wreck that burns or explodes is a separate, louder source (no fire system yet).

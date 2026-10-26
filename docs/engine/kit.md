@@ -541,6 +541,7 @@ Record: `docs/milestones/M-VEHICLEHIT.md`.
   scared list lives in the crowd system, not in the save: a loaded game starts with calm streets. The crowd system reads the event, so the combat kit's `WeaponFired3D` is registered
   by `install_crowd` too.
 - A crash scares them too (M-PEDCRASH): a `ContactBegin3D` that closes at 5 m/s or more (`kCrashSpeed`) and involves a `Vehicle3D` is a scare source at its `point`, handled like a muzzle (30 m, 5 s, the panic spreads). The car needs `RigidBody3D::contact_events` (an `ImpactDamage3D` car has it). Record: `docs/milestones/M-PEDCRASH.md`.
+- A vehicle at 6 m/s or more bearing down on a pedestrian (within `speed * 2 s + 3 m` ahead, 2.5 m either side of its line) makes it run from the vehicle for 3 s (M-PEDCRASH 2).
 - Panic spreads (M-PEDFLEE 3): a pedestrian within 8 m (`kPedestrianPanicRadius`) of one that is running, and still has more than 1.5 s to run, catches it and runs from the same spot with one
   second less (`kPedestrianPanicHop`), so a ripple moves through a crowd and dies out. A pedestrian that was hurt warns its neighbours the same way. Not saved.
 
