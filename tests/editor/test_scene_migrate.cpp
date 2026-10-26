@@ -48,3 +48,24 @@ TEST_CASE("a rename row does not apply to a file newer than its up_to_version") 
     cook::DiagList diags;
     CHECK_FALSE(doc.parse(kOld, "old.mcscene", diags));
 }
+
+TEST_CASE("a field rename row loads the old key as the new field, in a component that was itself renamed") {
+    constexpr ComponentRename comps[] = {{1, "OldTransform", "LocalTransform"}};
+    constexpr FieldRename fields[] = {{1, "LocalTransform", "pos", "position"}};
+    constexpr const char* text =
+        "{ \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"5ce2e000-0000-4000-8000-000000000011\", \"name\": \"old\",\n"
+        "  \"entities\": [ { \"name\": \"Crate\", \"components\": { \"OldTransform\": { \"pos\": [4, 5, 6] } } } ] }\n";
+    SceneDocument doc;
+    doc.set_renames(comps, 1);
+    cook::DiagList diags;
+    CHECK_FALSE(doc.parse(text, "old.mcscene", diags));  // the field name is unknown without its row
+
+    SceneDocument migrated;
+    migrated.set_renames(comps, 1);
+    migrated.set_field_renames(fields, 1);
+    cook::DiagList ok;
+    REQUIRE(migrated.parse(text, "old.mcscene", ok));
+    const DocComponent* c = migrated.at(0).find(refl::type_of<LocalTransform>());
+    REQUIRE(c != nullptr);
+    CHECK(static_cast<const LocalTransform*>(c->data())->position.x == 4.0f);
+}

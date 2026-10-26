@@ -82,6 +82,15 @@ struct ComponentRename {
     const char* new_name;
 };
 
+// A field that was renamed: in files of `up_to_version` or older, the `component` (by its current
+// name) spells the field `old_field`; it loads as `new_field`.
+struct FieldRename {
+    u32 up_to_version;
+    const char* component;
+    const char* old_field;
+    const char* new_field;
+};
+
 class SceneDocument {
 public:
     static constexpr u32 kFormatVersion = 1;  // entity "id" keys are optional within version 1
@@ -127,6 +136,7 @@ public:
     // The rename rows parse() applies (default: none, the first format has nothing to migrate).
     // The table must outlive the document; tests pass their own.
     void set_renames(const ComponentRename* table, usize count) { renames_ = table; rename_count_ = count; }
+    void set_field_renames(const FieldRename* table, usize count) { field_renames_ = table; field_rename_count_ = count; }
     // Deterministic, diff-friendly text: one component object per line, non-default fields only
     // (a prefab instance: its overridden fields).
     void serialize(cook::String& out) const;
@@ -139,6 +149,8 @@ private:
     EntityId next_id_ = 1;
     const ComponentRename* renames_ = nullptr;
     usize rename_count_ = 0;
+    const FieldRename* field_renames_ = nullptr;
+    usize field_rename_count_ = 0;
     DocKind kind_ = DocKind::Scene;
 };
 
