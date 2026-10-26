@@ -955,5 +955,11 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   the `PoliceState` index), `target` (entity, cleared when none) and `last_known` (vec3). Turn `drive_nav` and
   `aim` off and let the tree do the moving and shooting with the stock `move_to` and `look_at` tasks.
 
-Not in this step: spawning reinforcements as the level rises, arrests, and civilians that flee (they come
-with the pedestrian crowds, B3).
+- **Arrests (M-ARREST).** A unit that sees the offender within `arrest_range` (2.5 m), at a wanted level of at most
+  `arrest_max_level` (1), with the offender moving no faster than `arrest_speed` (1.5 m/s), builds
+  `arrest_progress`; after `arrest_time` (2 s) the offender is arrested: `Arrested3D { offender, by, position }`
+  is pushed and the wanted level cleared. The progress falls back whenever the offender moves off, runs or the unit
+  loses it. What an arrest costs the player (weapons, a respawn at the station) is the game's, in a handler of that
+  event. `arrest_range = 0` or `arrest_max_level = 0` make a unit that only chases and shoots.
+
+Not in this step: spawning reinforcements as the level rises, and police cars and roadblocks.

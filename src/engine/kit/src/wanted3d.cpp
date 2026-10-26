@@ -16,12 +16,14 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Wanted3D) == 68);
-static_assert(sizeof(Police3D) == 48);
+static_assert(sizeof(Police3D) == 64);
 
 namespace {
 
 struct Wanted3DState {
     u8 installed = 1;
+    Array<Entity> moved;       // where each offender was last tick (M-ARREST: how fast it is going)
+    Array<math::vec3> before;
 };
 
 // e and the entities it hangs under: the first that has a Wanted3D.
@@ -77,6 +79,7 @@ struct Unit {
 struct Offender {
     Entity entity;
     math::vec3 pos;
+    f32 speed;  // m/s since last tick
 };
 
 bool witnessed_by_police(Frame& f, const Array<Unit>& units, math::vec3 at, f32 range) {
@@ -107,6 +110,7 @@ void set_state(Police3D& p, PoliceState s) {
 // FixedUpdate_Pre, after "kit3d_health": crimes, then what the units see and do, then the cool-down.
 void kit3d_wanted(Frame& f) {
     World& w = f.world();
+    Wanted3DState& st = *w.try_resource<Wanted3DState>();
     Array<Unit> units;
     f.query<const Police3D, const LocalTransform>().each([&](Entity e, const Police3D& p, const LocalTransform&) {
         const Health3D* h = w.try_get<Health3D>(e);
@@ -147,8 +151,21 @@ void kit3d_wanted(Frame& f) {
     Array<Offender> offenders;
     f.query<Wanted3D>().each([&](Entity e, Wanted3D& wd) {
         wd.seen_by = 0;
-        offenders.push_back(Offender{e, position_of(w, e)});
+        const math::vec3 pos = position_of(w, e);
+        f32 speed = 0.0f;
+        for (usize i = 0; i < st.moved.size(); ++i)
+            if (st.moved[i] == e) {
+                const math::vec3 d = pos - st.before[i];
+                speed = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z) / math::max(f.dt, 1.0e-6f);
+            }
+        offenders.push_back(Offender{e, pos, speed});
     });
+    st.moved.clear();
+    st.before.clear();
+    for (const Offender& o : offenders) {
+        st.moved.push_back(o.entity);
+        st.before.push_back(o.pos);
+    }
 
     // The units.
     f.query<Police3D, LocalTransform>().each([&](Entity e, Police3D& p, LocalTransform& t) {
@@ -191,6 +208,23 @@ void kit3d_wanted(Frame& f) {
         } else if (p.state == PoliceState::Search && p.state_time >= p.search_time) {
             p.target = {};
             set_state(p, PoliceState::Idle);
+        }
+
+        // M-ARREST: standing still within reach of a unit that answers to it, at a level it arrests at.
+        {
+            bool near_still = false;
+            Entity who;
+            if (seen && p.arrest_range > 0.0f && p.arrest_max_level > 0) {
+                const Wanted3D& wd = *w.try_get<Wanted3D>(seen->entity);
+                near_still = best <= p.arrest_range && wd.level <= p.arrest_max_level && seen->speed <= p.arrest_speed;
+                who = seen->entity;
+            }
+            p.arrest_progress = near_still ? p.arrest_progress + f.dt : math::max(p.arrest_progress - f.dt, 0.0f);
+            if (near_still && p.arrest_progress >= p.arrest_time) {
+                p.arrest_progress = 0.0f;
+                EventAccess(w).push(Arrested3D{who, e, seen->pos});
+                clear_wanted(w, who);
+            }
         }
 
         if (p.state == PoliceState::Attack && p.aim) {
@@ -270,6 +304,7 @@ void install_wanted3d(World& world) {
     world.register_components<Wanted3D, Police3D>();
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
     world.register_event<WantedChanged3D>(Phase::FixedUpdate_Pre);
+    world.register_event<Arrested3D>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_wanted", &kit3d_wanted, "kit3d_health");
 }
 

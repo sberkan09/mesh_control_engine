@@ -25,6 +25,12 @@
 // an AiBrain also gets the blackboard keys "wanted" (number), "police_state" (number), "target" (entity,
 // cleared when none) and "last_known" (vec3), so a behavior tree can take over the movement.
 //
+// Arrest (M-ARREST). A unit that sees the offender within `arrest_range` of it, at a wanted level of at most
+// `arrest_max_level`, with the offender moving no faster than `arrest_speed`, builds `arrest_progress` for
+// `arrest_time` seconds (it falls back at the same rate when any of that stops being true); the offender is then
+// arrested: `Arrested3D` is pushed and the wanted level cleared (`clear_wanted`). What an arrest means for the
+// game (losing weapons, a respawn at the station) is the game's, on that event. `arrest_range` 0 turns it off.
+//
 // "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health". Everything is in the components, so it is
 // deterministic, hashed and saved.
 
@@ -76,7 +82,8 @@ struct Police3D {
     PoliceState state = PoliceState::Idle;  // engine-written
     u8 drive_nav = 1;               // 1: drives the entity's NavAgent3D
     u8 aim = 1;                     // 1: Attack turns the entity to the target and sets its Weapon3D's `fire`
-    u8 pad_[3] = {};
+    u8 arrest_max_level = 1;        // arrests up to this wanted level (above it, it only chases and shoots)
+    u8 pad_[2] = {};
     f32 sight_range = 30.0f;        // m
     f32 attack_range = 20.0f;       // m
     f32 search_time = 8.0f;         // s at the last known place before giving up
@@ -84,13 +91,22 @@ struct Police3D {
     f32 state_time = 0.0f;          // engine-written: s in the state
     Entity target;                  // engine-written: the offender it follows
     math::vec3 last_known;          // engine-written
+    f32 arrest_range = 2.5f;        // m from the offender at which it can cuff it; 0 = never arrests
+    f32 arrest_time = 2.0f;         // s the offender must stand still within range
+    f32 arrest_speed = 1.5f;        // m/s: faster than this it is not standing still
+    f32 arrest_progress = 0.0f;     // engine-written: s toward the arrest
 };
 MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wanted level"}),
               (attack_level, Range{1, 10}, Help{"shoots from this wanted level"}), (state, ReadOnly, Transient),
               (drive_nav, Help{"1: drives the NavAgent3D"}), (aim, Help{"1: Attack faces the target and fires the Weapon3D"}),
               (sight_range, Range{0, 1000}, Help{"m"}), (attack_range, Range{0, 1000}, Help{"m"}),
               (search_time, Range{0, 600}, Help{"s at the last known place"}), (eye_height, Range{0, 10}),
-              (state_time, ReadOnly, Transient), (target, Save, ReadOnly), (last_known, Save, ReadOnly))
+              (state_time, ReadOnly, Transient), (target, Save, ReadOnly), (last_known, Save, ReadOnly),
+              (arrest_max_level, Range{0, 10}, Help{"arrests up to this wanted level; 0 = never"}),
+              (arrest_range, Range{0, 50}, Help{"m from the offender at which it can arrest; 0 = never"}),
+              (arrest_time, Range{0, 60}, Help{"s the offender must stand still within range"}),
+              (arrest_speed, Range{0, 20}, Help{"m/s: faster than this it is not standing still"}),
+              (arrest_progress, ReadOnly, Transient))
 
 // Events (producer FixedUpdate_Pre).
 struct Crime3D {
@@ -104,7 +120,14 @@ struct WantedChanged3D {
     u32 from = 0;
     u32 to = 0;
 };
+// An offender arrested by `by` (M-ARREST); its wanted level is already cleared.
+struct Arrested3D {
+    Entity offender;
+    Entity by;
+    math::vec3 position;
+};
 MCE_EVENT(Crime3D, offender, victim, heat, position)
+MCE_EVENT(Arrested3D, offender, by, position)
 MCE_EVENT(WantedChanged3D, offender, from, to)
 
 // Adds `heat` to `offender`'s Wanted3D as a crime at `position` (`victim` may be null) and pushes Crime3D. The
