@@ -335,6 +335,26 @@ TEST_CASE("traffic avoid: on a one-lane road a car passes the wreck through an e
     CHECK(s.drv(c).state != TrafficState::Lost);
 }
 
+TEST_CASE("traffic avoid: several cars in a row each pass the wreck through the oncoming lane") {
+    Scene s(kStreet);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity cars[3] = {s.car(1.75f, 150.0f), s.car(1.75f, 172.0f), s.car(1.75f, 194.0f)};
+    f32 closest = 1e9f, between = 1e9f;
+    for (u32 i = 0; i < 60 * 40; ++i) {
+        s.run(1);
+        for (const Entity c : cars) closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        for (u32 a = 0; a < 3; ++a)
+            for (u32 b = a + 1; b < 3; ++b) between = math::min(between, math::length(s.pos(cars[a]) - s.pos(cars[b])));
+    }
+    for (const Entity c : cars) {
+        CHECK(s.pos(c).z < 70.0f);
+        CHECK(std::fabs(s.drv(c).offset) < 0.1f);
+        CHECK(s.drv(c).state != TrafficState::Lost);
+    }
+    CHECK(closest > 2.8f);
+    CHECK(between > 4.5f);
+}
+
 TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck while the oncoming lane is blocked") {
     Scene s(kStreet);
     s.wreck(1.75f, 100.0f);
