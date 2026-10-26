@@ -18,6 +18,30 @@ EntityId parent_id(const DocEntity& e) {
     return c == nullptr ? kNoEntity : doc_entity_id(static_cast<const ChildOf*>(c->data())->parent);
 }
 
+struct RefScan {
+    const SceneDocument* doc = nullptr;
+    bool dangling = false;
+};
+
+void check_ref(Entity* field, void* user) {
+    auto& scan = *static_cast<RefScan*>(user);
+    const EntityId id = doc_entity_id(*field);
+    if (id != kNoEntity && scan.doc->find(id) == nullptr) scan.dangling = true;
+}
+
+// True when a component other than ChildOf (MissingParent covers that one) refers to an entity the scene lacks.
+bool has_dangling_ref(const SceneDocument& doc, const DocEntity& e) {
+    RefScan scan;
+    scan.doc = &doc;
+    for (const DocComponent& comp : e.components) {
+        if (comp.type == &refl::type_of<ChildOf>()) continue;
+        // The visitor only reads; the document hands out its bytes as const.
+        visit_entity_refs(*comp.type, const_cast<void*>(comp.data()), check_ref, &scan);
+        if (scan.dangling) return true;
+    }
+    return false;
+}
+
 const char* describe(LintKind k) {
     switch (k) {
         case LintKind::EmptyName: return "no name";
@@ -25,6 +49,7 @@ const char* describe(LintKind k) {
         case LintKind::ZeroScale: return "scale of zero on an axis";
         case LintKind::NonFiniteTransform: return "position, rotation or scale is not a number";
         case LintKind::MissingParent: return "parent does not exist";
+        case LintKind::DanglingRef: return "refers to an entity the scene lacks";
     }
     return "";
 }
@@ -47,6 +72,9 @@ Array<LintFinding> lint_scene(const SceneDocument& doc) {
 
         const EntityId parent = parent_id(e);
         if (parent != kNoEntity && (parent == e.id || doc.find(parent) == nullptr)) add(e, LintKind::MissingParent);
+
+        // A prefab instance's references may name entities of the prefab, which this document does not hold.
+        if (e.prefab == asset::Guid{} && has_dangling_ref(doc, e)) add(e, LintKind::DanglingRef);
 
         // A prefab instance keeps only the fields it overrides: the transform it shows is not in this document.
         if (const DocComponent* t = e.find(refl::type_of<LocalTransform>())) {

@@ -18,6 +18,7 @@ const char* kind_name(editor::LintKind k) {
         case editor::LintKind::ZeroScale: return "zero_scale";
         case editor::LintKind::NonFiniteTransform: return "non_finite_transform";
         case editor::LintKind::MissingParent: return "missing_parent";
+        case editor::LintKind::DanglingRef: return "dangling_entity_ref";
     }
     return "";
 }
