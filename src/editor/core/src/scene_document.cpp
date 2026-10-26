@@ -299,7 +299,7 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             cook::JsonDoc migrated;
             cook::JsonValue body = comps.at(c);
             if (field_rename_count_ != 0 && body.is_object()) {
-                cook::String text("{");
+                cook::String rebuilt("{");
                 bool any = false;
                 for (u32 k = 0; k < body.size(); ++k) {
                     StringView key = body.key_at(k);
@@ -311,15 +311,15 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
                             break;
                         }
                     }
-                    if (k != 0) text += ", ";
-                    text += "\"";
-                    text += key;
-                    text += "\": ";
-                    cook::write_json(body.at(k), text, true);
+                    if (k != 0) rebuilt += ", ";
+                    rebuilt += "\"";
+                    rebuilt += key;
+                    rebuilt += "\": ";
+                    cook::write_json(body.at(k), rebuilt, true);
                 }
-                text += "}";
+                rebuilt += "}";
                 cook::JsonError merr;
-                if (any && migrated.parse(text.view(), merr)) body = migrated.root();
+                if (any && migrated.parse(rebuilt.view(), merr)) body = migrated.root();
             }
             cook::read_scene_component(*t, body, dc->data(), count, file, path, diags);
             // An instance overrides exactly the fields its file names.
