@@ -373,6 +373,26 @@ TEST_CASE("crowd: a hard vehicle crash nearby sends pedestrians running, a soft 
     CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
 }
 
+TEST_CASE("crowd: a fast vehicle bearing down on a pedestrian sends it running, a slow, a departing or a passing one does not (M-PEDCRASH 2)") {
+    struct Case {
+        f32 speed, car_z, car_x;
+        bool flees;
+    };
+    // The vehicle drives towards -z (identity rotation) from (car_x, car_z); the pedestrian stands at (4, -30).
+    for (const Case k : {Case{12.0f, -10.0f, 4.0f, true}, Case{12.0f, -10.0f, 10.0f, false}, Case{3.0f, -10.0f, 4.0f, false}, Case{12.0f, -50.0f, 4.0f, false},
+                         Case{-12.0f, -10.0f, 4.0f, false}, Case{12.0f, 60.0f, 4.0f, false}}) {
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+        Vehicle3D v;
+        v.speed = k.speed;
+        s.w.spawn_with(LocalTransform{{k.car_x, 0.0f, k.car_z}, math::quat::identity(), {1, 1, 1}}, v);
+        s.run(3);
+        CHECK((s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee) == k.flees);
+    }
+}
+
 TEST_CASE("crowd: panic spreads to close neighbours of a running pedestrian and not to far ones (M-PEDFLEE 3)") {
     Scene s(spawner(0));
     Pedestrian3D p;

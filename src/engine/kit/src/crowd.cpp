@@ -310,6 +310,11 @@ struct Fear {
 };
 constexpr usize kMaxFears = 512;
 constexpr f32 kCrashSpeed = 5.0f;     // m/s a vehicle must close at for pedestrians to hear it as a crash (M-PEDCRASH)
+constexpr f32 kRunDownSpeed = 6.0f;   // m/s a vehicle must go for pedestrians in its path to jump clear of it (M-PEDCRASH 2)
+constexpr f32 kRunDownTime = 2.0f;    // s ahead of it that counts as its path
+constexpr f32 kRunDownWidth = 2.5f;   // m either side of its line
+constexpr f32 kRunDownFlee = 3.0f;    // s a pedestrian runs from a vehicle that nearly hit it
+constexpr usize kMaxCars = 64;
 constexpr usize kMaxSources = 32;     // scare sources (shots and crashes) read in one tick
 
 struct CrowdState {
@@ -611,6 +616,21 @@ void kit_crowd(Frame& f) {
     for (const Fear& fr : st.fears)
         if (fr.left > kPedestrianPanicHop + 0.5f) spreaders.push_back(fr);
 
+    // M-PEDCRASH 2: vehicles moving fast enough to run somebody down, with the line each travels along.
+    struct Mover {
+        vec3 pos, dir;
+        f32 speed;
+    };
+    Array<Mover> movers;
+    w.query<const Vehicle3D&, const LocalTransform&>().each([&](Entity, const Vehicle3D& v, const LocalTransform& t) {
+        if (std::fabs(v.speed) < kRunDownSpeed || movers.size() >= kMaxCars) return;
+        const vec3 fwd = math::rotate(t.rotation, vec3{0.0f, 0.0f, -1.0f});
+        const f32 len = std::sqrt(fwd.x * fwd.x + fwd.z * fwd.z);
+        if (len < 1e-3f) return;
+        const f32 sign = v.speed < 0.0f ? -1.0f : 1.0f;
+        movers.push_back(Mover{t.position, vec3{sign * fwd.x / len, 0.0f, sign * fwd.z / len}, std::fabs(v.speed)});
+    });
+
     // The spawners, with the network each walks on.
     Array<Info> infos;
     w.query<const CrowdSpawner3D&>().each([&](Entity e, const CrowdSpawner3D& s) {
@@ -716,6 +736,21 @@ void kit_crowd(Frame& f) {
             }
             fear->threat = origin;
             fear->left = kPedestrianFleeSeconds;
+        }
+        for (const Mover& m : movers) {  // a vehicle bearing down on it: jump clear (run from where the vehicle is)
+            const f32 rx = t.position.x - m.pos.x, rz = t.position.z - m.pos.z;
+            const f32 along = rx * m.dir.x + rz * m.dir.z;
+            const f32 across = std::fabs(rx * m.dir.z - rz * m.dir.x);
+            if (along <= 0.0f || along > m.speed * kRunDownTime + 3.0f || across > kRunDownWidth) continue;
+            if (!fear) {
+                if (st.fears.size() >= kMaxFears) break;
+                st.fears.push_back(Fear{e, m.pos, t.position, kRunDownFlee});
+                fear = &st.fears.back();
+            } else if (fear->left < kRunDownFlee) {
+                fear->threat = m.pos;
+                fear->left = kRunDownFlee;
+            }
+            break;
         }
         if (!fear && !scared)  // a neighbour is running: so do I (the shot's or the attacker's side)
             for (const Fear& sp : spreaders) {
