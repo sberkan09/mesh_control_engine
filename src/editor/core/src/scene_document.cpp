@@ -214,8 +214,9 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
         diags.error(Errc::VersionTooNew, file, ver.line(), ver.col(), kStage, msg);
         return false;
     }
-    // Older versions migrate here (assets.md §6: migration happens at editor load). Version 1 is
-    // the first format, so the migrator table is empty.
+    // Older versions migrate here (assets.md §6: migration happens at editor load): component
+    // renames are looked up per record below. Version 1 is the first format, so the table is empty.
+    const u32 file_version = static_cast<u32>(ver.as_number());
 
     const cook::JsonValue g = root.get("guid");
     Result<asset::Guid> parsed = g.is_string() ? asset::parse_guid(g.as_string()) : Result<asset::Guid>(Error(Errc::ParseError, kStage));
@@ -268,7 +269,12 @@ bool SceneDocument::parse(StringView text, StringView file, cook::DiagList& diag
             continue;
         }
         for (u32 c = 0; c < comps.size(); ++c) {
-            const StringView tname = comps.key_at(c);
+            StringView tname = comps.key_at(c);
+            for (usize r = 0; r < rename_count_; ++r)
+                if (file_version <= renames_[r].up_to_version && tname == StringView(renames_[r].old_name)) {
+                    tname = StringView(renames_[r].new_name);
+                    break;
+                }
             const refl::TypeRecord* t = refl::find_type(StringId(tname));
             if (!t || !t->is_component()) {
                 cook::String msg("unknown component type '");

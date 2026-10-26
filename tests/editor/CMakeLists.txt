@@ -25,6 +25,7 @@ mce_add_test(test_editor UMBRELLA
         test_match_transform.cpp
         test_scene_diff.cpp
         test_scene_lint.cpp
+        test_scene_migrate.cpp
         test_scene_stats.cpp
         test_scene_find.cpp
         test_recent_list.cpp
