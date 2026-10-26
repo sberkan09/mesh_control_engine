@@ -16,7 +16,7 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Wanted3D) == 68);
-static_assert(sizeof(Police3D) == 64);
+static_assert(sizeof(Police3D) == 68);
 
 namespace {
 
@@ -167,6 +167,21 @@ void kit3d_wanted(Frame& f) {
         st.before.push_back(o.pos);
     }
 
+    // M-ARREST 2: an idle unit within `dispatch_range` of a place an offender it answers to was last seen.
+    auto dispatch = [&](Entity e, Police3D& p) {
+        const math::vec3 here = position_of(w, e);
+        for (const Offender& o : offenders) {
+            const Wanted3D& wd = *w.try_get<Wanted3D>(o.entity);
+            if (wd.level < p.min_level || wd.crimes == 0) continue;
+            if (math::length(wd.last_known - here) > p.dispatch_range) continue;
+            if (math::length(wd.last_known - here) < p.arrest_range + 1.0f) continue;
+            p.target = o.entity;
+            p.last_known = wd.last_known;
+            return true;
+        }
+        return false;
+    };
+
     // The units.
     f.query<Police3D, LocalTransform>().each([&](Entity e, Police3D& p, LocalTransform& t) {
         const Health3D* h = w.try_get<Health3D>(e);
@@ -200,6 +215,8 @@ void kit3d_wanted(Frame& f) {
             p.target = seen->entity;
             p.last_known = seen->pos;
             set_state(p, best <= p.attack_range && wd.level >= p.attack_level ? PoliceState::Attack : PoliceState::Pursue);
+        } else if (!tw && p.dispatch_range > 0.0f && dispatch(e, p)) {
+            set_state(p, PoliceState::Search);
         } else if (!tw || tw->level < p.min_level) {
             p.target = {};
             set_state(p, PoliceState::Idle);

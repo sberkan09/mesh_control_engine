@@ -31,6 +31,10 @@
 // arrested: `Arrested3D` is pushed and the wanted level cleared (`clear_wanted`). What an arrest means for the
 // game (losing weapons, a respawn at the station) is the game's, on that event. `arrest_range` 0 turns it off.
 //
+// Dispatch (M-ARREST 2). An idle unit with `dispatch_range` above 0 whose `min_level` the offender has reached,
+// and which is within that range of `Wanted3D::last_known`, takes the offender as its target and Searches there
+// (reinforcements: put units with a higher `min_level` and a long range around the map). It does not need to see it.
+//
 // "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health". Everything is in the components, so it is
 // deterministic, hashed and saved.
 
@@ -95,6 +99,7 @@ struct Police3D {
     f32 arrest_time = 2.0f;         // s the offender must stand still within range
     f32 arrest_speed = 1.5f;        // m/s: faster than this it is not standing still
     f32 arrest_progress = 0.0f;     // engine-written: s toward the arrest
+    f32 dispatch_range = 0.0f;      // m: an idle unit this close to the offender's last known place is sent there (0 = off)
 };
 MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wanted level"}),
               (attack_level, Range{1, 10}, Help{"shoots from this wanted level"}), (state, ReadOnly, Transient),
@@ -106,7 +111,8 @@ MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wante
               (arrest_range, Range{0, 50}, Help{"m from the offender at which it can arrest; 0 = never"}),
               (arrest_time, Range{0, 60}, Help{"s the offender must stand still within range"}),
               (arrest_speed, Range{0, 20}, Help{"m/s: faster than this it is not standing still"}),
-              (arrest_progress, ReadOnly, Transient))
+              (arrest_progress, ReadOnly, Transient),
+              (dispatch_range, Range{0, 2000}, Help{"m: an idle unit this close to the last known place is sent there; 0 = off"}))
 
 // Events (producer FixedUpdate_Pre).
 struct Crime3D {
