@@ -180,7 +180,7 @@ tick with gravity and splash), `apply_damage` for any other source; events `Weap
 cool-down) and `Police3D` (on a unit: `min_level`, `attack_level`, `PoliceState` Idle / Pursue / Attack / Search,
 sight, `drive_nav` for its `NavAgent3D`, `aim` for its `Weapon3D`; blackboard keys `wanted`, `police_state`,
 `target`, `last_known` on an `AiBrain`). Crimes come from `Damage3D` / `Died3D` against `civilian_team` /
-`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`. System `"kit3d_wanted"`
+`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`, `Arrested3D` (a unit within `arrest_range` of an offender standing still at a level of `arrest_max_level` or below arrests it after `arrest_time`: M-ARREST). System `"kit3d_wanted"`
 (`FixedUpdate_Pre`, after `"kit3d_health"`). Tests: `tests/kit/test_wanted3d.cpp`.
 
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its

@@ -25,7 +25,7 @@ LocalTransform at(f32 x, f32 y, f32 z) { return LocalTransform{{x, y, z}, math::
 struct Scene {
     World w;
     u64 t = 0;
-    u32 crimes = 0, changes = 0;
+    u32 crimes = 0, changes = 0, arrests = 0;
     u32 last_level = 0;
     Scene() {
         w.register_components<LocalTransform>();
@@ -40,6 +40,7 @@ struct Scene {
             w.tick(kDt, t++);
             auto ev = EventAccess(w);
             crimes += static_cast<u32>(ev.read<Crime3D>().size());
+            arrests += static_cast<u32>(ev.read<Arrested3D>().size());
             for (const WantedChanged3D& c : ev.read<WantedChanged3D>()) {
                 ++changes;
                 last_level = c.to;
@@ -273,6 +274,54 @@ TEST_CASE("wanted3d: drive_nav sets the NavAgent3D") {
     s.run(2);
     CHECK(s.police(c).state == PoliceState::Idle);
     CHECK(a.move_to == 1);  // untouched with drive_nav off
+}
+
+TEST_CASE("wanted3d: a unit arrests an offender who stands still within reach at a low level (M-ARREST)") {
+    Wanted3D wd;
+    wd.heat = 5.0f;  // level 1
+    {
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        const Entity c = s.cop(2.0f, 0.0f);
+        s.run(60);
+        CHECK(s.wanted(p).level == 1);
+        CHECK(s.arrests == 0);
+        CHECK(s.police(c).arrest_progress > 0.0f);
+        s.run(120);
+        CHECK(s.arrests == 1);
+        CHECK(s.wanted(p).level == 0);
+        CHECK(s.wanted(p).heat == 0.0f);
+        CHECK(s.police(c).state == PoliceState::Idle);
+    }
+    {  // keeps moving: no arrest, and the progress falls back
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        const Entity c = s.cop(2.0f, 0.0f);
+        s.run(60);
+        for (u32 i = 0; i < 240; ++i) {
+            s.w.try_get_mut<LocalTransform>(p)->position.z += 3.0f * kDt * ((i / 20) % 2 ? -1.0f : 1.0f);
+            s.run(1);
+        }
+        CHECK(s.arrests == 0);
+        CHECK(s.wanted(p).level == 1);
+        (void)c;
+    }
+    {  // out of reach, above the arrest level, or a unit that does not arrest
+        for (u32 k = 0; k < 3; ++k) {
+            Scene s;
+            Wanted3D w2 = wd;
+            Police3D pol;
+            f32 dist = 2.0f;
+            if (k == 0) dist = 5.0f;
+            if (k == 1) w2.heat = 30.0f;  // level 2
+            if (k == 2) pol.arrest_range = 0.0f;
+            const Entity p = s.player(w2, 0.0f, 0.0f);
+            s.cop(dist, 0.0f, pol);
+            s.run(60 * 4);
+            CHECK(s.arrests == 0);
+            CHECK(s.wanted(p).level >= 1);
+        }
+    }
 }
 
 TEST_CASE("wanted3d: replays hash the same") {
