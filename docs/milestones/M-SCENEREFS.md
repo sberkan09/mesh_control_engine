@@ -10,6 +10,6 @@
 
 | # | Step | State |
 |---|---|---|
-| 1 | `LintKind::DanglingRef` in `lint_scene`, the MCP kind name and tool description, user guide rows, a `test_scene_lint` case | open (PR) |
+| 1 | `LintKind::DanglingRef` in `lint_scene`, the MCP kind name and tool description, user guide rows, a `test_scene_lint` case | done (#795) |
 
 **Gates:** `test_editor`, `mcp_transcript` (the tool description is in the golden).
