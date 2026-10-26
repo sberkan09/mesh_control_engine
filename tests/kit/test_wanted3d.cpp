@@ -324,6 +324,28 @@ TEST_CASE("wanted3d: a unit arrests an offender who stands still within reach at
     }
 }
 
+TEST_CASE("wanted3d: an idle unit within dispatch range is sent to the last known place (M-ARREST 2)") {
+    Wanted3D wd;
+    wd.heat = 25.0f;  // level 2
+    wd.crimes = 1;
+    wd.last_known = {0.0f, 1.0f, 0.0f};
+    for (u32 k = 0; k < 4; ++k) {
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Police3D pol;
+        f32 dist = 80.0f;  // far beyond sight_range
+        if (k >= 1) pol.dispatch_range = 100.0f;
+        if (k == 2) dist = 150.0f;  // beyond the range
+        if (k == 3) pol.min_level = 3;  // does not answer to level 2
+        const Entity c = s.cop(dist, 0.0f, pol);
+        s.run(10);
+        const bool sent = s.police(c).state == PoliceState::Search;
+        CHECK(sent == (k == 1));
+        CHECK(s.police(c).target.is_null() == (k != 1));
+        (void)p;
+    }
+}
+
 TEST_CASE("wanted3d: replays hash the same") {
     auto run = [] {
         Scene s;

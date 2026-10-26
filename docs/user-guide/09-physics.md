@@ -962,4 +962,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   loses it. What an arrest costs the player (weapons, a respawn at the station) is the game's, in a handler of that
   event. `arrest_range = 0` or `arrest_max_level = 0` make a unit that only chases and shoots.
 
-Not in this step: spawning reinforcements as the level rises, and police cars and roadblocks.
+- **Reinforcements (M-ARREST 2).** A unit with `dispatch_range` above 0 (default 0, off) that is idle, whose `min_level`
+  the offender has reached and which is within that range of the offender's last known place, goes there and Searches,
+  even without seeing it. Place units with a higher `min_level` and a long range around the map: they stay idle at level 1
+  and arrive as the level rises.
+
+Not in this step: spawning new units, and police cars and roadblocks.
