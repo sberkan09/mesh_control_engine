@@ -99,6 +99,15 @@ add_test(NAME scene_lint_cli_exit_code COMMAND mce_scene_lint "${CMAKE_CURRENT_S
 set_tests_properties(scene_lint_cli_exit_code PROPERTIES WILL_FAIL TRUE)
 add_test(NAME scene_lint_cli_clean COMMAND mce_scene_lint "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_clean.mcscene")
 set_tests_properties(scene_lint_cli_clean PROPERTIES PASS_REGULAR_EXPRESSION "no findings")
+# --fix (M-LINTFIX 2): a copy of the bad scene is fixed, then lints clean.
+add_test(NAME scene_lint_fix_copy COMMAND ${CMAKE_COMMAND} -E copy
+         "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene" "${CMAKE_CURRENT_BINARY_DIR}/lint_fix_copy.mcscene")
+set_tests_properties(scene_lint_fix_copy PROPERTIES FIXTURES_SETUP lint_fix_copy)
+add_test(NAME scene_lint_fix_run COMMAND mce_scene_lint --fix "${CMAKE_CURRENT_BINARY_DIR}/lint_fix_copy.mcscene")
+set_tests_properties(scene_lint_fix_run PROPERTIES FIXTURES_REQUIRED lint_fix_copy FIXTURES_SETUP lint_fix_done
+    PASS_REGULAR_EXPRESSION "lint_fix_copy.mcscene: fixed 2")
+add_test(NAME scene_lint_fix_clean COMMAND mce_scene_lint "${CMAKE_CURRENT_BINARY_DIR}/lint_fix_copy.mcscene")
+set_tests_properties(scene_lint_fix_clean PROPERTIES FIXTURES_REQUIRED lint_fix_done PASS_REGULAR_EXPRESSION "no findings")
 
 # mce_scene_stats (M-SCENESTATS 2): the report over a fixture scene, and the heading when there are several.
 add_test(NAME scene_stats_cli_report COMMAND mce_scene_stats "${CMAKE_CURRENT_SOURCE_DIR}/data/lint_bad.mcscene")
