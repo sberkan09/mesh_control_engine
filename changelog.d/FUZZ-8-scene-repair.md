@@ -1,0 +1,1 @@
+- Fuzz, M-FUZZ 8: the scene repair (`fix_scene_lint`) runs over the mutated scene documents; lint must be clean afterwards.
