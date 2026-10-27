@@ -18,6 +18,8 @@ namespace mce::kit {
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Wanted3D) == 68);
 static_assert(sizeof(Police3D) == 68);
+static_assert(sizeof(RespawnPoint3D) == 4);
+static_assert(sizeof(Respawn3D) == 12);
 
 namespace {
 
@@ -322,6 +324,52 @@ void kit3d_wanted(Frame& f) {
     }
 }
 
+// M-WASTED: dying or being arrested starts the timer; at zero the player wakes up at the nearest matching point.
+void kit3d_respawn(Frame& f) {
+    World& w = f.world();
+    EventAccess ev(w);
+    auto start = [&](Entity e, u8 reason) {
+        Respawn3D* r = e.is_null() || !w.alive(e) ? nullptr : w.try_get_mut<Respawn3D>(e);
+        if (!r || (r->reason != 0 && reason == 2)) return;  // a busted wait is not turned into a wasted one
+        r->reason = reason;
+        r->timer = r->delay;
+    };
+    for (const Died3D& d : ev.read<Died3D>()) start(d.entity, 2);
+    for (const Arrested3D& a : ev.read<Arrested3D>()) start(a.offender, 1);
+
+    f.query<Respawn3D>().each([&](Entity e, Respawn3D& r) {
+        if (r.reason == 0) return;
+        r.timer -= f.dt;
+        if (r.timer > 0.0f) return;
+        const RespawnKind want = r.reason == 1 ? RespawnKind::Station : RespawnKind::Hospital;
+        const math::vec3 here = position_of(w, e);
+        bool found = false, found_kind = false;
+        f32 best = 0.0f;
+        math::vec3 target = here;
+        f.query<RespawnPoint3D, LocalTransform>().each([&](Entity pe, RespawnPoint3D& pt, LocalTransform&) {
+            const math::vec3 pp = position_of(w, pe);
+            const f32 d = math::length(pp - here);
+            const bool match = pt.kind == want;
+            if (found && ((found_kind && !match) || (found_kind == match && d >= best))) return;
+            found = true;
+            found_kind = match;
+            best = d;
+            target = pp;
+        });
+        if (found)
+            if (LocalTransform* t = w.try_get_mut<LocalTransform>(e)) t->position = target;
+        if (Health3D* h = w.try_get_mut<Health3D>(e)) {
+            h->current = h->max;
+            h->dead = 0;
+            h->dead_time = 0.0f;
+        }
+        clear_wanted(w, e);
+        ev.push(Respawned3D{e, r.reason, target});
+        r.reason = 0;
+        r.timer = 0.0f;
+    });
+}
+
 }  // namespace
 
 bool report_crime(World& w, Entity offender, f32 heat, math::vec3 position, Entity victim, bool witnessed) {
@@ -342,11 +390,13 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D>();
+    world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
     world.register_event<WantedChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Arrested3D>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_wanted", &kit3d_wanted, "kit3d_health");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_respawn", &kit3d_respawn, "kit3d_wanted");
 }
 
 }  // namespace mce::kit

@@ -41,7 +41,7 @@
 // (so a car beside a standing offender is still a unit that can arrest it). A car is not aimed: `aim` does not turn it.
 // A roadblock is a car with `drive_car` 0 placed across the road.
 //
-// "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health". Everything is in the components, so it is
+// "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health"; "kit3d_respawn" (M-WASTED) after it. Everything is in the components, so it is
 // deterministic, hashed and saved.
 
 #include "mce/ecs/entity.h"
@@ -149,6 +149,36 @@ MCE_EVENT(WantedChanged3D, offender, from, to)
 // count (no Wanted3D, no heat, not witnessed). From a FixedUpdate_Pre system or between ticks; the level is
 // recomputed at once and WantedChanged3D pushed.
 bool report_crime(World& world, Entity offender, f32 heat, math::vec3 position, Entity victim = {}, bool witnessed = true);
+
+// Busted and wasted (M-WASTED). `Respawn3D` on the player (the entity with a Health3D): after it dies (Died3D) or is
+// arrested (Arrested3D) it waits `delay` seconds, then wakes up at the nearest `RespawnPoint3D` (a Station after an
+// arrest, a Hospital after a death; any point when the wanted kind is missing; where it is when there is none) with full
+// health and no wanted level, and `Respawned3D` is pushed. What it costs (money, weapons) is the game's, on that event.
+enum class RespawnKind : u8 { Hospital, Station };
+MCE_ENUM(RespawnKind, Hospital, Station)
+
+struct RespawnPoint3D {
+    RespawnKind kind = RespawnKind::Hospital;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(RespawnPoint3D, (kind, Help{"Hospital: where a dead player wakes up; Station: where an arrested one does"}))
+
+struct Respawn3D {
+    f32 delay = 3.0f;               // s between dying or being arrested and waking up
+    f32 timer = 0.0f;               // engine-written: s left (0 when idle)
+    u8 reason = 0;                  // engine-written: 0 none, 1 busted, 2 wasted
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(Respawn3D, (delay, Range{0, 600}, Help{"s between dying or being arrested and waking up"}),
+              (timer, ReadOnly, Transient), (reason, ReadOnly, Transient, Help{"0 none, 1 busted, 2 wasted"}))
+
+// An entity woke up again (M-WASTED). `reason` 1: busted, 2: wasted.
+struct Respawned3D {
+    Entity entity;
+    u32 reason = 0;
+    math::vec3 position;
+};
+MCE_EVENT(Respawned3D, entity, reason, position)
 
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);

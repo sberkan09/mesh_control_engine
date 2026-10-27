@@ -1,0 +1,1 @@
+- Kit (M-WASTED 1): `Respawn3D` and `RespawnPoint3D`: a dead (wasted) or arrested (busted) player wakes up at the nearest hospital or station with full health and no wanted level (`Respawned3D`). Record: `docs/milestones/M-WASTED.md`.

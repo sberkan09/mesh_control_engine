@@ -972,4 +972,10 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   and inside 12 m, and brakes to a stop inside 4 m. There is no path following, so a wall between the car and the target
   stops it. A roadblock is a car with `drive_car` 0 placed across the road.
 
+- **Busted and wasted (M-WASTED).** Put `Respawn3D` (`delay`, default 3 s) on the player and `RespawnPoint3D` on a few
+  entities (`kind` Hospital or Station). After the player dies it wakes up at the nearest Hospital, after an arrest at the
+  nearest Station (any point when the wanted kind is missing; where it stands when there is none), with full health and
+  no wanted level, and `Respawned3D { entity, reason, position }` is pushed (`reason` 1 busted, 2 wasted). Fines and lost
+  weapons are the game's, on that event.
+
 Not in this step: spawning new units, and cars that follow roads.
