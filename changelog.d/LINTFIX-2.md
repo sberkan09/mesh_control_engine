@@ -1,0 +1,1 @@
+- Editor, M-LINTFIX: `mce_scene_lint --fix` repairs a scene's lint findings and rewrites the file in the canonical text.
