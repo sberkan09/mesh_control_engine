@@ -1,6 +1,7 @@
 #include "mce/kit/wanted3d.h"
 
 #include <cmath>
+#include <cstdio>
 
 #include "kit3d_internal.h"
 #include "mce/containers/array.h"
@@ -22,7 +23,7 @@ namespace mce::kit {
 static_assert(sizeof(Wanted3D) == 68);
 static_assert(sizeof(Police3D) == 68);
 static_assert(sizeof(RespawnPoint3D) == 4);
-static_assert(sizeof(Respawn3D) == 12);
+static_assert(sizeof(Respawn3D) == 16);
 static_assert(sizeof(Wallet3D) == 4);
 static_assert(sizeof(CashDrop3D) == 8);
 
@@ -375,6 +376,15 @@ void kit3d_respawn(Frame& f) {
             h->dead_time = 0.0f;
         }
         clear_wanted(w, e);
+        const i32 fine = take_cash(w, e, r.reason == 1 ? r.fine_busted : r.fine_wasted);
+        if (fine > 0 && r.caption && w.try_resource<Captions>()) {
+            char buf[24];
+            std::snprintf(buf, sizeof buf, "-$%d", fine);
+            ShowCaption c;
+            c.text = buf;
+            c.seconds = 2.0f;
+            ev.push(c);
+        }
         ev.push(Respawned3D{e, r.reason, target});
         r.reason = 0;
         r.timer = 0.0f;

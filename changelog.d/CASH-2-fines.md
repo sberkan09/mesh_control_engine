@@ -1,0 +1,1 @@
+- Kit (M-CASH 2): waking up busted or wasted costs a fine from the player's `Wallet3D` (`Respawn3D::fine_busted` / `fine_wasted`) and shows "-$N". Record: `docs/milestones/M-CASH.md`.
