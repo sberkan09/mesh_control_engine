@@ -1,0 +1,1 @@
+- MCP, M-LINTALL: `scene_lint_all` lints every scene and prefab under assets/ in one call.
