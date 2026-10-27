@@ -967,4 +967,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   even without seeing it. Place units with a higher `min_level` and a long range around the map: they stay idle at level 1
   and arrive as the level rises.
 
-Not in this step: spawning new units, and police cars and roadblocks.
+- **Police cars (M-ARREST 3).** `drive_car` 1 on a unit that has a `Vehicle3D` (with `use_input` 0) drives it at the target:
+  Pursue and Attack at the offender, Search at the last known place, Idle stops. It steers at the point, slows in turns
+  and inside 12 m, and brakes to a stop inside 4 m. There is no path following, so a wall between the car and the target
+  stops it. A roadblock is a car with `drive_car` 0 placed across the road.
+
+Not in this step: spawning new units, and cars that follow roads.

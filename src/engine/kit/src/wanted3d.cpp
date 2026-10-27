@@ -11,6 +11,7 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
+#include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
 
@@ -244,7 +245,7 @@ void kit3d_wanted(Frame& f) {
             }
         }
 
-        if (p.state == PoliceState::Attack && p.aim) {
+        if (p.state == PoliceState::Attack && p.aim && !p.drive_car) {
             const math::vec3 d = p.last_known - position_of(w, e);
             if (std::abs(d.x) + std::abs(d.z) > 1.0e-4f)
                 t.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, std::atan2(-d.x, -d.z));
@@ -271,6 +272,29 @@ void kit3d_wanted(Frame& f) {
                         }
                         break;
                 }
+            }
+        }
+        // M-ARREST 3: a police car steers at the point it answers to.
+        if (p.drive_car) {
+            if (Vehicle3D* v = w.try_get_mut<Vehicle3D>(e); v && !v->use_input) {
+                const bool go = p.state != PoliceState::Idle && !p.target.is_null();
+                const math::vec3 d = p.last_known - position_of(w, e);
+                const f32 dist = std::sqrt(d.x * d.x + d.z * d.z);
+                if (!go || dist < 4.0f) {
+                    v->throttle = 0.0f;
+                    v->steer = 0.0f;
+                    v->brake = 1.0f;
+                } else {
+                    const math::vec3 fwd = math::rotate(t.rotation, math::vec3{0.0f, 0.0f, -1.0f});
+                    // Signed angle from the heading to the target, positive when it is to the right.
+                    const f32 ang = std::atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
+                    const f32 max_steer = math::max(v->max_steer, 1.0f) * 0.0174533f;
+                    v->steer = math::clamp(ang / max_steer, -1.0f, 1.0f);
+                    const f32 turn = std::abs(v->steer);
+                    v->throttle = math::min(1.0f - 0.6f * turn, dist < 12.0f ? 0.4f : 1.0f);
+                    v->brake = 0.0f;
+                }
+                v->handbrake = 0.0f;
             }
         }
         if (w.has<AiBrain>(e)) {

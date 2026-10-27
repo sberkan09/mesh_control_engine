@@ -1,6 +1,6 @@
 # M-ARREST — police arrest an offender who stands still
 
-Status: step 1 and 2 done (2026-10-26). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
+Status: steps 1 to 3 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
 
 ## Why
 
@@ -25,7 +25,18 @@ search ends after `search_time` as usual. No new component, no spawn; only a fie
 Test: "an idle unit within dispatch range is sent to the last known place": sent when in range, not when out of range, not
 when `min_level` is above the level, not when `dispatch_range` is 0.
 
+Step 3 (police cars, no new component). A police car is a `Police3D` on an entity that also has a `Vehicle3D` (`use_input` 0).
+`Police3D::drive_car` (u8, default 0, takes a former pad byte so the size stays 68) makes `kit3d_wanted` write the car's
+`throttle`, `steer`, `brake` and `handbrake` every tick: Pursue and Attack aim at the target's position, Search at the last
+known place, Idle stops. Steering is the signed angle from the car's heading to the point, divided by `max_steer`; throttle
+falls with the steering lock and is capped at 0.4 inside 12 m; inside 4 m the car brakes to a stop, which is within
+`arrest_range` of an offender who stands beside it only if the car stopped close, so a car and a foot unit together is the
+normal pairing. `aim` does not turn a car. A roadblock is a `Vehicle3D` with `drive_car` 0 left across the road (no
+engine work). Limits: no path following (a wall between the car and the target stops it; `Vehicle3D` has no nav), no
+reversing out of a dead end, no ramming logic. Test: "a police car steers and drives at the target": right, left, stops at the
+target, `drive_car` 0 leaves the car alone.
+
 ## Open items
 
-- Police cars and roadblocks (police are on foot), spawning fresh units (needs a prefab/station), and a handcuff animation / UI prompt (the event is the hook).
+- Cars that follow a road path or reverse out of a dead end, spawning fresh units (needs a prefab/station), and a handcuff animation / UI prompt (the event is the hook).
 - An offender in a car is arrested the same way once it is stopped within reach; there is no pull-over.
