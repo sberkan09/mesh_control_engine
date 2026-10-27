@@ -299,6 +299,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_lint` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint_fix` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_stats` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_find` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `asset_used_by` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
