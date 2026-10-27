@@ -35,6 +35,12 @@
 // and which is within that range of `Wanted3D::last_known`, takes the offender as its target and Searches there
 // (reinforcements: put units with a higher `min_level` and a long range around the map). It does not need to see it.
 //
+// Police cars (M-ARREST 3). `drive_car` 1 on a unit that has a Vehicle3D (with `use_input` 0) writes the car's
+// `throttle`, `steer`, `brake` and `handbrake`: Pursue and Attack drive at the target, Search at the last known place,
+// Idle stops. It steers at the point, slows for tight turns and for the last 12 m, and brakes to a stop inside 4 m
+// (so a car beside a standing offender is still a unit that can arrest it). A car is not aimed: `aim` does not turn it.
+// A roadblock is a car with `drive_car` 0 placed across the road.
+//
 // "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health". Everything is in the components, so it is
 // deterministic, hashed and saved.
 
@@ -87,7 +93,8 @@ struct Police3D {
     u8 drive_nav = 1;               // 1: drives the entity's NavAgent3D
     u8 aim = 1;                     // 1: Attack turns the entity to the target and sets its Weapon3D's `fire`
     u8 arrest_max_level = 1;        // arrests up to this wanted level (above it, it only chases and shoots)
-    u8 pad_[2] = {};
+    u8 drive_car = 0;               // 1: drives the entity's Vehicle3D toward the target (M-ARREST 3)
+    u8 pad_[1] = {};
     f32 sight_range = 30.0f;        // m
     f32 attack_range = 20.0f;       // m
     f32 search_time = 8.0f;         // s at the last known place before giving up
@@ -107,6 +114,7 @@ MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wante
               (sight_range, Range{0, 1000}, Help{"m"}), (attack_range, Range{0, 1000}, Help{"m"}),
               (search_time, Range{0, 600}, Help{"s at the last known place"}), (eye_height, Range{0, 10}),
               (state_time, ReadOnly, Transient), (target, Save, ReadOnly), (last_known, Save, ReadOnly),
+              (drive_car, Help{"1: drives the Vehicle3D (throttle, steer, brake) toward the target"}),
               (arrest_max_level, Range{0, 10}, Help{"arrests up to this wanted level; 0 = never"}),
               (arrest_range, Range{0, 50}, Help{"m from the offender at which it can arrest; 0 = never"}),
               (arrest_time, Range{0, 60}, Help{"s the offender must stand still within range"}),

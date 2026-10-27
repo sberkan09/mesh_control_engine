@@ -11,6 +11,7 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
 
 using namespace mce;
@@ -343,6 +344,39 @@ TEST_CASE("wanted3d: an idle unit within dispatch range is sent to the last know
         CHECK(sent == (k == 1));
         CHECK(s.police(c).target.is_null() == (k != 1));
         (void)p;
+    }
+}
+
+TEST_CASE("wanted3d: a police car steers and drives at the target (M-ARREST 3)") {
+    Wanted3D wd;
+    wd.heat = 25.0f;
+    wd.crimes = 1;
+    for (u32 k = 0; k < 4; ++k) {
+        Scene s;
+        const f32 side = k == 1 ? -20.0f : 20.0f;  // right (+X) or left of a car facing -Z
+        s.player(wd, side, -30.0f);
+        Police3D pol;
+        pol.drive_car = k == 3 ? 0 : 1;
+        pol.sight_range = 100.0f;
+        Health3D h;
+        h.team = 2;
+        const Entity c = s.w.spawn_with(at(0, 1, 0), pol, h, Vehicle3D{});
+        s.run(5);
+        const Vehicle3D& v = *s.w.try_get<Vehicle3D>(c);
+        if (k == 3) {
+            CHECK(v.throttle == 0.0f);
+            CHECK(v.steer == 0.0f);
+        } else if (k == 2) {  // a unit at the offender: stops
+            s.w.try_get_mut<LocalTransform>(c)->position = {side, 1.0f, -29.0f};
+            s.run(5);
+            CHECK(v.throttle == 0.0f);
+            CHECK(v.brake == 1.0f);
+        } else {
+            CHECK(v.throttle > 0.0f);
+            CHECK(v.brake == 0.0f);
+            if (k == 0) CHECK(v.steer > 0.0f);
+            if (k == 1) CHECK(v.steer < 0.0f);
+        }
     }
 }
 
