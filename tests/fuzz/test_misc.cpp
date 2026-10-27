@@ -207,6 +207,18 @@ TEST_CASE("fuzz: scene documents survive mutated text, and what loads saves and 
         (void)editor::lint_scene(doc);
         (void)editor::scene_stats(doc);
         (void)editor::find_entities(doc, editor::FindQuery{});
+
+        // The repair (M-LINTFIX): lint is clean afterwards, a second pass changes nothing, and the result still saves and loads.
+        editor::SceneDocument repaired = doc;
+        const usize before = editor::lint_scene(repaired).size();
+        CHECK(editor::fix_scene_lint(repaired) == before);
+        CHECK(editor::lint_scene(repaired).empty());
+        CHECK(editor::fix_scene_lint(repaired) == 0);
+        cook::String fixed_text;
+        repaired.serialize(fixed_text);
+        editor::SceneDocument reloaded;
+        cook::DiagList reload_diags;
+        CHECK(reloaded.parse(fixed_text.view(), "fixed.mcscene", reload_diags));
     }
     std::printf("fuzz: scene documents: %u mutants, %llu read\n", n, static_cast<unsigned long long>(accepted));
     CHECK(accepted > 0);
