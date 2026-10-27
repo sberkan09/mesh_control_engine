@@ -96,6 +96,81 @@ Array<LintFinding> lint_scene(const SceneDocument& doc) {
     return out;
 }
 
+namespace {
+
+void null_missing_ref(Entity* field, void* user) {
+    const auto& doc = *static_cast<const SceneDocument*>(user);
+    const EntityId id = doc_entity_id(*field);
+    if (id != kNoEntity && doc.find(id) == nullptr) *field = Entity::null;
+}
+
+void fix_transform(LocalTransform& t) {
+    if (!finite3(t.position)) t.position = {};
+    if (!finite3(t.scale)) t.scale = {1.0f, 1.0f, 1.0f};
+    if (!(std::isfinite(t.rotation.x) && std::isfinite(t.rotation.y) && std::isfinite(t.rotation.z) &&
+          std::isfinite(t.rotation.w)))
+        t.rotation = {};
+    if (t.scale.x == 0.0f) t.scale.x = 1.0f;
+    if (t.scale.y == 0.0f) t.scale.y = 1.0f;
+    if (t.scale.z == 0.0f) t.scale.z = 1.0f;
+}
+
+bool name_taken(const SceneDocument& doc, EntityId parent, StringView name, EntityId except) {
+    for (const DocEntity& o : doc.entities())
+        if (o.id != except && o.name.view() == name && parent_id(o) == parent) return true;
+    return false;
+}
+
+}  // namespace
+
+usize fix_scene_lint(SceneDocument& doc) {
+    const Array<LintFinding> found = lint_scene(doc);
+    if (found.empty()) return 0;
+    auto flagged = [&found](EntityId id, LintKind kind) {
+        for (const LintFinding& f : found)
+            if (f.id == id && f.kind == kind) return true;
+        return false;
+    };
+    // Names first and the parent link next: sibling groups depend on both.
+    for (DocEntity& e : doc.entities_mut()) {
+        if (flagged(e.id, LintKind::EmptyName)) {
+            char buf[24];
+            std::snprintf(buf, sizeof buf, "Entity %u", static_cast<unsigned>(e.id));
+            e.name.assign(StringView(buf));
+        }
+        if (flagged(e.id, LintKind::MissingParent)) (void)doc.remove_component(e.id, refl::type_of<ChildOf>());
+    }
+    for (DocEntity& e : doc.entities_mut()) {
+        if (flagged(e.id, LintKind::DanglingRef)) {
+            for (DocComponent& comp : e.components) {
+                if (comp.type == &refl::type_of<ChildOf>()) continue;
+                visit_entity_refs(*comp.type, comp.data(), null_missing_ref, &doc);
+            }
+        }
+        if (flagged(e.id, LintKind::NonFiniteTransform) || flagged(e.id, LintKind::ZeroScale)) {
+            if (DocComponent* t = e.find(refl::type_of<LocalTransform>()))
+                fix_transform(*static_cast<LocalTransform*>(t->data()));
+        }
+    }
+    // Duplicates last, in document order: the first holder keeps the name, a later one takes the first free " (n)".
+    for (DocEntity& e : doc.entities_mut()) {
+        if (!flagged(e.id, LintKind::DuplicateSiblingName)) continue;
+        const EntityId parent = parent_id(e);
+        const cook::String base(e.name.view());
+        for (u32 n = 2;; ++n) {
+            char suffix[24];
+            std::snprintf(suffix, sizeof suffix, " (%u)", static_cast<unsigned>(n));
+            const usize room = e.name.capacity() - StringView(suffix).size();
+            FixedString<64> candidate(base.view().size() <= room ? base.view() : base.view().substr(0, room));
+            candidate.append(StringView(suffix));
+            if (name_taken(doc, parent, candidate.view(), e.id)) continue;
+            e.name = candidate;
+            break;
+        }
+    }
+    return found.size();
+}
+
 cook::String format_lint(Span<const LintFinding> findings) {
     cook::String out;
     for (const LintFinding& f : findings) {

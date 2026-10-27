@@ -102,3 +102,65 @@ TEST_CASE("a reference to an entity the scene lacks is reported; a null one and 
     CHECK_FALSE(has(f, gun, LintKind::MissingParent));  // a parent is reported as MissingParent, not twice
     CHECK(std::string_view(format_lint(f.span()).c_str()).find("Gun (id ") != std::string_view::npos);
 }
+
+TEST_CASE("fix_scene_lint repairs every kind and leaves a clean scene") {
+    EditorScene s;
+    const EntityId room = s.create_entity("Room");
+    const EntityId first = s.create_entity("Wall");
+    const EntityId second = s.create_entity("Wall");
+    const EntityId third = s.create_entity("Wall");
+    const EntityId unnamed = s.create_entity("");
+    const EntityId flat = s.create_entity("Flat");
+    const EntityId broken = s.create_entity("Broken");
+    const EntityId orphan = s.create_entity("Orphan");
+    const EntityId gun = s.create_entity("Gun");
+    s.set_parent(first, room);
+    s.set_parent(second, room);
+    s.set_parent(third, room);
+    LocalTransform flat_t;
+    flat_t.scale = {1.0f, 0.0f, 1.0f};
+    set_transform(s, flat, flat_t);
+    LocalTransform nan_t;
+    nan_t.position.x = std::numeric_limits<f32>::quiet_NaN();
+    nan_t.scale = {2.0f, 0.0f, 2.0f};
+    set_transform(s, broken, nan_t);
+    s.add_component(orphan, refl::type_of<ChildOf>());
+    REQUIRE(s.set(orphan, ChildOf{doc_entity_ref(999)}));
+    s.add_component(gun, refl::type_of<kit::AttachToBone>());
+    kit::AttachToBone a;
+    a.target = doc_entity_ref(998);
+    REQUIRE(s.set(gun, a));
+    REQUIRE_FALSE(lint_scene(s.doc()).empty());
+
+    SceneDocument doc = s.doc();
+    const usize fixed = fix_scene_lint(doc);
+    CHECK(fixed >= 7);
+    CHECK(lint_scene(doc).empty());
+    CHECK(doc.find(first)->name.view() == "Wall");
+    CHECK(doc.find(second)->name.view() == "Wall (2)");
+    CHECK(doc.find(third)->name.view() == "Wall (3)");
+    CHECK(doc.find(unnamed)->name.view().size() > 0);
+    CHECK(doc.find(orphan)->find(refl::type_of<ChildOf>()) == nullptr);
+    const auto* fixed_flat = static_cast<const LocalTransform*>(doc.find(flat)->find(refl::type_of<LocalTransform>())->data());
+    CHECK(fixed_flat->scale.y == 1.0f);
+    const auto* fixed_broken = static_cast<const LocalTransform*>(doc.find(broken)->find(refl::type_of<LocalTransform>())->data());
+    CHECK(fixed_broken->position.x == 0.0f);
+    CHECK(fixed_broken->scale.x == 2.0f);  // a finite axis is kept
+    CHECK(fixed_broken->scale.y == 1.0f);
+    const auto* fixed_gun = static_cast<const kit::AttachToBone*>(doc.find(gun)->find(refl::type_of<kit::AttachToBone>())->data());
+    CHECK(fixed_gun->target.is_null());
+
+    CHECK(fix_scene_lint(doc) == 0);  // idempotent
+}
+
+TEST_CASE("fix_scene_lint on a tidy scene changes nothing") {
+    EditorScene s;
+    s.create_entity("A");
+    s.create_entity("B");
+    SceneDocument doc = s.doc();
+    cook::String before, after;
+    doc.serialize(before);
+    CHECK(fix_scene_lint(doc) == 0);
+    doc.serialize(after);
+    CHECK(before.view() == after.view());
+}
