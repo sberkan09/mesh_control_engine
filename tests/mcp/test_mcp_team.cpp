@@ -450,6 +450,29 @@ TEST_CASE("scene_lint: the open scene with unsaved edits, then a saved file by p
     CHECK(alice.fails("scene_lint", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
 }
 
+TEST_CASE("scene_lint_fix: repairs a saved scene, leaves a tidy one alone, refuses a missing one") {
+    const std::string root = demo_project("mcp_team_scene_lint_fix");
+    Agent alice(root, "alice");
+    auto tidy = alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(tidy.v().get("fixed").as_number() == 0);
+    CHECK_FALSE(tidy.v().get("written").as_bool());
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    alice.ok("scene_save");
+    CHECK_FALSE(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+
+    auto fixed = alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(fixed.v().get("fixed").as_number() == 2);
+    CHECK(fixed.v().get("written").as_bool());
+    CHECK(str(fixed.v().get("report")).find("duplicate name among its siblings") != std::string::npos);
+    CHECK(alice.ok("scene_lint", R"({"path":"scenes/demo.mcscene"})").v().get("clean").as_bool());
+    CHECK(alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})").v().get("fixed").as_number() == 0);  // idempotent
+
+    CHECK(alice.fails("scene_lint_fix", R"({"path":"scenes/missing.mcscene"})").find("cannot read") != std::string::npos);
+    CHECK(alice.fails("scene_lint_fix").find("path") != std::string::npos);
+}
+
 // ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
 
 TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {

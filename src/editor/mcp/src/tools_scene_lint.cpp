@@ -1,6 +1,6 @@
 // scene_lint (M-SCENELINT step 3): mistakes in a scene that load fine and misbehave later (an entity without a name,
 // siblings that share a name, a scale of zero, a transform that is not a number, a missing parent). The same
-// findings `mce scene lint` prints.
+// findings `mce scene lint` prints. scene_lint_fix repairs them in a saved file.
 
 #include "mce/cook/fs.h"
 #include "mce/editor/scene_lint.h"
@@ -56,6 +56,44 @@ bool scene_lint(ToolCall& c) {
     for (const editor::LintFinding& f : found)
         c.out.begin_object().key("entity").num_u(f.id).key("name").str(f.name.view()).key("kind").str(kind_name(f.kind)).end_object();
     c.out.end_array().key("report").str(editor::format_lint(found.span()).view()).end_object();
+    return true;
+}
+
+// scene_lint_fix (M-LINTFIX 3): repairs what scene_lint finds in a saved scene and writes the file in the canonical text.
+bool scene_lint_fix(ToolCall& c) {
+    StringView path;
+    if (!arg_string(c, "path", path, true)) return false;
+    cook::String abs;
+    if (!scene_path(c.server, path, abs, c.error)) return false;
+    cook::String text;
+    if (!cook::fs::read_text(abs.view(), text)) {
+        c.error += "cannot read ";
+        c.error += path;
+        return false;
+    }
+    editor::SceneDocument doc;
+    cook::DiagList diags;
+    if (!doc.parse(text.view(), path, diags)) {
+        c.error += path;
+        c.error += " does not parse";
+        append_diags(c.error, diags, 5);
+        return false;
+    }
+    const Array<editor::LintFinding> before = editor::lint_scene(doc);
+    const cook::String report = editor::format_lint(before.span());
+    const usize fixed = editor::fix_scene_lint(doc);
+    if (fixed > 0) {
+        cook::String out;
+        doc.serialize(out);
+        if (!cook::fs::write_file_atomic(abs.view(), Span<const byte>(reinterpret_cast<const byte*>(out.c_str()), out.size()))) {
+            c.error += "could not write ";
+            c.error += path;
+            return false;
+        }
+    }
+    c.out.begin_object().key("scene").str(path).key("fixed").num_u(fixed);
+    c.out.key("written").boolean(fixed > 0);
+    c.out.key("report").str(report.view()).end_object();
     return true;
 }
 

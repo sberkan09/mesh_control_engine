@@ -77,6 +77,7 @@ bool scene_diff(ToolCall& c);
 
 // tools_scene_lint.cpp (M-SCENELINT 3): mistakes in a scene that load fine.
 bool scene_lint(ToolCall& c);
+bool scene_lint_fix(ToolCall& c);  // M-LINTFIX 3
 
 // tools_scene_stats.cpp (M-SCENESTATS 3): what a scene holds at a glance.
 bool scene_stats(ToolCall& c);

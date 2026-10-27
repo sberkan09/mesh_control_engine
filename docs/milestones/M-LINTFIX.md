@@ -1,6 +1,6 @@
 # M-LINTFIX — Scene lint findings repair themselves (milestone record)
 
-**Status:** in progress (steps 1-2 done). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more editor and agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** in progress (steps 1-2 done, step 3 open (PR)). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more editor and agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Goal.** `scene_lint` (M-SCENELINT, M-SCENEREFS) names six kinds of mistake, and the only cure today is editing the scene by hand or through many single-entity tool calls. Every kind has an unambiguous safe repair, so a tool can do it in one step: an agent finds the findings, fixes them, saves, and lints again.
 
@@ -15,7 +15,7 @@
 | # | Step | State |
 |---|---|---|
 | 1 | `fix_scene_lint` and its `test_editor` cases (every kind, idempotent, a tidy scene unchanged) | done (#810) |
-| 2 | `mce_scene_lint --fix` rewrites the file in the canonical form and prints what it fixed; a `ctest` over a copy of `lint_bad.mcscene` | added 2026-10-27, open (PR) |
-| 3 | MCP `scene_lint_fix` (`path` or the open scene; reports the fixed findings), capabilities and user-guide rows | open |
+| 2 | `mce_scene_lint --fix` rewrites the file in the canonical form and prints what it fixed; a `ctest` over a copy of `lint_bad.mcscene` | done (#812) |
+| 3 | MCP `scene_lint_fix` (`path` of a saved scene; writes the file and reports the findings it fixed), capabilities and user-guide rows | added 2026-10-27, open (PR) |
 
 **Gates:** `test_editor`, `scene_lint_cli_*` ctests; step 3 also `mcp_transcript`.
