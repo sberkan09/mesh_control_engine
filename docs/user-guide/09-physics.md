@@ -981,6 +981,8 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 - **Money (M-CASH).** Put `Wallet3D` (`cash`) on whoever carries money and `CashDrop3D` (`min`, `max`) on an entity with
   a `Health3D`: when it dies, its killer's wallet is credited a random amount in `[min, max]` (the same every replay),
   and `CashChanged3D { entity, delta, cash }` is pushed. From a system, `give_cash(world, e, n)` adds and
-  `take_cash(world, e, n)` takes up to `n` and returns what it took; a wallet never goes below zero.
+  `take_cash(world, e, n)` takes up to `n` and returns what it took; a wallet never goes below zero. `Respawn3D` also takes a fine from the player's wallet when it wakes
+  up (`fine_busted` 100, `fine_wasted` 200 by default; never more than the wallet holds) and shows "-$N" through the
+  captions.
 
 Not in this step: spawning new units, and cars that follow roads.

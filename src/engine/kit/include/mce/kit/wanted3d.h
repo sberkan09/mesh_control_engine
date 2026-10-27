@@ -170,8 +170,12 @@ struct Respawn3D {
     u8 reason = 0;                  // engine-written: 0 none, 1 busted, 2 wasted
     u8 caption = 1;                 // 1: shows "BUSTED" / "WASTED" through captions.h while it waits
     u8 pad_[2] = {};
+    u16 fine_busted = 100;          // cash taken from its Wallet3D (never below zero) when it wakes up busted
+    u16 fine_wasted = 200;          // ... and wasted
 };
 MCE_COMPONENT(Respawn3D, (caption, Help{"1: shows BUSTED or WASTED as a caption while the player waits (needs install_captions)"}), (delay, Range{0, 600}, Help{"s between dying or being arrested and waking up"}),
+              (fine_busted, Help{"cash taken from its Wallet3D when it wakes up busted (never below zero)"}),
+              (fine_wasted, Help{"cash taken from its Wallet3D when it wakes up wasted (never below zero)"}),
               (timer, ReadOnly, Transient), (reason, ReadOnly, Transient, Help{"0 none, 1 busted, 2 wasted"}))
 
 // An entity woke up again (M-WASTED). `reason` 1: busted, 2: wasted.

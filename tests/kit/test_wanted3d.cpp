@@ -545,6 +545,45 @@ TEST_CASE("wanted3d: a killed CashDrop3D pays the killer's wallet; take_cash nev
     }
 }
 
+TEST_CASE("wanted3d: waking up costs the fine, never below zero, and shows it (M-CASH 2)") {
+    Wanted3D wd;
+    wd.heat = 5.0f;
+    wd.crimes = 1;
+    const i32 start[3] = {500, 50, 0};
+    const i32 left[3] = {300, 0, 0};  // wasted fine is 200
+    for (u32 k = 0; k < 3; ++k) {
+        Scene s;
+        install_captions(s.w);
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Respawn3D r;
+        r.delay = 1.0f;
+        s.w.add(p, r);
+        s.w.add(p, Wallet3D{start[k]});
+        DamageInfo d;
+        d.amount = 1000.0f;
+        CHECK(apply_damage(s.w, p, d));
+        s.run(120);
+        CHECK(s.respawns == 1);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == left[k]);
+        CHECK(s.cash_events == (k == 2 ? 0u : 1u));
+        bool shown = false;
+        for (const CaptionLine& l : s.w.try_resource<Captions>()->lines)
+            if (l.text.view().substr(0, 2) == "-$") shown = true;
+        CHECK(shown == (k != 2));
+    }
+    {  // no wallet: nothing taken, nothing shown
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        s.w.add(p, Respawn3D{});
+        DamageInfo d;
+        d.amount = 1000.0f;
+        CHECK(apply_damage(s.w, p, d));
+        s.run(300);
+        CHECK(s.respawns == 1);
+        CHECK(s.cash_events == 0);
+    }
+}
+
 TEST_CASE("wanted3d: replays hash the same") {
     auto run = [] {
         Scene s;
