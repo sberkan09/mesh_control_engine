@@ -153,7 +153,8 @@ bool report_crime(World& world, Entity offender, f32 heat, math::vec3 position, 
 // Busted and wasted (M-WASTED). `Respawn3D` on the player (the entity with a Health3D): after it dies (Died3D) or is
 // arrested (Arrested3D) it waits `delay` seconds, then wakes up at the nearest `RespawnPoint3D` (a Station after an
 // arrest, a Hospital after a death; any point when the wanted kind is missing; where it is when there is none) with full
-// health and no wanted level, and `Respawned3D` is pushed. What it costs (money, weapons) is the game's, on that event.
+// health and no wanted level, and `Respawned3D` is pushed. With `caption` 1 and captions installed the wait shows
+// "WASTED" or "BUSTED" (a `ShowCaption` for `delay` seconds). What it costs (money, weapons) is the game's, on that event.
 enum class RespawnKind : u8 { Hospital, Station };
 MCE_ENUM(RespawnKind, Hospital, Station)
 
@@ -167,9 +168,10 @@ struct Respawn3D {
     f32 delay = 3.0f;               // s between dying or being arrested and waking up
     f32 timer = 0.0f;               // engine-written: s left (0 when idle)
     u8 reason = 0;                  // engine-written: 0 none, 1 busted, 2 wasted
-    u8 pad_[3] = {};
+    u8 caption = 1;                 // 1: shows "BUSTED" / "WASTED" through captions.h while it waits
+    u8 pad_[2] = {};
 };
-MCE_COMPONENT(Respawn3D, (delay, Range{0, 600}, Help{"s between dying or being arrested and waking up"}),
+MCE_COMPONENT(Respawn3D, (caption, Help{"1: shows BUSTED or WASTED as a caption while the player waits (needs install_captions)"}), (delay, Range{0, 600}, Help{"s between dying or being arrested and waking up"}),
               (timer, ReadOnly, Transient), (reason, ReadOnly, Transient, Help{"0 none, 1 busted, 2 wasted"}))
 
 // An entity woke up again (M-WASTED). `reason` 1: busted, 2: wasted.

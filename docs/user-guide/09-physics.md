@@ -976,6 +976,7 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   entities (`kind` Hospital or Station). After the player dies it wakes up at the nearest Hospital, after an arrest at the
   nearest Station (any point when the wanted kind is missing; where it stands when there is none), with full health and
   no wanted level, and `Respawned3D { entity, reason, position }` is pushed (`reason` 1 busted, 2 wasted). Fines and lost
-  weapons are the game's, on that event.
+  weapons are the game's, on that event. With captions installed (the stock player does) the wait also shows "WASTED" or
+  "BUSTED" through the subtitle view; `caption` 0 turns that off.
 
 Not in this step: spawning new units, and cars that follow roads.

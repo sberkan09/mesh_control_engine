@@ -8,6 +8,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
@@ -449,6 +450,32 @@ TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station
             CHECK(pos_x(s, p) == doctest::Approx(k == 0 ? -50.0f : 3.0f));
             CHECK(s.w.try_get<Health3D>(p)->dead == 0);
         }
+    }
+}
+
+TEST_CASE("wanted3d: the respawn wait shows BUSTED or WASTED as a caption (M-WASTED 2)") {
+    Wanted3D wd;
+    wd.heat = 5.0f;
+    wd.crimes = 1;
+    for (u32 k = 0; k < 3; ++k) {
+        Scene s;
+        if (k != 2) install_captions(s.w);  // k 2: no captions installed, nothing breaks
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Respawn3D r;
+        r.delay = 1.0f;
+        if (k == 1) r.caption = 0;
+        s.w.add(p, r);
+        DamageInfo d;
+        d.amount = 1000.0f;
+        CHECK(apply_damage(s.w, p, d));
+        s.run(20);
+        bool shown = false;
+        if (const Captions* c = s.w.try_resource<Captions>())
+            for (const CaptionLine& l : c->lines)
+                if (l.text == "WASTED") shown = true;
+        CHECK(shown == (k == 0));
+        s.run(80);
+        CHECK(s.respawns == 1);
     }
 }
 
