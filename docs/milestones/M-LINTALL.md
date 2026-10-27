@@ -1,6 +1,6 @@
 # M-LINTALL — One call lints the whole project (milestone record)
 
-**Status:** in progress (step 1). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** done (one step). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Goal.** `scene_lint` (M-SCENELINT) and `scene_lint_fix` (M-LINTFIX) work on one scene at a time. An agent that wants to know whether the project is tidy has to list the assets and call the tool per file. This milestone adds one read-only call over every scene and prefab under `assets/`.
 
@@ -13,6 +13,6 @@
 
 | # | Step | State |
 |---|---|---|
-| 1 | MCP `scene_lint_all`, a `test_mcp_team` case, capabilities and user-guide rows, the transcript golden | added 2026-10-27, open (PR) |
+| 1 | MCP `scene_lint_all`, a `test_mcp_team` case, capabilities and user-guide rows, the transcript golden | done (#816) |
 
 **Gates:** `test_mcp_team`, `mcp_transcript`, `mcp_symbol_wall`.
