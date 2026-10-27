@@ -1,6 +1,6 @@
 # M-WASTED — busted and wasted: the player comes back
 
-Status: step 1 done (2026-10-27). Own gameplay milestone, the follow-up M-ARREST asked for: `Arrested3D` and
+Status: steps 1 and 2 done (2026-10-27). Own gameplay milestone, the follow-up M-ARREST asked for: `Arrested3D` and
 `Died3D` exist, but nothing happens after them; the game has to write the whole "busted / wasted" flow itself.
 
 ## Why
@@ -32,6 +32,13 @@ One reflected component on the player and a marker on placed entities: `Respawn3
 dropped from the design: there is no money item in `Inventory`, so the fine is the game's, on `Respawned3D`. A busted wait
 is not turned into a wasted one. Tests: wasted goes to the hospital, busted to the station, a missing kind falls back to
 any point, no point leaves the position, the event fires once.
+
+## Built (step 2)
+
+`Respawn3D::caption` (u8, default 1, a former pad byte; size stays 12): when the timer starts and the world has the
+`Captions` resource (`install_captions`, which `install_stock` does), `kit3d_respawn` pushes a `ShowCaption` "WASTED" or
+"BUSTED" for `delay` seconds, so the stock subtitle view shows it with no game code. Worlds without captions, and
+`caption` 0, show nothing. Test: "the respawn wait shows BUSTED or WASTED as a caption".
 
 ## Steps
 

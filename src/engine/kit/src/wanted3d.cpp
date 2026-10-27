@@ -8,6 +8,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/ai.h"
+#include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
@@ -333,6 +334,12 @@ void kit3d_respawn(Frame& f) {
         if (!r || (r->reason != 0 && reason == 2)) return;  // a busted wait is not turned into a wasted one
         r->reason = reason;
         r->timer = r->delay;
+        if (r->caption && w.try_resource<Captions>()) {
+            ShowCaption c;
+            c.text = reason == 1 ? "BUSTED" : "WASTED";
+            c.seconds = r->delay;
+            ev.push(c);
+        }
     };
     for (const Died3D& d : ev.read<Died3D>()) start(d.entity, 2);
     for (const Arrested3D& a : ev.read<Arrested3D>()) start(a.offender, 1);
