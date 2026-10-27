@@ -182,6 +182,31 @@ struct Respawned3D {
 };
 MCE_EVENT(Respawned3D, entity, reason, position)
 
+// Money (M-CASH). `Wallet3D` on whoever carries cash; `CashDrop3D` on an entity with a Health3D credits its killer (when
+// the killer has a wallet) a random amount in [min, max] when it dies. Every credit and debit pushes CashChanged3D.
+struct Wallet3D {
+    i32 cash = 0;
+};
+MCE_COMPONENT(Wallet3D, (cash, Save, Range{0, 1000000000}, Help{"cash carried; the systems never take it below zero"}))
+
+struct CashDrop3D {
+    i32 min = 5;
+    i32 max = 25;
+};
+MCE_COMPONENT(CashDrop3D, (min, Range{0, 1000000}, Help{"least cash the killer gets"}), (max, Range{0, 1000000}, Help{"most cash the killer gets"}))
+
+struct CashChanged3D {
+    Entity entity;
+    i32 delta = 0;  // what was actually added (+) or taken (-)
+    i32 cash = 0;   // the wallet after the change
+};
+MCE_EVENT(CashChanged3D, entity, delta, cash)
+
+// Adds `amount` (> 0) to `e`'s wallet, saturating, and pushes CashChanged3D. False without a Wallet3D or when nothing changed.
+bool give_cash(World& world, Entity e, i32 amount);
+// Takes up to `amount` (> 0) from `e`'s wallet, never below zero, and pushes CashChanged3D. Returns what was taken (0 without a Wallet3D).
+i32 take_cash(World& world, Entity e, i32 amount);
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 

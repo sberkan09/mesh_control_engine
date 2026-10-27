@@ -978,5 +978,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   no wanted level, and `Respawned3D { entity, reason, position }` is pushed (`reason` 1 busted, 2 wasted). Fines and lost
   weapons are the game's, on that event. With captions installed (the stock player does) the wait also shows "WASTED" or
   "BUSTED" through the subtitle view; `caption` 0 turns that off.
+- **Money (M-CASH).** Put `Wallet3D` (`cash`) on whoever carries money and `CashDrop3D` (`min`, `max`) on an entity with
+  a `Health3D`: when it dies, its killer's wallet is credited a random amount in `[min, max]` (the same every replay),
+  and `CashChanged3D { entity, delta, cash }` is pushed. From a system, `give_cash(world, e, n)` adds and
+  `take_cash(world, e, n)` takes up to `n` and returns what it took; a wallet never goes below zero.
 
 Not in this step: spawning new units, and cars that follow roads.
