@@ -1,0 +1,1 @@
+- Docs (M-WASTED): milestone record for the busted and wasted respawn flow (design only, no code yet).
