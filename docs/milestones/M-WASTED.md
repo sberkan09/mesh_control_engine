@@ -1,6 +1,6 @@
 # M-WASTED — busted and wasted: the player comes back
 
-Status: open (designed 2026-10-27, no code yet). Own gameplay milestone, the follow-up M-ARREST asked for: `Arrested3D` and
+Status: step 1 done (2026-10-27). Own gameplay milestone, the follow-up M-ARREST asked for: `Arrested3D` and
 `Died3D` exist, but nothing happens after them; the game has to write the whole "busted / wasted" flow itself.
 
 ## Why
@@ -24,6 +24,14 @@ One reflected component on the player and a marker on placed entities: `Respawn3
 - An arrest already clears the wanted level; on death `clear_wanted` is added here.
 - Everything is in components, so it is hashed, saved and deterministic. Weapons lost on arrest are the game's, on
   `Respawned3D`.
+
+## Built (step 1)
+
+`Respawn3D { delay, timer, reason }`, `RespawnPoint3D { kind }`, `Respawned3D { entity, reason, position }` and the system
+`kit3d_respawn` live in `wanted3d.h/.cpp` (installed by `install_wanted3d`, so no new install wiring). Money fines were
+dropped from the design: there is no money item in `Inventory`, so the fine is the game's, on `Respawned3D`. A busted wait
+is not turned into a wasted one. Tests: wasted goes to the hospital, busted to the station, a missing kind falls back to
+any point, no point leaves the position, the event fires once.
 
 ## Steps
 

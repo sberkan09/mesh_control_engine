@@ -26,7 +26,7 @@ LocalTransform at(f32 x, f32 y, f32 z) { return LocalTransform{{x, y, z}, math::
 struct Scene {
     World w;
     u64 t = 0;
-    u32 crimes = 0, changes = 0, arrests = 0;
+    u32 crimes = 0, changes = 0, arrests = 0, respawns = 0, last_reason = 0;
     u32 last_level = 0;
     Scene() {
         w.register_components<LocalTransform>();
@@ -42,6 +42,10 @@ struct Scene {
             auto ev = EventAccess(w);
             crimes += static_cast<u32>(ev.read<Crime3D>().size());
             arrests += static_cast<u32>(ev.read<Arrested3D>().size());
+            for (const Respawned3D& r : ev.read<Respawned3D>()) {
+                ++respawns;
+                last_reason = r.reason;
+            }
             for (const WantedChanged3D& c : ev.read<WantedChanged3D>()) {
                 ++changes;
                 last_level = c.to;
@@ -376,6 +380,74 @@ TEST_CASE("wanted3d: a police car steers and drives at the target (M-ARREST 3)")
             CHECK(v.brake == 0.0f);
             if (k == 0) CHECK(v.steer > 0.0f);
             if (k == 1) CHECK(v.steer < 0.0f);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station (M-WASTED)") {
+    Wanted3D wd;
+    wd.heat = 5.0f;  // level 1
+    wd.crimes = 1;
+    const auto point = [](Scene& s, f32 x, RespawnKind k) {
+        RespawnPoint3D p;
+        p.kind = k;
+        s.w.spawn_with(at(x, 1.0f, 0.0f), p);
+    };
+    const auto pos_x = [](Scene& s, Entity e) { return s.w.try_get<LocalTransform>(e)->position.x; };
+    {  // wasted: after `delay`, at the hospital, alive, no wanted level
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Respawn3D r;
+        r.delay = 1.0f;
+        s.w.add(p, r);
+        point(s, 50.0f, RespawnKind::Hospital);
+        point(s, -50.0f, RespawnKind::Station);
+        DamageInfo d;
+        d.amount = 1000.0f;
+        CHECK(apply_damage(s.w, p, d));
+        s.run(30);
+        CHECK(s.w.try_get<Health3D>(p)->dead == 1);
+        CHECK(s.respawns == 0);
+        s.run(60);
+        CHECK(s.respawns == 1);
+        CHECK(s.last_reason == 2);
+        CHECK(pos_x(s, p) == doctest::Approx(50.0f));
+        CHECK(s.w.try_get<Health3D>(p)->dead == 0);
+        CHECK(s.w.try_get<Health3D>(p)->current == doctest::Approx(s.w.try_get<Health3D>(p)->max));
+        CHECK(s.wanted(p).level == 0);
+        s.run(120);
+        CHECK(s.respawns == 1);  // once
+    }
+    {  // busted: an arrest goes to the station
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Respawn3D r;
+        r.delay = 1.0f;
+        s.w.add(p, r);
+        point(s, 50.0f, RespawnKind::Hospital);
+        point(s, -50.0f, RespawnKind::Station);
+        s.cop(2.0f, 0.0f);
+        s.run(60 * 6);
+        CHECK(s.arrests == 1);
+        CHECK(s.respawns == 1);
+        CHECK(s.last_reason == 1);
+        CHECK(pos_x(s, p) == doctest::Approx(-50.0f));
+    }
+    {  // only a station: a dead player goes there; no point at all: it stays and still wakes up
+        for (u32 k = 0; k < 2; ++k) {
+            Scene s;
+            const Entity p = s.player(wd, 3.0f, 0.0f);
+            Respawn3D r;
+            r.delay = 0.5f;
+            s.w.add(p, r);
+            if (k == 0) point(s, -50.0f, RespawnKind::Station);
+            DamageInfo d;
+            d.amount = 1000.0f;
+            CHECK(apply_damage(s.w, p, d));
+            s.run(90);
+            CHECK(s.respawns == 1);
+            CHECK(pos_x(s, p) == doctest::Approx(k == 0 ? -50.0f : 3.0f));
+            CHECK(s.w.try_get<Health3D>(p)->dead == 0);
         }
     }
 }
