@@ -473,6 +473,28 @@ TEST_CASE("scene_lint_fix: repairs a saved scene, leaves a tidy one alone, refus
     CHECK(alice.fails("scene_lint_fix").find("path") != std::string::npos);
 }
 
+TEST_CASE("scene_lint_all: the whole project at once, then clean after the files are repaired") {
+    const std::string root = demo_project("mcp_team_scene_lint_all");
+    Agent alice(root, "alice");
+    auto tidy = alice.ok("scene_lint_all");
+    CHECK(tidy.v().get("clean").as_bool());
+    CHECK(tidy.v().get("scenes_checked").as_number() >= 1);
+    CHECK(tidy.v().get("files").size() == 0);
+
+    alice.ok("entity_create", R"({"name":"Crate A"})");
+    alice.ok("entity_create", R"({"name":"Flat","components":{"LocalTransform":{"scale":[1,0,1]}}})");
+    alice.ok("scene_save");
+    auto dirty = alice.ok("scene_lint_all");
+    CHECK_FALSE(dirty.v().get("clean").as_bool());
+    CHECK(dirty.v().get("findings").as_number() == 2);
+    REQUIRE(dirty.v().get("files").size() == 1);
+    CHECK(str(dirty.v().get("files").at(0).get("path")) == "scenes/demo.mcscene");
+    CHECK(str(dirty.v().get("files").at(0).get("report")).find("scale of zero on an axis") != std::string::npos);
+
+    alice.ok("scene_lint_fix", R"({"path":"scenes/demo.mcscene"})");
+    CHECK(alice.ok("scene_lint_all").v().get("clean").as_bool());
+}
+
 // ---- M-WORKFLOW step 2: three agents on one scene (SBA-181, issue #378)
 
 TEST_CASE("scene_open reloads from disk: a teammate's saved entity (and child) shows up, even when the scene is already open") {

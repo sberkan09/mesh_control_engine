@@ -97,4 +97,60 @@ bool scene_lint_fix(ToolCall& c) {
     return true;
 }
 
+// scene_lint_all (M-LINTALL 1): scene_lint over every scene and prefab under assets/, so one call answers "is the project tidy".
+bool scene_lint_all(ToolCall& c) {
+    if (!c.server.session().project().is_open()) {
+        c.error += "no project is open: start mce_mcp with --project <dir>";
+        return false;
+    }
+    const cook::String assets_dir = c.server.session().project().asset_path("");
+    Array<cook::String> files;
+    (void)cook::fs::list_files(assets_dir.view(), files);
+    auto ends_with = [](StringView s, StringView suffix) { return s.size() >= suffix.size() && s.substr(s.size() - suffix.size()) == suffix; };
+    usize checked = 0, total = 0;
+    struct Row {
+        cook::String path;
+        cook::String report;
+        usize findings = 0;
+        bool unreadable = false;
+    };
+    Array<Row> rows;
+    for (const cook::String& rel : files) {
+        if (!ends_with(rel.view(), ".mcscene") && !ends_with(rel.view(), ".mcprefab")) continue;
+        ++checked;
+        Row row;
+        row.path = rel;
+        cook::String abs = assets_dir;
+        abs += rel.view();
+        cook::String text;
+        editor::SceneDocument doc;
+        cook::DiagList diags;
+        if (!cook::fs::read_text(abs.view(), text) || !doc.parse(text.view(), rel.view(), diags)) {
+            row.unreadable = true;
+            rows.push_back(row);
+            continue;
+        }
+        const Array<editor::LintFinding> found = editor::lint_scene(doc);
+        if (found.empty()) continue;
+        row.findings = found.size();
+        row.report = editor::format_lint(found.span());
+        total += found.size();
+        rows.push_back(row);
+    }
+    usize unreadable = 0;
+    c.out.begin_object();
+    for (const Row& r : rows) unreadable += r.unreadable ? 1 : 0;
+    c.out.key("clean").boolean(total == 0 && unreadable == 0);
+    c.out.key("scenes_checked").num_u(checked).key("findings").num_u(total).key("unreadable").num_u(unreadable);
+    c.out.key("files").begin_array();
+    for (const Row& r : rows) {
+        c.out.begin_object().key("path").str(r.path.view());
+        if (r.unreadable) c.out.key("error").str("cannot read or parse");
+        else c.out.key("findings").num_u(r.findings).key("report").str(r.report.view());
+        c.out.end_object();
+    }
+    c.out.end_array().end_object();
+    return true;
+}
+
 }  // namespace mce::mcp
