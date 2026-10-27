@@ -7,11 +7,13 @@
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/hash.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
+#include "mce/kit/procgen.h"
 #include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
@@ -21,6 +23,8 @@ static_assert(sizeof(Wanted3D) == 68);
 static_assert(sizeof(Police3D) == 68);
 static_assert(sizeof(RespawnPoint3D) == 4);
 static_assert(sizeof(Respawn3D) == 12);
+static_assert(sizeof(Wallet3D) == 4);
+static_assert(sizeof(CashDrop3D) == 8);
 
 namespace {
 
@@ -377,7 +381,50 @@ void kit3d_respawn(Frame& f) {
     });
 }
 
+// M-CASH: a killed CashDrop3D pays its killer's wallet a deterministic amount.
+void kit3d_cash(Frame& f) {
+    World& w = f.world();
+    EventAccess ev(w);
+    for (const Died3D& d : ev.read<Died3D>()) {
+        if (d.entity.is_null() || d.killer.is_null() || !w.alive(d.entity) || !w.alive(d.killer)) continue;
+        const CashDrop3D* drop = w.try_get<CashDrop3D>(d.entity);
+        if (!drop || !w.has<Wallet3D>(d.killer)) continue;
+        const i32 lo = drop->min < drop->max ? drop->min : drop->max;
+        const i32 hi = drop->min < drop->max ? drop->max : drop->min;
+        procgen::Rng rng = procgen::Rng::child(hash_combine(fnv1a64("cash"), d.entity.index), "cash", d.killer.index);
+        give_cash(w, d.killer, rng.range(lo, hi));
+    }
+}
+
 }  // namespace
+
+bool give_cash(World& w, Entity e, i32 amount) {
+    Wallet3D* wl = e.is_null() || !w.alive(e) || amount <= 0 ? nullptr : w.try_get_mut<Wallet3D>(e);
+    if (!wl) return false;
+    const i32 room = 2000000000 - wl->cash;
+    const i32 add = amount < room ? amount : room;
+    if (add <= 0) return false;
+    wl->cash += add;
+    CashChanged3D c;
+    c.entity = e;
+    c.delta = add;
+    c.cash = wl->cash;
+    EventAccess(w).push(c);
+    return true;
+}
+
+i32 take_cash(World& w, Entity e, i32 amount) {
+    Wallet3D* wl = e.is_null() || !w.alive(e) || amount <= 0 ? nullptr : w.try_get_mut<Wallet3D>(e);
+    if (!wl || wl->cash <= 0) return 0;
+    const i32 take = amount < wl->cash ? amount : wl->cash;
+    wl->cash -= take;
+    CashChanged3D c;
+    c.entity = e;
+    c.delta = -take;
+    c.cash = wl->cash;
+    EventAccess(w).push(c);
+    return take;
+}
 
 bool report_crime(World& w, Entity offender, f32 heat, math::vec3 position, Entity victim, bool witnessed) {
     if (!witnessed || offender.is_null() || !w.alive(offender) || !w.has<Wanted3D>(offender) || heat <= 0.0f) return false;
@@ -397,13 +444,15 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D>();
+    world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
     world.register_event<WantedChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Arrested3D>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_wanted", &kit3d_wanted, "kit3d_health");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_respawn", &kit3d_respawn, "kit3d_wanted");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_cash", &kit3d_cash, "kit3d_wanted");
 }
 
 }  // namespace mce::kit

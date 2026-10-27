@@ -29,6 +29,8 @@ struct Scene {
     u64 t = 0;
     u32 crimes = 0, changes = 0, arrests = 0, respawns = 0, last_reason = 0;
     u32 last_level = 0;
+    u32 cash_events = 0;
+    i32 last_delta = 0;
     Scene() {
         w.register_components<LocalTransform>();
         install_wanted3d(w);
@@ -46,6 +48,10 @@ struct Scene {
             for (const Respawned3D& r : ev.read<Respawned3D>()) {
                 ++respawns;
                 last_reason = r.reason;
+            }
+            for (const CashChanged3D& c : ev.read<CashChanged3D>()) {
+                ++cash_events;
+                last_delta = c.delta;
             }
             for (const WantedChanged3D& c : ev.read<WantedChanged3D>()) {
                 ++changes;
@@ -476,6 +482,66 @@ TEST_CASE("wanted3d: the respawn wait shows BUSTED or WASTED as a caption (M-WAS
         CHECK(shown == (k == 0));
         s.run(80);
         CHECK(s.respawns == 1);
+    }
+}
+
+TEST_CASE("wanted3d: a killed CashDrop3D pays the killer's wallet; take_cash never goes below zero (M-CASH)") {
+    const auto kill_victim = [](Scene& s, Entity killer, bool with_drop) {
+        const Entity v = s.civilian(5.0f, 0.0f);
+        if (with_drop) {
+            CashDrop3D d;
+            d.min = 10;
+            d.max = 20;
+            s.w.add(v, d);
+        }
+        s.hit(killer, v, 1000.0f);
+        s.run(4);
+    };
+    {  // pays inside [min, max]
+        Scene s;
+        const Entity p = s.player();
+        s.w.add(p, Wallet3D{});
+        kill_victim(s, p, true);
+        const i32 cash = s.w.try_get<Wallet3D>(p)->cash;
+        CHECK(cash >= 10);
+        CHECK(cash <= 20);
+        CHECK(s.cash_events == 1);
+        CHECK(s.last_delta == cash);
+    }
+    {  // no wallet, or no drop: nothing
+        Scene s;
+        const Entity p = s.player();
+        kill_victim(s, p, true);
+        CHECK(s.cash_events == 0);
+        s.w.add(p, Wallet3D{});
+        kill_victim(s, p, false);
+        CHECK(s.cash_events == 0);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 0);
+    }
+    {  // take_cash stops at zero and reports what it took
+        Scene s;
+        const Entity p = s.player();
+        CHECK(take_cash(s.w, p, 5) == 0);
+        CHECK_FALSE(give_cash(s.w, p, 5));
+        s.w.add(p, Wallet3D{50});
+        CHECK(take_cash(s.w, p, 30) == 30);
+        CHECK(take_cash(s.w, p, 30) == 20);
+        CHECK(take_cash(s.w, p, 30) == 0);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 0);
+        CHECK(give_cash(s.w, p, 7));
+        CHECK_FALSE(give_cash(s.w, p, -7));
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 7);
+    }
+    {  // two identical runs pay the same
+        i32 got[2] = {0, 0};
+        for (i32& g : got) {
+            Scene s;
+            const Entity p = s.player();
+            s.w.add(p, Wallet3D{});
+            kill_victim(s, p, true);
+            g = s.w.try_get<Wallet3D>(p)->cash;
+        }
+        CHECK(got[0] == got[1]);
     }
 }
 

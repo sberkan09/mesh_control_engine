@@ -1,6 +1,6 @@
 # M-CASH — money: cash drops, a wallet, fines
 
-Status: design (2026-10-27). Own gameplay milestone for the GTA-like slice, the open end M-WASTED left: a fine on
+Status: step 1 done (2026-10-27). Own gameplay milestone for the GTA-like slice, the open end M-WASTED left: a fine on
 `Respawned3D` has nothing to take it from, because `Inventory` has no money item.
 
 ## Why
@@ -36,3 +36,10 @@ saved for free.
 ## Out of scope
 
 Pickup entities that fly to the player, shops and prices, a money HUD (the game's, on `CashChanged3D`), bank accounts.
+
+## Built (step 1)
+
+`Wallet3D`, `CashDrop3D`, `CashChanged3D`, `give_cash` / `take_cash` and the system `kit3d_cash` live in
+`wanted3d.h/.cpp`. The amount is drawn from an Rng seeded by the victim's entity index, so replays pay the same. A wallet
+saturates at 2e9. Tests: a kill pays inside [min, max], no wallet or no drop pays nothing, `take_cash` stops at zero,
+two identical runs pay the same.
