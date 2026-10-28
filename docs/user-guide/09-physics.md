@@ -163,7 +163,15 @@ From code: `DistanceJointDesc` (a rod, a rope with `min_length < max_length`, or
 `hertz > 0`) and `RevoluteJointDesc` (a hinge with an optional angle limit and motor), created on
 the world with `create_distance_joint(desc)` / `create_revolute_joint(desc)` and addressed by the
 returned `JointId` (`destroy_joint`, `set_motor_speed`, `set_joint_limits`). Prismatic, wheel, weld and mouse joints are not built.
-2D joints are not scene-authored yet.
+**2D joints** are a component too (M-JOINT2D). Put a `Joint2D` on a body's entity and set `connected` to the
+other body's entity (a joint to the world uses a static body). `kind` is `Distance` (a rod; `min_length < max_length`
+makes a rope; `hertz > 0` makes a spring, `damping_ratio` 0..1) or `Revolute` (a hinge at `anchor`, in this entity's
+frame; `limits` keeps the angle within `lower` .. `upper` degrees from the rest angle, `motor` drives it at
+`motor_speed` degrees per second up to `max_motor_torque`). Distance joints run from `anchor` to `connected_anchor`
+(the connected entity's frame); a length below zero means the distance when the joint was built. The joint is built
+the first tick both bodies exist; changing a setting rebuilds it from the current poses, except `motor_speed`,
+`lower` and `upper`, which update in place. `enabled` 0 removes the joint and keeps the component. `length_now` and
+`angle_now` are read-only readouts.
 
 **3D joints** are components. Put a `Joint3D` on a body's entity (a `RigidBody3D`, or a static
 `BoxCollider3D` / `MeshCollider3D` when the other side moves) and set `connected` to the other body's
