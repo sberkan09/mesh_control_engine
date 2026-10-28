@@ -1,0 +1,1 @@
+- Physics, M-JOINT2D: new `Joint2D` component (rod, rope, spring, hinge with limit and motor) built on World2D's distance and revolute joints; works from the Inspector, MCP and scene files.

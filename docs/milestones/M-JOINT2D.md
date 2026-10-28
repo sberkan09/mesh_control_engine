@@ -1,6 +1,6 @@
 # M-JOINT2D — 2D joints as components (milestone record)
 
-**Status:** step 1 in progress. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's instruction to take a device-free gap from the assessments when no milestone is free (no gameplay modules, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** step 1 in review. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's instruction to take a device-free gap from the assessments when no milestone is free (no gameplay modules, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 Source: `assessments/motor-erisim-bosluklari.md`, section 5 (Physics): "2D joints (`world2d.h`) are C++ only"; `docs/user-guide/09-physics.md` still says "2D joints are not scene-authored yet".
 
 **Why.** `World2D` has distance joints (a rod, a rope when `min_length < max_length`, a spring when `hertz > 0`) and revolute joints (a hinge with an angle limit and a motor), and the 3D side got `Joint3D` as a component in M-GAMEPLAY3D. In 2D the only way to build a swinging door, a rope bridge, a pendulum or a motorized wheel is game C++, so an agent working through MCP and a person in the Inspector cannot make one. The assessment lists this as one of the 2D physics gaps still open (contact events, queries and the character controller have since been opened by other milestones).
@@ -17,7 +17,7 @@ Source: `assessments/motor-erisim-bosluklari.md`, section 5 (Physics): "2D joint
 
 | # | Step | State |
 |---|---|---|
-| 1 | `Joint2D` component and its system in `physics2d`, with tests (rod, rope, spring, hinge with limit and motor, rebuild on change, removal with the component or a body) | in progress |
+| 1 | `Joint2D` component and its system in `physics2d`, with tests (rod, rope, spring, hinge with limit and motor, rebuild on change, removal with the component or a body) | in review |
 | 2 | Registered in the editor and `mce_mcp` component lists, `capabilities.md` and the user guide (the "not scene-authored yet" line), a sample scene (a rope bridge and a swinging door) | todo |
 
 **Gates:** `test_joints2d.cpp` (step 1); the capabilities row and the guide are checked by the walls stage (step 2). Both steps touch the physics module, so their PRs wait for the coordinator's review.
