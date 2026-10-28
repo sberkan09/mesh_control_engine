@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 
 #include "mce/ecs/transform.h"
 #include "mce/physics/joint2d.h"
@@ -140,35 +139,39 @@ bool finite(f32 v) { return std::isfinite(v); }
 // angles ordered and clamped, no negative spring or torque. `fixed` says something was repaired
 // (one warning at build time, not one per tick: the repaired value then compares equal).
 Joint2D settings_of(Joint2D j, bool* fixed = nullptr) {
-    const Joint2D before = j;
+    bool fx = false;
+    // Every repair goes through these, so `fixed` is tracked per field (NaN compares unequal to anything).
+    auto set = [&](f32& v, f32 to) {
+        if (!(v == to)) {
+            v = to;
+            fx = true;
+        }
+    };
     j.length_now = 0.0f;
     j.angle_now = 0.0f;
     const Joint2D d;
-    if (!finite(j.anchor.x) || !finite(j.anchor.y)) j.anchor = d.anchor;
-    if (!finite(j.connected_anchor.x) || !finite(j.connected_anchor.y)) j.connected_anchor = d.connected_anchor;
-    if (!finite(j.length)) j.length = d.length;
-    if (!finite(j.min_length)) j.min_length = d.min_length;
-    if (!finite(j.max_length)) j.max_length = d.max_length;
-    if (!finite(j.hertz)) j.hertz = d.hertz;
-    if (!finite(j.damping_ratio)) j.damping_ratio = d.damping_ratio;
-    if (!finite(j.lower)) j.lower = d.lower;
-    if (!finite(j.upper)) j.upper = d.upper;
-    if (!finite(j.motor_speed)) j.motor_speed = d.motor_speed;
-    if (!finite(j.max_motor_torque)) j.max_motor_torque = d.max_motor_torque;
-    if (j.hertz < 0.0f) j.hertz = 0.0f;
-    j.damping_ratio = std::clamp(j.damping_ratio, 0.0f, 1.0f);
-    if (j.max_motor_torque < 0.0f) j.max_motor_torque = 0.0f;
-    j.lower = std::clamp(j.lower, -180.0f, 180.0f);
-    j.upper = std::clamp(j.upper, -180.0f, 180.0f);
-    if (j.lower > j.upper) std::swap(j.lower, j.upper);
-    if (j.min_length >= 0.0f && j.max_length >= 0.0f && j.min_length > j.max_length) std::swap(j.min_length, j.max_length);
-    if (fixed) {
-        Joint2D b = before;
-        b.length_now = 0.0f;
-        b.angle_now = 0.0f;
-        // NaN never compares equal, so compare the bytes that matter through the repaired copy.
-        *fixed = !(std::memcmp(&b, &j, sizeof(Joint2D)) == 0);
+    if (!finite(j.anchor.x) || !finite(j.anchor.y)) { j.anchor = d.anchor; fx = true; }
+    if (!finite(j.connected_anchor.x) || !finite(j.connected_anchor.y)) { j.connected_anchor = d.connected_anchor; fx = true; }
+    if (!finite(j.length)) set(j.length, d.length);
+    if (!finite(j.min_length)) set(j.min_length, d.min_length);
+    if (!finite(j.max_length)) set(j.max_length, d.max_length);
+    if (!finite(j.hertz)) set(j.hertz, d.hertz);
+    if (!finite(j.damping_ratio)) set(j.damping_ratio, d.damping_ratio);
+    if (!finite(j.lower)) set(j.lower, d.lower);
+    if (!finite(j.upper)) set(j.upper, d.upper);
+    if (!finite(j.motor_speed)) set(j.motor_speed, d.motor_speed);
+    if (!finite(j.max_motor_torque)) set(j.max_motor_torque, d.max_motor_torque);
+    if (j.hertz < 0.0f) set(j.hertz, 0.0f);
+    set(j.damping_ratio, std::clamp(j.damping_ratio, 0.0f, 1.0f));
+    if (j.max_motor_torque < 0.0f) set(j.max_motor_torque, 0.0f);
+    set(j.lower, std::clamp(j.lower, -180.0f, 180.0f));
+    set(j.upper, std::clamp(j.upper, -180.0f, 180.0f));
+    if (j.lower > j.upper) { std::swap(j.lower, j.upper); fx = true; }
+    if (j.min_length >= 0.0f && j.max_length >= 0.0f && j.min_length > j.max_length) {
+        std::swap(j.min_length, j.max_length);
+        fx = true;
     }
+    if (fixed) *fixed = fx;
     return j;
 }
 
@@ -214,7 +217,8 @@ JointId build_joint(World2D& pw, Entity e, const Joint2D& j, const BodyState& se
     return pw.create_revolute_joint(d);
 }
 
-bool same_settings(const Joint2D& a, const Joint2D& b) { return std::memcmp(&a, &b, sizeof(Joint2D)) == 0; }
+// Sanitized settings are never NaN, so the defaulted comparison is a safe equality.
+bool same_settings(const Joint2D& a, const Joint2D& b) { return a == b; }
 
 // After the bodies are imported and before the step: build, rebuild, update in place and remove.
 void sync_joints(Frame& f, World2D& pw, JointState& js) {
