@@ -260,13 +260,7 @@ bool RoadsImporter::build(JsonValue doc, StringView file, Array<byte>& payload, 
         detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-roads\"");
         return false;
     }
-    const JsonValue ver = doc.get("version");
-    if (!ver.is_integer() || ver.as_number() != kRoadsFormatVersion) {
-        String msg;
-        appendf(msg, "unsupported roads version (this cook reads version %u)", kRoadsFormatVersion);
-        detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-        return false;
-    }
+    if (!detail::check_format_version(doc, kRoadsFormatVersion, "roads", file, kStage, diags)) return false;
     RoadTables tables;
     RoadHeader& header = tables.header;
     if (const JsonValue name = doc.get("name"); name.valid()) {

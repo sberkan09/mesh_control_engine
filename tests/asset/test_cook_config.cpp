@@ -4,8 +4,10 @@
 #include <doctest/doctest.h>
 
 #include "cook_test_util.h"
+#include "importer_common.h"
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
+#include "mce/cook/json.h"
 #include "mce/liveops/remote_config.h"
 
 using namespace mce;
@@ -96,4 +98,36 @@ TEST_CASE("remote config: authoring mistakes are cook errors") {
         CHECK_FALSE(r.ok());
         CHECK(config_diags(r).find("remote.mcconfig") != std::string::npos);
     }
+}
+
+// M-FORMATVER 1: the one version check every asset text importer shares.
+TEST_CASE("check_format_version accepts 1..current, refuses 0, newer and non-integers, and says what it read") {
+    auto check = [](const char* text, u32 current, std::string* msg = nullptr) {
+        cook::JsonDoc doc;
+        cook::JsonError err;
+        REQUIRE(doc.parse(text, err));
+        cook::DiagList diags;
+        const bool ok = cook::detail::check_format_version(doc.root(), current, "thing", "a.mcthing", "stage", diags);
+        if (msg != nullptr) {
+            msg->clear();
+            for (const auto& d : diags.all()) {
+                cook::String line;
+                cook::format_diagnostic(d, line);
+                *msg += line.c_str();
+            }
+        }
+        CHECK(ok == diags.all().empty());
+        return ok;
+    };
+    CHECK(check(R"({"version": 1})", 1));
+    CHECK(check(R"({"version": 1})", 2));  // an older file still reads after a bump
+    CHECK(check(R"({"version": 2})", 2));
+    std::string msg;
+    CHECK_FALSE(check(R"({"version": 2})", 1, &msg));  // newer than this cook
+    CHECK(msg.find("unsupported thing version (this cook reads version 1)") != std::string::npos);
+    CHECK(msg.find("a.mcthing") != std::string::npos);
+    CHECK_FALSE(check(R"({"version": 0})", 2));
+    CHECK_FALSE(check(R"({"version": 1.5})", 2));
+    CHECK_FALSE(check(R"({"version": "1"})", 2));
+    CHECK_FALSE(check(R"({})", 2));
 }
