@@ -4,7 +4,9 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <limits>
 
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
 #include "mce/physics/joint2d.h"
 #include "mce/physics/module.h"
@@ -221,4 +223,87 @@ TEST_CASE("joint2d: no connected entity, or a connected entity without a body, b
     w.try_get_mut<Joint2D>(lone)->connected = bare;
     tick(w, t, 5);
     CHECK(w.resource<World2D>().stats().joints == 0);
+}
+
+TEST_CASE("joint2d: non-finite settings are repaired once, not rebuilt every tick") {
+    World w;
+    install_physics2d(w);
+    const Entity post = w.spawn_with(body(BodyType::Static), box({0.1f, 0.1f}), at({0, 0}));
+    Joint2D j;
+    j.connected = post;
+    j.anchor = {-1.0f, 0.0f};
+    j.upper = std::nanf("");  // limits are off, so only a repair is visible
+    j.max_motor_torque = std::numeric_limits<f32>::infinity();
+    const Entity door = w.spawn_with(body(BodyType::Dynamic), box({1.0f, 0.1f}), at({1, 0}), j);
+    u64 t = 0;
+    tick(w, t, 120);
+    // A joint rebuilt every tick would restart its rest angle and never get far from 0.
+    CHECK(w.try_get<Joint2D>(door)->angle_now < -60.0f);
+    CHECK(w.resource<World2D>().stats().joints == 1);
+}
+
+TEST_CASE("joint2d: a negative spring, swapped limits and swapped rope lengths are repaired") {
+    World w;
+    install_physics2d(w);
+    const Entity post = w.spawn_with(body(BodyType::Static), box({0.2f, 0.2f}), at({0, 5}));
+    Joint2D rod;
+    rod.kind = JointKind2D::Distance;
+    rod.connected = post;
+    rod.hertz = -3.0f;  // negative: a rigid rod
+    const Entity weight = w.spawn_with(body(BodyType::Dynamic), box({0.3f, 0.3f}), at({3, 5}), rod);
+
+    const Entity hinge_post = w.spawn_with(body(BodyType::Static), box({0.1f, 0.1f}), at({20, 0}));
+    Joint2D hinge;
+    hinge.connected = hinge_post;
+    hinge.anchor = {-1.0f, 0.0f};
+    hinge.limits = 1;
+    hinge.lower = 45.0f;  // lower > upper: swapped to -45 .. 45
+    hinge.upper = -45.0f;
+    const Entity door = w.spawn_with(body(BodyType::Dynamic), box({1.0f, 0.1f}), at({21, 0}), hinge);
+    u64 t = 0;
+    tick(w, t, 300);
+    CHECK(w.try_get<Joint2D>(weight)->length_now == doctest::Approx(3.0f).epsilon(0.03));
+    const f32 a = w.try_get<Joint2D>(door)->angle_now;
+    CHECK(a < -40.0f);
+    CHECK(a > -47.0f);
+}
+
+TEST_CASE("joint2d: a refused joint is tried again when a body becomes dynamic") {
+    World w;
+    install_physics2d(w);
+    const Entity post = w.spawn_with(body(BodyType::Static), box({0.2f, 0.2f}), at({0, 5}));
+    Joint2D j;
+    j.kind = JointKind2D::Distance;
+    j.connected = post;
+    const Entity other = w.spawn_with(body(BodyType::Static), box({0.3f, 0.3f}), at({2, 5}), j);
+    u64 t = 0;
+    tick(w, t, 5);
+    CHECK(w.resource<World2D>().stats().joints == 0);  // two static bodies: refused
+    w.set(other, body(BodyType::Dynamic));
+    tick(w, t, 5);
+    CHECK(w.resource<World2D>().stats().joints == 1);
+}
+
+TEST_CASE("joint2d: the hinge pivot comes from the body's pose, even for a child entity") {
+    World w;
+    install_physics2d(w);
+    const Entity parent = w.spawn_with(at({100, 100}));
+    const Entity post = w.spawn_with(body(BodyType::Static), box({0.1f, 0.1f}), at({0, 0}));
+    Joint2D j;
+    j.connected = post;
+    j.anchor = {-1.0f, 0.0f};
+    j.limits = 1;
+    j.enabled = 0;  // the body exists first, the joint is built later
+    const Entity door = w.spawn_with(body(BodyType::Dynamic, 0.0f), box({1.0f, 0.1f}), at({1, 0}), j, ChildOf{parent});
+    u64 t = 0;
+    tick(w, t, 2);
+    w.try_get_mut<LocalTransform>(door)->position = {50, 50, 0};  // not a pose the world holds for the body
+    w.try_get_mut<Joint2D>(door)->enabled = 1;
+    w.try_get_mut<Joint2D>(door)->motor = 1;
+    w.try_get_mut<Joint2D>(door)->motor_speed = -30.0f;
+    w.try_get_mut<Joint2D>(door)->max_motor_torque = 100000.0f;
+    tick(w, t, 30);
+    CHECK(w.resource<World2D>().stats().joints == 1);
+    const f32 a = w.try_get<Joint2D>(door)->angle_now;
+    CHECK(a == doctest::Approx(-15.0f).epsilon(0.2));  // half a second at -30 deg/s around the right pivot
 }
