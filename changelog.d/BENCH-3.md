@@ -1,0 +1,1 @@
+- Asset, M-BENCH: ContainerWriter no longer copies its whole buffer per chunk; writing a container is about 8x faster at 1,000 chunks.
