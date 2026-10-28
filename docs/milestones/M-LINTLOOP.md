@@ -1,6 +1,6 @@
 # M-LINTLOOP — Scene lint finds parents that loop (milestone record)
 
-**Status:** open (one step). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's suggestion (more agent tooling; device-free, editor core and MCP only, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** done (one step). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's suggestion (more agent tooling; device-free, editor core and MCP only, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Goal.** A scene where A is under B and B is under A loads fine, but every walk up the hierarchy needs its own guard against the loop (several editor functions already carry one). `lint_scene` does not report it, so neither `scene_lint` nor the repair tools see it. This milestone adds the finding and its repair.
 
@@ -14,6 +14,6 @@
 
 | # | Step | State |
 |---|---|---|
-| 1 | `LintKind::ParentCycle` with its repair, MCP kind name, two `test_scene_lint` cases, user-guide rows, the transcript golden | open (PR) |
+| 1 | `LintKind::ParentCycle` with its repair, MCP kind name, two `test_scene_lint` cases, user-guide rows, the transcript golden | done (#826) |
 
 **Gates:** `test_editor` (lint cases), `test_mcp_team`, `mcp_transcript`, `mcp_symbol_wall`, `test_fuzz_misc` (the scene-repair loop).
