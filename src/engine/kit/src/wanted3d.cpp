@@ -495,6 +495,19 @@ i32 take_cash(World& w, Entity e, i32 amount) {
     return take;
 }
 
+bool crime_seen(Frame& f, Entity offender, math::vec3 at) {
+    World& w = f.world();
+    const Wanted3D* wd = offender.is_null() || !w.alive(offender) ? nullptr : w.try_get<Wanted3D>(offender);
+    if (!wd) return false;
+    if (!wd->require_witness) return true;
+    Array<Unit> units;
+    f.query<const Police3D, const LocalTransform>().each([&](Entity e, const Police3D& p, const LocalTransform&) {
+        const Health3D* h = w.try_get<Health3D>(e);
+        units.push_back(Unit{e, position_of(w, e) + math::vec3{0.0f, p.eye_height, 0.0f}, !(h && h->dead)});
+    });
+    return witnessed_by_police(f, units, at, wd->witness_range);
+}
+
 bool report_crime(World& w, Entity offender, f32 heat, math::vec3 position, Entity victim, bool witnessed) {
     if (!witnessed || offender.is_null() || !w.alive(offender) || !w.has<Wanted3D>(offender) || heat <= 0.0f) return false;
     add_heat(w, offender, heat, position, victim);

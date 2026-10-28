@@ -50,6 +50,7 @@
 
 namespace mce {
 class World;
+class Frame;
 }
 
 namespace mce::kit {
@@ -150,6 +151,10 @@ MCE_EVENT(WantedChanged3D, offender, from, to)
 // recomputed at once and WantedChanged3D pushed.
 bool report_crime(World& world, Entity offender, f32 heat, math::vec3 position, Entity victim = {}, bool witnessed = true);
 
+// Whether a crime of `offender` at `at` counts as seen: always when its Wanted3D has `require_witness` 0, otherwise
+// when a living Police3D unit within the offender's `witness_range` has a clear line to `at`. False without a Wanted3D.
+bool crime_seen(Frame& frame, Entity offender, math::vec3 at);
+
 // Busted and wasted (M-WASTED). `Respawn3D` on the player (the entity with a Health3D): after it dies (Died3D) or is
 // arrested (Arrested3D) it waits `delay` seconds, then wakes up at the nearest `RespawnPoint3D` (a Station after an
 // arrest, a Hospital after a death; any point when the wanted kind is missing; where it is when there is none) with full
@@ -215,14 +220,17 @@ struct MissionReward3D {
 MCE_COMPONENT(MissionReward3D, (cash, Range{0, 1000000}, Help{"cash the mission's actor is paid when it completes"}))
 
 // Car theft (M-CARJACK). `CarOwner3D` on a vehicle (one with a VehicleSeat3D, seats3d.h) that belongs to someone: the
-// first time a rider with a Wanted3D boards it, `report_crime` adds `heat` to that rider (unwitnessed or not: the car's
-// owner calls it in) and `stolen` is set, so the same car counts once. Needs install_wanted3d for the component to exist.
+// first time a rider with a Wanted3D boards it, `report_crime` adds `heat` to that rider and `stolen` is set, so the same
+// car counts once. With `needs_witness` 0 the car's owner calls it in; with 1 the theft counts only when `crime_seen`
+// (a police unit sees the car), and an unseen theft is still marked stolen. Needs install_wanted3d for the component to exist.
 struct CarOwner3D {
     f32 heat = 8.0f;
     u8 stolen = 0;  // engine-written
-    u8 pad_[3] = {};
+    u8 needs_witness = 0;
+    u8 pad_[2] = {};
 };
-MCE_COMPONENT(CarOwner3D, (heat, Range{0, 1000}, Help{"wanted heat the first boarding adds to the rider"}), (stolen, Save, ReadOnly))
+MCE_COMPONENT(CarOwner3D, (heat, Range{0, 1000}, Help{"wanted heat the first boarding adds to the rider"}), (stolen, Save, ReadOnly),
+              (needs_witness, Help{"1: the theft counts only when a police unit sees the car"}))
 
 // Adds `amount` (> 0) to `e`'s wallet, saturating, and pushes CashChanged3D. False without a Wallet3D or when nothing changed.
 bool give_cash(World& world, Entity e, i32 amount);
