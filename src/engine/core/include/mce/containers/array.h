@@ -145,19 +145,19 @@ public:
     }
 
     void resize(usize n) {
-        reserve(n);
+        grow_for(n);
         for (usize i = size_; i < n; ++i) new (data_ + i) T();
         shrink_to(n);
     }
     void resize(usize n, const T& fill) {
-        reserve(n);
+        grow_for(n);
         for (usize i = size_; i < n; ++i) new (data_ + i) T(fill);
         shrink_to(n);
     }
     // Grows without value-initializing trivially constructible elements (columns, scratch).
     void resize_uninitialized(usize n) {
         static_assert(std::is_trivially_default_constructible_v<T> && std::is_trivially_destructible_v<T>);
-        reserve(n);
+        grow_for(n);
         size_ = n;
     }
 
@@ -199,6 +199,12 @@ private:
         size_ = 0;
     }
     bool is_inline() const { return InlineN > 0 && data_ == inline_.ptr(); }
+
+    // The resize family grows like emplace_back (1.5x steps), so growing a buffer a chunk at a time is amortized
+    // linear; from empty the capacity is still exactly `n`. reserve() stays exact (it is the caller's size hint).
+    void grow_for(usize n) {
+        if (n > capacity_) reallocate(grow_capacity(n));
+    }
 
     usize grow_capacity(usize needed) const {
         usize c = capacity_ + capacity_ / 2;

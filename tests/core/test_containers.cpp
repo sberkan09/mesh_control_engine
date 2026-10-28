@@ -53,6 +53,39 @@ TEST_CASE("Array basic operations") {
     CHECK(a.empty());
 }
 
+TEST_CASE("Array resize grows geometrically but stays exact from empty") {
+    Array<int> a;
+    a.resize(100);
+    CHECK(a.capacity() == 100);  // a one-shot size is not padded
+    a.resize(101);
+    CHECK(a.capacity() >= 150);  // growing past it steps 1.5x, so a chunk-at-a-time loop is linear
+    usize reallocs = 0, cap = a.capacity();
+    for (usize n = 102; n < 5000; ++n) {
+        a.resize(n);
+        if (a.capacity() != cap) {
+            ++reallocs;
+            cap = a.capacity();
+        }
+    }
+    CHECK(reallocs < 20);
+    CHECK(a.size() == 4999);
+    CHECK(a[0] == 0);
+    CHECK(a[4998] == 0);
+
+    Array<int> f;
+    f.resize(10, 7);
+    f.resize(50, 9);
+    CHECK(f[9] == 7);
+    CHECK(f[10] == 9);
+    CHECK(f.capacity() >= 50);
+
+    Array<byte> u;
+    u.resize_uninitialized(64);
+    CHECK(u.capacity() == 64);
+    u.resize_uninitialized(65);
+    CHECK(u.capacity() >= 96);
+}
+
 TEST_CASE("Array push_back of an aliased element survives growth") {
     Array<Tracked> a;
     a.emplace_back(7);
