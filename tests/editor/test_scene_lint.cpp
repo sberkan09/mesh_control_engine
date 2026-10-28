@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <limits>
 #include <string_view>
 
@@ -101,6 +102,46 @@ TEST_CASE("a reference to an entity the scene lacks is reported; a null one and 
     CHECK(has(f, gun, LintKind::DanglingRef));
     CHECK_FALSE(has(f, gun, LintKind::MissingParent));  // a parent is reported as MissingParent, not twice
     CHECK(std::string_view(format_lint(f.span()).c_str()).find("Gun (id ") != std::string_view::npos);
+}
+
+TEST_CASE("a loop of parents is reported once, on its lowest id; a chain into the loop and a tidy tree are not") {
+    EditorScene s;
+    const EntityId a = s.create_entity("A");
+    const EntityId b = s.create_entity("B");
+    const EntityId c = s.create_entity("C");
+    const EntityId tail = s.create_entity("Tail");  // hangs below the loop, not in it
+    const EntityId solo = s.create_entity("Solo");
+    for (EntityId e : {a, b, c, tail}) s.add_component(e, refl::type_of<ChildOf>());
+    REQUIRE(s.set(a, ChildOf{doc_entity_ref(c)}));
+    REQUIRE(s.set(b, ChildOf{doc_entity_ref(a)}));
+    REQUIRE(s.set(c, ChildOf{doc_entity_ref(b)}));
+    REQUIRE(s.set(tail, ChildOf{doc_entity_ref(c)}));
+    const Array<LintFinding> f = lint_scene(s.doc());
+    usize cycles = 0;
+    for (const LintFinding& x : f) cycles += x.kind == LintKind::ParentCycle ? 1 : 0;
+    CHECK(cycles == 1);
+    CHECK(has(f, std::min({a, b, c}), LintKind::ParentCycle));
+    CHECK_FALSE(has(f, tail, LintKind::ParentCycle));
+    CHECK_FALSE(has(f, solo, LintKind::ParentCycle));
+    CHECK(std::string_view(format_lint(f.span()).c_str()).find("parents loop") != std::string_view::npos);
+}
+
+TEST_CASE("fix_scene_lint breaks a parent loop with one change and a second run finds nothing") {
+    EditorScene s;
+    const EntityId a = s.create_entity("A");
+    const EntityId b = s.create_entity("B");
+    s.add_component(a, refl::type_of<ChildOf>());
+    s.add_component(b, refl::type_of<ChildOf>());
+    REQUIRE(s.set(a, ChildOf{doc_entity_ref(b)}));
+    REQUIRE(s.set(b, ChildOf{doc_entity_ref(a)}));
+    SceneDocument doc = s.doc();
+    CHECK(fix_scene_lint(doc) == 1);
+    CHECK(lint_scene(doc).empty());
+    CHECK(fix_scene_lint(doc) == 0);
+    // The lowest id became a root; the other keeps its parent.
+    const EntityId low = std::min(a, b), high = std::max(a, b);
+    CHECK(doc.find(low)->find(refl::type_of<ChildOf>()) == nullptr);
+    CHECK(doc.find(high)->find(refl::type_of<ChildOf>()) != nullptr);
 }
 
 TEST_CASE("fix_scene_lint repairs every kind and leaves a clean scene") {
