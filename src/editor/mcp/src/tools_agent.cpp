@@ -318,8 +318,8 @@ const ToolDef kAgentTools[] = {
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/"}},"required":["path"]})j",
      scene_lint_fix},
     {"scene_lint_all",
-     "scene_lint over every scene and prefab under assets/ in one call: is the whole project tidy. Returns clean, scenes_checked, findings (the total) and unreadable (files that do not parse), and files: one row per scene or prefab that has findings or cannot be read, with its path, the number of findings and the text report (the same lines as scene_lint). Read-only; repair a file with scene_lint_fix.",
-     R"j({"type":"object","properties":{}})j", scene_lint_all},
+     "scene_lint over every scene and prefab under assets/ in one call: is the whole project tidy. Returns clean, scenes_checked, findings (the total) and unreadable (files that do not parse), and files: one row per scene or prefab that has findings or cannot be read, with its path, the number of findings and the text report (the same lines as scene_lint). Read-only unless fix is true; then every file with findings is repaired and written back in the canonical text like scene_lint_fix (the rows and the top level also carry fixed, and clean is true when nothing unreadable is left). The open scene in the editor is not changed: reload it with scene_open afterwards.",
+     R"j({"type":"object","properties":{"fix":{"type":"boolean","description":"Repair the findings and write the files; default false (read-only)"}}})j", scene_lint_all},
     {"scene_stats",
      "What a scene holds at a glance: entity count, roots, hierarchy depth, prefab instances, the box the local "
      "positions span and the components in use (most used first). 'path' is a scene under assets/; left out, the "
