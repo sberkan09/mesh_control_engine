@@ -168,6 +168,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player |
 | `CashDrop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing |
 | `MissionReward3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
+| `CarOwner3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars |
 | `PaySpray3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage |
 | `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/13_water/assets/scenes/water.mcscene |
 | `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |

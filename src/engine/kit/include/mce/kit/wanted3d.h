@@ -214,6 +214,16 @@ struct MissionReward3D {
 };
 MCE_COMPONENT(MissionReward3D, (cash, Range{0, 1000000}, Help{"cash the mission's actor is paid when it completes"}))
 
+// Car theft (M-CARJACK). `CarOwner3D` on a vehicle (one with a VehicleSeat3D, seats3d.h) that belongs to someone: the
+// first time a rider with a Wanted3D boards it, `report_crime` adds `heat` to that rider (unwitnessed or not: the car's
+// owner calls it in) and `stolen` is set, so the same car counts once. Needs install_wanted3d for the component to exist.
+struct CarOwner3D {
+    f32 heat = 8.0f;
+    u8 stolen = 0;  // engine-written
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(CarOwner3D, (heat, Range{0, 1000}, Help{"wanted heat the first boarding adds to the rider"}), (stolen, Save, ReadOnly))
+
 // Adds `amount` (> 0) to `e`'s wallet, saturating, and pushes CashChanged3D. False without a Wallet3D or when nothing changed.
 bool give_cash(World& world, Entity e, i32 amount);
 // Takes up to `amount` (> 0) from `e`'s wallet, never below zero, and pushes CashChanged3D. Returns what was taken (0 without a Wallet3D).

@@ -13,6 +13,7 @@
 #include "mce/kit/effects.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/vehicles3d.h"
+#include "mce/kit/wanted3d.h"
 #include "mce/string_id.h"
 
 namespace mce::kit {
@@ -192,6 +193,11 @@ void kit3d_seats(Frame& f) {
         r.vehicle = best;
         follow(w, r.camera, best);
         f.events().push(VehicleEntered3D{e, best});
+        if (CarOwner3D* own = w.try_get_mut<CarOwner3D>(best); own && !own->stolen) {  // M-CARJACK
+            own->stolen = 1;
+            const LocalTransform* ct = w.try_get<LocalTransform>(best);
+            report_crime(w, e, own->heat, ct ? ct->position : math::vec3{}, best);
+        }
     });
 }
 

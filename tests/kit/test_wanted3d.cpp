@@ -13,6 +13,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
 
@@ -662,6 +663,50 @@ TEST_CASE("wanted3d: a completed mission pays its actor the MissionReward3D (M-M
             const Wallet3D* wl = s.w.try_get<Wallet3D>(p);
             CHECK((wl ? wl->cash : 0) == 0);
             CHECK(s.cash_events == 0);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: boarding someone's car is a crime, once per car (M-CARJACK)") {
+    Wanted3D wd;
+    const auto car = [](Scene& s, bool owned) {
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        const Entity c = s.w.spawn_with(at(3.0f, 1.2f, 0.0f), b, v, VehicleSeat3D{});
+        if (owned) s.w.add(c, CarOwner3D{});
+        return c;
+    };
+    const auto board = [](Scene& s, Entity p) {
+        s.w.try_get_mut<Rider3D>(p)->enter = 1;
+        s.run(4);
+    };
+    for (u32 k = 0; k < 3; ++k) {  // k 0: owned car; k 1: unowned car; k 2: no Wanted3D on the rider
+        Scene s;
+        install_seats3d(s.w, nullptr);
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        s.w.add(p, Rider3D{});
+        if (k == 2) s.w.remove<Wanted3D>(p);
+        const Entity c = car(s, k != 1);
+        s.run(30);
+        board(s, p);
+        CHECK(s.w.try_get<Rider3D>(p)->seated == 1);
+        if (k == 0) {
+            CHECK(s.crimes == 1);
+            CHECK(s.wanted(p).heat == doctest::Approx(8.0f));
+            CHECK(s.w.try_get<CarOwner3D>(c)->stolen == 1);
+            s.w.try_get_mut<Rider3D>(p)->enter = 1;  // step out and back in: no second crime
+            s.run(240);
+            s.w.try_get_mut<Rider3D>(p)->enter = 1;
+            s.run(4);
+            CHECK(s.crimes == 1);
+        } else {
+            CHECK(s.crimes == 0);
         }
     }
 }
