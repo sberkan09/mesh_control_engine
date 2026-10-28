@@ -11,6 +11,7 @@
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
@@ -625,6 +626,42 @@ TEST_CASE("wanted3d: a garage clears the wanted level for a price (M-PAYSPRAY)")
             s.run(30);
             CHECK(s.sprays == 0);
             CHECK(s.wanted(p).level == 3);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a completed mission pays its actor the MissionReward3D (M-MISSIONPAY)") {
+    for (u32 k = 0; k < 3; ++k) {  // k 0: completes and pays; k 1: no wallet; k 2: fails, pays nothing
+        Scene s;
+        install_missions(s.w, nullptr);
+        const Entity p = s.player();
+        if (k != 1) s.w.add(p, Wallet3D{});
+        Objective o;
+        o.kind = ObjectiveKind::Signal;
+        o.signal = "delivered";
+        const Entity obj = s.w.spawn_with(o);
+        Mission m;
+        m.id = "job";
+        m.objective = obj;
+        m.actor = p;
+        m.start_on_load = 1;
+        if (k == 2) m.time_limit = 0.5f;
+        const Entity mis = s.w.spawn_with(m, MissionReward3D{250});
+        s.run(5);
+        if (k != 2) {
+            MissionSignal sig;
+            sig.name = "delivered";
+            EventAccess(s.w).push(sig);
+        }
+        s.run(60);
+        if (k == 0) {
+            CHECK(s.w.try_get<Mission>(mis)->state == MissionState::Complete);
+            CHECK(s.w.try_get<Wallet3D>(p)->cash == 250);
+            CHECK(s.cash_events == 1);
+        } else {
+            const Wallet3D* wl = s.w.try_get<Wallet3D>(p);
+            CHECK((wl ? wl->cash : 0) == 0);
+            CHECK(s.cash_events == 0);
         }
     }
 }

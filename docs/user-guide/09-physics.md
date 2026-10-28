@@ -988,5 +988,8 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   player with a `Wanted3D` at level 1 or more standing within `radius`, whose `Wallet3D` holds `price_per_level` times the
   level, pays that and loses the wanted level; `Sprayed3D { entity, garage, paid, level }` is pushed. Too poor, too far or
   `enabled` 0: nothing happens. Whether police in sight should block it is the game's rule.
+- **Mission pay (M-MISSIONPAY).** Put `MissionReward3D` (`cash`, default 100) on a Mission entity (see missions): when the
+  mission completes, its `actor`'s `Wallet3D` is credited that much and `CashChanged3D` is pushed. A failed mission, an
+  actor without a wallet or no `MissionReward3D` pays nothing.
 
 Not in this step: spawning new units, and cars that follow roads.

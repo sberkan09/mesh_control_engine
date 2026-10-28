@@ -206,6 +206,14 @@ struct CashChanged3D {
 };
 MCE_EVENT(CashChanged3D, entity, delta, cash)
 
+// Mission pay (M-MISSIONPAY). `MissionReward3D` on a Mission entity (missions.h): when the mission completes, its
+// actor's Wallet3D is credited `cash` (nothing when the actor has no wallet, or the mission fails). Needs
+// install_wanted3d for the component to exist.
+struct MissionReward3D {
+    i32 cash = 100;
+};
+MCE_COMPONENT(MissionReward3D, (cash, Range{0, 1000000}, Help{"cash the mission's actor is paid when it completes"}))
+
 // Adds `amount` (> 0) to `e`'s wallet, saturating, and pushes CashChanged3D. False without a Wallet3D or when nothing changed.
 bool give_cash(World& world, Entity e, i32 amount);
 // Takes up to `amount` (> 0) from `e`'s wallet, never below zero, and pushes CashChanged3D. Returns what was taken (0 without a Wallet3D).
