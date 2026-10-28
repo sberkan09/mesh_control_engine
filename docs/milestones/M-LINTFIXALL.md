@@ -1,6 +1,6 @@
 # M-LINTFIXALL — One call repairs the whole project (milestone record)
 
-**Status:** in progress (one step). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** done (one step). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-27 on the coordinator's suggestion (more agent tooling; device-free, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Goal.** `scene_lint_all` (M-LINTALL) tells an agent which files are untidy, and `scene_lint_fix` (M-LINTFIX) repairs one file. Tidying a project still takes one call per file. This milestone lets `scene_lint_all` repair what it finds when asked to.
 
@@ -13,6 +13,6 @@
 
 | # | Step | State |
 |---|---|---|
-| 1 | `fix` on MCP `scene_lint_all`, a `test_mcp_team` case, user-guide row, the transcript golden | open (PR) |
+| 1 | `fix` on MCP `scene_lint_all`, a `test_mcp_team` case, user-guide row, the transcript golden | done (#823) |
 
 **Gates:** `test_mcp_team`, `mcp_transcript`, `mcp_symbol_wall`.
