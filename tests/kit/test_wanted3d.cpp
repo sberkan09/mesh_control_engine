@@ -32,6 +32,8 @@ struct Scene {
     u32 crimes = 0, changes = 0, arrests = 0, respawns = 0, last_reason = 0;
     u32 last_level = 0;
     u32 sprays = 0;
+    u32 ammo_sales = 0;
+    u32 last_rounds = 0;
     i32 last_paid = 0;
     u32 cash_events = 0;
     i32 last_delta = 0;
@@ -56,6 +58,10 @@ struct Scene {
             for (const Sprayed3D& sp : ev.read<Sprayed3D>()) {
                 ++sprays;
                 last_paid = sp.paid;
+            }
+            for (const AmmoBought3D& a : ev.read<AmmoBought3D>()) {
+                ++ammo_sales;
+                last_rounds = a.rounds;
             }
             for (const CashChanged3D& c : ev.read<CashChanged3D>()) {
                 ++cash_events;
@@ -627,6 +633,56 @@ TEST_CASE("wanted3d: a garage clears the wanted level for a price (M-PAYSPRAY)")
             s.run(30);
             CHECK(s.sprays == 0);
             CHECK(s.wanted(p).level == 3);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a shop tops up the reserve for a price (M-AMMOSHOP)") {
+    const auto buyer = [](Scene& s, f32 x, i32 cash) {
+        const Entity p = s.player({}, x, 0.0f);
+        Weapon3D wp;
+        wp.magazine = 12;
+        wp.reserve = 20;
+        s.w.add(p, wp);
+        s.w.add(p, Wallet3D{cash});
+        return p;
+    };
+    const auto shop = [](Scene& s) {
+        AmmoShop3D a;
+        a.price_per_round = 2;
+        a.stock_to = 100;
+        return s.w.spawn_with(at(0.0f, 1.0f, 0.0f), a);
+    };
+    {  // enough cash: filled to stock_to, paid 80 rounds x 2
+        Scene s;
+        const Entity p = buyer(s, 1.0f, 1000);
+        shop(s);
+        s.run(4);
+        CHECK(s.ammo_sales == 1);
+        CHECK(s.last_rounds == 80);
+        CHECK(s.w.try_get<Weapon3D>(p)->reserve == 100);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 840);
+        s.run(60);
+        CHECK(s.ammo_sales == 1);  // full: nothing more to sell
+    }
+    {  // short of cash: buys what it can pay for
+        Scene s;
+        const Entity p = buyer(s, 1.0f, 25);
+        shop(s);
+        s.run(4);
+        CHECK(s.w.try_get<Weapon3D>(p)->reserve == 32);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 1);
+    }
+    {  // too far, switched off, never-dry weapon: nothing sold
+        for (u32 k = 0; k < 3; ++k) {
+            Scene s;
+            const Entity p = buyer(s, k == 0 ? 50.0f : 1.0f, 1000);
+            const Entity sh = shop(s);
+            if (k == 1) s.w.try_get_mut<AmmoShop3D>(sh)->enabled = 0;
+            if (k == 2) s.w.try_get_mut<Weapon3D>(p)->infinite_ammo = 1;
+            s.run(30);
+            CHECK(s.ammo_sales == 0);
+            CHECK(s.w.try_get<Weapon3D>(p)->reserve == 20);
         }
     }
 }

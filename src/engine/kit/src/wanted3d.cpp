@@ -27,6 +27,7 @@ static_assert(sizeof(Respawn3D) == 16);
 static_assert(sizeof(Wallet3D) == 4);
 static_assert(sizeof(CashDrop3D) == 8);
 static_assert(sizeof(PaySpray3D) == 8);
+static_assert(sizeof(AmmoShop3D) == 12);
 static_assert(sizeof(MissionReward3D) == 4);
 static_assert(sizeof(CarOwner3D) == 8);
 
@@ -427,6 +428,23 @@ void kit3d_payspray(Frame& f) {
     });
 }
 
+void kit3d_ammoshop(Frame& f) {
+    World& w = f.world();
+    f.query<AmmoShop3D, LocalTransform>().each([&](Entity se, AmmoShop3D& sh, LocalTransform&) {
+        if (!sh.enabled || sh.price_per_round == 0) return;
+        const math::vec3 sp = position_of(w, se);
+        f.query<Weapon3D, Wallet3D, LocalTransform>().each([&](Entity be, Weapon3D& wp, Wallet3D& wl, LocalTransform&) {
+            if (wp.magazine == 0 || wp.infinite_ammo || wp.reserve >= sh.stock_to || math::length(position_of(w, be) - sp) > sh.radius) return;
+            const u32 afford = wl.cash > 0 ? static_cast<u32>(wl.cash) / sh.price_per_round : 0u;
+            const u32 rounds = math::min(sh.stock_to - wp.reserve, afford);
+            if (rounds == 0) return;
+            const i32 paid = take_cash(w, be, static_cast<i32>(rounds * sh.price_per_round));
+            wp.reserve += rounds;
+            EventAccess(w).push(AmmoBought3D{be, se, rounds, paid});
+        });
+    });
+}
+
 }  // namespace
 
 bool give_cash(World& w, Entity e, i32 amount) {
@@ -475,8 +493,9 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D>();
     world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
+    world.register_event<AmmoBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
@@ -486,6 +505,7 @@ void install_wanted3d(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_respawn", &kit3d_respawn, "kit3d_wanted");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_cash", &kit3d_cash, "kit3d_wanted");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_payspray", &kit3d_payspray, "kit3d_cash");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_ammoshop", &kit3d_ammoshop, "kit3d_payspray");
 }
 
 }  // namespace mce::kit

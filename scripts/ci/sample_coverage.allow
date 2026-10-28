@@ -19,3 +19,4 @@ MissionReward3D | M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game pu
 CarOwner3D | M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars
 CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
 RespawnPoint3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station
+AmmoShop3D | M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter
