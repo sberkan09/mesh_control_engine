@@ -818,6 +818,33 @@ TEST_CASE("wanted3d: boarding someone's car is a crime, once per car (M-CARJACK)
     }
 }
 
+TEST_CASE("wanted3d: a theft that needs a witness counts only when police see the car (M-CARJACK 2)") {
+    for (u32 k = 0; k < 3; ++k) {  // k 0: a unit nearby; k 1: none; k 2: needs_witness off, none
+        Scene s;
+        install_seats3d(s.w, nullptr);
+        const Entity p = s.player({}, 0.0f, 0.0f);
+        s.w.add(p, Rider3D{});
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        CarOwner3D own;
+        own.needs_witness = k == 2 ? 0 : 1;
+        const Entity c = s.w.spawn_with(at(3.0f, 1.2f, 0.0f), b, v, VehicleSeat3D{}, own);
+        if (k == 0) s.cop(3.0f, 12.0f);
+        s.run(30);
+        s.w.try_get_mut<Rider3D>(p)->enter = 1;
+        s.run(4);
+        CHECK(s.w.try_get<Rider3D>(p)->seated == 1);
+        CHECK(s.w.try_get<CarOwner3D>(c)->stolen == 1);
+        CHECK(s.crimes == (k == 1 ? 0u : 1u));
+    }
+}
+
 TEST_CASE("wanted3d: replays hash the same") {
     auto run = [] {
         Scene s;

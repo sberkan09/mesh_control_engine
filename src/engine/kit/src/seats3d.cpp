@@ -196,7 +196,8 @@ void kit3d_seats(Frame& f) {
         if (CarOwner3D* own = w.try_get_mut<CarOwner3D>(best); own && !own->stolen) {  // M-CARJACK
             own->stolen = 1;
             const LocalTransform* ct = w.try_get<LocalTransform>(best);
-            report_crime(w, e, own->heat, ct ? ct->position : math::vec3{}, best);
+            const math::vec3 at = ct ? ct->position : math::vec3{};
+            report_crime(w, e, own->heat, at, best, !own->needs_witness || crime_seen(f, e, at));
         }
     });
 }
