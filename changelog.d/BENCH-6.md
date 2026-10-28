@@ -1,0 +1,1 @@
+- Docs, M-BENCH: records why `ContainerView::find` keeps its linear TOC scan.
