@@ -27,6 +27,7 @@ static_assert(sizeof(Respawn3D) == 16);
 static_assert(sizeof(Wallet3D) == 4);
 static_assert(sizeof(CashDrop3D) == 8);
 static_assert(sizeof(PaySpray3D) == 8);
+static_assert(sizeof(MissionReward3D) == 4);
 
 namespace {
 
@@ -473,7 +474,7 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D>();
     world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);

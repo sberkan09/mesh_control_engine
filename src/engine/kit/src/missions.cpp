@@ -6,6 +6,7 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/wanted3d.h"
 #include "mce/scene/entity_names.h"
 #include "mce/string_id.h"
 
@@ -24,6 +25,12 @@ bool pose_of(World& w, Entity e, math::vec3& pos) {
     math::vec3 scale;
     world_pose(w, e, *t, pos, rot, scale);
     return true;
+}
+
+// M-MISSIONPAY: a completed mission pays its actor the MissionReward3D on the mission entity.
+void pay_reward(World& w, Entity mission, const Mission& m) {
+    const MissionReward3D* r = w.try_get<MissionReward3D>(mission);
+    if (r && r->cash > 0) give_cash(w, m.actor, r->cash);
 }
 
 // Resolves the target by name while it is empty.
@@ -146,6 +153,7 @@ void kit_missions(Frame& f) {
         if (next.is_null() || !w.alive(next) || !w.try_get<Objective>(next)) {
             m.state = MissionState::Complete;
             f.events().push(MissionCompleted{e});
+            pay_reward(w, e, m);
             return;
         }
         m.current = next;

@@ -1,0 +1,1 @@
+- Kit (M-MISSIONPAY 1): `MissionReward3D` on a Mission entity pays the actor's `Wallet3D` when the mission completes. Record: `docs/milestones/M-MISSIONPAY.md`.
