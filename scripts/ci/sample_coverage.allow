@@ -14,5 +14,6 @@ VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample 
 ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
 Respawn3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample
 Wallet3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player
+PaySpray3D | M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage
 CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
 RespawnPoint3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station

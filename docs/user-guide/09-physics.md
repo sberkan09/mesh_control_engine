@@ -984,5 +984,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   `take_cash(world, e, n)` takes up to `n` and returns what it took; a wallet never goes below zero. `Respawn3D` also takes a fine from the player's wallet when it wakes
   up (`fine_busted` 100, `fine_wasted` 200 by default; never more than the wallet holds) and shows "-$N" through the
   captions.
+- **Pay-and-spray (M-PAYSPRAY).** Put `PaySpray3D` (`radius` 3 m, `price_per_level` 100) on a placed entity, a garage. A
+  player with a `Wanted3D` at level 1 or more standing within `radius`, whose `Wallet3D` holds `price_per_level` times the
+  level, pays that and loses the wanted level; `Sprayed3D { entity, garage, paid, level }` is pushed. Too poor, too far or
+  `enabled` 0: nothing happens. Whether police in sight should block it is the game's rule.
 
 Not in this step: spawning new units, and cars that follow roads.

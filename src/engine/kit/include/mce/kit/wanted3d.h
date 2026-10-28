@@ -211,6 +211,28 @@ bool give_cash(World& world, Entity e, i32 amount);
 // Takes up to `amount` (> 0) from `e`'s wallet, never below zero, and pushes CashChanged3D. Returns what was taken (0 without a Wallet3D).
 i32 take_cash(World& world, Entity e, i32 amount);
 
+// Pay-and-spray (M-PAYSPRAY). `PaySpray3D` on a placed entity (a garage): an offender with a Wanted3D at level 1 or
+// more that stands within `radius` of it, and whose Wallet3D holds `price_per_level` x its level, pays that and has
+// its wanted level cleared (`clear_wanted`); `Sprayed3D` is pushed. Too poor: nothing happens. Whether the police may
+// be in sight is the game's rule; the garage does not check it. System "kit3d_payspray" (after "kit3d_cash").
+struct PaySpray3D {
+    f32 radius = 3.0f;           // m, from the entity
+    u16 price_per_level = 100;   // cash per wanted level
+    u8 enabled = 1;
+    u8 pad_ = 0;
+};
+MCE_COMPONENT(PaySpray3D, (radius, Range{0.1f, 100}, Help{"m: an offender this close pays to clear its level"}),
+              (price_per_level, Help{"cash per wanted level"}), enabled)
+
+// An offender paid a PaySpray3D and lost its wanted level.
+struct Sprayed3D {
+    Entity entity;
+    Entity garage;
+    i32 paid = 0;
+    u32 level = 0;  // the level it had
+};
+MCE_EVENT(Sprayed3D, entity, garage, paid, level)
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 
