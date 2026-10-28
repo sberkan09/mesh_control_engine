@@ -20,3 +20,4 @@ CarOwner3D | M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on
 CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
 RespawnPoint3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station
 AmmoShop3D | M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter
+HealShop3D | M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic

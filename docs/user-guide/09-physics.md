@@ -997,5 +997,8 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 - **Ammo shop (M-AMMOSHOP).** Put `AmmoShop3D` (`radius`, `price_per_round`, `stock_to`) on a shop entity. A player who has a
   `Weapon3D` (with a `magazine`, not `infinite_ammo`) and a `Wallet3D` and stands within `radius` has the weapon's `reserve`
   filled up to `stock_to` and pays `price_per_round` for each round; with too little cash it buys as many as it can afford.
+- **Medic (M-HEALSHOP).** Put `HealShop3D` (`radius`, `price_per_hp`) on a clinic entity. A living player with a `Health3D` below
+  its `max` and a `Wallet3D` who stands within `radius` is healed one hit point per `price_per_hp` cash, up to `max`; with
+  too little cash it buys as many hit points as it can afford.
 
 Not in this step: spawning new units, and cars that follow roads.

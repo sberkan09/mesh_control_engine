@@ -274,6 +274,27 @@ struct AmmoBought3D {
 };
 MCE_EVENT(AmmoBought3D, entity, shop, rounds, paid)
 
+// Medic (M-HEALSHOP). `HealShop3D` on a placed entity: a living buyer with a Health3D below its `max` and a Wallet3D that
+// stands within `radius` is healed `1` hp per `price_per_hp` cash, up to its `max`; with too little cash it buys the whole
+// hit points it can pay for. `HealBought3D` is pushed per sale. System "kit3d_healshop" (after "kit3d_ammoshop").
+struct HealShop3D {
+    f32 radius = 3.0f;          // m, from the entity
+    u16 price_per_hp = 1;       // cash per hit point
+    u8 enabled = 1;
+    u8 pad_ = 0;
+};
+MCE_COMPONENT(HealShop3D, (radius, Range{0.1f, 100}, Help{"m: a hurt buyer this close is healed for cash"}), (price_per_hp, Help{"cash per hit point"}),
+              enabled)
+
+// A buyer was healed by a HealShop3D.
+struct HealBought3D {
+    Entity entity;
+    Entity shop;
+    f32 hp = 0.0f;
+    i32 paid = 0;
+};
+MCE_EVENT(HealBought3D, entity, shop, hp, paid)
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 
