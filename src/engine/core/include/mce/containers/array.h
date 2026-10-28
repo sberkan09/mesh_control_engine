@@ -201,9 +201,9 @@ private:
     bool is_inline() const { return InlineN > 0 && data_ == inline_.ptr(); }
 
     // The resize family grows like emplace_back (1.5x steps), so growing a buffer a chunk at a time is amortized
-    // linear; from empty the capacity is still exactly `n`. reserve() stays exact (it is the caller's size hint).
+    // linear; from a zero-capacity array it allocates exactly `n` (no 4-element floor). reserve() stays exact (it is the caller's size hint).
     void grow_for(usize n) {
-        if (n > capacity_) reallocate(grow_capacity(n));
+        if (n > capacity_) reallocate(capacity_ == 0 ? n : grow_capacity(n));
     }
 
     usize grow_capacity(usize needed) const {

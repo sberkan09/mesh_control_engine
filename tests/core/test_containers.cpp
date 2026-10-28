@@ -72,6 +72,12 @@ TEST_CASE("Array resize grows geometrically but stays exact from empty") {
     CHECK(a[0] == 0);
     CHECK(a[4998] == 0);
 
+    Array<int> tiny;
+    tiny.resize(2);
+    CHECK(tiny.capacity() == 2);  // small one-shot sizes are exact too
+    tiny.resize(3);
+    CHECK(tiny.capacity() >= 4);
+
     Array<int> f;
     f.resize(10, 7);
     f.resize(50, 9);
