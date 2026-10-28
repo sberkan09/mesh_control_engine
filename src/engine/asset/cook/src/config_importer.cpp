@@ -103,13 +103,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-config\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kConfigFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported remote config version (this cook reads version %u)", kConfigFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kConfigFormatVersion, "remote config", file, kStage, diags)) return false;
         const JsonValue values = doc.get("values");
         if (values.valid() && !values.is_object()) {
             error(diags, file, values, "'values' must be an object of key: value");

@@ -132,13 +132,7 @@ public:
             return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-terrain") return fail(fmt, "\"format\" must be \"mce-terrain\"");
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kTerrainFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported terrain version (this cook reads version %u)", kTerrainFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kTerrainFormatVersion, "terrain", file, kStage, diags)) return false;
 
         asset::TerrainHeader h{};
         const JsonValue res = doc.get("resolution");

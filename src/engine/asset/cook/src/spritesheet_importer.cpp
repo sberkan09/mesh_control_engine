@@ -84,13 +84,7 @@ public:
             return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-spritesheet") return fail(fmt, "\"format\" must be \"mce-spritesheet\"");
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kSheetFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported sprite sheet version (this cook reads version %u)", kSheetFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kSheetFormatVersion, "sprite sheet", file, kStage, diags)) return false;
 
         asset::SpriteSheetHeader h{};
         if (const JsonValue t = doc.get("texture"); t.is_string()) {

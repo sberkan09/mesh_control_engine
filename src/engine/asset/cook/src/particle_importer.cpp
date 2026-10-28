@@ -101,13 +101,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-particles\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kParticleFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported particle preset version (this cook reads version %u)", kParticleFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kParticleFormatVersion, "particle preset", file, kStage, diags)) return false;
 
         asset::ParticlePresetChunk p{};
         p.rate = read_f32(doc, "rate", 0, file, diags);

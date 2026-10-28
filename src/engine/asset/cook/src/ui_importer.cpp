@@ -91,13 +91,7 @@ public:
             error(fmt.valid() ? fmt : doc, "\"format\" must be \"mce-ui\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kUiFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported UI document version (this cook reads version %u)", kUiFormatVersion);
-            detail::error_at(diags_, Errc::VersionTooNew, file_, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kUiFormatVersion, "UI document", file_, kStage, diags_)) return false;
         read_ref(doc.get("font"), out_.font, "font");
         read_ref(doc.get("sprites"), out_.sprites, "sprites");
         read_ref(doc.get("theme"), out_.theme, "theme");
@@ -802,13 +796,7 @@ public:
             error(fmt.valid() ? fmt : doc, "\"format\" must be \"mce-uitheme\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kUiThemeFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported UI theme version (this cook reads version %u)", kUiThemeFormatVersion);
-            detail::error_at(diags_, Errc::VersionTooNew, file_, ver.valid() ? ver : doc, kThemeStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kUiThemeFormatVersion, "UI theme", file_, kThemeStage, diags_)) return false;
         ui::Palette palette;
         if (const JsonValue p = doc.get("palette"); p.valid())
             read_scene_component(refl::type_of<ui::UiPalette>(), p, &palette, 0, file_, "palette", diags_);

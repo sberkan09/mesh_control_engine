@@ -99,13 +99,7 @@ public:
             detail::error_at(diags, Errc::ParseError, file, fmt.valid() ? fmt : doc, kStage, "\"format\" must be \"mce-material\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kMaterialFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported material version (this cook reads version %u)", kMaterialFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kMaterialFormatVersion, "material", file, kStage, diags)) return false;
 
         asset::MaterialChunk m{};
         m.base_color[0] = m.base_color[1] = m.base_color[2] = m.base_color[3] = 1.0f;

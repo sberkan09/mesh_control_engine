@@ -143,13 +143,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-items\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kItemsFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported item catalog version (this cook reads version %u)", kItemsFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kItemsFormatVersion, "item catalog", file, kStage, diags)) return false;
 
         asset::ItemCatalog catalog;
         const JsonValue items = doc.get("items");
