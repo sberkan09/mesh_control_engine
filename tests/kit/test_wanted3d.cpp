@@ -29,6 +29,8 @@ struct Scene {
     u64 t = 0;
     u32 crimes = 0, changes = 0, arrests = 0, respawns = 0, last_reason = 0;
     u32 last_level = 0;
+    u32 sprays = 0;
+    i32 last_paid = 0;
     u32 cash_events = 0;
     i32 last_delta = 0;
     Scene() {
@@ -48,6 +50,10 @@ struct Scene {
             for (const Respawned3D& r : ev.read<Respawned3D>()) {
                 ++respawns;
                 last_reason = r.reason;
+            }
+            for (const Sprayed3D& sp : ev.read<Sprayed3D>()) {
+                ++sprays;
+                last_paid = sp.paid;
             }
             for (const CashChanged3D& c : ev.read<CashChanged3D>()) {
                 ++cash_events;
@@ -581,6 +587,45 @@ TEST_CASE("wanted3d: waking up costs the fine, never below zero, and shows it (M
         s.run(300);
         CHECK(s.respawns == 1);
         CHECK(s.cash_events == 0);
+    }
+}
+
+TEST_CASE("wanted3d: a garage clears the wanted level for a price (M-PAYSPRAY)") {
+    Wanted3D wd;
+    wd.heat = 45.0f;  // level 3 at 20 heat per level
+    wd.crimes = 1;
+    const auto garage = [](Scene& s, f32 x, u16 price = 100) {
+        PaySpray3D g;
+        g.radius = 3.0f;
+        g.price_per_level = price;
+        return s.w.spawn_with(at(x, 1.0f, 0.0f), g);
+    };
+    {  // at the garage with enough cash: pays level x price, level 0
+        Scene s;
+        const Entity p = s.player(wd, 1.0f, 0.0f);
+        s.w.add(p, Wallet3D{1000});
+        s.run(2);
+        CHECK(s.wanted(p).level == 3);
+        garage(s, 0.0f);
+        s.run(4);
+        CHECK(s.sprays == 1);
+        CHECK(s.last_paid == 300);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 700);
+        CHECK(s.wanted(p).level == 0);
+        s.run(60);
+        CHECK(s.sprays == 1);  // level 0: nothing more to pay for
+    }
+    {  // too poor, too far, switched off, no wallet: nothing happens
+        for (u32 k = 0; k < 4; ++k) {
+            Scene s;
+            const Entity p = s.player(wd, k == 1 ? 50.0f : 1.0f, 0.0f);
+            if (k != 3) s.w.add(p, Wallet3D{k == 0 ? 299 : 1000});
+            const Entity g = garage(s, 0.0f);
+            if (k == 2) s.w.try_get_mut<PaySpray3D>(g)->enabled = 0;
+            s.run(30);
+            CHECK(s.sprays == 0);
+            CHECK(s.wanted(p).level == 3);
+        }
     }
 }
 

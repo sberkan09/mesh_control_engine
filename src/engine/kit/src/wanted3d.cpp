@@ -26,6 +26,7 @@ static_assert(sizeof(RespawnPoint3D) == 4);
 static_assert(sizeof(Respawn3D) == 16);
 static_assert(sizeof(Wallet3D) == 4);
 static_assert(sizeof(CashDrop3D) == 8);
+static_assert(sizeof(PaySpray3D) == 8);
 
 namespace {
 
@@ -406,6 +407,24 @@ void kit3d_cash(Frame& f) {
     }
 }
 
+// M-PAYSPRAY: an offender standing at a garage with the cash pays for a clean slate.
+void kit3d_payspray(Frame& f) {
+    World& w = f.world();
+    f.query<PaySpray3D, LocalTransform>().each([&](Entity ge, PaySpray3D& g, LocalTransform&) {
+        if (!g.enabled) return;
+        const math::vec3 gp = position_of(w, ge);
+        f.query<Wanted3D, Wallet3D, LocalTransform>().each([&](Entity oe, Wanted3D& wd, Wallet3D& wl, LocalTransform&) {
+            if (wd.level == 0 || math::length(position_of(w, oe) - gp) > g.radius) return;
+            const i32 cost = static_cast<i32>(g.price_per_level) * static_cast<i32>(wd.level);
+            if (wl.cash < cost) return;
+            const u32 level = wd.level;
+            const i32 paid = take_cash(w, oe, cost);
+            clear_wanted(w, oe);
+            EventAccess(w).push(Sprayed3D{oe, ge, paid, level});
+        });
+    });
+}
+
 }  // namespace
 
 bool give_cash(World& w, Entity e, i32 amount) {
@@ -454,7 +473,8 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D>();
+    world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
@@ -463,6 +483,7 @@ void install_wanted3d(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_wanted", &kit3d_wanted, "kit3d_health");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_respawn", &kit3d_respawn, "kit3d_wanted");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_cash", &kit3d_cash, "kit3d_wanted");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_payspray", &kit3d_payspray, "kit3d_cash");
 }
 
 }  // namespace mce::kit
