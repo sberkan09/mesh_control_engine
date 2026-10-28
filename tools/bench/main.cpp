@@ -7,6 +7,9 @@
 // ecs_destroy     destroy those N entities
 // ecs_add_remove  add then remove one component on every entity (two archetype moves each)
 // jobs_run_wait   N trivial jobs through jobs::run and one wait_for
+// container_write N/100 chunks of 4 KiB through ContainerWriter (TOC, alignment, both CRCs)
+// container_open  ContainerView::open on that file (header and payload CRC verification)
+// container_find  one find(type, guid) per chunk on the opened file
 //
 // Each case runs `repeats` times on a fresh world and reports the best time, so a cold cache or a busy core costs
 // one repeat, not the number. The numbers belong to the machine that ran them; the tool gates nothing. --quick
@@ -18,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "mce/asset/container.h"
 #include "mce/containers/array.h"
 #include "mce/ecs/world.h"
 #include "mce/jobs.h"
@@ -40,10 +44,11 @@ using Clock = std::chrono::steady_clock;
 
 double ms_since(Clock::time_point t0) { return std::chrono::duration<double, std::milli>(Clock::now() - t0).count(); }
 
-struct Result {
+struct Case {
     const char* name = "";
     u64 items = 0;
     double best_ms = 0;
+    u64 bytes = 0;  // payload size of the cases that move bytes (0: not reported)
 };
 
 struct Options {
@@ -61,8 +66,8 @@ void spawn_all(World& w, u32 n, Array<Entity>* out) {
     }
 }
 
-Result bench_iterate(const Options& o) {
-    Result r{"ecs_iterate", o.entities, 1e30};
+Case bench_iterate(const Options& o) {
+    Case r{"ecs_iterate", o.entities, 1e30};
     World w;
     spawn_all(w, o.entities, nullptr);
     for (u32 rep = 0; rep < o.repeats; ++rep) {
@@ -79,9 +84,9 @@ Result bench_iterate(const Options& o) {
 }
 
 // Spawn and destroy share one run per repeat: destroy needs the spawned handles.
-void bench_spawn_destroy(const Options& o, Result& spawn, Result& destroy) {
-    spawn = Result{"ecs_spawn", o.entities, 1e30};
-    destroy = Result{"ecs_destroy", o.entities, 1e30};
+void bench_spawn_destroy(const Options& o, Case& spawn, Case& destroy) {
+    spawn = Case{"ecs_spawn", o.entities, 1e30};
+    destroy = Case{"ecs_destroy", o.entities, 1e30};
     for (u32 rep = 0; rep < o.repeats; ++rep) {
         World w;
         Array<Entity> handles;
@@ -96,8 +101,8 @@ void bench_spawn_destroy(const Options& o, Result& spawn, Result& destroy) {
     }
 }
 
-Result bench_add_remove(const Options& o) {
-    Result r{"ecs_add_remove", o.entities, 1e30};
+Case bench_add_remove(const Options& o) {
+    Case r{"ecs_add_remove", o.entities, 1e30};
     for (u32 rep = 0; rep < o.repeats; ++rep) {
         World w;
         Array<Entity> handles;
@@ -114,8 +119,8 @@ Result bench_add_remove(const Options& o) {
 
 void count_job(void* ctx) { ++*static_cast<u32*>(ctx); }
 
-Result bench_jobs(const Options& o) {
-    Result r{"jobs_run_wait", o.entities, 1e30};
+Case bench_jobs(const Options& o) {
+    Case r{"jobs_run_wait", o.entities, 1e30};
     jobs::init(0);
     for (u32 rep = 0; rep < o.repeats; ++rep) {
         u32 done = 0;
@@ -130,6 +135,52 @@ Result bench_jobs(const Options& o) {
     return r;
 }
 
+// ---- assets: a container of N/100 chunks of 4 KiB, each with its own GUID ----------------------------------------------
+
+constexpr usize kChunkBytes = 4096;
+
+u32 chunk_count_for(const Options& o) { return std::max<u32>(o.entities / 100, 16); }
+
+void build_container(u32 chunks, Array<byte>& out) {
+    Array<byte> payload;
+    payload.resize(kChunkBytes);
+    for (usize i = 0; i < payload.size(); ++i) payload[i] = static_cast<byte>(i * 31u);
+    asset::ContainerWriter w;
+    for (u32 i = 0; i < chunks; ++i) {
+        asset::ContainerWriter::ChunkDesc d;
+        d.type = asset::ChunkType::Texture;
+        d.guid = asset::Guid{0x1000u + i, 0x2000u + i};
+        payload[0] = static_cast<byte>(i);  // distinct payloads, same size
+        w.add(d, payload.span());
+    }
+    w.finish(out);
+}
+
+void bench_container(const Options& o, Case& write, Case& open, Case& find) {
+    const u32 chunks = chunk_count_for(o);
+    const u64 total = u64(chunks) * kChunkBytes;
+    write = Case{"container_write", chunks, 1e30, total};
+    open = Case{"container_open", chunks, 1e30, total};
+    find = Case{"container_find", chunks, 1e30, 0};
+    Array<byte> file;
+    for (u32 rep = 0; rep < o.repeats; ++rep) {
+        file.clear();
+        auto t0 = Clock::now();
+        build_container(chunks, file);
+        write.best_ms = std::min(write.best_ms, ms_since(t0));
+        t0 = Clock::now();
+        auto view = asset::ContainerView::open(file.span(), "bench.mce");
+        open.best_ms = std::min(open.best_ms, ms_since(t0));
+        if (!view) {
+            std::fprintf(stderr, "mce_bench: container_open failed\n");
+            std::exit(1);
+        }
+        t0 = Clock::now();
+        for (u32 i = 0; i < chunks; ++i) g_sink += view.value().find(asset::ChunkType::Texture, asset::Guid{0x1000u + i, 0x2000u + i});
+        find.best_ms = std::min(find.best_ms, ms_since(t0));
+    }
+}
+
 bool parse_u32(const char* s, u32& out) {
     char* end = nullptr;
     const unsigned long v = std::strtoul(s, &end, 10);
@@ -138,22 +189,26 @@ bool parse_u32(const char* s, u32& out) {
     return true;
 }
 
-void print(const Result* results, usize n, const Options& o) {
+void print(const Case* results, usize n, const Options& o) {
     if (o.json) {
         std::printf("{\"format\":\"mce-bench\",\"version\":1,\"entities\":%u,\"repeats\":%u,\"results\":[", o.entities, o.repeats);
         for (usize i = 0; i < n; ++i) {
-            const Result& r = results[i];
-            std::printf("%s{\"name\":\"%s\",\"items\":%llu,\"best_ms\":%.4f,\"ns_per_item\":%.2f}", i ? "," : "", r.name,
+            const Case& r = results[i];
+            std::printf("%s{\"name\":\"%s\",\"items\":%llu,\"best_ms\":%.4f,\"ns_per_item\":%.2f", i ? "," : "", r.name,
                         static_cast<unsigned long long>(r.items), r.best_ms, r.best_ms * 1e6 / double(r.items));
+            if (r.bytes > 0) std::printf(",\"mb_per_s\":%.1f", double(r.bytes) / 1048576.0 / (r.best_ms / 1000.0));
+            std::printf("}");
         }
         std::printf("],\"checksum\":%llu}\n", static_cast<unsigned long long>(g_sink));
         return;
     }
-    std::printf("%-16s %10s %12s %12s\n", "case", "items", "best ms", "ns/item");
+    std::printf("%-16s %10s %12s %12s %10s\n", "case", "items", "best ms", "ns/item", "MB/s");
     for (usize i = 0; i < n; ++i) {
-        const Result& r = results[i];
-        std::printf("%-16s %10llu %12.4f %12.2f\n", r.name, static_cast<unsigned long long>(r.items), r.best_ms,
+        const Case& r = results[i];
+        std::printf("%-16s %10llu %12.4f %12.2f", r.name, static_cast<unsigned long long>(r.items), r.best_ms,
                     r.best_ms * 1e6 / double(r.items));
+        if (r.bytes > 0) std::printf(" %10.1f", double(r.bytes) / 1048576.0 / (r.best_ms / 1000.0));
+        std::printf("\n");
     }
 }
 
@@ -174,11 +229,12 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
-    Result results[5];
+    Case results[8];
     results[0] = bench_iterate(o);
     bench_spawn_destroy(o, results[1], results[2]);
     results[3] = bench_add_remove(o);
     results[4] = bench_jobs(o);
-    print(results, 5, o);
+    bench_container(o, results[5], results[6], results[7]);
+    print(results, 8, o);
     return 0;
 }
