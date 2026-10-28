@@ -1,5 +1,6 @@
 #include "mce/asset/container.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace mce::asset {
@@ -123,6 +124,10 @@ Result<void> ContainerView::check_version(const TocEntry& e, u8 supported_major,
 
 void ContainerWriter::add(const ChunkDesc& desc, Span<const byte> payload) {
     const usize at = align_up(data_.size(), CHUNK_ALIGN);
+    // `payload` must not point into this writer's own buffer: growing reallocates it and the span would dangle.
+    // Array::resize grows to exactly the size asked, so growing by one chunk at a time would copy the whole buffer
+    // per chunk (quadratic); reserve with the array's own 1.5x step first (M-BENCH 3).
+    if (at + payload.size() > data_.capacity()) data_.reserve(std::max(at + payload.size(), data_.capacity() + data_.capacity() / 2));
     data_.resize(at + payload.size(), byte{0});
     if (!payload.empty()) std::memcpy(data_.data() + at, payload.data(), payload.size());
     chunks_.push_back(Pending{desc, at, payload.size()});
