@@ -33,6 +33,8 @@ struct Scene {
     u32 last_level = 0;
     u32 sprays = 0;
     u32 ammo_sales = 0;
+    u32 heals = 0;
+    f32 last_heal = 0.0f;
     u32 last_rounds = 0;
     i32 last_paid = 0;
     u32 cash_events = 0;
@@ -58,6 +60,10 @@ struct Scene {
             for (const Sprayed3D& sp : ev.read<Sprayed3D>()) {
                 ++sprays;
                 last_paid = sp.paid;
+            }
+            for (const HealBought3D& h : ev.read<HealBought3D>()) {
+                ++heals;
+                last_heal = h.hp;
             }
             for (const AmmoBought3D& a : ev.read<AmmoBought3D>()) {
                 ++ammo_sales;
@@ -683,6 +689,51 @@ TEST_CASE("wanted3d: a shop tops up the reserve for a price (M-AMMOSHOP)") {
             s.run(30);
             CHECK(s.ammo_sales == 0);
             CHECK(s.w.try_get<Weapon3D>(p)->reserve == 20);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a medic heals a hurt buyer for a price (M-HEALSHOP)") {
+    const auto buyer = [](Scene& s, f32 x, i32 cash) {
+        const Entity p = s.player({}, x, 0.0f);
+        s.w.try_get_mut<Health3D>(p)->current = 40.0f;
+        s.w.add(p, Wallet3D{cash});
+        return p;
+    };
+    const auto medic = [](Scene& s) {
+        HealShop3D h;
+        h.price_per_hp = 2;
+        return s.w.spawn_with(at(0.0f, 1.0f, 0.0f), h);
+    };
+    {  // enough cash: back to max, 60 hp x 2
+        Scene s;
+        const Entity p = buyer(s, 1.0f, 500);
+        medic(s);
+        s.run(4);
+        CHECK(s.heals == 1);
+        CHECK(s.last_heal == 60.0f);
+        CHECK(s.w.try_get<Health3D>(p)->current == 100.0f);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 380);
+        s.run(60);
+        CHECK(s.heals == 1);  // healthy: nothing to sell
+    }
+    {  // short of cash: buys the hit points it can pay for
+        Scene s;
+        const Entity p = buyer(s, 1.0f, 25);
+        medic(s);
+        s.run(4);
+        CHECK(s.w.try_get<Health3D>(p)->current == 52.0f);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 1);
+    }
+    {  // too far, switched off: nothing sold
+        for (u32 k = 0; k < 2; ++k) {
+            Scene s;
+            const Entity p = buyer(s, k == 0 ? 50.0f : 1.0f, 500);
+            const Entity m = medic(s);
+            if (k == 1) s.w.try_get_mut<HealShop3D>(m)->enabled = 0;
+            s.run(30);
+            CHECK(s.heals == 0);
+            CHECK(s.w.try_get<Health3D>(p)->current == 40.0f);
         }
     }
 }

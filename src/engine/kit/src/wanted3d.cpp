@@ -28,6 +28,7 @@ static_assert(sizeof(Wallet3D) == 4);
 static_assert(sizeof(CashDrop3D) == 8);
 static_assert(sizeof(PaySpray3D) == 8);
 static_assert(sizeof(AmmoShop3D) == 12);
+static_assert(sizeof(HealShop3D) == 8);
 static_assert(sizeof(MissionReward3D) == 4);
 static_assert(sizeof(CarOwner3D) == 8);
 
@@ -445,6 +446,25 @@ void kit3d_ammoshop(Frame& f) {
     });
 }
 
+void kit3d_healshop(Frame& f) {
+    World& w = f.world();
+    f.query<HealShop3D, LocalTransform>().each([&](Entity se, HealShop3D& sh, LocalTransform&) {
+        if (!sh.enabled || sh.price_per_hp == 0) return;
+        const math::vec3 sp = position_of(w, se);
+        f.query<Health3D, Wallet3D, LocalTransform>().each([&](Entity be, Health3D& hp, Wallet3D& wl, LocalTransform&) {
+            if (hp.dead || hp.current >= hp.max || wl.cash <= 0 || math::length(position_of(w, be) - sp) > sh.radius) return;
+            const f32 want = std::ceil(hp.max - hp.current);  // the last fraction of a hit point is sold as a whole one
+            const i32 afford_hp = wl.cash / static_cast<i32>(sh.price_per_hp);
+            const f32 afford = static_cast<f32>(afford_hp);
+            const f32 heal = want < afford ? want : afford;
+            if (heal <= 0.0f) return;
+            const i32 paid = take_cash(w, be, static_cast<i32>(heal) * static_cast<i32>(sh.price_per_hp));
+            hp.current = hp.current + heal < hp.max ? hp.current + heal : hp.max;
+            EventAccess(w).push(HealBought3D{be, se, heal, paid});
+        });
+    });
+}
+
 }  // namespace
 
 bool give_cash(World& w, Entity e, i32 amount) {
@@ -493,9 +513,10 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D>();
     world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
     world.register_event<AmmoBought3D>(Phase::FixedUpdate_Pre);
+    world.register_event<HealBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
@@ -506,6 +527,7 @@ void install_wanted3d(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_cash", &kit3d_cash, "kit3d_wanted");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_payspray", &kit3d_payspray, "kit3d_cash");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_ammoshop", &kit3d_ammoshop, "kit3d_payspray");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_healshop", &kit3d_healshop, "kit3d_ammoshop");
 }
 
 }  // namespace mce::kit
