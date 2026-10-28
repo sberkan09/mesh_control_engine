@@ -1,6 +1,6 @@
 # M-BENCH — Headless benchmarks of the hot paths (milestone record)
 
-**Status:** steps 1-3 done ( more cases and optimizations can follow as new steps). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's suggestion (device-free performance work; no gameplay, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** steps 1-3 done (more cases and optimizations can follow as new steps). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-28 on the coordinator's suggestion (device-free performance work; no gameplay, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Why.** `docs/architecture/ecs-gameplay.md` states NFR-T-01 (100k entities with transform and velocity iterate in under 1.5 ms) as "a Tracy-verified CI benchmark with a synthetic 100k-entity world", but the repository has no benchmark at all: M-PERF measures frames of a running game (counters, captures), nothing measures the ECS, the job system or the asset loader on their own. Without a number there is nothing to optimize against, and a regression in a hot path only shows up as a slow game later.
 
