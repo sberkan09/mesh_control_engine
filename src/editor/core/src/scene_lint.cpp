@@ -18,6 +18,22 @@ EntityId parent_id(const DocEntity& e) {
     return c == nullptr ? kNoEntity : doc_entity_id(static_cast<const ChildOf*>(c->data())->parent);
 }
 
+// True when `e` sits in a loop of parents (itself excluded: a parent of itself is MissingParent) and has the lowest id of it,
+// so a loop is reported once and one repair breaks it.
+bool is_cycle_anchor(const SceneDocument& doc, const DocEntity& e) {
+    EntityId cur = parent_id(e);
+    if (cur == kNoEntity || cur == e.id) return false;
+    for (usize steps = 0; steps <= doc.size(); ++steps) {
+        if (cur == e.id) return true;
+        if (cur < e.id) return false;  // a lower id sits in the walk: it, not `e`, anchors the loop (or the walk never closes)
+        const DocEntity* up = doc.find(cur);
+        if (up == nullptr) return false;
+        cur = parent_id(*up);
+        if (cur == kNoEntity) return false;
+    }
+    return false;
+}
+
 struct RefScan {
     const SceneDocument* doc = nullptr;
     bool dangling = false;
@@ -50,6 +66,7 @@ const char* describe(LintKind k) {
         case LintKind::NonFiniteTransform: return "position, rotation or scale is not a number";
         case LintKind::MissingParent: return "parent does not exist";
         case LintKind::DanglingRef: return "refers to an entity the scene lacks";
+        case LintKind::ParentCycle: return "is its own ancestor (the parents loop)";
     }
     return "";
 }
@@ -72,6 +89,8 @@ Array<LintFinding> lint_scene(const SceneDocument& doc) {
 
         const EntityId parent = parent_id(e);
         if (parent != kNoEntity && (parent == e.id || doc.find(parent) == nullptr)) add(e, LintKind::MissingParent);
+
+        if (is_cycle_anchor(doc, e)) add(e, LintKind::ParentCycle);
 
         // A prefab instance's references may name entities of the prefab, which this document does not hold.
         if (e.prefab == asset::Guid{} && has_dangling_ref(doc, e)) add(e, LintKind::DanglingRef);
@@ -138,7 +157,7 @@ usize fix_scene_lint(SceneDocument& doc) {
             std::snprintf(buf, sizeof buf, "Entity %u", static_cast<unsigned>(e.id));
             e.name.assign(StringView(buf));
         }
-        if (flagged(e.id, LintKind::MissingParent)) (void)doc.remove_component(e.id, refl::type_of<ChildOf>());
+        if (flagged(e.id, LintKind::MissingParent) || flagged(e.id, LintKind::ParentCycle)) (void)doc.remove_component(e.id, refl::type_of<ChildOf>());
     }
     for (DocEntity& e : doc.entities_mut()) {
         if (flagged(e.id, LintKind::DanglingRef)) {

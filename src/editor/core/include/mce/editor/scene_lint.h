@@ -3,7 +3,7 @@
 // entity without a name, two siblings with one name (a path like Room/Wall then names both), a scale of zero on an
 // axis (the entity has no volume and cannot be picked), a position, rotation or scale that is not a number, a parent
 // that does not exist, a reference from another component (a follow target, a trigger link) to an entity the scene
-// lacks. Headless, document-level (no ECS), tested in CI.
+// lacks, parents that loop back on themselves. Headless, document-level (no ECS), tested in CI.
 
 #include "mce/containers/array.h"
 #include "mce/cook/string.h"
@@ -18,6 +18,7 @@ enum class LintKind : u8 {
     NonFiniteTransform,
     MissingParent,  // ChildOf names an entity the scene lacks, or the entity itself
     DanglingRef,    // another component refers to an entity the scene lacks (prefab instances are not checked)
+    ParentCycle,    // the parents loop back (A under B under A); reported once per loop, on its lowest entity id
 };
 
 struct LintFinding {
@@ -31,7 +32,7 @@ Array<LintFinding> lint_scene(const SceneDocument& doc);
 
 // Repairs what `lint_scene` finds, in place, without losing data a scene could still mean: an empty name becomes
 // "Entity <id>"; a second sibling with a taken name gets a numbered suffix (" (2)", ...); a parent that does not exist is
-// dropped (the entity becomes a root); a reference to a missing entity is set to null; a position, rotation or scale
+// dropped (the entity becomes a root), and so is the parent of the entity a loop is reported on; a reference to a missing entity is set to null; a position, rotation or scale
 // that is not a number is reset to its default; a scale axis of zero becomes 1. Returns the number of findings fixed
 // (0: nothing changed); `lint_scene` is clean afterwards. Edits the document directly, so it is for tools that load a
 // file, fix it and save it, not for an open EditorScene (which has undo).

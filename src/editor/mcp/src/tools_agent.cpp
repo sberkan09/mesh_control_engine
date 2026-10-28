@@ -308,13 +308,13 @@ const ToolDef kAgentTools[] = {
     {"scene_lint",
      "Mistakes in a scene that load fine and misbehave later: an entity without a name, siblings that share a name "
      "(a path like Room/Wall then names both), a scale of zero on an axis, a position, rotation or scale that is not "
-     "a number, a parent that does not exist, a reference to an entity the scene lacks. 'path' is a scene under "
+     "a number, a parent that does not exist, parents that loop back (parent_cycle), a reference to an entity the scene lacks. 'path' is a scene under "
      "assets/; left out, the open scene (unsaved edits included). Returns clean, the findings (entity, name, kind) "
      "and a text report, one line per finding.",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
      scene_lint},
     {"scene_lint_fix",
-     "Repairs what scene_lint finds in a saved scene and writes the file back in the canonical text: an empty name becomes \"Entity <id>\", a later sibling with a taken name gets \" (2)\", \" (3)\", a parent or a reference to an entity the scene lacks is dropped, a position, rotation or scale that is not a number returns to its default, a zero scale axis becomes 1. 'path' is a scene under assets/. Returns fixed (findings repaired), written (false: nothing to fix, the file is untouched) and a text report of what was found. The open scene in the editor is not changed: reload it with scene_open afterwards (unsaved edits to it would be lost).",
+     "Repairs what scene_lint finds in a saved scene and writes the file back in the canonical text: an empty name becomes \"Entity <id>\", a later sibling with a taken name gets \" (2)\", \" (3)\", a parent, a parent loop (on its lowest entity id) or a reference to an entity the scene lacks is dropped, a position, rotation or scale that is not a number returns to its default, a zero scale axis becomes 1. 'path' is a scene under assets/. Returns fixed (findings repaired), written (false: nothing to fix, the file is untouched) and a text report of what was found. The open scene in the editor is not changed: reload it with scene_open afterwards (unsaved edits to it would be lost).",
      R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/"}},"required":["path"]})j",
      scene_lint_fix},
     {"scene_lint_all",
