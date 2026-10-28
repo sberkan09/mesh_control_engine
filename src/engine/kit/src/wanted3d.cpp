@@ -454,7 +454,8 @@ void kit3d_healshop(Frame& f) {
         f.query<Health3D, Wallet3D, LocalTransform>().each([&](Entity be, Health3D& hp, Wallet3D& wl, LocalTransform&) {
             if (hp.dead || hp.current >= hp.max || wl.cash <= 0 || math::length(position_of(w, be) - sp) > sh.radius) return;
             const f32 want = std::ceil(hp.max - hp.current);  // the last fraction of a hit point is sold as a whole one
-            const f32 afford = static_cast<f32>(wl.cash / sh.price_per_hp);
+            const i32 afford_hp = wl.cash / static_cast<i32>(sh.price_per_hp);
+            const f32 afford = static_cast<f32>(afford_hp);
             const f32 heal = want < afford ? want : afford;
             if (heal <= 0.0f) return;
             const i32 paid = take_cash(w, be, static_cast<i32>(heal) * static_cast<i32>(sh.price_per_hp));
