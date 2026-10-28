@@ -251,6 +251,29 @@ struct Sprayed3D {
 };
 MCE_EVENT(Sprayed3D, entity, garage, paid, level)
 
+// Ammo shop (M-AMMOSHOP). `AmmoShop3D` on a placed entity: a buyer with a Weapon3D and a Wallet3D on the same entity that
+// stands within `radius` has the weapon's `reserve` topped up to `stock_to` rounds at `price_per_round` each. A buyer that
+// cannot afford the whole top-up buys as many rounds as it can pay for. Weapons that never run dry (`magazine` 0 or
+// `infinite_ammo`) are not sold to. `AmmoBought3D` is pushed per sale. System "kit3d_ammoshop" (after "kit3d_payspray").
+struct AmmoShop3D {
+    f32 radius = 3.0f;            // m, from the entity
+    u16 price_per_round = 2;      // cash per round
+    u16 stock_to = 120;           // the reserve it fills up to
+    u8 enabled = 1;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(AmmoShop3D, (radius, Range{0.1f, 100}, Help{"m: a buyer this close is sold ammo"}), (price_per_round, Help{"cash per round"}),
+              (stock_to, Help{"the reserve a sale fills up to"}), enabled)
+
+// A buyer was sold rounds by an AmmoShop3D.
+struct AmmoBought3D {
+    Entity entity;
+    Entity shop;
+    u32 rounds = 0;
+    i32 paid = 0;
+};
+MCE_EVENT(AmmoBought3D, entity, shop, rounds, paid)
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 
