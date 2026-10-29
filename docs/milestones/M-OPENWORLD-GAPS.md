@@ -62,6 +62,11 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   while driving, the car turns under a fixed camera, so a turn off the avenue leaves the road out of frame. Needs a chase
   option on `CameraFollow3D` (ease the yaw behind the target's heading while it moves, Look input overriding it for a
   moment), used by the sample while `Rider3D` is seated. A separate step.
+- **Walkers with a body: two open edges** (from the #859 review, open). (1) A walker that is mid-hop at a junction
+  (`Pedestrian3D.target` set) and finds a dynamic body in its way only waits; it does not turn round, so a car parked
+  across a crossing can hold it there for good. (2) `path_blocked` tests only the end pose of a step, so a far walker's
+  16-tick step (up to about 1 m when fleeing) can pass through a thin dynamic body. Fix: give up the hop after a short
+  wait, and sweep the step (a shape cast from the body to the target) instead of the end overlap.
 
 ## C. Gameplay depth
 
