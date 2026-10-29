@@ -40,8 +40,8 @@ struct Joint2D {
     f32 max_length = -1.0f;               // Distance: < 0 = length
     f32 hertz = 0.0f;                     // Distance: > 0 makes it a spring of this frequency
     f32 damping_ratio = 0.0f;             // Distance spring: 0..1
-    f32 lower = -45.0f;                   // Revolute: degrees from the rest angle (-180..0)
-    f32 upper = 45.0f;                    // Revolute: degrees from the rest angle (0..180)
+    f32 lower = -45.0f;                   // Revolute: degrees from the rest angle (-180..180)
+    f32 upper = 45.0f;                    // Revolute: degrees from the rest angle (-180..180)
     f32 motor_speed = 0.0f;               // Revolute: degrees per second
     f32 max_motor_torque = 0.0f;          // Revolute: N*m
     f32 length_now = 0.0f;                // engine-written: Distance, the anchors' distance (m)
