@@ -58,6 +58,26 @@ void shots(Frame& f) {
         play(f, wa->shot.guid, wa->gain_db, wa->attenuation_id, ev.origin);
         ++wa->fired;
     }
+    for (const WeaponHit3D& ev : f.events().read<WeaponHit3D>()) {
+        const WeaponAudio* wa = w.alive(ev.weapon) ? w.try_get<WeaponAudio>(ev.weapon) : nullptr;
+        if (wa && !wa->hit.guid.is_null()) play(f, wa->hit.guid, wa->hit_gain_db, wa->attenuation_id, ev.point);
+    }
+}
+
+void impacts(Frame& f) {
+    World& w = f.world();
+    const f32 dt = static_cast<f32>(f.dt);
+    f.query<ImpactAudio&>().each([&](Entity, ImpactAudio& ia) { ia.wait = math::max(0.0f, ia.wait - dt); });
+    for (const ContactBegin3D& ev : f.events().read<ContactBegin3D>()) {
+        for (const Entity body : {ev.a, ev.b}) {
+            ImpactAudio* ia = !body.is_null() && w.alive(body) ? w.try_get_mut<ImpactAudio>(body) : nullptr;
+            if (!ia || ia->wait > 0.0f || ia->clip.guid.is_null() || !(ev.approach_speed >= ia->min_speed)) continue;
+            const f32 span = math::max(finite(ia->full_speed, 20.0f) - finite(ia->min_speed, 4.0f), 0.01f);
+            const f32 t = math::clamp((ev.approach_speed - ia->min_speed) / span, 0.0f, 1.0f);
+            play(f, ia->clip.guid, lerp(ia->quiet_db, ia->loud_db, t), ia->attenuation_id, ev.point);
+            ia->wait = math::max(finite(ia->min_gap, 0.5f), 0.0f);
+        }
+    }
 }
 
 void footsteps(Frame& f) {
@@ -106,6 +126,7 @@ void kit_world_audio(Frame& f) {
     if (!w.event_queue<audio::PlaySfx>() && !ref) return;  // no audio in this world
     engines(f, ref ? ref->device : nullptr);
     shots(f);
+    impacts(f);
     footsteps(f);
     sirens(f);
 }
@@ -113,7 +134,7 @@ void kit_world_audio(Frame& f) {
 }  // namespace
 
 void install_world_audio(World& world) {
-    world.register_components<EngineAudio, WeaponAudio, FootstepAudio, SirenAudio>();
+    world.register_components<EngineAudio, WeaponAudio, ImpactAudio, FootstepAudio, SirenAudio>();
     world.add_system(Phase::FixedUpdate_Post, "kit_world_audio", &kit_world_audio);
 }
 

@@ -24,7 +24,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A3 | **Missions** (reach, kill, deliver, timers, Luau chaining, retry, pay) | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
 | A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
 | A5 | **Weather** (rain, wet roads, fog, lightning, wind, snow) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
-| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; still missing: radio, hit and impact sounds, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
+| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; still missing: radio, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
 | A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |

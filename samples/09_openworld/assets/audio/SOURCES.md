@@ -11,6 +11,8 @@ SHA-256 (the pins are in the script) and writes these files; run it again after 
 | `siren.wav` | `siren.mp3` | looneybits | https://opengameart.org/content/sirens-and-alarm-noise | 8 whole wail periods (5.5 s) cut where the pitch falls back, mono 44.1 kHz, 5 ms join |
 | `footstep_1..6.ogg` | `01-footstep.ogg` .. `06-footstep.ogg` | GboxMikeFozzy | https://opengameart.org/content/footsteps-0 | none |
 | `city_ambience.wav` | `crowd_shouting.ogg` | StarNinjas | https://opengameart.org/content/crowd-shoutingspeaking-ambience | first 14 s with a 1.5 s crossfade into the start (a seamless loop), mono 44.1 kHz |
+| `hit_1..5.ogg` | `metal_hit_01..05.ogg` | rubberduck | https://opengameart.org/content/100-cc0-metal-and-wood-sfx | none (taken from the pack's zip) |
+| `crash_1..3.ogg` | `metal_slam_01.ogg`, `metal_falling_01.ogg`, `metal_falling_02.ogg` | rubberduck | same | none |
 
 The authors ask for nothing under CC0; StarNinjas would like a link to their OpenGameArt profile (https://opengameart.org/users/starninjas)
 and to hear where the sound is used, so it is credited in `CREDITS.md`. Cooked sidecars (`*.mceasset`) and the two sound sets

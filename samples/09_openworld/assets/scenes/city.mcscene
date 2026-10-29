@@ -17191,7 +17191,9 @@
     "AudioListener": {},
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -2
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -2,
+     "hit_gain_db": -4
     },
     "CameraFollow3D": {
      "target": "$694",
@@ -17257,7 +17259,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17295,6 +17299,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "MapMarker": {
      "color": [
@@ -17360,7 +17371,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17398,6 +17411,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "MapMarker": {
      "color": [
@@ -17463,7 +17483,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17501,6 +17523,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "MapMarker": {
      "color": [
@@ -17604,22 +17633,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
-    },
-    "AudioSource": {
-     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
-     "bus": "SFX",
-     "loop": true,
-     "play_on_start": true,
-     "gain_db": -60,
-     "priority": 170
-    },
-    "AudioSpatial": {
-     "attenuation_id": 1
-    },
-    "SirenAudio": {
-     "min_level": 1,
-     "active_db": -9
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17714,7 +17730,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17809,22 +17827,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
-    },
-    "AudioSource": {
-     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
-     "bus": "SFX",
-     "loop": true,
-     "play_on_start": true,
-     "gain_db": -60,
-     "priority": 170
-    },
-    "AudioSpatial": {
-     "attenuation_id": 1
-    },
-    "SirenAudio": {
-     "min_level": 1,
-     "active_db": -9
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17919,7 +17924,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -18031,7 +18038,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18054,6 +18063,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 2,
+     "active_db": -8
     }
    }
   },
@@ -18110,7 +18141,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18133,6 +18166,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 2,
+     "active_db": -8
     }
    }
   },
@@ -18189,7 +18244,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18212,6 +18269,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 3,
+     "active_db": -8
     }
    }
   },
@@ -18268,7 +18347,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18291,6 +18372,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 3,
+     "active_db": -8
     }
    }
   },

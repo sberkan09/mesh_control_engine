@@ -15,6 +15,6 @@
 
 ## Sounds (CC0, OpenGameArt)
 
-Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy and the crowd bed by
+Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy, impacts by rubberduck and the crowd bed by
 [StarNinjas](https://opengameart.org/users/starninjas), all CC0-1.0. Files, sources and the changes made (trim, loop, mono):
 `assets/audio/SOURCES.md`; rebuilt by `tools/fetch_audio.py`.

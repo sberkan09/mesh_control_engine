@@ -11,7 +11,10 @@
 //                  idle_pitch) and gain = idle_db + t * (top_db - idle_db). The system writes AudioSource::gain_db and
 //                  AudioSource::pick_rate and sets the live voice's pitch, so do not add AudioDoppler to the same source.
 //   WeaponAudio    on a Weapon3D entity: each WeaponFired3D naming it plays `shot` (a sound set picks a variant and pitch)
-//                  at the muzzle, in 3D with `attenuation_id` (0: centred, 2D).
+//                  at the muzzle, and each WeaponHit3D plays `hit` at the impact point, in 3D with `attenuation_id` (0:
+//                  centred, 2D).
+//   ImpactAudio    on a RigidBody3D with contact_events (a car): a ContactBegin3D closing faster than `min_speed` plays `clip`
+//                  at the contact, from `quiet_db` at min_speed to `loud_db` at `full_speed`, at most once per `min_gap` s.
 //   FootstepAudio  on a CharacterController3D entity: while it is grounded and not seated in a car, every `stride` metres
 //                  walked plays `clip` (a sound set) at its feet. Faster walking steps faster.
 //   SirenAudio     on a looping AudioSource: silent (-60 dB) until the first Wanted3D reaches `min_level`, then `active_db`;
@@ -52,14 +55,35 @@ MCE_COMPONENT(EngineAudio, (idle_pitch, Range{0.25f, 4}, Help{"playback rate at 
 
 struct WeaponAudio {
     asset::AssetRef<asset::Sfx> shot;
+    asset::AssetRef<asset::Sfx> hit;  // played where a shot lands; null: silent
     f32 gain_db = 0.0f;
+    f32 hit_gain_db = 0.0f;
     u16 attenuation_id = 1;
     u16 pad_ = 0;
     u32 fired = 0;  // engine-written: shots played
+};
+MCE_COMPONENT(WeaponAudio, (shot, Help{"an Sfx or a sound set (.mcsound) played for each shot"}),
+              (hit, Help{"an Sfx or a sound set played at each impact point"}), (gain_db, Range{-60, 12}),
+              (hit_gain_db, Range{-60, 12}), (attenuation_id, Help{"3D curve id at the muzzle and the impact; 0 = centred"}),
+              (fired, ReadOnly, Transient))
+
+struct ImpactAudio {
+    asset::AssetRef<asset::Sfx> clip;
+    f32 min_speed = 4.0f;
+    f32 full_speed = 20.0f;
+    f32 quiet_db = -12.0f;
+    f32 loud_db = 0.0f;
+    f32 min_gap = 0.5f;
+    f32 wait = 0.0f;  // engine-written: seconds until the next impact may sound
+    u16 attenuation_id = 1;
+    u16 pad_ = 0;
     u32 pad2_ = 0;
 };
-MCE_COMPONENT(WeaponAudio, (shot, Help{"an Sfx or a sound set (.mcsound) played for each shot"}), (gain_db, Range{-60, 12}),
-              (attenuation_id, Help{"3D curve id at the muzzle; 0 = centred"}), (fired, ReadOnly, Transient))
+MCE_COMPONENT(ImpactAudio, (clip, Help{"an Sfx or a sound set (.mcsound) played for a hard hit"}),
+              (min_speed, Range{0, 200}, Help{"m/s the bodies must close at; set RigidBody3D.contact_min_speed no higher"}),
+              (full_speed, Range{0, 200}, Help{"m/s of the loudest hit"}), (quiet_db, Range{-60, 12}), (loud_db, Range{-60, 12}),
+              (min_gap, Range{0, 10}, Help{"seconds between two sounds of this body"}), (wait, ReadOnly, Transient),
+              (attenuation_id, Help{"3D curve id; 0 = centred"}))
 
 struct FootstepAudio {
     asset::AssetRef<asset::Sfx> clip;
@@ -86,7 +110,7 @@ struct SirenAudio {
 MCE_COMPONENT(SirenAudio, (min_level, Range{1, 10}, Help{"wanted level where the siren starts"}), (active_db, Range{-60, 12}),
               (slew_db_per_s, Range{1, 600}, Help{"how fast the gain slides"}), (current_db, ReadOnly, Transient))
 
-// Registers the four components and adds "kit_world_audio". Idempotent.
+// Registers the five components and adds "kit_world_audio". Idempotent.
 void install_world_audio(World& world);
 
 }  // namespace mce::kit

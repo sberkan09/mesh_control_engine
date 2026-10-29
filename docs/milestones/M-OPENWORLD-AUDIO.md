@@ -15,6 +15,8 @@ scene cannot do that without code.
 | 3 | The scene: `AudioListener` on the camera; footsteps on the player and police; shots on the camera's and the police's `Weapon3D`; engines on the parked cars and the traffic prefab; sirens on two police; the `SFX` city bed; `AudioLimiter` and a pause `AudioSnapshot` (`gen_assets.py`) | done | same |
 | 4 | Tests (`tests/kit/test_world_audio.cpp`, padding) and the user guide (10.9) | done | same |
 
+| 5 | Follow-up: `WeaponAudio.hit` (a sound where a shot lands), `ImpactAudio` (a car crash by closing speed, `contact_events` on every car), sirens moved from the foot police to the police cars (on the root: the audio bridge follows an entity's own `LocalTransform`, so a child source would sound at the wrong place) | done | follow-up PR |
+
 ## Decisions
 
 - **A kit module, not a sample trick.** No existing component read `Vehicle3D.speed`, `WeaponFired3D` or `Wanted3D.level` for sound, and
@@ -32,5 +34,5 @@ scene cannot do that without code.
 
 - Not heard here: the cloud has no output device. The offline mixer and the unit tests cover the logic; the loudness balance (engine -10 dB, shots -2 dB,
   siren -9 dB, bed -22 dB) is a first guess and needs a listen on a machine with speakers.
-- Police are on foot, so sirens come from two of them until police cars (A9, E4) exist.
-- No hit or impact sound (`WeaponHit3D`), radio, music or pedestrian voices yet; the kit has no component for them.
+- No radio, music or pedestrian voices yet. Impacts use metal sounds for every contact (a pedestrian hit, glass and walls sound the same).
+- Roadblock cars are silent; only the chasing cars carry a siren and they have no engine loop.
