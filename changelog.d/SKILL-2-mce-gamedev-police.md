@@ -1,0 +1,1 @@
+- `mce-gamedev` skill: police, wanted and road-following pitfalls added to `docs/skills/mce-gamedev/references/`.
