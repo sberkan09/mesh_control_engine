@@ -108,6 +108,26 @@ MCE_COMPONENT(Objective, (kind, Save), (state, Save, ReadOnly), (target, Save, H
               (duration, Save, Range{0, 100000}, Help{"timer: seconds"}), (ticks, Save, ReadOnly),
               (next, Save, Help{"the objective that follows; empty: the mission ends with this one"}))
 
+// A mission-giver (M-MISSIONSTART). `MissionMarker` on a placed entity (a map marker): while its `mission` is Idle and that
+// mission's `actor` stands within `radius` of the marker, the mission starts, as if `start` were set. `enabled` 0 switches
+// it off. Needs install_missions.
+struct MissionMarker {
+    Entity mission;
+    f32 radius = 3.0f;  // m
+    u8 enabled = 1;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(MissionMarker, (mission, Save, Help{"the Mission entity this marker starts"}),
+              (radius, Save, Range{0.1f, 1000}, Help{"m: the mission's actor this close starts it"}), (enabled, Save))
+
+// `MissionWantedFail` on a Mission entity: while it is Active, the mission fails (MissionFailed reason 3) once its actor's
+// Wanted3D reaches `level` (install_wanted3d for the component to read). Needs install_missions.
+struct MissionWantedFail {
+    u8 level = 3;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(MissionWantedFail, (level, Save, Range{1, 5}, Help{"the mission fails when its actor's wanted level reaches this"}))
+
 // Events (producer FixedUpdate_Pre).
 struct MissionStarted {
     Entity mission;
@@ -122,7 +142,7 @@ struct MissionCompleted {
 };
 struct MissionFailed {
     Entity mission;
-    u32 reason = 0;                 // 0: time limit, 1: fail_on_death
+    u32 reason = 0;                 // 0: time limit, 1: fail_on_death, 2: objective gone, 3: MissionWantedFail
 };
 // The input: a named signal for the active `signal` objectives (the game, Luau or a system pushes it).
 struct MissionSignal {

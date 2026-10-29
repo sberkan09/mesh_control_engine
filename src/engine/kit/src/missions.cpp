@@ -11,6 +11,8 @@
 #include "mce/string_id.h"
 
 namespace mce::kit {
+static_assert(sizeof(MissionMarker) == 16);
+static_assert(sizeof(MissionWantedFail) == 4);
 namespace {
 
 struct MissionsInstalled {};
@@ -106,6 +108,14 @@ void kit_missions(Frame& f) {
     in.signals = f.events().read<MissionSignal>();
     in.interact = is && is->has_action(kInteract) && is->pressed(kInteract);
 
+    f.query<MissionMarker, LocalTransform>().each([&](Entity me, MissionMarker& mk, LocalTransform&) {
+        if (!mk.enabled || mk.mission.is_null() || !w.alive(mk.mission)) return;
+        Mission* mm = w.try_get_mut<Mission>(mk.mission);
+        if (!mm || mm->state != MissionState::Idle) return;
+        math::vec3 actor_pos, marker_pos;
+        if (pose_of(w, mm->actor, actor_pos) && pose_of(w, me, marker_pos) && math::length(actor_pos - marker_pos) <= mk.radius) mm->start = 1;
+    });
+
     f.query<Mission>().each([&](Entity e, Mission& m) {
         if (m.state == MissionState::Idle) {
             if (!m.start && !m.start_on_load) return;
@@ -139,6 +149,13 @@ void kit_missions(Frame& f) {
             f.events().push(MissionFailed{e, fail_death ? 1u : 0u});
             return;
         }
+        const MissionWantedFail* wf = w.try_get<MissionWantedFail>(e);
+        const Wanted3D* wd = wf && !m.actor.is_null() && w.alive(m.actor) ? w.try_get<Wanted3D>(m.actor) : nullptr;
+        if (wf && wd && wd->level >= wf->level) {
+            m.state = MissionState::Failed;
+            f.events().push(MissionFailed{e, 3u});
+            return;
+        }
         Objective* o = m.current.is_null() || !w.alive(m.current) ? nullptr : w.try_get_mut<Objective>(m.current);
         if (!o) {  // the objective went: the mission has nothing left to wait for
             m.state = MissionState::Failed;
@@ -167,7 +184,7 @@ void install_missions(World& world, asset::AssetSystem* assets) {
     install_combat3d(world, assets);
     if (world.try_resource<MissionsInstalled>()) return;
     world.set_resource(MissionsInstalled{});
-    world.register_components<Mission, Objective>();
+    world.register_components<Mission, Objective, MissionMarker, MissionWantedFail>();
     world.register_event<MissionStarted>(Phase::FixedUpdate_Pre);
     world.register_event<ObjectiveDone>(Phase::FixedUpdate_Pre);
     world.register_event<MissionCompleted>(Phase::FixedUpdate_Pre);
