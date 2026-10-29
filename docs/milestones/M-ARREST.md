@@ -1,6 +1,6 @@
 # M-ARREST — police arrest an offender who stands still
 
-Status: steps 1 to 3 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
+Status: steps 1 to 4 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
 
 ## Why
 
@@ -35,6 +35,13 @@ normal pairing. `aim` does not turn a car. A roadblock is a `Vehicle3D` with `dr
 engine work). Limits: no path following (a wall between the car and the target stops it; `Vehicle3D` has no nav), no
 reversing out of a dead end, no ramming logic. Test: "a police car steers and drives at the target": right, left, stops at the
 target, `drive_car` 0 leaves the car alone.
+
+Step 4 (police cars on the road network). `Police3D::drive_car` 2 (same byte, so the size stays 68) makes the car follow the
+`RoadNetwork3D`: `road_route` from the lane under the car (going its way, connectors allowed, within 30 m) to the lane nearest the
+target or last known place (within 80 m); the aim point is 10 m plus half the speed down that route, and the steering, throttle and
+braking are those of step 3. No lane near the car or the target: it drives straight as for 1. The route is recomputed every tick
+(A* over a few hundred lanes), nothing is stored. Test: "a police car with drive_car 2 follows the road, not the straight line".
+Limits: the car ignores traffic lights and other cars, does not reverse out of a dead end and may take the oncoming lane.
 
 ## Open items
 

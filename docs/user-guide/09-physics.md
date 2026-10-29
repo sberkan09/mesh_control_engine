@@ -989,8 +989,10 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 
 - **Police cars (M-ARREST 3).** `drive_car` 1 on a unit that has a `Vehicle3D` (with `use_input` 0) drives it at the target:
   Pursue and Attack at the offender, Search at the last known place, Idle stops. It steers at the point, slows in turns
-  and inside 12 m, and brakes to a stop inside 4 m. There is no path following, so a wall between the car and the target
-  stops it. A roadblock is a car with `drive_car` 0 placed across the road.
+  and inside 12 m, and brakes to a stop inside 4 m. With `drive_car` 1 there is no path following, so a wall between the car and the target
+  stops it; `drive_car` 2 (M-ARREST 4) drives along the `RoadNetwork3D` instead: the quickest lane route from the car's lane to the
+  lane nearest the target (`road_route`), steered by pure pursuit, falling back to the straight line when no lane is within 30 m of
+  the car or 80 m of the target. A roadblock is a car with `drive_car` 0 placed across the road.
 
 - **Busted and wasted (M-WASTED).** Put `Respawn3D` (`delay`, default 3 s) on the player and `RespawnPoint3D` on a few
   entities (`kind` Hospital or Station). After the player dies it wakes up at the nearest Hospital, after an arrest at the

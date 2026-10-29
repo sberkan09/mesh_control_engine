@@ -5,6 +5,11 @@
 
 #include <cmath>
 
+#include <cstring>
+
+#include "mce/asset/container.h"
+#include "mce/cook/cook.h"
+#include "mce/cook/importer.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -13,6 +18,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/roads.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
@@ -411,6 +417,53 @@ TEST_CASE("wanted3d: a police car steers and drives at the target (M-ARREST 3)")
             if (k == 1) CHECK(v.steer < 0.0f);
         }
     }
+}
+
+TEST_CASE("wanted3d: a police car with drive_car 2 follows the road, not the straight line (M-ARREST 4)") {
+    // An L of road: from the origin 100 m north (-Z), then 100 m east. The target stands 90 m east and 80 m north of the car.
+    constexpr const char* kL = R"({ "format": "mce-roads", "version": 1, "name": "ell",
+      "nodes": [{"name": "a", "at": [0, 0, 0]}, {"name": "b", "at": [0, 0, -100]}, {"name": "c", "at": [100, 0, -100]}],
+      "roads": [{"name": "up", "from": "a", "to": "b", "lanes": 1}, {"name": "over", "from": "b", "to": "c", "lanes": 1}] })";
+    const asset::Guid guid{0x7e7a000000004000ull, 0x80000000000000d1ull};
+    cook::ImporterRegistry importers;
+    cook::ImporterRegistry::add_builtins(importers);
+    const cook::IImporter* imp = importers.for_extension(".mcroads");
+    REQUIRE(imp);
+    cook::AssetRegistry registry;
+    cook::DiagList diags;
+    Array<byte> cooked;
+    REQUIRE(cook::cook_document(registry, *imp, guid, "ell.mcroads", kL, cooked, diags));
+    auto view = asset::ContainerView::open(cooked.span(), "ell.mcroads");
+    REQUIRE(view);
+    const Span<const byte> payload = view.value().payload(view.value().find(asset::ChunkType::RoadNetwork, guid));
+
+    Wanted3D wd;
+    wd.heat = 25.0f;
+    wd.crimes = 1;
+    f32 steer[3] = {};
+    for (u32 k = 0; k < 3; ++k) {  // 0: straight line, 1: along the road, 2: along the road with no lane near the car
+        Scene s;
+        install_roads(s.w, nullptr);
+        REQUIRE(s.w.resource<RoadRegistry>().define(guid, payload));
+        RoadNetwork3D n;
+        n.roads.guid = guid;
+        s.w.spawn_with(at(0, 0, 0), n);
+        s.player(wd, 90.0f, -80.0f);
+        Police3D pol;
+        pol.drive_car = k == 0 ? 1 : 2;
+        pol.sight_range = 300.0f;
+        Health3D h;
+        h.team = 2;
+        const Entity c = s.w.spawn_with(at(k == 2 ? -200.0f : 0.0f, 1, -10), pol, h, Vehicle3D{});
+        s.run(5);
+        const Vehicle3D& v = *s.w.try_get<Vehicle3D>(c);
+        CHECK(v.throttle > 0.0f);
+        CHECK(v.brake == 0.0f);
+        steer[k] = v.steer;
+    }
+    CHECK(steer[0] > 0.5f);                 // straight at the target: hard right
+    CHECK(steer[1] < steer[0] - 0.3f);      // the road runs on ahead: only the lane's offset to steer for
+    CHECK(steer[2] > 0.5f);                 // 200 m from any lane: falls back to the straight line
 }
 
 TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station (M-WASTED)") {

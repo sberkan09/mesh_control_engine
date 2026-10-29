@@ -15,6 +15,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/procgen.h"
+#include "mce/kit/roads.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 
@@ -43,6 +44,40 @@ struct Wanted3DState {
     Array<Entity> moved;       // where each offender was last tick (M-ARREST: how fast it is going)
     Array<math::vec3> before;
 };
+
+// M-ARREST 4: the point a police car on the road network steers at. The quickest lane route (road_route) from the lane under
+// the car, going its way, to the lane nearest `goal`, then the spot `look` metres down it; `goal` itself when the route ends
+// sooner. False when the car or the goal is not near a lane (the car then drives straight at the goal).
+bool road_aim(World& w, math::vec3 pos, math::vec3 fwd, math::vec3 goal, f32 look, math::vec3& aim) {
+    RoadNet net;
+    if (!road_net_first(w, net)) return false;
+    RoadSpot from, to;
+    RoadNearestQuery qf;
+    qf.max_distance = 30.0f;
+    qf.connectors = true;
+    qf.heading = fwd;
+    RoadNearestQuery qt;
+    qt.max_distance = 80.0f;
+    if (!road_nearest(net, pos, from, qf) || !road_nearest(net, goal, to, qt)) return false;
+    Array<u32> route;
+    if (!road_route(*net.def, from.lane, to.lane, route) || route.empty()) return false;
+    f32 s = from.s;
+    f32 left = look;
+    for (usize i = 0; i < route.size(); ++i) {
+        const f32 len = net.def->lanes[route[i]].length;
+        const bool last = i + 1 == route.size();
+        // On the goal's own lane the aim never runs past the goal.
+        const f32 end = last ? math::min(len, to.s) : len;
+        if (s + left <= end) {
+            aim = road_lane_point(net, route[i], s + left);
+            return true;
+        }
+        left -= math::max(end - s, 0.0f);
+        s = 0.0f;
+    }
+    aim = goal;
+    return true;
+}
 
 // e and the entities it hangs under: the first that has a Wanted3D.
 Entity wanted_holder(World& w, Entity e) {
@@ -295,14 +330,19 @@ void kit3d_wanted(Frame& f) {
         if (p.drive_car) {
             if (Vehicle3D* v = w.try_get_mut<Vehicle3D>(e); v && !v->use_input) {
                 const bool go = p.state != PoliceState::Idle && !p.target.is_null();
-                const math::vec3 d = p.last_known - position_of(w, e);
+                math::vec3 d = p.last_known - position_of(w, e);
                 const f32 dist = std::sqrt(d.x * d.x + d.z * d.z);
+                const math::vec3 fwd = math::rotate(t.rotation, math::vec3{0.0f, 0.0f, -1.0f});
+                // drive_car 2: follow the road network toward the target (straight at it where no lane is near).
+                if (go && p.drive_car == 2 && dist >= 4.0f) {
+                    math::vec3 aim;
+                    if (road_aim(w, position_of(w, e), fwd, p.last_known, 10.0f + 0.5f * math::max(v->speed, 0.0f), aim)) d = aim - position_of(w, e);
+                }
                 if (!go || dist < 4.0f) {
                     v->throttle = 0.0f;
                     v->steer = 0.0f;
                     v->brake = 1.0f;
                 } else {
-                    const math::vec3 fwd = math::rotate(t.rotation, math::vec3{0.0f, 0.0f, -1.0f});
                     // Signed angle from the heading to the target, positive when it is to the right.
                     const f32 ang = std::atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
                     const f32 max_steer = math::max(v->max_steer, 1.0f) * 0.0174533f;
