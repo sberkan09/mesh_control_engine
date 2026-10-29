@@ -25,9 +25,9 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
 | A5 | **Weather** (rain, wet roads, fog, lightning, wind, snow) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
 | A6 | **Audio**: no engine sound, gunshot, footsteps, ambience, sirens, radio | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
-| A7 | **Busted and wasted**: dying or being arrested ends the game for good (no respawn) | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
+| A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
-| A9 | **Police cars and roadblocks**: all four police are on foot | `drive_car` on `Police3D` (M-ARREST 3) | none |
+| A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
 | A10 | **Carjacking, vehicle damage and wrecks, ramming pedestrians** | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
 | A11 | **Loot, shops, inventory** (ammo, health, chop shop) | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
 | A12 | **Pause menu, options, save/load** in the sample (the stock player has Esc pause; no game screens) | `ui_flow`, save system | `ui_screens` |
@@ -83,7 +83,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 1. **E2 HUD + wanted stars + health + ammo** (A1): copy `10_missions` `hud.mcui`; one `.mcui`, no code. Biggest feel gain.
 2. **E3 audio pass** (A6): engine loop, shot, hit, siren, ambience; the sample must call out the bus layout.
-3. **E4 busted and wasted + police cars + arrest** (A7-A9): data only, uses M-WASTED and M-ARREST components.
+3. **E4 busted and wasted + police cars + arrest** (A7-A9; respawn, cars and roadblocks done, see [M-OPENWORLD-POLICE](M-OPENWORLD-POLICE.md)): data only, uses M-WASTED and M-ARREST components.
 4. **E5 look pass**: roads with markings and crossings, a sky HDRI, tint/exposure check on GL and Metal, shot effects.
 5. **E6 day/night + weather** (A4, A5), **E7 missions + minimap** (A2, A3), **E8 shops, carjack, wrecks** (A10, A11).
 6. **E9 animation**: play the node clips, wheel spin, door and seat transitions.

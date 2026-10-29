@@ -28,6 +28,8 @@ MCE_CVAR(cv_nightsky, "r.nightsky", true,
          "Moon and stars in the night sky (NightSky; off = the moonless, starless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_water, "r.water", true,
          "Water plane from the Water component (WaterSurface; off = the frame without a plane)", CVarFlags::Saved);
+MCE_CVAR(cv_aurora, "r.aurora", true,
+         "Aurora curtains in the night sky (AuroraSky; off = the frame without them)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -52,6 +54,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.clouds = false;
             q.night_sky = false;
             q.water = false;
+            q.aurora = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -201,6 +204,23 @@ WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water) 
     out.roughness = unit(water.roughness, 0.08f);
     out.foam_amount = q.water ? unit(water.foam_amount, 0.0f) : 0.0f;
     out.foam_width_m = detail::ranged(water.foam_width_m, 0.05f, 20.0f, 1.5f);
+    return out;
+}
+
+AuroraSky apply_quality(const QualitySettings& q, const AuroraSky& aurora) {
+    AuroraSky out = aurora;
+    const auto unit = [](f32 x) { return detail::ranged(x, 0.0f, 1.0f, 0.0f); };
+    out.level = q.aurora && cv_aurora.get_bool() ? detail::ranged(aurora.level, 0.0f, 4.0f, 0.0f) : 0.0f;
+    out.base_height = detail::ranged(aurora.base_height, 0.02f, 0.6f, 0.18f);
+    out.height_span = detail::ranged(aurora.height_span, 0.05f, 0.8f, 0.35f);
+    out.azimuth = detail::unit_dir2_z(aurora.azimuth);
+    out.half_width_cos = detail::ranged(aurora.half_width_cos, -1.0f, 1.0f, 0.8192f);
+    const f32 count = detail::ranged(static_cast<f32>(aurora.curtain_count), 1.0f, 6.0f, 3.0f);
+    out.curtain_count = static_cast<i32>(count);
+    out.time = std::isfinite(aurora.time) ? aurora.time : 0.0f;
+    out.speed = detail::ranged(aurora.speed, 0.0f, 4.0f, 1.0f);
+    out.low_color = math::vec3{unit(aurora.low_color.x), unit(aurora.low_color.y), unit(aurora.low_color.z)};
+    out.high_color = math::vec3{unit(aurora.high_color.x), unit(aurora.high_color.y), unit(aurora.high_color.z)};
     return out;
 }
 

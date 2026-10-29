@@ -809,6 +809,38 @@ TEST_CASE("wanted3d: a cash pickup pays whoever touches it (M-CASHPICKUP)") {
     }
 }
 
+TEST_CASE("wanted3d: a failed mission costs its actor the fail_fee (M-MISSIONFEE)") {
+    for (u32 k = 0; k < 3; ++k) {  // k 0: fails, fee 60 of 100; k 1: fails, fee 500 (wallet floors at 0); k 2: completes, no fee
+        Scene s;
+        install_missions(s.w, nullptr);
+        const Entity p = s.player();
+        s.w.add(p, Wallet3D{100});
+        Objective o;
+        o.kind = ObjectiveKind::Signal;
+        o.signal = "delivered";
+        const Entity obj = s.w.spawn_with(o);
+        Mission m;
+        m.id = "job";
+        m.objective = obj;
+        m.actor = p;
+        m.start_on_load = 1;
+        if (k != 2) m.time_limit = 0.5f;
+        MissionReward3D rw;
+        rw.cash = 0;
+        rw.fail_fee = k == 1 ? 500 : 60;
+        const Entity mis = s.w.spawn_with(m, rw);
+        s.run(5);
+        if (k == 2) {
+            MissionSignal sig;
+            sig.name = "delivered";
+            EventAccess(s.w).push(sig);
+        }
+        s.run(60);
+        CHECK(s.w.try_get<Mission>(mis)->state == (k == 2 ? MissionState::Complete : MissionState::Failed));
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 0 ? 40 : k == 1 ? 0 : 100));
+    }
+}
+
 TEST_CASE("wanted3d: a completed mission pays its actor the MissionReward3D (M-MISSIONPAY)") {
     for (u32 k = 0; k < 3; ++k) {  // k 0: completes and pays; k 1: no wallet; k 2: fails, pays nothing
         Scene s;

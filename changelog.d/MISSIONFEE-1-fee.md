@@ -1,0 +1,1 @@
+- Kit (M-MISSIONFEE 1): `MissionReward3D.fail_fee` takes cash from the actor when a mission fails. Record: `docs/milestones/M-MISSIONFEE.md`.

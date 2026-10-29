@@ -17130,8 +17130,13 @@
      "regen_delay": 5
     },
     "Wanted3D": {},
+    "Respawn3D": {
+     "delay": 3,
+     "fine_busted": 100,
+     "fine_wasted": 200
+    },
     "Wallet3D": {
-     "cash": 0
+     "cash": 500
     },
     "StreamingFocus": {},
     "UiScreen": {
@@ -17872,6 +17877,992 @@
      "spawn_max": 90,
      "despawn_radius": 130,
      "seed": 11
+    }
+   }
+  },
+  {
+   "id": 715,
+   "name": "Police car 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      30.0,
+      0.9,
+      12.0
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 2,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 1,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 600
+    }
+   }
+  },
+  {
+   "id": 716,
+   "name": "Police car 1 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$714"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 717,
+   "name": "Police car 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      0.9,
+      -12.0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 2,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 1,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 600
+    }
+   }
+  },
+  {
+   "id": 718,
+   "name": "Police car 2 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$716"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 719,
+   "name": "Police car 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      12.0,
+      0.9,
+      -30.0
+     ],
+     "rotation": [
+      0,
+      0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 1,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 600
+    }
+   }
+  },
+  {
+   "id": 720,
+   "name": "Police car 3 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$718"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 721,
+   "name": "Police car 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -12.0,
+      0.9,
+      30.0
+     ],
+     "rotation": [
+      0,
+      -0.70711,
+      0,
+      0.70711
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 1,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 600
+    }
+   }
+  },
+  {
+   "id": 722,
+   "name": "Police car 4 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$720"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 723,
+   "name": "Roadblock 1 car 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -210.0,
+      0.9,
+      -3.6
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000,
+     "handbrake": 1
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 0,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 0
+    }
+   }
+  },
+  {
+   "id": 724,
+   "name": "Roadblock 1 car 1 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$722"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 725,
+   "name": "Roadblock 1 car 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -210.0,
+      0.9,
+      3.6
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000,
+     "handbrake": 1
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 0,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 0
+    }
+   }
+  },
+  {
+   "id": 726,
+   "name": "Roadblock 1 car 2 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$724"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 727,
+   "name": "Roadblock 1 officer 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -207.0,
+      0.95,
+      -4.0
+     ]
+    },
+    "CharacterController3D": {
+     "radius": 0.3,
+     "half_height": 0.6,
+     "speed": 4.5,
+     "layer": 2,
+     "mask": 65535
+    },
+    "Health3D": {
+     "max": 80,
+     "team": 2,
+     "destroy_on_death": 1,
+     "linger": 4
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 3,
+     "drive_nav": 0,
+     "sight_range": 70,
+     "attack_range": 45,
+     "search_time": 6,
+     "arrest_range": 0
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "damage": 8,
+     "range": 70,
+     "rate": 2,
+     "spread_deg": 3,
+     "magazine": 0
+    }
+   }
+  },
+  {
+   "id": 728,
+   "name": "Roadblock 1 officer 1 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$726"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    }
+   }
+  },
+  {
+   "id": 729,
+   "name": "Roadblock 1 officer 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -207.0,
+      0.95,
+      4.0
+     ]
+    },
+    "CharacterController3D": {
+     "radius": 0.3,
+     "half_height": 0.6,
+     "speed": 4.5,
+     "layer": 2,
+     "mask": 65535
+    },
+    "Health3D": {
+     "max": 80,
+     "team": 2,
+     "destroy_on_death": 1,
+     "linger": 4
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 3,
+     "drive_nav": 0,
+     "sight_range": 70,
+     "attack_range": 45,
+     "search_time": 6,
+     "arrest_range": 0
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "damage": 8,
+     "range": 70,
+     "rate": 2,
+     "spread_deg": 3,
+     "magazine": 0
+    }
+   }
+  },
+  {
+   "id": 730,
+   "name": "Roadblock 1 officer 2 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$728"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    }
+   }
+  },
+  {
+   "id": 731,
+   "name": "Roadblock 2 car 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      210.0,
+      0.9,
+      -3.6
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000,
+     "handbrake": 1
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 0,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 0
+    }
+   }
+  },
+  {
+   "id": 732,
+   "name": "Roadblock 2 car 1 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$730"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 733,
+   "name": "Roadblock 2 car 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      210.0,
+      0.9,
+      3.6
+     ]
+    },
+    "RigidBody3D": {
+     "half": [
+      0.9,
+      0.4,
+      1.5
+     ],
+     "density": 300
+    },
+    "Vehicle3D": {
+     "engine_torque": 900,
+     "self_right": 1,
+     "anti_roll": 8000,
+     "handbrake": 1
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 2,
+     "destroy_on_death": 0
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 10,
+     "drive_nav": 0,
+     "aim": 0,
+     "drive_car": 0,
+     "sight_range": 90,
+     "attack_range": 0,
+     "search_time": 15,
+     "arrest_range": 0,
+     "dispatch_range": 0
+    }
+   }
+  },
+  {
+   "id": 734,
+   "name": "Roadblock 2 car 2 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$732"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.4,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    }
+   }
+  },
+  {
+   "id": 735,
+   "name": "Roadblock 2 officer 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      207.0,
+      0.95,
+      -4.0
+     ]
+    },
+    "CharacterController3D": {
+     "radius": 0.3,
+     "half_height": 0.6,
+     "speed": 4.5,
+     "layer": 2,
+     "mask": 65535
+    },
+    "Health3D": {
+     "max": 80,
+     "team": 2,
+     "destroy_on_death": 1,
+     "linger": 4
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 3,
+     "drive_nav": 0,
+     "sight_range": 70,
+     "attack_range": 45,
+     "search_time": 6,
+     "arrest_range": 0
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "damage": 8,
+     "range": 70,
+     "rate": 2,
+     "spread_deg": 3,
+     "magazine": 0
+    }
+   }
+  },
+  {
+   "id": 736,
+   "name": "Roadblock 2 officer 1 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$734"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    }
+   }
+  },
+  {
+   "id": 737,
+   "name": "Roadblock 2 officer 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      207.0,
+      0.95,
+      4.0
+     ]
+    },
+    "CharacterController3D": {
+     "radius": 0.3,
+     "half_height": 0.6,
+     "speed": 4.5,
+     "layer": 2,
+     "mask": 65535
+    },
+    "Health3D": {
+     "max": 80,
+     "team": 2,
+     "destroy_on_death": 1,
+     "linger": 4
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 3,
+     "drive_nav": 0,
+     "sight_range": 70,
+     "attack_range": 45,
+     "search_time": 6,
+     "arrest_range": 0
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "damage": 8,
+     "range": 70,
+     "rate": 2,
+     "spread_deg": 3,
+     "magazine": 0
+    }
+   }
+  },
+  {
+   "id": 738,
+   "name": "Roadblock 2 officer 2 model",
+   "components": {
+    "ChildOf": {
+     "parent": "$736"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    }
+   }
+  },
+  {
+   "id": 739,
+   "name": "Hospital",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -150.0,
+      1.0,
+      9.0
+     ]
+    },
+    "RespawnPoint3D": {
+     "kind": "Hospital"
+    }
+   }
+  },
+  {
+   "id": 740,
+   "name": "Hospital pad",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -150.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.9,
+      0.95,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 741,
+   "name": "Police station",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      40.0,
+      1.0,
+      -9.0
+     ]
+    },
+    "RespawnPoint3D": {
+     "kind": "Station"
+    }
+   }
+  },
+  {
+   "id": 742,
+   "name": "Police station pad",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      40.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.15,
+      0.25,
+      0.7,
+      1
+     ],
+     "cast_shadows": 0
     }
    }
   }
