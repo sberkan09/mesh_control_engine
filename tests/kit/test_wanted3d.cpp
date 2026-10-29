@@ -881,6 +881,40 @@ TEST_CASE("wanted3d: a failed mission can be run again (M-MISSIONRETRY)") {
     }
 }
 
+TEST_CASE("wanted3d: a chop shop buys a stolen car from its driver (M-CHOPSHOP)") {
+    for (u32 k = 0; k < 3; ++k) {  // k 0: stolen car at the shop; k 1: a car nobody owns; k 2: the shop is far away
+        Scene s;
+        install_seats3d(s.w, nullptr);
+        const Entity p = s.player({}, 0.0f, 0.0f);
+        s.w.add(p, Rider3D{});
+        s.w.add(p, Wallet3D{10});
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        const Entity c = s.w.spawn_with(at(3.0f, 1.2f, 0.0f), b, v, VehicleSeat3D{});
+        if (k != 1) s.w.add(c, CarOwner3D{});
+        s.run(30);
+        s.w.try_get_mut<Rider3D>(p)->enter = 1;
+        s.run(4);
+        CHECK(s.w.try_get<Rider3D>(p)->seated == 1);
+        ChopShop3D shop;
+        shop.price = 250;
+        s.w.spawn_with(at(k == 2 ? 80.0f : 3.0f, 0.0f, 0.0f), shop);
+        s.run(10);
+        CHECK(s.w.alive(c) == (k != 0));
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 0 ? 260 : 10));
+        if (k == 0) {
+            s.run(10);
+            CHECK(s.w.try_get<Rider3D>(p)->seated == 0);
+        }
+    }
+}
+
 TEST_CASE("wanted3d: boarding someone's car is a crime, once per car (M-CARJACK)") {
     Wanted3D wd;
     const auto car = [](Scene& s, bool owned) {

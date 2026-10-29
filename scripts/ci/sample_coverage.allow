@@ -28,3 +28,4 @@ Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game pu
 ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 CashPickup3D | M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts it on dropped or placed cash
 MissionRetry | M-MISSIONRETRY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
+ChopShop3D | M-CHOPSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a scrapyard entity

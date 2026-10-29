@@ -15,6 +15,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/procgen.h"
+#include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 
 namespace mce::kit {
@@ -30,6 +31,7 @@ static_assert(sizeof(PaySpray3D) == 8);
 static_assert(sizeof(AmmoShop3D) == 12);
 static_assert(sizeof(HealShop3D) == 8);
 static_assert(sizeof(CashPickup3D) == 16);
+static_assert(sizeof(ChopShop3D) == 12);
 static_assert(sizeof(MissionReward3D) == 4);
 static_assert(sizeof(CarOwner3D) == 8);
 
@@ -466,6 +468,23 @@ void kit3d_healshop(Frame& f) {
     });
 }
 
+void kit3d_chopshop(Frame& f) {
+    World& w = f.world();
+    f.query<ChopShop3D, LocalTransform>().each([&](Entity se, ChopShop3D& sh, LocalTransform&) {
+        if (!sh.enabled) return;
+        const math::vec3 sp = position_of(w, se);
+        f.query<CarOwner3D, VehicleSeat3D, LocalTransform>().each([&](Entity ce, CarOwner3D& own, VehicleSeat3D& seat, LocalTransform&) {
+            if (!own.stolen || seat.driver.is_null() || !w.alive(seat.driver) || !w.try_get<Wallet3D>(seat.driver) ||
+                math::length(position_of(w, ce) - sp) > sh.radius)
+                return;
+            const Entity seller = seat.driver;
+            if (!give_cash(w, seller, sh.price)) return;
+            f.commands().destroy(ce);
+            EventAccess(w).push(CarSold3D{seller, se, ce, sh.price});
+        });
+    });
+}
+
 void kit3d_cashpickup(Frame& f) {
     World& w = f.world();
     f.query<CashPickup3D, LocalTransform>().each([&](Entity pe, CashPickup3D& cp, LocalTransform&) {
@@ -546,11 +565,12 @@ void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D, CashPickup3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D, CashPickup3D, ChopShop3D>();
     world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
     world.register_event<AmmoBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<HealBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashPickedUp3D>(Phase::FixedUpdate_Pre);
+    world.register_event<CarSold3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
@@ -563,6 +583,7 @@ void install_wanted3d(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_ammoshop", &kit3d_ammoshop, "kit3d_payspray");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_healshop", &kit3d_healshop, "kit3d_ammoshop");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_cashpickup", &kit3d_cashpickup, "kit3d_healshop");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_chopshop", &kit3d_chopshop, "kit3d_cashpickup");
 }
 
 }  // namespace mce::kit

@@ -325,6 +325,28 @@ struct CashPickedUp3D {
 };
 MCE_EVENT(CashPickedUp3D, entity, pickup, cash)
 
+// Chop shop (M-CHOPSHOP). `ChopShop3D` on a placed entity (a scrapyard): a stolen car (`CarOwner3D.stolen` 1, with a
+// VehicleSeat3D) whose driver holds a Wallet3D and that stands within `radius` is bought for `price`: the driver is paid
+// (`give_cash`), the car is destroyed (the driver steps out as for any vanished vehicle) and `CarSold3D` is pushed. Needs the
+// seats of install_seats3d. System "kit3d_chopshop" (after "kit3d_cashpickup").
+struct ChopShop3D {
+    f32 radius = 4.0f;  // m
+    i32 price = 300;
+    u8 enabled = 1;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(ChopShop3D, (radius, Save, Range{0.1f, 1000}, Help{"m: a stolen car this close is bought"}),
+              (price, Save, Range{1, 1000000}, Help{"cash paid to the driver for a stolen car"}), (enabled, Save))
+
+// A driver sold a stolen car to a ChopShop3D.
+struct CarSold3D {
+    Entity seller;
+    Entity shop;
+    Entity car;
+    i32 paid = 0;
+};
+MCE_EVENT(CarSold3D, seller, shop, car, paid)
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 

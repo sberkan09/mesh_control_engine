@@ -1022,6 +1022,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   (`level`, default 3) to a Mission entity and it fails (`MissionFailed` reason 3) once its actor's `Wanted3D` reaches that level.
 - **Retrying a failed mission (M-MISSIONRETRY).** Add `MissionRetry` (`delay`, default 3 s) to a Mission entity: `delay` seconds after
   it fails the mission goes back to Idle with its objectives Pending, so its `MissionMarker` (or `start`) runs it again.
+- **Chop shop (M-CHOPSHOP).** Put `ChopShop3D` (`radius`, `price`) on a scrapyard entity. A stolen car (`CarOwner3D.stolen` 1, with a
+  `VehicleSeat3D`) within `radius` whose driver holds a `Wallet3D` is bought: the driver is paid `price`, the car is destroyed, the
+  driver steps out and `CarSold3D` is pushed. Needs `install_seats3d` for the seats.
 - **Medic (M-HEALSHOP).** Put `HealShop3D` (`radius`, `price_per_hp`) on a clinic entity. A living player with a `Health3D` below
   its `max` and a `Wallet3D` who stands within `radius` is healed one hit point per `price_per_hp` cash, up to `max`; with
   too little cash it buys as many hit points as it can afford.
