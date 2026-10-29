@@ -61,8 +61,8 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 16a | done | | `Aurora` component in `mce/kit/aurora.h` with the six pure helpers, registered in `install_weather` after `Water`, explicit zero pad, padding test, three `engine_components.cpp` includes, `capabilities.md` row, guide 9.19n, `tests/kit/test_aurora.cpp`. The helpers wrap the time inside (like the water ones) and quantise `speed` to quarters so every rate is a whole number of cycles per 64 s; `aurora_curtain_intensity` is 0..1 and does not apply `strength` (that is `aurora_level`'s gain) but is exactly 0 when off, gated or at zero strength. |
-| 16b | planned | | |
+| 16a | done | #749 | `Aurora` component in `mce/kit/aurora.h` with the six pure helpers, registered in `install_weather` after `Water`, explicit zero pad, padding test, three `engine_components.cpp` includes, `capabilities.md` row, guide 9.19n, `tests/kit/test_aurora.cpp`. The helpers wrap the time inside (like the water ones) and quantise `speed` to quarters so every rate is a whole number of cycles per 64 s; `aurora_curtain_intensity` is 0..1 and does not apply `strength` (that is `aurora_level`'s gain) but is exactly 0 when off, gated or at zero strength. |
+| 16b | seam PR | | Carrier only (the feed PR is still to come): `render::AuroraSky` POD (explicit zeroed `pad_[3]`), `Scene3D::set_aurora()` / `aurora()`, `QualitySettings::aurora` (Low false), cvar `r.aurora`, by-value `apply_quality(q, AuroraSky)` overload, `test_aurora_quality` in `tests/render`. Data only: no shader, no `PassU` change, nothing reads it. `scene3d.h` include fan-out before the change: 144 of 890 TUs (under the 150 warning) |
 | 16c | planned | | |
 | 16d | planned | | |
 | 16e | planned | | |
