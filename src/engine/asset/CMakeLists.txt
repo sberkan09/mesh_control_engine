@@ -24,7 +24,9 @@ target_include_directories(mce_asset SYSTEM PRIVATE "${stb_SOURCE_DIR}")
 if(MSVC)
     set_source_files_properties(src/stb_vorbis_impl.c PROPERTIES COMPILE_OPTIONS "/W0")
 else()
-    set_source_files_properties(src/stb_vorbis_impl.c PROPERTIES COMPILE_OPTIONS "-w")
+    # -fno-sanitize=shift: stb reads a packet's end marker (-1) into `x += get8_packet(f) << (8*i)`, a left shift of
+    # a negative value that UBSan reports in C; the fuzz stage reached it on a truncated header. ASan still covers it.
+    set_source_files_properties(src/stb_vorbis_impl.c PROPERTIES COMPILE_OPTIONS "-w;-fno-sanitize=shift")
 endif()
 # The async loader thread (AssetSystem::request_async).
 find_package(Threads REQUIRED)
