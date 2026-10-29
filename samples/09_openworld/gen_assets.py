@@ -59,6 +59,7 @@ G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
 G_AMMO = guid("ui/ammo.mcui")
+G_ANIM = guid("anim/blocky.mcanim")
 
 GRID = 5          # junctions per side
 SPACING = 250.0   # m between junctions: 4 blocks of 250 m = 1 km
@@ -439,6 +440,22 @@ def buildings(scene, rng):
     return count
 
 
+# --- animation -----------------------------------------------------------------------------------------
+
+def anim_graph():
+    """The Blocky Characters' node clips as one locomotion blend: idle standing, walk at a stroll, sprint at a run.
+    Locomotion3D feeds `speed` from the controller, the nav agent or the crowd walker's motion."""
+    write("anim/blocky.mcanim", {"format": "mce-animgraph", "version": 2, "guid": G_ANIM, "name": "blocky", "params": ["speed"],
+                                  "start": "locomotion", "states": [{"name": "locomotion", "blend": {"param": "speed", "points": [
+                                      {"clip": "idle", "at": 0}, {"clip": "walk", "at": 1.6}, {"clip": "sprint", "at": 6.0}]}}]})
+
+
+def animate(s, root, model, **loco):
+    """The model plays the locomotion graph; the root's Locomotion3D drives it from how the root moves."""
+    s.ents[model]["components"]["Animator"] = {"graph": "guid:" + G_ANIM}
+    s.ents[root]["components"]["Locomotion3D"] = dict({"animator": s.ref(model)}, **loco)
+
+
 # --- prefabs --------------------------------------------------------------------------------------------
 
 CAR_COLORS = [(0.7, 0.1, 0.1), (0.1, 0.25, 0.6), (0.85, 0.85, 0.82), (0.12, 0.12, 0.14), (0.8, 0.6, 0.1), (0.15, 0.45, 0.25)]
@@ -495,9 +512,10 @@ def prefabs():
         # A 1.8 m kinematic capsule: the crowd stands a walker with a body on it (its origin is the capsule's centre,
         # 0.9 m above the pavement) and drives it by velocity, so the model hangs 0.9 m below.
         "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
-        "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
+        "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2},
+        "Locomotion3D": {"animator": "$1"}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                         "MeshRef": model_mesh("character-b")}}]
+                                         "MeshRef": model_mesh("character-b"), "Animator": {"graph": "guid:" + G_ANIM}}}]
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
                                           "entities": walker})
 
@@ -531,8 +549,9 @@ def scene():
         # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
-    s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                           "MeshRef": model_mesh("character-a")})
+    player_model = s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                          "MeshRef": model_mesh("character-a")})
+    animate(s, player, player_model, turn_rate=12)  # input moves the player; Locomotion3D turns it to face the way it goes
     # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
@@ -584,8 +603,9 @@ def scene():
                 "AudioSpatial": {"attenuation_id": 1},
                 "SirenAudio": {"min_level": 1, "active_db": -9},
             })
-        s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                                            "MeshRef": model_mesh("character-d")})
+        cop_model = s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                                        "MeshRef": model_mesh("character-d")})
+        animate(s, cop, cop_model)
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
     s.add("Navmesh", {"LocalTransform": tf((0, 0, 0)),
                       "NavMeshSurface3D": {"bounds_half": [260, 30, 260], "cell_size": 0.5, "cell_height": 0.25, "agent_radius": 0.4,
@@ -617,9 +637,10 @@ def scene():
                              "search_time": 6, "arrest_range": 0},
                 "Weapon3D": {"kind": "Hitscan", "damage": 8, "range": 70, "rate": 2, "spread_deg": 3, "magazine": 0},
             })
-            s.add("Roadblock %d officer %d model" % (n + 1, (k + 3) // 2),
-                  {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                   "MeshRef": model_mesh("character-d")})
+            cop_model = s.add("Roadblock %d officer %d model" % (n + 1, (k + 3) // 2),
+                              {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                               "MeshRef": model_mesh("character-d")})
+            animate(s, cop, cop_model)
     # Where a dead player wakes up (hospital, west avenue) and an arrested one (station, by the plaza), each marked by a flat pad.
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
@@ -666,6 +687,7 @@ audio_assets()
 hud()
 input_map()
 write("roads/city.mcroads", roads_doc())
+anim_graph()
 prefabs()
 entities, nb = scene()
 print("09_openworld: %d scene entities, %d buildings" % (entities, nb))

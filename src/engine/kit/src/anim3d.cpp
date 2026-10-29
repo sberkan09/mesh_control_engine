@@ -16,6 +16,7 @@
 #include "mce/asset/asset_system.h"
 #include "mce/asset/formats.h"
 #include "mce/containers/array.h"
+#include "mce/ecs/hierarchy.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/anim3d.h"
 #include "mce/kit/bodies3d.h"
@@ -30,7 +31,7 @@ namespace mce::kit {
 static_assert(sizeof(Animator) == 248);
 static_assert(sizeof(AttachToBone) == 80);
 static_assert(sizeof(IKTarget3D) == 48);
-static_assert(sizeof(Locomotion3D) == 56);
+static_assert(sizeof(Locomotion3D) == 64);
 static_assert(sizeof(AnimEvent3D) == 16);
 
 namespace {
@@ -301,7 +302,7 @@ void kit3d_locomotion(Frame& f) {
     World& w = f.world();
     asset::AssetSystem* assets = kit3d_assets(w);
     Anim3DAssets& cache = w.resource<Anim3DAssets>();
-    f.query<Locomotion3D&, const LocalTransform>().each([&](Entity e, Locomotion3D& l, const LocalTransform& t) {
+    f.query<Locomotion3D&, LocalTransform&>().each([&](Entity e, Locomotion3D& l, LocalTransform& t) {
         vec3 pos, scale;
         quat rot;
         world_pose(w, e, t, pos, rot, scale);
@@ -326,6 +327,16 @@ void kit3d_locomotion(Frame& f) {
         l.vertical_speed += (velocity.y - l.vertical_speed) * k;
         l.local_move.x += (math::dot(flat, right) - l.local_move.x) * k;
         l.local_move.y += (math::dot(flat, ahead) - l.local_move.y) * k;
+        // Facing: a root turns towards where it moves (its forward is -Z), by at most turn_rate * dt.
+        if (l.turn_rate > 0.0f && math::length(flat) > l.turn_min_speed && !w.try_get<ChildOf>(e)) {
+            const vec3 fwd = math::rotate(t.rotation, vec3{0.0f, 0.0f, -1.0f});
+            const f32 have = std::atan2(-fwd.x, -fwd.z), want = std::atan2(-flat.x, -flat.z);
+            f32 turn = want - have;
+            while (turn > math::kPi) turn -= 2.0f * math::kPi;
+            while (turn < -math::kPi) turn += 2.0f * math::kPi;
+            const f32 step = l.turn_rate * dt;
+            t.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, have + math::clamp(turn, -step, step));
+        }
 
         const Entity target = l.animator.is_null() ? e : l.animator;
         Animator* a = w.try_get_mut<Animator>(target);

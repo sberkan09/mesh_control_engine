@@ -17146,6 +17146,10 @@
     },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
+    },
+    "Locomotion3D": {
+     "animator": "$695",
+     "turn_rate": 12
     }
    }
   },
@@ -17176,6 +17180,9 @@
     },
     "MeshRef": {
      "mesh": "guid:5385e46b-690b-5f7c-bfe9-71e0a30f33b0"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -17620,6 +17627,9 @@
     "SirenAudio": {
      "min_level": 1,
      "active_db": -9
+    },
+    "Locomotion3D": {
+     "animator": "$704"
     }
    }
   },
@@ -17650,6 +17660,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -17715,6 +17728,9 @@
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
      "gain_db": -4
+    },
+    "Locomotion3D": {
+     "animator": "$706"
     }
    }
   },
@@ -17745,6 +17761,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -17825,6 +17844,9 @@
     "SirenAudio": {
      "min_level": 1,
      "active_db": -9
+    },
+    "Locomotion3D": {
+     "animator": "$708"
     }
    }
   },
@@ -17855,6 +17877,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -17920,6 +17945,9 @@
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
      "gain_db": -4
+    },
+    "Locomotion3D": {
+     "animator": "$710"
     }
    }
   },
@@ -17950,6 +17978,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -18512,6 +18543,9 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "Locomotion3D": {
+     "animator": "$727"
     }
    }
   },
@@ -18542,6 +18576,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -18585,6 +18622,9 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "Locomotion3D": {
+     "animator": "$729"
     }
    }
   },
@@ -18615,6 +18655,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -18806,6 +18849,9 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "Locomotion3D": {
+     "animator": "$735"
     }
    }
   },
@@ -18836,6 +18882,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
@@ -18879,6 +18928,9 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "Locomotion3D": {
+     "animator": "$737"
     }
    }
   },
@@ -18909,6 +18961,9 @@
     },
     "MeshRef": {
      "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    },
+    "Animator": {
+     "graph": "guid:05379b4f-f67c-5073-89c2-a7872731f419"
     }
    }
   },
