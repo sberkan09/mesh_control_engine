@@ -212,12 +212,15 @@ struct CashChanged3D {
 MCE_EVENT(CashChanged3D, entity, delta, cash)
 
 // Mission pay (M-MISSIONPAY). `MissionReward3D` on a Mission entity (missions.h): when the mission completes, its
-// actor's Wallet3D is credited `cash` (nothing when the actor has no wallet, or the mission fails). Needs
-// install_wanted3d for the component to exist.
+// actor's Wallet3D is credited `cash` (nothing when the actor has no wallet). When the mission fails (any MissionFailed
+// reason) `fail_fee` is taken from the wallet, never below zero (M-MISSIONFEE). Needs install_wanted3d for the component
+// to exist.
 struct MissionReward3D {
     i32 cash = 100;
+    i32 fail_fee = 0;
 };
-MCE_COMPONENT(MissionReward3D, (cash, Range{0, 1000000}, Help{"cash the mission's actor is paid when it completes"}))
+MCE_COMPONENT(MissionReward3D, (cash, Range{0, 1000000}, Help{"cash the mission's actor is paid when it completes"}),
+              (fail_fee, Range{0, 1000000}, Help{"cash taken from the actor's wallet when the mission fails"}))
 
 // Car theft (M-CARJACK). `CarOwner3D` on a vehicle (one with a VehicleSeat3D, seats3d.h) that belongs to someone: the
 // first time a rider with a Wanted3D boards it, `report_crime` adds `heat` to that rider and `stolen` is set, so the same
