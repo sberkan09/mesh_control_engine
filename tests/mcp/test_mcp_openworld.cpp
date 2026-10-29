@@ -21,7 +21,7 @@ cook::JsonValue comps(const Client::Tool& run, u32 i) { return entity_at(run, i)
 double count(const Client::Tool& run) { return run.v().get("inspect").get("count").as_number(); }
 
 std::string drive_input() {
-    return "1-100 Move=-1,0\\n110 Interact\\n130-330 Move=0,1\\n340-470 TriggerL\\n480 Interact";
+    return "1-100 Move=0,1\\n110 Interact\\n130-330 Move=0,1\\n340-470 TriggerL\\n480 Interact";
 }
 
 }  // namespace
@@ -56,15 +56,14 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(drove.v().get("log").get("errors").as_number() == 0);
     CHECK(comps(drove, 0).get("Rider3D").get("seated").as_number() == 0);  // out again
     CHECK(comps(drove, 0).get("LocalTransform").get("position").at(0).as_number() < -85.0);  // the car took them west
-    // The car starts at x = -72 and drives along the sidewalk side of the avenue, where crowd walkers are. A walker is a solid
-    // kinematic capsule, so one in the way knocks the car aside and stops the drive early (measured: with the crowd off the car
-    // reaches x = -122, with the crowd on it ends anywhere between -92 and -105 depending on the walkers' spawn). So the check
-    // is "moved well west", not a fixed end point.
+    // The car starts at x = -72 on the avenue's sidewalk and drives west along it, where crowd walkers are. A walker turns
+    // round at a car in its way, but a car that drives into one meets a solid kinematic capsule, which can knock the car
+    // aside and stop the drive early. So the check is "moved well west", not a fixed end point.
 
     // A fight: the player stands 14 m from a police officer on the plaza with the camera level and fires. The officer
     // dies, the wanted level rises, and the others see the player and pursue or attack.
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[20.263,0.95,22]})");
-    c.ok("component_set", R"({"entity":"Camera","component":"CameraFollow3D","value":{"pitch":0.0,"min_pitch":0.0,"offset":[0,0.05,0]}})");
+    c.ok("component_set", R"({"entity":"Camera","component":"CameraFollow3D","value":{"yaw":0.0,"pitch":0.0,"min_pitch":0.0,"offset":[0,0.05,0]}})");
     c.ok("scene_save");
     // M-PEDFLEE: the shots send the walkers near the plaza running; with no shots nobody runs.
     const auto fleeing = [&](const char* input) {

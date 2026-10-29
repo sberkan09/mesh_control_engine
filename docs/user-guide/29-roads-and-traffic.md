@@ -163,11 +163,20 @@ pavements of a `RoadNetwork3D` around a focus:
 | `cross` | 0-1: how willing they are to cross a road instead of going round the corner |
 | `seed` | the random stream; the same seed replays the same crowd |
 
-A pedestrian has no behaviour tree and no physics body: it is a few numbers (which pavement, how far along, which
+A pedestrian has no behaviour tree and needs no physics body: it is a few numbers (which pavement, how far along, which
 way) that one system advances, so hundreds cost less than a handful of AI characters. It writes the entity's
 `LocalTransform` (on the network's plane, facing the way it walks) and two fields an animation graph can read:
 `pace` (m/s it moves at now, 0 while waiting) and `mode` (`Walk`, `Wait` at a kerb, `Cross`). Give the prefab a
 walk/idle graph keyed on `pace`.
+
+**A body for hits.** The prefab may add a kinematic `RigidBody3D` (a capsule, sphere or box) so that cars collide with
+walkers and shots hit them. The crowd then stands the walker on it: the entity's origin is the body's centre (a capsule's
+`radius + half_height` above the pavement), so hang the model that far below (a 1.8 m capsule, model at y = -0.9). The
+crowd drives the body by velocity, aimed at each step's pose so it arrives by the walker's next step: contacts see a real
+walking speed, and mid and far walkers, which step every 4th or 16th tick, glide between steps instead of jumping. A
+walker turns round when a dynamic body (a parked car, a crate) stands where it is going, instead of shoving it aside; one
+that starts inside such a body walks out. Dead walkers' bodies stop, despawned walkers' bodies go, and a walker moved from
+outside (a script, the editor, a loaded save) is put back on its pavement, body and all.
 
 **At junctions** a pedestrian goes round the corner, across a road or turns back, chosen by its own random stream. A
 crossing waits at the kerb until every road it crosses has no straight-on traffic with a green or amber light and
@@ -199,7 +208,9 @@ scene (`assets/scenes/city.mcscene`, written by `gen_assets.py`). Its pieces, as
   capsule and `Health3D` team 3, so the police can see a shot walker as a crime).
 - **The player** is a `CharacterController3D` with `Rider3D` (E gets in the parked car and out again), `Health3D` team 1 and
   `Wanted3D`. The camera is an orbit `CameraFollow3D` that also carries the `Weapon3D` (owner = the player): shots leave
-  along the view, and the camera follows the car while the player sits in it.
+  along the view, and the camera follows the car while the player sits in it. It starts at `yaw` π/2, looking west along
+  the avenue: pick the start yaw so the first frame shows the road. At yaw 0 this camera hung over the avenue looking into
+  a block, and the traffic and crowd, which spawn 45 m and 25 m away, were never in frame.
 - **Police** are four `Police3D` characters with a `NavAgent3D` and a `Weapon3D` on the plaza, on a `NavMeshSurface3D`
   baked at start-up around the middle blocks (cell 0.5 m). They stay idle until a witnessed crime gives the player a
   wanted level; then they pursue, and from level 2 shoot.

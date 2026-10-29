@@ -446,6 +446,8 @@ def prefabs():
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
         "LocalTransform": {}, "Pedestrian3D": {},
+        # A 1.8 m kinematic capsule: the crowd stands a walker with a body on it (its origin is the capsule's centre,
+        # 0.9 m above the pavement) and drives it by velocity, so the model hangs 0.9 m below.
         "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
         "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
@@ -482,11 +484,13 @@ def scene():
     })
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a")})
-    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view.
+    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view. It starts looking west along
+    # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
+    # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
-        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "pitch": 0.3, "min_pitch": -0.3,
+        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
         "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
                      "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
@@ -494,7 +498,7 @@ def scene():
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
 
-    # Parked cars on the avenue's sidewalk: take the first one.
+    # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
         comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
