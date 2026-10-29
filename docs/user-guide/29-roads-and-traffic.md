@@ -169,11 +169,14 @@ way) that one system advances, so hundreds cost less than a handful of AI charac
 `pace` (m/s it moves at now, 0 while waiting) and `mode` (`Walk`, `Wait` at a kerb, `Cross`). Give the prefab a
 walk/idle graph keyed on `pace`.
 
-**A body for hits.** The prefab may add a kinematic `RigidBody3D` (a capsule) so that cars collide with walkers and shots
-hit them; the crowd moves that body along with the walker every step. The walker's origin is at its feet on the
-pavement, so centre the capsule there and make it tall enough to reach the head (`half_height` + `radius` about the
-character's height); the half below the ground touches nothing, as kinematic bodies ignore the static floor. Put the
-model at offset 0 too, not lifted half a capsule.
+**A body for hits.** The prefab may add a kinematic `RigidBody3D` (a capsule, sphere or box) so that cars collide with
+walkers and shots hit them. The crowd then stands the walker on it: the entity's origin is the body's centre (a capsule's
+`radius + half_height` above the pavement), so hang the model that far below (a 1.8 m capsule, model at y = -0.9). The
+crowd drives the body by velocity, aimed at each step's pose so it arrives by the walker's next step: contacts see a real
+walking speed, and mid and far walkers, which step every 4th or 16th tick, glide between steps instead of jumping. A
+walker turns round when a dynamic body (a parked car, a crate) stands where it is going, instead of shoving it aside; one
+that starts inside such a body walks out. Dead walkers' bodies stop, despawned walkers' bodies go, and a walker moved from
+outside (a script, the editor, a loaded save) is put back on its pavement, body and all.
 
 **At junctions** a pedestrian goes round the corner, across a road or turns back, chosen by its own random stream. A
 crossing waits at the kerb until every road it crosses has no straight-on traffic with a green or amber light and

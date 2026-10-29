@@ -48,16 +48,20 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   `use_input` characters), the camera stays behind a fixed orbit, the gun is on the camera.
 - **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
-- ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213).** The cars did spawn and drive (24
-  alive within 10 s); three things hid them. (1) The orbit camera started at yaw 0, hung over the avenue and looked north
-  into a block, so no road was ever in frame; it now starts at yaw π/2, looking west along the avenue. (2) The walkers carry
-  a kinematic capsule, and `kit3d_bodies` syncs bodies before `kit_crowd` steps, so the physics write-back put each walker
-  back on its spawn point every tick (its `s` ran on, its transform did not): the crowd now moves the body with the walker.
-  (3) The walker prefab sat half under the pavement (origin at the feet, model lifted -0.9); the model is at 0 and the
-  capsule reaches the head. Also: `mce_player`'s headless line "714 entities" counts the scene's own entities, not the
-  spawned ones, so it never showed the traffic either. The parked cars moved off the walkers' line (a kinematic walker shoves
-  a parked car). Verified on captures at ticks 300 and 700 from the start position (cars on both carriageways, walkers on
-  both sidewalks).
+- ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213, PR #859).** The cars did spawn and
+  drive (24 alive within 10 s); two things hid them and the crowd. (1) The orbit camera started at yaw 0, hung over the
+  avenue and looked north into a block, so no road was ever in frame; it now starts at yaw π/2, looking west along the
+  avenue. (2) The walkers carry a kinematic capsule, and `kit3d_bodies` syncs bodies before `kit_crowd` steps, so the
+  physics write-back put each walker back on its spawn point every tick (its `s` ran on, its transform did not), half
+  under the pavement. The crowd now runs explicitly after `kit3d_bodies`, stands a walker with a body on its capsule and
+  drives the body by velocity (far walkers glide between steps); a walker turns round at a parked car instead of shoving
+  it. Also: `mce_player`'s headless line "714 entities" counts the scene's own entities, not the spawned ones, so it never
+  showed the traffic either (not changed). Verified on captures at ticks 300 and 700 from the start position and during
+  the drive script (cars on both carriageways, walkers moving on both sidewalks).
+- **The camera does not turn with the car** (open, found in SBA-213). `CameraFollow3D` keeps the yaw the player gave it;
+  while driving, the car turns under a fixed camera, so a turn off the avenue leaves the road out of frame. Needs a chase
+  option on `CameraFollow3D` (ease the yaw behind the target's heading while it moves, Look input overriding it for a
+  moment), used by the sample while `Rider3D` is seated. A separate step.
 
 ## C. Gameplay depth
 

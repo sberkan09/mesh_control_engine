@@ -428,11 +428,11 @@ def prefabs():
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
         "LocalTransform": {}, "Pedestrian3D": {},
-        # The crowd puts a walker's origin at its feet on the pavement, so the capsule is centred there and tall enough to
-        # reach the head (the half under the ground hits nothing: kinematic bodies ignore the static floor).
-        "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 1.45},
+        # A 1.8 m kinematic capsule: the crowd stands a walker with a body on it (its origin is the capsule's centre,
+        # 0.9 m above the pavement) and drives it by velocity, so the model hangs 0.9 m below.
+        "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
         "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
-        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, 0, 0), (CHAR_SCALE,) * 3, math.pi),
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                          "MeshRef": model_mesh("character-b")}}]
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
                                           "entities": walker})
@@ -476,9 +476,8 @@ def scene():
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
 
-    # Parked cars just off the avenue's sidewalk (the walkers' line is the sidewalk's middle, and a kinematic walker shoves a
-    # parked car aside): take the first one.
-    for n, (x, z, yaw) in enumerate(((-72.0, -10.2, math.pi / 2), (-110.0, 10.2, -math.pi / 2), (120.0, 10.2, -math.pi / 2))):
+    # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
+    for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
         comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
         car = s.add("Parked car %d" % (n + 1), comps)

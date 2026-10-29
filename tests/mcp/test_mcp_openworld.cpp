@@ -56,9 +56,9 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(drove.v().get("log").get("errors").as_number() == 0);
     CHECK(comps(drove, 0).get("Rider3D").get("seated").as_number() == 0);  // out again
     CHECK(comps(drove, 0).get("LocalTransform").get("position").at(0).as_number() < -85.0);  // the car took them west
-    // The car starts at x = -72, just off the avenue's sidewalk, and drives west beside it, where crowd walkers are. A walker is
-    // a solid kinematic capsule, so one in the way can knock the car aside and stop the drive early. So the check is "moved
-    // well west", not a fixed end point.
+    // The car starts at x = -72 on the avenue's sidewalk and drives west along it, where crowd walkers are. A walker turns
+    // round at a car in its way, but a car that drives into one meets a solid kinematic capsule, which can knock the car
+    // aside and stop the drive early. So the check is "moved well west", not a fixed end point.
 
     // A fight: the player stands 14 m from a police officer on the plaza with the camera level and fires. The officer
     // dies, the wanted level rises, and the others see the player and pursue or attack.

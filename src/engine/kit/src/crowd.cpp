@@ -553,6 +553,91 @@ struct Info {
 
 u32 lod_period(u32 lod) { return lod == 0 ? 1u : lod == 1 ? 4u : 16u; }
 
+// ---- walkers with a body ----------------------------------------------------------------------------------
+// A prefab may give a walker a kinematic RigidBody3D so cars and shots hit it. Its origin is then the body's centre,
+// `lift` above the pavement (the model sits at -lift), and the crowd drives the body by velocity: each step aims it at
+// the step's pose so it gets there by the walker's next step (one tick near, 4 or 16 ticks farther out). The physics
+// write-back then writes the pose, so between far steps the walker glides instead of jumping, contacts see a real
+// velocity, and kit3d_bodies (which runs first) leaves the body alone.
+
+constexpr f32 kBodySnap = 3.0f;  // m: a pose farther than this from the body (a teleport, a load) is jumped to
+
+f32 body_lift(const RigidBody3D& b) {
+    switch (b.shape) {
+        case BodyShape3D::Capsule: return b.radius + b.half_height;
+        case BodyShape3D::Sphere: return b.radius;
+        case BodyShape3D::Box: return b.half.y;
+        default: return 0.0f;
+    }
+}
+
+f32 yaw_of(math::quat q) {
+    const vec3 fwd = math::rotate(q, vec3{0.0f, 0.0f, -1.0f});
+    return std::atan2(-fwd.x, -fwd.z);
+}
+
+// A dynamic body where the walker's capsule is going and not where it stands (so one that starts inside a car
+// can walk out of it). Static colliders (the floor) and kinematic bodies (other walkers) do not count.
+bool path_blocked(const Physics3D& phys, Entity e, const RigidBody3D& b, f32 lift, vec3 from, vec3 to) {
+    const f32 r = (b.shape == BodyShape3D::Box ? math::max(b.half.x, b.half.z) : b.radius) + 0.05f;
+    const vec3 half{r, math::max(lift - 0.1f, 0.05f), r};
+    const auto dynamic_at = [&](vec3 at) {
+        Entity hits[8];
+        physics::QueryFilter3D filter;
+        filter.exclude = Span<const Entity>(&e, 1);
+        const u32 n = phys.world.overlap_box(at, half, math::quat::identity(), Span<Entity>(hits, 8), filter);
+        for (u32 i = 0; i < n && i < 8; ++i) {
+            physics::BodyState3D s;
+            if (phys.world.body_state(hits[i], s) && s.type == physics::BodyType3D::Dynamic) return true;
+        }
+        return false;
+    };
+    return dynamic_at(to) && !dynamic_at(from);
+}
+
+struct WalkerBody {
+    Physics3D* phys;
+    Entity e;
+    RigidBody3D* rb = nullptr;  // a kinematic body, on a walker with the body kit installed
+    f32 lift = 0.0f;
+    bool driven = false;        // its physics body exists (built by kit3d_bodies from the tick after the spawn)
+    bool keep = false;          // it moves on this tick at the velocity set by its last step
+
+    WalkerBody(Physics3D* p, World& w, Entity entity) : phys(p), e(entity) {
+        RigidBody3D* b = p ? w.try_get_mut<RigidBody3D>(entity) : nullptr;
+        if (!b || b->type != BodyType3DKind::Kinematic) return;
+        rb = b;
+        lift = body_lift(*b);
+        driven = p->world.has_body(entity);
+    }
+    WalkerBody(const WalkerBody&) = delete;
+    WalkerBody& operator=(const WalkerBody&) = delete;
+    ~WalkerBody() {
+        if (!driven || keep) return;
+        rb->velocity = {};
+        phys->world.set_linear_velocity(e, {});
+        phys->world.set_angular_velocity(e, {});
+    }
+    // Aims the body at pose `t` (yaw `yaw`) to arrive in `ticks` ticks of `dt`.
+    void drive(const LocalTransform& t, f32 yaw, u32 ticks, f32 dt) {
+        physics::BodyState3D s;
+        if (!phys->world.body_state(e, s)) return;
+        const vec3 d = t.position - s.position;
+        if (math::length(d) > kBodySnap) {
+            phys->world.teleport(e, t.position, t.rotation);
+            return;  // and stops: the destructor zeroes the velocities
+        }
+        const f32 span = static_cast<f32>(ticks) * dt;
+        f32 turn = yaw - yaw_of(s.rotation);
+        while (turn > kPi) turn -= 2.0f * kPi;
+        while (turn < -kPi) turn += 2.0f * kPi;
+        rb->velocity = d * (1.0f / span);  // kit3d_bodies applies it again on the ticks it does not step
+        phys->world.set_linear_velocity(e, rb->velocity);
+        phys->world.set_angular_velocity(e, {0.0f, turn / span, 0.0f});
+        keep = true;
+    }
+};
+
 void refresh_candidates(Candidates& c, const Info& in, bool focused, const vec3& focus_local) {
     const u32 key = in.net.def->generation * 31u + in.net.def->hash;
     i32 cx = 0, cz = 0;
@@ -701,6 +786,7 @@ void kit_crowd(Frame& f) {
         } else {
             in = &loose;
         }
+        WalkerBody body(phys, w, e);  // stops the body on every way out below that does not move it
         // A pedestrian whose Health3D is dead stops where it fell and is removed after kPedestrianCorpseSeconds; it does not count
         // toward the crowd's population, so the spawner refills the street. A revived one walks again.
         const Health3D* hp = w.try_get<Health3D>(e);
@@ -795,7 +881,10 @@ void kit_crowd(Frame& f) {
         if (p.mode == PedestrianMode::Wait) ++st.stats.waiting;
         if (p.mode == PedestrianMode::Cross) ++st.stats.crossing;
         if (!in->has_net || !in->graph || in->graph->edges.empty()) return;
-        if ((f.tick + e.index) % lod_period(lod) != 0) return;
+        if ((f.tick + e.index) % lod_period(lod) != 0) {
+            body.keep = true;  // still on its way to the pose of its last step
+            return;
+        }
         Crowd c;
         c.params = &in->params;
         c.net = &in->net;
@@ -814,13 +903,30 @@ void kit_crowd(Frame& f) {
                 }
             }
         }
+        const Pedestrian3D before = p;
+        const LocalTransform was = t;
         step_pedestrian(p, t, c, p.lag);
-        // A walker with a body (a kinematic capsule, so cars and shots hit it): the body goes with it now. kit3d_bodies
-        // already synced this tick's bodies, so without this the write-back after the step would put the old pose back
-        // and the walker would never leave its spawn point.
-        if (phys && w.try_get<RigidBody3D>(e) && phys->world.has_body(e)) phys->world.teleport(e, t.position, t.rotation);
         if (scared) p.mode = PedestrianMode::Flee;
         p.lag = 0.0f;
+        if (body.rb) {
+            t.position.y += body.lift;
+            if (body.driven) {
+                if (path_blocked(*phys, e, *body.rb, body.lift, was.position, t.position)) {
+                    // Something solid (a parked car, a crate) stands where it was going: it turns round instead of
+                    // shoving it aside, as a kinematic body would.
+                    p = before;
+                    p.pace = 0.0f;
+                    p.lag = 0.0f;
+                    if (p.target == kNone) {
+                        p.dir ^= 1u;
+                        p.yaw += p.yaw > 0.0f ? -kPi : kPi;
+                    }
+                    t = was;
+                } else {
+                    body.drive(t, p.yaw, lod_period(lod), f.dt);
+                }
+            }
+        }
         ++st.stats.stepped;
     });
 
@@ -891,7 +997,13 @@ void kit_crowd(Frame& f) {
                 ecs::PrefabOverride::of("LocalTransform.rotation", rot)};
             ecs::SpawnParams sp_params;
             sp_params.overrides = Span<const ecs::PrefabOverride>(overrides, 9);
-            if (Result<u32> r = ecs::instantiate(w, assets->resolve(handle), sp_params); !r) {
+            Array<Entity> made;
+            if (Result<u32> r = ecs::instantiate(w, assets->resolve(handle), sp_params, &made); r && !made.empty()) {
+                // A walker with a body stands on it: its origin is the body's centre (see WalkerBody).
+                const RigidBody3D* b = w.try_get<RigidBody3D>(made[0]);
+                LocalTransform* lt = w.try_get_mut<LocalTransform>(made[0]);
+                if (b && lt && b->type == BodyType3DKind::Kinematic) lt->position.y += body_lift(*b);
+            } else if (!r) {
                 FixedString<512> why;
                 format_error(r.error(), why);
                 MCE_LOG_WARN("kit: CrowdSpawner3D prefab {} failed: {} (it needs a LocalTransform and a Pedestrian3D)",
@@ -921,7 +1033,9 @@ void install_crowd(World& world, asset::AssetSystem* assets) {
     CrowdState st;
     st.assets = assets;
     world.set_resource(static_cast<CrowdState&&>(st));
-    world.add_system(Phase::FixedUpdate_Pre, "kit_crowd", &kit_crowd);
+    install_bodies3d(world, assets);
+    // After the body sync: the crowd drives walkers' kinematic bodies by velocity for this tick's step (WalkerBody).
+    world.add_system(Phase::FixedUpdate_Pre, "kit_crowd", &kit_crowd, "kit3d_bodies");
 }
 
 }  // namespace mce::kit
