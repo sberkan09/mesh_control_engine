@@ -247,8 +247,10 @@ def roads_doc():
 AUDIO_FILES = {"engine_loop": ("wav", {}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
+HITS = ["hit_%d" % i for i in range(1, 6)]
+CRASHES = ["crash_%d" % i for i in range(1, 4)]
 AUDIO_EXT = {name: ext for name, (ext, _) in AUDIO_FILES.items()}
-AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS})
+AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS + HITS + CRASHES})
 
 
 def audio_guid(name):
@@ -257,16 +259,22 @@ def audio_guid(name):
 
 G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
+G_HITS = guid("audio/hits.mcsound")
+G_CRASHES = guid("audio/crashes.mcsound")
 
 
 def audio_assets():
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
-    for name in FOOTSTEPS:
+    for name in FOOTSTEPS + HITS + CRASHES:
         write("audio/%s.ogg.mceasset" % name, {"guid": audio_guid(name), "importer": "ogg", "importer_version": 2, "settings": {}})
     write("audio/footsteps.mcsound", {"format": "mce-sound", "version": 1, "guid": G_FOOTSTEPS,
                                       "clips": ["guid:" + audio_guid(n) for n in FOOTSTEPS], "pick": "random", "no_repeat": True,
                                       "pitch": [0.92, 1.08], "gain_db": [-3, 0]})
+    write("audio/hits.mcsound", {"format": "mce-sound", "version": 1, "guid": G_HITS, "clips": ["guid:" + audio_guid(n) for n in HITS],
+                                 "pick": "random", "no_repeat": True, "pitch": [0.9, 1.1], "gain_db": [-3, 0]})
+    write("audio/crashes.mcsound", {"format": "mce-sound", "version": 1, "guid": G_CRASHES, "clips": ["guid:" + audio_guid(n) for n in CRASHES],
+                                    "pick": "random", "no_repeat": True, "pitch": [0.85, 1.05], "gain_db": [-2, 0]})
     write("audio/shots.mcsound", {"format": "mce-sound", "version": 1, "guid": G_SHOTS,
                                   "clips": ["guid:" + audio_guid("shot_1"), "guid:" + audio_guid("shot_2")], "pick": "random",
                                   "no_repeat": True, "pitch": [0.96, 1.04], "gain_db": [-2, 0]})
@@ -457,6 +465,8 @@ def car_entities(model, traffic):
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
     root.update(engine_audio(traffic))
+    root["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
+    root["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -10, "loud_db": 0}
     if traffic:
         root["TrafficDriver3D"] = {}
         root["VehicleSeat3D"]["locked"] = 1
@@ -481,6 +491,13 @@ def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
         "Health3D": {"max": 150, "team": 2, "destroy_on_death": 0},
         "Police3D": police,
     }
+    comps["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
+    comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
+    if not block:   # the chasing cars carry the siren on the root: the audio bridge follows an entity's own LocalTransform, a child's is
+                    # relative. It sounds from the wanted level the car answers; its loud wail stands in for the engine
+        comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                      "gain_db": -60, "priority": 170},
+                      "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
     car = scene.add(name, comps)
     scene.add(name + " model", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
                                 "MeshRef": model_mesh("police")})
@@ -540,7 +557,7 @@ def scene():
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
         "AudioListener": {},
-        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -2},
+        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
         "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
@@ -575,15 +592,8 @@ def scene():
             "MapMarker": {"color": [1.0, 0.2, 0.2, 1], "layer": 0, "always_visible": 1, "label": "Police"},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
             "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.7, "gain_db": -6},
-            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -4},
+            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -4, "hit_gain_db": -8},
         })
-        if n % 2 == 0:   # two of the four carry a siren; it sounds from the wanted level the unit answers (A9 gives it a car)
-            s.ents[cop]["components"].update({
-                "AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True, "gain_db": -60,
-                                "priority": 170},
-                "AudioSpatial": {"attenuation_id": 1},
-                "SirenAudio": {"min_level": 1, "active_db": -9},
-            })
         s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                             "MeshRef": model_mesh("character-d")})
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.

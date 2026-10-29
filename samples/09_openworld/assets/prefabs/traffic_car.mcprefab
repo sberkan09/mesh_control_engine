@@ -14,7 +14,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -52,6 +54,13 @@
      "idle_db": -14,
      "top_db": -6,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "TrafficDriver3D": {}
    }

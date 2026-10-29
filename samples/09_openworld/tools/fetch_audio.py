@@ -17,6 +17,7 @@ import sys
 import urllib.parse
 import urllib.request
 import wave
+import zipfile
 
 import numpy as np
 
@@ -38,6 +39,12 @@ SOURCES = {
     "05-footstep.ogg": "f1b4893dd3cebe23438567a0dcaf047848a52b594e7eb03e5c212d99e83d2298",
     "06-footstep.ogg": "39147cc1b98abb4b5378ad07b15d50d18f2aa0f0fd2f5514f078c1e574d14773",
 }
+# One zip pack (rubberduck, "100 CC0 wood and metal SFX"): the members used here, copied unmodified
+ZIP_NAME = "100-CC0-wood-metal-SFX.zip"
+ZIP_SHA256 = "be6eba63b03409ac0c77787a956b1503a7c186403d04aef9725c52644a4b7878"
+ZIP_MEMBERS = {"metal_hit_01.ogg": "hit_1.ogg", "metal_hit_02.ogg": "hit_2.ogg", "metal_hit_03.ogg": "hit_3.ogg",
+               "metal_hit_04.ogg": "hit_4.ogg", "metal_hit_05.ogg": "hit_5.ogg", "metal_slam_01.ogg": "crash_1.ogg",
+               "metal_falling_01.ogg": "crash_2.ogg", "metal_falling_02.ogg": "crash_3.ogg"}
 RATE = 44100
 
 
@@ -49,7 +56,7 @@ def sha256(path):
 
 
 def fetch(cache):
-    for name, want in SOURCES.items():
+    for name, want in list(SOURCES.items()) + [(ZIP_NAME, ZIP_SHA256)]:
         path = os.path.join(cache, name)
         if not (os.path.isfile(path) and sha256(path) == want):
             req = urllib.request.Request(BASE + urllib.parse.quote(name), headers={"User-Agent": "mce-content/1"})
@@ -125,6 +132,10 @@ def main():
     shutil.copyfile(os.path.join(cache, "loop_0.wav"), os.path.join(OUT, "engine_loop.wav"))
     for n in range(1, 7):
         shutil.copyfile(os.path.join(cache, "0%d-footstep.ogg" % n), os.path.join(OUT, "footstep_%d.ogg" % n))
+    with zipfile.ZipFile(os.path.join(cache, ZIP_NAME)) as z:
+        for member, out in ZIP_MEMBERS.items():
+            with open(os.path.join(OUT, out), "wb") as f:
+                f.write(z.read(member))
     write_wav("shot_1.wav", shot(os.path.join(cache, "22 Pistol.wav"), 0.9))
     write_wav("shot_2.wav", shot(os.path.join(cache, "22 Magnum.wav"), 1.1))
     write_wav("siren.wav", siren(os.path.join(cache, "siren.mp3"), 8))
