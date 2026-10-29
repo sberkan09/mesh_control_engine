@@ -104,6 +104,7 @@
    "name": "Water",
    "components": {
     "Water": {},
+    "Aurora": {},
     "LocalTransform": {}
    }
   },
