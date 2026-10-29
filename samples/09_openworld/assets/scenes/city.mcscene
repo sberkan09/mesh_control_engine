@@ -18429,15 +18429,22 @@
   },
   {
    "id": 723,
-   "name": "Roadblock 1 car 1",
+   "name": "Roadblock 1",
    "components": {
     "LocalTransform": {
      "position": [
       -210.0,
-      0.9,
-      -3.6
+      0.95,
+      0.0
+     ],
+     "rotation": [
+      0,
+      -0.70711,
+      0,
+      0.70711
      ]
     },
+<<<<<<< HEAD
     "RigidBody3D": {
      "half": [
       0.9,
@@ -18477,41 +18484,56 @@
      "full_speed": 18,
      "quiet_db": -8,
      "loud_db": 0
+=======
+    "Roadblock3D": {
+     "car": "guid:3643b620-d4a6-545e-a67d-3e419d5540ce",
+     "officer": "guid:e47ce9bf-ee7f-5199-b639-c138199de7e3",
+     "min_level": 3,
+     "cars": 2,
+     "officers": 2,
+     "car_spacing": 3.6,
+     "officer_back": -2.5,
+     "spawn_min": 45,
+     "spawn_max": 300,
+     "hold": 10
+>>>>>>> origin/master
     }
    }
   },
   {
    "id": 724,
-   "name": "Roadblock 1 car 1 model",
+   "name": "Roadblock 2",
    "components": {
-    "ChildOf": {
-     "parent": "$722"
-    },
     "LocalTransform": {
      "position": [
-      0,
-      -0.4,
-      0
+      210.0,
+      0.95,
+      0.0
      ],
      "rotation": [
       0,
-      1.0,
+      0.70711,
       0,
-      0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
+      0.70711
      ]
     },
-    "MeshRef": {
-     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    "Roadblock3D": {
+     "car": "guid:3643b620-d4a6-545e-a67d-3e419d5540ce",
+     "officer": "guid:e47ce9bf-ee7f-5199-b639-c138199de7e3",
+     "min_level": 3,
+     "cars": 2,
+     "officers": 2,
+     "car_spacing": 3.6,
+     "officer_back": -2.5,
+     "spawn_min": 45,
+     "spawn_max": 300,
+     "hold": 10
     }
    }
   },
   {
    "id": 725,
+<<<<<<< HEAD
    "name": "Roadblock 1 car 2",
    "components": {
     "LocalTransform": {
@@ -19053,6 +19075,8 @@
   },
   {
    "id": 739,
+=======
+>>>>>>> origin/master
    "name": "Hospital",
    "components": {
     "LocalTransform": {
@@ -19068,7 +19092,7 @@
    }
   },
   {
-   "id": 740,
+   "id": 726,
    "name": "Hospital pad",
    "components": {
     "LocalTransform": {
@@ -19096,7 +19120,7 @@
    }
   },
   {
-   "id": 741,
+   "id": 727,
    "name": "Police station",
    "components": {
     "LocalTransform": {
@@ -19112,7 +19136,7 @@
    }
   },
   {
-   "id": 742,
+   "id": 728,
    "name": "Police station pad",
    "components": {
     "LocalTransform": {
@@ -19140,7 +19164,7 @@
    }
   },
   {
-   "id": 743,
+   "id": 729,
    "name": "Mixer",
    "components": {
     "AudioLimiter": {
@@ -19149,7 +19173,7 @@
    }
   },
   {
-   "id": 744,
+   "id": 730,
    "name": "Pause mix",
    "components": {
     "AudioSnapshot": {
@@ -19162,7 +19186,7 @@
    }
   },
   {
-   "id": 745,
+   "id": 731,
    "name": "City ambience",
    "components": {
     "AudioSource": {

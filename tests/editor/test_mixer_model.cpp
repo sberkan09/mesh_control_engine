@@ -81,6 +81,42 @@ TEST_CASE("MixerModel: reverb units, the limiter and ducks are independent and u
     CHECK(mix.duck(AudioBus::Music, db));
 }
 
+TEST_CASE("MixerModel: clearing a reverb unit, the limiter or a duck removes only that item") {
+    EditorScene scene;
+    scene.new_scene("mix");
+    MixerModel mix(scene);
+
+    audio::AudioReverb rv;
+    rv.room_size = 0.5f;
+    REQUIRE(mix.set_reverb(0, rv));
+    REQUIRE(mix.set_reverb(1, rv));
+    REQUIRE(mix.set_limiter(audio::AudioLimiter()));
+    REQUIRE(mix.set_duck(AudioBus::Music, audio::AudioDuck()));
+    REQUIRE(mix.set_duck(AudioBus::SFX, audio::AudioDuck()));
+    CHECK(scene.doc().size() == 5);
+
+    CHECK(mix.clear_reverb(1));
+    CHECK_FALSE(mix.clear_reverb(1));  // already gone
+    audio::AudioReverb got;
+    CHECK(mix.reverb(0, got));
+    CHECK_FALSE(mix.reverb(1, got));
+
+    CHECK(mix.clear_duck(AudioBus::Music));
+    audio::AudioDuck d;
+    CHECK_FALSE(mix.duck(AudioBus::Music, d));
+    CHECK(mix.duck(AudioBus::SFX, d));
+
+    audio::AudioLimiter lim;
+    CHECK(mix.clear_limiter());
+    CHECK_FALSE(mix.clear_limiter());
+    CHECK_FALSE(mix.limiter(lim));
+    CHECK(scene.doc().size() == 2);  // reverb 0 and the SFX duck stay
+
+    // Each clear was one undo entry.
+    REQUIRE(scene.undo());
+    CHECK(mix.limiter(lim));
+}
+
 TEST_CASE("MixerModel: writes to one item merge into a single undo entry until the undo is sealed") {
     EditorScene scene;
     scene.new_scene("mix");

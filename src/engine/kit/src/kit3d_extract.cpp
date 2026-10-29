@@ -11,6 +11,7 @@
 #include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/chunk_lod3d.h"
+#include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
@@ -929,7 +930,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     }
     scene.set_fog(fog);
     scene.set_volumetrics(vol);
-    f32 cloud_cover = 0.0f;  // filled by the clouds block below, read by the night sky
+    f32 cloud_cover = 0.0f;  // filled by the clouds block below, read by the night sky and the aurora
     {  // wet surfaces (M-WETSURFACE 5c): only a scene with both a Weather and a WetSurfaces gets wet
         const Weather* weather = nullptr;
         const WetSurfaces* wetc = nullptr;
@@ -1034,6 +1035,10 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         scene.set_clouds(shown);
         cloud_cover = shown.coverage;
     }
+    const f32 dark = [&] {  // 0 by day, 1 at night: shared by the night sky and the aurora
+        const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);
+        return 1.0f - t * t * (3.0f - 2.0f * t);
+    }();
     {  // night sky (M-NIGHTSKY 14e): moon, stars and their fade from the Moon, the clock, the clouds and the fog
         render::NightSky night;  // density and intensity 0: off
         if (moon && moon->enabled && env.time_of_day >= 0.0f && env.sky_texture.guid == asset::Guid{}) {
@@ -1048,14 +1053,52 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             night.star_twinkle = moon->star_twinkle;
             // the value set_time() gets later in this extract (scene.time() would still be last frame's)
             night.star_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
-            const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);
-            const f32 dark = 1.0f - t * t * (3.0f - 2.0f * t);  // 0 by day, 1 at night
             const f32 clear = 1.0f - clamp(cloud_cover, 0.0f, 1.0f);
             const f32 f = clamp(fog.density / 0.05f, 0.0f, 1.0f);  // fog is the local copy (weather and mist included)
             const f32 unfogged = 1.0f - f * f * (3.0f - 2.0f * f);
             night.night_fade = dark * clear * unfogged;
         }
         scene.set_night_sky(render::apply_quality(quality_, night));
+    }
+    {  // aurora (M-AURORA 16b): the first Aurora; without one, when disabled, with a closed gate or no night (level 0),
+       // under an equirect sky texture or with non-finite inputs the carrier is the default one (level 0, off), written
+       // every frame so a stale one never survives. Only the carrier is written.
+        render::AuroraSky shown;  // level 0 by default (off)
+        const Aurora* aurora = nullptr;
+        world.query<const Aurora&>().each([&](const Aurora& c) {
+            if (!aurora) aurora = &c;
+        });
+        if (aurora && aurora->enabled && env.sky_texture.guid == asset::Guid{} && std::isfinite(aurora->azimuth_deg) &&
+            std::isfinite(aurora->width_deg)) {
+            // no clock (time_of_day < 0): no night fade, so night_only 1 shows nothing and night_only 0 shows it
+            const f32 night_fade = env.time_of_day >= 0.0f ? dark : 0.0f;
+            const f32 level = aurora_level(*aurora, night_fade, cloud_cover);  // cloud_cover is post-apply_quality
+            if (level > 0.0f && std::isfinite(level)) {
+                using detail::aurora_clamp;
+                render::AuroraSky a;
+                a.level = level;
+                a.base_height = aurora_clamp(aurora->base_height, 0.18f, 0.02f, 0.6f);
+                a.height_span = aurora_clamp(aurora->height_span, 0.35f, 0.05f, 0.8f);
+                // arc centre as an xz unit vector: azimuth_deg 0 = +z, counter-clockwise seen from above, like
+                // WindDirection (90 = +x), so (x, z) = (sin, cos)
+                const f64 az = static_cast<f64>(aurora->azimuth_deg) * (3.14159265358979323846 / 180.0);
+                a.azimuth = math::vec2{static_cast<f32>(std::sin(az)), static_cast<f32>(std::cos(az))};
+                // cosine of half the angular width (width_deg clamped to its Range 10..180)
+                const f64 half = static_cast<f64>(aurora_clamp(aurora->width_deg, 70.0f, 10.0f, 180.0f)) * 0.5 *
+                                 (3.14159265358979323846 / 180.0);
+                a.half_width_cos = static_cast<f32>(std::cos(half));
+                a.curtain_count = static_cast<i32>(std::clamp<u32>(aurora->curtain_count, 1u, 6u));
+                a.speed = aurora_clamp(aurora->speed, 1.0f, 0.0f, 4.0f);
+                a.low_color = aurora->low_color;
+                a.high_color = aurora->high_color;
+                // the value set_time() gets later in this extract (scene.time() would still be last frame's), wrapped in f64
+                const f32 frame_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
+                a.time = aurora_wrap_time(static_cast<f64>(frame_time));
+                a.enabled = true;
+                shown = render::apply_quality(quality_, a);
+            }
+        }
+        scene.set_aurora(shown);
     }
     {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
         const Water* water = nullptr;
