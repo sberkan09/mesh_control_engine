@@ -17130,7 +17130,12 @@
      "regen_delay": 5
     },
     "Wanted3D": {},
-    "StreamingFocus": {}
+    "StreamingFocus": {},
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.9,
+     "gain_db": -4
+    }
    }
   },
   {
@@ -17171,6 +17176,11 @@
     "Camera3DComponent": {
      "fov_deg": 65,
      "far_z": 1500
+    },
+    "AudioListener": {},
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -2
     },
     "CameraFollow3D": {
      "target": "$694",
@@ -17251,6 +17261,25 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
     }
    }
   },
@@ -17326,6 +17355,25 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
     }
    }
   },
@@ -17401,6 +17449,25 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
     }
    }
   },
@@ -17476,6 +17543,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17551,6 +17642,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -17626,6 +17726,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17701,6 +17825,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -17792,6 +17925,43 @@
      "spawn_max": 90,
      "despawn_radius": 130,
      "seed": 11
+    }
+   }
+  },
+  {
+   "id": 715,
+   "name": "Mixer",
+   "components": {
+    "AudioLimiter": {
+     "ceiling_db": -1
+    }
+   }
+  },
+  {
+   "id": 716,
+   "name": "Pause mix",
+   "components": {
+    "AudioSnapshot": {
+     "bus": "SFX",
+     "while_paused": true,
+     "fade_s": 0.3,
+     "gain_db": -12,
+     "lowpass_hz": 900
+    }
+   }
+  },
+  {
+   "id": 717,
+   "name": "City ambience",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:8fcf77a5-579a-5577-8463-ee0f17da3c67",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -22,
+     "priority": 200,
+     "fade_s": 2
     }
    }
   }

@@ -33,6 +33,7 @@
 #include "mce/kit/timed_light.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/weather.h"
+#include "mce/kit/world_audio.h"
 #include "mce/kit/world_clock.h"
 #include "mce/kit/wanted3d.h"
 #include "mce/kit/vehicle_ram.h"
@@ -48,6 +49,7 @@
 #include "mce/physics/world2d.h"
 #include "mce/kit/ai.h"
 #include "mce/kit/video.h"
+#include "mce/kit/world_audio.h"
 #include "mce/kit/sprite_anim.h"
 #include "mce/physics/world2d.h"
 #include "mce/scene/scene.h"
@@ -160,6 +162,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
+    install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick
     install_presence(world);
