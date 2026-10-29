@@ -15,16 +15,16 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | Component | Header | Editor | MCP | Cook | Documented in | Shown in |
 |---|---|---|---|---|---|---|
 | `AudioSource` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/main.cpp |
-| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `AudioOcclusion` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioDoppler` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioListenerMix` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/audio; M-VIEWS step 5 shows it in samples/09_coop (a listener per player) |
 | `AudioBusEffects` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioReverb` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioDuck` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ChildOf` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `WorldTransform` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/03-editor.md | projects/MarbleGarden/games/marble_garden/module/marble_garden.cpp |
 | `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/net_arena/arena.h |
@@ -185,6 +185,10 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WindDirection` | `mce/kit/wind_direction.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WindGust` | `mce/kit/wind_gust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WindSway` | `mce/kit/wind_sway.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `EngineAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `WeaponAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `FootstepAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `SirenAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
