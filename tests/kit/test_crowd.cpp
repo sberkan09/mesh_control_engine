@@ -15,6 +15,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/crowd.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/vehicles3d.h"
 
@@ -60,8 +61,10 @@ struct Scene {
     World w;
     u64 t = 0;
     Entity net, spawner, focus;
-    explicit Scene(CrowdSpawner3D sp = {}, bool with_focus = false, vec3 focus_at = {}) {
+    // with_bodies: the 3D bodies installed ahead of the crowd, the order kit::install_stock uses.
+    explicit Scene(CrowdSpawner3D sp = {}, bool with_focus = false, vec3 focus_at = {}, bool with_bodies = false) {
         w.register_components<LocalTransform>();
+        if (with_bodies) install_bodies3d(w, nullptr);
         install_roads(w, nullptr);
         install_crowd(w, nullptr);
         const Array<byte> payload = cook_roads(kCross);
@@ -143,6 +146,30 @@ TEST_CASE("crowd: a hand-placed pedestrian snaps to the nearest pavement and wal
     s.run(60);
     const vec3 b = (*s.w.try_get_mut<LocalTransform>(e)).position;
     CHECK(std::fabs(b.z - a.z) == doctest::Approx(1.5f).epsilon(0.1));
+}
+
+TEST_CASE("crowd: a pedestrian with a kinematic body walks, and its body goes with it") {
+    // The 09_openworld walkers carry a kinematic capsule (cars and shots hit them). The bodies sync before the crowd steps,
+    // so the crowd moves the body itself; before it did, the physics write-back put the old pose back every tick and the
+    // walker stood at its spawn point while its `s` ran on.
+    Scene s(spawner(0), false, {}, true);
+    Pedestrian3D p;
+    p.speed = 1.5f;
+    RigidBody3D b;
+    b.type = BodyType3DKind::Kinematic;
+    b.shape = BodyShape3D::Capsule;
+    b.radius = 0.3f;
+    b.half_height = 1.45f;
+    const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p, b);
+    s.run(2);
+    const vec3 a = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(a.x == doctest::Approx(4.75f).epsilon(0.01));
+    s.run(60);
+    const vec3 c = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(std::fabs(c.z - a.z) == doctest::Approx(1.5f).epsilon(0.1));
+    physics::BodyState3D body;
+    REQUIRE(s.w.resource<Physics3D>().world.body_state(e, body));
+    CHECK(body.position.z == doctest::Approx(c.z).epsilon(0.001));
 }
 
 TEST_CASE("crowd: the same seed replays to the same hash, another seed does not") {

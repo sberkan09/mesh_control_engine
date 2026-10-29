@@ -48,17 +48,26 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   `use_input` characters), the camera stays behind a fixed orbit, the gun is on the camera.
 - **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
-- **Traffic and crowd were not seen in any of the 11 captures** (24 cars and 70 walkers are configured). They spawn around
-  the focus; from the player's start the frames show only the parked car and buildings. Not investigated whether the spawn
-  ring, the camera angle or the LOD hides them; the MCP test `test_mcp_openworld` asserts the counts but no screenshot gate
-  proves they are visible. Worth a hands-on look on the Mac.
+- ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213).** The cars did spawn and drive (24
+  alive within 10 s); three things hid them. (1) The orbit camera started at yaw 0, hung over the avenue and looked north
+  into a block, so no road was ever in frame; it now starts at yaw π/2, looking west along the avenue. (2) The walkers carry
+  a kinematic capsule, and `kit3d_bodies` syncs bodies before `kit_crowd` steps, so the physics write-back put each walker
+  back on its spawn point every tick (its `s` ran on, its transform did not): the crowd now moves the body with the walker.
+  (3) The walker prefab sat half under the pavement (origin at the feet, model lifted -0.9); the model is at 0 and the
+  capsule reaches the head. Also: `mce_player`'s headless line "714 entities" counts the scene's own entities, not the
+  spawned ones, so it never showed the traffic either. The parked cars moved off the walkers' line (a kinematic walker shoves
+  a parked car). Verified on captures at ticks 300 and 700 from the start position (cars on both carriageways, walkers on
+  both sidewalks).
 
 ## C. Gameplay depth
 
 - **Player stuck behaviour.** Sprinting into a building face stops the player with no slide or feedback; the sample has no
   fall-off or out-of-bounds handling (the ground is a 1120 m slab; the world edge has no wall).
 - **No cover, melee, grenades or weapon switching.** One hitscan gun (`Weapon3D`), reload, no ammo pickups.
-- **Pedestrians do not react** to gunfire, cars or the player (no flee, no phone calls to police); crowds do not avoid each other.
+- **Pedestrians did not visibly react** to gunfire or cars: the kit has M-PEDFLEE (hurt, shot nearby, panic spreads) and
+  M-PEDCRASH (crash, car bearing down) and the walkers did switch to `Flee`, but they were frozen in place (B, SBA-213), so
+  nobody ran. With the fix they run. Still missing: no reaction to the player walking into them, no phone calls to police,
+  crowds do not avoid each other.
 - **Traffic**: no lane changes, no overtaking, no horns, no reaction to a car crash; a car stopped for a still pedestrian waits.
 - **Police**: the navmesh covers only the middle blocks, so units stay there; no police cars (A9), no helicopters, no
   roadblocks; wanted level has no on-screen indicator (A1) and no flashing sirens.

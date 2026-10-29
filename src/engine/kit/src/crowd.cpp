@@ -592,6 +592,7 @@ void kit_crowd(Frame& f) {
     World& w = f.world();
     CrowdState& st = *w.try_resource<CrowdState>();
     st.stats = CrowdStats{};
+    Physics3D* phys = w.try_resource<Physics3D>();
 
     // M-PEDFLEE 2: scared pedestrians count down; this tick's shots are the new scares
     {
@@ -814,6 +815,10 @@ void kit_crowd(Frame& f) {
             }
         }
         step_pedestrian(p, t, c, p.lag);
+        // A walker with a body (a kinematic capsule, so cars and shots hit it): the body goes with it now. kit3d_bodies
+        // already synced this tick's bodies, so without this the write-back after the step would put the old pose back
+        // and the walker would never leave its spawn point.
+        if (phys && w.try_get<RigidBody3D>(e) && phys->world.has_body(e)) phys->world.teleport(e, t.position, t.rotation);
         if (scared) p.mode = PedestrianMode::Flee;
         p.lag = 0.0f;
         ++st.stats.stepped;
