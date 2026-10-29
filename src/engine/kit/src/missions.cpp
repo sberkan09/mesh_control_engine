@@ -12,6 +12,7 @@
 
 namespace mce::kit {
 static_assert(sizeof(MissionMarker) == 16);
+static_assert(sizeof(MissionRetry) == 8);
 static_assert(sizeof(MissionWantedFail) == 4);
 namespace {
 
@@ -134,6 +135,26 @@ void kit_missions(Frame& f) {
             activate(w, m.current);
             return;  // the first objective is looked at next tick
         }
+        if (m.state == MissionState::Failed) {
+            MissionRetry* rt = w.try_get_mut<MissionRetry>(e);
+            if (!rt) return;
+            if (rt->left <= 0.0f) rt->left = rt->delay;
+            rt->left -= f.dt;
+            if (rt->left > 0.0f) return;
+            rt->left = 0.0f;
+            Entity at = m.objective;
+            for (u32 n = 0; n < 64 && !at.is_null() && w.alive(at); ++n) {  // the chain is short; the cap guards a loop
+                Objective* o = w.try_get_mut<Objective>(at);
+                if (!o) break;
+                o->state = ObjectiveState::Pending;
+                o->progress = 0;
+                o->ticks = 0;
+                at = o->next;
+            }
+            m.state = MissionState::Idle;
+            m.start = 0;
+            return;
+        }
         if (m.state != MissionState::Active) return;
         ++m.ticks;
         m.elapsed = static_cast<f32>(m.ticks) * f.dt;
@@ -184,7 +205,7 @@ void install_missions(World& world, asset::AssetSystem* assets) {
     install_combat3d(world, assets);
     if (world.try_resource<MissionsInstalled>()) return;
     world.set_resource(MissionsInstalled{});
-    world.register_components<Mission, Objective, MissionMarker, MissionWantedFail>();
+    world.register_components<Mission, Objective, MissionMarker, MissionWantedFail, MissionRetry>();
     world.register_event<MissionStarted>(Phase::FixedUpdate_Pre);
     world.register_event<ObjectiveDone>(Phase::FixedUpdate_Pre);
     world.register_event<MissionCompleted>(Phase::FixedUpdate_Pre);

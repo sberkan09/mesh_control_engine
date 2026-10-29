@@ -854,6 +854,29 @@ TEST_CASE("wanted3d: a marker starts its mission and the wanted level can fail i
     }
 }
 
+TEST_CASE("wanted3d: a failed mission can be run again (M-MISSIONRETRY)") {
+    for (u32 k = 0; k < 2; ++k) {  // k 0: MissionRetry; k 1: none
+        Scene s;
+        install_missions(s.w, nullptr);
+        const Entity p = s.player({}, 0.0f, 0.0f);
+        Objective ob;
+        ob.kind = ObjectiveKind::Signal;
+        const Entity obj = s.w.spawn_with(ob);
+        Mission m;
+        m.id = "job";
+        m.objective = obj;
+        m.actor = p;
+        m.time_limit = 0.2f;
+        const Entity mis = s.w.spawn_with(m);
+        if (k == 0) s.w.add(mis, MissionRetry{0.5f, 0.0f});
+        s.w.try_get_mut<Mission>(mis)->start = 1;
+        s.run(60);
+        CHECK(s.w.try_get<Mission>(mis)->state == (k == 0 ? MissionState::Idle : MissionState::Failed));
+        CHECK(s.w.try_get<Objective>(obj)->state == (k == 0 ? ObjectiveState::Pending : ObjectiveState::Active));
+        if (k == 0) {
+            s.w.try_get_mut<Mission>(mis)->start = 1;
+            s.run(2);
+            CHECK(s.w.try_get<Mission>(mis)->state == MissionState::Active);
 TEST_CASE("wanted3d: a chop shop buys a stolen car from its driver (M-CHOPSHOP)") {
     for (u32 k = 0; k < 3; ++k) {  // k 0: stolen car at the shop; k 1: a car nobody owns; k 2: the shop is far away
         Scene s;

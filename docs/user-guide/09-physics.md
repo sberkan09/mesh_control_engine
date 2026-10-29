@@ -1020,6 +1020,8 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 - **Mission givers and wanted-level failure (M-MISSIONSTART).** Put `MissionMarker` (`mission`, `radius`) on a placed entity: when the
   `actor` of that Idle `Mission` stands within `radius`, the mission starts, as if `start` were set. Add `MissionWantedFail`
   (`level`, default 3) to a Mission entity and it fails (`MissionFailed` reason 3) once its actor's `Wanted3D` reaches that level.
+- **Retrying a failed mission (M-MISSIONRETRY).** Add `MissionRetry` (`delay`, default 3 s) to a Mission entity: `delay` seconds after
+  it fails the mission goes back to Idle with its objectives Pending, so its `MissionMarker` (or `start`) runs it again.
 - **Chop shop (M-CHOPSHOP).** Put `ChopShop3D` (`radius`, `price`) on a scrapyard entity. A stolen car (`CarOwner3D.stolen` 1, with a
   `VehicleSeat3D`) within `radius` whose driver holds a `Wallet3D` is bought: the driver is paid `price`, the car is destroyed, the
   driver steps out and `CarSold3D` is pushed. Needs `install_seats3d` for the seats.
