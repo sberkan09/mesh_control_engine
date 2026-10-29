@@ -425,7 +425,7 @@ def car_entities(model, traffic):
 
 def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
     """A police car: a Vehicle3D driven by Police3D (drive_car), or a parked roadblock (block: drive_car 0, handbrake on)."""
-    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 1,
+    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 2,
               "sight_range": 90, "attack_range": 0, "search_time": 15, "arrest_range": 0, "dispatch_range": dispatch}
     comps = {
         "LocalTransform": tf(pos, None, yaw),

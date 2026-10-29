@@ -100,7 +100,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     u32 blocks = 0;
     for (u32 i = 0; i < count(units); ++i) {
         const cook::JsonValue unit = comps(units, i).get("Police3D");
-        if (unit.get("drive_car").as_number() == 1) ++cars;
+        if (unit.get("drive_car").as_number() == 2) ++cars;
         if (unit.get("min_level").as_number() == 3 && unit.get("drive_car").as_number() == 0 && unit.get("attack_range").as_number() > 0) ++blocks;
     }
     CHECK(cars == 4);
