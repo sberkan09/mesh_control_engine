@@ -1,0 +1,1 @@
+- Kit (M-OPENWORLD-POLICE 4): `CameraFollow3D::chase` eases the orbit yaw behind a driving `Vehicle3D` target (or any moving target), the Look input holds it for `chase_hold` seconds; the 09_openworld camera uses it. Record: `docs/milestones/M-OPENWORLD-POLICE.md`.

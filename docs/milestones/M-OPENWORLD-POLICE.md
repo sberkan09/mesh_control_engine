@@ -1,6 +1,6 @@
 # M-OPENWORLD-POLICE — respawn, police cars and roadblocks in the city sample
 
-Status: steps 1 to 3 done (2026-10-29); step 2 = pursuit cars on the roads, step 3 = roadblocks that come with the wanted level. Gap record: [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) E4 (A7, A8, A9). Data only: it wires kit components that
+Status: steps 1 to 4 done (2026-10-29); step 4 = the chase camera (`CameraFollow3D::chase`, see the user guide 8.2); step 2 = pursuit cars on the roads, step 3 = roadblocks that come with the wanted level. Gap record: [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) E4 (A7, A8, A9). Data only: it wires kit components that
 already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEALSHOP](M-HEALSHOP.md), [M-ARREST](M-ARREST.md) 1-3) into
 `samples/09_openworld` (`gen_assets.py` and the regenerated `city.mcscene`). Steps 1-2 are data only; step 3 adds `Roadblock3D` to the kit.
 
@@ -31,3 +31,15 @@ already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEAL
 
 `test_mcp_openworld` counts 4 pursuit cars and 4 roadblock officers, the two respawn points, and checks that the markers stand empty, that the east block (and only it) stands for a level-4 player 110 m away, arrests the player beside a plaza officer (wakes up at the station, 400 cash) and then has the west roadblock's officers shoot it (wakes up at the
 hospital west of x = -100, wanted level 0, 200 cash less than the 500 it starts with).
+
+## Step 4: the camera turns with the car
+
+`CameraFollow3D` gains `chase` (0 off, 1 behind a `Vehicle3D` target driving forward, 2 behind any moving target), `chase_rate`
+(2.5 /s), `chase_hold` (1.5 s) and `chase_min_speed` (3 m/s), plus the engine-written `chase_idle` (the struct goes from 104 to
+120 bytes; old scenes load with chase off). The heading is the target's ground velocity (the same difference `look_ahead` uses), so
+it needs no facing component; a reversing car and a walker are left alone in mode 1; the Look action holds the yaw for `chase_hold`
+seconds; `lock_on` wins. The 09_openworld camera has `chase` 1: the seat swaps the camera's target to the car, so the camera swings
+behind it round corners and stays put on foot. Tests: "chase turns the camera behind a moving target" (modes, speed gate, vehicle
+direction) and "the Look input holds a chasing camera for chase_hold seconds".
+Limits: the yaw eases along the short way round, so a U-turn swings the camera through a side view; no pitch or distance change with
+speed; velocity is measured per tick, so a teleporting target (a respawn) flicks the yaw once if it is above the minimum speed.

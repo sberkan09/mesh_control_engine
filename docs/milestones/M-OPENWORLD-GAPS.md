@@ -58,7 +58,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   it. Also: `mce_player`'s headless line "714 entities" counts the scene's own entities, not the spawned ones, so it never
   showed the traffic either (not changed). Verified on captures at ticks 300 and 700 from the start position and during
   the drive script (cars on both carriageways, walkers moving on both sidewalks).
-- **The camera does not turn with the car** (open, found in SBA-213). `CameraFollow3D` keeps the yaw the player gave it;
+- **The camera does not turn with the car** (done, M-OPENWORLD-POLICE 4: `CameraFollow3D::chase`, on in the sample; found in SBA-213). `CameraFollow3D` keeps the yaw the player gave it;
   while driving, the car turns under a fixed camera, so a turn off the avenue leaves the road out of frame. Needs a chase
   option on `CameraFollow3D` (ease the yaw behind the target's heading while it moves, Look input overriding it for a
   moment), used by the sample while `Rider3D` is seated. A separate step.

@@ -13,6 +13,8 @@
 #include "mce/kit/particles.h"
 #include "mce/kit/pathfinding.h"
 #include "mce/kit/sprite_extract.h"
+#include "mce/kit/vehicles3d.h"
+#include "mce/input/actions.h"
 #include "mce/physics/module.h"
 #include "mce/physics/world2d.h"
 
@@ -183,6 +185,84 @@ TEST_CASE("effects: CameraFollow3D orbits at its distance and looks at the pivot
     const math::vec3 forward = math::rotate(t.rotation, {0.0f, 0.0f, -1.0f});
     const math::vec3 to_pivot = math::normalize(pivot - t.position);
     CHECK(math::dot(forward, to_pivot) == doctest::Approx(1.0f));
+}
+
+namespace {
+
+struct ChaseScene {
+    World w;
+    u64 t = 0;
+    Entity target, cam;
+    explicit ChaseScene(u8 chase, bool vehicle, f32 vehicle_speed = 8.0f) {
+        w.register_components<LocalTransform, Vehicle3D>();
+        install_effects(w, nullptr);
+        Vehicle3D v;
+        v.speed = vehicle_speed;
+        target = vehicle ? w.spawn_with(at(0, 0, 0), v) : w.spawn_with(at(0, 0, 0));
+        CameraFollow3D f;
+        f.target = target;
+        f.smoothing = 0.0f;
+        f.chase = chase;
+        f.orbit_speed = 2.0f;
+        cam = w.spawn_with(at(0, 0, 0), f);
+        w.tick(kDt, t++);
+    }
+    // The target moves `speed` m/s along `dir` (unit, flat) for `seconds`.
+    void drive(math::vec3 dir, f32 speed, f32 seconds) {
+        for (u32 i = 0; i < static_cast<u32>(seconds * 60.0f); ++i) {
+            w.try_get_mut<LocalTransform>(target)->position = w.try_get<LocalTransform>(target)->position + dir * (speed * kDt);
+            w.tick(kDt, t++);
+        }
+    }
+    f32 yaw() { return w.try_get<CameraFollow3D>(cam)->yaw; }
+};
+
+}  // namespace
+
+TEST_CASE("effects: CameraFollow3D chase turns the camera behind a moving target (M-OPENWORLD-POLICE 4)") {
+    {  // chase 2: any target; heading +X puts the camera on -X
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(s.yaw()) < -0.99f);  // the camera's back vector is (sin yaw, cos yaw): -X
+        CHECK(s.w.try_get<LocalTransform>(s.cam)->position.x < s.w.try_get<LocalTransform>(s.target)->position.x - 3.0f);
+        s.drive({0.0f, 0.0f, -1.0f}, 6.0f, 3.0f);  // then it heads -Z: camera on +Z (yaw 0)
+        CHECK(std::cos(s.yaw()) > 0.99f);
+    }
+    {  // off by default
+        ChaseScene s(0, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(s.yaw() == 0.0f);
+    }
+    {  // chase 1 follows a Vehicle3D driving forward, not a walker and not a reversing car
+        ChaseScene walker(1, false);
+        walker.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(walker.yaw() == 0.0f);
+        ChaseScene reversing(1, true, -6.0f);
+        reversing.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(reversing.yaw() == 0.0f);
+        ChaseScene car(1, true, 8.0f);
+        car.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(car.yaw()) < -0.99f);
+    }
+    {  // below chase_min_speed (3 m/s) nothing turns
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 3.0f);
+        CHECK(s.yaw() == 0.0f);
+    }
+}
+
+TEST_CASE("effects: the Look input holds a chasing camera for chase_hold seconds") {
+    ChaseScene s(2, false);
+    input::InputState in;
+    in.look = {0.5f, 0.0f};
+    s.w.set_resource(in);
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 0.2f);  // the player turns the camera
+    const f32 held = s.yaw();
+    s.w.resource<input::InputState>().look = {0.0f, 0.0f};
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 1.0f);  // inside chase_hold (1.5 s): the yaw stays where the player left it
+    CHECK(s.yaw() == held);
+    s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);  // then it eases behind the heading
+    CHECK(std::sin(s.yaw()) < -0.99f);
 }
 
 TEST_CASE("effects: PathAgents walk on a NavGrid built from the scene's colliders") {
