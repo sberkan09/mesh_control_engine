@@ -347,6 +347,14 @@ struct CarSold3D {
 };
 MCE_EVENT(CarSold3D, seller, shop, car, paid)
 
+// Confiscation (M-ARRESTLOSS). `Confiscate3D` on a player with a Respawn3D and a Weapon3D: when it wakes up busted
+// (`Respawned3D` reason 1) the police keep part of the spare ammunition: `reserve` becomes `reserve * ammo_kept`
+// (rounded down). Dying (wasted) loses nothing here. Runs inside "kit3d_respawn".
+struct Confiscate3D {
+    f32 ammo_kept = 0.0f;  // 0..1: the fraction of the Weapon3D reserve that survives an arrest
+};
+MCE_COMPONENT(Confiscate3D, (ammo_kept, Save, Range{0, 1}, Help{"the fraction of the spare ammunition kept after being arrested"}))
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 
