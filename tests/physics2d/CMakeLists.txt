@@ -10,7 +10,8 @@ set(_physics2d_sources
     test_controller.cpp
     test_module.cpp
     test_joints_sleep.cpp
-    test_joint2d.cpp)
+    test_joint2d.cpp
+    test_force2d.cpp)
 if(MCE_PHYSICS_ORACLE)
     list(APPEND _physics2d_sources oracle/test_box2d_oracle.cpp)
 endif()

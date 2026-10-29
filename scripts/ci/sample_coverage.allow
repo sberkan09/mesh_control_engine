@@ -23,3 +23,6 @@ AmmoShop3D | M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it o
 HealShop3D | M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic
 MissionMarker | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker
 MissionWantedFail | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
+LaunchVelocity2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
+Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
+ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mce/ecs/transform.h"
+#include "mce/physics/force2d.h"
 #include "mce/physics/joint2d.h"
 #include "mce/log.h"
 
@@ -297,6 +298,36 @@ void publish_events(Frame& f, const World2D& pw) {
     for (const ContactEnd2D& e : pw.contact_ends()) ev.push(e);
 }
 
+// LaunchVelocity2D, Impulse2D and ConstantForce2D (M-PHYSDRIVE2D): pushes from components, applied
+// after the import and before the step.
+bool finite2(math::vec2 v) { return std::isfinite(v.x) && std::isfinite(v.y); }
+
+void apply_drives(Frame& f, World2D& pw) {
+    f.query<LaunchVelocity2D&>().each([&](Entity e, LaunchVelocity2D& l) {
+        BodyState bs;
+        if (l.applied || !pw.body_state(e, bs) || bs.type == BodyType::Static) return;
+        l.applied = 1;
+        pw.set_linear_velocity(e, finite2(l.linear) ? l.linear : math::vec2{});
+        pw.set_angular_velocity(e, std::isfinite(l.angular) ? l.angular * kDegToRad : 0.0f);
+    });
+    f.query<Impulse2D&>().each([&](Entity e, Impulse2D& im) {
+        if (im.impulse.x == 0.0f && im.impulse.y == 0.0f) return;
+        BodyState bs;
+        if (!pw.body_state(e, bs) || bs.type != BodyType::Dynamic) return;  // kept until the body can take it
+        if (finite2(im.impulse) && finite2(im.point)) {
+            const f32 c = std::cos(bs.angle), s = std::sin(bs.angle);
+            const math::vec2 at{bs.position.x + c * im.point.x - s * im.point.y, bs.position.y + s * im.point.x + c * im.point.y};
+            pw.apply_impulse(e, im.impulse, at);
+        }
+        im.impulse = {};
+    });
+    f.query<const ConstantForce2D&>().each([&](Entity e, const ConstantForce2D& cf) {
+        BodyState bs;
+        if (!finite2(cf.force) || !pw.body_state(e, bs) || bs.type != BodyType::Dynamic) return;
+        pw.apply_force(e, cf.force);
+    });
+}
+
 }  // namespace
 
 void physics_step(Frame& f) {
@@ -304,13 +335,14 @@ void physics_step(Frame& f) {
     SyncState& sync = f.resource<SyncState>();
     import(f, pw, sync);
     sync_joints(f, pw, f.resource<JointState>());
+    apply_drives(f, pw);
     pw.step(f.dt);
     export_state(f, pw);
     publish_events(f, pw);
 }
 
 void install_physics2d(World& world, const PhysicsConfig& config) {
-    world.register_components<RigidBody2D, Collider2D, CharacterController2D, CharacterGround2D, Joint2D, LocalTransform>();
+    world.register_components<RigidBody2D, Collider2D, CharacterController2D, CharacterGround2D, Joint2D, LaunchVelocity2D, Impulse2D, ConstantForce2D, LocalTransform>();
     world.register_event<TriggerEnter>(Phase::FixedUpdate_Physics);
     world.register_event<TriggerExit>(Phase::FixedUpdate_Physics);
     world.register_event<ContactBegin2D>(Phase::FixedUpdate_Physics);

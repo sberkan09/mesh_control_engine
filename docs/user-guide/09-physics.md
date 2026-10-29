@@ -173,6 +173,13 @@ the first tick both bodies exist; changing a setting rebuilds it from the curren
 `lower` and `upper`, which update in place. `enabled` 0 removes the joint and keeps the component. `length_now` and
 `angle_now` are read-only readouts.
 
+**Pushing 2D bodies** also needs no code (M-PHYSDRIVE2D). `LaunchVelocity2D` sets a body's velocity (`linear` in m/s,
+`angular` in degrees per second) once, the first tick the body exists, for a thrown ball or a bullet; it is ignored on a
+static body. `Impulse2D` gives a one-shot push (`impulse` in N*s, world space, at `point` in the body's frame): the tick
+it is applied `impulse` goes back to zero, so writing a new value pushes again. `ConstantForce2D` applies `force` (N,
+world space) every tick while the component is there, for wind, a conveyor or a thruster. Impulses and forces act on
+dynamic bodies only, and NaN or infinity counts as zero.
+
 **3D joints** are components. Put a `Joint3D` on a body's entity (a `RigidBody3D`, or a static
 `BoxCollider3D` / `MeshCollider3D` when the other side moves) and set `connected` to the other body's
 entity, or leave it empty to join the body to the world. `kind` picks the joint:
