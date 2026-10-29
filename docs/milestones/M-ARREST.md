@@ -1,6 +1,6 @@
 # M-ARREST — police arrest an offender who stands still
 
-Status: steps 1 to 4 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
+Status: steps 1 to 5 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
 
 ## Why
 
@@ -49,6 +49,16 @@ behind it ... keeps on to turn round", "replays to the same state", "resumed wit
 stopped", "follows a target that moves to another lane at once".
 Limits: the car ignores traffic lights and other cars, does not reverse out of a dead end or a jam (follow-up) and may take the
 oncoming lane.
+
+Step 5 (unstuck and no jitter). `Police3D` gains `stuck_time` and `reverse_left` (engine-written, saved; 68 to 76 bytes, appended, old scenes
+load with 0). A driven car (`drive_car` 1 or 2) that pushes the throttle for 2 s while its `Vehicle3D::speed` stays under 0.5 m/s
+reverses for 1.5 s (throttle -0.6, wheel against the way it wants to go), then tries again; a car held by the brake near its target is
+not counted. A drive test over the L's junction (a kinematic car that reports its speed) found a real wheel flip: when the route ended
+within the look-ahead the aim switched between the last lane point and the goal itself, which can be 20 m off the road, and the wheel
+jumped between lock and straight every tick (24 sign flips). The aim now stays on the route's last point, the road spot nearest the
+goal. Tests: "backs out and tries again" (jammed car: about 2 s forward, 1.5 s reverse, forward again), "a moving police car is not
+mistaken for a stuck one", "does not jitter through a junction" (biggest tick-to-tick wheel change under 0.5, at most 6 sign flips).
+Limits: the reverse is blind (no check of what is behind), a jam that lasts keeps cycling, a car still ignores traffic lights.
 
 ## Open items
 
