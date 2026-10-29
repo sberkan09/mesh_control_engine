@@ -992,7 +992,7 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   and inside 12 m, and brakes to a stop inside 4 m. With `drive_car` 1 there is no path following, so a wall between the car and the target
   stops it; `drive_car` 2 (M-ARREST 4) drives along the road network (see 29-roads-and-traffic) instead: the quickest lane route from the car's lane to the
   lane nearest the target (`road_route`), steered by pure pursuit, falling back to the straight line when no lane is within 30 m of
-  the car or 80 m of the target. A roadblock is a car with `drive_car` 0 placed across the road.
+  the car or 80 m of the target. A driven car that pushes the throttle for 2 s without moving (a wall, a dead end) reverses for 1.5 s and tries again (`stuck_time` and `reverse_left` hold the timers). A roadblock is a car with `drive_car` 0 placed across the road.
 
 - **Roadblocks that come with the wanted level (M-OPENWORLD-POLICE 3).** Put a `Roadblock3D` on a marker entity where the block
   should be: its local X runs across the road (the line of cars), its local +Z is the side `officer_back` metres away that the
