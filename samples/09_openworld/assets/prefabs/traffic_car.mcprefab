@@ -34,6 +34,25 @@
      ],
      "locked": 1
     },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 90
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -14,
+     "top_db": -6,
+     "parked_db": -60
+    },
     "TrafficDriver3D": {}
    }
   },

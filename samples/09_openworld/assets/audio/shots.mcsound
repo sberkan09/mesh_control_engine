@@ -1,0 +1,19 @@
+{
+ "format": "mce-sound",
+ "version": 1,
+ "guid": "056f6327-3835-57af-b946-01e375024d5a",
+ "clips": [
+  "guid:08ccc8a2-ac7f-5860-a9d2-dc7ad16f5f18",
+  "guid:7b4deea8-5fb6-5c74-993a-4e6d033ca354"
+ ],
+ "pick": "random",
+ "no_repeat": true,
+ "pitch": [
+  0.96,
+  1.04
+ ],
+ "gain_db": [
+  -2,
+  0
+ ]
+}

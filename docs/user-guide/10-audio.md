@@ -261,3 +261,25 @@ The default NPC dialogue box (21) follows `access.subtitle_speaker` and scales i
 `access.subtitle_background`. Captions are presentation only: the lines live in a resource, never
 in a component, so a run hashes the same with them on or off. A host with its own UI reads the
 lines with `kit::caption_lines` and draws them with `ui::SubtitleView`.
+
+## 10.9 Engines, shots, footsteps and sirens
+
+A game with cars, guns and police needs sounds that follow the world. Four components put them in the scene next to
+an ordinary `AudioSource`, with no code (`samples/09_openworld` uses all four):
+
+| Component | Goes on | What it does |
+|---|---|---|
+| `EngineAudio` | a `Vehicle3D` entity that also has a looping, `play_on_start`, 3D `AudioSource` | The engine runs while a driver sits in the `VehicleSeat3D` or the car moves faster than 0.5 m/s, otherwise it is silent (`parked_db`). With t = \|speed\| / `top_speed` (0..1), the pitch goes from `idle_pitch` to `top_pitch` and the gain from `idle_db` to `top_db`. Traffic cars have no driver entity, so they sound while they roll |
+| `WeaponAudio` | a `Weapon3D` entity | Each shot (`WeaponFired3D`) plays `shot` at the muzzle in 3D. Give it a sound set (10.3) so shots vary |
+| `FootstepAudio` | a `CharacterController3D` entity | While grounded and not seated in a car, a step plays `clip` (a sound set) at the feet every `stride` metres, so running steps faster |
+| `SirenAudio` | an entity with a looping `AudioSource` | Silent until the first `Wanted3D` reaches `min_level`, then it slides to `active_db` at `slew_db_per_s` |
+
+Pitch comes from the voice's own playback rate (`AudioSource.pick_rate`, see 10.3), so do not add `AudioDoppler` to an
+`EngineAudio` source. The systems read only sim state (speed, events, wanted level), so a replay sounds the same, and
+a world without audio (a headless sim) is left untouched. The fields they write are engine-written and part of the state hash.
+
+**Bus layout of the sample.** Everything that is part of the world (engines, shots, footsteps, sirens, the city bed) is on
+`SFX`; `Music` and `Voice` stay free for a score and mission lines (they can duck `SFX` with `AudioDuck`, 10.5). The
+master has an `AudioLimiter` (-1 dB) so a gunfight does not clip, and an `AudioSnapshot` with `while_paused` muffles and
+lowers `SFX` behind the pause screen.
+

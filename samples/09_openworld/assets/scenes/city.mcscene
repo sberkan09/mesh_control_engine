@@ -17138,7 +17138,15 @@
     "Wallet3D": {
      "cash": 500
     },
-    "StreamingFocus": {}
+    "StreamingFocus": {},
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.9,
+     "gain_db": -4
+    },
+    "UiScreen": {
+     "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
+    }
    }
   },
   {
@@ -17180,6 +17188,11 @@
      "fov_deg": 65,
      "far_z": 1500
     },
+    "AudioListener": {},
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -2
+    },
     "CameraFollow3D": {
      "target": "$694",
      "offset": [
@@ -17215,6 +17228,9 @@
       -6.0
      ],
      "mask": 65535
+    },
+    "UiScreen": {
+     "document": "guid:9f41b508-dabf-59c6-9aba-dc181c5e3ade"
     }
    }
   },
@@ -17260,6 +17276,34 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17335,6 +17379,34 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17410,6 +17482,34 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17478,6 +17578,17 @@
      "attack_range": 28,
      "search_time": 12
     },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
+    },
     "Weapon3D": {
      "kind": "Hitscan",
      "damage": 7,
@@ -17485,6 +17596,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17553,6 +17688,17 @@
      "attack_range": 28,
      "search_time": 12
     },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
+    },
     "Weapon3D": {
      "kind": "Hitscan",
      "damage": 7,
@@ -17560,6 +17706,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -17628,6 +17783,17 @@
      "attack_range": 28,
      "search_time": 12
     },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
+    },
     "Weapon3D": {
      "kind": "Hitscan",
      "damage": 7,
@@ -17635,6 +17801,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17703,6 +17893,17 @@
      "attack_range": 28,
      "search_time": 12
     },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
+    },
     "Weapon3D": {
      "kind": "Hitscan",
      "damage": 7,
@@ -17710,6 +17911,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -18261,6 +18471,43 @@
       1
      ],
      "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 729,
+   "name": "Mixer",
+   "components": {
+    "AudioLimiter": {
+     "ceiling_db": -1
+    }
+   }
+  },
+  {
+   "id": 730,
+   "name": "Pause mix",
+   "components": {
+    "AudioSnapshot": {
+     "bus": "SFX",
+     "while_paused": true,
+     "fade_s": 0.3,
+     "gain_db": -12,
+     "lowpass_hz": 900
+    }
+   }
+  },
+  {
+   "id": 731,
+   "name": "City ambience",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:8fcf77a5-579a-5577-8463-ee0f17da3c67",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -22,
+     "priority": 200,
+     "fade_s": 2
     }
    }
   }

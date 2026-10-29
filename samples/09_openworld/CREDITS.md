@@ -12,3 +12,9 @@
 | City Kit (Suburban) (`assets/third_party/kenney-city-kit-suburban/`) | Kenney | [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/) | https://kenney.nl/assets/city-kit-suburban |
 
 <!-- mce-content:end -->
+
+## Sounds (CC0, OpenGameArt)
+
+Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy and the crowd bed by
+[StarNinjas](https://opengameart.org/users/starninjas), all CC0-1.0. Files, sources and the changes made (trim, loop, mono):
+`assets/audio/SOURCES.md`; rebuilt by `tools/fetch_audio.py`.

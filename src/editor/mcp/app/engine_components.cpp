@@ -59,6 +59,7 @@
 #include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)
 #include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
 #include "mce/kit/weather_audio.h"       // WeatherAudio (M-WEATHERAUDIO 10a)
+#include "mce/kit/world_audio.h"        // EngineAudio, WeaponAudio, FootstepAudio, SirenAudio (M-OPENWORLD E3)
 #include "mce/kit/lightning_bolt.h"      // LightningBolt (M-LIGHTNINGBOLT 11a)
 #include "mce/kit/ground_mist.h"         // GroundMist (M-GROUNDMIST 13a)
 #include "mce/kit/moon.h"                 // Moon (M-NIGHTSKY 14a)
