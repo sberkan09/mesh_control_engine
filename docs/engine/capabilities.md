@@ -167,9 +167,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
-| `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station |
-| `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample |
-| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player |
+| `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `CashDrop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing |
 | `MissionReward3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
 | `CarOwner3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars |

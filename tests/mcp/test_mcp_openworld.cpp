@@ -79,14 +79,59 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(fleeing("20-80 Fire") >= 1);
     auto police = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Police3D","show":["Police3D"]}})");
     CHECK(police.v().get("log").get("errors").as_number() == 0);
-    CHECK(count(police) == 3);  // the officer that was shot is gone
+    // The plaza squad is the Police3D with min_level 1 (the cars and roadblock officers answer from level 2 and 3).
+    u32 foot = 0;
     u32 hunting = 0;
-    for (u32 i = 0; i < 3; ++i) {
-        const std::string state = str(comps(police, i).get("Police3D").get("state"));
+    for (u32 i = 0; i < count(police); ++i) {
+        const cook::JsonValue unit = comps(police, i).get("Police3D");
+        if (unit.get("min_level").as_number() != 1) continue;
+        ++foot;
+        const std::string state = str(unit.get("state"));
         if (state == "Pursue" || state == "Attack") ++hunting;
     }
+    CHECK(foot == 3);  // the officer that was shot is gone
     CHECK(hunting >= 2);
     auto wanted = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Wanted3D","show":["Wanted3D"]}})");
     CHECK(comps(wanted, 0).get("Wanted3D").get("crimes").as_number() >= 1);
     CHECK(comps(wanted, 0).get("Wanted3D").get("level").as_number() >= 1);
+
+    // M-OPENWORLD E4: police cars, roadblocks and respawn. All of it is the sample's data on the existing kit components.
+    auto units = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Police3D","show":["Police3D"]}})");
+    u32 cars = 0;
+    u32 blocks = 0;
+    for (u32 i = 0; i < count(units); ++i) {
+        const cook::JsonValue unit = comps(units, i).get("Police3D");
+        if (unit.get("drive_car").as_number() == 1) ++cars;
+        if (unit.get("min_level").as_number() == 3 && unit.get("drive_car").as_number() == 0 && unit.get("attack_range").as_number() > 0) ++blocks;
+    }
+    CHECK(cars == 4);
+    CHECK(blocks == 4);  // two officers at each of the two roadblocks
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RespawnPoint3D","show":["RespawnPoint3D"]}})")) == 2);
+
+    // Busted: a level-1 offender who stands still beside a plaza officer is arrested and wakes up at the station, 100 poorer.
+    const auto wake = [&](const char* ticks) {
+        c.ok("scene_save");
+        auto r = c.ok("run_headless", std::string(R"({"ticks":)") + ticks +
+                                          R"(,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Respawn3D","Health3D","LocalTransform","Wanted3D","Wallet3D"]}})");
+        CHECK(r.v().get("log").get("errors").as_number() == 0);
+        REQUIRE(count(r) == 1);
+        return r;
+    };
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[22,0.95,8.6]})");
+    c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":15})");
+    auto busted = wake("600");
+    cook::JsonValue pc = comps(busted, 0);
+    CHECK(pc.get("LocalTransform").get("position").at(0).as_number() > 30.0);  // the station is at x = 40
+    CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
+    CHECK(pc.get("Wallet3D").get("cash").as_number() == 400);
+
+    // Wasted: at level 3 the roadblock officers shoot the player from the avenue; it wakes up at the hospital, 200 poorer (the runs start from the saved scene, so from 500 cash again).
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-180,0.95,0]})");
+    c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":70})");
+    auto wasted = wake("1800");
+    pc = comps(wasted, 0);
+    CHECK(pc.get("LocalTransform").get("position").at(0).as_number() < -100.0);  // the hospital is on the west avenue
+    CHECK(pc.get("Health3D").get("current").as_number() > 50.0);
+    CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
+    CHECK(pc.get("Wallet3D").get("cash").as_number() == 300);  // each run starts from the saved scene: 500 - 200
 }
