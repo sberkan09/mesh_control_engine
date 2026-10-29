@@ -97,6 +97,15 @@ if(MCE_BUILD_EDITOR)
         DEPS
             mce::mce_editor_core)
     target_include_directories(test_fuzz_editor_documents PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+    # The behaviour-tree editor over hostile files and edit runs (M-HARDEN2 3).
+    mce_add_test(test_fuzz_editor_trees UMBRELLA
+        SOURCES
+            test_editor_trees.cpp
+        DEPS
+            mce::mce_editor_core)
+    target_include_directories(test_fuzz_editor_trees PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(test_fuzz_editor_trees PROPERTIES ENVIRONMENT "MCE_FUZZ_ROOT=${CMAKE_BINARY_DIR}")
 endif()
 
 # Scene instantiate over mutated scene chunks (the kit's components are linked so real columns resolve).
@@ -115,7 +124,7 @@ set_tests_properties(test_fuzz_scene PROPERTIES ENVIRONMENT "MCE_FUZZ_ROOT=${CMA
 # `fuzz` so `ctest -L fuzz` runs just these.
 set(MCE_FUZZ_TESTS test_fuzz test_fuzz_player_data test_fuzz_net test_fuzz_script test_fuzz_importers
     test_fuzz_websocket test_fuzz_misc test_fuzz_scene test_fuzz_editor_files
-    test_fuzz_editor_documents)
+    test_fuzz_editor_documents test_fuzz_editor_trees)
 foreach(_t IN LISTS MCE_FUZZ_TESTS)
     if(TEST ${_t})
         set_tests_properties(${_t} PROPERTIES LABELS "fuzz" TIMEOUT 600)

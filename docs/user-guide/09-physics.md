@@ -920,6 +920,10 @@ written. The setter never adds the component. The queries work with `enabled` 0 
 The `13_water` sample (`ctest -R water`) is the worked example: a default `Water` off a sloped sand island, and a crate whose
 script sets its `y` to `water.height_at(x, z)` and tilts it to `water.normal_at(x, z)` every tick, logging `water:` every 150 ticks.
 
+## 9.19n Aurora data (M-AURORA)
+
+The optional `Aurora` component (`mce/kit/aurora.h`, one per scene, the first in ECS order is read) describes a curtain aurora as data; in this step nothing draws it yet (the renderer feed and the shader are steps 16b and 16c), so existing scenes are unchanged. It is authored, never derived: `latitude_deg` (68, -90..90) is the scene's magnetic latitude, because the engine has no globe, and `gate_low_deg` (55) and `gate_high_deg` (65) open the effect smoothly between them on the absolute latitude (the sign only mirrors the side; an inverted or zero pair falls back to the defaults). The rest shapes the curtains: `strength` (0..4), `curtain_count` (1..6), `base_height` and `height_span` (sines of the elevation), `azimuth_deg` (0 = +z, counter-clockwise from above) and `width_deg` of the arc, `speed` (0..4, in quarter steps so the pattern repeats every 64 s), the green `low_color` and violet `high_color`, and `night_only` (1: scaled by the night fade, so it never shows by day; 0 forces it, which a scene with no `WorldClock` needs). The pure helpers `aurora_latitude_gate`, `aurora_level`, `aurora_wrap_time`, `aurora_curtain_height`, `aurora_curtain_intensity` and `aurora_band_color` compute the gate, the gain, the curtain edges, the brightness and the colour by height from the authoring, the night fade, the cloud coverage and the time alone; a closed gate, a zero `strength` or `enabled` 0 gives exactly 0. There is no system and nothing is stored or hashed beyond the authored fields.
+
 ## 9.20 Precipitation and lightning (M-WEATHER)
 
 `mce/kit/precipitation.h` turns the weather into rain, snow and lightning (installing it installs the weather). Both

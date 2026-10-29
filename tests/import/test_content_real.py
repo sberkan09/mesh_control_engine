@@ -4,7 +4,7 @@
     test_content_real.py <work dir> <mce_cook>
 
 Needs the network (or archives already in MCE_CONTENT_CACHE: the ledger hashes decide whether a file is the right one);
-without either the test prints SKIP and passes. Labelled `slow`: the integration run executes it.
+without either the test prints SKIP and passes. A `manual` pack (the Kenney kits) is covered only when the cache holds it. Labelled `slow`: the integration run executes it.
 """
 
 import contextlib
@@ -47,6 +47,7 @@ def main():
             ("kenney-blocky-characters", ["models/character-a.glb", "models/character-b.glb", "models/Textures/*"]),
             ("kenney-impact-sounds", ["audio/footstep_concrete_00[01].ogg"]),
             ("ambientcg-asphalt031", None), ("ambientcg-road007", None)]
+    added = []
     for pack, only in adds:
         argv = ["add", pack, pj, "--cache", cache]
         for o in only or []:
@@ -56,11 +57,21 @@ def main():
             if "download" in msg and "failed" in msg:
                 print("SKIP: the network is not reachable and the archive is not cached: " + msg.strip())
                 return 0
+            if "cannot be downloaded by a script" in msg:
+                # a manual pack (kenney.nl since October 2026): covered only when MCE_CONTENT_CACHE holds its archive
+                print(f"SKIP {pack}: manual download, not in the cache")
+                continue
             check(False, f"add {pack}: {msg}")
             return 1
+        added.append(pack)
+    if not added:
+        print("SKIP: no pack could be fetched")
+        return 0
     code, msg = run(mc, ["verify", pj])
     check(code == 0, "verify passes: " + msg)
 
+    if "kenney-blocky-characters" not in added:
+        return finish(cook, pj)
     # the node-animated characters: retarget a's clips onto b (same rig, so the map is the identity)
     root = os.path.join(pj, "assets", "third_party", "kenney-blocky-characters", "models")
     names = [n["name"] for n in rt.Gltf(os.path.join(root, "character-a.glb")).json["nodes"]]
@@ -70,7 +81,10 @@ def main():
                          "--out", os.path.join(root, "character-b-with-a.glb"), "--map", mp, "--map-only",
                          "--clips", "idle,walk,sprint", "--prefix", "a_"])
     check(code == 0, "node-rig retarget: " + msg)
+    return finish(cook, pj)
 
+
+def finish(cook, pj):
     r = subprocess.run([cook, pj, "--quiet"], capture_output=True, text=True)
     check(r.returncode == 0, f"mce_cook of the real packs: exit {r.returncode}\n{r.stdout[-1500:]}{r.stderr[-1500:]}")
     if failures:

@@ -136,6 +136,11 @@ the `metallic_roughness` texture (pure-Python 8-bit PNG codec, deterministic); `
 hash and cooks them with `mce_cook`: 0 failed, run once here against the live downloads.
 Open items: pin the Quaternius hash once someone downloads it; `--online` check is not run in CI; ledger entries for Quaternius city/vehicle packs, OpenGameArt and
 Poly Haven models/textures; hooking the ledger into MCP `library_search` / `library_add`; 
+2026-10-29 (integration red fix): kenney.nl moved to short-lived signed download links, so the old pinned URLs
+302 to the pack page and the integration run's `import_content_real` hashed HTML. The six Kenney entries are now
+`manual` (hash and size kept), `mce content` refuses a web page instead of reporting a hash mismatch, and
+`import_content_real` skips a manual pack the cache does not hold (ambientCG still runs). Open: put the Kenney zips in
+the integration runner's `MCE_CONTENT_CACHE` to cover them again.
 
 **D3: humanoid retarget.** `tools/mce_cli/mce_retarget.py` (`mce retarget <src>... --onto <character.glb>`): name-based humanoid
 map (Mixamo, Unreal, Rigify, VRM, Biped, engine names; `--map` overrides), world-space delta retarget (A-pose to T-pose,
