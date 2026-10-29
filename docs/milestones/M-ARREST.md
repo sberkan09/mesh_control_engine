@@ -38,10 +38,15 @@ target, `drive_car` 0 leaves the car alone.
 
 Step 4 (police cars on the road network). `Police3D::drive_car` 2 (same byte, so the size stays 68) makes the car follow the
 `RoadNetwork3D`: `road_route` from the lane under the car (going its way, connectors allowed, within 30 m) to the lane nearest the
-target or last known place (within 80 m); the aim point is 10 m plus half the speed down that route, and the steering, throttle and
-braking are those of step 3. No lane near the car or the target: it drives straight as for 1. The route is recomputed every tick
-(A* over a few hundred lanes), nothing is stored. Test: "a police car with drive_car 2 follows the road, not the straight line".
-Limits: the car ignores traffic lights and other cars, does not reverse out of a dead end and may take the oncoming lane.
+target or last known place (within 80 m). The aim point is 10 m plus half the speed down the route; steering and throttle are those
+of step 3, but slowing (inside 12 m) and stopping (inside 4 m) use the route metres still to go. No lane near the car or the target:
+it drives straight as for 1. The route is cached per car in the system's state (not saved or hashed; a resumed run plans again):
+the goal's lane is looked up every 15 ticks and the A* runs only when that lane changes, the cache is empty, or the car's lane has
+been off the route for 15 ticks in a row (so a flicker between lanes at a junction does not re-plan or jerk the wheel; the last aim
+is kept meanwhile). Tests: "takes the roads to a target round the corner" (a kinematic car drives an L to the target and parks;
+the straight car cuts across), "whose target is behind it ... keeps on to turn round", "replays to the same state".
+Limits: the car ignores traffic lights and other cars, does not reverse out of a dead end or a jam (follow-up) and may take the
+oncoming lane.
 
 ## Open items
 

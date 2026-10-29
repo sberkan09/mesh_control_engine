@@ -39,43 +39,102 @@ static_assert(sizeof(CarOwner3D) == 8);
 
 namespace {
 
+// A police car's route on the road network (M-ARREST 4), kept between ticks so the A* runs only when the goal's lane changes or the
+// car has left the route, not every tick. Not saved or hashed: a resumed run starts with an empty cache and plans again.
+struct CarRoute {
+    Entity car;
+    Array<u32> lanes;       // road_route, in driving order; empty = none yet
+    u32 goal_lane = 0xFFFFFFFFu;
+    f32 goal_s = 0.0f;      // metres along goal_lane that the goal is
+    u32 age = 0;            // ticks since the goal's lane was last looked up
+    u32 off_ticks = 0;      // consecutive ticks the car's lane was not on the route
+    math::vec3 aim;         // the last aim point (kept while the car's lane is briefly not on the route)
+    f32 remaining = 0.0f;   // route metres from the car to the goal
+};
+
 struct Wanted3DState {
     u8 installed = 1;
     Array<Entity> moved;       // where each offender was last tick (M-ARREST: how fast it is going)
     Array<math::vec3> before;
+    Array<CarRoute> routes;    // police cars that drive along the roads
+    Entity road_entity;        // the RoadNetwork3D they use (the first one found)
 };
 
-// M-ARREST 4: the point a police car on the road network steers at. The quickest lane route (road_route) from the lane under
-// the car, going its way, to the lane nearest `goal`, then the spot `look` metres down it; `goal` itself when the route ends
-// sooner. False when the car or the goal is not near a lane (the car then drives straight at the goal).
-bool road_aim(World& w, math::vec3 pos, math::vec3 fwd, math::vec3 goal, f32 look, math::vec3& aim) {
+constexpr u32 kGoalLaneEvery = 15;  // ticks between looks at which lane the goal is on
+constexpr u32 kOffRouteTicks = 15;  // ticks off the route (a flicker between lanes at a junction does not count) before planning again
+
+// M-ARREST 4: where a police car on the road network steers. The route is the quickest lane route (road_route) from the lane under
+// the car, the one going its way, to the lane nearest `goal`. `aim` is the spot `look` metres down it (`goal` when the route ends
+// sooner) and `remaining` the route metres still to go. False when the car or the goal is not near a lane (the car then drives
+// straight at the goal).
+bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec3 fwd, math::vec3 goal, f32 look, math::vec3& aim,
+              f32& remaining) {
     RoadNet net;
-    if (!road_net_first(w, net)) return false;
-    RoadSpot from, to;
+    if (st.road_entity.is_null() || !w.alive(st.road_entity) || !road_net(w, st.road_entity, net)) {
+        if (!road_net_first(w, net)) return false;
+        st.road_entity = net.entity;
+    }
+    CarRoute* r = nullptr;
+    for (CarRoute& c : st.routes)
+        if (c.car == car) r = &c;
+    if (!r) {
+        st.routes.push_back(CarRoute{});
+        r = &st.routes[st.routes.size() - 1];
+        r->car = car;
+    }
+    const RoadRegistry::Def& d = *net.def;
+    if (r->goal_lane == 0xFFFFFFFFu || r->age++ % kGoalLaneEvery == 0) {
+        RoadSpot to;
+        RoadNearestQuery qt;
+        qt.max_distance = 80.0f;
+        if (!road_nearest(net, goal, to, qt)) return false;
+        if (to.lane != r->goal_lane) r->lanes.clear();
+        r->goal_lane = to.lane;
+        r->goal_s = to.s;
+    }
+    RoadSpot from;
     RoadNearestQuery qf;
     qf.max_distance = 30.0f;
     qf.connectors = true;
     qf.heading = fwd;
-    RoadNearestQuery qt;
-    qt.max_distance = 80.0f;
-    if (!road_nearest(net, pos, from, qf) || !road_nearest(net, goal, to, qt)) return false;
-    Array<u32> route;
-    if (!road_route(*net.def, from.lane, to.lane, route) || route.empty()) return false;
+    if (!road_nearest(net, pos, from, qf)) return false;
+    usize idx = r->lanes.size();
+    for (usize i = 0; i < r->lanes.size(); ++i)
+        if (r->lanes[i] == from.lane) {
+            idx = i;
+            break;
+        }
+    if (idx < r->lanes.size()) {
+        r->off_ticks = 0;
+    } else if (r->lanes.empty() || ++r->off_ticks >= kOffRouteTicks) {
+        r->off_ticks = 0;
+        if (!road_route(d, from.lane, r->goal_lane, r->lanes) || r->lanes.empty()) return false;
+        idx = 0;
+    } else {
+        // A lane that is not on the route for a few ticks (the oncoming lane beside it, a junction): keep the last aim.
+        aim = r->aim;
+        remaining = r->remaining;
+        return true;
+    }
     f32 s = from.s;
     f32 left = look;
-    for (usize i = 0; i < route.size(); ++i) {
-        const f32 len = net.def->lanes[route[i]].length;
-        const bool last = i + 1 == route.size();
-        // On the goal's own lane the aim never runs past the goal.
-        const f32 end = last ? math::min(len, to.s) : len;
-        if (s + left <= end) {
-            aim = road_lane_point(net, route[i], s + left);
-            return true;
+    bool aimed = false;
+    f32 rest = 0.0f;
+    for (usize i = idx; i < r->lanes.size(); ++i) {
+        const f32 len = d.lanes[r->lanes[i]].length;
+        const f32 end = i + 1 == r->lanes.size() ? math::min(len, r->goal_s) : len;  // on the goal's own lane never past the goal
+        if (!aimed && s + left <= end) {
+            aim = road_lane_point(net, r->lanes[i], s + left);
+            aimed = true;
         }
-        left -= math::max(end - s, 0.0f);
+        if (!aimed) left -= math::max(end - s, 0.0f);
+        rest += math::max(end - s, 0.0f);
         s = 0.0f;
     }
-    aim = goal;
+    if (!aimed) aim = goal;
+    remaining = rest;
+    r->aim = aim;
+    r->remaining = rest;
     return true;
 }
 
@@ -164,6 +223,8 @@ void set_state(Police3D& p, PoliceState s) {
 void kit3d_wanted(Frame& f) {
     World& w = f.world();
     Wanted3DState& st = *w.try_resource<Wanted3DState>();
+    for (usize i = st.routes.size(); i-- > 0;)
+        if (!w.alive(st.routes[i].car)) st.routes.erase(i);
     Array<Unit> units;
     f.query<const Police3D, const LocalTransform>().each([&](Entity e, const Police3D& p, const LocalTransform&) {
         const Health3D* h = w.try_get<Health3D>(e);
@@ -333,22 +394,27 @@ void kit3d_wanted(Frame& f) {
                 math::vec3 d = p.last_known - position_of(w, e);
                 const f32 dist = std::sqrt(d.x * d.x + d.z * d.z);
                 const math::vec3 fwd = math::rotate(t.rotation, math::vec3{0.0f, 0.0f, -1.0f});
-                // drive_car 2: follow the road network toward the target (straight at it where no lane is near).
-                if (go && p.drive_car == 2 && dist >= 4.0f) {
+                // How far it still has to go: the straight line, or the route metres on the roads (drive_car 2, where a lane is near).
+                f32 togo = dist;
+                if (go && p.drive_car == 2) {
                     math::vec3 aim;
-                    if (road_aim(w, position_of(w, e), fwd, p.last_known, 10.0f + 0.5f * math::max(v->speed, 0.0f), aim)) d = aim - position_of(w, e);
+                    f32 remaining = 0.0f;
+                    if (road_aim(w, st, e, position_of(w, e), fwd, p.last_known, 10.0f + 0.5f * math::max(v->speed, 0.0f), aim, remaining)) {
+                        d = aim - position_of(w, e);
+                        togo = remaining;
+                    }
                 }
-                if (!go || dist < 4.0f) {
+                if (!go || dist < 4.0f || togo < 4.0f) {
                     v->throttle = 0.0f;
                     v->steer = 0.0f;
                     v->brake = 1.0f;
                 } else {
-                    // Signed angle from the heading to the target, positive when it is to the right.
+                    // Signed angle from the heading to the point, positive when it is to the right.
                     const f32 ang = std::atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
                     const f32 max_steer = math::max(v->max_steer, 1.0f) * 0.0174533f;
                     v->steer = math::clamp(ang / max_steer, -1.0f, 1.0f);
                     const f32 turn = std::abs(v->steer);
-                    v->throttle = math::min(1.0f - 0.6f * turn, dist < 12.0f ? 0.4f : 1.0f);
+                    v->throttle = math::min(1.0f - 0.6f * turn, togo < 12.0f ? 0.4f : 1.0f);
                     v->brake = 0.0f;
                 }
                 v->handbrake = 0.0f;
