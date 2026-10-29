@@ -645,6 +645,35 @@ TEST_CASE("wanted3d: a garage clears the wanted level for a price (M-PAYSPRAY)")
     }
 }
 
+TEST_CASE("wanted3d: an arrest costs spare ammunition, dying does not (M-ARRESTLOSS)") {
+    Wanted3D wd;
+    wd.heat = 5.0f;
+    wd.crimes = 1;
+    for (u32 k = 0; k < 3; ++k) {  // k 0: busted with Confiscate3D; k 1: wasted with it; k 2: busted without it
+        Scene s;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        Respawn3D r;
+        r.delay = 1.0f;
+        s.w.add(p, r);
+        Weapon3D wp;
+        wp.magazine = 10;
+        wp.reserve = 100;
+        s.w.add(p, wp);
+        if (k != 2) s.w.add(p, Confiscate3D{0.25f});
+        if (k == 1) {
+            DamageInfo d;
+            d.amount = 1000.0f;
+            CHECK(apply_damage(s.w, p, d));
+        } else {
+            s.cop(2.0f, 0.0f);
+        }
+        s.run(60 * 6);
+        CHECK(s.respawns == 1);
+        CHECK(s.last_reason == (k == 1 ? 2u : 1u));
+        CHECK(s.w.try_get<Weapon3D>(p)->reserve == (k == 0 ? 25u : 100u));
+    }
+}
+
 TEST_CASE("wanted3d: a shop tops up the reserve for a price (M-AMMOSHOP)") {
     const auto buyer = [](Scene& s, f32 x, i32 cash) {
         const Entity p = s.player({}, x, 0.0f);
