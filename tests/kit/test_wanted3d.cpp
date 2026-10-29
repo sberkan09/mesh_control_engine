@@ -447,7 +447,7 @@ Array<byte> cook_ell() {
 
 // A scene with the L and a police car (Vehicle3D inputs only: the test moves the car itself, see drive).
 struct EllScene : Scene {
-    Entity car;
+    Entity car, offender;
     f32 yaw = 0.0f;  // 0 faces -Z; positive turns left
     EllScene(u8 drive_car, math::vec3 car_at, math::vec3 target, f32 car_yaw = 0.0f) {
         install_roads(w, nullptr);
@@ -459,7 +459,7 @@ struct EllScene : Scene {
         Wanted3D wd;
         wd.heat = 25.0f;
         wd.crimes = 1;
-        player(wd, target.x, target.z);
+        offender = player(wd, target.x, target.z);
         Police3D pol;
         pol.drive_car = drive_car;
         pol.sight_range = 400.0f;
@@ -536,6 +536,35 @@ TEST_CASE("wanted3d: a police car on the roads replays to the same state (M-ARRE
     CHECK(first.second.x == second.second.x);
     CHECK(first.second.z == second.second.z);
     CHECK(first.second.z < -20.0f);  // it did drive
+}
+
+TEST_CASE("wanted3d: a police car resumed with no route cache drives like one that never stopped (M-ARREST 4)") {
+    // The cache is not saved: a loaded game starts with it empty. Copy a car's pose after 300 ticks into a fresh world (empty cache)
+    // and let both finish; the route is a function of the car's lane and the goal's lane, so they must end in the same place.
+    EllScene whole(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    for (u32 i = 0; i < 300; ++i) whole.drive();
+    const math::vec3 mid = whole.pos();
+    EllScene resumed(2, mid, {90.0f, 1.0f, -80.0f}, whole.yaw);
+    for (u32 i = 0; i < 1500; ++i) {
+        whole.drive();
+        resumed.drive();
+    }
+    CHECK(whole.pos().x == resumed.pos().x);
+    CHECK(whole.pos().z == resumed.pos().z);
+    CHECK(whole.pos().x > 75.0f);  // and it did get there
+}
+
+TEST_CASE("wanted3d: a police car follows a target that moves to another lane at once (M-ARREST 4)") {
+    EllScene s(2, {1.75f, 1.0f, -50.0f}, {1.75f, 1.0f, -90.0f});  // ahead on the same road: goes on
+    s.run(5);
+    CHECK(s.w.try_get<Vehicle3D>(s.car)->throttle > 0.3f);
+    // The offender is moved onto the far arm of the L; the very next tick the goal is that lane (no stale lane for 15 ticks).
+    s.w.try_get_mut<LocalTransform>(s.offender)->position = {90.0f, 1.0f, -98.0f};
+    s.drive();
+    s.drive();
+    const Vehicle3D& v = *s.w.try_get<Vehicle3D>(s.car);
+    CHECK(v.brake == 0.0f);  // 90 m of road to go: not stopped for the old, nearby goal
+    CHECK(v.throttle > 0.3f);
 }
 
 TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station (M-WASTED)") {

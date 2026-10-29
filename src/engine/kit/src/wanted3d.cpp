@@ -39,17 +39,15 @@ static_assert(sizeof(CarOwner3D) == 8);
 
 namespace {
 
-// A police car's route on the road network (M-ARREST 4), kept between ticks so the A* runs only when the goal's lane changes or the
-// car has left the route, not every tick. Not saved or hashed: a resumed run starts with an empty cache and plans again.
+// A police car's route on the road network (M-ARREST 4), kept between ticks so the A* runs only when the car moves to another lane or
+// the goal's lane changes. It is a pure cache: the route is a function of (the car's lane, the goal's lane) alone, so the same
+// route is planned whether or not the cache is there, and a run resumed from a save (which starts with it empty) drives exactly
+// like one that never stopped. Nothing here is saved or hashed.
 struct CarRoute {
     Entity car;
-    Array<u32> lanes;       // road_route, in driving order; empty = none yet
+    u32 from_lane = 0xFFFFFFFFu;
     u32 goal_lane = 0xFFFFFFFFu;
-    f32 goal_s = 0.0f;      // metres along goal_lane that the goal is
-    u32 age = 0;            // ticks since the goal's lane was last looked up
-    u32 off_ticks = 0;      // consecutive ticks the car's lane was not on the route
-    math::vec3 aim;         // the last aim point (kept while the car's lane is briefly not on the route)
-    f32 remaining = 0.0f;   // route metres from the car to the goal
+    Array<u32> lanes;  // road_route(from_lane, goal_lane), in driving order
 };
 
 struct Wanted3DState {
@@ -60,13 +58,10 @@ struct Wanted3DState {
     Entity road_entity;        // the RoadNetwork3D they use (the first one found)
 };
 
-constexpr u32 kGoalLaneEvery = 15;  // ticks between looks at which lane the goal is on
-constexpr u32 kOffRouteTicks = 15;  // ticks off the route (a flicker between lanes at a junction does not count) before planning again
-
 // M-ARREST 4: where a police car on the road network steers. The route is the quickest lane route (road_route) from the lane under
-// the car, the one going its way, to the lane nearest `goal`. `aim` is the spot `look` metres down it (`goal` when the route ends
-// sooner) and `remaining` the route metres still to go. False when the car or the goal is not near a lane (the car then drives
-// straight at the goal).
+// the car, the one going its way (a junction connector counts), to the lane nearest `goal`. `aim` is the spot `look` metres down it
+// (`goal` when the route ends sooner) and `remaining` the route metres still to go. Everything is looked up afresh each tick (two
+// grid queries); only the A* is cached. False when the car or the goal is not near a lane (the car then drives straight at the goal).
 bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec3 fwd, math::vec3 goal, f32 look, math::vec3& aim,
               f32& remaining) {
     RoadNet net;
@@ -74,6 +69,16 @@ bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec
         if (!road_net_first(w, net)) return false;
         st.road_entity = net.entity;
     }
+    RoadSpot to;
+    RoadNearestQuery qt;
+    qt.max_distance = 80.0f;
+    if (!road_nearest(net, goal, to, qt)) return false;
+    RoadSpot from;
+    RoadNearestQuery qf;
+    qf.max_distance = 30.0f;
+    qf.connectors = true;
+    qf.heading = fwd;
+    if (!road_nearest(net, pos, from, qf)) return false;
     CarRoute* r = nullptr;
     for (CarRoute& c : st.routes)
         if (c.car == car) r = &c;
@@ -82,47 +87,22 @@ bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec
         r = &st.routes[st.routes.size() - 1];
         r->car = car;
     }
-    const RoadRegistry::Def& d = *net.def;
-    if (r->goal_lane == 0xFFFFFFFFu || r->age++ % kGoalLaneEvery == 0) {
-        RoadSpot to;
-        RoadNearestQuery qt;
-        qt.max_distance = 80.0f;
-        if (!road_nearest(net, goal, to, qt)) return false;
-        if (to.lane != r->goal_lane) r->lanes.clear();
+    if (r->lanes.empty() || r->from_lane != from.lane || r->goal_lane != to.lane) {
+        r->from_lane = from.lane;
         r->goal_lane = to.lane;
-        r->goal_s = to.s;
-    }
-    RoadSpot from;
-    RoadNearestQuery qf;
-    qf.max_distance = 30.0f;
-    qf.connectors = true;
-    qf.heading = fwd;
-    if (!road_nearest(net, pos, from, qf)) return false;
-    usize idx = r->lanes.size();
-    for (usize i = 0; i < r->lanes.size(); ++i)
-        if (r->lanes[i] == from.lane) {
-            idx = i;
-            break;
+        if (!road_route(*net.def, from.lane, to.lane, r->lanes) || r->lanes.empty()) {
+            r->lanes.clear();
+            return false;
         }
-    if (idx < r->lanes.size()) {
-        r->off_ticks = 0;
-    } else if (r->lanes.empty() || ++r->off_ticks >= kOffRouteTicks) {
-        r->off_ticks = 0;
-        if (!road_route(d, from.lane, r->goal_lane, r->lanes) || r->lanes.empty()) return false;
-        idx = 0;
-    } else {
-        // A lane that is not on the route for a few ticks (the oncoming lane beside it, a junction): keep the last aim.
-        aim = r->aim;
-        remaining = r->remaining;
-        return true;
     }
+    const RoadRegistry::Def& d = *net.def;
     f32 s = from.s;
     f32 left = look;
     bool aimed = false;
     f32 rest = 0.0f;
-    for (usize i = idx; i < r->lanes.size(); ++i) {
+    for (usize i = 0; i < r->lanes.size(); ++i) {
         const f32 len = d.lanes[r->lanes[i]].length;
-        const f32 end = i + 1 == r->lanes.size() ? math::min(len, r->goal_s) : len;  // on the goal's own lane never past the goal
+        const f32 end = i + 1 == r->lanes.size() ? math::min(len, to.s) : len;  // on the goal's own lane never past the goal
         if (!aimed && s + left <= end) {
             aim = road_lane_point(net, r->lanes[i], s + left);
             aimed = true;
@@ -133,8 +113,6 @@ bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec
     }
     if (!aimed) aim = goal;
     remaining = rest;
-    r->aim = aim;
-    r->remaining = rest;
     return true;
 }
 
