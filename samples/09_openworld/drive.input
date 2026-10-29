@@ -1,5 +1,5 @@
-# 09_openworld: walk west to the parked car (about 10 m), get in, drive west along the avenue, brake, get out.
-1-100 Move=-1,0
+# 09_openworld: walk west (forward: the camera starts looking west) to the parked car (about 10 m), get in, drive west along the avenue, brake, get out.
+1-100 Move=0,1
 110 Interact
 130-330 Move=0,1
 340-470 TriggerL

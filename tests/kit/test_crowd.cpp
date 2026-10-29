@@ -10,11 +10,13 @@
 #include "mce/asset/container.h"
 #include "mce/cook/cook.h"
 #include "mce/cook/importer.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/crowd.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
 #include "mce/kit/vehicles3d.h"
 
@@ -60,8 +62,10 @@ struct Scene {
     World w;
     u64 t = 0;
     Entity net, spawner, focus;
-    explicit Scene(CrowdSpawner3D sp = {}, bool with_focus = false, vec3 focus_at = {}) {
+    // with_bodies: the 3D bodies installed ahead of the crowd, the order kit::install_stock uses.
+    explicit Scene(CrowdSpawner3D sp = {}, bool with_focus = false, vec3 focus_at = {}, bool with_bodies = false) {
         w.register_components<LocalTransform>();
+        if (with_bodies) install_bodies3d(w, nullptr);
         install_roads(w, nullptr);
         install_crowd(w, nullptr);
         const Array<byte> payload = cook_roads(kCross);
@@ -143,6 +147,161 @@ TEST_CASE("crowd: a hand-placed pedestrian snaps to the nearest pavement and wal
     s.run(60);
     const vec3 b = (*s.w.try_get_mut<LocalTransform>(e)).position;
     CHECK(std::fabs(b.z - a.z) == doctest::Approx(1.5f).epsilon(0.1));
+}
+
+// ---- walkers with a kinematic body (the 09_openworld prefab): driven by velocity, standing on the capsule ----
+
+RigidBody3D walker_body() {
+    RigidBody3D b;
+    b.type = BodyType3DKind::Kinematic;
+    b.shape = BodyShape3D::Capsule;
+    b.radius = 0.3f;
+    b.half_height = 0.6f;  // 1.8 m: the origin is 0.9 m above the pavement
+    return b;
+}
+
+Entity bodied_walker(Scene& s, vec3 at = {4.0f, 0.0f, -30.0f}) {
+    Pedestrian3D p;
+    p.speed = 1.5f;
+    return s.w.spawn_with(LocalTransform{at, math::quat::identity(), {1, 1, 1}}, p, walker_body());
+}
+
+physics::BodyState3D body_of(Scene& s, Entity e) {
+    physics::BodyState3D b;
+    REQUIRE(s.w.resource<Physics3D>().world.body_state(e, b));
+    return b;
+}
+
+f32 flat_speed(vec3 v) { return std::sqrt(v.x * v.x + v.z * v.z); }
+
+TEST_CASE("crowd: a walker with a kinematic body walks on its capsule, driven by velocity") {
+    // The bodies sync before the crowd steps; before the crowd drove the body, the physics write-back put the old pose
+    // back every tick and the walker stood at its spawn point while its `s` ran on.
+    Scene s(spawner(0), false, {}, true);
+    const Entity e = bodied_walker(s);
+    s.run(2);
+    const vec3 a = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(a.x == doctest::Approx(4.75f).epsilon(0.01));
+    CHECK(a.y == doctest::Approx(0.9f).epsilon(0.001));  // the capsule stands on the pavement
+    s.run(60);
+    const vec3 c = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(std::fabs(c.z - a.z) == doctest::Approx(1.5f).epsilon(0.1));
+    const physics::BodyState3D b = body_of(s, e);
+    CHECK(b.position.z == doctest::Approx(c.z).epsilon(0.001));
+    CHECK(flat_speed(b.linear_velocity) == doctest::Approx(1.5f).epsilon(0.05));  // contacts see it moving
+    CHECK(flat_speed(s.w.try_get<RigidBody3D>(e)->velocity) == doctest::Approx(1.5f).epsilon(0.05));
+}
+
+TEST_CASE("crowd: a far walker with a body glides between its steps instead of jumping") {
+    Scene s(spawner(0), true, {4.0f, 0.0f, -130.0f}, true);  // 100 m off: past far_radius, inside despawn_radius
+    const Entity e = bodied_walker(s);
+    (*s.w.try_get_mut<Pedestrian3D>(e)).crowd = s.spawner.index + 1;
+    s.run(40);
+    REQUIRE(s.w.try_get<Pedestrian3D>(e)->lod == 2);
+    f32 last = s.w.try_get<LocalTransform>(e)->position.z;
+    u32 moved = 0;
+    for (u32 i = 0; i < 32; ++i) {
+        s.run(1);
+        const f32 z = s.w.try_get<LocalTransform>(e)->position.z;
+        if (std::fabs(z - last) > 0.005f && std::fabs(z - last) < 0.1f) ++moved;  // a tick's walk, not a 16-tick jump
+        last = z;
+    }
+    CHECK(moved >= 30);
+}
+
+TEST_CASE("crowd: a fleeing walker's body runs at the flee pace") {
+    Scene s(spawner(0), false, {}, true);
+    const Entity e = bodied_walker(s);
+    s.run(30);
+    WeaponFired3D shot;
+    shot.origin = {4.0f, 1.0f, -20.0f};
+    shot.end = {4.0f, 1.0f, 30.0f};
+    EventAccess(s.w).push(shot);
+    s.run(10);
+    REQUIRE(s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee);
+    CHECK(flat_speed(body_of(s, e).linear_velocity) == doctest::Approx(1.5f * kPedestrianFleeScale).epsilon(0.05));
+}
+
+TEST_CASE("crowd: a dead walker's body stops, a despawned walker's body goes") {
+    Scene s(spawner(0), true, {4.0f, 0.0f, -30.0f}, true);
+    const Entity e = bodied_walker(s);
+    Health3D hp;
+    hp.max = hp.current = 50.0f;
+    s.w.add(e, hp);
+    (*s.w.try_get_mut<Pedestrian3D>(e)).crowd = s.spawner.index + 1;
+    s.run(30);
+    CHECK(flat_speed(body_of(s, e).linear_velocity) > 1.0f);
+    s.w.try_get_mut<Health3D>(e)->dead = 1;
+    s.run(2);
+    const vec3 fell = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(flat_speed(body_of(s, e).linear_velocity) == doctest::Approx(0.0f));
+    s.run(60);
+    CHECK(s.w.try_get<LocalTransform>(e)->position.z == doctest::Approx(fell.z));
+    s.w.try_get_mut<Health3D>(e)->dead = 0;
+    s.run(5);
+    s.move_focus({4.0f, 0.0f, 900.0f});  // far past despawn_radius
+    s.run(3);
+    CHECK_FALSE(s.w.alive(e));
+    CHECK_FALSE(s.w.resource<Physics3D>().world.has_body(e));
+}
+
+TEST_CASE("crowd: a walker moved from outside goes back to its pavement, body and all") {
+    Scene s(spawner(0), false, {}, true);
+    const Entity e = bodied_walker(s);
+    s.run(30);
+    s.w.try_get_mut<LocalTransform>(e)->position.x += 10.0f;  // a script or the editor drags it off
+    s.run(3);
+    const vec3 back = s.w.try_get<LocalTransform>(e)->position;
+    CHECK(back.x == doctest::Approx(4.75f).epsilon(0.01));
+    CHECK(body_of(s, e).position.x == doctest::Approx(back.x).epsilon(0.001));
+    s.run(30);
+    CHECK(flat_speed(body_of(s, e).linear_velocity) == doctest::Approx(1.5f).epsilon(0.05));
+}
+
+TEST_CASE("crowd: a saved walker with a body resumes where it was") {
+    Array<byte> bytes;
+    vec3 expected;
+    {
+        Scene a(spawner(0), false, {}, true);
+        a.w.register_components<SaveKey>();
+        const Entity e = bodied_walker(a);
+        a.w.add(e, SaveKey{1});
+        a.run(90);
+        save::write_save(a.w, {}, bytes);
+        a.run(120);
+        expected = a.w.try_get<LocalTransform>(e)->position;
+    }
+    Scene b(spawner(0), false, {}, true);
+    b.w.register_components<SaveKey>();
+    const Entity e = bodied_walker(b);  // the base world: the walker at its spawn point, its body built
+    b.w.add(e, SaveKey{1});
+    b.run(2);
+    REQUIRE(save::read_save(b.w, bytes.span()));
+    b.run(120);
+    const vec3 got = b.w.try_get<LocalTransform>(e)->position;
+    CHECK(got.x == doctest::Approx(expected.x).epsilon(0.001));
+    CHECK(got.z == doctest::Approx(expected.z).epsilon(0.001));
+    CHECK(body_of(b, e).position.z == doctest::Approx(got.z).epsilon(0.001));
+}
+
+TEST_CASE("crowd: a walker turns round at a parked car instead of shoving it") {
+    Scene s(spawner(0), false, {}, true);
+    const Entity e = bodied_walker(s);
+    s.run(30);
+    const vec3 at = s.w.try_get<LocalTransform>(e)->position;
+    const f32 ahead = s.w.try_get<RigidBody3D>(e)->velocity.z > 0.0f ? 1.0f : -1.0f;
+    RigidBody3D car;
+    car.half = {0.9f, 0.4f, 1.5f};
+    car.density = 300.0f;
+    car.gravity_scale = 0.0f;  // no floor in this scene
+    const vec3 car_at{4.75f, 0.5f, at.z + ahead * 4.0f};
+    const Entity parked = s.w.spawn_with(LocalTransform{car_at, math::quat::identity(), {1, 1, 1}}, car);
+    s.run(240);
+    const vec3 car_now = s.w.try_get<LocalTransform>(parked)->position;
+    CHECK(math::length(car_now - car_at) < 0.05f);  // not pushed
+    const vec3 now = s.w.try_get<LocalTransform>(e)->position;
+    CHECK((now.z - car_at.z) * ahead < -1.5f);  // still on its own side of the car
+    CHECK(s.w.try_get<RigidBody3D>(e)->velocity.z * ahead < 0.0f);  // walking away from it
 }
 
 TEST_CASE("crowd: the same seed replays to the same hash, another seed does not") {
