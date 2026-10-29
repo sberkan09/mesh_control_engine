@@ -240,6 +240,49 @@ def roads_doc():
             "lane_width": LANE_W, "speed": 11, "nodes": nodes, "roads": roads, "signals": signals}
 
 
+# --- audio (M-OPENWORLD E3) -------------------------------------------------------------------------------
+# The sound files in assets/audio/ come from tools/fetch_audio.py (CC0, see assets/audio/SOURCES.md); here only their sidecars,
+# the two sound sets and the GUIDs the scene uses are written.
+
+AUDIO_FILES = {"engine_loop": ("wav", {}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
+               "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
+FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
+AUDIO_EXT = {name: ext for name, (ext, _) in AUDIO_FILES.items()}
+AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS})
+
+
+def audio_guid(name):
+    return guid("audio/%s.%s" % (name, AUDIO_EXT[name]))
+
+
+G_FOOTSTEPS = guid("audio/footsteps.mcsound")
+G_SHOTS = guid("audio/shots.mcsound")
+
+
+def audio_assets():
+    for name, (ext, settings) in AUDIO_FILES.items():
+        write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
+    for name in FOOTSTEPS:
+        write("audio/%s.ogg.mceasset" % name, {"guid": audio_guid(name), "importer": "ogg", "importer_version": 2, "settings": {}})
+    write("audio/footsteps.mcsound", {"format": "mce-sound", "version": 1, "guid": G_FOOTSTEPS,
+                                      "clips": ["guid:" + audio_guid(n) for n in FOOTSTEPS], "pick": "random", "no_repeat": True,
+                                      "pitch": [0.92, 1.08], "gain_db": [-3, 0]})
+    write("audio/shots.mcsound", {"format": "mce-sound", "version": 1, "guid": G_SHOTS,
+                                  "clips": ["guid:" + audio_guid("shot_1"), "guid:" + audio_guid("shot_2")], "pick": "random",
+                                  "no_repeat": True, "pitch": [0.96, 1.04], "gain_db": [-2, 0]})
+
+
+def engine_audio(traffic):
+    """The engine of a car: a looping 3D AudioSource whose gain and pitch EngineAudio drives from the car's speed."""
+    return {
+        "AudioSource": {"clip": "guid:" + audio_guid("engine_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                        "gain_db": -60, "priority": 90 if traffic else 150},
+        "AudioSpatial": {"attenuation_id": 1},
+        "EngineAudio": {"idle_pitch": 0.8, "top_pitch": 2.3, "top_speed": 28, "idle_db": -14 if traffic else -10,
+                        "top_db": -6 if traffic else 0, "parked_db": -60},
+    }
+
+
 # --- scene helpers --------------------------------------------------------------------------------------
 
 class Scene:
@@ -413,6 +456,7 @@ def car_entities(model, traffic):
         "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
+    root.update(engine_audio(traffic))
     if traffic:
         root["TrafficDriver3D"] = {}
         root["VehicleSeat3D"]["locked"] = 1
@@ -483,6 +527,7 @@ def scene():
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
+        "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
         # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
@@ -494,6 +539,8 @@ def scene():
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
+        "AudioListener": {},
+        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -2},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
         "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
@@ -527,7 +574,16 @@ def scene():
             "Police3D": {"min_level": 1, "attack_level": 2, "sight_range": 55, "attack_range": 28, "search_time": 12},
             "MapMarker": {"color": [1.0, 0.2, 0.2, 1], "layer": 0, "always_visible": 1, "label": "Police"},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
+            "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.7, "gain_db": -6},
+            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -4},
         })
+        if n % 2 == 0:   # two of the four carry a siren; it sounds from the wanted level the unit answers (A9 gives it a car)
+            s.ents[cop]["components"].update({
+                "AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True, "gain_db": -60,
+                                "priority": 170},
+                "AudioSpatial": {"attenuation_id": 1},
+                "SirenAudio": {"min_level": 1, "active_db": -9},
+            })
         s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                             "MeshRef": model_mesh("character-d")})
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
@@ -568,6 +624,12 @@ def scene():
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
         s.add(name + " pad", {"LocalTransform": tf((pos[0], 0.22, pos[1]), (5.0, 0.04, 5.0)), "MeshRef": mesh(tint, 0)})
+    # The mix (bus layout: Master > SFX (engines, shots, steps, sirens, ambience); Music and Voice stay free for E7/E8): a limiter
+    # on the master, the pause snapshot (the world goes muffled and quieter behind the pause screen) and the city bed.
+    s.add("Mixer", {"AudioLimiter": {"ceiling_db": -1}})
+    s.add("Pause mix", {"AudioSnapshot": {"bus": "SFX", "while_paused": True, "fade_s": 0.3, "gain_db": -12, "lowpass_hz": 900}})
+    s.add("City ambience", {"AudioSource": {"clip": "guid:" + audio_guid("city_ambience"), "bus": "SFX", "loop": True,
+                                            "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
@@ -600,6 +662,7 @@ def hud():
 
 
 models()
+audio_assets()
 hud()
 input_map()
 write("roads/city.mcroads", roads_doc())
