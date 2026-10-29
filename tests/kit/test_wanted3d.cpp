@@ -5,6 +5,11 @@
 
 #include <cmath>
 
+#include <cstring>
+
+#include "mce/asset/container.h"
+#include "mce/cook/cook.h"
+#include "mce/cook/importer.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/bodies3d.h"
@@ -13,6 +18,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
+#include "mce/kit/roads.h"
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
@@ -413,6 +419,154 @@ TEST_CASE("wanted3d: a police car steers and drives at the target (M-ARREST 3)")
     }
 }
 
+namespace {
+
+// An L of road (M-ARREST 4): from the origin 100 m north (-Z), then 100 m east, one lane each way.
+const asset::Guid kEllGuid{0x7e7a000000004000ull, 0x80000000000000d1ull};
+
+Array<byte> cook_ell() {
+    constexpr const char* kL = R"({ "format": "mce-roads", "version": 1, "name": "ell",
+      "nodes": [{"name": "a", "at": [0, 0, 0]}, {"name": "b", "at": [0, 0, -100]}, {"name": "c", "at": [100, 0, -100]}],
+      "roads": [{"name": "up", "from": "a", "to": "b", "lanes": 1}, {"name": "over", "from": "b", "to": "c", "lanes": 1}] })";
+    cook::ImporterRegistry importers;
+    cook::ImporterRegistry::add_builtins(importers);
+    const cook::IImporter* imp = importers.for_extension(".mcroads");
+    REQUIRE(imp);
+    cook::AssetRegistry registry;
+    cook::DiagList diags;
+    Array<byte> cooked;
+    REQUIRE(cook::cook_document(registry, *imp, kEllGuid, "ell.mcroads", kL, cooked, diags));
+    auto view = asset::ContainerView::open(cooked.span(), "ell.mcroads");
+    REQUIRE(view);
+    const Span<const byte> p = view.value().payload(view.value().find(asset::ChunkType::RoadNetwork, kEllGuid));
+    Array<byte> out;
+    out.resize(p.size());
+    std::memcpy(out.data(), p.data(), p.size());
+    return out;
+}
+
+// A scene with the L and a police car (Vehicle3D inputs only: the test moves the car itself, see drive).
+struct EllScene : Scene {
+    Entity car, offender;
+    f32 yaw = 0.0f;  // 0 faces -Z; positive turns left
+    EllScene(u8 drive_car, math::vec3 car_at, math::vec3 target, f32 car_yaw = 0.0f) {
+        install_roads(w, nullptr);
+        const Array<byte> payload = cook_ell();
+        REQUIRE(w.resource<RoadRegistry>().define(kEllGuid, payload.span()));
+        RoadNetwork3D n;
+        n.roads.guid = kEllGuid;
+        w.spawn_with(at(0, 0, 0), n);
+        Wanted3D wd;
+        wd.heat = 25.0f;
+        wd.crimes = 1;
+        offender = player(wd, target.x, target.z);
+        Police3D pol;
+        pol.drive_car = drive_car;
+        pol.sight_range = 400.0f;
+        pol.arrest_range = 0.0f;
+        Health3D h;
+        h.team = 2;
+        yaw = car_yaw;
+        LocalTransform lt = at(car_at.x, car_at.y, car_at.z);
+        lt.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, yaw);
+        car = w.spawn_with(lt, pol, h, Vehicle3D{});
+    }
+    math::vec3 pos() { return w.try_get<LocalTransform>(car)->position; }
+    // One tick: the systems write the car's inputs, then a kinematic car (8 m/s, 0.8 rad/s at full lock) follows them.
+    void drive() {
+        run(1);
+        const Vehicle3D& v = *w.try_get<Vehicle3D>(car);
+        LocalTransform& lt = *w.try_get_mut<LocalTransform>(car);
+        yaw -= v.steer * 0.8f * kDt;
+        lt.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, yaw);
+        const f32 speed = v.brake > 0.5f ? 0.0f : 8.0f * v.throttle;
+        lt.position = lt.position + math::rotate(lt.rotation, math::vec3{0.0f, 0.0f, -1.0f}) * (speed * kDt);
+    }
+};
+
+// Metres from `p` to the L (flat).
+f32 off_ell(math::vec3 p) {
+    const f32 up = std::abs(p.x) + (p.z > 0.0f ? p.z : (p.z < -100.0f ? -100.0f - p.z : 0.0f));
+    const f32 over = std::abs(p.z + 100.0f) + (p.x < 0.0f ? -p.x : (p.x > 100.0f ? p.x - 100.0f : 0.0f));
+    return math::min(up, over);
+}
+
+}  // namespace
+
+TEST_CASE("wanted3d: a police car with drive_car 2 takes the roads to a target round the corner (M-ARREST 4)") {
+    // The target stands 90 m east and 80 m north of the start, in the L's inner corner, off the road.
+    for (u32 k = 0; k < 2; ++k) {  // 0: straight at it (drive_car 1), 1: along the road (drive_car 2)
+        EllScene s(k == 0 ? 1 : 2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+        f32 worst = 0.0f;
+        for (u32 i = 0; i < 2400; ++i) {
+            s.drive();
+            worst = math::max(worst, off_ell(s.pos()));
+        }
+        if (k == 0) {
+            CHECK(worst > 30.0f);  // cuts across the grass
+        } else {
+            CHECK(worst < 12.0f);               // stays on the road (the test car cuts the corner by its 10 m turning circle)
+            CHECK(s.pos().x > 75.0f);           // went round the corner
+            CHECK(s.pos().z < -90.0f);
+            CHECK(s.w.try_get<Vehicle3D>(s.car)->brake == 1.0f);  // and parked near the target's lane
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a police car whose target is behind it on the road keeps on to turn round (M-ARREST 4)") {
+    // The target stands on the oncoming lane 45 m behind the car, which faces away from it.
+    EllScene straight(1, {1.75f, 1.0f, -50.0f}, {-1.75f, 1.0f, -5.0f});
+    EllScene roads(2, {1.75f, 1.0f, -50.0f}, {-1.75f, 1.0f, -5.0f});
+    straight.run(5);
+    roads.run(5);
+    CHECK(std::abs(straight.w.try_get<Vehicle3D>(straight.car)->steer) > 0.9f);  // a straight line would be a U-turn on the spot
+    CHECK(std::abs(roads.w.try_get<Vehicle3D>(roads.car)->steer) < 0.5f);         // the route goes on ahead
+    CHECK(roads.w.try_get<Vehicle3D>(roads.car)->throttle > 0.3f);
+}
+
+TEST_CASE("wanted3d: a police car on the roads replays to the same state (M-ARREST 4)") {
+    const auto play = [] {
+        EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+        for (u32 i = 0; i < 900; ++i) s.drive();
+        return std::pair<u64, math::vec3>{s.w.state_hash(), s.pos()};
+    };
+    const auto first = play();
+    const auto second = play();
+    CHECK(first.first == second.first);
+    CHECK(first.second.x == second.second.x);
+    CHECK(first.second.z == second.second.z);
+    CHECK(first.second.z < -20.0f);  // it did drive
+}
+
+TEST_CASE("wanted3d: a police car resumed with no route cache drives like one that never stopped (M-ARREST 4)") {
+    // The cache is not saved: a loaded game starts with it empty. Copy a car's pose after 300 ticks into a fresh world (empty cache)
+    // and let both finish; the route is a function of the car's lane and the goal's lane, so they must end in the same place.
+    EllScene whole(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    for (u32 i = 0; i < 300; ++i) whole.drive();
+    const math::vec3 mid = whole.pos();
+    EllScene resumed(2, mid, {90.0f, 1.0f, -80.0f}, whole.yaw);
+    for (u32 i = 0; i < 1500; ++i) {
+        whole.drive();
+        resumed.drive();
+    }
+    CHECK(whole.pos().x == resumed.pos().x);
+    CHECK(whole.pos().z == resumed.pos().z);
+    CHECK(whole.pos().x > 75.0f);  // and it did get there
+}
+
+TEST_CASE("wanted3d: a police car follows a target that moves to another lane at once (M-ARREST 4)") {
+    EllScene s(2, {1.75f, 1.0f, -50.0f}, {1.75f, 1.0f, -90.0f});  // ahead on the same road: goes on
+    s.run(5);
+    CHECK(s.w.try_get<Vehicle3D>(s.car)->throttle > 0.3f);
+    // The offender is moved onto the far arm of the L; the very next tick the goal is that lane (no stale lane for 15 ticks).
+    s.w.try_get_mut<LocalTransform>(s.offender)->position = {90.0f, 1.0f, -98.0f};
+    s.drive();
+    s.drive();
+    const Vehicle3D& v = *s.w.try_get<Vehicle3D>(s.car);
+    CHECK(v.brake == 0.0f);  // 90 m of road to go: not stopped for the old, nearby goal
+    CHECK(v.throttle > 0.3f);
+}
+
 TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station (M-WASTED)") {
     Wanted3D wd;
     wd.heat = 5.0f;  // level 1
@@ -806,6 +960,38 @@ TEST_CASE("wanted3d: a cash pickup pays whoever touches it (M-CASHPICKUP)") {
             CHECK(s.pickups == 0);
             CHECK(s.w.alive(c));
         }
+    }
+}
+
+TEST_CASE("wanted3d: a failed mission costs its actor the fail_fee (M-MISSIONFEE)") {
+    for (u32 k = 0; k < 3; ++k) {  // k 0: fails, fee 60 of 100; k 1: fails, fee 500 (wallet floors at 0); k 2: completes, no fee
+        Scene s;
+        install_missions(s.w, nullptr);
+        const Entity p = s.player();
+        s.w.add(p, Wallet3D{100});
+        Objective o;
+        o.kind = ObjectiveKind::Signal;
+        o.signal = "delivered";
+        const Entity obj = s.w.spawn_with(o);
+        Mission m;
+        m.id = "job";
+        m.objective = obj;
+        m.actor = p;
+        m.start_on_load = 1;
+        if (k != 2) m.time_limit = 0.5f;
+        MissionReward3D rw;
+        rw.cash = 0;
+        rw.fail_fee = k == 1 ? 500 : 60;
+        const Entity mis = s.w.spawn_with(m, rw);
+        s.run(5);
+        if (k == 2) {
+            MissionSignal sig;
+            sig.name = "delivered";
+            EventAccess(s.w).push(sig);
+        }
+        s.run(60);
+        CHECK(s.w.try_get<Mission>(mis)->state == (k == 2 ? MissionState::Complete : MissionState::Failed));
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 0 ? 40 : k == 1 ? 0 : 100));
     }
 }
 

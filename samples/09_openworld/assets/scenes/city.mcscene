@@ -17143,6 +17143,9 @@
      "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
      "stride": 1.9,
      "gain_db": -4
+    },
+    "UiScreen": {
+     "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
     }
    }
   },
@@ -17198,6 +17201,7 @@
       0
      ],
      "distance": 5.5,
+     "yaw": 1.5707963267948966,
      "pitch": 0.3,
      "min_pitch": -0.3,
      "max_pitch": 1.2,
@@ -17224,6 +17228,9 @@
       -6.0
      ],
      "mask": 65535
+    },
+    "UiScreen": {
+     "document": "guid:9f41b508-dabf-59c6-9aba-dc181c5e3ade"
     }
    }
   },
@@ -17288,6 +17295,15 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17382,6 +17398,15 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17476,6 +17501,15 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "MapMarker": {
+     "color": [
+      0.3,
+      0.6,
+      1.0,
+      1
+     ],
+     "label": "Car"
     }
    }
   },
@@ -17543,6 +17577,17 @@
      "sight_range": 55,
      "attack_range": 28,
      "search_time": 12
+    },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
     },
     "Weapon3D": {
      "kind": "Hitscan",
@@ -17643,6 +17688,17 @@
      "attack_range": 28,
      "search_time": 12
     },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
+    },
     "Weapon3D": {
      "kind": "Hitscan",
      "damage": 7,
@@ -17726,6 +17782,17 @@
      "sight_range": 55,
      "attack_range": 28,
      "search_time": 12
+    },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
     },
     "Weapon3D": {
      "kind": "Hitscan",
@@ -17825,6 +17892,17 @@
      "sight_range": 55,
      "attack_range": 28,
      "search_time": 12
+    },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.2,
+      0.2,
+      1
+     ],
+     "layer": 0,
+     "always_visible": 1,
+     "label": "Police"
     },
     "Weapon3D": {
      "kind": "Hitscan",
@@ -17970,7 +18048,7 @@
      "attack_level": 10,
      "drive_nav": 0,
      "aim": 0,
-     "drive_car": 1,
+     "drive_car": 2,
      "sight_range": 90,
      "attack_range": 0,
      "search_time": 15,
@@ -18049,7 +18127,7 @@
      "attack_level": 10,
      "drive_nav": 0,
      "aim": 0,
-     "drive_car": 1,
+     "drive_car": 2,
      "sight_range": 90,
      "attack_range": 0,
      "search_time": 15,
@@ -18128,7 +18206,7 @@
      "attack_level": 10,
      "drive_nav": 0,
      "aim": 0,
-     "drive_car": 1,
+     "drive_car": 2,
      "sight_range": 90,
      "attack_range": 0,
      "search_time": 15,
@@ -18207,7 +18285,7 @@
      "attack_level": 10,
      "drive_nav": 0,
      "aim": 0,
-     "drive_car": 1,
+     "drive_car": 2,
      "sight_range": 90,
      "attack_range": 0,
      "search_time": 15,

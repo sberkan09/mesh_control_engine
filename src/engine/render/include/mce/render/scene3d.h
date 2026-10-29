@@ -432,6 +432,28 @@ struct NightSky {
     u8 pad_[3] = {};
 };
 
+// Aurora curtains in the sky pass (M-AURORA 16b; the kit extract drives it from the Aurora component, the quality
+// tiers gate it). `level` 0..4 is the brightness gain with the latitude gate and the night fade already folded in
+// (0 = off: the frame is the one without it). `base_height` 0.02..0.6 and `height_span` 0.05..0.8 are the curtain's
+// lower edge and reach as sines of the elevation, `azimuth` the arc centre on xz (unit; NaN / zero -> (0, 1)),
+// `half_width_cos` -1..1 the cosine of the arc's half-width, `curtain_count` 1..6, `time` the wrapped animation
+// clock in seconds (non-finite -> 0), `speed` 0..4, `low_color` / `high_color` linear tints (0..1 per channel).
+// `enabled` is a pass-through switch for the caller; apply_quality does not change it.
+struct AuroraSky {
+    f32 level = 0.0f;
+    f32 base_height = 0.18f;
+    f32 height_span = 0.35f;
+    math::vec2 azimuth{0.0f, 1.0f};
+    f32 half_width_cos = 0.8192f;
+    i32 curtain_count = 3;
+    f32 time = 0.0f;
+    f32 speed = 1.0f;
+    math::vec3 low_color{0.10f, 1.00f, 0.35f};
+    math::vec3 high_color{0.55f, 0.15f, 0.90f};
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // A water plane for the forward pass (M-WATER 15b; the kit extract drives it from the Water component, the quality
 // tiers gate it). One horizontal square of `half_extent` meters centred on the camera, at `level_y`. The wave set is
 // carried as authoring parameters (the shader and the kit re-derive the same tables): `wave_count` 1..8 Gerstner
@@ -780,6 +802,7 @@ public:
     void set_clouds(const Clouds& c) { clouds_ = c; }
     void set_night_sky(const NightSky& n) { night_sky_ = n; }
     void set_water(const WaterSurface& w) { water_ = w; }
+    void set_aurora(const AuroraSky& a) { aurora_ = a; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -849,6 +872,7 @@ public:
     const Clouds& clouds() const { return clouds_; }
     const NightSky& night_sky() const { return night_sky_; }
     const WaterSurface& water() const { return water_; }
+    const AuroraSky& aurora() const { return aurora_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -943,6 +967,7 @@ private:
     Clouds clouds_;
     NightSky night_sky_;
     WaterSurface water_;
+    AuroraSky aurora_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
