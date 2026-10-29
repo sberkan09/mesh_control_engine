@@ -721,6 +721,28 @@ TEST_CASE("golden: water_night: the moon and the stars in a gentle swell") {
     check_golden("water_night", f);
 }
 
+// ---- M-AURORA 16c: the aurora curtains ---------------------------------------------------------------------------
+
+// The default curtains (level 1, three curtains across a 70 degree arc toward the camera's view) over the star field
+// of the night sky, the camera looking up (aurora_sky_scene).
+TEST_CASE("golden: aurora_sky: aurora curtains over the starry night sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { aurora_sky_scene(s, aurora_carrier()); });
+    check_golden("aurora_sky", f);
+}
+
+// The same curtains over a calm sea at night (a 0.05 m swell): the sky above the horizon and their reflection.
+TEST_CASE("golden: aurora_water: aurora curtains and their reflection on a night sea") {
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        water_night_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f), water_carrier(0.05f));
+        s.set_aurora(aurora_carrier());
+    });
+    check_golden("aurora_water", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
