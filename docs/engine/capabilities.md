@@ -114,6 +114,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `MissionMarker` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker |
+| `MissionWantedFail` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
 | `Moon` | `mce/kit/moon.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |

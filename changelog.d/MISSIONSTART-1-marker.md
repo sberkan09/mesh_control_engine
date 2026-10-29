@@ -1,0 +1,1 @@
+- Kit (M-MISSIONSTART 1): `MissionMarker` starts a mission when its actor reaches the marker; `MissionWantedFail` fails a mission at a wanted level. Record: `docs/milestones/M-MISSIONSTART.md`.

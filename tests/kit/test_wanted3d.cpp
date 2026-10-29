@@ -774,6 +774,44 @@ TEST_CASE("wanted3d: a completed mission pays its actor the MissionReward3D (M-M
     }
 }
 
+TEST_CASE("wanted3d: a marker starts its mission and the wanted level can fail it (M-MISSIONSTART)") {
+    const auto job = [](Scene& s, Entity p) {
+        Objective o;
+        o.kind = ObjectiveKind::Signal;
+        o.signal = "never";
+        const Entity obj = s.w.spawn_with(o);
+        Mission m;
+        m.id = "job";
+        m.objective = obj;
+        m.actor = p;
+        return s.w.spawn_with(m);
+    };
+    for (u32 k = 0; k < 3; ++k) {  // k 0: actor at the marker; k 1: far; k 2: marker disabled
+        Scene s;
+        install_missions(s.w, nullptr);
+        const Entity p = s.player({}, k == 1 ? 40.0f : 1.0f, 0.0f);
+        const Entity mis = job(s, p);
+        MissionMarker mk;
+        mk.mission = mis;
+        mk.enabled = k == 2 ? 0 : 1;
+        s.w.spawn_with(at(0.0f, 1.0f, 0.0f), mk);
+        s.run(10);
+        CHECK((s.w.try_get<Mission>(mis)->state == MissionState::Active) == (k == 0));
+    }
+    for (u32 k = 0; k < 2; ++k) {  // k 0: wanted level 3 fails a level-3 mission; k 1: level 1 does not
+        Scene s;
+        install_missions(s.w, nullptr);
+        Wanted3D wd;
+        wd.heat = k == 0 ? 45.0f : 25.0f;
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        const Entity mis = job(s, p);
+        s.w.add(mis, MissionWantedFail{3});
+        s.w.try_get_mut<Mission>(mis)->start = 1;
+        s.run(10);
+        CHECK(s.w.try_get<Mission>(mis)->state == (k == 0 ? MissionState::Failed : MissionState::Active));
+    }
+}
+
 TEST_CASE("wanted3d: boarding someone's car is a crime, once per car (M-CARJACK)") {
     Wanted3D wd;
     const auto car = [](Scene& s, bool owned) {
