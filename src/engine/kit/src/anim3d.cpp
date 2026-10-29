@@ -302,7 +302,7 @@ void kit3d_locomotion(Frame& f) {
     World& w = f.world();
     asset::AssetSystem* assets = kit3d_assets(w);
     Anim3DAssets& cache = w.resource<Anim3DAssets>();
-    f.query<Locomotion3D&, LocalTransform&>().each([&](Entity e, Locomotion3D& l, LocalTransform& t) {
+    f.query<Locomotion3D&, const LocalTransform>().each([&](Entity e, Locomotion3D& l, const LocalTransform& t) {
         vec3 pos, scale;
         quat rot;
         world_pose(w, e, t, pos, rot, scale);
@@ -335,7 +335,9 @@ void kit3d_locomotion(Frame& f) {
             while (turn > math::kPi) turn -= 2.0f * math::kPi;
             while (turn < -math::kPi) turn += 2.0f * math::kPi;
             const f32 step = l.turn_rate * dt;
-            t.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, have + math::clamp(turn, -step, step));
+            // Written only here, so an entity that does not turn is not a changed transform this tick.
+            if (LocalTransform* out = w.try_get_mut<LocalTransform>(e))
+                out->rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, have + math::clamp(turn, -step, step));
         }
 
         const Entity target = l.animator.is_null() ? e : l.animator;

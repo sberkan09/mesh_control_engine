@@ -67,7 +67,8 @@ MCE_COMPONENT(IKTarget3D, (animator, Help{"the entity whose Animator graph has t
 // min_rate..max_rate) while moving and at 1 when still, so feet keep pace with the ground.
 // With turn_rate set, a root entity (no ChildOf) turns at up to turn_rate rad/s to face where it
 // moves while faster than turn_min_speed: for a player's CharacterController3D, which input moves
-// but nothing turns (a NavAgent3D has face_motion, a crowd walker faces its pavement).
+// but nothing turns (a NavAgent3D has face_motion, a crowd walker faces its pavement). Its rotation is
+// rebuilt as a yaw about +Y: any pitch or roll it had is dropped while it turns.
 struct Locomotion3D {
     Entity animator;               // the entity with the Animator (the model); null = this entity
     f32 smoothing = 0.1f;          // s: how quickly the speeds follow the motion (0 = at once)
