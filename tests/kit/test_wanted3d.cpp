@@ -34,6 +34,7 @@ struct Scene {
     u32 sprays = 0;
     u32 ammo_sales = 0;
     u32 heals = 0;
+    u32 pickups = 0;
     f32 last_heal = 0.0f;
     u32 last_rounds = 0;
     i32 last_paid = 0;
@@ -61,6 +62,7 @@ struct Scene {
                 ++sprays;
                 last_paid = sp.paid;
             }
+            pickups += static_cast<u32>(ev.read<CashPickedUp3D>().size());
             for (const HealBought3D& h : ev.read<HealBought3D>()) {
                 ++heals;
                 last_heal = h.hp;
@@ -734,6 +736,46 @@ TEST_CASE("wanted3d: a medic heals a hurt buyer for a price (M-HEALSHOP)") {
             s.run(30);
             CHECK(s.heals == 0);
             CHECK(s.w.try_get<Health3D>(p)->current == 40.0f);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a cash pickup pays whoever touches it (M-CASHPICKUP)") {
+    {  // one-shot: paid once, the pickup is gone
+        Scene s;
+        const Entity p = s.player({}, 1.0f, 0.0f);
+        s.w.add(p, Wallet3D{});
+        const Entity c = s.w.spawn_with(at(0.0f, 1.0f, 0.0f), CashPickup3D{});
+        s.run(6);
+        CHECK(s.pickups == 1);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 50);
+        CHECK(!s.w.alive(c));
+    }
+    {  // respawning: waits, then pays again while the holder stays
+        Scene s;
+        const Entity p = s.player({}, 1.0f, 0.0f);
+        s.w.add(p, Wallet3D{});
+        CashPickup3D cp;
+        cp.respawn = 1.0f;
+        const Entity c = s.w.spawn_with(at(0.0f, 1.0f, 0.0f), cp);
+        s.run(6);
+        CHECK(s.pickups == 1);
+        CHECK(s.w.alive(c));
+        s.run(30);
+        CHECK(s.pickups == 1);  // still waiting
+        s.run(60);
+        CHECK(s.pickups == 2);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 100);
+    }
+    {  // too far, or no wallet: nothing is taken
+        for (u32 k = 0; k < 2; ++k) {
+            Scene s;
+            const Entity p = s.player({}, k == 0 ? 30.0f : 1.0f, 0.0f);
+            if (k == 0) s.w.add(p, Wallet3D{});
+            const Entity c = s.w.spawn_with(at(0.0f, 1.0f, 0.0f), CashPickup3D{});
+            s.run(30);
+            CHECK(s.pickups == 0);
+            CHECK(s.w.alive(c));
         }
     }
 }

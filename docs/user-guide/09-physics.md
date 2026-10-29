@@ -1013,6 +1013,9 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 - **Ammo shop (M-AMMOSHOP).** Put `AmmoShop3D` (`radius`, `price_per_round`, `stock_to`) on a shop entity. A player who has a
   `Weapon3D` (with a `magazine`, not `infinite_ammo`) and a `Wallet3D` and stands within `radius` has the weapon's `reserve`
   filled up to `stock_to` and pays `price_per_round` for each round; with too little cash it buys as many as it can afford.
+- **Cash pickups (M-CASHPICKUP).** Put `CashPickup3D` (`cash`, `radius`, `respawn`) on a placed entity: the first `Wallet3D` holder that
+  comes within `radius` is paid `cash` and `CashPickedUp3D` is pushed. With `respawn` 0 the pickup is destroyed; otherwise it
+  waits `respawn` seconds before it can be taken again (hide it from the event). A holder with a full wallet takes nothing.
 - **Mission givers and wanted-level failure (M-MISSIONSTART).** Put `MissionMarker` (`mission`, `radius`) on a placed entity: when the
   `actor` of that Idle `Mission` stands within `radius`, the mission starts, as if `start` were set. Add `MissionWantedFail`
   (`level`, default 3) to a Mission entity and it fails (`MissionFailed` reason 3) once its actor's `Wanted3D` reaches that level.

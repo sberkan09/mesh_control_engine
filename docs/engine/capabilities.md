@@ -174,6 +174,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `PaySpray3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage |
 | `AmmoShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter |
 | `HealShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic |
+| `CashPickup3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts it on dropped or placed cash |
 | `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/13_water/assets/scenes/water.mcscene |
 | `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
