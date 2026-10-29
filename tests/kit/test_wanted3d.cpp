@@ -596,6 +596,55 @@ TEST_CASE("wanted3d: a police car that cannot move backs out and tries again (M-
     CHECK(steer_in_reverse <= 0.0f);  // the aim is ahead or to the right, so the wheel is straight or to the left
 }
 
+TEST_CASE("wanted3d: a car that has to brake stops reversing (M-ARREST 5)") {
+    EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    s.run(5);
+    for (u32 i = 0; i < 200 && s.w.try_get<Police3D>(s.car)->reverse_left <= 0.0f; ++i) {
+        s.run(1);
+        s.w.try_get_mut<Vehicle3D>(s.car)->speed = 0.0f;
+    }
+    REQUIRE(s.w.try_get<Police3D>(s.car)->reverse_left > 0.0f);
+    // The target is now within 4 m: the car brakes at once instead of reversing blind for the rest of the 1.5 s.
+    const math::vec3 here = s.pos();
+    s.w.try_get_mut<LocalTransform>(s.offender)->position = {here.x, here.y, here.z - 2.0f};
+    s.run(1);
+    const Police3D& p = *s.w.try_get<Police3D>(s.car);
+    const Vehicle3D& v = *s.w.try_get<Vehicle3D>(s.car);
+    CHECK(p.reverse_left == 0.0f);
+    CHECK(p.stuck_time == 0.0f);
+    CHECK(v.throttle == 0.0f);
+    CHECK(v.brake == 1.0f);
+}
+
+TEST_CASE("wanted3d: the stuck and reverse timers are saved state and a resumed car carries on (M-ARREST 5)") {
+    EllScene whole(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    whole.run(5);
+    for (u32 i = 0; i < 200 && whole.w.try_get<Police3D>(whole.car)->reverse_left <= 0.0f; ++i) {
+        whole.run(1);
+        whole.w.try_get_mut<Vehicle3D>(whole.car)->speed = 0.0f;
+    }
+    const Police3D mid = *whole.w.try_get<Police3D>(whole.car);
+    REQUIRE(mid.reverse_left > 0.0f);
+    // The timers are part of the world hash: a car saved mid-reverse is not the same state as one that has not started.
+    EllScene fresh(2, whole.pos(), {90.0f, 1.0f, -80.0f}, whole.yaw);
+    const u64 before = fresh.w.state_hash();
+    fresh.w.try_get_mut<Police3D>(fresh.car)->reverse_left = mid.reverse_left;
+    CHECK(fresh.w.state_hash() != before);
+    fresh.w.try_get_mut<Police3D>(fresh.car)->stuck_time = 0.7f;
+    fresh.w.try_get_mut<Police3D>(fresh.car)->reverse_left = 0.0f;
+    CHECK(fresh.w.state_hash() != before);
+    // A loaded car starts Idle (the state is not saved) with the saved timers: they stay in range and it drives on to the goal.
+    *fresh.w.try_get_mut<Police3D>(fresh.car) = mid;
+    fresh.w.try_get_mut<Police3D>(fresh.car)->state = PoliceState::Idle;
+    for (u32 i = 0; i < 1500; ++i) {
+        fresh.drive();
+        const Police3D& p = *fresh.w.try_get<Police3D>(fresh.car);
+        CHECK(p.reverse_left <= 1.5f);
+        CHECK(p.stuck_time < 2.1f);
+    }
+    CHECK(fresh.pos().x > 75.0f);
+}
+
 TEST_CASE("wanted3d: a moving police car is not mistaken for a stuck one (M-ARREST 5)") {
     EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
     for (u32 i = 0; i < 1500; ++i) {

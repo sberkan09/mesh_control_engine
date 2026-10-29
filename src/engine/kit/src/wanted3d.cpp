@@ -386,6 +386,7 @@ void kit3d_wanted(Frame& f) {
                 }
                 // Pushing the throttle without moving for 2 s: back out for 1.5 s with the wheel against the way it wants to go.
                 const bool braking = !go || dist < 4.0f || togo < 4.0f;
+                if (braking) p.reverse_left = 0.0f;
                 if (p.reverse_left > 0.0f) {
                     p.reverse_left = math::max(p.reverse_left - f.dt, 0.0f);
                     const f32 ang = std::atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
