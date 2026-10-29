@@ -246,7 +246,8 @@ def roads_doc():
 # The sound files in assets/audio/ come from tools/fetch_audio.py (CC0, see assets/audio/SOURCES.md); here only their sidecars,
 # the two sound sets and the GUIDs the scene uses are written.
 
-AUDIO_FILES = {"engine_loop": ("wav", {}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
+AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vorbis", "quality": 0.3}),
+               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
 HITS = ["hit_%d" % i for i in range(1, 6)]
@@ -262,6 +263,7 @@ def audio_guid(name):
 G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
 G_HITS = guid("audio/hits.mcsound")
+G_LAMP = guid("materials/lamp.mcmat")
 G_CRASHES = guid("audio/crashes.mcsound")
 
 
@@ -535,13 +537,73 @@ def prefabs():
                                           "entities": walker})
 
 
+# --- day and night, sky, street lamps, weather (M-OPENWORLD E6) ---------------------------------------------
+
+START_HOUR = 9.0      # the game starts on a morning
+DAY_SECONDS = 720     # twelve real minutes for 24 hours
+WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
+
+
+def lamp_material():
+    write("materials/lamp.mcmat", {"format": "mce-material", "version": 1, "guid": G_LAMP, "name": "lamp", "base_color": [0.1, 0.1, 0.12, 1],
+                                   "metallic": 0.1, "roughness": 0.3, "emissive": [2.2, 1.6, 0.8], "alpha_mode": "opaque", "alpha_cutoff": 0.5,
+                                   "double_sided": False, "unlit": False, "textures": {}})
+
+
+def atmosphere(s, net):
+    """A world clock with a day cycle, a physical sky with a moon and stars, a street lamp at two corners of every junction that
+    lights at dusk, and a seeded weather schedule (rain, storm, fog, lightning) with its rain and wind beds and a night bed."""
+    s.add("Clock", {"LocalTransform": {}, "WorldClock": {"hour": START_HOUR, "day_length_seconds": DAY_SECONDS}, "DayCycle": {}})
+    s.add("Weather", {"LocalTransform": {}, "Weather": {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED},
+                      "WindGust": {}, "GroundMist": {}, "Moon": {}, "WetSurfaces": {"strength": 4, "darken": 0.5, "puddles": 0.6},
+                      "RainRipples": {}, "ThunderDelay": {}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
+    s.add("Rain", {"LocalTransform": tf((0, 20, 34)),
+                   "Precipitation3D": {"rain_rate": 3000, "snow_rate": 0, "follow_camera": 1, "height": 12, "area": 14, "rain_speed": 18,
+                                       "snow_speed": 1.5},
+                   "ParticleEmitter3D": {"color_start": [0.55, 0.62, 0.75, 0.35], "color_end": [0.55, 0.62, 0.75, 0.15], "offset": [0, 0, 0],
+                                         "box": [14, 0.5, 14], "direction": [0, -1, 0], "gravity": [0, -9, 0], "spread_deg": 2, "rate": 0,
+                                         "speed_min": 16.2, "speed_max": 19.8, "lifetime_min": 0.667, "lifetime_max": 0.8, "drag": 0,
+                                         "ground_height": 0, "bounce": 0, "size_start": 0.04, "size_end": 0.04, "max_particles": 4096,
+                                         "seed": 1, "burst": 0, "burst_version": 0, "collide": 0, "additive": 0, "emitting": 0}})
+    s.add("Rain splashes", {"LocalTransform": {}, "RainSplash": {},
+                            "ParticleEmitter3D": {"color_start": [0.7, 0.78, 0.9, 0.5], "color_end": [0.7, 0.78, 0.9, 0], "size_start": 0.05,
+                                                  "size_end": 0.03, "max_particles": 1024, "seed": 2, "collide": 0, "additive": 0,
+                                                  "emitting": 0, "rate": 0}})
+    s.add("Lightning", {"LocalTransform": {}, "Lightning": {"min_gap_seconds": 6, "max_gap_seconds": 16, "flash_ticks": 8, "flash_boost": 4,
+                                                              "seed": 7}, "LightningBolt": {}})
+    rain_bed = s.add("Rain bed", {"AudioSource": {"clip": "guid:" + audio_guid("rain_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                                  "gain_db": -60, "priority": 190}})
+    wind_bed = s.add("Wind bed", {"AudioSource": {"clip": "guid:" + audio_guid("wind_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                                  "gain_db": -60, "priority": 190}})
+    s.ents[next(i for i, e in enumerate(s.ents) if e["name"] == "Weather")]["components"]["WeatherAudio"] = {
+        "rain_source": s.ref(rain_bed), "wind_source": s.ref(wind_bed), "rain_db": -10, "wind_db": -18, "fade_seconds": 6}
+    # The night bed rises after 19:00 and fades out after 05:00; the city bed thins a little at night.
+    s.add("Night bed", {"AudioSource": {"clip": "guid:" + audio_guid("night_crickets"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                        "gain_db": -60, "priority": 190},
+                        "ClockAudio": {"on_hour": 19.5, "off_hour": 4.5, "fade_hours": 1.5, "on_db": -24, "off_db": -60}})
+    for e in s.ents:
+        if e["name"] == "City ambience":
+            e["components"]["ClockAudio"] = {"on_hour": 19.5, "off_hour": 4.5, "fade_hours": 1.5, "on_db": -30, "off_db": -22}
+    # Street lamps: two opposite corners of every junction pad (the pad is 14 m square), lit from dusk to dawn.
+    for j in range(GRID):
+        for i in range(GRID):
+            x, z = node_pos(i, j)
+            for k, (dx, dz) in enumerate(((6.2, 6.2), (-6.2, -6.2))):
+                name = "Lamp %d_%d_%d" % (i, j, k)
+                s.add(name + " post", {"LocalTransform": tf((x + dx, 2.85, z + dz), (0.16, 5.5, 0.16)), "MeshRef": mesh((0.12, 0.12, 0.14))})
+                s.add(name, {"LocalTransform": tf((x + dx, 5.7, z + dz), (0.5, 0.22, 0.5)),
+                             "MeshRef": {"mesh": "guid:" + G_BOX, "material": "guid:" + G_LAMP, "cast_shadows": 0},
+                             "PointLight3D": {"color": [1.0, 0.72, 0.42, 1], "intensity": 16, "radius": 28},
+                             "TimedLight3D": {"on_hour": 18.5 + (i + j) % 3 * 0.25, "off_hour": 5.75, "fade_minutes": 20}})
+
+
 # --- the scene ------------------------------------------------------------------------------------------
 
 def scene():
     rng = random.Random(1009)
     s = Scene()
     s.add("Environment", {"Environment3D": {"sun_direction": [-0.45, -0.8, -0.35], "sun_intensity": 3.0, "shadow_distance": 140,
-                                            "fog_density": 0.0002, "exposure": 1.0}, "LocalTransform": {}})
+                                            "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 0}, "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     city_surface(s)
     n_buildings = buildings(s, rng)
@@ -648,6 +710,7 @@ def scene():
     s.add("Pause mix", {"AudioSnapshot": {"bus": "SFX", "while_paused": True, "fade_s": 0.3, "gain_db": -12, "lowpass_hz": 900}})
     s.add("City ambience", {"AudioSource": {"clip": "guid:" + audio_guid("city_ambience"), "bus": "SFX", "loop": True,
                                             "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
+    atmosphere(s, net)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
@@ -693,6 +756,7 @@ def hud():
 
 
 models()
+lamp_material()
 audio_assets()
 hud()
 input_map()

@@ -13,6 +13,9 @@ SHA-256 (the pins are in the script) and writes these files; run it again after 
 | `city_ambience.wav` | `crowd_shouting.ogg` | StarNinjas | https://opengameart.org/content/crowd-shoutingspeaking-ambience | first 14 s with a 1.5 s crossfade into the start (a seamless loop), mono 44.1 kHz |
 | `hit_1..5.ogg` | `metal_hit_01..05.ogg` | rubberduck | https://opengameart.org/content/100-cc0-metal-and-wood-sfx | none (taken from the pack's zip) |
 | `crash_1..3.ogg` | `metal_slam_01.ogg`, `metal_falling_01.ogg`, `metal_falling_02.ogg` | rubberduck | same | none |
+| `rain_loop.wav` | `amb_rain_loop_1.ogg` | kresiek-the-furry | https://opengameart.org/content/amb-rain-loop-1 | first 16 s with a 2 s crossfade (a loop), mono 22.05 kHz |
+| `wind_loop.wav` | `wind background noise 2.wav` | bashar3a | https://opengameart.org/content/mild-wind-background-noise | first 16 s with a 2 s crossfade, mono 22.05 kHz |
+| `night_crickets.wav` | `crickets_1.mp3` | wolfgang | https://opengameart.org/content/crickets-ambient-noise-loopable | first 10 s with a 1.4 s crossfade, mono 22.05 kHz |
 
 The authors ask for nothing under CC0; StarNinjas would like a link to their OpenGameArt profile (https://opengameart.org/users/starninjas)
 and to hear where the sound is used, so it is credited in `CREDITS.md`. Cooked sidecars (`*.mceasset`) and the two sound sets

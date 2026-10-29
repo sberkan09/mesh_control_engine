@@ -1,0 +1,9 @@
+{
+ "guid": "71e720ad-8ecb-5200-8255-c37a0f8330c3",
+ "importer": "wav",
+ "importer_version": 2,
+ "settings": {
+  "compress": "vorbis",
+  "quality": 0.3
+ }
+}

@@ -22,8 +22,8 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; wanted stars done (Panels bound to `Wanted3D/level`, visible from `range` lo up); open: the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
 | A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission markers wait for E7) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
 | A3 | **Missions** (reach, kill, deliver, timers, Luau chaining, retry, pay) | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
-| A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
-| A5 | **Weather** (rain, wet roads, fog, lightning, wind, snow) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
+| A4 | **Day/night cycle**: ~~the sun is fixed~~ **done (E6, 2026-10-29)**, see [M-OPENWORLD-DAYNIGHT](M-OPENWORLD-DAYNIGHT.md) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
+| A5 | **Weather**: ~~rain, wet roads, fog, lightning, wind~~ **done (E6)** except snow (no snow cover in the city) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
 | A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; still missing: radio, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
 | A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
