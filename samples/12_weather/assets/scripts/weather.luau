@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, and the "moon:" lines, the Moon's phase and level).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, and the "aurora:" lines, the Aurora's latitude, gate and level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -57,5 +57,12 @@ function update()
         local mx, my, mz = weather.moon_direction()
         mce.log(string.format("moon: phase %.3f illumination %.3f level %.3f dir %.2f %.2f %.2f at tick %d",
             weather.moon_phase(), weather.moon_illumination(), weather.moon_level(), mx, my, mz, t))
+        -- M-AURORA: the Aurora on the Weather entity. The scene has no globe, so the latitude is authored: this walks it from
+        -- 45 degrees (gate closed) up by 1 degree per 45 ticks (ticks 450 to 900 cross the gate, 55 to 65), so the level
+        -- rises with the gate while the night fades (the clock starts at 5:00, dawn at about 6:00) and the weather's cloud
+        -- cover damps it. aurora_level is the kit helper on the night fade of the hour and the cloud coverage.
+        weather.set_aurora{latitude = 45 + t / 45}
+        mce.log(string.format("aurora: latitude %.2f gate %.3f level %.3f at tick %d",
+            weather.aurora_latitude(), weather.aurora_gate(), weather.aurora_level(), t))
     end
 end

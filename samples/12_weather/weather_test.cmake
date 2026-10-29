@@ -27,6 +27,12 @@
 #      through the dawn. The level starts at 1.000 (full, well up), falls with its height and the rain's damping
 #      (0.469 at tick 450, 0.270 at 600 where the storm is called, 0.121 at 1200) and is 0.000 from tick 1500 (below the
 #      horizon, the sun is coming up). The Moon is pure data: it changes the state hash (a new column) and nothing else.
+#  13. (M-AURORA 16d) the "aurora:" lines: the Aurora on the Weather entity (default gate 55..65 degrees); the script walks
+#      the authored latitude from 45 up by 1 degree per 45 ticks with weather.set_aurora, so the gate is closed (level 0.000)
+#      until tick 450 (55 degrees), is half open at about 60 degrees and fully open from tick 900 (65 degrees, gate 1.000).
+#      The level is the kit's aurora_level on the night fade of the hour (the clock starts at 5:00, so the night fades through
+#      the dawn) and the CloudLayer's cover: 0.512 at tick 900, 0.588 at 1050 and falling to 0.000 from tick 2250 (day). The
+#      Aurora is pure data here: it changes the state hash (a new column) and nothing else; the entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -81,6 +87,8 @@ expect("${first}" "script: mist: level 0.185 hour 5.00 strength 1.00 peak 6.0 h 
 expect("${first}" "script: mist: level 0.114 hour 5.30 strength 1.00 peak 6.0 h at tick 450\n" "the rain did not damp the mist")
 expect("${first}" "script: moon: phase 0.507 illumination 1.000 level 1.000 dir 0.95 -0.22 0.23 at tick 0\n" "the moon did not start full and up")
 expect("${first}" "script: moon: phase 0.507 illumination 0.999 level 0.469 dir 0.97 -0.15 0.19 at tick 450\n" "the rain did not damp the moon as it sinks")
+expect("${first}" "script: aurora: latitude 45.00 gate 0.000 level 0.000 at tick 0\n" "the aurora did not start with a closed gate")
+expect("${first}" "script: aurora: latitude 55.00 gate 0.000 level 0.000 at tick 450\n" "the aurora gate is not closed at its low edge")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -122,6 +130,12 @@ expect("${forecast}" "script: mist: level 0.367 hour 6.60 strength 1.00 peak 6.0
 expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.270 dir 0.98 -0.13 0.18 at tick 600\n" "the moon is wrong when the storm is called")
 expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.121 dir 0.99 -0.05 0.13 at tick 1200\n" "the moon did not keep sinking")
 expect("${forecast}" "script: moon: phase 0.508 illumination 0.999 level 0.000 dir 0.99 -0.00 0.10 at tick 1500\n" "the moon did not set by tick 1500")
+expect("${forecast}" "script: aurora: latitude 58.33 gate 0.259 level 0.073 at tick 600\n" "the aurora gate did not start to open")
+expect("${forecast}" "script: aurora: latitude 61.67 gate 0.741 level 0.295 at tick 750\n" "the aurora gate is wrong halfway")
+expect("${forecast}" "script: aurora: latitude 65.00 gate 1.000 level 0.512 at tick 900\n" "the aurora gate is not fully open at its high edge")
+expect("${forecast}" "script: aurora: latitude 68.33 gate 1.000 level 0.588 at tick 1050\n" "the aurora level is wrong in the dark")
+expect("${forecast}" "script: aurora: latitude 78.33 gate 1.000 level 0.210 at tick 1500\n" "the dawn did not fade the aurora")
+expect("${forecast}" "script: aurora: latitude 90.00 gate 1.000 level 0.000 at tick 2400\n" "the aurora shows by day")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")
