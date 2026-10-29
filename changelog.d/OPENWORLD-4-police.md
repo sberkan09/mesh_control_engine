@@ -1,0 +1,1 @@
+- Open-world sample, M-OPENWORLD E4: `samples/09_openworld` now respawns the player (hospital after dying, station after an arrest, fine taken), has four police cars that chase from wanted level 2 and 3, and two roadblocks with officers that fire from level 3. Data only. Record: `docs/milestones/M-OPENWORLD-POLICE.md`.
