@@ -116,3 +116,21 @@ TEST_CASE("StringsGrid: add and remove a key; a table the cook refuses is not wr
     CHECK(err.view().find("nothing was written") != StringView::npos);
     CHECK(f.read("loc/en.csv") == before);
 }
+
+TEST_CASE("StringsGrid: a row with a key and no text column takes a text") {  // found by M-HARDEN2 fuzz
+    std::string root = cook_test::fresh_dir("strings_grid_one_column");
+    std::filesystem::create_directories(root + "/assets/loc");
+    std::ofstream(root + "/assets/loc/en.csv") << "key,text\nmenu.play\n";
+    std::ofstream(root + "/assets/loc/en.csv.mceasset") << R"({ "guid": "5ce4e000-0000-4000-8000-0000000000e1", "importer": "strings" })";
+    EditorProject project;
+    REQUIRE(project.open(root));
+    StringsGrid grid;
+    cook::String err;
+    REQUIRE(grid.load(project, err));
+    REQUIRE(grid.keys().size() == 1);
+    grid.set_text(0, 0, "Play");
+    CHECK(grid.text(0, 0) == "Play");
+    CHECK(grid.add_key("menu.quit"));
+    grid.set_text(0, 1, "Quit");
+    CHECK(grid.text(0, 1) == "Quit");
+}
