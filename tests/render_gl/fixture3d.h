@@ -763,4 +763,25 @@ inline void water_night_scene(Scene3D& s, const NightSky& night, const WaterSurf
     s.set_water(w);
 }
 
+// ---- M-AURORA 16c: the aurora curtains -------------------------------------------------------------------------
+
+// The aurora as the kit extract hands it over: level 1, the default curtains (base 0.18, span 0.35, three curtains,
+// green base and violet top, speed 1), the arc 70 degrees wide centred toward -z (where cloud_sky_camera and
+// water_camera look), at a fixed clock.
+inline AuroraSky aurora_carrier(f32 level = 1.0f, f32 time = 12.25f) {
+    AuroraSky a;
+    a.level = level;
+    a.azimuth = {0.0f, -1.0f};
+    a.half_width_cos = 0.81915204f;  // cos 35 degrees
+    a.time = time;
+    a.enabled = true;
+    return a;
+}
+
+// The aurora night: night_sky_scene's dark sky with the star field (density 0.6, no moon) and the curtains.
+inline void aurora_sky_scene(Scene3D& s, const AuroraSky& aurora) {
+    night_sky_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f));
+    s.set_aurora(aurora);
+}
+
 }  // namespace mce::render_test

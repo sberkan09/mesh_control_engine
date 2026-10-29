@@ -77,6 +77,11 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_water4;         // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound (u_water_depth)
     vec4 p_water5;         // xy the two detail ripples' phases (rad), z detail slope (0 = none), w 0
     vec4 p_wave[8];        // per Gerstner wave: xy the wave vector k * dir on xz (rad/m), z amplitude (m), w phase (rad)
+    vec4 p_aurora;         // M-AURORA 16c: x level (0 = off), y base height, z height span (sines), w time mod 64 s
+    vec4 p_aurora2;        // xy the arc centre (xz unit vector), z cos of the arc's half-width, w curtain count (1..6)
+    vec4 p_aurora3;        // rgb the low (base) colour, w 0
+    vec4 p_aurora4;        // rgb the high (top) colour, w speed (0..4)
+    vec4 p_free[12];       // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1550,8 +1555,9 @@ void main() {
 )";
 
 // The sky's layers over sky_radiance(), shared by the sky pass (kSkyFS) and the water's reflection (kWaterFS, M-WATER
-// 15c): the cloud layer, the stars and the moon. Functions of a direction (and, for the night layer, the angular size
-// of a pixel along it), so the water reflects them through the same code rather than a copy.
+// 15c): the cloud layer, the stars and the moon, and the aurora (M-AURORA 16c). Functions of a direction (and, for the
+// night layer and the aurora, the angular size of a pixel along it), so the water reflects them through the same code
+// rather than a copy.
 #define MCE_GLSL_SKY_LAYERS \
     R"(
 // ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
@@ -1712,6 +1718,99 @@ vec3 apply_night_at(vec3 c, vec3 d, float pix) {
     }
     return c + (stars * (1.0 - cover) + moon) * p_night.w;
 }
+// ---- the aurora (M-AURORA 16c), behind p_aurora.x > 0 (level, with the kit's latitude gate and night fade folded in;
+// 0 = the frame without it bit for bit). A function of the view direction only (no camera position, no floating
+// origin, no parallax) and of the clock p_aurora.w (wrapped on the CPU to 64 s, every rate a whole number of cycles
+// per period). Up-going rays only; additive emission over the night sky, under the clouds and the fog.
+//   u      the arc parameter 0..1: the azimuth of d from the arc centre p_aurora2.xy (xz; counter-clockwise from above,
+//          as the kit's azimuth_deg: u grows with the azimuth), over the arc's width 2 acos(p_aurora2.z); 0 outside.
+//   edges  aurora_curtain_height: lower = min(base (1 + 0.2 sin(2 pi (T1 + 0.9 u))), 0.95), upper = min(lower + span
+//          (1 + 0.2 sin(2 pi (T3 + 1.3 u + 0.25))), 1), sines of the elevation; Tk the fractional turn of k * quarters
+//          cycles per 64 s (quarters = the speed in quarters, as the kit quantises it).
+//   h01    (d.y - lower) / (upper - lower), sampled 4 times over the pixel's height (a short march in elevation, not in
+//          distance), each smoothstep(0, 0.08, h01) exp(-2.5 h01) times the band colour mix(low, high,
+//          smoothstep(0.55, 1, h01)) (aurora_band_color), averaged: the sharp lower edge does not alias.
+//   rays   aurora_curtain_intensity's striations: 16 cells per curtain across the arc, a cell's value (0.4 + 0.6 r)
+//          (0.85 + 0.15 sin(2 pi (T5 + r))), r the cell's pcg2d hash (cloud_hash(cell, 7), the kit's aurora_hash),
+//          box-filtered over the pixel's width in cells and faded to their mean as a cell shrinks under about a
+//          pixel, so the rays neither alias nor crawl under a turn; times the end fade over 0.5 - 0.3 (width - 10) /
+//          170 of the arc at each end and the pulse 0.9 + 0.1 sin(2 pi T2).
+//   total  c + level * kAuroraGain * the above, faded into the horizon haze by smoothstep(0, 0.25, d.y) as the stars.
+// The constants below are the kit's (mce/kit/aurora.h), copied as a block: a change there goes here too, and
+// test_render3d_aurora_gl compares the drawn edges and band colours with the kit's helpers at probe points.
+const float kAuroraPeriod = 64.0;        // kit::kAuroraPeriodSeconds
+const float kAuroraSway = 0.2;           // both edges sway by up to 20 percent
+const float kAuroraSwayLowU = 0.9;       // lower edge: phase offset 0.9 u, 1 cycle per quarter of speed per period
+const float kAuroraSwayHighU = 1.3;      // upper edge: phase offset 1.3 u + 0.25, 3 cycles
+const float kAuroraSwayHighOff = 0.25;
+const float kAuroraLowerMax = 0.95;      // the lower edge's cap
+const uint kAuroraCyclesLow = 1u, kAuroraCyclesHigh = 3u, kAuroraCyclesShimmer = 5u, kAuroraCyclesPulse = 2u;
+const float kAuroraEdge = 0.08;          // the lower edge's smoothstep, a share of the curtain's height
+const float kAuroraFall = 2.5;           // exp(-2.5 h01) toward the top
+const uint kAuroraRayCells = 16u;        // ray cells per curtain
+const uint kAuroraRaySeed = 7u;          // aurora_hash(cell, 7)
+const float kAuroraRayMin = 0.4;         // a ray's brightness 0.4 + 0.6 r
+const float kAuroraShimmer = 0.15;       // 0.85 + 0.15 sin(2 pi (T5 + r))
+const float kAuroraPulse = 0.1;          // 0.9 + 0.1 sin(2 pi T2)
+const float kAuroraBandLow = 0.55;       // the colour band: smoothstep(0.55, 1, h01) from low to high
+// Shader only (not in the kit): the emission at level 1 and full intensity, and the mean of a ray cell's value (what
+// the rays fade to under a pixel).
+const float kAuroraGain = 0.6;
+const float kAuroraRayMean = 0.595;
+float aurora_turns(uint cycles) {  // the fractional turn of cycles * quarters cycles per period at p_aurora.w
+    float quarters = floor(p_aurora4.w * 4.0 + 0.5);
+    return fract(p_aurora.w * (float(cycles) * quarters / kAuroraPeriod));
+}
+float aurora_sin_turns(float turns, float offset) { return sin(6.2831853 * fract(turns + offset)); }
+float aurora_ray(uint cell, float shimmer) {
+    float r = float(cloud_hash(uvec2(cell, kAuroraRaySeed)) >> 8u) * (1.0 / 16777216.0);
+    return (kAuroraRayMin + (1.0 - kAuroraRayMin) * r) *
+           (1.0 - kAuroraShimmer + kAuroraShimmer * aurora_sin_turns(shimmer, r));
+}
+// The aurora over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_aurora; the water: the reflected ray's screen derivative).
+vec3 aurora_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float hl = length(d.xz);  // cos of the elevation
+    if (hl < 1e-4) return c;
+    vec2 e = d.xz / hl;
+    vec2 m = p_aurora2.xy;
+    float half_w = acos(clamp(p_aurora2.z, 0.0, 0.9962));  // the CPU keeps the width in 10..180 degrees
+    float u = 0.5 + atan(m.y * e.x - m.x * e.y, dot(m, e)) / (2.0 * half_w);
+    if (u <= 0.0 || u >= 1.0) return c;
+    float sway_lo = aurora_sin_turns(aurora_turns(kAuroraCyclesLow), kAuroraSwayLowU * u);
+    float sway_hi = aurora_sin_turns(aurora_turns(kAuroraCyclesHigh), kAuroraSwayHighU * u + kAuroraSwayHighOff);
+    float lower = min(p_aurora.y * (1.0 + kAuroraSway * sway_lo), kAuroraLowerMax);
+    float upper = min(lower + p_aurora.z * (1.0 + kAuroraSway * sway_hi), 1.0);
+    float pixy = pix * hl;  // the pixel's height in sines of the elevation
+    if (d.y + 0.5 * pixy <= lower || d.y - 0.5 * pixy > upper) return c;
+    float span = upper - lower;
+    vec3 band = vec3(0.0);
+    for (int k = 0; k < 4; ++k) {
+        float h = (d.y + pixy * (float(k) * 0.25 - 0.375) - lower) / span;
+        if (h <= 0.0 || h > 1.0) continue;
+        band += mix(p_aurora3.rgb, p_aurora4.rgb, smoothstep(kAuroraBandLow, 1.0, h)) *
+                (smoothstep(0.0, kAuroraEdge, h) * exp(-kAuroraFall * h));
+    }
+    float width = clamp(degrees(2.0 * half_w), 10.0, 180.0);
+    float fade_len = 0.5 - 0.3 * ((width - 10.0) / 170.0);
+    float ends = smoothstep(0.0, fade_len, u) * smoothstep(0.0, fade_len, 1.0 - u);
+    uint cells = kAuroraRayCells * uint(clamp(p_aurora2.w, 1.0, 6.0));
+    float g = u * float(cells);
+    uint i0 = min(uint(g), cells - 1u);
+    float fx = g - float(i0);
+    float w = pix * float(cells) / (2.0 * half_w * hl);  // the pixel's width in ray cells
+    float hw = 0.5 * min(w, 1.0);
+    float shimmer = aurora_turns(kAuroraCyclesShimmer);
+    float rays = aurora_ray(i0, shimmer);
+    if (fx < hw && i0 > 0u)  // the footprint reaches into the cell before (after): its share of the box
+        rays = mix(rays, aurora_ray(i0 - 1u, shimmer), (hw - fx) / (2.0 * hw));
+    else if (fx > 1.0 - hw && i0 + 1u < cells)
+        rays = mix(rays, aurora_ray(i0 + 1u, shimmer), (fx - 1.0 + hw) / (2.0 * hw));
+    rays = mix(rays, kAuroraRayMean, smoothstep(0.5, 1.5, w));
+    float pulse = 1.0 - kAuroraPulse + kAuroraPulse * aurora_sin_turns(aurora_turns(kAuroraCyclesPulse), 0.0);
+    return c + band * (0.25 * p_aurora.x * kAuroraGain * ends * rays * pulse * smoothstep(0.0, 0.25, d.y));
+}
 )"
 
 constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
@@ -1724,6 +1823,12 @@ vec3 apply_night(vec3 c, vec3 d) {
     float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
     return apply_night_at(c, d, pix);
 }
+vec3 apply_aurora(vec3 c, vec3 d) {  // aurora_layer with the sky pass's pixel footprint, as apply_night
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return aurora_layer(c, d, pix);
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1733,6 +1838,7 @@ void main() {
     float edge = 1.0 - p_sun.x;
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
     if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night(c, d);  // under the clouds and the fog, as the sun is
+    if (p_aurora.x > 0.0) c = apply_aurora(c, d);  // in front of the stars, under the clouds and the fog (M-AURORA 16c)
     if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
@@ -1796,6 +1902,7 @@ vec3 water_sky(vec3 r, float pix, float lod) {
     vec3 c = sky_radiance(r, lod);
     vec3 sun = -p_light_dir.xyz;
     if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night_at(c, r, pix);
+    if (p_aurora.x > 0.0) c = aurora_layer(c, r, pix);  // the curtains on the reflected ray (M-AURORA 16c)
     if (p_cloud.x > 0.0) c = apply_clouds(c, r, sun, dot(r, sun));
     if (p_vol.x <= 0.5 && p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, r.y));
     return c;
