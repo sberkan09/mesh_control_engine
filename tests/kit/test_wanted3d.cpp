@@ -877,6 +877,10 @@ TEST_CASE("wanted3d: a failed mission can be run again (M-MISSIONRETRY)") {
             s.w.try_get_mut<Mission>(mis)->start = 1;
             s.run(2);
             CHECK(s.w.try_get<Mission>(mis)->state == MissionState::Active);
+        }
+    }
+}
+
 TEST_CASE("wanted3d: a chop shop buys a stolen car from its driver (M-CHOPSHOP)") {
     for (u32 k = 0; k < 3; ++k) {  // k 0: stolen car at the shop; k 1: a car nobody owns; k 2: the shop is far away
         Scene s;
