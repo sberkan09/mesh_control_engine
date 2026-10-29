@@ -185,7 +185,7 @@ Universal Animation Library.
 ```sh
 mce content list [--kind models|textures|audio|animations|hdri] [--tag car] [--json]
 mce content info kenney-car-kit
-mce content add kenney-car-kit MyGame [--only 'models/sedan*' --only 'models/Textures/*'] [--dry-run]
+mce content add kenney-car-kit MyGame --file kenney_car-kit.zip [--only 'models/sedan*' --only 'models/Textures/*'] [--dry-run]
 mce content add ambientcg-asphalt031 MyGame
 mce content verify MyGame
 ```
@@ -204,7 +204,15 @@ no recorded pack owns, on a recorded file that changed or vanished, and on a rec
 CC-BY. If a download's hash no longer matches, the upstream file changed: read its licence again, then update the ledger
 entry (`source.sha256`, `size`, `retrieved`) in a PR. A pack whose download needs a browser session (`source.kind`
 `manual`, e.g. itch.io) is fetched by hand and passed with `--file <archive>`; `mce content fetch` verifies it and
-puts it in the cache.
+puts it in the cache. The Kenney packs are `manual` too: kenney.nl hands out a short-lived signed link for each download,
+so open the pack's page, press Download, then "Continue without donating", and pass the zip as it is:
+
+```sh
+mce content add kenney-car-kit MyGame --file ~/Downloads/kenney_car-kit.zip --only 'models/sedan*'
+```
+
+A download that comes back as a web page (a host that moved to browser-only downloads redirects its old links) is
+refused with that message; make the entry `manual` and keep its hash.
 
 To add a pack to the ledger: read its licence on the author's page, download it, compute `sha256sum`, copy an existing
 entry of the same kind, fill in `license`, `license_url`, `homepage`, `retrieved` (the date you read the licence),

@@ -264,11 +264,20 @@ def download(url, dest, opener=None):
     tmp = dest.with_suffix(dest.suffix + ".part")
     try:
         with opener(req, timeout=120) as r, open(tmp, "wb") as f:
+            headers = getattr(r, "headers", None)
+            if headers is not None and headers.get_content_type() == "text/html":
+                # a host that moved to browser-only downloads redirects the old link to a web page
+                raise ContentError(f"{url} returned a web page ({getattr(r, 'url', url)}), not the file; the host "
+                                   "no longer serves it to scripts: make its ledger entry `manual` (user guide 5.3)")
             shutil.copyfileobj(r, f)
     except (urllib.error.URLError, OSError) as e:
         if tmp.exists():
             tmp.unlink()
         raise ContentError(f"download of {url} failed: {e}")
+    except ContentError:
+        if tmp.exists():
+            tmp.unlink()
+        raise
     return tmp
 
 

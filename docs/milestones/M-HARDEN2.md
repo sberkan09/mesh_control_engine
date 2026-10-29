@@ -1,6 +1,6 @@
 # M-HARDEN2 — Hostile text in the editor's own files (milestone record)
 
-**Status:** step 1 done, step 2 in review. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-29 on the coordinator's instruction to spend idle time on quality (no gameplay modules, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
+**Status:** steps 1 and 2 done, step 3 in review. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-10-29 on the coordinator's instruction to spend idle time on quality (no gameplay modules, outside M-WASTED and M-VISUAL). No Linear issues (Linear is at its free issue limit); this record is the tracker.
 
 **Why.** M-FUZZ put a deterministic mutation test over the pack readers, the player's data, the net, scripts, importers, the command line, `.mcperf` and the scene document. The editor and the MCP server also read and write small files that an agent or a person edits by hand: the recent-files list, the camera bookmarks, the project's `.mceproj` and the locale tables behind the Strings panel. None of those had a mutation test, and the first run of one found a real bug: a locale row with a key and no text column (or an empty file) made `StringsGrid::set_text` read past the end of a row.
 
@@ -11,7 +11,7 @@
 | # | Step | State |
 |---|---|---|
 | 1 | `tests/fuzz/test_editor_files.cpp`: the recent list, the camera bookmarks, `.mceproj` (budgets and a settings patch) and the strings grid over mutated locale tables; fix of the short-row crash in the strings grid | done (#852) |
-| 2 | `tests/fuzz/test_editor_documents.cpp`: the tilemap document (`parse`/`serialize`, brushes) and the terrain document (`load` over mutated source and cooked bytes, brush, `serialize`); fix: a `tile_size` that overflows a float no longer writes back as `inf` | in review |
-| 3 | Still open: the behaviour-tree, `.mcanim` graph and UI document editors (they work through the session and the cook, so they need a project fixture); selection sets are in-memory only and need no reader fuzz | todo |
+| 2 | `tests/fuzz/test_editor_documents.cpp`: the tilemap document (`parse`/`serialize`, brushes) and the terrain document (`load` over mutated source and cooked bytes, brush, `serialize`); fix: a `tile_size` that overflows a float no longer writes back as `inf` | done (#854) |
+| 3 | `tests/fuzz/test_editor_trees.cpp`: the behaviour-tree, animation-graph and UI-document editors open mutated files, then take 24 random edits, saves, undos and redos each; no bug found in 12000 mutants (4000 per editor), the test stays as a guard. Selection sets are in-memory only and need no reader fuzz | in review |
 
-**Gates:** `test_fuzz_editor_files` and `test_fuzz_editor_documents` (label `fuzz`, run by the ASan stage); `tilemap: a tile size that does not fit a float…` in `test_tilemap.cpp`; `StringsGrid: a row with a key and no text column…` in `test_strings_grid.cpp`. The fix is in editor code, not the engine core.
+**Gates:** `test_fuzz_editor_files`, `test_fuzz_editor_documents` and `test_fuzz_editor_trees` (label `fuzz`, run by the ASan stage); `tilemap: a tile size that does not fit a float…` in `test_tilemap.cpp`; `StringsGrid: a row with a key and no text column…` in `test_strings_grid.cpp`. The fix is in editor code, not the engine core.
