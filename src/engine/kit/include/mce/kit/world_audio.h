@@ -17,6 +17,9 @@
 //                  at the contact, from `quiet_db` at min_speed to `loud_db` at `full_speed`, at most once per `min_gap` s.
 //   FootstepAudio  on a CharacterController3D entity: while it is grounded and not seated in a car, every `stride` metres
 //                  walked plays `clip` (a sound set) at its feet. Faster walking steps faster.
+//   ClockAudio     on a looping AudioSource: its gain follows the WorldClock between `off_db` (day) and `on_db` (night): up over
+//                  `fade_hours` after `on_hour`, down over `fade_hours` after `off_hour`. A night bed of crickets (on_db -20,
+//                  off_db -60) and a city bed that thins out at night (on_db -30, off_db -22) are the same component.
 //   SirenAudio     on a looping AudioSource: silent (-60 dB) until the first Wanted3D reaches `min_level`, then `active_db`;
 //                  the gain slides at `slew_db_per_s`.
 //
@@ -110,7 +113,19 @@ struct SirenAudio {
 MCE_COMPONENT(SirenAudio, (min_level, Range{1, 10}, Help{"wanted level where the siren starts"}), (active_db, Range{-60, 12}),
               (slew_db_per_s, Range{1, 600}, Help{"how fast the gain slides"}), (current_db, ReadOnly, Transient))
 
-// Registers the five components and adds "kit_world_audio". Idempotent.
+struct ClockAudio {
+    f32 on_hour = 19.0f;
+    f32 off_hour = 5.0f;
+    f32 fade_hours = 1.5f;
+    f32 on_db = -20.0f;
+    f32 off_db = -60.0f;
+    u32 pad_ = 0;
+};
+MCE_COMPONENT(ClockAudio, (on_hour, Range{0, 24}, Help{"hour the gain starts rising to on_db"}),
+              (off_hour, Range{0, 24}, Help{"hour the gain starts falling to off_db; equal to on_hour: always on_db"}),
+              (fade_hours, Range{0, 12}, Help{"game hours of each fade"}), (on_db, Range{-60, 12}), (off_db, Range{-60, 12}))
+
+// Registers the six components and adds "kit_world_audio". Idempotent.
 void install_world_audio(World& world);
 
 }  // namespace mce::kit
