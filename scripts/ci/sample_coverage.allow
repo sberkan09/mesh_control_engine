@@ -27,3 +27,4 @@ CashPickup3D | M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts 
 MissionRetry | M-MISSIONRETRY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
 ChopShop3D | M-CHOPSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a scrapyard entity
 Confiscate3D | M-ARRESTLOSS: tested in tests/kit/test_wanted3d.cpp; a game puts it on the player beside Respawn3D
+RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand

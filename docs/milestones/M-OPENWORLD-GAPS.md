@@ -19,7 +19,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 | # | Missing in the sample | Exists as | Demo elsewhere |
 |---|---|---|---|
-| A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; open: wanted stars need a string or visibility binding, the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
+| A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; wanted stars done (Panels bound to `Wanted3D/level`, visible from `range` lo up); open: the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
 | A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission markers wait for E7) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
 | A3 | **Missions** (reach, kill, deliver, timers, Luau chaining, retry, pay) | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
 | A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
@@ -62,11 +62,10 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   while driving, the car turns under a fixed camera, so a turn off the avenue leaves the road out of frame. Needs a chase
   option on `CameraFollow3D` (ease the yaw behind the target's heading while it moves, Look input overriding it for a
   moment), used by the sample while `Rider3D` is seated. A separate step.
-- **Walkers with a body: two open edges** (from the #859 review, open). (1) A walker that is mid-hop at a junction
-  (`Pedestrian3D.target` set) and finds a dynamic body in its way only waits; it does not turn round, so a car parked
-  across a crossing can hold it there for good. (2) `path_blocked` tests only the end pose of a step, so a far walker's
-  16-tick step (up to about 1 m when fleeing) can pass through a thin dynamic body. Fix: give up the hop after a short
-  wait, and sweep the step (a shape cast from the body to the target) instead of the end overlap.
+- ~~**Walkers with a body: two open edges**~~ **Fixed (SBA-214).** (1) A walker mid-hop at a junction that meets a dynamic
+  body walks the hop back to the end it left, as one on a pavement turns round, instead of waiting there for good. (2) The
+  blocked test sweeps the step (sphere casts low, middle and high on the capsule) as well as testing its end, so a far
+  walker's 16-tick step no longer passes through a thin body.
 
 ## C. Gameplay depth
 

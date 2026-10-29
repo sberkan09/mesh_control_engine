@@ -646,6 +646,33 @@ TEST_CASE("ui: a health bar bound to UiHealth/hp updates on change and is untouc
     d.update(frame());
 }
 
+TEST_CASE("ui: a panel bound to a field shows from its range's lo up (wanted stars)") {
+    Fixture f;
+    World world;
+    const Entity player = world.spawn();
+    world.set(player, UiHealth{});
+    Document d;
+    d.set_skin(f.skin);
+    d.set_modal(false);
+    Builder b(d, d.root());
+    const WidgetId low = b.panel("star1").at({0.0f, 0.0f}, {8, 8}).id();
+    const WidgetId high = b.panel("star3").at({0.0f, 0.0f}, {8, 8}).id();
+    d.set_range(low, 1.0f, 5.0f, 1.0f);
+    d.set_range(high, 3.0f, 5.0f, 1.0f);
+    CHECK(d.bind_property(low, world, player, "UiHealth/lives"));
+    CHECK(d.bind_property(high, world, player, "UiHealth/lives"));
+    d.update(frame());  // lives 3: both shown
+    CHECK(d.visible_self(low));
+    CHECK(d.visible_self(high));
+    world.try_get_mut<UiHealth>(player)->lives = 2;
+    d.update(frame());
+    CHECK(d.visible_self(low));
+    CHECK_FALSE(d.visible_self(high));
+    world.try_get_mut<UiHealth>(player)->lives = 0;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(low));
+}
+
 TEST_CASE("ui: the developer console mirrors the log, runs convars and closes on cancel") {
     Fixture f;
     cv_test_ui_volume.reset();
