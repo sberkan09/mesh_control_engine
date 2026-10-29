@@ -65,6 +65,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         auto gun = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Weapon3D","Confiscate3D"]}})");
         REQUIRE(count(gun) == 1);
         CHECK(comps(gun, 0).get("Weapon3D").get("reserve").as_number() == 150);
+        // The scene was saved and reloaded for this run: the weapon still names an entity (the camera) after the remap.
+        CHECK(str(comps(gun, 0).get("Weapon3D").get("aim_from")).substr(0, 1) == "$");
         CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"AmmoShop3D","show":["AmmoShop3D"]}})")) == 1);
         c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-30,0.95,-9]})");
         c.ok("component_set", R"({"entity":"Player","component":"Weapon3D","path":"reserve","value":10})");

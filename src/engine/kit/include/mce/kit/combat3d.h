@@ -113,8 +113,8 @@ struct Weapon3D {
     f32 projectile_life = 5.0f;     // s
     f32 splash_radius = 0.0f;       // m: > 0 explodes where the projectile lands
     f32 projectile_scale = 0.2f;    // the model's scale
-    math::vec3 muzzle;              // aim entity's space: where the shot leaves
-    math::vec3 direction{0.0f, 0.0f, -1.0f};  // entity space
+    math::vec3 muzzle;              // entity space (aim_from's when set): where the shot leaves
+    math::vec3 direction{0.0f, 0.0f, -1.0f};  // entity space (aim_from's when set)
     f32 cooldown = 0.0f;            // engine-written: s until the next shot
     f32 reload_left = 0.0f;         // engine-written
     u32 shots = 0;                  // engine-written: shots fired
