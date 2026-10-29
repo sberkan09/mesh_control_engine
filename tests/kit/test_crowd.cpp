@@ -341,6 +341,72 @@ TEST_CASE("crowd: a walker that meets a car on a crossing walks the hop back ins
     CHECK(s.w.try_get<Pedestrian3D>(e)->pace > 0.0f);
 }
 
+TEST_CASE("crowd: a walker waiting at the kerb with a car on its crossing turns back when the light lets it go") {
+    // Two identical runs: the first finds a walker waiting for the east-west light and the way it crosses once it may;
+    // the second parks a car there while it waits. Blocked on its first step off the kerb (its state still the Wait at
+    // hop 0), it turns the hop round and steps back onto its own pavement: it neither waits on nor shoves the car.
+    const vec3 starts[] = {{14.0f, 0.0f, 9.0f}, {16.0f, 0.0f, -9.0f}, {-15.0f, 0.0f, 9.0f}, {-17.0f, 0.0f, -9.0f},
+                           {30.0f, 0.0f, 9.0f}, {32.0f, 0.0f, -9.0f}, {-30.0f, 0.0f, 9.0f}, {-32.0f, 0.0f, -9.0f}};
+    const auto setup = [&](Scene& s, Array<Entity>& ws) {
+        s.set_time(5.0f);  // east-west green: crossing an east or west road waits
+        for (const vec3& at : starts) ws.push_back(bodied_walker(s, at));
+    };
+    u32 waited_at = 0, who = 0;
+    vec3 kerb, way;
+    {
+        Scene a(spawner(0), false, {}, true);
+        Array<Entity> ws;
+        setup(a, ws);
+        bool found = false;
+        for (u32 t = 0; t < 8000 && !found; ++t) {
+            a.run(1);
+            for (u32 i = 0; i < ws.size() && !found; ++i)
+                if (a.w.try_get<Pedestrian3D>(ws[i])->mode == PedestrianMode::Wait) {
+                    found = true;
+                    waited_at = t + 1;
+                    who = i;
+                }
+        }
+        REQUIRE(found);
+        a.run(30);
+        kerb = a.w.try_get<LocalTransform>(ws[who])->position;
+        a.set_time(23.5f);  // all red, 14.5 s before east-west goes green again: it may cross
+        for (u32 t = 0; t < 120 && a.w.try_get<Pedestrian3D>(ws[who])->hop < 0.1f; ++t) a.run(1);
+        const vec3 v = a.w.try_get<LocalTransform>(ws[who])->position - kerb;
+        REQUIRE(flat_speed(v) > 0.1f);
+        way = v * (1.0f / flat_speed(v));
+    }
+    Scene b(spawner(0), false, {}, true);
+    Array<Entity> ws;
+    setup(b, ws);
+    b.run(waited_at + 30);
+    const Entity e = ws[who];
+    REQUIRE(b.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Wait);
+    const u32 own_edge = b.w.try_get<Pedestrian3D>(e)->edge;
+    RigidBody3D car;
+    car.half = {0.9f, 0.4f, 0.9f};
+    car.density = 300.0f;
+    car.gravity_scale = 0.0f;
+    const vec3 car_at{kerb.x + way.x * 1.5f, 0.5f, kerb.z + way.z * 1.5f};
+    const Entity parked = b.w.spawn_with(LocalTransform{car_at, math::quat::identity(), {1, 1, 1}}, car);
+    b.set_time(23.5f);
+    bool back_on_pavement = false;
+    f32 farthest = -1e9f;
+    for (u32 t = 0; t < 600; ++t) {
+        b.run(1);
+        const Pedestrian3D& p = *b.w.try_get<Pedestrian3D>(e);
+        const vec3 at = b.w.try_get<LocalTransform>(e)->position - kerb;
+        farthest = math::max(farthest, at.x * way.x + at.z * way.z);
+        back_on_pavement = back_on_pavement || (p.target == 0xFFFFFFFFu && p.edge == own_edge && p.pace > 0.0f);
+    }
+    CHECK(farthest < 0.6f);    // never got onto the road past the kerb
+    CHECK(back_on_pavement);   // walking its own pavement again
+    CHECK(math::length(b.w.try_get<LocalTransform>(parked)->position - car_at) < 0.05f);
+    CHECK(b.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Wait);
+    CHECK(b.w.try_get<Pedestrian3D>(e)->pace > 0.0f);
+    CHECK(flat_speed(b.w.try_get<LocalTransform>(e)->position - car_at) > 3.0f);  // walked off, not standing at the car
+}
+
 TEST_CASE("crowd: a far walker's long step does not pass through a thin body") {
     Scene s(spawner(0), true, {4.0f, 0.0f, -130.0f}, true);  // far: a step every 16 ticks
     const Entity e = bodied_walker(s);

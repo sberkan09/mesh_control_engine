@@ -596,12 +596,14 @@ bool path_blocked(const Physics3D& phys, Entity e, const RigidBody3D& b, f32 lif
     if (dynamic_at(from)) return false;
     if (dynamic_at(to)) return true;
     // The way there, swept: a far walker's step (16 ticks, up to about 1 m when fleeing) can be longer than a thin body
-    // is deep. A sphere low, at the middle and high on the body; the first hit only counts when it is dynamic.
+    // is deep. Only a step longer than the sphere is swept (a near walker moves a few cm a tick: the end test covers it).
+    // A sphere low, at the middle and high on the body; the cast reports its first hit only, so the low one keeps 2 cm
+    // clear of the ground the walker stands on, and a hit counts only when it is dynamic.
     const vec3 d = to - from;
-    if (math::length(d) < 1e-3f) return false;
+    if (math::length(d) <= r) return false;
     physics::QueryFilter3D filter;
     filter.exclude = Span<const Entity>(&e, 1);
-    const f32 rise = math::max(lift - r, 0.0f);
+    const f32 rise = math::max(lift - r - 0.02f, 0.0f);
     for (const f32 dy : {-rise, 0.0f, rise}) {
         const vec3 off{0.0f, dy, 0.0f};
         if (std::optional<physics::ShapeHit3D> hit = phys.world.shape_cast(r, from + off, to + off, filter)) {
@@ -614,10 +616,11 @@ bool path_blocked(const Physics3D& phys, Entity e, const RigidBody3D& b, f32 lif
 
 // A walker that meets something solid turns round: on an edge it walks back the way it came; on a hop across a
 // junction it walks the hop back to the end it left (waiting there for good is how a car parked on a crossing held it).
+// With no hop back (a one-way hop), it leaves the hop and walks on from the pavement nearest to it.
 void turn_round(Pedestrian3D& p, const Graph& g) {
-    p.yaw += p.yaw > 0.0f ? -kPi : kPi;
     if (p.target == kNone) {
         p.dir ^= 1u;
+        p.yaw += p.yaw > 0.0f ? -kPi : kPi;
         return;
     }
     const u32 from = p.edge * 2 + (p.dir ? 1u : 0u);
@@ -628,10 +631,15 @@ void turn_round(Pedestrian3D& p, const Graph& g) {
         p.dir = static_cast<u8>(back & 1u);
         p.s = (back & 1u) ? g.edges[p.edge].length : 0.0f;
         p.target = from;
+        // One that was still waiting at the kerb (hop 0) gets hop 1: it steps straight back onto its own pavement.
         p.hop = math::clamp(1.0f - p.hop, 0.0f, 1.0f);
-        if (p.mode == PedestrianMode::Wait) p.mode = PedestrianMode::Cross;  // already on the road: no light to wait for
+        p.yaw += p.yaw > 0.0f ? -kPi : kPi;
         return;
     }
+    p.edge = kNone;  // step_pedestrian snaps it to the nearest pavement and walks on from there
+    p.target = kNone;
+    p.hop = 0.0f;
+    p.mode = PedestrianMode::Walk;
 }
 
 struct WalkerBody {
