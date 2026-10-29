@@ -45,7 +45,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   rig are not played; wheels do not spin; no door, steering or lights animation.
 - **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
 - **No third-person feel**: the player does not face its movement direction (the engine has no facing component for
-  `use_input` characters), the camera stays behind a fixed orbit, the gun is on the camera.
+  `use_input` characters), the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
 - **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
 - ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213, PR #859).** The cars did spawn and
@@ -109,3 +109,14 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 Steps 1 to 4 are the "make it playable" bundle; 5 to 8 make it a game; 9 to 11 are polish and scale. Each is a data-only or
 single-module change, so they can run in parallel threads on disjoint files (`samples/09_openworld` plus one module each).
+
+## F. Weapons and combat (step 2)
+
+Step 2 closes "no cover, melee, grenades or weapon switching" and moves the gun to where the shop and confiscation components look.
+
+| Step | What | Status |
+|---|---|---|
+| 2a | `Weapon3D::aim_from` (an Entity): the shot leaves from that entity's pose (plus `muzzle`) and points along its forward; null or a gone entity falls back to the weapon's own pose. The 09_openworld gun moved from the camera to the player (`aim_from` = the camera, `WeaponAudio` and the ammo readout in `hud.mcui` with it), so `Confiscate3D` (an arrest keeps half the spare rounds) and an `AmmoShop3D` on the avenue (2 cash a round, up to 150) now work. `Weapon3D` 168 to 176 bytes. | done |
+| 2b | `Loadout3D` weapon switching | open |
+| 2c | `Melee3D` | open |
+| 2d | `Cover3D` / take cover (ray from the shooter to the target against the cover) | open |

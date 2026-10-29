@@ -403,7 +403,7 @@ physics change shows up in `-headless` runs immediately.
 ## 9.12 Weapons, health and damage (M-OPENWORLD C2)
 
 `mce/kit/combat3d.h` has three components. `Health3D` goes on anything that can be hurt: a character, a car,
-a crate. `Weapon3D` fires from its entity. `Projectile3D` is a shot in flight.
+a crate. `Weapon3D` fires from its entity, or from another entity's pose when `aim_from` is set (a third-person gun on the player that aims along the camera: the shot leaves at the camera's position plus `muzzle` and points where it looks; if that entity is destroyed the weapon uses its own pose). `Projectile3D` is a shot in flight.
 
 - **Health.** `current` of `max`; `armor` (0..1) is the fraction of every hit absorbed; `regen` hp/s starts
   `regen_delay` seconds after the last hit. At zero it dies: `dead = 1` and a `Died3D` event (with the
