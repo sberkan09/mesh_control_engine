@@ -54,7 +54,8 @@ TEST_CASE("siblings that share a name are reported, the same name under differen
     CHECK(has(f, second, LintKind::DuplicateSiblingName));
     CHECK_FALSE(has(f, first, LintKind::DuplicateSiblingName));
     CHECK_FALSE(has(f, elsewhere, LintKind::DuplicateSiblingName));
-    const std::string_view text = format_lint(f.span()).c_str();
+    const auto report = format_lint(f.span());  // a view of the temporary would dangle
+    const std::string_view text = report.c_str();
     CHECK(text.find("duplicate name among its siblings") != std::string_view::npos);
 }
 

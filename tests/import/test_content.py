@@ -9,6 +9,7 @@ for real.
 
 import contextlib
 import copy
+import email.message
 import hashlib
 import io
 import json
@@ -164,6 +165,17 @@ def test_fetch(work, zpath):
     except mc.ContentError as e:
         check("sha256 is" in str(e) and "changed" in str(e), "a hash mismatch names the problem: " + str(e))
     check(not any(f.endswith((".part", ".zip")) for f in os.listdir(os.path.join(work, "cache2"))), "a bad download leaves nothing in the cache")
+
+    class Page(Resp):  # a host that moved to browser-only downloads redirects the old link to its web page
+        headers = email.message.Message()
+        headers["Content-Type"] = "text/html; charset=UTF-8"
+
+    try:
+        mc.fetch_pack(pack, mc.cache_dir(os.path.join(work, "cache4")), opener=lambda req, timeout=0: Page(b"<html>"))
+        check(False, "a web page instead of the archive is refused")
+    except mc.ContentError as e:
+        check("web page" in str(e) and "manual" in str(e), "a web page names the problem: " + str(e))
+    check(not os.listdir(os.path.join(work, "cache4")), "a web page leaves nothing in the cache")
 
     manual = copy.deepcopy(pack)
     manual["source"] = {"kind": "manual", "page": "https://example.com/page", "instructions": "Click download.", "archive": "zip"}

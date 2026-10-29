@@ -38,9 +38,10 @@
         "low poly"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/city-kit-commercial/a742d900eb-1753115042/kenney_city-kit-commercial_2.1.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/city-kit-commercial",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "f8b09b081c2bb88bcc126e2dec1cb40fd0dad7e7e591b6c26aaefe96fb35276b",
         "size": 4096974,
         "license_member": "License.txt"
@@ -75,9 +76,10 @@
         "low poly"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/city-kit-suburban/2c871b7af2-1745479373/kenney_city-kit-suburban_20.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/city-kit-suburban",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "5869c35cf30b1c87bdb2d197b6d325eebadd2ef08ea27f04797e8e08d77a9a39",
         "size": 3038740,
         "license_member": "License.txt"
@@ -113,9 +115,10 @@
         "low poly"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/city-kit-roads/74288c9459-1791628607/kenney_city-kit-roads.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/city-kit-roads",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "374a4552115cbd11b4ec5c930ee31a533562dc78a09af249a655d03f7ea3b959",
         "size": 2852289,
         "license_member": "License.txt"
@@ -150,9 +153,10 @@
         "low poly"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/car-kit",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "fac7dacac5c7874348cf19729af3ef205f3d366493edaf0a827d93f4fdf3d0c4",
         "size": 4814237,
         "license_member": "License.txt"
@@ -187,9 +191,10 @@
         "low poly"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/blocky-characters/8369c0cf30-1749547469/kenney_blocky-characters_20.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/blocky-characters",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "5e123859aa0c1598342b600c6db197024a1d63eb9ec531398b310725f589887e",
         "size": 2148510,
         "license_member": "License.txt"
@@ -222,9 +227,10 @@
         "impact"
       ],
       "source": {
-        "kind": "http",
-        "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+        "kind": "manual",
+        "page": "https://kenney.nl/assets/impact-sounds",
         "archive": "zip",
+        "instructions": "kenney.nl hands out a short-lived signed link per download since October 2026, so a script cannot fetch it: open the page, press Download, then 'Continue without donating', and keep the zip as it is. A hash mismatch means the pack was updated: read its licence again and pin the new sha256 and size.",
         "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8",
         "size": 800850,
         "license_member": "License.txt"
