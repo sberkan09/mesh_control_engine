@@ -71,3 +71,17 @@ Kaynaklar: user-guide 14.4 ve 17, MCP dogfood/blind test notları (`docs/researc
 | Golden PNG'ler | dev-only (CI bakmaz), `MCE_UPDATE_GOLDENS=1` ile yazılır; mevcut golden'lar byte-aynı kalmalı |
 | PassU uniform bloğu | 256 B katı kalmalı |
 | Fuzz testleri | `label fuzz`, `MCE_FUZZ_ITERS`; `tests/fuzz/mutator.h`, `json_swap.h`; bulunan hatayı düzeltince aynı PR'a regresyon testi |
+
+## Oyun mantığı yazarken (polis/wanted/yol takibi işinden)
+
+| Belirti / kural | Çözüm |
+|---|---|
+| Faz içinde `world.spawn_with` assert eder | `f.commands().spawn` kullan (yapısal değişiklik Commands ile) |
+| Sorgu yürürken yapı değişimi | istekleri topla, yürüyüşten sonra uygula |
+| Önbellek sonucu save/load ve replay'i ayrıştırıyor | önbellek saf olmalı: çıktısı yalnız duruma bağlı (yol takibinde `road_route`, önbellekte yalnız A*) |
+| Çalışma anında doğan varlık kaydedilmiyor | `SaveKey` taşımaz; kalıcı olması gereken varlığı sahnede yarat |
+| Fizik gövdeli çocuk ebeveyni izlemiyor | fizik gövdeleri `ChildOf`'u yok sayar; gövdeyi kök yap |
+| Wanted seviyesi beklenenden farklı | seviye `ceil(heat/...)`: heat 25/20 seviye 2'ye denk gelir; `inspect` ile `Wanted3D` oku |
+| Spawn çakışıyor / araç iç içe doğuyor | spawn öncesi boşluk kontrolü yap, başarısızsa bekle (sonraki tikte dene) |
+| Araç kamerası titriyor | kamera hızını konum farkından hesapla, `target` değişince sıfırla, eşiklerde histerezis kullan |
+| Transcript golden'da `components` sayısı master ile çakışıyor | master'daki değeri al ve kendi eklediğin kadar artır |

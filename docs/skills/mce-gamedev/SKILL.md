@@ -87,3 +87,4 @@ run_headless {ticks:300, inspect:{...}}                    # kanıtla
 10. Üretilen sahneyi (`gen_assets.py` çıktısı) elle düzenleme; betiği değiştir, yeniden üret.
 11. Yeni bileşen = 3 yerde `#include`, `capabilities.py`, `sample_coverage.allow`, transcript golden'daki `components` sayısı, `test_padding`, `changelog.d/<BİLET>-<n>-<slug>.md`.
 12. CI: `--task` bir kez ve detached, `--premerge` ile aynı anda değil; mesaj gelince konteyner yeniden başlar (`uptime -s`, `--resume`); ccache'i silme.
+13. Oyun mantığında faz içinde `world.spawn_with` yok (`f.commands().spawn`), sorgu yürürken yapı değiştirme, önbellekler saf olmalı (save/replay ayrışmasın), çalışma anında doğan varlık kaydedilmez, fizik gövdeleri `ChildOf`'u yok sayar.
