@@ -1,6 +1,7 @@
 #include "mce/editor/tilemap_editor.h"
 
 #include <cmath>
+#include <limits>
 #include <utility>
 
 #include "mce/cook/cook.h"
@@ -73,8 +74,11 @@ bool TilemapDocument::parse(StringView text, StringView file, cook::DiagList& di
     read_u32(root, "rows", 256, d.rows, file, diags);
     read_u32(root, "width", kMaxSide, d.width, file, diags);
     read_u32(root, "height", kMaxSide, d.height, file, diags);
-    if (const cook::JsonValue ts = root.get("tile_size"); ts.is_number() && ts.as_number() > 0.0)
-        d.tile_size = static_cast<f32>(ts.as_number());
+    if (const cook::JsonValue ts = root.get("tile_size"); ts.is_number()) {
+        // A size that does not fit an f32 (or underflows to 0) would write back as "inf" or 0, which no reader takes.
+        const f32 size = static_cast<f32>(ts.as_number());
+        if (size > 0.0f && size <= std::numeric_limits<f32>::max()) d.tile_size = size;
+    }
     if (diags.error_count() != before) return false;
     d.tiles.resize(usize(d.width) * d.height, 0u);
     if (const cook::JsonValue arr = root.get("tiles"); arr.valid()) {
