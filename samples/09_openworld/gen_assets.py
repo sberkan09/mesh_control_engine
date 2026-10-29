@@ -454,6 +454,71 @@ def prefabs():
                                           "entities": walker})
 
 
+# --- the loop: missions, money to find and money to spend (M-OPENWORLD E7/E8) ------------------------------------------
+# Everything here is added after the older entities so their order (and the spawners' walkers) stays as it was.
+# The player has a wallet (500). Pads are flat boxes on the avenue sidewalks (z = -9 or +9); a pad with a mission marker starts a
+# mission when the player stands on it, the destination pads are the objectives, and the minimap shows both (MapMarker).
+
+def pad(s, name, x, z, size, tint, extra=None):
+    comps = {"LocalTransform": tf((x, 0.22, z), (size, 0.04, size)), "MeshRef": mesh(tint, 0)}
+    if extra:
+        comps.update(extra)
+    return s.add(name, comps)
+
+
+def economy_and_missions(s, player):
+    actor = s.ref(player)
+    key = [1000]
+
+    def save_key():
+        key[0] += 1
+        return {"key": key[0]}
+
+    def mission(title, start, stops, limit, reward, fee, wanted_fail, tint):
+        """A marker pad at `start`, a chain of ReachZone objectives at `stops` and the Mission that ties them."""
+        objectives = []
+        for n, (x, z) in enumerate(stops):
+            dest = pad(s, "%s stop %d" % (title, n + 1), x, z, 5.0, tint,
+                       {"MapMarker": {"icon": 0, "color": list(tint) + [1], "label": "%s %d" % (title, n + 1)}})
+            objectives.append(s.add("%s objective %d" % (title, n + 1), {
+                "Objective": {"kind": "ReachZone", "target": s.ref(dest), "radius": 4.0}, "SaveKey": save_key()}))
+        for a, b in zip(objectives, objectives[1:]):
+            s.ents[a]["components"]["Objective"]["next"] = s.ref(b)
+        comps = {"Mission": {"id": title.lower().replace(" ", "_"), "objective": s.ref(objectives[0]), "actor": actor,
+                             "fail_on_death": actor, "time_limit": limit},
+                 "MissionReward3D": {"cash": reward, "fail_fee": fee},
+                 "MissionRetry": {"delay": 8},
+                 "SaveKey": save_key()}
+        if wanted_fail:
+            comps["MissionWantedFail"] = {"level": wanted_fail}
+        m = s.add("Mission " + title, comps)
+        pad(s, "Mission " + title + " marker", start[0], start[1], 4.0, (1.0, 0.85, 0.1),
+            {"MissionMarker": {"mission": s.ref(m), "radius": 3.0},
+             "MapMarker": {"icon": 0, "color": [1, 0.85, 0.1, 1], "label": title, "always_visible": 1}})
+        return m
+
+    # Three jobs of rising length and pay. A failed one (time, death, police at the level) costs a fee and can be run again after 8 s.
+    mission("Errand", (-45.0, -9.0), [(95.0, -9.0)], 100, 250, 0, 0, (0.3, 0.7, 1.0))
+    mission("Courier", (60.0, 9.0), [(-120.0, 9.0), (150.0, -9.0)], 170, 700, 100, 3, (0.4, 1.0, 0.5))
+    mission("Long haul", (-190.0, -9.0), [(180.0, 9.0)], 150, 1000, 200, 3, (1.0, 0.45, 0.3))
+
+    # Money lying around: a pad each, back after two minutes.
+    rng = random.Random(2027)
+    spots = [(-170, 9), (-140, -9), (-95, 9), (-20, 9), (-10, -9), (-35, 9), (75, -9), (85, 9), (110, -9), (140, 9), (170, -9), (200, 9)]
+    for n, (x, z) in enumerate(spots):
+        cash = rng.choice((40, 60, 80, 100))
+        pad(s, "Cash %d" % (n + 1), x, z, 1.2, (0.35, 0.9, 0.3),
+            {"CashPickup3D": {"cash": cash, "radius": 1.6, "respawn": 120},
+             "MapMarker": {"icon": 0, "color": [0.35, 0.9, 0.3, 1], "label": "$"}})
+
+    # Shops. Medic: a hurt player pays 1 per hit point. Scrapyard: a stolen car (cars 2 and 3) driven here pays 400.
+    # (No ammo shop: the gun is on the camera, which carries no wallet.)
+    pad(s, "Medic", -100.0, -9.0, 4.0, (0.95, 0.95, 0.95),
+        {"HealShop3D": {"radius": 3.0, "price_per_hp": 1}, "MapMarker": {"icon": 0, "color": [1, 0.3, 0.3, 1], "label": "Medic", "always_visible": 1}})
+    pad(s, "Scrapyard", 130.0, -9.0, 8.0, (0.6, 0.4, 0.2),
+        {"ChopShop3D": {"radius": 6.0, "price": 400}, "MapMarker": {"icon": 0, "color": [1, 0.6, 0.1, 1], "label": "Scrapyard", "always_visible": 1}})
+
+
 # --- the scene ------------------------------------------------------------------------------------------
 
 def scene():
@@ -498,6 +563,9 @@ def scene():
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
         comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
+        if n > 0:
+            # Cars 2 and 3 belong to someone: taking one is a crime when police see it (M-CARJACK), and a scrapyard pays for it (M-CHOPSHOP).
+            comps["CarOwner3D"] = {"heat": 12, "needs_witness": 1}
         car = s.add("Parked car %d" % (n + 1), comps)
         for part in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[1:]:
             p = dict(part["components"])
@@ -556,6 +624,7 @@ def scene():
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
         s.add(name + " pad", {"LocalTransform": tf((pos[0], 0.22, pos[1]), (5.0, 0.04, 5.0)), "MeshRef": mesh(tint, 0)})
+    economy_and_missions(s, player)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
