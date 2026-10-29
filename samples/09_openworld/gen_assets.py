@@ -55,6 +55,8 @@ def model_guid(name):
 G_ROADS = guid("roads/city.mcroads")
 G_CAR = guid("prefabs/traffic_car.mcprefab")
 G_WALKER = guid("prefabs/pedestrian.mcprefab")
+G_BLOCK_CAR = guid("prefabs/roadblock_car.mcprefab")
+G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
@@ -240,6 +242,49 @@ def roads_doc():
             "lane_width": LANE_W, "speed": 11, "nodes": nodes, "roads": roads, "signals": signals}
 
 
+# --- audio (M-OPENWORLD E3) -------------------------------------------------------------------------------
+# The sound files in assets/audio/ come from tools/fetch_audio.py (CC0, see assets/audio/SOURCES.md); here only their sidecars,
+# the two sound sets and the GUIDs the scene uses are written.
+
+AUDIO_FILES = {"engine_loop": ("wav", {}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
+               "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
+FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
+AUDIO_EXT = {name: ext for name, (ext, _) in AUDIO_FILES.items()}
+AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS})
+
+
+def audio_guid(name):
+    return guid("audio/%s.%s" % (name, AUDIO_EXT[name]))
+
+
+G_FOOTSTEPS = guid("audio/footsteps.mcsound")
+G_SHOTS = guid("audio/shots.mcsound")
+
+
+def audio_assets():
+    for name, (ext, settings) in AUDIO_FILES.items():
+        write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
+    for name in FOOTSTEPS:
+        write("audio/%s.ogg.mceasset" % name, {"guid": audio_guid(name), "importer": "ogg", "importer_version": 2, "settings": {}})
+    write("audio/footsteps.mcsound", {"format": "mce-sound", "version": 1, "guid": G_FOOTSTEPS,
+                                      "clips": ["guid:" + audio_guid(n) for n in FOOTSTEPS], "pick": "random", "no_repeat": True,
+                                      "pitch": [0.92, 1.08], "gain_db": [-3, 0]})
+    write("audio/shots.mcsound", {"format": "mce-sound", "version": 1, "guid": G_SHOTS,
+                                  "clips": ["guid:" + audio_guid("shot_1"), "guid:" + audio_guid("shot_2")], "pick": "random",
+                                  "no_repeat": True, "pitch": [0.96, 1.04], "gain_db": [-2, 0]})
+
+
+def engine_audio(traffic):
+    """The engine of a car: a looping 3D AudioSource whose gain and pitch EngineAudio drives from the car's speed."""
+    return {
+        "AudioSource": {"clip": "guid:" + audio_guid("engine_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                        "gain_db": -60, "priority": 90 if traffic else 150},
+        "AudioSpatial": {"attenuation_id": 1},
+        "EngineAudio": {"idle_pitch": 0.8, "top_pitch": 2.3, "top_speed": 28, "idle_db": -14 if traffic else -10,
+                        "top_db": -6 if traffic else 0, "parked_db": -60},
+    }
+
+
 # --- scene helpers --------------------------------------------------------------------------------------
 
 class Scene:
@@ -413,6 +458,7 @@ def car_entities(model, traffic):
         "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
+    root.update(engine_audio(traffic))
     if traffic:
         root["TrafficDriver3D"] = {}
         root["VehicleSeat3D"]["locked"] = 1
@@ -425,15 +471,14 @@ def car_entities(model, traffic):
     return ents
 
 
-def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
-    """A police car: a Vehicle3D driven by Police3D (drive_car), or a parked roadblock (block: drive_car 0, handbrake on)."""
-    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 2,
+def police_car(scene, name, pos, yaw, min_level, dispatch):
+    """A police car: a Vehicle3D driven by Police3D along the roads (drive_car 2)."""
+    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 2,
               "sight_range": 90, "attack_range": 0, "search_time": 15, "arrest_range": 0, "dispatch_range": dispatch}
     comps = {
         "LocalTransform": tf(pos, None, yaw),
         "RigidBody3D": {"half": [0.9, 0.4, 1.5], "density": 300},
-        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000, "handbrake": 1} if block
-        else {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
+        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
         "Health3D": {"max": 150, "team": 2, "destroy_on_death": 0},
         "Police3D": police,
     }
@@ -444,6 +489,21 @@ def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
 
 
 def prefabs():
+    # Roadblock pieces: a police car that is a static box (the barricade does not roll away), and an officer who holds his ground.
+    write("prefabs/roadblock_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_CAR, "name": "roadblock_car", "entities": [
+        {"name": "Roadblock car", "components": {"LocalTransform": {}, "BoxCollider3D": {"half": [0.9, 0.95, 1.5]}}},
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.5, 0), (CAR_SCALE,) * 3, math.pi),
+                                         "MeshRef": model_mesh("police")}}]})
+    write("prefabs/roadblock_officer.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_COP, "name": "roadblock_officer", "entities": [
+        {"name": "Roadblock officer", "components": {
+            "LocalTransform": {},
+            "CharacterController3D": {"radius": 0.3, "half_height": 0.6, "speed": 4.5, "layer": 2, "mask": 65535},
+            "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
+            "Police3D": {"min_level": 3, "attack_level": 3, "drive_nav": 0, "sight_range": 90, "attack_range": 70, "search_time": 6,
+                         "arrest_range": 0},
+            "Weapon3D": {"kind": "Hitscan", "damage": 10, "range": 80, "rate": 3, "spread_deg": 1.5, "magazine": 0}}},
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                         "MeshRef": model_mesh("character-d")}}]})
     write("prefabs/traffic_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_CAR, "name": "traffic_car",
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
@@ -548,6 +608,7 @@ def scene():
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
+        "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
         # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
@@ -559,6 +620,8 @@ def scene():
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
+        "AudioListener": {},
+        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -2},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
         "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
@@ -595,7 +658,16 @@ def scene():
             "Police3D": {"min_level": 1, "attack_level": 2, "sight_range": 55, "attack_range": 28, "search_time": 12},
             "MapMarker": {"color": [1.0, 0.2, 0.2, 1], "layer": 0, "always_visible": 1, "label": "Police"},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
+            "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.7, "gain_db": -6},
+            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -4},
         })
+        if n % 2 == 0:   # two of the four carry a siren; it sounds from the wanted level the unit answers (A9 gives it a car)
+            s.ents[cop]["components"].update({
+                "AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True, "gain_db": -60,
+                                "priority": 170},
+                "AudioSpatial": {"attenuation_id": 1},
+                "SirenAudio": {"min_level": 1, "active_db": -9},
+            })
         s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                             "MeshRef": model_mesh("character-d")})
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
@@ -615,27 +687,24 @@ def scene():
     # They do not shoot or arrest (the foot units do); a car has no path following, so a wall in the way stops it.
     for n, (x, z, yaw) in enumerate(((30.0, 12.0, 0.0), (-30.0, -12.0, math.pi), (12.0, -30.0, math.pi / 2), (-12.0, 30.0, -math.pi / 2))):
         police_car(s, "Police car %d" % (n + 1), (x, 0.9, z), yaw, 2 + n // 2 * 1, 600)
-    # Roadblocks across the avenue at both ends of the middle stretch: two police cars side by side with the handbrake on, and two officers who
-    # hold the position (no dispatch) and open fire from level 3 when the player comes within sight.
-    for n, (x, side) in enumerate(((-210.0, 1), (210.0, -1))):
-        for k in (-1, 1):
-            police_car(s, "Roadblock %d car %d" % (n + 1, (k + 3) // 2), (x, 0.9, k * 3.6), 0.0, 3, 0, block=True)
-        for k in (-1, 1):
-            cop = s.add("Roadblock %d officer %d" % (n + 1, (k + 3) // 2), {
-                "LocalTransform": tf((x + side * 3.0, 0.95, k * 4.0)),
-                "CharacterController3D": {"radius": 0.3, "half_height": 0.6, "speed": 4.5, "layer": 2, "mask": 65535},
-                "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
-                "Police3D": {"min_level": 3, "attack_level": 3, "drive_nav": 0, "sight_range": 70, "attack_range": 45,
-                             "search_time": 6, "arrest_range": 0},
-                "Weapon3D": {"kind": "Hitscan", "damage": 8, "range": 70, "rate": 2, "spread_deg": 3, "magazine": 0},
-            })
-            s.add("Roadblock %d officer %d model" % (n + 1, (k + 3) // 2),
-                  {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                   "MeshRef": model_mesh("character-d")})
+    # Roadblocks across the avenue at both ends of the middle stretch. Each marker spawns two police cars (static bodies, side by side
+    # across the road) and two officers behind them when the player reaches wanted level 3 from at least 45 m away, and takes them
+    # down 10 s after the level drops (Roadblock3D). The marker's local X runs along world Z; its +Z points away from the plaza, so the officers (officer_back -2.5) stand in front of the cars, in line of fire.
+    for n, (x, yaw) in enumerate(((-210.0, -math.pi / 2), (210.0, math.pi / 2))):
+        s.add("Roadblock %d" % (n + 1), {
+            "LocalTransform": tf((x, 0.95, 0.0), None, yaw),
+            "Roadblock3D": {"car": "guid:" + G_BLOCK_CAR, "officer": "guid:" + G_BLOCK_COP, "min_level": 3, "cars": 2, "officers": 2,
+                            "car_spacing": 3.6, "officer_back": -2.5, "spawn_min": 45, "spawn_max": 300, "hold": 10}})
     # Where a dead player wakes up (hospital, west avenue) and an arrested one (station, by the plaza), each marked by a flat pad.
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
         s.add(name + " pad", {"LocalTransform": tf((pos[0], 0.22, pos[1]), (5.0, 0.04, 5.0)), "MeshRef": mesh(tint, 0)})
+    # The mix (bus layout: Master > SFX (engines, shots, steps, sirens, ambience); Music and Voice stay free for E7/E8): a limiter
+    # on the master, the pause snapshot (the world goes muffled and quieter behind the pause screen) and the city bed.
+    s.add("Mixer", {"AudioLimiter": {"ceiling_db": -1}})
+    s.add("Pause mix", {"AudioSnapshot": {"bus": "SFX", "while_paused": True, "fade_s": 0.3, "gain_db": -12, "lowpass_hz": 900}})
+    s.add("City ambience", {"AudioSource": {"clip": "guid:" + audio_guid("city_ambience"), "bus": "SFX", "loop": True,
+                                            "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
     economy_and_missions(s, player)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
@@ -655,10 +724,23 @@ def hud():
     def box(x0, y0, x1, y1, ax=0, ay=0):
         return {"min": [ax, ay], "max": [ax, ay], "offset_min": [x0, y0], "offset_max": [x1, y1]}
 
+    def wanted_stars():
+        """Five stars at the right: star n is a Panel bound to Wanted3D/level that shows from level n up (range lo = n)."""
+        stars = []
+        for n in range(1, 6):
+            x1 = -16 - (5 - n) * 34
+            stars.append({"name": "star%d" % n, "kind": "Panel", "visible": False, "style": {"tint": [0, 0, 0, 0]},
+                          "range": [n, 5, 1], "value": n, "bind": "Wanted3D/level", "anchors": box(x1 - 34, 248, x1, 290, 1, 0),
+                          "children": [{"name": "glyph", "kind": "Text", "text": "*", "fill": True, "text_align": "Center",
+                                        "style": {"text_size": 52, "text_color": [1.0, 0.85, 0.25, 1], "text_outline": 2,
+                                                  "text_outline_color": [0, 0, 0, 1]}}]})
+        return stars
+
     write("ui/hud.mcui", {"format": "mce-ui", "version": 1, "guid": G_HUD, "modal": False, "widgets": [
         text("health", "HEALTH 100", 28, box(24, -64, 280, -24, 0, 1), "Health3D/current", "HEALTH %.0f", [0.45, 1.0, 0.5, 1]),
-        text("wanted", "WANTED 0 / 5", 26, box(-280, 232, -16, 268, 1, 0), "Wanted3D/level", "WANTED %.0f / 5", [1.0, 0.85, 0.25, 1], "Right"),
-        text("cash", "$ 0", 30, box(-280, 270, -16, 310, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
+        text("wanted", "WANTED", 22, box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
+        *wanted_stars(),
+        text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
         text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
         {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
@@ -669,6 +751,7 @@ def hud():
 
 
 models()
+audio_assets()
 hud()
 input_map()
 write("roads/city.mcroads", roads_doc())

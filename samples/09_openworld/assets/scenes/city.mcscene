@@ -17139,6 +17139,11 @@
      "cash": 500
     },
     "StreamingFocus": {},
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.9,
+     "gain_db": -4
+    },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
     }
@@ -17182,6 +17187,11 @@
     "Camera3DComponent": {
      "fov_deg": 65,
      "far_z": 1500
+    },
+    "AudioListener": {},
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -2
     },
     "CameraFollow3D": {
      "target": "$694",
@@ -17267,6 +17277,25 @@
      ],
      "enter_radius": 4.0
     },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
+    },
     "MapMarker": {
      "color": [
       0.3,
@@ -17350,6 +17379,25 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
     },
     "CarOwner3D": {
      "heat": 12,
@@ -17438,6 +17486,25 @@
       0
      ],
      "enter_radius": 4.0
+    },
+    "AudioSource": {
+     "clip": "guid:c5ee0af8-f311-5954-8384-09c22a237c8b",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 150
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "EngineAudio": {
+     "idle_pitch": 0.8,
+     "top_pitch": 2.3,
+     "top_speed": 28,
+     "idle_db": -10,
+     "top_db": 0,
+     "parked_db": -60
     },
     "CarOwner3D": {
      "heat": 12,
@@ -17537,6 +17604,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17623,6 +17714,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -17709,6 +17809,30 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 1,
+     "active_db": -9
     }
    }
   },
@@ -17795,6 +17919,15 @@
      "rate": 2,
      "spread_deg": 3,
      "magazine": 0
+    },
+    "FootstepAudio": {
+     "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
+     "stride": 1.7,
+     "gain_db": -6
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "gain_db": -4
     }
    }
   },
@@ -18201,594 +18334,68 @@
   },
   {
    "id": 723,
-   "name": "Roadblock 1 car 1",
+   "name": "Roadblock 1",
    "components": {
     "LocalTransform": {
      "position": [
       -210.0,
-      0.9,
-      -3.6
+      0.95,
+      0.0
+     ],
+     "rotation": [
+      0,
+      -0.70711,
+      0,
+      0.70711
      ]
     },
-    "RigidBody3D": {
-     "half": [
-      0.9,
-      0.4,
-      1.5
-     ],
-     "density": 300
-    },
-    "Vehicle3D": {
-     "engine_torque": 900,
-     "self_right": 1,
-     "anti_roll": 8000,
-     "handbrake": 1
-    },
-    "Health3D": {
-     "max": 150,
-     "team": 2,
-     "destroy_on_death": 0
-    },
-    "Police3D": {
+    "Roadblock3D": {
+     "car": "guid:3643b620-d4a6-545e-a67d-3e419d5540ce",
+     "officer": "guid:e47ce9bf-ee7f-5199-b639-c138199de7e3",
      "min_level": 3,
-     "attack_level": 10,
-     "drive_nav": 0,
-     "aim": 0,
-     "drive_car": 0,
-     "sight_range": 90,
-     "attack_range": 0,
-     "search_time": 15,
-     "arrest_range": 0,
-     "dispatch_range": 0
+     "cars": 2,
+     "officers": 2,
+     "car_spacing": 3.6,
+     "officer_back": -2.5,
+     "spawn_min": 45,
+     "spawn_max": 300,
+     "hold": 10
     }
    }
   },
   {
    "id": 724,
-   "name": "Roadblock 1 car 1 model",
+   "name": "Roadblock 2",
    "components": {
-    "ChildOf": {
-     "parent": "$722"
-    },
     "LocalTransform": {
      "position": [
-      0,
-      -0.4,
-      0
+      210.0,
+      0.95,
+      0.0
      ],
      "rotation": [
       0,
-      1.0,
+      0.70711,
       0,
-      0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
+      0.70711
      ]
     },
-    "MeshRef": {
-     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
+    "Roadblock3D": {
+     "car": "guid:3643b620-d4a6-545e-a67d-3e419d5540ce",
+     "officer": "guid:e47ce9bf-ee7f-5199-b639-c138199de7e3",
+     "min_level": 3,
+     "cars": 2,
+     "officers": 2,
+     "car_spacing": 3.6,
+     "officer_back": -2.5,
+     "spawn_min": 45,
+     "spawn_max": 300,
+     "hold": 10
     }
    }
   },
   {
    "id": 725,
-   "name": "Roadblock 1 car 2",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      -210.0,
-      0.9,
-      3.6
-     ]
-    },
-    "RigidBody3D": {
-     "half": [
-      0.9,
-      0.4,
-      1.5
-     ],
-     "density": 300
-    },
-    "Vehicle3D": {
-     "engine_torque": 900,
-     "self_right": 1,
-     "anti_roll": 8000,
-     "handbrake": 1
-    },
-    "Health3D": {
-     "max": 150,
-     "team": 2,
-     "destroy_on_death": 0
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 10,
-     "drive_nav": 0,
-     "aim": 0,
-     "drive_car": 0,
-     "sight_range": 90,
-     "attack_range": 0,
-     "search_time": 15,
-     "arrest_range": 0,
-     "dispatch_range": 0
-    }
-   }
-  },
-  {
-   "id": 726,
-   "name": "Roadblock 1 car 2 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$724"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.4,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
-    }
-   }
-  },
-  {
-   "id": 727,
-   "name": "Roadblock 1 officer 1",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      -207.0,
-      0.95,
-      -4.0
-     ]
-    },
-    "CharacterController3D": {
-     "radius": 0.3,
-     "half_height": 0.6,
-     "speed": 4.5,
-     "layer": 2,
-     "mask": 65535
-    },
-    "Health3D": {
-     "max": 80,
-     "team": 2,
-     "destroy_on_death": 1,
-     "linger": 4
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 3,
-     "drive_nav": 0,
-     "sight_range": 70,
-     "attack_range": 45,
-     "search_time": 6,
-     "arrest_range": 0
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "damage": 8,
-     "range": 70,
-     "rate": 2,
-     "spread_deg": 3,
-     "magazine": 0
-    }
-   }
-  },
-  {
-   "id": 728,
-   "name": "Roadblock 1 officer 1 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$726"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.9,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.3,
-      0.3,
-      0.3
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
-    }
-   }
-  },
-  {
-   "id": 729,
-   "name": "Roadblock 1 officer 2",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      -207.0,
-      0.95,
-      4.0
-     ]
-    },
-    "CharacterController3D": {
-     "radius": 0.3,
-     "half_height": 0.6,
-     "speed": 4.5,
-     "layer": 2,
-     "mask": 65535
-    },
-    "Health3D": {
-     "max": 80,
-     "team": 2,
-     "destroy_on_death": 1,
-     "linger": 4
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 3,
-     "drive_nav": 0,
-     "sight_range": 70,
-     "attack_range": 45,
-     "search_time": 6,
-     "arrest_range": 0
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "damage": 8,
-     "range": 70,
-     "rate": 2,
-     "spread_deg": 3,
-     "magazine": 0
-    }
-   }
-  },
-  {
-   "id": 730,
-   "name": "Roadblock 1 officer 2 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$728"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.9,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.3,
-      0.3,
-      0.3
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
-    }
-   }
-  },
-  {
-   "id": 731,
-   "name": "Roadblock 2 car 1",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      210.0,
-      0.9,
-      -3.6
-     ]
-    },
-    "RigidBody3D": {
-     "half": [
-      0.9,
-      0.4,
-      1.5
-     ],
-     "density": 300
-    },
-    "Vehicle3D": {
-     "engine_torque": 900,
-     "self_right": 1,
-     "anti_roll": 8000,
-     "handbrake": 1
-    },
-    "Health3D": {
-     "max": 150,
-     "team": 2,
-     "destroy_on_death": 0
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 10,
-     "drive_nav": 0,
-     "aim": 0,
-     "drive_car": 0,
-     "sight_range": 90,
-     "attack_range": 0,
-     "search_time": 15,
-     "arrest_range": 0,
-     "dispatch_range": 0
-    }
-   }
-  },
-  {
-   "id": 732,
-   "name": "Roadblock 2 car 1 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$730"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.4,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
-    }
-   }
-  },
-  {
-   "id": 733,
-   "name": "Roadblock 2 car 2",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      210.0,
-      0.9,
-      3.6
-     ]
-    },
-    "RigidBody3D": {
-     "half": [
-      0.9,
-      0.4,
-      1.5
-     ],
-     "density": 300
-    },
-    "Vehicle3D": {
-     "engine_torque": 900,
-     "self_right": 1,
-     "anti_roll": 8000,
-     "handbrake": 1
-    },
-    "Health3D": {
-     "max": 150,
-     "team": 2,
-     "destroy_on_death": 0
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 10,
-     "drive_nav": 0,
-     "aim": 0,
-     "drive_car": 0,
-     "sight_range": 90,
-     "attack_range": 0,
-     "search_time": 15,
-     "arrest_range": 0,
-     "dispatch_range": 0
-    }
-   }
-  },
-  {
-   "id": 734,
-   "name": "Roadblock 2 car 2 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$732"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.4,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.95,
-      0.95,
-      0.95
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:12076951-002e-5b9c-b75f-9bd158a1aec4"
-    }
-   }
-  },
-  {
-   "id": 735,
-   "name": "Roadblock 2 officer 1",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      207.0,
-      0.95,
-      -4.0
-     ]
-    },
-    "CharacterController3D": {
-     "radius": 0.3,
-     "half_height": 0.6,
-     "speed": 4.5,
-     "layer": 2,
-     "mask": 65535
-    },
-    "Health3D": {
-     "max": 80,
-     "team": 2,
-     "destroy_on_death": 1,
-     "linger": 4
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 3,
-     "drive_nav": 0,
-     "sight_range": 70,
-     "attack_range": 45,
-     "search_time": 6,
-     "arrest_range": 0
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "damage": 8,
-     "range": 70,
-     "rate": 2,
-     "spread_deg": 3,
-     "magazine": 0
-    }
-   }
-  },
-  {
-   "id": 736,
-   "name": "Roadblock 2 officer 1 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$734"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.9,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.3,
-      0.3,
-      0.3
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
-    }
-   }
-  },
-  {
-   "id": 737,
-   "name": "Roadblock 2 officer 2",
-   "components": {
-    "LocalTransform": {
-     "position": [
-      207.0,
-      0.95,
-      4.0
-     ]
-    },
-    "CharacterController3D": {
-     "radius": 0.3,
-     "half_height": 0.6,
-     "speed": 4.5,
-     "layer": 2,
-     "mask": 65535
-    },
-    "Health3D": {
-     "max": 80,
-     "team": 2,
-     "destroy_on_death": 1,
-     "linger": 4
-    },
-    "Police3D": {
-     "min_level": 3,
-     "attack_level": 3,
-     "drive_nav": 0,
-     "sight_range": 70,
-     "attack_range": 45,
-     "search_time": 6,
-     "arrest_range": 0
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "damage": 8,
-     "range": 70,
-     "rate": 2,
-     "spread_deg": 3,
-     "magazine": 0
-    }
-   }
-  },
-  {
-   "id": 738,
-   "name": "Roadblock 2 officer 2 model",
-   "components": {
-    "ChildOf": {
-     "parent": "$736"
-    },
-    "LocalTransform": {
-     "position": [
-      0,
-      -0.9,
-      0
-     ],
-     "rotation": [
-      0,
-      1.0,
-      0,
-      0.0
-     ],
-     "scale": [
-      0.3,
-      0.3,
-      0.3
-     ]
-    },
-    "MeshRef": {
-     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
-    }
-   }
-  },
-  {
-   "id": 739,
    "name": "Hospital",
    "components": {
     "LocalTransform": {
@@ -18804,7 +18411,7 @@
    }
   },
   {
-   "id": 740,
+   "id": 726,
    "name": "Hospital pad",
    "components": {
     "LocalTransform": {
@@ -18832,7 +18439,7 @@
    }
   },
   {
-   "id": 741,
+   "id": 727,
    "name": "Police station",
    "components": {
     "LocalTransform": {
@@ -18848,7 +18455,7 @@
    }
   },
   {
-   "id": 742,
+   "id": 728,
    "name": "Police station pad",
    "components": {
     "LocalTransform": {
@@ -18876,7 +18483,44 @@
    }
   },
   {
-   "id": 743,
+   "id": 729,
+   "name": "Mixer",
+   "components": {
+    "AudioLimiter": {
+     "ceiling_db": -1
+    }
+   }
+  },
+  {
+   "id": 730,
+   "name": "Pause mix",
+   "components": {
+    "AudioSnapshot": {
+     "bus": "SFX",
+     "while_paused": true,
+     "fade_s": 0.3,
+     "gain_db": -12,
+     "lowpass_hz": 900
+    }
+   }
+  },
+  {
+   "id": 731,
+   "name": "City ambience",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:8fcf77a5-579a-5577-8463-ee0f17da3c67",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -22,
+     "priority": 200,
+     "fade_s": 2
+    }
+   }
+  },
+  {
+   "id": 732,
    "name": "Errand stop 1",
    "components": {
     "LocalTransform": {
@@ -18914,12 +18558,12 @@
    }
   },
   {
-   "id": 744,
+   "id": 733,
    "name": "Errand objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$742",
+     "target": "$731",
      "radius": 4.0
     },
     "SaveKey": {
@@ -18928,12 +18572,12 @@
    }
   },
   {
-   "id": 745,
+   "id": 734,
    "name": "Mission Errand",
    "components": {
     "Mission": {
      "id": "errand",
-     "objective": "$743",
+     "objective": "$732",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 100
@@ -18951,7 +18595,7 @@
    }
   },
   {
-   "id": 746,
+   "id": 735,
    "name": "Mission Errand marker",
    "components": {
     "LocalTransform": {
@@ -18977,7 +18621,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$744",
+     "mission": "$733",
      "radius": 3.0
     },
     "MapMarker": {
@@ -18994,7 +18638,7 @@
    }
   },
   {
-   "id": 747,
+   "id": 736,
    "name": "Courier stop 1",
    "components": {
     "LocalTransform": {
@@ -19032,14 +18676,14 @@
    }
   },
   {
-   "id": 748,
+   "id": 737,
    "name": "Courier objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$746",
+     "target": "$735",
      "radius": 4.0,
-     "next": "$749"
+     "next": "$738"
     },
     "SaveKey": {
      "key": 1003
@@ -19047,7 +18691,7 @@
    }
   },
   {
-   "id": 749,
+   "id": 738,
    "name": "Courier stop 2",
    "components": {
     "LocalTransform": {
@@ -19085,12 +18729,12 @@
    }
   },
   {
-   "id": 750,
+   "id": 739,
    "name": "Courier objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$748",
+     "target": "$737",
      "radius": 4.0
     },
     "SaveKey": {
@@ -19099,12 +18743,12 @@
    }
   },
   {
-   "id": 751,
+   "id": 740,
    "name": "Mission Courier",
    "components": {
     "Mission": {
      "id": "courier",
-     "objective": "$747",
+     "objective": "$736",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 170
@@ -19125,7 +18769,7 @@
    }
   },
   {
-   "id": 752,
+   "id": 741,
    "name": "Mission Courier marker",
    "components": {
     "LocalTransform": {
@@ -19151,7 +18795,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$750",
+     "mission": "$739",
      "radius": 3.0
     },
     "MapMarker": {
@@ -19168,7 +18812,7 @@
    }
   },
   {
-   "id": 753,
+   "id": 742,
    "name": "Long haul stop 1",
    "components": {
     "LocalTransform": {
@@ -19206,12 +18850,12 @@
    }
   },
   {
-   "id": 754,
+   "id": 743,
    "name": "Long haul objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$752",
+     "target": "$741",
      "radius": 4.0
     },
     "SaveKey": {
@@ -19220,12 +18864,12 @@
    }
   },
   {
-   "id": 755,
+   "id": 744,
    "name": "Mission Long haul",
    "components": {
     "Mission": {
      "id": "long_haul",
-     "objective": "$753",
+     "objective": "$742",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 150
@@ -19246,7 +18890,7 @@
    }
   },
   {
-   "id": 756,
+   "id": 745,
    "name": "Mission Long haul marker",
    "components": {
     "LocalTransform": {
@@ -19272,7 +18916,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$754",
+     "mission": "$743",
      "radius": 3.0
     },
     "MapMarker": {
@@ -19289,7 +18933,7 @@
    }
   },
   {
-   "id": 757,
+   "id": 746,
    "name": "Cash 1",
    "components": {
     "LocalTransform": {
@@ -19332,7 +18976,7 @@
    }
   },
   {
-   "id": 758,
+   "id": 747,
    "name": "Cash 2",
    "components": {
     "LocalTransform": {
@@ -19375,7 +19019,7 @@
    }
   },
   {
-   "id": 759,
+   "id": 748,
    "name": "Cash 3",
    "components": {
     "LocalTransform": {
@@ -19418,7 +19062,7 @@
    }
   },
   {
-   "id": 760,
+   "id": 749,
    "name": "Cash 4",
    "components": {
     "LocalTransform": {
@@ -19461,7 +19105,7 @@
    }
   },
   {
-   "id": 761,
+   "id": 750,
    "name": "Cash 5",
    "components": {
     "LocalTransform": {
@@ -19504,7 +19148,7 @@
    }
   },
   {
-   "id": 762,
+   "id": 751,
    "name": "Cash 6",
    "components": {
     "LocalTransform": {
@@ -19547,7 +19191,7 @@
    }
   },
   {
-   "id": 763,
+   "id": 752,
    "name": "Cash 7",
    "components": {
     "LocalTransform": {
@@ -19590,7 +19234,7 @@
    }
   },
   {
-   "id": 764,
+   "id": 753,
    "name": "Cash 8",
    "components": {
     "LocalTransform": {
@@ -19633,7 +19277,7 @@
    }
   },
   {
-   "id": 765,
+   "id": 754,
    "name": "Cash 9",
    "components": {
     "LocalTransform": {
@@ -19676,7 +19320,7 @@
    }
   },
   {
-   "id": 766,
+   "id": 755,
    "name": "Cash 10",
    "components": {
     "LocalTransform": {
@@ -19719,7 +19363,7 @@
    }
   },
   {
-   "id": 767,
+   "id": 756,
    "name": "Cash 11",
    "components": {
     "LocalTransform": {
@@ -19762,7 +19406,7 @@
    }
   },
   {
-   "id": 768,
+   "id": 757,
    "name": "Cash 12",
    "components": {
     "LocalTransform": {
@@ -19805,7 +19449,7 @@
    }
   },
   {
-   "id": 769,
+   "id": 758,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -19848,7 +19492,7 @@
    }
   },
   {
-   "id": 770,
+   "id": 759,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {

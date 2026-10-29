@@ -1,0 +1,73 @@
+{
+ "format": "mce-prefab",
+ "version": 1,
+ "guid": "e47ce9bf-ee7f-5199-b639-c138199de7e3",
+ "name": "roadblock_officer",
+ "entities": [
+  {
+   "name": "Roadblock officer",
+   "components": {
+    "LocalTransform": {},
+    "CharacterController3D": {
+     "radius": 0.3,
+     "half_height": 0.6,
+     "speed": 4.5,
+     "layer": 2,
+     "mask": 65535
+    },
+    "Health3D": {
+     "max": 80,
+     "team": 2,
+     "destroy_on_death": 1,
+     "linger": 4
+    },
+    "Police3D": {
+     "min_level": 3,
+     "attack_level": 3,
+     "drive_nav": 0,
+     "sight_range": 90,
+     "attack_range": 70,
+     "search_time": 6,
+     "arrest_range": 0
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "damage": 10,
+     "range": 80,
+     "rate": 3,
+     "spread_deg": 1.5,
+     "magazine": 0
+    }
+   }
+  },
+  {
+   "name": "Model",
+   "components": {
+    "ChildOf": {
+     "parent": "$0"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:18c25d5d-737f-5570-b62e-497844b6fd20"
+    }
+   }
+  }
+ ]
+}

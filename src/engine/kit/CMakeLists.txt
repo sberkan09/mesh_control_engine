@@ -31,6 +31,7 @@ mce_add_library(mce_gameplay_kit
         src/timed_light.cpp
         src/weather.cpp
         src/weather_audio.cpp
+        src/world_audio.cpp
         src/wind_gust.cpp
         src/lightning_bolt.cpp
         src/precipitation.cpp
@@ -56,6 +57,7 @@ mce_add_library(mce_gameplay_kit
         src/ui_flow.cpp
         src/ai.cpp
         src/roads.cpp
+        src/roadblock.cpp
         src/traffic.cpp
         src/crowd.cpp
         src/ai_tasks.cpp

@@ -994,6 +994,17 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   lane nearest the target (`road_route`), steered by pure pursuit, falling back to the straight line when no lane is within 30 m of
   the car or 80 m of the target. A roadblock is a car with `drive_car` 0 placed across the road.
 
+- **Roadblocks that come with the wanted level (M-OPENWORLD-POLICE 3).** Put a `Roadblock3D` on a marker entity where the block
+  should be: its local X runs across the road (the line of cars), its local +Z is the side `officer_back` metres away that the
+  officers stand on (negative: in front of the cars). Give it a `car` prefab (a police car whose root is a static body, so it
+  blocks the road) and an `officer` prefab (a root with `Police3D`, `Health3D` and a weapon). While an offender's wanted level is at
+  `min_level` (default 3) or above and it is between `spawn_min` and `spawn_max` metres away, the marker spawns `cars` cars side by
+  side `car_spacing` apart and `officers` officers, each tagged with `RoadblockPiece3D`. `hold` seconds after the level drops
+  below `min_level` they are destroyed, but never while the offender is closer than `spawn_min` (nothing vanishes in sight).
+  A block waits while a living thing (a `Health3D`) or a vehicle is within 3 m of a piece's place, and after a spawn that made nothing (no prefab or hook, a prefab that does not load) it waits 5 s before trying again. Which markers are up is read from the pieces that exist; the pieces are made at run time and not saved, so a loaded game puts the block up again from the wanted level. Without prefabs a game spawns the pieces itself through the `RoadblockSpawnHook` resource (kind 0 car, 1 officer). Ordinary
+  `Police3D` units placed in the scene with a higher `min_level` are the other way to have more police at a high level; a
+  `Roadblock3D` is for units that appear only then.
+
 - **Busted and wasted (M-WASTED).** Put `Respawn3D` (`delay`, default 3 s) on the player and `RespawnPoint3D` on a few
   entities (`kind` Hospital or Station). After the player dies it wakes up at the nearest Hospital, after an arrest at the
   nearest Station (any point when the wanted kind is missing; where it stands when there is none), with full health and

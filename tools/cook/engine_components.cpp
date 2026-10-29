@@ -43,6 +43,7 @@
 #include "mce/kit/perception.h"        // Perceiver, Stimulus (M-AI 3)
 #include "mce/kit/crowd.h"             // Pedestrian3D, CrowdSpawner3D (M-OPENWORLD B3)
 #include "mce/kit/roads.h"             // RoadNetwork3D (M-OPENWORLD B1)
+#include "mce/kit/roadblock.h"         // Roadblock3D, RoadblockPiece3D (M-OPENWORLD-POLICE 3)
 #include "mce/kit/traffic.h"           // TrafficDriver3D, TrafficSpawner3D (M-OPENWORLD B2)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)
@@ -61,6 +62,7 @@
 #include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)
 #include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
 #include "mce/kit/weather_audio.h"       // WeatherAudio (M-WEATHERAUDIO 10a)
+#include "mce/kit/world_audio.h"        // EngineAudio, WeaponAudio, FootstepAudio, SirenAudio (M-OPENWORLD E3)
 #include "mce/kit/lightning_bolt.h"      // LightningBolt (M-LIGHTNINGBOLT 11a)
 #include "mce/kit/ground_mist.h"         // GroundMist (M-GROUNDMIST 13a)
 #include "mce/kit/moon.h"                 // Moon (M-NIGHTSKY 14a)

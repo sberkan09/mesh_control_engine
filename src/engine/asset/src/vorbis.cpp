@@ -1,5 +1,7 @@
 #include "mce/asset/vorbis.h"
 
+#include <cstring>
+
 #define STB_VORBIS_HEADER_ONLY
 #define STB_VORBIS_NO_STDIO
 #define STB_VORBIS_NO_PUSHDATA_API
@@ -12,6 +14,23 @@ constexpr const char* kStage = "asset.vorbis";
 constexpr usize kFirstArena = 128 * 1024;
 constexpr usize kMaxArena = 16 * 1024 * 1024;
 stb_vorbis* sv(void* v) { return static_cast<stb_vorbis*>(v); }
+
+// stb_vorbis frees a comment list it could not allocate (a header that claims billions of comments): it walks
+// `comment_list_length` entries of a null `comment_list` and crashes. A comment costs at least its 4-byte length field,
+// so a count beyond what the stream can hold is refused here, before stb sees it (found by the chunk fuzz test).
+bool comment_count_fits(Span<const byte> data) {
+    static constexpr char kMagic[7] = {3, 'v', 'o', 'r', 'b', 'i', 's'};
+    const usize n = data.size();
+    for (usize i = 0; i + 11 <= n; ++i) {
+        if (std::memcmp(data.data() + i, kMagic, sizeof(kMagic)) != 0) continue;
+        auto u32_at = [&](usize at) { return static_cast<u32>(data[at]) | static_cast<u32>(data[at + 1]) << 8 | static_cast<u32>(data[at + 2]) << 16 | static_cast<u32>(data[at + 3]) << 24; };
+        const usize vendor = u32_at(i + 7);
+        const usize count_at = i + 11 + vendor;
+        if (count_at + 4 > n) return true;  // truncated: stb stops at the end of data on its own
+        return u32_at(count_at) <= (n - count_at - 4) / 4 + 1;
+    }
+    return true;
+}
 }  // namespace
 
 VorbisReader::VorbisReader(mem::IAllocator& a) : arena_(a) {}
@@ -28,6 +47,7 @@ void VorbisReader::close() {
 Result<void> VorbisReader::open(Span<const byte> data) {
     close();
     if (data.empty() || data.size() > 0x7FFFFFFFu) return Error(Errc::InvalidArgument, kStage, "empty or oversized stream");
+    if (!comment_count_fits(data)) return Error(Errc::ImportFailed, kStage, "not an Ogg Vorbis stream");
     if (arena_.size() < kFirstArena) arena_.resize(kFirstArena);
     for (;;) {
         stb_vorbis_alloc alloc;

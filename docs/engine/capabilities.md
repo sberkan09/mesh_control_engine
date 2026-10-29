@@ -15,16 +15,16 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | Component | Header | Editor | MCP | Cook | Documented in | Shown in |
 |---|---|---|---|---|---|---|
 | `AudioSource` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/main.cpp |
-| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSpatial` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `AudioOcclusion` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioDoppler` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioListener` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioListenerMix` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/audio; M-VIEWS step 5 shows it in samples/09_coop (a listener per player) |
 | `AudioBusEffects` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
 | `AudioReverb` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioLimiter` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `AudioDuck` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
+| `AudioSnapshot` | `mce/audio/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ChildOf` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `WorldTransform` | `mce/ecs/hierarchy.h` | yes | yes | yes | docs/user-guide/03-editor.md | projects/MarbleGarden/games/marble_garden/module/marble_garden.cpp |
 | `NetReplicated` | `mce/ecs/replicated.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/net_arena/arena.h |
@@ -51,7 +51,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
 | `CloudLayer` | `mce/kit/cloud_layer.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Health3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
-| `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Weapon3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/roadblock_officer.mcprefab |
 | `Projectile3D` | `mce/kit/combat3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp |
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/import_demo/assets/scenes/main.mcscene |
@@ -137,6 +137,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `RainSplash` | `mce/kit/rain_splash.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `RenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `ShowRenderTexture` | `mce/kit/render_textures.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
+| `Roadblock3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `RoadblockPiece3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand |
 | `RoadNetwork3D` | `mce/kit/roads.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `VehicleSeat3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `Rider3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
@@ -166,7 +168,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SplitScreen` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
-| `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/roadblock_officer.mcprefab |
 | `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
@@ -186,6 +188,10 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WindDirection` | `mce/kit/wind_direction.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WindGust` | `mce/kit/wind_gust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WindSway` | `mce/kit/wind_sway.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `EngineAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `WeaponAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `FootstepAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `SirenAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WorldClock` | `mce/kit/world_clock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/11_daynight/assets/scenes/daynight.mcscene |
 | `Dialogue` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |
 | `DialogueInput` | `mce/kit/novel.h` | yes | yes | yes | docs/user-guide/18-samples.md | samples/systems_tour/main.cpp |

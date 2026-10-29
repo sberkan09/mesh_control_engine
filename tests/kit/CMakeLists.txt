@@ -33,6 +33,7 @@ mce_add_test(test_kit UMBRELLA
         test_nav3d.cpp
         test_joints3d.cpp
         test_ragdolls3d.cpp
+        test_roadblock.cpp
         test_roads.cpp
         test_traffic.cpp
         test_crowd.cpp
@@ -62,6 +63,7 @@ mce_add_test(test_kit UMBRELLA
         test_thunder_delay.cpp
         test_lightning_bolt.cpp
         test_weather_audio.cpp
+        test_world_audio.cpp
         test_wind_gust.cpp
         test_ground_mist.cpp
         test_moon.cpp
@@ -69,6 +71,7 @@ mce_add_test(test_kit UMBRELLA
         test_aurora.cpp
         test_water.cpp
         test_water_extract.cpp
+        test_aurora_extract.cpp
         test_night_sky_extract.cpp
         test_ground_mist_extract.cpp
         test_wind_gust_extract.cpp
