@@ -13,7 +13,6 @@ FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_o
 VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample
 ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
 Respawn3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample
-Wallet3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player
 PaySpray3D | M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage
 MissionReward3D | M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
 CarOwner3D | M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars

@@ -55,7 +55,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Sprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/03_platformer/game/platformer.cpp |
 | `AnimatedSprite` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/import_demo/assets/scenes/main.mcscene |
 | `TextLabel` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/scene_demo/assets/scenes/demo.mcscene |
-| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `UiScreen` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `UiFlow` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | projects/Kindle/assets/scenes/main.mcscene |
 | `Camera2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_coop/assets/scenes/arena.mcscene |
 | `Post2DComponent` | `mce/kit/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/extras_2d/assets/scenes/extras.mcscene |
@@ -111,7 +111,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
-| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `MissionMarker` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker |
@@ -168,7 +168,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station |
 | `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample |
-| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player |
+| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `CashDrop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing |
 | `MissionReward3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
 | `CarOwner3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars |
