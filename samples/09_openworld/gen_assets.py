@@ -494,11 +494,11 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     }
     comps["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
     comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
-    if not block:   # the chasing cars carry the siren on the root: the audio bridge follows an entity's own LocalTransform, a child's is
-                    # relative. It sounds from the wanted level the car answers; its loud wail stands in for the engine
-        comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
-                                      "gain_db": -60, "priority": 170},
-                      "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
+    # The siren sits on the root: the audio bridge follows an entity's own LocalTransform, a child's is relative. It sounds from the
+    # wanted level the car answers; its loud wail stands in for the engine.
+    comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                  "gain_db": -60, "priority": 170},
+                  "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
     car = scene.add(name, comps)
     scene.add(name + " model", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
                                 "MeshRef": model_mesh("police")})
