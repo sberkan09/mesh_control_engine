@@ -29,7 +29,7 @@ static_assert(sizeof(ParticleBurst) == 12);
 static_assert(sizeof(ShakeTrigger) == 12);
 static_assert(sizeof(CameraShake2D) == 40);
 static_assert(sizeof(CameraFollow2D) == 60);
-static_assert(sizeof(CameraFollow3D) == 104);
+static_assert(sizeof(CameraFollow3D) == 132);
 static_assert(sizeof(PhysicsEvents) == 56);
 static_assert(sizeof(NavGridSource) == 40);
 
@@ -291,6 +291,27 @@ void kit_camera_follow(Frame& f) {
         if (in && c.orbit_speed > 0.0f) {
             if (!locked) c.yaw -= in->look.x * c.orbit_speed * f.dt;
             c.pitch += in->look.y * c.orbit_speed * f.dt;
+        }
+        // A new target (into or out of a car) has no velocity yet: restart the memory so the swap is not read as a speed.
+        if (!(c.chase_target == c.target)) {
+            c.chase_target = c.target;
+            c.last_goal = p + c.offset;
+            c.chasing = 0;
+        }
+        // Chase: ease the yaw behind where the target is going, unless the player has just used the Look input.
+        c.chase_idle = in && c.orbit_speed > 0.0f && std::fabs(in->look.x) > 0.1f ? 0.0f : c.chase_idle + f.dt;
+        if (c.chase && !locked && c.primed && f.dt > 0.0f) {
+            const f32 vx = (p.x + c.offset.x - c.last_goal.x) / f.dt, vz = (p.z + c.offset.z - c.last_goal.z) / f.dt;
+            const Vehicle3D* car = w.try_get<Vehicle3D>(c.target);
+            const bool drives = c.chase == 2 || (car && car->speed > 0.0f);
+            // Starts at chase_min_speed, stops below 70% of it.
+            const f32 limit = c.chase_min_speed * (c.chasing ? 0.7f : 1.0f);
+            c.chasing = drives && vx * vx + vz * vz >= limit * limit ? 1 : 0;
+            if (c.chasing && c.chase_idle >= c.chase_hold) {
+                f32 turn = std::atan2(-vx, -vz) - c.yaw;
+                turn -= math::kTau * std::floor((turn + math::kPi) / math::kTau);  // the short way round
+                c.yaw += turn * follow_blend(c.chase_rate, f.dt);
+            }
         }
         c.pitch = math::clamp(c.pitch, c.min_pitch, math::max(c.min_pitch, c.max_pitch));
         const math::vec3 raw = p + c.offset;
