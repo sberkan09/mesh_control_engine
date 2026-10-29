@@ -128,6 +128,14 @@ struct MissionWantedFail {
 };
 MCE_COMPONENT(MissionWantedFail, (level, Save, Range{1, 5}, Help{"the mission fails when its actor's wanted level reaches this"}))
 
+// `MissionRetry` on a Mission entity (M-MISSIONRETRY): `delay` seconds after the mission fails it goes back to Idle with its
+// objectives Pending, so a `MissionMarker` or `start` can run it again. `left` is engine-written. Needs install_missions.
+struct MissionRetry {
+    f32 delay = 3.0f;  // s
+    f32 left = 0.0f;   // engine-written: s until it is Idle again
+};
+MCE_COMPONENT(MissionRetry, (delay, Save, Range{0, 100000}, Help{"s after a failure before the mission can start again"}), (left, Save, ReadOnly))
+
 // Events (producer FixedUpdate_Pre).
 struct MissionStarted {
     Entity mission;
