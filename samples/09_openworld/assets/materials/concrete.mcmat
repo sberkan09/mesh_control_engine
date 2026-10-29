@@ -1,0 +1,27 @@
+{
+ "format": "mce-material",
+ "version": 1,
+ "guid": "fc1e746a-24bf-548f-9736-b088b8acc468",
+ "name": "concrete",
+ "base_color": [
+  1.0,
+  1.0,
+  1.0,
+  1.0
+ ],
+ "metallic": 0.0,
+ "roughness": 0.9,
+ "emissive": [
+  0,
+  0,
+  0
+ ],
+ "alpha_mode": "opaque",
+ "alpha_cutoff": 0.5,
+ "double_sided": false,
+ "unlit": false,
+ "textures": {
+  "base_color": "guid:b8278157-6693-5c9a-affd-3717f77bc29a",
+  "normal": "guid:f8042ebd-eef6-520f-93a6-5b05d898dad5"
+ }
+}

@@ -1,0 +1,24 @@
+{
+ "format": "mce-material",
+ "version": 1,
+ "guid": "47121c27-c7e1-5bac-bb1f-d87f12f1de1e",
+ "name": "marking_white",
+ "base_color": [
+  0.92,
+  0.92,
+  0.88,
+  1.0
+ ],
+ "metallic": 0.0,
+ "roughness": 0.6,
+ "emissive": [
+  0,
+  0,
+  0
+ ],
+ "alpha_mode": "opaque",
+ "alpha_cutoff": 0.5,
+ "double_sided": false,
+ "unlit": false,
+ "textures": {}
+}

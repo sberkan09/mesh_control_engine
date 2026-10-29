@@ -23,7 +23,7 @@
 - **Snow.** The seeded schedule picks among all five weather kinds; seed 55 has no snow in its first ten picks (25 minutes), `Precipitation3D.snow_rate` is 0 and
   there is no `SnowCover`, so a later snow pick would only grey the sky. A schedule that can exclude kinds would need a kit change.
 - **Lamps are 50 point lights.** Look at the frame time on a real GPU (not measured here, llvmpipe only); lowering `radius` or keeping lamps to the inner junctions is the cheap fix.
-- **No thunder sound** (`ThunderDelay` has no clip) and no lamp light on moving cars (headlights).
+- ~~No thunder sound and no headlights~~ done in E7, see [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md).
 
 ## Verification
 

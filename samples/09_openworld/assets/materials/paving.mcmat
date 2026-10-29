@@ -1,0 +1,27 @@
+{
+ "format": "mce-material",
+ "version": 1,
+ "guid": "ce320e7b-f4b5-57fe-85f6-c312325b0269",
+ "name": "paving",
+ "base_color": [
+  1.0,
+  0.98,
+  0.94,
+  1.0
+ ],
+ "metallic": 0.0,
+ "roughness": 0.85,
+ "emissive": [
+  0,
+  0,
+  0
+ ],
+ "alpha_mode": "opaque",
+ "alpha_cutoff": 0.5,
+ "double_sided": false,
+ "unlit": false,
+ "textures": {
+  "base_color": "guid:0af2f83f-d002-5328-8d9b-312fc5c2904e",
+  "normal": "guid:235468c9-9ae5-5180-982f-ca09391d2b68"
+ }
+}

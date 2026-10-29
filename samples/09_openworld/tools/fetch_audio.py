@@ -48,6 +48,10 @@ ZIP_SHA256 = "be6eba63b03409ac0c77787a956b1503a7c186403d04aef9725c52644a4b7878"
 ZIP_MEMBERS = {"metal_hit_01.ogg": "hit_1.ogg", "metal_hit_02.ogg": "hit_2.ogg", "metal_hit_03.ogg": "hit_3.ogg",
                "metal_hit_04.ogg": "hit_4.ogg", "metal_hit_05.ogg": "hit_5.ogg", "metal_slam_01.ogg": "crash_1.ogg",
                "metal_falling_01.ogg": "crash_2.ogg", "metal_falling_02.ogg": "crash_3.ogg"}
+# The second rubberduck pack ("100 CC0 SFX #2", CC0): the one thunder clap, copied unmodified
+ZIP2_NAME = "sfx_100_v2.zip"
+ZIP2_SHA256 = "0fc61b4494e2e893c0c015ced4877b3f689c7d84a48cb61daecd7ddb52db797b"
+ZIP2_MEMBERS = {"sfx100v2_thunder_01.ogg": "thunder.ogg"}
 RATE = 44100
 BED_RATE = 22050   # the noise beds (rain, wind, crickets) have nothing above 8 kHz worth the bytes
 
@@ -60,7 +64,7 @@ def sha256(path):
 
 
 def fetch(cache):
-    for name, want in list(SOURCES.items()) + [(ZIP_NAME, ZIP_SHA256)]:
+    for name, want in list(SOURCES.items()) + [(ZIP_NAME, ZIP_SHA256), (ZIP2_NAME, ZIP2_SHA256)]:
         path = os.path.join(cache, name)
         if not (os.path.isfile(path) and sha256(path) == want):
             req = urllib.request.Request(BASE + urllib.parse.quote(name), headers={"User-Agent": "mce-content/1"})
@@ -138,6 +142,10 @@ def main():
         shutil.copyfile(os.path.join(cache, "0%d-footstep.ogg" % n), os.path.join(OUT, "footstep_%d.ogg" % n))
     with zipfile.ZipFile(os.path.join(cache, ZIP_NAME)) as z:
         for member, out in ZIP_MEMBERS.items():
+            with open(os.path.join(OUT, out), "wb") as f:
+                f.write(z.read(member))
+    with zipfile.ZipFile(os.path.join(cache, ZIP2_NAME)) as z:
+        for member, out in ZIP2_MEMBERS.items():
             with open(os.path.join(OUT, out), "wb") as f:
                 f.write(z.read(member))
     write_wav("shot_1.wav", shot(os.path.join(cache, "22 Pistol.wav"), 0.9))

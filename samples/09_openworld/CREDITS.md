@@ -15,6 +15,11 @@
 
 ## Sounds (CC0, OpenGameArt)
 
-Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy, impacts by rubberduck, rain by kresiek-the-furry, wind by bashar3a, crickets by wolfgang and the crowd bed by
+Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy, impacts and thunder by rubberduck, rain by kresiek-the-furry, wind by bashar3a, crickets by wolfgang and the crowd bed by
 [StarNinjas](https://opengameart.org/users/starninjas), all CC0-1.0. Files, sources and the changes made (trim, loop, mono):
 `assets/audio/SOURCES.md`; rebuilt by `tools/fetch_audio.py`.
+
+## Textures and models made for the sample
+
+The ground textures (`assets/textures/`, `tools/gen_textures.py`) and the Blender props (`assets/models/props/`, `blender/gen_models.py`) are original to this
+repository (CC0-1.0).

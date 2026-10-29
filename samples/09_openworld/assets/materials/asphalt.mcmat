@@ -1,0 +1,27 @@
+{
+ "format": "mce-material",
+ "version": 1,
+ "guid": "639e1404-941f-5386-b4ae-fb58362f62fe",
+ "name": "asphalt",
+ "base_color": [
+  1.0,
+  1.0,
+  1.0,
+  1.0
+ ],
+ "metallic": 0.0,
+ "roughness": 0.92,
+ "emissive": [
+  0,
+  0,
+  0
+ ],
+ "alpha_mode": "opaque",
+ "alpha_cutoff": 0.5,
+ "double_sided": false,
+ "unlit": false,
+ "textures": {
+  "base_color": "guid:b9601f63-7b34-5918-8557-bddb287a62aa",
+  "normal": "guid:b2fd193f-4ecf-56c0-bc9c-9833d6022958"
+ }
+}

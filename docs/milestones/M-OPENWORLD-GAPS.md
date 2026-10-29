@@ -36,7 +36,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 ## B. Content and look (observed in the captures)
 
-- **Roads, ground, kerbs and trees are tinted boxes** (one `box.glb`). No road markings, lane lines, crossings, junction
+- ~~**Roads, ground, kerbs and trees are tinted boxes** (one `box.glb`).~~ **Done (E7, 2026-10-29), see [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md).** Was: No road markings, lane lines, crossings, junction
   meshes or sidewalk detail; the road network is data only, so the visual road is a flat slab.
 - **Washed-out colours.** The grass tint (0.20, 0.34, 0.14) shows as a pastel green (about 186, 214, 164) and the kerb or
   sidewalk strip reads near white. Suspect the fixed sun (intensity 3.0, exposure 1.0) and no grading; cause not confirmed.
@@ -101,7 +101,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 1. **E2 HUD + wanted stars + health + ammo** (A1): copy `10_missions` `hud.mcui`; one `.mcui`, no code. Biggest feel gain.
 2. **E3 audio pass** (A6): done, see [M-OPENWORLD-AUDIO](M-OPENWORLD-AUDIO.md). Engine loop, shot, footsteps, siren, ambience; hit sounds and radio remain.
 3. **E4 busted and wasted + police cars + arrest** (A7-A9; respawn, cars and roadblocks done, see [M-OPENWORLD-POLICE](M-OPENWORLD-POLICE.md)): data only, uses M-WASTED and M-ARREST components.
-4. **E5 look pass**: roads with markings and crossings, a sky HDRI, tint/exposure check on GL and Metal, shot effects.
+4. **E5 look pass**: roads with markings and crossings (done, E7: [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md)), a sky HDRI, tint/exposure check on GL and Metal, shot effects.
 5. **E6 day/night + weather** (A4, A5), **E7 missions + minimap** (A2, A3), **E8 shops, carjack, wrecks** (A10, A11).
 6. **E9 animation**: play the node clips, wheel spin, door and seat transitions.
 7. **E10 gates**: screenshot gate, budget counters, scripted playthrough test, Mac soak.
