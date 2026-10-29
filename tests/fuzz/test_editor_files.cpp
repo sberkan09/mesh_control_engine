@@ -166,7 +166,7 @@ TEST_CASE("fuzz: mutated locale tables load into the strings grid and what loads
         cook::String err;
         if (!grid.load(project, err)) continue;
         ++loaded;
-        if (grid.keys().size() > 0 && grid.locales().size() > 0) grid.set_text(0, 0, "edited");
+        if (!grid.keys().empty() && !grid.locales().empty()) grid.set_text(0, 0, "edited");
         (void)grid.add_key("fuzz.added");
         cook::String serr;
         (void)grid.save(project, serr);  // a table the cook refuses is not written; either way, no crash
