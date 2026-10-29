@@ -134,8 +134,10 @@ MCE_COMPONENT(CameraFollow2D, (target, Help{"the entity to follow"}), offset,
 // pivot, looking along yaw / pitch; `lock_on` turns the yaw (at `lock_on_rate`) so the camera frames
 // the target in front of that entity.
 // Chase (M-OPENWORLD-POLICE 4, off by default): `chase` 1 eases the yaw behind the target's ground velocity while the target has a
-// Vehicle3D driving forward faster than `chase_min_speed` (2: any target moving that fast), at `chase_rate` per second; the Look
-// input holds the yaw where the player put it for `chase_hold` seconds after it was last used. `lock_on` wins over chase.
+// Vehicle3D driving forward (2: any target, a reversing car included) faster than `chase_min_speed`, at `chase_rate` per second. It
+// starts at `chase_min_speed` and stops below 70% of it, so speed jitter near the threshold does not flicker it. The Look input holds
+// the yaw where the player put it for `chase_hold` seconds after it was last used. `lock_on` wins over chase. A change of `target`
+// (getting into or out of a car) forgets the old velocity, so the swap itself does not read as a speed.
 struct CameraFollow3D {
     Entity target;
     math::vec3 offset{0.0f, 1.5f, 0.0f};
@@ -162,6 +164,9 @@ struct CameraFollow3D {
     f32 chase_hold = 1.5f;          // s the Look input holds the yaw
     f32 chase_min_speed = 3.0f;     // m/s the target must move to be chased
     f32 chase_idle = 0.0f;          // engine-written: s since the Look input was last used
+    Entity chase_target;            // engine-written: the target the velocity memory belongs to
+    u8 chasing = 0;                 // engine-written: 1 while the target is fast enough to chase (with hysteresis)
+    u8 pad2_[3] = {};
 };
 MCE_COMPONENT(CameraFollow3D, (target, Help{"the entity to orbit"}), (offset, Help{"pivot above the target"}),
               (distance, Range{0.1f, 1000}), (yaw, Help{"radians about +Y"}), (pitch, Help{"radians above the horizon"}),
@@ -177,7 +182,8 @@ MCE_COMPONENT(CameraFollow3D, (target, Help{"the entity to orbit"}), (offset, He
               (chase, Range{0, 2}, Help{"0 off; 1 turns behind a Vehicle3D target driving forward; 2 behind any moving target"}),
               (chase_rate, Range{0, 60}, Help{"1/s the yaw eases behind the heading"}),
               (chase_hold, Range{0, 60}, Help{"s the Look input holds the yaw after its last use"}),
-              (chase_min_speed, Range{0, 100}, Help{"m/s the target must move to be chased"}), (chase_idle, ReadOnly, Transient))
+              (chase_min_speed, Range{0, 100}, Help{"m/s the target must move to start being chased (it stops below 70%)"}), (chase_idle, ReadOnly, Transient),
+              (chase_target, ReadOnly, Transient), (chasing, ReadOnly, Transient))
 
 // Engine-written record of the 2D physics events naming this entity (add the component to
 // see them; readable by data, sequences and run_headless inspect).

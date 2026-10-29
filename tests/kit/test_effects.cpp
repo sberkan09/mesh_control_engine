@@ -251,6 +251,37 @@ TEST_CASE("effects: CameraFollow3D chase turns the camera behind a moving target
     }
 }
 
+TEST_CASE("effects: chase ignores a target swap and speed jitter at the threshold (M-OPENWORLD-POLICE 4)") {
+    {  // swapping the target to an entity far away is not a speed: the yaw does not move on the swap
+        ChaseScene s(2, false);
+        const Entity far_away = s.w.spawn_with(at(500, 0, 500));
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 0.0f);
+        s.w.try_get_mut<CameraFollow3D>(s.cam)->target = far_away;
+        const f32 before = s.yaw();
+        s.w.tick(kDt, s.t++);
+        CHECK(s.yaw() == before);
+    }
+    {  // between 70% and 100% of chase_min_speed it keeps chasing once started, but never starts
+        ChaseScene s(2, false);
+        s.drive({1.0f, 0.0f, 0.0f}, 2.6f, 3.0f);  // 2.6 < 3: does not start
+        CHECK(s.yaw() == 0.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 3.2f, 0.5f);  // starts
+        const f32 started = s.yaw();
+        CHECK(started != 0.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 2.6f, 0.5f);  // 2.6 >= 2.1: keeps going
+        CHECK(std::fabs(s.yaw()) > std::fabs(started));
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 0.5f);  // below 70%: stops
+        const f32 stopped = s.yaw();
+        s.drive({1.0f, 0.0f, 0.0f}, 1.5f, 0.5f);
+        CHECK(s.yaw() == stopped);
+    }
+    {  // mode 2 is any moving target, a reversing car included (mode 1 skips it)
+        ChaseScene s(2, true, -6.0f);
+        s.drive({1.0f, 0.0f, 0.0f}, 6.0f, 3.0f);
+        CHECK(std::sin(s.yaw()) < -0.99f);
+    }
+}
+
 TEST_CASE("effects: the Look input holds a chasing camera for chase_hold seconds") {
     ChaseScene s(2, false);
     input::InputState in;

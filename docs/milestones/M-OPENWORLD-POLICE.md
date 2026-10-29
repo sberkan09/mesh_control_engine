@@ -35,8 +35,8 @@ hospital west of x = -100, wanted level 0, 200 cash less than the 500 it starts 
 ## Step 4: the camera turns with the car
 
 `CameraFollow3D` gains `chase` (0 off, 1 behind a `Vehicle3D` target driving forward, 2 behind any moving target), `chase_rate`
-(2.5 /s), `chase_hold` (1.5 s) and `chase_min_speed` (3 m/s), plus the engine-written `chase_idle` (the struct goes from 104 to
-120 bytes; old scenes load with chase off). The heading is the target's ground velocity (the same difference `look_ahead` uses), so
+(2.5 /s), `chase_hold` (1.5 s) and `chase_min_speed` (3 m/s), plus the engine-written `chase_idle`, `chase_target` and `chasing` (the struct goes from 104 to
+132 bytes; old scenes load with chase off). Review fixes (#875): a change of target (getting into or out of a car) restarts the velocity memory so the swap is not read as a speed; chase starts at `chase_min_speed` and stops below 70% of it (hysteresis, so physics jitter at the threshold does not flicker it); mode 2 follows any moving target, a reversing car included (mode 1 skips it). The heading is the target's ground velocity (the same difference `look_ahead` uses), so
 it needs no facing component; a reversing car and a walker are left alone in mode 1; the Look action holds the yaw for `chase_hold`
 seconds; `lock_on` wins. The 09_openworld camera has `chase` 1: the seat swaps the camera's target to the car, so the camera swings
 behind it round corners and stays put on foot. Tests: "chase turns the camera behind a moving target" (modes, speed gate, vehicle
