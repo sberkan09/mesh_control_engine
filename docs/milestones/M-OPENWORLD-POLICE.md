@@ -18,7 +18,7 @@ already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEAL
   from at least 45 m away (at most 300 m), each marker spawns two static police cars side by side across the road and two officers
   in front of them (prefabs `roadblock_car` and `roadblock_officer`, `officer_back` -2.5); the officers hold their ground and fire
   when the player is within sight. 10 s after the level drops below 3 (and the player is 45 m or more away) they are destroyed.
-  Kit: `kit/roadblock.h`, system `kit3d_roadblocks` after `kit3d_wanted`.
+  Kit: `kit/roadblock.h`, system `kit3d_roadblocks` after `kit3d_wanted`. Review fixes (#871): the pieces are made after the walk over the markers; a spawn that made nothing waits 5 s; a piece's place must be clear of anything with a `Health3D` or `Vehicle3D` within 3 m (it waits, so a parked car on the spot defers the block for good: move the marker); `up` is read from the pieces, which are run-time entities and not saved, so a load re-forms the block (test "a loaded game puts the block up again").
 
 ## Limits
 

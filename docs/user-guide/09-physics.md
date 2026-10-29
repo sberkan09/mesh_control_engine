@@ -1001,7 +1001,7 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   `min_level` (default 3) or above and it is between `spawn_min` and `spawn_max` metres away, the marker spawns `cars` cars side by
   side `car_spacing` apart and `officers` officers, each tagged with `RoadblockPiece3D`. `hold` seconds after the level drops
   below `min_level` they are destroyed, but never while the offender is closer than `spawn_min` (nothing vanishes in sight).
-  Without prefabs a game spawns the pieces itself through the `RoadblockSpawnHook` resource (kind 0 car, 1 officer). Ordinary
+  A block waits while a living thing (a `Health3D`) or a vehicle is within 3 m of a piece's place, and after a spawn that made nothing (no prefab or hook, a prefab that does not load) it waits 5 s before trying again. Which markers are up is read from the pieces that exist; the pieces are made at run time and not saved, so a loaded game puts the block up again from the wanted level. Without prefabs a game spawns the pieces itself through the `RoadblockSpawnHook` resource (kind 0 car, 1 officer). Ordinary
   `Police3D` units placed in the scene with a higher `min_level` are the other way to have more police at a high level; a
   `Roadblock3D` is for units that appear only then.
 
