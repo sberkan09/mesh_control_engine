@@ -55,6 +55,8 @@ def model_guid(name):
 G_ROADS = guid("roads/city.mcroads")
 G_CAR = guid("prefabs/traffic_car.mcprefab")
 G_WALKER = guid("prefabs/pedestrian.mcprefab")
+G_BLOCK_CAR = guid("prefabs/roadblock_car.mcprefab")
+G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
@@ -469,15 +471,14 @@ def car_entities(model, traffic):
     return ents
 
 
-def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
-    """A police car: a Vehicle3D driven by Police3D (drive_car), or a parked roadblock (block: drive_car 0, handbrake on)."""
-    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 2,
+def police_car(scene, name, pos, yaw, min_level, dispatch):
+    """A police car: a Vehicle3D driven by Police3D along the roads (drive_car 2)."""
+    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 2,
               "sight_range": 90, "attack_range": 0, "search_time": 15, "arrest_range": 0, "dispatch_range": dispatch}
     comps = {
         "LocalTransform": tf(pos, None, yaw),
         "RigidBody3D": {"half": [0.9, 0.4, 1.5], "density": 300},
-        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000, "handbrake": 1} if block
-        else {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
+        "Vehicle3D": {"engine_torque": 900, "self_right": 1, "anti_roll": 8000},
         "Health3D": {"max": 150, "team": 2, "destroy_on_death": 0},
         "Police3D": police,
     }
@@ -488,6 +489,21 @@ def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
 
 
 def prefabs():
+    # Roadblock pieces: a police car that is a static box (the barricade does not roll away), and an officer who holds his ground.
+    write("prefabs/roadblock_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_CAR, "name": "roadblock_car", "entities": [
+        {"name": "Roadblock car", "components": {"LocalTransform": {}, "BoxCollider3D": {"half": [0.9, 0.95, 1.5]}}},
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.5, 0), (CAR_SCALE,) * 3, math.pi),
+                                         "MeshRef": model_mesh("police")}}]})
+    write("prefabs/roadblock_officer.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_COP, "name": "roadblock_officer", "entities": [
+        {"name": "Roadblock officer", "components": {
+            "LocalTransform": {},
+            "CharacterController3D": {"radius": 0.3, "half_height": 0.6, "speed": 4.5, "layer": 2, "mask": 65535},
+            "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
+            "Police3D": {"min_level": 3, "attack_level": 3, "drive_nav": 0, "sight_range": 90, "attack_range": 70, "search_time": 6,
+                         "arrest_range": 0},
+            "Weapon3D": {"kind": "Hitscan", "damage": 10, "range": 80, "rate": 3, "spread_deg": 1.5, "magazine": 0}}},
+        {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                         "MeshRef": model_mesh("character-d")}}]})
     write("prefabs/traffic_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_CAR, "name": "traffic_car",
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
@@ -603,23 +619,14 @@ def scene():
     # They do not shoot or arrest (the foot units do); a car has no path following, so a wall in the way stops it.
     for n, (x, z, yaw) in enumerate(((30.0, 12.0, 0.0), (-30.0, -12.0, math.pi), (12.0, -30.0, math.pi / 2), (-12.0, 30.0, -math.pi / 2))):
         police_car(s, "Police car %d" % (n + 1), (x, 0.9, z), yaw, 2 + n // 2 * 1, 600)
-    # Roadblocks across the avenue at both ends of the middle stretch: two police cars side by side with the handbrake on, and two officers who
-    # hold the position (no dispatch) and open fire from level 3 when the player comes within sight.
-    for n, (x, side) in enumerate(((-210.0, 1), (210.0, -1))):
-        for k in (-1, 1):
-            police_car(s, "Roadblock %d car %d" % (n + 1, (k + 3) // 2), (x, 0.9, k * 3.6), 0.0, 3, 0, block=True)
-        for k in (-1, 1):
-            cop = s.add("Roadblock %d officer %d" % (n + 1, (k + 3) // 2), {
-                "LocalTransform": tf((x + side * 3.0, 0.95, k * 4.0)),
-                "CharacterController3D": {"radius": 0.3, "half_height": 0.6, "speed": 4.5, "layer": 2, "mask": 65535},
-                "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
-                "Police3D": {"min_level": 3, "attack_level": 3, "drive_nav": 0, "sight_range": 70, "attack_range": 45,
-                             "search_time": 6, "arrest_range": 0},
-                "Weapon3D": {"kind": "Hitscan", "damage": 8, "range": 70, "rate": 2, "spread_deg": 3, "magazine": 0},
-            })
-            s.add("Roadblock %d officer %d model" % (n + 1, (k + 3) // 2),
-                  {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                   "MeshRef": model_mesh("character-d")})
+    # Roadblocks across the avenue at both ends of the middle stretch. Each marker spawns two police cars (static bodies, side by side
+    # across the road) and two officers behind them when the player reaches wanted level 3 from at least 45 m away, and takes them
+    # down 10 s after the level drops (Roadblock3D). The marker's local X runs along world Z; its +Z points away from the plaza, so the officers (officer_back -2.5) stand in front of the cars, in line of fire.
+    for n, (x, yaw) in enumerate(((-210.0, -math.pi / 2), (210.0, math.pi / 2))):
+        s.add("Roadblock %d" % (n + 1), {
+            "LocalTransform": tf((x, 0.95, 0.0), None, yaw),
+            "Roadblock3D": {"car": "guid:" + G_BLOCK_CAR, "officer": "guid:" + G_BLOCK_COP, "min_level": 3, "cars": 2, "officers": 2,
+                            "car_spacing": 3.6, "officer_back": -2.5, "spawn_min": 45, "spawn_max": 300, "hold": 10}})
     # Where a dead player wakes up (hospital, west avenue) and an arrested one (station, by the plaza), each marked by a flat pad.
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})

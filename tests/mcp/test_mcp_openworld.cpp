@@ -97,14 +97,14 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     // M-OPENWORLD E4: police cars, roadblocks and respawn. All of it is the sample's data on the existing kit components.
     auto units = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Police3D","show":["Police3D"]}})");
     u32 cars = 0;
-    u32 blocks = 0;
     for (u32 i = 0; i < count(units); ++i) {
         const cook::JsonValue unit = comps(units, i).get("Police3D");
         if (unit.get("drive_car").as_number() == 2) ++cars;
-        if (unit.get("min_level").as_number() == 3 && unit.get("drive_car").as_number() == 0 && unit.get("attack_range").as_number() > 0) ++blocks;
     }
     CHECK(cars == 4);
-    CHECK(blocks == 4);  // two officers at each of the two roadblocks
+    // The roadblocks are markers: nothing stands there until the wanted level reaches 3.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Roadblock3D","show":["Roadblock3D"]}})")) == 2);
+    CHECK(count(c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"RoadblockPiece3D","show":["RoadblockPiece3D"]}})")) == 0);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RespawnPoint3D","show":["RespawnPoint3D"]}})")) == 2);
 
     // Busted: a level-1 offender who stands still beside a plaza officer is arrested and wakes up at the station, 100 poorer.
@@ -124,8 +124,17 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
     CHECK(pc.get("Wallet3D").get("cash").as_number() == 400);
 
-    // Wasted: at level 3 the roadblock officers shoot the player from the avenue; it wakes up at the hospital, 200 poorer (the runs start from the saved scene, so from 500 cash again).
-    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-180,0.95,0]})");
+    // Level 4 with the player 110 m from the east marker (and 310 m from the west one): only the east block stands, 2 cars + 2 officers.
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[100,0.95,60]})");
+    c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":70})");
+    c.ok("scene_save");
+    auto standing = c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"RoadblockPiece3D","show":["RoadblockPiece3D","LocalTransform"]}})");
+    CHECK(standing.v().get("log").get("errors").as_number() == 0);
+    CHECK(count(standing) == 4);
+    for (u32 i = 0; i < count(standing); ++i) CHECK(comps(standing, i).get("LocalTransform").get("position").at(0).as_number() > 190.0);
+
+    // Wasted: at level 3 the west roadblock (up once the player is 50 m away) shoots the player; it wakes up at the hospital, 200 poorer (the runs start from the saved scene, so from 500 cash again).
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-160,0.95,0]})");
     c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":70})");
     auto wasted = wake("1800");
     pc = comps(wasted, 0);
