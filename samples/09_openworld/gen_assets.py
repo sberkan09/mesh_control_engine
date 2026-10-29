@@ -648,10 +648,23 @@ def hud():
     def box(x0, y0, x1, y1, ax=0, ay=0):
         return {"min": [ax, ay], "max": [ax, ay], "offset_min": [x0, y0], "offset_max": [x1, y1]}
 
+    def wanted_stars():
+        """Five stars at the right: star n is a Panel bound to Wanted3D/level that shows from level n up (range lo = n)."""
+        stars = []
+        for n in range(1, 6):
+            x1 = -16 - (5 - n) * 34
+            stars.append({"name": "star%d" % n, "kind": "Panel", "visible": False, "style": {"tint": [0, 0, 0, 0]},
+                          "range": [n, 5, 1], "value": n, "bind": "Wanted3D/level", "anchors": box(x1 - 34, 248, x1, 290, 1, 0),
+                          "children": [{"name": "glyph", "kind": "Text", "text": "*", "fill": True, "text_align": "Center",
+                                        "style": {"text_size": 52, "text_color": [1.0, 0.85, 0.25, 1], "text_outline": 2,
+                                                  "text_outline_color": [0, 0, 0, 1]}}]})
+        return stars
+
     write("ui/hud.mcui", {"format": "mce-ui", "version": 1, "guid": G_HUD, "modal": False, "widgets": [
         text("health", "HEALTH 100", 28, box(24, -64, 280, -24, 0, 1), "Health3D/current", "HEALTH %.0f", [0.45, 1.0, 0.5, 1]),
-        text("wanted", "WANTED 0 / 5", 26, box(-280, 232, -16, 268, 1, 0), "Wanted3D/level", "WANTED %.0f / 5", [1.0, 0.85, 0.25, 1], "Right"),
-        text("cash", "$ 0", 30, box(-280, 270, -16, 310, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
+        text("wanted", "WANTED", 22, box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
+        *wanted_stars(),
+        text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
         text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
         {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,

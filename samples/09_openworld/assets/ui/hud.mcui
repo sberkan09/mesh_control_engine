@@ -49,9 +49,9 @@
   {
    "name": "wanted",
    "kind": "Text",
-   "text": "WANTED 0 / 5",
+   "text": "WANTED",
    "style": {
-    "text_size": 26,
+    "text_size": 22,
     "text_outline": 2,
     "text_outline_color": [
      0,
@@ -78,15 +78,328 @@
     ],
     "offset_min": [
      -280,
-     232
+     224
     ],
     "offset_max": [
      -16,
-     268
+     248
+    ]
+   }
+  },
+  {
+   "name": "star1",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
     ]
    },
+   "range": [
+    1,
+    5,
+    1
+   ],
+   "value": 1,
    "bind": "Wanted3D/level",
-   "format": "WANTED %.0f / 5"
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -186,
+     248
+    ],
+    "offset_max": [
+     -152,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star2",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    2,
+    5,
+    1
+   ],
+   "value": 2,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -152,
+     248
+    ],
+    "offset_max": [
+     -118,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star3",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    3,
+    5,
+    1
+   ],
+   "value": 3,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -118,
+     248
+    ],
+    "offset_max": [
+     -84,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star4",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    4,
+    5,
+    1
+   ],
+   "value": 4,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -84,
+     248
+    ],
+    "offset_max": [
+     -50,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "star5",
+   "kind": "Panel",
+   "visible": false,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "range": [
+    5,
+    5,
+    1
+   ],
+   "value": 5,
+   "bind": "Wanted3D/level",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -50,
+     248
+    ],
+    "offset_max": [
+     -16,
+     290
+    ]
+   },
+   "children": [
+    {
+     "name": "glyph",
+     "kind": "Text",
+     "text": "*",
+     "fill": true,
+     "text_align": "Center",
+     "style": {
+      "text_size": 52,
+      "text_color": [
+       1.0,
+       0.85,
+       0.25,
+       1
+      ],
+      "text_outline": 2,
+      "text_outline_color": [
+       0,
+       0,
+       0,
+       1
+      ]
+     }
+    }
+   ]
   },
   {
    "name": "cash",
@@ -120,11 +433,11 @@
     ],
     "offset_min": [
      -280,
-     270
+     292
     ],
     "offset_max": [
      -16,
-     310
+     332
     ]
    },
    "bind": "Wallet3D/cash",

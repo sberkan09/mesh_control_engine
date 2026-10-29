@@ -602,6 +602,8 @@ void Document::sync_properties() {
             char text[96];
             std::snprintf(text, sizeof(text), b.format.empty() ? "%g" : b.format.c_str(), v);
             set_text(b.widget, text);
+        } else if (n->kind == WidgetKind::Panel || n->kind == WidgetKind::Image) {
+            set_visible(b.widget, static_cast<f32>(v) >= n->lo);  // shown from `lo` up: a wanted star, a low-health flash
         } else {
             n->value = static_cast<f32>(v) < n->lo ? n->lo : (static_cast<f32>(v) > n->hi ? n->hi : static_cast<f32>(v));
         }
