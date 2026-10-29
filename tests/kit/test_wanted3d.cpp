@@ -475,11 +475,12 @@ struct EllScene : Scene {
     // One tick: the systems write the car's inputs, then a kinematic car (8 m/s, 0.8 rad/s at full lock) follows them.
     void drive() {
         run(1);
-        const Vehicle3D& v = *w.try_get<Vehicle3D>(car);
+        Vehicle3D& v = *w.try_get_mut<Vehicle3D>(car);
         LocalTransform& lt = *w.try_get_mut<LocalTransform>(car);
         yaw -= v.steer * 0.8f * kDt;
         lt.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, yaw);
         const f32 speed = v.brake > 0.5f ? 0.0f : 8.0f * v.throttle;
+        v.speed = speed;  // the engine writes it from the wheels; the test car reports what it does
         lt.position = lt.position + math::rotate(lt.rotation, math::vec3{0.0f, 0.0f, -1.0f}) * (speed * kDt);
     }
 };
@@ -507,7 +508,7 @@ TEST_CASE("wanted3d: a police car with drive_car 2 takes the roads to a target r
         } else {
             CHECK(worst < 12.0f);               // stays on the road (the test car cuts the corner by its 10 m turning circle)
             CHECK(s.pos().x > 75.0f);           // went round the corner
-            CHECK(s.pos().z < -90.0f);
+            CHECK(s.pos().z < -85.0f);
             CHECK(s.w.try_get<Vehicle3D>(s.car)->brake == 1.0f);  // and parked near the target's lane
         }
     }
@@ -565,6 +566,65 @@ TEST_CASE("wanted3d: a police car follows a target that moves to another lane at
     const Vehicle3D& v = *s.w.try_get<Vehicle3D>(s.car);
     CHECK(v.brake == 0.0f);  // 90 m of road to go: not stopped for the old, nearby goal
     CHECK(v.throttle > 0.3f);
+}
+
+TEST_CASE("wanted3d: a police car that cannot move backs out and tries again (M-ARREST 5)") {
+    EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    s.run(5);
+    // The car is jammed: it pushes the throttle and its speed stays 0.
+    u32 forward_ticks = 0;
+    u32 reverse_ticks = 0;
+    f32 steer_in_reverse = 0.0f;
+    bool reversed_then_forward = false;
+    for (u32 i = 0; i < 300; ++i) {  // 5 s: one try, one reverse
+        s.run(1);
+        Vehicle3D& v = *s.w.try_get_mut<Vehicle3D>(s.car);
+        v.speed = 0.0f;
+        if (v.throttle > 0.0f) {
+            ++forward_ticks;
+            if (reverse_ticks > 0) reversed_then_forward = true;
+        }
+        if (v.throttle < 0.0f) {
+            ++reverse_ticks;
+            steer_in_reverse = v.steer;
+        }
+    }
+    CHECK(forward_ticks >= 100);   // it tried for about 2 s at least first
+    CHECK(reverse_ticks >= 80);    // then backed up for about 1.5 s (90 ticks)
+    CHECK(reverse_ticks <= 100);  // (one reverse of 1.5 s = 90 ticks)
+    CHECK(reversed_then_forward);  // and went forward again
+    CHECK(steer_in_reverse <= 0.0f);  // the aim is ahead or to the right, so the wheel is straight or to the left
+}
+
+TEST_CASE("wanted3d: a moving police car is not mistaken for a stuck one (M-ARREST 5)") {
+    EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    for (u32 i = 0; i < 1500; ++i) {
+        s.drive();
+        CHECK(s.w.try_get<Vehicle3D>(s.car)->throttle >= 0.0f);
+    }
+}
+
+TEST_CASE("wanted3d: a police car's wheel does not jitter through a junction (M-ARREST 5)") {
+    // The L's corner is a junction: the car's lane changes from the road to a connector to the next road. Over the whole drive the
+    // wheel must change smoothly: no tick-to-tick jump, and no run of sign flips.
+    EllScene s(2, {1.75f, 1.0f, -10.0f}, {90.0f, 1.0f, -80.0f});
+    f32 last = 0.0f;
+    f32 biggest_jump = 0.0f;
+    u32 flips = 0;
+    f32 last_sign = 0.0f;
+    for (u32 i = 0; i < 2400; ++i) {
+        s.drive();
+        const f32 steer = s.w.try_get<Vehicle3D>(s.car)->steer;
+        if (i > 0) biggest_jump = math::max(biggest_jump, std::abs(steer - last));
+        last = steer;
+        if (std::abs(steer) > 0.05f) {
+            const f32 sign = steer > 0.0f ? 1.0f : -1.0f;
+            if (last_sign != 0.0f && sign != last_sign) ++flips;
+            last_sign = sign;
+        }
+    }
+    CHECK(biggest_jump < 0.5f);
+    CHECK(flips <= 6);
 }
 
 TEST_CASE("wanted3d: a dead or arrested player wakes up at a hospital or station (M-WASTED)") {

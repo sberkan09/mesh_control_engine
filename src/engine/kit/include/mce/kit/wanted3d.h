@@ -43,6 +43,10 @@
 // (the one going its way) to the lane nearest the target, steered by pure pursuit, so it takes the roads round blocks of buildings;
 // with no lane near the car or the target it drives straight as for 1. A roadblock is a car with `drive_car` 0 placed across the road.
 //
+// Getting unstuck (M-ARREST 5). A driven car (`drive_car` 1 or 2) that pushes the throttle for 2 s without moving (a wall, a
+// roadblock, a dead end) reverses for 1.5 s with the wheel turned against the way it wants to go, then tries again. The two
+// timers are in the component, so a replay and a save agree.
+//
 // "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health"; "kit3d_respawn" (M-WASTED) after it. Everything is in the components, so it is
 // deterministic, hashed and saved.
 
@@ -110,6 +114,8 @@ struct Police3D {
     f32 arrest_speed = 1.5f;        // m/s: faster than this it is not standing still
     f32 arrest_progress = 0.0f;     // engine-written: s toward the arrest
     f32 dispatch_range = 0.0f;      // m: an idle unit this close to the offender's last known place is sent there (0 = off)
+    f32 stuck_time = 0.0f;          // engine-written: s a driven car has pushed the throttle without moving (M-ARREST 5)
+    f32 reverse_left = 0.0f;        // engine-written: s of reversing left to get out of a jam
 };
 MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wanted level"}),
               (attack_level, Range{1, 10}, Help{"shoots from this wanted level"}), (state, ReadOnly, Transient),
@@ -123,7 +129,8 @@ MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wante
               (arrest_time, Range{0, 60}, Help{"s the offender must stand still within range"}),
               (arrest_speed, Range{0, 20}, Help{"m/s: faster than this it is not standing still"}),
               (arrest_progress, ReadOnly, Transient),
-              (dispatch_range, Range{0, 2000}, Help{"m: an idle unit this close to the last known place is sent there; 0 = off"}))
+              (dispatch_range, Range{0, 2000}, Help{"m: an idle unit this close to the last known place is sent there; 0 = off"}),
+              (stuck_time, Save, ReadOnly), (reverse_left, Save, ReadOnly))
 
 // Events (producer FixedUpdate_Pre).
 struct Crime3D {
