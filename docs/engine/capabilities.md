@@ -188,7 +188,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Collider2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterController2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterGround2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
-| `Joint2D` | `mce/physics/joint2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: tested in tests/physics2d/test_joint2d.cpp; the sample scene (a rope bridge and a swinging door) arrives with M-JOINT2D step 2 |
+| `Joint2D` | `mce/physics/joint2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
 | `SceneChunk` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 | `StreamingFocus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `FloatingOrigin3D` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it |
