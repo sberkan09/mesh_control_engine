@@ -178,7 +178,8 @@ the first tick both bodies exist; changing a setting rebuilds it from the curren
 static body. `Impulse2D` gives a one-shot push (`impulse` in N*s, world space, at `point` in the body's frame): the tick
 it is applied `impulse` goes back to zero, so writing a new value pushes again. `ConstantForce2D` applies `force` (N,
 world space) every tick while the component is there, for wind, a conveyor or a thruster. Impulses and forces act on
-dynamic bodies only, and NaN or infinity counts as zero.
+dynamic bodies only, and NaN or infinity counts as zero. `LaunchVelocity2D.applied` is kept in save games (not in
+scenes), so loading a save does not launch the body again. Gravity is a scene setting: `WorldSettings.gravity_2d`.
 
 **3D joints** are components. Put a `Joint3D` on a body's entity (a `RigidBody3D`, or a static
 `BoxCollider3D` / `MeshCollider3D` when the other side moves) and set `connected` to the other body's
