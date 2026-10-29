@@ -36,6 +36,12 @@ void pay_reward(World& w, Entity mission, const Mission& m) {
     if (r && r->cash > 0) give_cash(w, m.actor, r->cash);
 }
 
+// M-MISSIONFEE: a failed mission takes the MissionReward3D's fail_fee from its actor.
+void charge_failure(World& w, Entity mission, const Mission& m) {
+    const MissionReward3D* r = w.try_get<MissionReward3D>(mission);
+    if (r && r->fail_fee > 0) take_cash(w, m.actor, r->fail_fee);
+}
+
 // Resolves the target by name while it is empty.
 void resolve_target(World& w, Objective& o) {
     if (!o.target.is_null() || o.tag.empty()) return;
@@ -168,6 +174,7 @@ void kit_missions(Frame& f) {
             (m.time_limit > 0.0f && static_cast<f64>(m.ticks) * f.dt >= static_cast<f64>(m.time_limit) - 1e-6)) {
             m.state = MissionState::Failed;
             f.events().push(MissionFailed{e, fail_death ? 1u : 0u});
+            charge_failure(w, e, m);
             return;
         }
         const MissionWantedFail* wf = w.try_get<MissionWantedFail>(e);
@@ -175,12 +182,14 @@ void kit_missions(Frame& f) {
         if (wf && wd && wd->level >= wf->level) {
             m.state = MissionState::Failed;
             f.events().push(MissionFailed{e, 3u});
+            charge_failure(w, e, m);
             return;
         }
         Objective* o = m.current.is_null() || !w.alive(m.current) ? nullptr : w.try_get_mut<Objective>(m.current);
         if (!o) {  // the objective went: the mission has nothing left to wait for
             m.state = MissionState::Failed;
             f.events().push(MissionFailed{e, 2u});
+            charge_failure(w, e, m);
             return;
         }
         if (!evaluate(w, m, *o, in, f.dt)) return;

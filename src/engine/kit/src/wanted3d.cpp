@@ -33,7 +33,7 @@ static_assert(sizeof(HealShop3D) == 8);
 static_assert(sizeof(CashPickup3D) == 16);
 static_assert(sizeof(ChopShop3D) == 12);
 static_assert(sizeof(Confiscate3D) == 4);
-static_assert(sizeof(MissionReward3D) == 4);
+static_assert(sizeof(MissionReward3D) == 8);
 static_assert(sizeof(CarOwner3D) == 8);
 
 namespace {
