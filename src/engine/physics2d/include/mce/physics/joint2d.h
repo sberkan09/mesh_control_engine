@@ -55,8 +55,8 @@ MCE_COMPONENT(Joint2D, (connected, Help{"the other body's entity (required)"}), 
               (connected_anchor, Help{"Distance: the far end, in the connected entity's frame"}),
               (length, Help{"Distance: metres; < 0 = as built"}), (min_length, Help{"Distance: < 0 = length; min < max makes a rope"}),
               (max_length, Help{"Distance: < 0 = length"}), (hertz, Range{0, 100}, Help{"Distance: > 0 makes a spring, Hz"}),
-              (damping_ratio, Range{0, 1}), (lower, Range{-180, 0}, Help{"Revolute: degrees from the rest angle"}),
-              (upper, Range{0, 180}, Help{"Revolute: degrees from the rest angle"}), (motor_speed, Help{"Revolute: degrees per second"}),
+              (damping_ratio, Range{0, 1}), (lower, Range{-180, 180}, Help{"Revolute: degrees from the rest angle"}),
+              (upper, Range{-180, 180}, Help{"Revolute: degrees from the rest angle"}), (motor_speed, Help{"Revolute: degrees per second"}),
               (max_motor_torque, Range{0, 1000000}, Help{"Revolute: N*m"}), (length_now, ReadOnly, Transient),
               (angle_now, ReadOnly, Transient))
 
