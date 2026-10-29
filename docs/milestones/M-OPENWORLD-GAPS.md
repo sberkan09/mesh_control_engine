@@ -19,8 +19,8 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 | # | Missing in the sample | Exists as | Demo elsewhere |
 |---|---|---|---|
-| A1 | **HUD**: no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
-| A2 | **Minimap and map markers** | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
+| A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; open: wanted stars need a string or visibility binding, the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
+| A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission markers wait for E7) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
 | A3 | **Missions** (reach, kill, deliver, timers, Luau chaining, retry, pay) | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
 | A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
 | A5 | **Weather** (rain, wet roads, fog, lightning, wind, snow) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
