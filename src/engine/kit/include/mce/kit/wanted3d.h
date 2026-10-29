@@ -303,6 +303,28 @@ struct HealBought3D {
 };
 MCE_EVENT(HealBought3D, entity, shop, hp, paid)
 
+// Cash pickup (M-CASHPICKUP). `CashPickup3D` on a placed entity: a holder of a Wallet3D that comes within `radius` is paid
+// `cash` (`give_cash`) and `CashPickedUp3D` is pushed. With `respawn` 0 the pickup entity is then destroyed; otherwise it
+// waits `respawn` seconds (engine-written `left`) before it can be taken again, and a game hides it meanwhile from the
+// event. A holder whose wallet is full takes nothing. System "kit3d_cashpickup" (after "kit3d_healshop").
+struct CashPickup3D {
+    i32 cash = 50;
+    f32 radius = 1.5f;   // m, from the entity
+    f32 respawn = 0.0f;  // s until it can be taken again; 0: destroyed when taken
+    f32 left = 0.0f;     // engine-written: s until it can be taken
+};
+MCE_COMPONENT(CashPickup3D, (cash, Range{1, 1000000}, Help{"cash a Wallet3D holder is paid for touching it"}),
+              (radius, Range{0.1f, 100}, Help{"m"}), (respawn, Range{0, 100000}, Help{"s before it can be taken again; 0: destroyed when taken"}),
+              (left, ReadOnly, Transient))
+
+// A holder took a CashPickup3D.
+struct CashPickedUp3D {
+    Entity entity;
+    Entity pickup;
+    i32 cash = 0;
+};
+MCE_EVENT(CashPickedUp3D, entity, pickup, cash)
+
 // Clears the heat and level of `offender` (a pay-and-spray, a mission end). Units go Idle on the next tick.
 void clear_wanted(World& world, Entity offender);
 
