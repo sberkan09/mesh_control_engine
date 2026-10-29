@@ -323,6 +323,7 @@ void apply_drives(Frame& f, World2D& pw) {
     });
     f.query<const ConstantForce2D&>().each([&](Entity e, const ConstantForce2D& cf) {
         BodyState bs;
+        if (cf.force.x == 0.0f && cf.force.y == 0.0f) return;  // a zero force must not keep a sleeping body awake
         if (!finite2(cf.force) || !pw.body_state(e, bs) || bs.type != BodyType::Dynamic) return;
         pw.apply_force(e, cf.force);
     });

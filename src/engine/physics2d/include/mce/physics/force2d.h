@@ -22,12 +22,12 @@ namespace mce::physics {
 struct LaunchVelocity2D {
     math::vec2 linear;        // m/s, world space
     f32 angular = 0.0f;       // degrees per second
-    u8 applied = 0;           // set when the velocity was applied; not saved, so a loaded scene launches again
+    u8 applied = 0;           // set once applied; not in scenes (they launch on play), in save games (a loaded save does not launch again)
     u8 pad_[3] = {};
     friend bool operator==(const LaunchVelocity2D&, const LaunchVelocity2D&) = default;
 };
 MCE_COMPONENT(LaunchVelocity2D, (linear, Help{"m/s, world space"}), (angular, Help{"degrees per second"}),
-              (applied, ReadOnly, Transient))
+              (applied, ReadOnly, Transient, Save))
 
 struct Impulse2D {
     math::vec2 impulse;  // N*s, world space; reset to zero once applied

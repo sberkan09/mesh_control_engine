@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <limits>
+#include <string_view>
 
 #include "mce/ecs/transform.h"
 #include "mce/physics/force2d.h"
@@ -150,4 +151,35 @@ TEST_CASE("force2d: non-finite values count as zero and do not poison the body")
     CHECK(std::isfinite(p.x));
     CHECK(std::isfinite(p.y));
     CHECK((*w.try_get<Impulse2D>(e)).impulse.x == 0.0f);
+}
+
+TEST_CASE("force2d: a zero force lets a body fall asleep") {
+    PhysicsConfig cfg;
+    cfg.enable_sleep = true;
+    cfg.time_to_sleep = 0.2f;
+    World w;
+    install_physics2d(w, cfg);
+    const Entity e = w.spawn_with(body(BodyType::Dynamic), box(), at({0, 0}), ConstantForce2D{});
+    u64 t = 0;
+    tick(w, t, 120);
+    BodyState bs;
+    REQUIRE(w.resource<World2D>().body_state(e, bs));
+    CHECK_FALSE(bs.awake);
+    w.try_get_mut<ConstantForce2D>(e)->force = {1.0f, 0.0f};  // a real force wakes it again
+    tick(w, t, 5);
+    REQUIRE(w.resource<World2D>().body_state(e, bs));
+    CHECK(bs.awake);
+}
+
+TEST_CASE("force2d: the launched flag is a save-game field and not a scene field") {
+    const refl::TypeRecord* ti = refl::find_type(refl::type_id<LaunchVelocity2D>());
+    REQUIRE(ti != nullptr);
+    bool found = false;
+    for (const refl::FieldRecord& f : ti->fields) {
+        if (std::string_view(f.name_str) != "applied") continue;
+        found = true;
+        CHECK(f.has(refl::FieldFlags::Save));
+        CHECK(f.has(refl::FieldFlags::Transient));
+    }
+    CHECK(found);
 }
