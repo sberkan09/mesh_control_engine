@@ -586,6 +586,40 @@ TEST_CASE("anim3d: Locomotion3D reads a moved entity's speed and drives another 
     CHECK(r.anim().speed == 1.0f);  // no stride_speed: the play rate is left alone
 }
 
+TEST_CASE("anim3d: Locomotion3D turn_rate turns a root to face its motion, at its rate, and only while it moves") {
+    Rig r("anim3d_loco_turn", locomotion_graph());
+    Locomotion3D l;
+    l.animator = r.e;
+    l.turn_rate = 3.0f;  // rad/s
+    const Entity mover = r.w.spawn_with(LocalTransform{{}, quat::identity(), {1, 1, 1}}, l);
+    const auto yaw = [&] {
+        const vec3 f = math::rotate(r.w.try_get<LocalTransform>(mover)->rotation, vec3{0.0f, 0.0f, -1.0f});
+        return std::atan2(-f.x, -f.z);
+    };
+    r.run(2);
+    // Moving along +X (to its right): it turns towards yaw -pi/2, at most 3 rad/s.
+    for (u32 i = 0; i < 10; ++i) {
+        r.w.try_get_mut<LocalTransform>(mover)->position.x += 0.05f;
+        r.run(1);
+    }
+    CHECK(yaw() == doctest::Approx(-3.0f * 9.0f / 60.0f).epsilon(0.05));  // 9 ticks of motion seen, still turning
+    for (u32 i = 0; i < 60; ++i) {
+        r.w.try_get_mut<LocalTransform>(mover)->position.x += 0.05f;
+        r.run(1);
+    }
+    CHECK(yaw() == doctest::Approx(-math::kPi / 2.0f).epsilon(1e-3));  // facing +X
+    // Standing still (below turn_min_speed), it keeps that facing.
+    r.run(30);
+    CHECK(yaw() == doctest::Approx(-math::kPi / 2.0f).epsilon(1e-3));
+    // turn_rate 0 never turns.
+    r.w.try_get_mut<Locomotion3D>(mover)->turn_rate = 0.0f;
+    for (u32 i = 0; i < 30; ++i) {
+        r.w.try_get_mut<LocalTransform>(mover)->position.z += 0.05f;
+        r.run(1);
+    }
+    CHECK(yaw() == doctest::Approx(-math::kPi / 2.0f).epsilon(1e-3));
+}
+
 TEST_CASE("anim3d: foot IK plants both feet on a slope and a stair while the character walks") {
     const std::string feet = graph(R"("params": ["speed"], "states": [ { "name": "stand", "clip": "idle" } ],
         "ik": [ { "name": "foot_l", "type": "foot", "bone": "foot_l", "pelvis": "hips", "reach": 0.5, "pole": [0, 0, 1] },

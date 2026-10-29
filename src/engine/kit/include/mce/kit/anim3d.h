@@ -65,6 +65,10 @@ MCE_COMPONENT(IKTarget3D, (animator, Help{"the entity whose Animator graph has t
 //                   forward; forward is -Z)    vertical_speed  m/s, up positive
 // With stride_speed set, the Animator plays at ground speed / stride_speed (clamped to
 // min_rate..max_rate) while moving and at 1 when still, so feet keep pace with the ground.
+// With turn_rate set, a root entity (no ChildOf) turns at up to turn_rate rad/s to face where it
+// moves while faster than turn_min_speed: for a player's CharacterController3D, which input moves
+// but nothing turns (a NavAgent3D has face_motion, a crowd walker faces its pavement). Its rotation is
+// rebuilt as a yaw about +Y: any pitch or roll it had is dropped while it turns.
 struct Locomotion3D {
     Entity animator;               // the entity with the Animator (the model); null = this entity
     f32 smoothing = 0.1f;          // s: how quickly the speeds follow the motion (0 = at once)
@@ -79,6 +83,8 @@ struct Locomotion3D {
     u8 crouched = 0;               // engine-written
     u8 seen = 0;                   // engine-written: 1 once last_position holds a position
     u8 found = 0;                  // engine-written: parameters the graph declares, as a count
+    f32 turn_rate = 0.0f;          // rad/s it turns to face its motion; 0 = never
+    f32 turn_min_speed = 0.3f;     // m/s below which it keeps its facing
 };
 MCE_COMPONENT(Locomotion3D, (animator, Help{"the entity with the Animator; empty = this entity"}),
               (smoothing, Range{0, 2}, Help{"seconds for the speeds to follow the motion"}),
@@ -86,6 +92,7 @@ MCE_COMPONENT(Locomotion3D, (animator, Help{"the entity with the Animator; empty
               (min_rate, Range{0, 8}), (max_rate, Range{0, 8}), (ground_speed, ReadOnly, Transient),
               (vertical_speed, ReadOnly, Transient), (local_move, ReadOnly, Transient), (last_position, ReadOnly, Transient, WorldPoint),
               (grounded, ReadOnly, Transient), (crouched, ReadOnly, Transient), (seen, ReadOnly, Transient),
-              (found, ReadOnly, Transient))
+              (found, ReadOnly, Transient), (turn_rate, Range{0, 60}, Help{"rad/s a root entity turns to face where it moves; 0 = never"}),
+              (turn_min_speed, Range{0, 20}, Help{"m/s below which it keeps its facing"}))
 
 }  // namespace mce::kit

@@ -41,11 +41,15 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 - **Washed-out colours.** The grass tint (0.20, 0.34, 0.14) shows as a pastel green (about 186, 214, 164) and the kerb or
   sidewalk strip reads near white. Suspect the fixed sun (intensity 3.0, exposure 1.0) and no grading; cause not confirmed.
   Check it on Metal as well (same shaders translated to MSL) before tuning.
-- **Characters and cars are blocky/toy Kenney models with no animation.** Characters slide: the node clips of the blocky
-  rig are not played; wheels do not spin; no door, steering or lights animation.
+- **Characters and cars are blocky/toy Kenney models with no animation.** ~~Characters slide: the node clips of the blocky
+  rig are not played~~ **Characters fixed (E9; no Linear card, the plan is full):** the player, the police and every walker play the Blocky Characters'
+  node clips through one graph (`assets/anim/blocky.mcanim`: idle, walk at 1.6 m/s, sprint at 6 m/s, blended on `speed`)
+  fed by a `Locomotion3D` on the root, and the player turns to face where it walks (`Locomotion3D.turn_rate`). Still open:
+  the `die`, `drive` and `holding-*-shoot` clips are not used (no graph parameter for dead, seated or firing yet); wheels do
+  not spin; no door, steering or lights animation.
 - **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
-- **No third-person feel**: the player does not face its movement direction (the engine has no facing component for
-  `use_input` characters), the camera stays behind a fixed orbit, the gun is on the camera.
+- **No third-person feel**: ~~the player does not face its movement direction~~ (fixed, E9:
+  `Locomotion3D.turn_rate`), the camera stays behind a fixed orbit, the gun is on the camera.
 - **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
 - ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213, PR #859).** The cars did spawn and

@@ -1,0 +1,32 @@
+{
+ "format": "mce-animgraph",
+ "version": 2,
+ "guid": "05379b4f-f67c-5073-89c2-a7872731f419",
+ "name": "blocky",
+ "params": [
+  "speed"
+ ],
+ "start": "locomotion",
+ "states": [
+  {
+   "name": "locomotion",
+   "blend": {
+    "param": "speed",
+    "points": [
+     {
+      "clip": "idle",
+      "at": 0
+     },
+     {
+      "clip": "walk",
+      "at": 1.6
+     },
+     {
+      "clip": "sprint",
+      "at": 6.0
+     }
+    ]
+   }
+  }
+ ]
+}

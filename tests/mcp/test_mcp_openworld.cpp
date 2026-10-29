@@ -44,6 +44,20 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(spawner.get("alive").as_number() >= 10);
     CHECK(spawner.get("alive").as_number() <= spawner.get("max_cars").as_number());
     CHECK(count(c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"Pedestrian3D","show":["Pedestrian3D"]}})")) >= 20);
+    // Everyone on foot animates: the player, the police and every walker have a Locomotion3D that finds the graph's `speed`,
+    // and the walkers (1-1.7 m/s) feed a walking speed into it.
+    {
+        auto loco = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"Locomotion3D","show":["Locomotion3D"]}})");
+        REQUIRE(count(loco) >= 25);
+        u32 found = 0, walking = 0;
+        for (u32 i = 0; i < count(loco); ++i) {
+            const cook::JsonValue l = comps(loco, i).get("Locomotion3D");
+            found += l.get("found").as_number() == 1 ? 1u : 0u;
+            walking += l.get("ground_speed").as_number() > 0.8 ? 1u : 0u;
+        }
+        CHECK(found == count(loco));
+        CHECK(walking >= 15);
+    }
 
     // The drive script: walk to the parked car, get in (seated at tick 300), drive west, brake, get out.
     const std::string in = drive_input();
