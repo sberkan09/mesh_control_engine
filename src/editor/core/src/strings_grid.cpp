@@ -176,15 +176,22 @@ StringView StringsGrid::text(u32 locale, u32 key) const {
 void StringsGrid::set_text(u32 locale, u32 key, StringView text) {
     if (locale >= tables_.size() || key >= keys_.size()) return;
     Table& t = tables_[locale];
+    if (t.records.empty()) {  // an empty file: the header row comes first, rows are indexed from 1
+        Record header;
+        header.push_back(cook::String("key"));
+        header.push_back(cook::String("text"));
+        t.records.push_back(static_cast<Record&&>(header));
+    }
     if (rows_[locale][key] < 0) {
         Record rec;
-        const u32 width = static_cast<u32>(t.records[0].size());
+        const u32 width = static_cast<u32>(t.records[0].size() < 2 ? 2 : t.records[0].size());
         for (u32 i = 0; i < width; ++i) rec.push_back(cook::String());
         rec[0] = keys_[key];
         t.records.push_back(static_cast<Record&&>(rec));
         rows_[locale][key] = static_cast<i32>(t.records.size()) - 1;
     }
     Record& rec = t.records[static_cast<u32>(rows_[locale][key])];
+    while (rec.size() < 2) rec.push_back(cook::String());  // a short row (a key and no text column yet)
     if (rec[1].view() == text) return;
     rec[1] = cook::String(text);
     locales_[locale].dirty = true;
