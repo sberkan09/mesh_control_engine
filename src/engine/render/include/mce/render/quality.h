@@ -58,6 +58,8 @@ struct QualitySettings {
     // M-WATER 15b: the water plane is honored (off: no plane). Low keeps a flat tinted plane with the sky
     // reflection: no animated normals, no foam.
     bool water = true;
+    // M-AURORA 16b: the aurora curtains are honored (off: level 0, the frame without them). Low turns them off.
+    bool aurora = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -126,5 +128,11 @@ NightSky apply_quality(const QualitySettings& q, const NightSky& sky);
 // channel (NaN 0), depth_scale_m 0.1..200 (NaN 8), foam_width_m 0.05..20 (NaN 1.5); wind_dir is normalized (NaN /
 // zero -> +x) and a non-finite time becomes 0. Returns a copy for the same reason as the SnowCover overload.
 WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water);
+// AuroraSky: `r.aurora 0` and the Low tier (aurora false) zero `level` (the frame without it). Clamps: level 0..4,
+// base_height 0.02..0.6, height_span 0.05..0.8, half_width_cos -1..1, curtain_count 1..6, speed 0..4, colors 0..1 per
+// channel (NaN to 0, except base_height 0.18, height_span 0.35, half_width_cos 0.8192, curtain_count 3, speed 1); azimuth
+// is normalized (NaN / zero -> (0, 1)) and a non-finite time becomes 0; `enabled` passes through. Returns a copy for
+// the same reason as the SnowCover overload.
+AuroraSky apply_quality(const QualitySettings& q, const AuroraSky& aurora);
 
 }  // namespace mce::render

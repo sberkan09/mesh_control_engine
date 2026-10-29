@@ -38,6 +38,14 @@ inline math::vec3 unit_dir3(math::vec3 d) {
 // lo..hi, NaN -> `nan_to` (the water plane's scalars).
 inline f32 ranged(f32 x, f32 lo, f32 hi, f32 nan_to) { return x == x ? (x > lo ? (x < hi ? x : hi) : lo) : nan_to; }
 
+// A unit vector on xz; NaN/inf or length below 1e-6 -> (0, 1) (the aurora's arc centre).
+inline math::vec2 unit_dir2_z(math::vec2 d) {
+    const f32 len2 = d.x * d.x + d.y * d.y;
+    if (!(len2 >= 1.0e-12f) || len2 > 3.0e38f) return math::vec2{0.0f, 1.0f};
+    const f32 len = std::sqrt(len2);
+    return math::vec2{d.x / len, d.y / len};
+}
+
 // A wind direction on xz as a unit vector; NaN/inf or length below 1e-6 -> +x (1, 0).
 inline math::vec2 unit_wind_dir(math::vec2 d) {
     const f32 len2 = d.x * d.x + d.y * d.y;
