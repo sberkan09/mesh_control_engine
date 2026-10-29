@@ -1,6 +1,6 @@
 # M-OPENWORLD-POLICE — respawn, police cars and roadblocks in the city sample
 
-Status: step 1 done (2026-10-29). Gap record: [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) E4 (A7, A8, A9). Data only: it wires kit components that
+Status: steps 1 and 2 done (2026-10-29); step 2 = pursuit cars on the roads. Gap record: [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) E4 (A7, A8, A9). Data only: it wires kit components that
 already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEALSHOP](M-HEALSHOP.md), [M-ARREST](M-ARREST.md) 1-3) into
 `samples/09_openworld` (`gen_assets.py` and the regenerated `city.mcscene`). No engine code changed.
 
@@ -22,7 +22,7 @@ already exist ([M-WASTED](M-WASTED.md), [M-ARRESTLOSS](M-ARRESTLOSS.md), [M-HEAL
 
 - The roadblocks are always there; only their officers wake up with the wanted level. The engine has no component that spawns a
   barricade at a level (M-ARREST open item "spawning fresh units"). Traffic cars can queue against a roadblock.
-- A police car has no path following (M-ARREST 3): a wall between it and the target stops it, and the navmesh does not help cars.
+- The pursuit cars follow the road network (`drive_car` 2, M-ARREST 4) and ignore traffic lights and other cars; a target away from any road (more than 80 m) is approached in a straight line.
 - Cars neither ram nor shoot; no helicopters, no spike strips, no siren lights or sound (other threads: audio, HUD).
 - Respawn points are flat pads on the avenue sidewalk; no hospital or station building.
 

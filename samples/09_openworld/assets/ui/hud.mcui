@@ -1,0 +1,209 @@
+{
+ "format": "mce-ui",
+ "version": 1,
+ "guid": "ecad21b6-7694-5060-85fb-dd1becae38f0",
+ "modal": false,
+ "widgets": [
+  {
+   "name": "health",
+   "kind": "Text",
+   "text": "HEALTH 100",
+   "style": {
+    "text_size": 28,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.45,
+     1.0,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -64
+    ],
+    "offset_max": [
+     280,
+     -24
+    ]
+   },
+   "bind": "Health3D/current",
+   "format": "HEALTH %.0f"
+  },
+  {
+   "name": "wanted",
+   "kind": "Text",
+   "text": "WANTED 0 / 5",
+   "style": {
+    "text_size": 26,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.85,
+     0.25,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     232
+    ],
+    "offset_max": [
+     -16,
+     268
+    ]
+   },
+   "bind": "Wanted3D/level",
+   "format": "WANTED %.0f / 5"
+  },
+  {
+   "name": "cash",
+   "kind": "Text",
+   "text": "$ 0",
+   "style": {
+    "text_size": 30,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.6,
+     1.0,
+     0.6,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     270
+    ],
+    "offset_max": [
+     -16,
+     310
+    ]
+   },
+   "bind": "Wallet3D/cash",
+   "format": "$ %.0f"
+  },
+  {
+   "name": "objective",
+   "kind": "Text",
+   "text": "OBJECTIVE: take the car on the avenue",
+   "style": {
+    "text_size": 24,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     0
+    ],
+    "max": [
+     0,
+     0
+    ],
+    "offset_min": [
+     24,
+     16
+    ],
+    "offset_max": [
+     560,
+     52
+    ]
+   }
+  },
+  {
+   "name": "mini",
+   "kind": "Minimap",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -216,
+     16
+    ],
+    "offset_max": [
+     -16,
+     216
+    ]
+   },
+   "minimap": {
+    "track": "Player",
+    "radius": 60,
+    "zoom": 1,
+    "rotate_with_heading": false,
+    "clamp_to_rim": true,
+    "background": [
+     0.05,
+     0.07,
+     0.06,
+     0.75
+    ]
+   }
+  }
+ ]
+}

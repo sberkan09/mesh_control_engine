@@ -39,7 +39,9 @@
 // `throttle`, `steer`, `brake` and `handbrake`: Pursue and Attack drive at the target, Search at the last known place,
 // Idle stops. It steers at the point, slows for tight turns and for the last 12 m, and brakes to a stop inside 4 m
 // (so a car beside a standing offender is still a unit that can arrest it). A car is not aimed: `aim` does not turn it.
-// A roadblock is a car with `drive_car` 0 placed across the road.
+// `drive_car` 2 drives along the RoadNetwork3D instead of in a line (M-ARREST 4): the quickest lane route from the car's lane
+// (the one going its way) to the lane nearest the target, steered by pure pursuit, so it takes the roads round blocks of buildings;
+// with no lane near the car or the target it drives straight as for 1. A roadblock is a car with `drive_car` 0 placed across the road.
 //
 // "kit3d_wanted" runs in FixedUpdate_Pre after "kit3d_health"; "kit3d_respawn" (M-WASTED) after it. Everything is in the components, so it is
 // deterministic, hashed and saved.
@@ -94,7 +96,7 @@ struct Police3D {
     u8 drive_nav = 1;               // 1: drives the entity's NavAgent3D
     u8 aim = 1;                     // 1: Attack turns the entity to the target and sets its Weapon3D's `fire`
     u8 arrest_max_level = 1;        // arrests up to this wanted level (above it, it only chases and shoots)
-    u8 drive_car = 0;               // 1: drives the entity's Vehicle3D toward the target (M-ARREST 3)
+    u8 drive_car = 0;               // 1: drives the entity's Vehicle3D toward the target; 2: along the road network (M-ARREST 3, 4)
     u8 pad_[1] = {};
     f32 sight_range = 30.0f;        // m
     f32 attack_range = 20.0f;       // m
@@ -115,7 +117,7 @@ MCE_COMPONENT(Police3D, (min_level, Range{1, 10}, Help{"responds from this wante
               (sight_range, Range{0, 1000}, Help{"m"}), (attack_range, Range{0, 1000}, Help{"m"}),
               (search_time, Range{0, 600}, Help{"s at the last known place"}), (eye_height, Range{0, 10}),
               (state_time, ReadOnly, Transient), (target, Save, ReadOnly), (last_known, Save, ReadOnly),
-              (drive_car, Help{"1: drives the Vehicle3D (throttle, steer, brake) toward the target"}),
+              (drive_car, Help{"1: drives the Vehicle3D (throttle, steer, brake) straight at the target; 2: along the road network"}),
               (arrest_max_level, Range{0, 10}, Help{"arrests up to this wanted level; 0 = never"}),
               (arrest_range, Range{0, 50}, Help{"m from the offender at which it can arrest; 0 = never"}),
               (arrest_time, Range{0, 60}, Help{"s the offender must stand still within range"}),

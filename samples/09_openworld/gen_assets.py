@@ -57,6 +57,8 @@ G_CAR = guid("prefabs/traffic_car.mcprefab")
 G_WALKER = guid("prefabs/pedestrian.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
+G_HUD = guid("ui/hud.mcui")
+G_AMMO = guid("ui/ammo.mcui")
 
 GRID = 5          # junctions per side
 SPACING = 250.0   # m between junctions: 4 blocks of 250 m = 1 km
@@ -425,7 +427,7 @@ def car_entities(model, traffic):
 
 def police_car(scene, name, pos, yaw, min_level, dispatch, block=False):
     """A police car: a Vehicle3D driven by Police3D (drive_car), or a parked roadblock (block: drive_car 0, handbrake on)."""
-    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 1,
+    police = {"min_level": min_level, "attack_level": 10, "drive_nav": 0, "aim": 0, "drive_car": 0 if block else 2,
               "sight_range": 90, "attack_range": 0, "search_time": 15, "arrest_range": 0, "dispatch_range": dispatch}
     comps = {
         "LocalTransform": tf(pos, None, yaw),
@@ -446,6 +448,8 @@ def prefabs():
                                            "entities": car_entities("sedan", True)})
     walker = [{"name": "Pedestrian", "components": {
         "LocalTransform": {}, "Pedestrian3D": {},
+        # A 1.8 m kinematic capsule: the crowd stands a walker with a body on it (its origin is the capsule's centre,
+        # 0.9 m above the pavement) and drives it by velocity, so the model hangs 0.9 m below.
         "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
         "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
@@ -544,28 +548,35 @@ def scene():
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
+        # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
+        "UiScreen": {"document": "guid:" + G_HUD},
     })
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a")})
-    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view.
+    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view. It starts looking west along
+    # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
+    # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
-        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "pitch": 0.3, "min_pitch": -0.3,
+        "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
         "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
                      "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
                      "mask": 0xFFFF},
+        # The ammo readout: Weapon3D lives on the camera, so its screen sits here and reads the gun from this entity.
+        "UiScreen": {"document": "guid:" + G_AMMO},
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
 
-    # Parked cars on the avenue's sidewalk: take the first one.
+    # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
         comps = {c: v for c, v in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[0]["components"].items()}
         comps["LocalTransform"] = tf((x, 0.9, z), None, yaw)
         if n > 0:
             # Cars 2 and 3 belong to someone: taking one is a crime when police see it (M-CARJACK), and a scrapyard pays for it (M-CHOPSHOP).
             comps["CarOwner3D"] = {"heat": 12, "needs_witness": 1}
+        comps["MapMarker"] = {"color": [0.3, 0.6, 1.0, 1], "label": "Car"}
         car = s.add("Parked car %d" % (n + 1), comps)
         for part in car_entities(CAR_MODELS[n % len(CAR_MODELS)], False)[1:]:
             p = dict(part["components"])
@@ -582,6 +593,7 @@ def scene():
             "NavAgent3D": {"speed": 4.5, "face_motion": 1},
             "Health3D": {"max": 80, "team": 2, "destroy_on_death": 1, "linger": 4},
             "Police3D": {"min_level": 1, "attack_level": 2, "sight_range": 55, "attack_range": 28, "search_time": 12},
+            "MapMarker": {"color": [1.0, 0.2, 0.2, 1], "layer": 0, "always_visible": 1, "label": "Police"},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
         })
         s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
@@ -629,7 +641,35 @@ def scene():
     return len(s.ents), n_buildings
 
 
+def hud():
+    """The HUD: health, wanted level, cash and the minimap (hud.mcui, bound to the Player), and the ammo (ammo.mcui, bound to the camera's gun)."""
+    def text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
+        w = {"name": name, "kind": "Text", "text": label, "style": {"text_size": size, "text_outline": 2, "text_outline_color": [0, 0, 0, 1]},
+             "text_align": align, "anchors": anchors}
+        if color:
+            w["style"]["text_color"] = color
+        if bind:
+            w["bind"], w["format"] = bind, fmt
+        return w
+
+    def box(x0, y0, x1, y1, ax=0, ay=0):
+        return {"min": [ax, ay], "max": [ax, ay], "offset_min": [x0, y0], "offset_max": [x1, y1]}
+
+    write("ui/hud.mcui", {"format": "mce-ui", "version": 1, "guid": G_HUD, "modal": False, "widgets": [
+        text("health", "HEALTH 100", 28, box(24, -64, 280, -24, 0, 1), "Health3D/current", "HEALTH %.0f", [0.45, 1.0, 0.5, 1]),
+        text("wanted", "WANTED 0 / 5", 26, box(-280, 232, -16, 268, 1, 0), "Wanted3D/level", "WANTED %.0f / 5", [1.0, 0.85, 0.25, 1], "Right"),
+        text("cash", "$ 0", 30, box(-280, 270, -16, 310, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
+        text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
+        {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
+         "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
+                     "background": [0.05, 0.07, 0.06, 0.75]}}]})
+    write("ui/ammo.mcui", {"format": "mce-ui", "version": 1, "guid": G_AMMO, "modal": False, "widgets": [
+        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
+        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right")]})
+
+
 models()
+hud()
 input_map()
 write("roads/city.mcroads", roads_doc())
 prefabs()

@@ -1,6 +1,6 @@
 # M-ARREST — police arrest an offender who stands still
 
-Status: steps 1 to 3 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
+Status: steps 1 to 4 done (2026-10-27). Own gameplay milestone (coordinator: pick the most valuable missing GTA-slice system; wanted level / police was one of the examples). M-OPENWORLD C3 listed arrests as an open item.
 
 ## Why
 
@@ -35,6 +35,20 @@ normal pairing. `aim` does not turn a car. A roadblock is a `Vehicle3D` with `dr
 engine work). Limits: no path following (a wall between the car and the target stops it; `Vehicle3D` has no nav), no
 reversing out of a dead end, no ramming logic. Test: "a police car steers and drives at the target": right, left, stops at the
 target, `drive_car` 0 leaves the car alone.
+
+Step 4 (police cars on the road network). `Police3D::drive_car` 2 (same byte, so the size stays 68) makes the car follow the
+`RoadNetwork3D`: `road_route` from the lane under the car (going its way, connectors allowed, within 30 m) to the lane nearest the
+target or last known place (within 80 m). The aim point is 10 m plus half the speed down the route; steering and throttle are those
+of step 3, but slowing (inside 12 m) and stopping (inside 4 m) use the route metres still to go. No lane near the car or the target:
+it drives straight as for 1. The lanes under the car and nearest the target are looked up afresh every tick (two grid queries), so the aim, the distance to go and
+the stop all follow the target at once; only the A* is cached per car, keyed by (the car's lane, the goal's lane), so it is a pure
+cache: a run resumed from a save (the cache is not saved) drives exactly like one that never stopped. The car's lane is the one going
+its way (a junction connector counts as a lane, so a car crossing a junction routes from the connector). Tests: "takes the roads to a
+target round the corner" (a kinematic car drives an L to the target and parks; the straight car cuts across), "whose target is
+behind it ... keeps on to turn round", "replays to the same state", "resumed with no route cache drives like one that never
+stopped", "follows a target that moves to another lane at once".
+Limits: the car ignores traffic lights and other cars, does not reverse out of a dead end or a jam (follow-up) and may take the
+oncoming lane.
 
 ## Open items
 
