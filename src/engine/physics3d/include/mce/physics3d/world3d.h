@@ -317,12 +317,25 @@ struct ShapeHit3D {
     f32 t = 0.0f;   // fraction of the sweep [0, 1]
 };
 
+// A body pair that touched this step (M-CONTACTEVENTS). `a` sorts before `b`; `normal` points from `a` to
+// `b`; `point` is on `a`, in world space.
+struct ContactEvent3D {
+    Entity a;
+    Entity b;
+    vec3 point;
+    vec3 normal;
+    f32 approach_speed = 0.0f;  // m/s the bodies closed at, before the solver
+    f32 impulse = 0.0f;         // N*s estimate: approach speed * reduced mass
+};
+static_assert(sizeof(ContactEvent3D) == 48);
+
 struct PhysicsConfig3D {
     vec3 gravity{0.0f, -9.81f, 0.0f};
     f32 fixed_dt = 1.0f / 60.0f;
     u32 max_bodies = 4096;
     u32 max_body_pairs = 8192;
     u32 max_contact_constraints = 4096;
+    u32 max_contact_events_per_tick = 256;  // M-CONTACTEVENTS: the rest are dropped
     usize temp_allocator_bytes = 4u << 20;  // ADR-0003 §5: fixed 4 MiB carve-out
 };
 
@@ -440,6 +453,12 @@ public:
     // its size and returns how many there are.
     u32 overlap_sphere(vec3 center, f32 radius, Span<Entity> out, const QueryFilter3D& f = {}) const;
     u32 overlap_box(vec3 center, vec3 half, quat rotation, Span<Entity> out, const QueryFilter3D& f = {}) const;
+
+    // ---- contact events (M-CONTACTEVENTS): a body opts in with `min_speed` m/s (a negative value
+    // switches it off); a pair is reported when one of its bodies opted in and they closed at least
+    // that fast. `contact_events` is the last step's, sorted by (a, b). Returns false for an unknown entity.
+    bool set_contact_events(Entity e, f32 min_speed);
+    Span<const ContactEvent3D> contact_events() const;
 
     // ---- editor / test surface ---------------------------------------------------------------------
     u64 hash_state(u64 seed) const;

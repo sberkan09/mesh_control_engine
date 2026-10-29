@@ -1,0 +1,1 @@
+- MCP, M-ASSETUSEDBY: new tool `asset_used_by` lists the assets whose files name a given asset (the Assets panel's Used by... for agents).

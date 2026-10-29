@@ -1,0 +1,1 @@
+- Kit (M-CARWRECK): a dead car (`Health3D::dead` with a `Vehicle3D`) is a wreck: input off, throttle zero, handbrake on, AI drivers let go (`kit_wreck`). Record: `docs/milestones/M-CARWRECK.md`.

@@ -21,6 +21,8 @@ It needs no device: a deterministic mutator, ctest targets and fixes with regres
 | 2 | Walk what the readers accept (every view's arrays and offsets) so ASan sees out-of-bounds reads; the readers outside the asset module (UI, string tables, catalogs, input map); fix the findings. The nav mesh load: fixed in 2b (integrity hash) | SBA-186 | done |
 | 3 | The importers (png, gltf, ogg, mcskel2d, mcanim, mcterrain, mcbt, mcui, timelines, tilemaps) and scene instantiate; saves, replays, input recordings, `.mcperf`, net packet decoders, the Luau compile path | SBA-187 | done (3a #424, 3b #501 and #520, 3c #533) |
 | 4 | The targets in the ASan stage with a time budget; a walls check that a new chunk type has a fuzz target; user guide note; the close | SBA-188 | done (#552) |
+| 7 | The editor's scene document reader (`SceneDocument::parse`, with the M-SCENEMIGRATE rename tables set): mutated and value-swapped text; what loads must save, load again and survive lint, stats and find | added 2026-10-26, done (#806) |
+| 8 | The scene repair (`fix_scene_lint`, M-LINTFIX) over the same mutants: lint is clean afterwards, a second pass fixes nothing, the repaired text loads again | added 2026-10-27, done (#819) |
 
 ## Step 1 — Mutator and survey (done, SBA-185)
 

@@ -12,9 +12,11 @@
 #include "mce/cook/importer.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/crowd.h"
 #include "mce/kit/roads.h"
+#include "mce/kit/vehicles3d.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -330,6 +332,65 @@ TEST_CASE("crowd: a shot nearby sends pedestrians running, a far one does not, a
     EventAccess(far.w).push(shot);
     far.run(5);
     CHECK(far.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+}
+
+TEST_CASE("crowd: a hard vehicle crash nearby sends pedestrians running, a soft one or a far one does not (M-PEDCRASH)") {
+    struct Case {
+        f32 speed, z;
+        bool flees;
+    };
+    for (const Case k : {Case{9.0f, -20.0f, true}, Case{2.0f, -20.0f, false}, Case{9.0f, -30.0f + kPedestrianFearRadius + 20.0f, false}}) {
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+        const Entity car = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, k.z}, math::quat::identity(), {1, 1, 1}}, Vehicle3D{});
+        s.run(30);
+        CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        ContactBegin3D hit;
+        hit.a = car;
+        hit.point = {4.0f, 1.0f, k.z};
+        hit.approach_speed = k.speed;
+        EventAccess(s.w).push(hit);
+        s.run(3);
+        CHECK((s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee) == k.flees);
+        if (k.flees) {
+            const f32 d0 = std::fabs(s.w.try_get<LocalTransform>(e)->position.z - k.z);
+            s.run(20);
+            CHECK(std::fabs(s.w.try_get<LocalTransform>(e)->position.z - k.z) > d0);  // away from the crash
+            s.run(60 * 6);
+            CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+        }
+    }
+    // Two things that are not vehicles hitting each other are not a crash.
+    Scene s(spawner(0));
+    const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, Pedestrian3D{});
+    ContactBegin3D hit;
+    hit.point = {4.0f, 1.0f, -25.0f};
+    hit.approach_speed = 20.0f;
+    EventAccess(s.w).push(hit);
+    s.run(5);
+    CHECK(s.w.try_get<Pedestrian3D>(e)->mode != PedestrianMode::Flee);
+}
+
+TEST_CASE("crowd: a fast vehicle bearing down on a pedestrian sends it running, a slow, a departing or a passing one does not (M-PEDCRASH 2)") {
+    struct Case {
+        f32 speed, car_z, car_x;
+        bool flees;
+    };
+    // The vehicle drives towards -z (identity rotation) from (car_x, car_z); the pedestrian stands at (4, -30).
+    for (const Case k : {Case{12.0f, -10.0f, 4.0f, true}, Case{12.0f, -10.0f, 10.0f, false}, Case{3.0f, -10.0f, 4.0f, false}, Case{12.0f, -50.0f, 4.0f, false},
+                         Case{-12.0f, -10.0f, 4.0f, false}, Case{12.0f, 60.0f, 4.0f, false}}) {
+        Scene s(spawner(0));
+        Pedestrian3D p;
+        p.speed = 1.5f;
+        const Entity e = s.w.spawn_with(LocalTransform{{4.0f, 0.0f, -30.0f}, math::quat::identity(), {1, 1, 1}}, p);
+        Vehicle3D v;
+        v.speed = k.speed;
+        s.w.spawn_with(LocalTransform{{k.car_x, 0.0f, k.car_z}, math::quat::identity(), {1, 1, 1}}, v);
+        s.run(3);
+        CHECK((s.w.try_get<Pedestrian3D>(e)->mode == PedestrianMode::Flee) == k.flees);
+    }
 }
 
 TEST_CASE("crowd: panic spreads to close neighbours of a running pedestrian and not to far ones (M-PEDFLEE 3)") {

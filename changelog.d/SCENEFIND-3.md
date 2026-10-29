@@ -1,0 +1,1 @@
+- MCP, M-SCENEFIND step 3: `scene_find` tool returns the entities of the open scene (or a saved one) that match a name part, a component or a prefab link.

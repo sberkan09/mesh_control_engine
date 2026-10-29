@@ -69,13 +69,7 @@ public:
             return false;
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-animgraph") return fail(fmt, "\"format\" must be \"mce-animgraph\"");
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() < 1 || ver.as_number() > kAnimGraphFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported animation graph version (this cook reads version %u)", kAnimGraphFormatVersion);
-            detail::error_at(diags_, Errc::VersionTooNew, file_, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kAnimGraphFormatVersion, "animation graph", file_, kStage, diags_)) return false;
         if (const JsonValue n = doc.get("name"); n.is_string()) d.name.assign(n.as_string());
 
         const JsonValue params = doc.get("params");

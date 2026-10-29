@@ -180,7 +180,7 @@ tick with gravity and splash), `apply_damage` for any other source; events `Weap
 cool-down) and `Police3D` (on a unit: `min_level`, `attack_level`, `PoliceState` Idle / Pursue / Attack / Search,
 sight, `drive_nav` for its `NavAgent3D`, `aim` for its `Weapon3D`; blackboard keys `wanted`, `police_state`,
 `target`, `last_known` on an `AiBrain`). Crimes come from `Damage3D` / `Died3D` against `civilian_team` /
-`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`. System `"kit3d_wanted"`
+`police_team` victims, or from `report_crime`; events `Crime3D`, `WantedChanged3D`, `Arrested3D` (a unit within `arrest_range` of an offender standing still at a level of `arrest_max_level` or below arrests it after `arrest_time`: M-ARREST; an idle unit within `dispatch_range` of the last known place is sent there: reinforcements). System `"kit3d_wanted"` Busted and wasted (M-WASTED): `Respawn3D` on the player (`delay`, engine-written `timer`/`reason`) and `RespawnPoint3D { kind }` (Hospital, Station) on placed entities; after `Died3D` (wasted) or `Arrested3D` (busted) and `delay` seconds the system `"kit3d_respawn"` moves the entity to the nearest point of the matching kind, restores its `Health3D`, clears the wanted level and pushes `Respawned3D { entity, reason, position }`. Money (M-CASH): `Wallet3D { cash }`, `CashDrop3D { min, max }` (pays the killer's wallet on `Died3D`), event `CashChanged3D`, `give_cash` / `take_cash`, system `"kit3d_cash"`. Pay-and-spray (M-PAYSPRAY): `PaySpray3D { radius, price_per_level }` on a garage clears the wanted level of an offender in `radius` who can pay (`Wallet3D`), event `Sprayed3D`, system `"kit3d_payspray"`. Mission pay (M-MISSIONPAY): `MissionReward3D { cash }` on a Mission entity credits the actor's wallet when the mission completes. Car theft (M-CARJACK): `CarOwner3D { heat, stolen }` on a vehicle adds `heat` as a crime the first time a rider with a `Wanted3D` boards it. With `needs_witness` 1 it counts only when `crime_seen` (a police unit sees the car). Ammo shop (M-AMMOSHOP): `AmmoShop3D { radius, price_per_round, stock_to }` on a placed entity tops up the `Weapon3D.reserve` of a buyer with a `Wallet3D` within `radius` and charges for it, event `AmmoBought3D`, system `"kit3d_ammoshop"`. Medic (M-HEALSHOP): `HealShop3D { radius, price_per_hp }` heals a hurt buyer with a `Wallet3D` within `radius` for cash, event `HealBought3D`, system `"kit3d_healshop"`. Cash pickups (M-CASHPICKUP): `CashPickup3D { cash, radius, respawn }` pays the first `Wallet3D` holder within `radius`, event `CashPickedUp3D`, system `"kit3d_cashpickup"`. Chop shop (M-CHOPSHOP): `ChopShop3D { radius, price }` buys a stolen car (`CarOwner3D.stolen`) from its driver (`Wallet3D`), destroys the car, event `CarSold3D`, system `"kit3d_chopshop"`. Confiscation (M-ARRESTLOSS): `Confiscate3D { ammo_kept }` on the player cuts the `Weapon3D` reserve when `kit3d_respawn` wakes it up busted. Mission givers (M-MISSIONSTART): `MissionMarker { mission, radius }` starts an Idle Mission when its actor is within `radius`; `MissionWantedFail { level }` on a Mission fails it (reason 3) when its actor's wanted level reaches `level`. Retry (M-MISSIONRETRY): `MissionRetry { delay }` on a Mission puts it back to Idle (objectives Pending) `delay` seconds after it fails.
 (`FixedUpdate_Pre`, after `"kit3d_health"`). Tests: `tests/kit/test_wanted3d.cpp`.
 
 `roads.h` (M-OPENWORLD B1, ADR-0046): `RoadNetwork3D` places a cooked `.mcroads` (`asset::RoadView`) at its
@@ -199,7 +199,7 @@ connectors by rank and arrival) and bends, pure pursuit steering. `TrafficSpawne
 before the drivers) spawns cars from a prefab or the game's `TrafficSpawnHook` in a ring around a focus and
 removes far, lost or flipped ones. All driver state is in the component (saved, hashed). A `Pedestrian3D` in `Cross` mode
 within a car's lanes ahead (lane half width + 1.2 m, checked every 1.5 m up to its stopping distance + 15 m) stops it
-3 m short.
+3 m short. A car stuck behind a stopped car that nobody drives (`drive = 0`, a wreck) takes a free lane beside it when its road has a second lane in its direction (M-TRAFFICAVOID); once past, it returns to the lane it left (`TrafficDriver3D::home`); on a road with one lane each way it passes through the oncoming lane when that is empty (`TrafficDriver3D::offset`), otherwise it queues.
 
 `crowd.h` (M-OPENWORLD B3, ADR-0048): `CrowdSpawner3D` keeps up to `max_count` `Pedestrian3D` walking the pavements of
 a `RoadNetwork3D` between `spawn_min` and `spawn_max` of a focus (an entity, else the first camera; with none the
@@ -506,6 +506,32 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `Pedestrian3D` with a dead `Health3D` switches to `PedestrianMode::Down`: it stops, stays 10 s (`kPedestrianCorpseSeconds`) and is removed. It does not count toward
   `max_count` (the street refills) and shows in `CrowdStats::down`. A revived one walks again.
 
+### Contact events (M-CONTACTEVENTS)
+
+A `RigidBody3D` with `contact_events = 1` raises `ContactBegin3D { a, b, point, normal, approach_speed, impulse }` (producer `FixedUpdate_Physics`, so read it in `FixedUpdate_Post`
+or in `FixedUpdate_Pre` of the next tick) when it closes on another body faster than `contact_min_speed` m/s (0 means 2). `a` sorts before `b`, `normal` points from `a` to `b`;
+one event per pair per step, the same pair is not reported again for 0.1 s unless it hits twice as fast. A `SfxTrigger` / `ParticleBurst` with `FireOn::ContactBegin` fires on it
+and `PhysicsEvents` counts `contact_begins` / `last_contact` / `contact_speed` (point and normal stay 2D). Only `RigidBody3D` entities opt in; characters, crowd pedestrians and ragdoll parts do not report.
+Record: `docs/milestones/M-CONTACTEVENTS.md`.
+
+### Crash damage (M-CONTACTEVENTS 4)
+
+`ImpactDamage3D` on an entity with `Health3D` and a `RigidBody3D` whose `contact_events` is on (a car, a crate): every `ContactBegin3D` it is in that closes at least `min_speed` m/s costs
+`(speed - min_speed + 1) * damage_per_ms` hp through `apply_damage`, once per second at most. The instigator is the other body or its `VehicleSeat3D` driver, so ramming a traffic car as a wanted
+player is a crime. `kit_impact_damage` (FixedUpdate_Pre) reads the previous tick's events. `kit_vehicle_ram` skips bodies that have `ImpactDamage3D`, so one touch is not two hits; the ram zone
+stays the way cars hurt crowd pedestrians, who have no physics body. The car's `VehicleSeat3D` driver takes `occupant_share` (default 0.5) of the same blow.
+On an entity with a `CharacterController3D` the component is also the contact opt-in (a character is no `RigidBody3D`), so a character landed on, run over or hit by a thrown crate takes the same crash damage.
+
+`kit_wreck` (installed with it, FixedUpdate_Pre): a car whose `Health3D` is dead (it has a `Vehicle3D`) is a wreck: `use_input` off, throttle and steer zero, handbrake on, and a `TrafficDriver3D` / `VehicleDriver3D` on it lets go (`drive = 0`). Set `Health3D::destroy_on_death` to remove it after `linger`, or leave it as scenery (M-CARWRECK).
+
+### Vehicle ram (M-VEHICLEHIT)
+
+`VehicleRam3D` on a `Vehicle3D` entity (installed by `install_vehicle_ram`, part of the stock kit) hurts the living `Health3D` bodies in a box in front of the car
+while it moves faster than `min_speed` m/s (reversing: the box is behind). The box runs `zone_start` to `zone_end` metres along the travel direction and `half_width` to each side.
+Damage is `(speed - min_speed + 1) * damage_per_ms`, with an impulse of `speed * impulse_per_ms` along the travel direction, through `apply_damage`; the instigator is the
+`VehicleSeat3D` driver when there is one (so `Wanted3D` sees a crime), else the car. The car, the driver and the dead are skipped, and one car hurts a victim once a second at most.
+Record: `docs/milestones/M-VEHICLEHIT.md`.
+
 ### Fleeing pedestrians (M-PEDFLEE)
 
 - A live pedestrian whose `Health3D` was hit in the last 5 s (`kPedestrianFleeSeconds`; `hits > 0` and `since_hit` below it) switches to `PedestrianMode::Flee`: on its pavement edge
@@ -514,6 +540,8 @@ kind, an amount and a time left in whole microseconds (the fixed step rounded to
 - A `WeaponFired3D` within 30 m (`kPedestrianFearRadius`) of a pedestrian scares it the same way (M-PEDFLEE 2): it runs from the muzzle for 5 s, whichever side the shot came from. The
   scared list lives in the crowd system, not in the save: a loaded game starts with calm streets. The crowd system reads the event, so the combat kit's `WeaponFired3D` is registered
   by `install_crowd` too.
+- A crash scares them too (M-PEDCRASH): a `ContactBegin3D` that closes at 5 m/s or more (`kCrashSpeed`) and involves a `Vehicle3D` is a scare source at its `point`, handled like a muzzle (30 m, 5 s, the panic spreads). The car needs `RigidBody3D::contact_events` (an `ImpactDamage3D` car has it). Record: `docs/milestones/M-PEDCRASH.md`.
+- A vehicle at 6 m/s or more bearing down on a pedestrian (within `speed * 2 s + 3 m` ahead, 2.5 m either side of its line) makes it run from the vehicle for 3 s (M-PEDCRASH 2).
 - Panic spreads (M-PEDFLEE 3): a pedestrian within 8 m (`kPedestrianPanicRadius`) of one that is running, and still has more than 1.5 s to run, catches it and runs from the same spot with one
   second less (`kPedestrianPanicHop`), so a ripple moves through a crowd and dies out. A pedestrian that was hurt warns its neighbours the same way. Not saved.
 

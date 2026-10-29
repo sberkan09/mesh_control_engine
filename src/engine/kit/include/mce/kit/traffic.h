@@ -71,6 +71,8 @@ struct TrafficDriver3D {
     u32 lane = 0xFFFFFFFFu;      // engine-written (a spawner sets it): the lane it is on
     u32 next = 0xFFFFFFFFu;      // engine-written: the lane after it
     u32 after = 0xFFFFFFFFu;     // engine-written: and the one after that
+    u32 home = 0xFFFFFFFFu;      // engine-written: the lane it left to go round a wreck (it returns there; none = not dodging)
+    f32 offset = 0.0f;           // m to the right of its lane's centre line that it steers for (0 = centred; the way round an oncoming-lane pass)
     f32 s = 0.0f;                // engine-written: metres along `lane`
     f32 target_speed = 0.0f;     // engine-written: m/s it wants now
     f32 stopped_for = 0.0f;      // engine-written: s it has stood at a stop line
@@ -86,7 +88,7 @@ MCE_COMPONENT(TrafficDriver3D, (network, Help{"the RoadNetwork3D it drives on; n
               (yield_time, Range{0, 20}, Help{"s a junction must be clear of cars that go first"}),
               (lost_distance, Range{0.5f, 100}, Help{"m off its lane before it re-snaps"}), (seed, Help{"picks its turns"}),
               (drive, Help{"0: lets go of the car"}), (state, ReadOnly, Save), (turns, ReadOnly, Save), (lane, ReadOnly, Save),
-              (next, ReadOnly, Save), (after, ReadOnly, Save), (s, ReadOnly, Save), (target_speed, ReadOnly, Transient),
+              (next, ReadOnly, Save), (after, ReadOnly, Save), (home, ReadOnly, Save), (offset, Range{-8, 8}, Help{"m right of the lane's centre it steers for"}), (s, ReadOnly, Save), (target_speed, ReadOnly, Transient),
               (stopped_for, ReadOnly, Save), (stuck_for, ReadOnly, Save), (leader, ReadOnly, Transient),
               (spawner, Help{"the TrafficSpawner3D that made it"}))
 

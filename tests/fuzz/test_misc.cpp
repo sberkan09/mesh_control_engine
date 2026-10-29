@@ -1,5 +1,5 @@
 // M-FUZZ 3c: the command line and the console (the player types or passes them), and .mcperf captures (tools read
-// them back). Nothing here may crash, hang or fire an MCE_ASSERT on any text.
+// them back), and scene documents the editor and MCP server open. Nothing here may crash, hang or fire an MCE_ASSERT on any text.
 
 #include <doctest/doctest.h>
 
@@ -15,7 +15,13 @@
 #include "mutator.h"
 #include "test_support.h"
 #if defined(MCE_FUZZ_HAS_EDITOR_CORE)
+#include "mce/ecs/hierarchy.h"
+#include "mce/ecs/transform.h"
 #include "mce/editor/perf_file.h"
+#include "mce/editor/scene_document.h"
+#include "mce/editor/scene_find.h"
+#include "mce/editor/scene_lint.h"
+#include "mce/editor/scene_stats.h"
 #endif
 
 using namespace mce;
@@ -143,6 +149,78 @@ TEST_CASE("fuzz: .mcperf captures survive mutated text") {
         }
     }
     std::printf("fuzz: mcperf: %u mutants, %llu read\n", n, static_cast<unsigned long long>(accepted));
+    CHECK(accepted > 0);
+}
+
+// M-FUZZ 7: the editor's scene document reader, with the rename tables of M-SCENEMIGRATE set so the rebuilt-object path is
+// reached. What loads must save, load again and survive the tools that read a document (lint, stats, find).
+TEST_CASE("fuzz: scene documents survive mutated text, and what loads saves and lints") {
+    log::set_level(log::Level::Off);
+    static const char kSeed[] =
+        "{ \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"5ce2e000-0000-4000-8000-00000000f001\", \"name\": \"fuzz\",\n"
+        "  \"entities\": [\n"
+        "    { \"name\": \"Root\", \"id\": 1, \"components\": { \"OldTransform\": { \"pos\": [1, 2, 3] } } },\n"
+        "    { \"name\": \"Child\", \"id\": 2, \"components\": { \"LocalTransform\": { \"position\": [0, 1, 0] }, "
+        "\"ChildOf\": { \"parent\": \"$0\" } } }\n"
+        "  ] }\n";
+    static const editor::ComponentRename kComps[] = {{1, "OldTransform", "LocalTransform"}};
+    static const editor::FieldRename kFields[] = {{1, "LocalTransform", "pos", "position"}};
+    (void)refl::type_of<LocalTransform>();
+    (void)refl::type_of<ChildOf>();
+    {  // the untouched seed loads, through both rename tables
+        editor::SceneDocument doc;
+        doc.set_renames(kComps, 1);
+        doc.set_field_renames(kFields, 1);
+        cook::DiagList diags;
+        REQUIRE(doc.parse(kSeed, "seed.mcscene", diags));
+        REQUIRE(doc.size() == 2);
+    }
+    const Span<const byte> seed(reinterpret_cast<const byte*>(kSeed), sizeof(kSeed) - 1);
+    std::vector<std::uint64_t> storage;
+    fuzz::Mutator m(0x5CE4E);
+    const u32 n = iterations(3000);
+    u64 accepted = 0;
+    for (u32 it = 0; it < n; ++it) {
+        INFO("replay: scene document iteration " << it);
+        std::string swapped;
+        const char* p;
+        usize len;
+        if (it % 2 == 1) {
+            swapped = fuzz::swap_value(m, seed);
+            p = swapped.data();
+            len = swapped.size();
+        } else {
+            len = m.mutate(seed, storage);
+            p = reinterpret_cast<const char*>(storage.data());
+        }
+        editor::SceneDocument doc;
+        doc.set_renames(kComps, 1);
+        doc.set_field_renames(kFields, 1);
+        cook::DiagList diags;
+        if (!doc.parse(StringView(p, len), "fuzz.mcscene", diags)) continue;
+        ++accepted;
+        cook::String saved;
+        doc.serialize(saved);
+        editor::SceneDocument again;
+        cook::DiagList again_diags;
+        CHECK(again.parse(saved.view(), "again.mcscene", again_diags));
+        (void)editor::lint_scene(doc);
+        (void)editor::scene_stats(doc);
+        (void)editor::find_entities(doc, editor::FindQuery{});
+
+        // The repair (M-LINTFIX): lint is clean afterwards, a second pass changes nothing, and the result still saves and loads.
+        editor::SceneDocument repaired = doc;
+        const usize before = editor::lint_scene(repaired).size();
+        CHECK(editor::fix_scene_lint(repaired) == before);
+        CHECK(editor::lint_scene(repaired).empty());
+        CHECK(editor::fix_scene_lint(repaired) == 0);
+        cook::String fixed_text;
+        repaired.serialize(fixed_text);
+        editor::SceneDocument reloaded;
+        cook::DiagList reload_diags;
+        CHECK(reloaded.parse(fixed_text.view(), "fixed.mcscene", reload_diags));
+    }
+    std::printf("fuzz: scene documents: %u mutants, %llu read\n", n, static_cast<unsigned long long>(accepted));
     CHECK(accepted > 0);
 }
 #endif

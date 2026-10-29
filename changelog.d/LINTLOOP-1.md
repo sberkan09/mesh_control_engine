@@ -1,0 +1,1 @@
+- Editor, M-LINTLOOP: scene lint reports parents that loop back (`parent_cycle`) and `fix_scene_lint` breaks the loop.

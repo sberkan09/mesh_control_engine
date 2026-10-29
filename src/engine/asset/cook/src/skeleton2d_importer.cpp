@@ -967,13 +967,7 @@ public:
         const JsonValue fmt = doc.get("format");
         if (!fmt.is_string() || fmt.as_string() != "mce-skeleton2d")
             return r.fail(fmt.valid() ? fmt : doc, "\"format\" must be \"mce-skeleton2d\"");
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported skeleton version (this cook reads version %u)", kFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, r.file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kFormatVersion, "skeleton", r.file, kStage, diags)) return false;
 
         asset::Skeleton2DHeader h{};
         if (const JsonValue n = doc.get("name"); n.valid()) {

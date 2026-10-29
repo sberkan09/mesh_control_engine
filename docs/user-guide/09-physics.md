@@ -163,7 +163,23 @@ From code: `DistanceJointDesc` (a rod, a rope with `min_length < max_length`, or
 `hertz > 0`) and `RevoluteJointDesc` (a hinge with an optional angle limit and motor), created on
 the world with `create_distance_joint(desc)` / `create_revolute_joint(desc)` and addressed by the
 returned `JointId` (`destroy_joint`, `set_motor_speed`, `set_joint_limits`). Prismatic, wheel, weld and mouse joints are not built.
-2D joints are not scene-authored yet.
+**2D joints** are a component too (M-JOINT2D). Put a `Joint2D` on a body's entity and set `connected` to the
+other body's entity (a joint to the world uses a static body). `kind` is `Distance` (a rod; `min_length < max_length`
+makes a rope; `hertz > 0` makes a spring, `damping_ratio` 0..1) or `Revolute` (a hinge at `anchor`, in this entity's
+frame; `limits` keeps the angle within `lower` .. `upper` degrees from the rest angle, `motor` drives it at
+`motor_speed` degrees per second up to `max_motor_torque`). Distance joints run from `anchor` to `connected_anchor`
+(the connected entity's frame); a length below zero means the distance when the joint was built. The joint is built
+the first tick both bodies exist; changing a setting rebuilds it from the current poses, except `motor_speed`,
+`lower` and `upper`, which update in place. `enabled` 0 removes the joint and keeps the component. `length_now` and
+`angle_now` are read-only readouts.
+
+**Pushing 2D bodies** also needs no code (M-PHYSDRIVE2D). `LaunchVelocity2D` sets a body's velocity (`linear` in m/s,
+`angular` in degrees per second) once, the first tick the body exists, for a thrown ball or a bullet; it is ignored on a
+static body. `Impulse2D` gives a one-shot push (`impulse` in N*s, world space, at `point` in the body's frame): the tick
+it is applied `impulse` goes back to zero, so writing a new value pushes again. `ConstantForce2D` applies `force` (N,
+world space) every tick while the component is there, for wind, a conveyor or a thruster. Impulses and forces act on
+dynamic bodies only, and NaN or infinity counts as zero. `LaunchVelocity2D.applied` is kept in save games (not in
+scenes), so loading a save does not launch the body again. Gravity is a scene setting: `WorldSettings.gravity_2d`.
 
 **3D joints** are components. Put a `Joint3D` on a body's entity (a `RigidBody3D`, or a static
 `BoxCollider3D` / `MeshCollider3D` when the other side moves) and set `connected` to the other body's
@@ -959,5 +975,64 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   the `PoliceState` index), `target` (entity, cleared when none) and `last_known` (vec3). Turn `drive_nav` and
   `aim` off and let the tree do the moving and shooting with the stock `move_to` and `look_at` tasks.
 
-Not in this step: spawning reinforcements as the level rises, arrests, and civilians that flee (they come
-with the pedestrian crowds, B3).
+- **Arrests (M-ARREST).** A unit that sees the offender within `arrest_range` (2.5 m), at a wanted level of at most
+  `arrest_max_level` (1), with the offender moving no faster than `arrest_speed` (1.5 m/s), builds
+  `arrest_progress`; after `arrest_time` (2 s) the offender is arrested: `Arrested3D { offender, by, position }`
+  is pushed and the wanted level cleared. The progress falls back whenever the offender moves off, runs or the unit
+  loses it. What an arrest costs the player (weapons, a respawn at the station) is the game's, in a handler of that
+  event. `arrest_range = 0` or `arrest_max_level = 0` make a unit that only chases and shoots.
+
+- **Reinforcements (M-ARREST 2).** A unit with `dispatch_range` above 0 (default 0, off) that is idle, whose `min_level`
+  the offender has reached and which is within that range of the offender's last known place, goes there and Searches,
+  even without seeing it. Place units with a higher `min_level` and a long range around the map: they stay idle at level 1
+  and arrive as the level rises.
+
+- **Police cars (M-ARREST 3).** `drive_car` 1 on a unit that has a `Vehicle3D` (with `use_input` 0) drives it at the target:
+  Pursue and Attack at the offender, Search at the last known place, Idle stops. It steers at the point, slows in turns
+  and inside 12 m, and brakes to a stop inside 4 m. There is no path following, so a wall between the car and the target
+  stops it. A roadblock is a car with `drive_car` 0 placed across the road.
+
+- **Busted and wasted (M-WASTED).** Put `Respawn3D` (`delay`, default 3 s) on the player and `RespawnPoint3D` on a few
+  entities (`kind` Hospital or Station). After the player dies it wakes up at the nearest Hospital, after an arrest at the
+  nearest Station (any point when the wanted kind is missing; where it stands when there is none), with full health and
+  no wanted level, and `Respawned3D { entity, reason, position }` is pushed (`reason` 1 busted, 2 wasted). Fines and lost
+  weapons are the game's, on that event. With captions installed (the stock player does) the wait also shows "WASTED" or
+  "BUSTED" through the subtitle view; `caption` 0 turns that off.
+- **Money (M-CASH).** Put `Wallet3D` (`cash`) on whoever carries money and `CashDrop3D` (`min`, `max`) on an entity with
+  a `Health3D`: when it dies, its killer's wallet is credited a random amount in `[min, max]` (the same every replay),
+  and `CashChanged3D { entity, delta, cash }` is pushed. From a system, `give_cash(world, e, n)` adds and
+  `take_cash(world, e, n)` takes up to `n` and returns what it took; a wallet never goes below zero. `Respawn3D` also takes a fine from the player's wallet when it wakes
+  up (`fine_busted` 100, `fine_wasted` 200 by default; never more than the wallet holds) and shows "-$N" through the
+  captions.
+- **Pay-and-spray (M-PAYSPRAY).** Put `PaySpray3D` (`radius` 3 m, `price_per_level` 100) on a placed entity, a garage. A
+  player with a `Wanted3D` at level 1 or more standing within `radius`, whose `Wallet3D` holds `price_per_level` times the
+  level, pays that and loses the wanted level; `Sprayed3D { entity, garage, paid, level }` is pushed. Too poor, too far or
+  `enabled` 0: nothing happens. Whether police in sight should block it is the game's rule.
+- **Mission pay (M-MISSIONPAY).** Put `MissionReward3D` (`cash`, default 100) on a Mission entity (see missions): when the
+  mission completes, its `actor`'s `Wallet3D` is credited that much and `CashChanged3D` is pushed. A failed mission, an
+  actor without a wallet or no `MissionReward3D` pays nothing.
+- **Car theft (M-CARJACK).** Put `CarOwner3D` (`heat`, default 8) on a parked car that belongs to someone (it also needs a
+  `VehicleSeat3D`). The first time a rider with a `Wanted3D` boards it, that heat is added as a crime (no police witness
+  needed) and the car is marked `stolen`, so it counts once. Cars without it cost nothing. Set `needs_witness` to 1 and the theft counts only when a police
+  unit within the rider's `witness_range` can see the car.
+- **Ammo shop (M-AMMOSHOP).** Put `AmmoShop3D` (`radius`, `price_per_round`, `stock_to`) on a shop entity. A player who has a
+  `Weapon3D` (with a `magazine`, not `infinite_ammo`) and a `Wallet3D` and stands within `radius` has the weapon's `reserve`
+  filled up to `stock_to` and pays `price_per_round` for each round; with too little cash it buys as many as it can afford.
+- **Cash pickups (M-CASHPICKUP).** Put `CashPickup3D` (`cash`, `radius`, `respawn`) on a placed entity: the first `Wallet3D` holder that
+  comes within `radius` is paid `cash` and `CashPickedUp3D` is pushed. With `respawn` 0 the pickup is destroyed; otherwise it
+  waits `respawn` seconds before it can be taken again (hide it from the event). A holder with a full wallet takes nothing.
+- **Mission givers and wanted-level failure (M-MISSIONSTART).** Put `MissionMarker` (`mission`, `radius`) on a placed entity: when the
+  `actor` of that Idle `Mission` stands within `radius`, the mission starts, as if `start` were set. Add `MissionWantedFail`
+  (`level`, default 3) to a Mission entity and it fails (`MissionFailed` reason 3) once its actor's `Wanted3D` reaches that level.
+- **Retrying a failed mission (M-MISSIONRETRY).** Add `MissionRetry` (`delay`, default 3 s) to a Mission entity: `delay` seconds after
+  it fails the mission goes back to Idle with its objectives Pending, so its `MissionMarker` (or `start`) runs it again.
+- **Chop shop (M-CHOPSHOP).** Put `ChopShop3D` (`radius`, `price`) on a scrapyard entity. A stolen car (`CarOwner3D.stolen` 1, with a
+  `VehicleSeat3D`) within `radius` whose driver holds a `Wallet3D` is bought: the driver is paid `price`, the car is destroyed, the
+  driver steps out and `CarSold3D` is pushed. Needs `install_seats3d` for the seats.
+- **Confiscation (M-ARRESTLOSS).** Put `Confiscate3D` (`ammo_kept`, 0 to 1) next to `Respawn3D` and `Weapon3D` on the player: waking up
+  busted leaves `reserve * ammo_kept` spare rounds (rounded down). Dying keeps them all.
+- **Medic (M-HEALSHOP).** Put `HealShop3D` (`radius`, `price_per_hp`) on a clinic entity. A living player with a `Health3D` below
+  its `max` and a `Wallet3D` who stands within `radius` is healed one hit point per `price_per_hp` cash, up to `max`; with
+  too little cash it buys as many hit points as it can afford.
+
+Not in this step: spawning new units, and cars that follow roads.

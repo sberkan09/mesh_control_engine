@@ -298,6 +298,49 @@ const ToolDef kAgentTools[] = {
      scene_switch},
     {"scene_documents", "The scenes this server has open: the current one and the ones scene_switch parked, each with dirty.",
      R"j({"type":"object","properties":{}})j", scene_documents},
+    {"scene_diff",
+     "What changed between two versions of a scene: entities added, removed or changed (matched by id), renames, "
+     "components added or removed and the changed fields by name, a reorder, a header change. 'a' is the before "
+     "(a scene path under assets/); 'b' the after, or the open scene (unsaved edits included) when left out. "
+     "Returns identical, counts and a text report, one line per entity.",
+     R"j({"type":"object","properties":{"a":{"type":"string","description":"Scene path under assets/ (before)"},"b":{"type":"string","description":"Scene path under assets/ (after); default: the open scene"}},"required":["a"]})j",
+     scene_diff},
+    {"scene_lint",
+     "Mistakes in a scene that load fine and misbehave later: an entity without a name, siblings that share a name "
+     "(a path like Room/Wall then names both), a scale of zero on an axis, a position, rotation or scale that is not "
+     "a number, a parent that does not exist, parents that loop back (parent_cycle), a reference to an entity the scene lacks. 'path' is a scene under "
+     "assets/; left out, the open scene (unsaved edits included). Returns clean, the findings (entity, name, kind) "
+     "and a text report, one line per finding.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
+     scene_lint},
+    {"scene_lint_fix",
+     "Repairs what scene_lint finds in a saved scene and writes the file back in the canonical text: an empty name becomes \"Entity <id>\", a later sibling with a taken name gets \" (2)\", \" (3)\", a parent, a parent loop (on its lowest entity id) or a reference to an entity the scene lacks is dropped, a position, rotation or scale that is not a number returns to its default, a zero scale axis becomes 1. 'path' is a scene under assets/. Returns fixed (findings repaired), written (false: nothing to fix, the file is untouched) and a text report of what was found. The open scene in the editor is not changed: reload it with scene_open afterwards (unsaved edits to it would be lost).",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/"}},"required":["path"]})j",
+     scene_lint_fix},
+    {"scene_lint_all",
+     "scene_lint over every scene and prefab under assets/ in one call: is the whole project tidy. Returns clean, scenes_checked, findings (the total) and unreadable (files that do not parse), and files: one row per scene or prefab that has findings or cannot be read, with its path, the number of findings and the text report (the same lines as scene_lint). Read-only unless fix is true; then every file with findings is repaired and written back in the canonical text like scene_lint_fix (the rows and the top level also carry fixed, and clean is true when nothing unreadable is left). The open scene in the editor is not changed: reload it with scene_open afterwards.",
+     R"j({"type":"object","properties":{"fix":{"type":"boolean","description":"Repair the findings and write the files; default false (read-only)"}}})j", scene_lint_all},
+    {"scene_stats",
+     "What a scene holds at a glance: entity count, roots, hierarchy depth, prefab instances, the box the local "
+     "positions span and the components in use (most used first). 'path' is a scene under assets/; left out, the "
+     "open scene (unsaved edits included). Returns the numbers and a text report (the same as `mce scene stats`).",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"}}})j",
+     scene_stats},
+    {"scene_find",
+     "The entities of a scene that match a question: 'name' is a part of the entity name (ignoring case), "
+     "'component' a component type the entity carries, 'prefab' keeps only prefab instances; every condition "
+     "given must hold, none given lists every entity. 'path' is a scene under assets/; left out, the open scene "
+     "(unsaved edits included). Returns count, the hits (entity id, name, hierarchy path such as Room/Wall/Torch) "
+     "and a text report.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Scene path under assets/; default: the open scene"},"name":{"type":"string","description":"Part of the entity name, ignoring case"},"component":{"type":"string","description":"A component type the entity carries, e.g. Sprite"},"prefab":{"type":"boolean","description":"Only prefab instances"}}})j",
+     scene_find},
+    {"asset_used_by",
+     "The assets whose files name a given asset, so you can see what deleting or rewriting it would "
+     "break. Give 'path' (under assets/) or 'guid' (\"guid:<uuid>\"). Returns count and used_by, the paths "
+     "of the assets that name it (the same answer as the Assets panel's Used by...). Only asset files are "
+     "read: a script that loads by path, the start scene and files outside assets/ are not seen.",
+     R"j({"type":"object","properties":{"path":{"type":"string","description":"Asset path under assets/"},"guid":{"type":"string","description":"guid:<uuid>"}}})j",
+     asset_used_by},
     {"report_friction",
      "Write down something the engine made hard (a missing tool, a confusing error, a doc that was wrong, a "
      "workaround you had to invent) as a note in the project's friction.jsonl, so the engine's developers fix it. "

@@ -70,6 +70,10 @@
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
 #include "mce/kit/wanted3d.h"          // Wanted3D, Police3D (M-OPENWORLD C3)
+#include "mce/kit/vehicle_ram.h"        // VehicleRam3D (M-VEHICLEHIT)
+#include "mce/kit/impact_damage.h"       // ImpactDamage3D (M-CONTACTEVENTS)
 #include "mce/kit/ui_flow.h"          // UiFlowRules (M-WORKFLOW 7)
 #include "mce/physics/components.h"   // RigidBody2D, Collider2D, CharacterController2D, ...
+#include "mce/physics/force2d.h"       // LaunchVelocity2D, Impulse2D, ConstantForce2D
+#include "mce/physics/joint2d.h"       // Joint2D
 #include "mce/scene/streaming.h"      // SceneChunk, StreamingFocus, SceneChunkStatus

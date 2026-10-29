@@ -6,10 +6,14 @@
 #include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/wanted3d.h"
 #include "mce/scene/entity_names.h"
 #include "mce/string_id.h"
 
 namespace mce::kit {
+static_assert(sizeof(MissionMarker) == 16);
+static_assert(sizeof(MissionRetry) == 8);
+static_assert(sizeof(MissionWantedFail) == 4);
 namespace {
 
 struct MissionsInstalled {};
@@ -24,6 +28,12 @@ bool pose_of(World& w, Entity e, math::vec3& pos) {
     math::vec3 scale;
     world_pose(w, e, *t, pos, rot, scale);
     return true;
+}
+
+// M-MISSIONPAY: a completed mission pays its actor the MissionReward3D on the mission entity.
+void pay_reward(World& w, Entity mission, const Mission& m) {
+    const MissionReward3D* r = w.try_get<MissionReward3D>(mission);
+    if (r && r->cash > 0) give_cash(w, m.actor, r->cash);
 }
 
 // Resolves the target by name while it is empty.
@@ -99,6 +109,14 @@ void kit_missions(Frame& f) {
     in.signals = f.events().read<MissionSignal>();
     in.interact = is && is->has_action(kInteract) && is->pressed(kInteract);
 
+    f.query<MissionMarker, LocalTransform>().each([&](Entity me, MissionMarker& mk, LocalTransform&) {
+        if (!mk.enabled || mk.mission.is_null() || !w.alive(mk.mission)) return;
+        Mission* mm = w.try_get_mut<Mission>(mk.mission);
+        if (!mm || mm->state != MissionState::Idle) return;
+        math::vec3 actor_pos, marker_pos;
+        if (pose_of(w, mm->actor, actor_pos) && pose_of(w, me, marker_pos) && math::length(actor_pos - marker_pos) <= mk.radius) mm->start = 1;
+    });
+
     f.query<Mission>().each([&](Entity e, Mission& m) {
         if (m.state == MissionState::Idle) {
             if (!m.start && !m.start_on_load) return;
@@ -117,6 +135,26 @@ void kit_missions(Frame& f) {
             activate(w, m.current);
             return;  // the first objective is looked at next tick
         }
+        if (m.state == MissionState::Failed) {
+            MissionRetry* rt = w.try_get_mut<MissionRetry>(e);
+            if (!rt) return;
+            if (rt->left <= 0.0f) rt->left = rt->delay;
+            rt->left -= f.dt;
+            if (rt->left > 0.0f) return;
+            rt->left = 0.0f;
+            Entity at = m.objective;
+            for (u32 n = 0; n < 64 && !at.is_null() && w.alive(at); ++n) {  // the chain is short; the cap guards a loop
+                Objective* o = w.try_get_mut<Objective>(at);
+                if (!o) break;
+                o->state = ObjectiveState::Pending;
+                o->progress = 0;
+                o->ticks = 0;
+                at = o->next;
+            }
+            m.state = MissionState::Idle;
+            m.start = 0;
+            return;
+        }
         if (m.state != MissionState::Active) return;
         ++m.ticks;
         m.elapsed = static_cast<f32>(m.ticks) * f.dt;
@@ -130,6 +168,13 @@ void kit_missions(Frame& f) {
             (m.time_limit > 0.0f && static_cast<f64>(m.ticks) * f.dt >= static_cast<f64>(m.time_limit) - 1e-6)) {
             m.state = MissionState::Failed;
             f.events().push(MissionFailed{e, fail_death ? 1u : 0u});
+            return;
+        }
+        const MissionWantedFail* wf = w.try_get<MissionWantedFail>(e);
+        const Wanted3D* wd = wf && !m.actor.is_null() && w.alive(m.actor) ? w.try_get<Wanted3D>(m.actor) : nullptr;
+        if (wf && wd && wd->level >= wf->level) {
+            m.state = MissionState::Failed;
+            f.events().push(MissionFailed{e, 3u});
             return;
         }
         Objective* o = m.current.is_null() || !w.alive(m.current) ? nullptr : w.try_get_mut<Objective>(m.current);
@@ -146,6 +191,7 @@ void kit_missions(Frame& f) {
         if (next.is_null() || !w.alive(next) || !w.try_get<Objective>(next)) {
             m.state = MissionState::Complete;
             f.events().push(MissionCompleted{e});
+            pay_reward(w, e, m);
             return;
         }
         m.current = next;
@@ -159,7 +205,7 @@ void install_missions(World& world, asset::AssetSystem* assets) {
     install_combat3d(world, assets);
     if (world.try_resource<MissionsInstalled>()) return;
     world.set_resource(MissionsInstalled{});
-    world.register_components<Mission, Objective>();
+    world.register_components<Mission, Objective, MissionMarker, MissionWantedFail, MissionRetry>();
     world.register_event<MissionStarted>(Phase::FixedUpdate_Pre);
     world.register_event<ObjectiveDone>(Phase::FixedUpdate_Pre);
     world.register_event<MissionCompleted>(Phase::FixedUpdate_Pre);

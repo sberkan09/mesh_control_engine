@@ -1,0 +1,1 @@
+- Physics/Kit (M-CONTACTEVENTS): characters report contact events like bodies (`set_contact_events` on a `CharacterController3D` entity), and `ImpactDamage3D` on one is its opt-in, so a character hurt by a body that hits it takes crash damage. Record: `docs/milestones/M-CONTACTEVENTS.md`.

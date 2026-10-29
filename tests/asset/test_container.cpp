@@ -229,3 +229,33 @@ TEST_CASE("container: fuzz — 1000 deterministic byte mutations never crash") {
     }
     CHECK(rejected > 400);
 }
+
+TEST_CASE("container: a writer with thousands of chunks keeps every payload and its alignment (M-BENCH 3 growth path)") {
+    ContainerWriter w;
+    constexpr u32 kChunks = 3000;
+    for (u32 i = 0; i < kChunks; ++i) {
+        ContainerWriter::ChunkDesc d;
+        d.type = ChunkType::Texture;
+        d.guid = Guid{0x1000u + i, 0x2000u + i};
+        const u32 size = 1 + (i * 37u) % 300;  // sizes that straddle the alignment
+        Array<byte> payload;
+        payload.resize(size, static_cast<byte>(i));
+        w.add(d, payload.span());
+    }
+    Array<byte> file;
+    w.finish(file);
+    auto r = ContainerView::open(file.span(), "many.mce");
+    REQUIRE(r);
+    const ContainerView& v = r.value();
+    REQUIRE(v.chunk_count() == kChunks);
+    for (u32 i = 0; i < kChunks; i += 97) {
+        CAPTURE(i);
+        const u32 at = v.find(ChunkType::Texture, Guid{0x1000u + i, 0x2000u + i});
+        REQUIRE(at == i);
+        CHECK(v.entry(at).offset % CHUNK_ALIGN == 0);
+        const Span<const byte> p = v.payload(at);
+        CHECK(p.size() == 1 + (i * 37u) % 300);
+        CHECK(p[0] == static_cast<byte>(i));
+        CHECK(p[p.size() - 1] == static_cast<byte>(i));
+    }
+}

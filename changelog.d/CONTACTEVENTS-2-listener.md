@@ -1,0 +1,1 @@
+- Physics (M-CONTACTEVENTS 2): the Jolt contact listener fills `World3D::contact_events()` (sorted by pair, one per pair, throttled, capped) for bodies that opted in with `set_contact_events`. Record: `docs/milestones/M-CONTACTEVENTS.md`.

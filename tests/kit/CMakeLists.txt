@@ -13,6 +13,7 @@ mce_add_test(test_kit UMBRELLA
         test_ai_budget.cpp
         test_audio_occlusion.cpp
         test_bodies3d.cpp
+        test_contacts3d.cpp
         test_debug_lines.cpp
         test_origin3d.cpp
         test_chunk_lod3d.cpp
@@ -75,6 +76,9 @@ mce_add_test(test_kit UMBRELLA
         test_rain_splash.cpp
         test_map_markers.cpp
         test_wanted3d.cpp
+        test_vehicle_ram.cpp
+        test_impact_damage.cpp
+        test_gta_slice.cpp
         test_particles.cpp
         test_pathfinding.cpp
         test_procgen.cpp

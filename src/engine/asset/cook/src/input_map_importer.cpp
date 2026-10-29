@@ -322,13 +322,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-input\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kInputFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported input map version (this cook reads version %u)", kInputFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kInputFormatVersion, "input map", file, kStage, diags)) return false;
         const JsonValue maps = doc.get("maps");
         if (!maps.is_array() || maps.size() == 0) {
             error(diags, file, maps.valid() ? maps : doc, "'maps' must be a non-empty array");

@@ -10,3 +10,23 @@ SharedCamera2D | tested in tests/kit/test_coop.cpp; 09_coop uses one camera per 
 Projectile3D | M-OPENWORLD C2: engine-spawned by Weapon3D; tested in tests/kit/test_combat3d.cpp
 UiFlowRules | tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR
 FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it
+VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample
+ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
+Respawn3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample
+Wallet3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player
+PaySpray3D | M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage
+MissionReward3D | M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
+CarOwner3D | M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars
+CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
+RespawnPoint3D | M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station
+AmmoShop3D | M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter
+HealShop3D | M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic
+MissionMarker | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker
+MissionWantedFail | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
+LaunchVelocity2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
+Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
+ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
+CashPickup3D | M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts it on dropped or placed cash
+MissionRetry | M-MISSIONRETRY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
+ChopShop3D | M-CHOPSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a scrapyard entity
+Confiscate3D | M-ARRESTLOSS: tested in tests/kit/test_wanted3d.cpp; a game puts it on the player beside Respawn3D

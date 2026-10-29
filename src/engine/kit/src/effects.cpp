@@ -146,6 +146,17 @@ void record_physics_events(Frame& f, Named& n) {
         for (const LapCompleted3D& ev : events.read<LapCompleted3D>()) add_unique(n.lap, ev.vehicle);
     if (w.event_queue<Landed3D>())
         for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
+    if (w.event_queue<ContactBegin3D>())
+        for (const ContactBegin3D& ev : events.read<ContactBegin3D>()) {
+            add_unique(n.contact, ev.a);
+            add_unique(n.contact, ev.b);
+            for (const bool is_a : {true, false})
+                if (PhysicsEvents* p = w.try_get_mut<PhysicsEvents>(is_a ? ev.a : ev.b)) {
+                    p->last_contact = is_a ? ev.b : ev.a;
+                    p->contact_speed = ev.approach_speed;
+                    ++p->contact_begins;
+                }
+        }
     if (w.event_queue<TriggerEnter3D>()) {
         for (const TriggerEnter3D& ev : events.read<TriggerEnter3D>()) {
             add_unique(n.trigger, ev.trigger);

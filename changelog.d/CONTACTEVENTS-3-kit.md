@@ -1,0 +1,1 @@
+- Kit (M-CONTACTEVENTS 3): `RigidBody3D::contact_events` raises `ContactBegin3D`; `FireOn::ContactBegin` triggers and `PhysicsEvents` read it. Record: `docs/milestones/M-CONTACTEVENTS.md`.

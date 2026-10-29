@@ -1,0 +1,1 @@
+- Editor, M-MATCHXFORM: Edit > Match to anchor copies the first selected entity's position, rotation or scale onto the other selected entities.

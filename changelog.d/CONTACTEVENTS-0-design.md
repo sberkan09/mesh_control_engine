@@ -1,0 +1,1 @@
+- Docs (M-CONTACTEVENTS): design for 3D contact events (Jolt listener, `ContactBegin3D`, impact damage), five stacked steps. Record: `docs/milestones/M-CONTACTEVENTS.md`.

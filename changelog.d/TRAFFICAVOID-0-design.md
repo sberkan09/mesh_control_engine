@@ -1,0 +1,1 @@
+- Docs (M-TRAFFICAVOID): design note for traffic going around a wreck by taking the free neighbouring lane. Record: `docs/milestones/M-TRAFFICAVOID.md`.

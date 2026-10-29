@@ -50,7 +50,7 @@ struct RigidBody3D {
     bool set_velocity = false;          // dynamic: apply `velocity` once (the engine clears it)
     u16 mask = 0xFFFF;                  // layers this body collides with
     bool stop_spin = false;             // dynamic: zero the body's spin once (a respawn; the engine clears it)
-    u8 pad_ = 0;
+    u8 contact_events = 0;              // 1: raise ContactBegin3D for this body's hits (M-CONTACTEVENTS)
     math::vec3 half{0.5f, 0.5f, 0.5f};  // Box half extents
     f32 radius = 0.5f;                  // Sphere, Capsule
     f32 half_height = 0.5f;             // Capsule: half the cylinder between the caps (along Y)
@@ -62,7 +62,7 @@ struct RigidBody3D {
     math::vec3 velocity;                // kinematic: m/s every tick; dynamic: with set_velocity
     math::vec3 impulse;                 // dynamic: N*s applied once at the centre of mass (the engine zeroes it)
     math::vec3 current_velocity;        // engine-written: the body's velocity after the last step
-    u32 pad2_ = 0;
+    f32 contact_min_speed = 0.0f;       // m/s the bodies must close at for a ContactBegin3D; 0 = 2
 };
 MCE_COMPONENT(RigidBody3D, (hull, Help{"ConvexMesh: a mesh whose vertices make the hull"}), type, shape,
               (layer, Range{0, 15}), (set_velocity, Help{"dynamic: apply 'velocity' once (the engine clears it)"}), mask,
@@ -70,7 +70,9 @@ MCE_COMPONENT(RigidBody3D, (hull, Help{"ConvexMesh: a mesh whose vertices make t
               (half, Help{"Box half extents, metres"}), (radius, Range{0.01f, 100}), (half_height, Range{0, 100}),
               (friction, Range{0, 2}), (restitution, Range{0, 1}), (density, Range{1, 100000}), (gravity_scale, Range{-10, 10}),
               (linear_damping, Range{0, 10}), (velocity, Help{"kinematic: m/s every tick; dynamic: with set_velocity"}),
-              (impulse, Help{"dynamic: N*s applied once (the engine zeroes it)"}), (current_velocity, ReadOnly, Transient))
+              (impulse, Help{"dynamic: N*s applied once (the engine zeroes it)"}), (current_velocity, ReadOnly, Transient),
+              (contact_events, Help{"1: raise ContactBegin3D when this body hits something (sounds, damage)"}),
+              (contact_min_speed, Range{0, 200}, Help{"m/s the bodies must close at to count; 0 = 2"}))
 
 struct CharacterController3D {
     f32 radius = 0.3f;
@@ -163,6 +165,17 @@ struct TriggerExit3D {  // also when either entity is destroyed
     Entity trigger;
     Entity other;
 };
+// A body with RigidBody3D::contact_events hit another body (physics3d's ContactEvent3D; `a` sorts before `b`,
+// `normal` points from a to b). Read in FixedUpdate_Post, or in FixedUpdate_Pre of the next tick.
+struct ContactBegin3D {
+    Entity a;
+    Entity b;
+    math::vec3 point;
+    math::vec3 normal;
+    f32 approach_speed = 0.0f;  // m/s
+    f32 impulse = 0.0f;         // N*s estimate
+};
+MCE_EVENT(ContactBegin3D, a, b, point, normal, approach_speed, impulse)
 MCE_EVENT(TriggerEnter3D, trigger, other)
 MCE_EVENT(TriggerExit3D, trigger, other)
 

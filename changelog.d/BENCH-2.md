@@ -1,0 +1,1 @@
+- Tools, M-BENCH: `mce_bench` also times the .mce container (write, open with CRC checks, find by GUID).

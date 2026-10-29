@@ -95,6 +95,15 @@ void error_at(DiagList& diags, Errc code, StringView file, JsonValue at, const c
     diags.error(code, file, at.valid() ? at.line() : 0, at.valid() ? at.col() : 0, stage, msg);
 }
 
+bool check_format_version(JsonValue doc, u32 current, const char* what, StringView file, const char* stage, DiagList& diags) {
+    const JsonValue ver = doc.get("version");
+    if (ver.is_integer() && ver.as_number() >= 1 && ver.as_number() <= current) return true;
+    String msg;
+    appendf(msg, "unsupported %s version (this cook reads version %u)", what, current);
+    error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, stage, msg);
+    return false;
+}
+
 bool check_keys(JsonValue obj, std::initializer_list<StringView> allowed, StringView file, const char* stage, DiagList& diags) {
     if (!obj.valid()) return true;
     if (!obj.is_object()) {

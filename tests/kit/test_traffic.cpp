@@ -33,6 +33,11 @@ constexpr const char* kStreet = R"({ "format": "mce-roads", "version": 1,
   "nodes": [{"name": "s", "at": [0, 0, 200]}, {"name": "n", "at": [0, 0, -200]}],
   "roads": [{"name": "main", "from": "s", "to": "n", "lanes": 1, "speed": 12}] })";
 
+// The same street with two lanes in each direction.
+constexpr const char* kStreet2 = R"({ "format": "mce-roads", "version": 1,
+  "nodes": [{"name": "s", "at": [0, 0, 200]}, {"name": "n", "at": [0, 0, -200]}],
+  "roads": [{"name": "main", "from": "s", "to": "n", "lanes": 2, "speed": 12}] })";
+
 // A signalled crossroads, arms 120 m; east-west green first (24 s until north-south's green).
 constexpr const char* kCross = R"({ "format": "mce-roads", "version": 1,
   "nodes": [{"name": "c", "at": [0, 0, 0]}, {"name": "n", "at": [0, 0, -120]}, {"name": "s", "at": [0, 0, 120]},
@@ -122,6 +127,14 @@ struct Scene {
         d.max_speed = max_speed;
         return w.spawn_with(pose({x, 1.2f, z}, yaw), car_body(), car_vehicle(), d);
     }
+    // A wrecked/parked car: nobody drives it and its handbrake is on (M-TRAFFICAVOID).
+    Entity wreck(f32 x, f32 z, f32 yaw = 0.0f) {
+        TrafficDriver3D d;
+        d.drive = 0;
+        Vehicle3D v = car_vehicle();
+        v.handbrake = 1.0f;
+        return w.spawn_with(pose({x, 1.2f, z}, yaw), car_body(), v, d);
+    }
     vec3 pos(Entity e) { return w.try_get<LocalTransform>(e)->position; }
     const TrafficDriver3D& drv(Entity e) { return *w.try_get<TrafficDriver3D>(e); }
     f32 speed(Entity e) { return w.try_get<Vehicle3D>(e)->speed; }
@@ -139,6 +152,16 @@ TEST_CASE("traffic: a car keeps to its lane at the lane's speed") {
     CHECK(s.pos(c).z < 120.0f);
     CHECK(std::fabs(s.pos(c).x - 1.75f) < 0.6f);  // in its lane
     CHECK(s.speed(c) == doctest::Approx(12.0f).epsilon(0.15));
+}
+
+TEST_CASE("traffic: offset shifts where a car drives inside its lane") {
+    Scene s(kStreet);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.w.try_get_mut<TrafficDriver3D>(c)->offset = 1.5f;  // to the right of travel (+x going -z)
+    s.run(60 * 12);
+    CHECK(s.drv(c).state != TrafficState::Lost);
+    CHECK(s.pos(c).z < 120.0f);
+    CHECK(std::fabs(s.pos(c).x - 3.25f) < 0.6f);
 }
 
 TEST_CASE("traffic: a faster car follows a slow one without hitting it") {
@@ -260,4 +283,114 @@ TEST_CASE("traffic: the same traffic replays to the same hash") {
         return s.w.state_hash();
     };
     CHECK(run() == run());
+}
+
+TEST_CASE("traffic avoid: on a two-lane road a car goes around a wreck by taking the other lane") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 180.0f);
+    bool other_lane = false;
+    for (u32 i = 0; i < 60 * 25; ++i) {
+        s.run(1);
+        other_lane |= s.drv(c).lane != s.drv(wreck).lane;
+    }
+    CHECK(s.pos(c).z < 80.0f);                      // it got past
+    CHECK(other_lane);                              // by another lane
+    CHECK(s.drv(c).state != TrafficState::Lost);
+    CHECK(s.speed(wreck) < 0.5f);
+}
+
+TEST_CASE("traffic avoid: once past the wreck the car returns to the lane it left") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 150.0f);
+    bool left = false;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        left |= s.drv(c).lane != s.drv(wreck).lane;
+    }
+    CHECK(left);                                    // it did go round
+    CHECK(s.pos(c).z < 70.0f);                      // and is well past
+    CHECK(s.drv(c).lane == s.drv(wreck).lane);     // back where it started
+    CHECK(s.drv(c).home == 0xFFFFFFFFu);
+    CHECK(s.drv(c).state != TrafficState::Lost);
+}
+
+TEST_CASE("traffic avoid: on a one-lane road a car passes the wreck through an empty oncoming lane and comes back") {
+    Scene s(kStreet);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity c = s.car(1.75f, 160.0f);
+    f32 closest = 1e9f, most_left = 0.0f;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        most_left = math::min(most_left, s.drv(c).offset);
+    }
+    CHECK(s.pos(c).z < 60.0f);                      // it got past
+    CHECK(most_left < -3.0f);                       // through the oncoming lane
+    CHECK(closest > 2.8f);                          // never touching it
+    CHECK(std::fabs(s.drv(c).offset) < 0.1f);       // and back in its lane
+    CHECK(s.drv(c).lane == s.drv(wreck).lane);
+    CHECK(s.drv(c).state != TrafficState::Lost);
+}
+
+TEST_CASE("traffic avoid: several cars in a row each pass the wreck through the oncoming lane") {
+    Scene s(kStreet);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity cars[3] = {s.car(1.75f, 150.0f), s.car(1.75f, 172.0f), s.car(1.75f, 194.0f)};
+    f32 closest = 1e9f, between = 1e9f;
+    for (u32 i = 0; i < 60 * 40; ++i) {
+        s.run(1);
+        for (const Entity c : cars) closest = math::min(closest, math::length(s.pos(c) - s.pos(wreck)));
+        for (u32 a = 0; a < 3; ++a)
+            for (u32 b = a + 1; b < 3; ++b) between = math::min(between, math::length(s.pos(cars[a]) - s.pos(cars[b])));
+    }
+    for (const Entity c : cars) {
+        CHECK(s.pos(c).z < 70.0f);
+        CHECK(std::fabs(s.drv(c).offset) < 0.1f);
+        CHECK(s.drv(c).state != TrafficState::Lost);
+    }
+    CHECK(closest > 2.8f);
+    CHECK(between > 4.5f);
+}
+
+TEST_CASE("traffic avoid: on a one-lane road a car queues behind the wreck while the oncoming lane is blocked") {
+    Scene s(kStreet);
+    s.wreck(1.75f, 100.0f);
+    s.wreck(-1.75f, 60.0f, 3.14159265f);  // a wreck in the oncoming lane
+    const Entity c = s.car(1.75f, 180.0f);
+    s.run(60 * 25);
+    CHECK(s.pos(c).z > 100.0f + 2.0f);
+    CHECK(s.speed(c) < 0.5f);
+    CHECK(s.drv(c).offset == 0.0f);
+}
+
+TEST_CASE("traffic avoid: the other lane blocked beside the wreck means waiting") {
+    Scene s(kStreet2);
+    s.wreck(1.75f, 100.0f);
+    s.wreck(5.25f, 98.0f);
+    const Entity c = s.car(1.75f, 180.0f);
+    s.run(60 * 25);
+    CHECK(s.pos(c).z > 100.0f + 2.0f);
+}
+
+TEST_CASE("traffic avoid: two cars queued behind a wreck both get around it, one after the other") {
+    Scene s(kStreet2);
+    const Entity wreck = s.wreck(1.75f, 100.0f);
+    const Entity first = s.car(1.75f, 150.0f);
+    const Entity second = s.car(1.75f, 170.0f);
+    f32 closest = 1e9f;
+    bool first_around = false, second_around = false;
+    for (u32 i = 0; i < 60 * 30; ++i) {
+        s.run(1);
+        first_around |= s.drv(first).lane != s.drv(wreck).lane;
+        second_around |= s.drv(second).lane != s.drv(wreck).lane;
+        closest = math::min(closest, math::length(s.pos(first) - s.pos(second)));
+    }
+    CHECK(s.pos(first).z < 80.0f);
+    CHECK(s.pos(second).z < 80.0f);
+    CHECK(first_around);
+    CHECK(second_around);
+    CHECK(closest > 4.5f);  // never overlapping
 }

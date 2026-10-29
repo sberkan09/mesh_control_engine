@@ -73,6 +73,24 @@ enum class DocKind : u8 { Scene, Prefab };
 // arrays included).
 void visit_entity_refs(const refl::TypeRecord& type, void* value, void (*fn)(Entity* field, void* user), void* user);
 
+// A component type that was renamed: files of `up_to_version` or older that spell it `old_name`
+// load it as `new_name` (assets.md §6: migration happens at editor load). A bump of
+// SceneDocument::kFormatVersion that renames a component adds its row here, nothing else.
+struct ComponentRename {
+    u32 up_to_version;
+    const char* old_name;
+    const char* new_name;
+};
+
+// A field that was renamed: in files of `up_to_version` or older, the `component` (by its current
+// name) spells the field `old_field`; it loads as `new_field`.
+struct FieldRename {
+    u32 up_to_version;
+    const char* component;
+    const char* old_field;
+    const char* new_field;
+};
+
 class SceneDocument {
 public:
     static constexpr u32 kFormatVersion = 1;  // entity "id" keys are optional within version 1
@@ -115,6 +133,10 @@ public:
     // Replaces the document with `text` ("mce-scene" or "mce-prefab"; kind() follows). On error the document is left empty and `diags` holds
     // file:line:col rows. A "version" newer than kFormatVersion is refused (never guessed at).
     bool parse(StringView text, StringView file, cook::DiagList& diags);
+    // The rename rows parse() applies (default: none, the first format has nothing to migrate).
+    // The table must outlive the document; tests pass their own.
+    void set_renames(const ComponentRename* table, usize count) { renames_ = table; rename_count_ = count; }
+    void set_field_renames(const FieldRename* table, usize count) { field_renames_ = table; field_rename_count_ = count; }
     // Deterministic, diff-friendly text: one component object per line, non-default fields only
     // (a prefab instance: its overridden fields).
     void serialize(cook::String& out) const;
@@ -125,6 +147,10 @@ private:
     Array<DocEntity> entities_;
     cook::String settings_;  // the "settings" object, carried verbatim (not edited at MVP)
     EntityId next_id_ = 1;
+    const ComponentRename* renames_ = nullptr;
+    usize rename_count_ = 0;
+    const FieldRename* field_renames_ = nullptr;
+    usize field_rename_count_ = 0;
     DocKind kind_ = DocKind::Scene;
 };
 

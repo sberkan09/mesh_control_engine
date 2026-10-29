@@ -1,0 +1,1 @@
+- Kit (M-ARREST 3): `Police3D::drive_car` drives the unit's `Vehicle3D` at the offender (police cars). Record: `docs/milestones/M-ARREST.md`.

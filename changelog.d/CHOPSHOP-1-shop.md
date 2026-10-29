@@ -1,0 +1,1 @@
+- Kit (M-CHOPSHOP 1): `ChopShop3D` buys a stolen car from its driver and destroys it (`CarSold3D`). Record: `docs/milestones/M-CHOPSHOP.md`.

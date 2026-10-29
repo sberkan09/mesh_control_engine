@@ -7,9 +7,11 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/hash.h"
+#include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/roads.h"
+#include "mce/kit/vehicles3d.h"
 #include "mce/log.h"
 
 namespace mce::kit {
@@ -307,6 +309,13 @@ struct Fear {
     f32 left = 0.0f;
 };
 constexpr usize kMaxFears = 512;
+constexpr f32 kCrashSpeed = 5.0f;     // m/s a vehicle must close at for pedestrians to hear it as a crash (M-PEDCRASH)
+constexpr f32 kRunDownSpeed = 6.0f;   // m/s a vehicle must go for pedestrians in its path to jump clear of it (M-PEDCRASH 2)
+constexpr f32 kRunDownTime = 2.0f;    // s ahead of it that counts as its path
+constexpr f32 kRunDownWidth = 2.5f;   // m either side of its line
+constexpr f32 kRunDownFlee = 3.0f;    // s a pedestrian runs from a vehicle that nearly hit it
+constexpr usize kMaxCars = 64;
+constexpr usize kMaxSources = 32;     // scare sources (shots and crashes) read in one tick
 
 struct CrowdState {
     Array<Fear> fears;
@@ -593,11 +602,34 @@ void kit_crowd(Frame& f) {
         }
         st.fears = static_cast<Array<Fear>&&>(keep);
     }
-    Span<const WeaponFired3D> shots = f.events().read<WeaponFired3D>();
+    // What scares this tick: the muzzles of shots, and the points where a vehicle hit something hard (M-PEDCRASH).
+    Array<vec3> sources;
+    for (const WeaponFired3D& sh : f.events().read<WeaponFired3D>())
+        if (sources.size() < kMaxSources) sources.push_back(sh.origin);
+    for (const ContactBegin3D& cb : f.events().read<ContactBegin3D>()) {
+        if (cb.approach_speed < kCrashSpeed || sources.size() >= kMaxSources) continue;
+        const bool car = (!cb.a.is_null() && w.alive(cb.a) && w.try_get<Vehicle3D>(cb.a)) || (!cb.b.is_null() && w.alive(cb.b) && w.try_get<Vehicle3D>(cb.b));
+        if (car) sources.push_back(cb.point);
+    }
     // M-PEDFLEE 3: those who ran last tick and still have time to run pass the panic on (one second less per hop, so it dies out)
     Array<Fear> spreaders;
     for (const Fear& fr : st.fears)
         if (fr.left > kPedestrianPanicHop + 0.5f) spreaders.push_back(fr);
+
+    // M-PEDCRASH 2: vehicles moving fast enough to run somebody down, with the line each travels along.
+    struct Mover {
+        vec3 pos, dir;
+        f32 speed;
+    };
+    Array<Mover> movers;
+    w.query<const Vehicle3D&, const LocalTransform&>().each([&](Entity, const Vehicle3D& v, const LocalTransform& t) {
+        if (std::fabs(v.speed) < kRunDownSpeed || movers.size() >= kMaxCars) return;
+        const vec3 fwd = math::rotate(t.rotation, vec3{0.0f, 0.0f, -1.0f});
+        const f32 len = std::sqrt(fwd.x * fwd.x + fwd.z * fwd.z);
+        if (len < 1e-3f) return;
+        const f32 sign = v.speed < 0.0f ? -1.0f : 1.0f;
+        movers.push_back(Mover{t.position, vec3{sign * fwd.x / len, 0.0f, sign * fwd.z / len}, std::fabs(v.speed)});
+    });
 
     // The spawners, with the network each walks on.
     Array<Info> infos;
@@ -694,16 +726,31 @@ void kit_crowd(Frame& f) {
         Fear* fear = nullptr;
         for (Fear& fr : st.fears)
             if (fr.ped == e) fear = &fr;
-        for (const WeaponFired3D& sh : shots) {  // a shot nearby: run from the muzzle (the last close one wins)
-            const f32 dx = t.position.x - sh.origin.x, dz = t.position.z - sh.origin.z;
+        for (const vec3& origin : sources) {  // a shot or a crash nearby: run from it (the last close one wins)
+            const f32 dx = t.position.x - origin.x, dz = t.position.z - origin.z;
             if (dx * dx + dz * dz > kPedestrianFearRadius * kPedestrianFearRadius) continue;
             if (!fear) {
                 if (st.fears.size() >= kMaxFears) break;
-                st.fears.push_back(Fear{e, sh.origin, t.position, kPedestrianFleeSeconds});
+                st.fears.push_back(Fear{e, origin, t.position, kPedestrianFleeSeconds});
                 fear = &st.fears.back();
             }
-            fear->threat = sh.origin;
+            fear->threat = origin;
             fear->left = kPedestrianFleeSeconds;
+        }
+        for (const Mover& m : movers) {  // a vehicle bearing down on it: jump clear (run from where the vehicle is)
+            const f32 rx = t.position.x - m.pos.x, rz = t.position.z - m.pos.z;
+            const f32 along = rx * m.dir.x + rz * m.dir.z;
+            const f32 across = std::fabs(rx * m.dir.z - rz * m.dir.x);
+            if (along <= 0.0f || along > m.speed * kRunDownTime + 3.0f || across > kRunDownWidth) continue;
+            if (!fear) {
+                if (st.fears.size() >= kMaxFears) break;
+                st.fears.push_back(Fear{e, m.pos, t.position, kRunDownFlee});
+                fear = &st.fears.back();
+            } else if (fear->left < kRunDownFlee) {
+                fear->threat = m.pos;
+                fear->left = kRunDownFlee;
+            }
+            break;
         }
         if (!fear && !scared)  // a neighbour is running: so do I (the shot's or the attacker's side)
             for (const Fear& sp : spreaders) {
@@ -863,8 +910,9 @@ void install_crowd(World& world, asset::AssetSystem* assets) {
         st->assets = assets;
         return;
     }
-    world.register_components<Pedestrian3D, CrowdSpawner3D, LocalTransform, Camera3DComponent>();
+    world.register_components<Pedestrian3D, CrowdSpawner3D, LocalTransform, Camera3DComponent, Vehicle3D>();
     world.register_event<WeaponFired3D>(Phase::FixedUpdate_Pre);  // the combat kit's; registering twice is a no-op
+    world.register_event<ContactBegin3D>(Phase::FixedUpdate_Physics);  // the bodies kit's, likewise
     CrowdState st;
     st.assets = assets;
     world.set_resource(static_cast<CrowdState&&>(st));

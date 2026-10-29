@@ -22,6 +22,21 @@ mce_add_library(mce_editor_core UMBRELLA
         src/selection_sets.cpp
         src/hierarchy_filter.cpp
         src/batch_rename.cpp
+        src/select_related.cpp
+        src/select_all.cpp
+        src/group_entities.cpp
+        src/entity_path.cpp
+        src/unique_names.cpp
+        src/align_entities.cpp
+        src/reset_transform.cpp
+        src/flip_entities.cpp
+        src/snap_entities.cpp
+        src/duplicate_offset.cpp
+        src/match_transform.cpp
+        src/scene_diff.cpp
+        src/scene_lint.cpp
+        src/scene_stats.cpp
+        src/scene_find.cpp
         src/recent_list.cpp
         src/mixer_model.cpp
         src/source_doc.cpp

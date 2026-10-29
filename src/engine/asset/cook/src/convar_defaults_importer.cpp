@@ -55,13 +55,7 @@ public:
             error(diags, file, fmt.valid() ? fmt : doc, "\"format\" must be \"mce-defaults\"");
             return false;
         }
-        const JsonValue ver = doc.get("version");
-        if (!ver.is_integer() || ver.as_number() != kDefaultsFormatVersion) {
-            String msg;
-            appendf(msg, "unsupported convar defaults version (this cook reads version %u)", kDefaultsFormatVersion);
-            detail::error_at(diags, Errc::VersionTooNew, file, ver.valid() ? ver : doc, kStage, msg);
-            return false;
-        }
+        if (!detail::check_format_version(doc, kDefaultsFormatVersion, "convar defaults", file, kStage, diags)) return false;
         const JsonValue convars = doc.get("convars");
         if (convars.valid() && !convars.is_object()) {
             error(diags, file, convars, "'convars' must be an object of name: value");

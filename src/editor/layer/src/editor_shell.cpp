@@ -9,12 +9,23 @@
 #include "imgui_renderer.h"
 #include "mce/convar.h"
 #include "mce/cook/fs.h"
+#include "mce/editor/align_entities.h"
 #include "mce/editor/batch_rename.h"
 #include "mce/editor/camera_bookmarks.h"
+#include "mce/editor/duplicate_offset.h"
+#include "mce/editor/entity_path.h"
+#include "mce/editor/flip_entities.h"
+#include "mce/editor/group_entities.h"
+#include "mce/editor/match_transform.h"
 #include "mce/editor/quick_open.h"
 #include "mce/editor/recent_list.h"
+#include "mce/editor/reset_transform.h"
+#include "mce/editor/select_all.h"
+#include "mce/editor/select_related.h"
+#include "mce/editor/snap_entities.h"
 #include "mce/editor/selection_history.h"
 #include "mce/editor/selection_sets.h"
+#include "mce/editor/unique_names.h"
 #include "mce/log.h"
 #include "mce/platform/library.h"
 #include "mce/platform/platform.h"
@@ -50,6 +61,102 @@ struct EditorShell::Impl {
 };
 
 namespace {
+
+// Edit > Align: lines the selection up on `axis` (`distribute`: spaces it evenly instead).
+void align_selection(EditorScene& scene, AlignAxis axis, AlignMode mode, bool distribute = false) {
+    Array<EntityId> ids;  // a copy: the edits below touch the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    if (distribute)
+        distribute_entities(scene, ids.span(), axis);
+    else
+        align_entities(scene, ids.span(), axis, mode);
+}
+
+// Edit > Make names unique: numbers the duplicates among the selection, or among every entity when nothing is selected.
+void unique_names_in(EditorScene& scene) {
+    Array<EntityId> ids;
+    if (scene.selection().empty())
+        ids = select_all(scene);
+    else
+        for (EntityId id : scene.selection().items()) ids.push_back(id);
+    make_names_unique(scene, ids.span());
+}
+
+// Edit > Flip: mirrors the selection across its middle on `axis`.
+void flip_selection(EditorScene& scene, AlignAxis axis) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    flip_entities(scene, ids.span(), axis);
+}
+
+// Edit > Snap to grid: the selection's world X and Y go to multiples of the snap step.
+void snap_selection(EditorScene& scene, f32 step) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    snap_entities(scene, ids.span(), step);
+}
+
+// Edit > Duplicate right / up: duplicates the selection and steps the copies by `dx`, `dy` (the copies are selected).
+void duplicate_stepped(EditorScene& scene, f32 dx, f32 dy) {
+    Array<EntityId> ids;  // a copy: the edit below changes the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    duplicate_offset(scene, ids.span(), dx, dy);
+}
+
+// Edit > Match to anchor: `part` of the first selected entity goes onto the rest of the selection.
+void match_selection(EditorScene& scene, MatchPart part) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    match_transforms(scene, ids.span(), scene.selection().anchor(), part);
+}
+
+// Edit > Reset transform: the selection's local transforms go back to the identity.
+void reset_selection_transforms(EditorScene& scene) {
+    Array<EntityId> ids;  // a copy: the edit below touches the scene
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    reset_transforms(scene, ids.span());
+}
+
+// Edit > Copy path: the hierarchy paths of the selection (Room/Wall/Torch), one per line, on the clipboard.
+void copy_selection_paths(const EditorScene& scene) {
+    const cook::String text = entity_paths(scene, scene.selection().items());
+    if (!text.empty()) ImGui::SetClipboardText(text.c_str());
+}
+
+// Ctrl+G: the selection moves under a new Group, which becomes the selection. Ctrl+Shift+G: the selected parents
+// dissolve and their children are selected.
+void group_selection(EditorScene& scene) {
+    if (scene.selection().empty()) return;
+    Array<EntityId> ids;  // a copy: the edits below change the selection
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const EntityId g = group_entities(scene, ids.span());
+    if (g != kNoEntity) scene.selection().set(g);
+}
+
+void ungroup_selection(EditorScene& scene) {
+    Array<EntityId> ids;
+    for (EntityId id : scene.selection().items()) ids.push_back(id);
+    const Array<EntityId> freed = ungroup_entities(scene, ids.span());
+    if (freed.empty()) return;
+    scene.selection().set(freed[0]);
+    for (usize i = 1; i < freed.size(); ++i) scene.selection().toggle(freed[i]);
+}
+
+// Replaces the selection with the entities `relation` names around it; nothing related leaves it alone.
+void select_around(EditorScene& scene, Relation relation) {
+    const Array<EntityId> ids = select_related(scene, scene.selection().items(), relation);
+    if (ids.empty()) return;
+    scene.selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene.selection().toggle(ids[i]);
+}
+
+// Replaces the selection with `ids` (the first becomes the anchor); an empty list clears it.
+void select_ids(EditorScene& scene, const Array<EntityId>& ids) {
+    scene.selection().clear();
+    if (ids.empty()) return;
+    scene.selection().set(ids[0]);
+    for (usize i = 1; i < ids.size(); ++i) scene.selection().toggle(ids[i]);
+}
 
 MCE_CVAR(cv_autosave_interval, "editor.autosave_interval", 300.0f,
          "Seconds of unsaved changes before the editor autosaves (0 = only on focus loss)", CVarFlags::None);
@@ -527,6 +634,14 @@ void EditorShell::handle_shortcuts() {
         scene().redo();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_LeftArrow)) selection_back();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_RightArrow)) selection_forward();
+    // Ctrl+A selects every entity, Ctrl+I the ones that are not selected now.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) select_ids(scene(), select_all(scene()));
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_I)) select_ids(scene(), invert_selection(scene()));
+    // Alt+Up selects the parents, Alt+Down the children, Alt+Shift+Down everything below.
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_UpArrow)) select_around(scene(), Relation::Parent);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiKey_DownArrow)) select_around(scene(), Relation::Children);
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Alt | ImGuiMod_Shift | ImGuiKey_DownArrow))
+        select_around(scene(), Relation::Descendants);
     // Selection sets: Ctrl+Shift+number stores the selection, Alt+number selects it again.
     for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
         const ImGuiKey key = static_cast<ImGuiKey>(ImGuiKey_1 + static_cast<int>(i));
@@ -539,6 +654,8 @@ void EditorShell::handle_shortcuts() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_X)) cut_selection();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) paste();
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_D)) duplicate_selection();
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_G)) group_selection(scene());
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_G)) ungroup_selection(scene());
     // Camera bookmarks: Ctrl+1..9 stores the viewport's view, 1..9 flies back to it.
     if (viewport_.focused) {
         for (u32 i = 0; i < CameraBookmarks::kSlots; ++i) {
@@ -1100,6 +1217,35 @@ void EditorShell::draw_menu_bar() {
         if (ImGui::MenuItem("Next selection", "Alt+Right", false, impl_->sel_history.can_forward()))
             selection_forward();
         if (ImGui::MenuItem("Rename selection...", nullptr, false, sel)) popup_ = Popup::BatchRename;
+        if (ImGui::MenuItem("Make names unique")) unique_names_in(scene());
+        if (ImGui::BeginMenu("Align", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Left")) align_selection(scene(), AlignAxis::X, AlignMode::Min);
+            if (ImGui::MenuItem("Center horizontally")) align_selection(scene(), AlignAxis::X, AlignMode::Center);
+            if (ImGui::MenuItem("Right")) align_selection(scene(), AlignAxis::X, AlignMode::Max);
+            if (ImGui::MenuItem("Bottom")) align_selection(scene(), AlignAxis::Y, AlignMode::Min);
+            if (ImGui::MenuItem("Center vertically")) align_selection(scene(), AlignAxis::Y, AlignMode::Center);
+            if (ImGui::MenuItem("Top")) align_selection(scene(), AlignAxis::Y, AlignMode::Max);
+            ImGui::Separator();
+            const bool three = scene().selection().items().size() >= 3;
+            if (ImGui::MenuItem("Distribute horizontally", nullptr, false, three))
+                align_selection(scene(), AlignAxis::X, AlignMode::Min, true);
+            if (ImGui::MenuItem("Distribute vertically", nullptr, false, three))
+                align_selection(scene(), AlignAxis::Y, AlignMode::Min, true);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Select")) {
+            if (ImGui::MenuItem("All", "Ctrl+A")) select_ids(scene(), select_all(scene()));
+            if (ImGui::MenuItem("Invert", "Ctrl+I")) select_ids(scene(), invert_selection(scene()));
+            ImGui::Separator();
+            ImGui::BeginDisabled(!sel);
+            if (ImGui::MenuItem("Parent", "Alt+Up")) select_around(scene(), Relation::Parent);
+            if (ImGui::MenuItem("Children", "Alt+Down")) select_around(scene(), Relation::Children);
+            if (ImGui::MenuItem("All descendants", "Alt+Shift+Down")) select_around(scene(), Relation::Descendants);
+            if (ImGui::MenuItem("Siblings")) select_around(scene(), Relation::Siblings);
+            if (ImGui::MenuItem("Similar")) select_ids(scene(), select_similar(scene()));
+            ImGui::EndDisabled();
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("Selection sets")) {
             for (u32 i = 0; i < SelectionSets::kSlots; ++i) {
                 FixedString<32> label;
@@ -1116,8 +1262,23 @@ void EditorShell::draw_menu_bar() {
         ImGui::Separator();
         if (ImGui::MenuItem("Cut", "Ctrl+X", false, sel)) cut_selection();
         if (ImGui::MenuItem("Copy", "Ctrl+C", false, sel)) copy_selection();
+        if (ImGui::MenuItem("Copy path", nullptr, false, sel)) copy_selection_paths(scene());
+        if (ImGui::MenuItem("Flip horizontally", nullptr, false, sel)) flip_selection(scene(), AlignAxis::X);
+        if (ImGui::MenuItem("Flip vertically", nullptr, false, sel)) flip_selection(scene(), AlignAxis::Y);
+        if (ImGui::BeginMenu("Match to anchor", scene().selection().items().size() >= 2)) {
+            if (ImGui::MenuItem("Position")) match_selection(scene(), MatchPart::Position);
+            if (ImGui::MenuItem("Rotation")) match_selection(scene(), MatchPart::Rotation);
+            if (ImGui::MenuItem("Scale")) match_selection(scene(), MatchPart::Scale);
+            ImGui::EndMenu();
+        }
+        if (ImGui::MenuItem("Snap to grid", nullptr, false, sel)) snap_selection(scene(), view_.snap_step);
+        if (ImGui::MenuItem("Reset transform", nullptr, false, sel)) reset_selection_transforms(scene());
         if (ImGui::MenuItem("Paste", "Ctrl+V")) paste();
         if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, sel)) duplicate_selection();
+        if (ImGui::MenuItem("Duplicate right", nullptr, false, sel)) duplicate_stepped(scene(), view_.snap_step, 0.0f);
+        if (ImGui::MenuItem("Duplicate up", nullptr, false, sel)) duplicate_stepped(scene(), 0.0f, view_.snap_step);
+        if (ImGui::MenuItem("Group", "Ctrl+G", false, sel)) group_selection(scene());
+        if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G", false, sel)) ungroup_selection(scene());
         ImGui::Separator();
         if (ImGui::MenuItem("Move tool", "W", view_.gizmo == GizmoMode::Move)) view_.gizmo = GizmoMode::Move;
         if (ImGui::MenuItem("Rotate tool", "E", view_.gizmo == GizmoMode::Rotate)) view_.gizmo = GizmoMode::Rotate;

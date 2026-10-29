@@ -72,6 +72,19 @@ TEST_CASE("tilemap: the document round-trips; set and fill clip to the map and t
     CHECK(diags.error_count() > 0);
 }
 
+TEST_CASE("tilemap: a tile size that does not fit a float keeps the default and the file reads back") {
+    TilemapDocument d;
+    cook::DiagList diags;
+    REQUIRE(d.parse(R"({ "format": "mce-tilemap", "columns": 1, "rows": 1, "width": 2, "height": 1, "tile_size": 1e300 })", "big.mctilemap", diags));
+    CHECK(d.tile_size == 1.0f);
+    REQUIRE(d.parse(R"({ "format": "mce-tilemap", "columns": 1, "rows": 1, "width": 2, "height": 1, "tile_size": 1e-300 })", "tiny.mctilemap", diags));
+    CHECK(d.tile_size == 1.0f);
+    cook::String text;
+    d.serialize(text);
+    TilemapDocument back;
+    CHECK(back.parse(text.view(), "back.mctilemap", diags));
+}
+
 TEST_CASE("tilemap: create, paint, fill -> saved and re-baked in the live mount; strokes undo and redo") {
     EditorSession session;
     open_demo(session, "tilemap_paint");

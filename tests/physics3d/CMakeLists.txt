@@ -13,6 +13,7 @@ mce_add_test(test_physics3d
         test_joints.cpp
         test_ragdolls.cpp
         test_vehicles.cpp
+        test_contacts.cpp
     DEPS
         mce::mce_physics3d
         mce::mce_physics2d)

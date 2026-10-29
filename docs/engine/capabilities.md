@@ -88,6 +88,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample |
 | `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |
@@ -114,6 +115,9 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/10_missions/assets/scenes/missions.mcscene |
+| `MissionMarker` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker |
+| `MissionWantedFail` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
+| `MissionRetry` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONRETRY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
 | `Moon` | `mce/kit/moon.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `NavMeshSurface3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `NavArea3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
@@ -153,6 +157,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TrafficDriver3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TrafficSpawner3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `UiFlowRules` | `mce/kit/ui_flow.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | allowed: tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR |
+| `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/08_movement/assets/scenes/race.mcscene |
 | `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/race.mcscene |
@@ -162,6 +167,18 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `UiScreenView` | `mce/kit/views.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: wired in the stock player and tested in tests/kit; a per-player HUD needs art, 09_coop has none |
 | `Wanted3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Police3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `RespawnPoint3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; the city sample places a hospital and a station |
+| `Respawn3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WASTED: tested in tests/kit/test_wanted3d.cpp; a sample player with a hospital and station comes with the city sample |
+| `Wallet3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the player |
+| `CashDrop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing |
+| `MissionReward3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity |
+| `CarOwner3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars |
+| `PaySpray3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage |
+| `AmmoShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter |
+| `HealShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic |
+| `CashPickup3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts it on dropped or placed cash |
+| `ChopShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-CHOPSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a scrapyard entity |
+| `Confiscate3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-ARRESTLOSS: tested in tests/kit/test_wanted3d.cpp; a game puts it on the player beside Respawn3D |
 | `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/13_water/assets/scenes/water.mcscene |
 | `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
@@ -178,6 +195,10 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Collider2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterController2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/03_platformer/game/platformer.cpp |
 | `CharacterGround2D` | `mce/physics/components.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
+| `LaunchVelocity2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `Impulse2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `ConstantForce2D` | `mce/physics/force2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body |
+| `Joint2D` | `mce/physics/joint2d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/physics2d_headless/main.cpp |
 | `SceneChunk` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 | `StreamingFocus` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `FloatingOrigin3D` | `mce/scene/streaming.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: tested in tests/scene/test_streaming.cpp and tests/kit/test_origin3d.cpp; the M-OPENWORLD city sample (A4) shows it |
@@ -294,6 +315,13 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `task_update` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_switch` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `scene_documents` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_diff` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint_fix` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_lint_all` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_stats` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `scene_find` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
+| `asset_used_by` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `report_friction` | `tools_agent.cpp` | docs/user-guide/14-mcp-ai-workflow.md |
 | `bt_create` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |
 | `bt_add_node` | `tools_bt.cpp` | docs/user-guide/13-sequences-fsm-saves.md |

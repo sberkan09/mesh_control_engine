@@ -1,0 +1,1 @@
+- Editor, M-COPYPATH: Edit > Copy path puts the hierarchy path of each selected entity (Room/Wall/Torch) on the clipboard.
