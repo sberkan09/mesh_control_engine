@@ -174,8 +174,8 @@ walkers and shots hit them. The crowd then stands the walker on it: the entity's
 `radius + half_height` above the pavement), so hang the model that far below (a 1.8 m capsule, model at y = -0.9). The
 crowd drives the body by velocity, aimed at each step's pose so it arrives by the walker's next step: contacts see a real
 walking speed, and mid and far walkers, which step every 4th or 16th tick, glide between steps instead of jumping. A
-walker turns round when a dynamic body (a parked car, a crate) stands where it is going, instead of shoving it aside; one
-that starts inside such a body walks out. Dead walkers' bodies stop, despawned walkers' bodies go, and a walker moved from
+walker turns round when a dynamic body (a parked car, a crate) stands where it is going or in the way there, instead of
+shoving it aside; on a crossing it walks back to the kerb it left. One that starts inside such a body walks out. Dead walkers' bodies stop, despawned walkers' bodies go, and a walker moved from
 outside (a script, the editor, a loaded save) is put back on its pavement, body and all.
 
 **At junctions** a pedestrian goes round the corner, across a road or turns back, chosen by its own random stream. A
