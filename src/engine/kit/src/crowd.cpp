@@ -1,6 +1,7 @@
 #include "mce/kit/crowd.h"
 
 #include <cmath>
+#include <optional>
 
 #include "mce/asset/asset_system.h"
 #include "mce/ecs/prefab.h"
@@ -592,7 +593,45 @@ bool path_blocked(const Physics3D& phys, Entity e, const RigidBody3D& b, f32 lif
         }
         return false;
     };
-    return dynamic_at(to) && !dynamic_at(from);
+    if (dynamic_at(from)) return false;
+    if (dynamic_at(to)) return true;
+    // The way there, swept: a far walker's step (16 ticks, up to about 1 m when fleeing) can be longer than a thin body
+    // is deep. A sphere low, at the middle and high on the body; the first hit only counts when it is dynamic.
+    const vec3 d = to - from;
+    if (math::length(d) < 1e-3f) return false;
+    physics::QueryFilter3D filter;
+    filter.exclude = Span<const Entity>(&e, 1);
+    const f32 rise = math::max(lift - r, 0.0f);
+    for (const f32 dy : {-rise, 0.0f, rise}) {
+        const vec3 off{0.0f, dy, 0.0f};
+        if (std::optional<physics::ShapeHit3D> hit = phys.world.shape_cast(r, from + off, to + off, filter)) {
+            physics::BodyState3D s;
+            if (phys.world.body_state(hit->entity, s) && s.type == physics::BodyType3D::Dynamic) return true;
+        }
+    }
+    return false;
+}
+
+// A walker that meets something solid turns round: on an edge it walks back the way it came; on a hop across a
+// junction it walks the hop back to the end it left (waiting there for good is how a car parked on a crossing held it).
+void turn_round(Pedestrian3D& p, const Graph& g) {
+    p.yaw += p.yaw > 0.0f ? -kPi : kPi;
+    if (p.target == kNone) {
+        p.dir ^= 1u;
+        return;
+    }
+    const u32 from = p.edge * 2 + (p.dir ? 1u : 0u);
+    for (u32 h = g.hop_start[p.target]; h < g.hop_start[p.target + 1]; ++h) {
+        if (g.hops[h].to != from) continue;
+        const u32 back = p.target;
+        p.edge = back >> 1;
+        p.dir = static_cast<u8>(back & 1u);
+        p.s = (back & 1u) ? g.edges[p.edge].length : 0.0f;
+        p.target = from;
+        p.hop = math::clamp(1.0f - p.hop, 0.0f, 1.0f);
+        if (p.mode == PedestrianMode::Wait) p.mode = PedestrianMode::Cross;  // already on the road: no light to wait for
+        return;
+    }
 }
 
 struct WalkerBody {
@@ -917,10 +956,7 @@ void kit_crowd(Frame& f) {
                     p = before;
                     p.pace = 0.0f;
                     p.lag = 0.0f;
-                    if (p.target == kNone) {
-                        p.dir ^= 1u;
-                        p.yaw += p.yaw > 0.0f ? -kPi : kPi;
-                    }
+                    turn_round(p, *c.graph);
                     t = was;
                 } else {
                     body.drive(t, p.yaw, lod_period(lod), f.dt);
