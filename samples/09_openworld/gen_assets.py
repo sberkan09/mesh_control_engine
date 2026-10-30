@@ -5,8 +5,9 @@ A 1 km x 1 km city slice (M-OPENWORLD E1): a 5 x 5 junction grid, 250 m apart, w
 (two lanes each way) crossing at the middle and one lane each way elsewhere, traffic lights at the
 nine inner junctions, blocks of boxes for buildings and parks, a player on foot with a gun and a
 parked car to take, a few police, traffic and a pedestrian crowd that gather around the player.
-Cars, characters and buildings are CC0 Kenney models (`mce content add`, see CREDITS.md); road, ground and trees are
-tinted boxes of one unit cube, so the rest of the sample stays self-contained.
+Cars, characters and buildings are CC0 Kenney models (`mce content add`, see CREDITS.md). Road, kerb, ground and park surfaces
+are textured slabs with road paint (E7: textures from tools/gen_textures.py, meshes written here); trees, lamp posts, benches,
+hydrants and bins are Blender models (blender/gen_models.py); the unit cube is left for the pads and the lamp heads.
 """
 import json
 import math
@@ -25,6 +26,7 @@ def guid(name):
 
 G_BOX = guid("models/box.glb")
 TP = "third_party/"
+PROPS = ["tree_oak", "tree_pine", "bush", "lamp_post", "hydrant", "bench", "bin"]
 CAR_MODELS = ["sedan", "sedan-sports", "taxi", "suv", "delivery", "police"]
 CHARACTERS = ["character-a", "character-b", "character-c", "character-d", "character-e", "character-f"]
 DOWNTOWN_MODELS = [("building-m", 3.15), ("building-n", 2.48), ("building-l", 2.27), ("building-skyscraper-a", 2.88),
@@ -37,6 +39,8 @@ KIT = {"sedan": "kenney-car-kit", "sedan-sports": "kenney-car-kit", "taxi": "ken
 
 def model_rel(name):
     """Imported (mce content add) model path, relative to assets/."""
+    if name in PROPS:
+        return "models/props/%s.glb" % name
     if name in KIT:
         pack = KIT[name]
     elif name.startswith("character"):
@@ -132,7 +136,7 @@ def models():
     write_bytes("models/box.glb", box_glb())
     write("models/box.glb.mceasset", {"guid": G_BOX, "importer": "gltf", "importer_version": 3, "settings": {}})
     # The Kenney models come from `mce content add` (CC0, see CREDITS.md); only their sidecars are written here.
-    names = set(CAR_MODELS) | set(CHARACTERS) | {n for n, _ in DOWNTOWN_MODELS + SUBURB_MODELS + RESIDENTIAL_MODELS}
+    names = set(CAR_MODELS) | set(CHARACTERS) | set(PROPS) | {n for n, _ in DOWNTOWN_MODELS + SUBURB_MODELS + RESIDENTIAL_MODELS}
     for n in sorted(names):
         write(model_rel(n) + ".mceasset", {"guid": model_guid(n), "importer": "gltf", "importer_version": 3, "settings": {}})
 
@@ -251,8 +255,9 @@ AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vo
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
 HITS = ["hit_%d" % i for i in range(1, 6)]
 CRASHES = ["crash_%d" % i for i in range(1, 4)]
+THUNDER = ["thunder"]
 AUDIO_EXT = {name: ext for name, (ext, _) in AUDIO_FILES.items()}
-AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS + HITS + CRASHES})
+AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS + HITS + CRASHES + THUNDER})
 
 
 def audio_guid(name):
@@ -269,7 +274,7 @@ G_CRASHES = guid("audio/crashes.mcsound")
 def audio_assets():
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
-    for name in FOOTSTEPS + HITS + CRASHES:
+    for name in FOOTSTEPS + HITS + CRASHES + THUNDER:
         write("audio/%s.ogg.mceasset" % name, {"guid": audio_guid(name), "importer": "ogg", "importer_version": 2, "settings": {}})
     write("audio/footsteps.mcsound", {"format": "mce-sound", "version": 1, "guid": G_FOOTSTEPS,
                                       "clips": ["guid:" + audio_guid(n) for n in FOOTSTEPS], "pick": "random", "no_repeat": True,
@@ -354,45 +359,240 @@ GRASS = (0.20, 0.34, 0.14)
 PARK = (0.16, 0.38, 0.17)
 
 
+# --- the look (M-OPENWORLD E7): textured surfaces, road paint, street furniture ------------------------------
+# tools/gen_textures.py writes assets/textures/*.jpg; the sidecars, the four surface materials, the slab and paint meshes
+# (boxes with UVs in metres, so one texture tile covers `uv` metres whatever the slab size) are written here. The Blender props
+# (blender/gen_models.py) come in through the PROPS list.
+
+SURFACES = {"asphalt": (4.0, [1.0, 1.0, 1.0, 1.0], 0.92), "paving": (2.4, [1.0, 0.98, 0.94, 1.0], 0.85),
+            "grass": (8.0, [0.85, 0.9, 0.8, 1.0], 0.95), "concrete": (4.0, [1.0, 1.0, 1.0, 1.0], 0.9)}
+PAINT = {"marking_white": [0.92, 0.92, 0.88, 1.0], "marking_yellow": [0.95, 0.74, 0.12, 1.0]}
+G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + list(PAINT)}
+PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
+ROAD_TOP = 0.14
+SIDEWALK_TOP = 0.2
+
+
+def surface_assets():
+    for name, (uv, tint, rough) in SURFACES.items():
+        textures = {}
+        for kind in ("color", "normal"):
+            rel = "textures/%s_%s.jpg" % (name, kind)
+            write(rel + ".mceasset", {"guid": guid(rel), "importer": "texture", "importer_version": 1,
+                                      "settings": {"srgb": False} if kind == "normal" else {}})
+            textures["base_color" if kind == "color" else "normal"] = "guid:" + guid(rel)
+        write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": tint,
+                                            "metallic": 0.0, "roughness": rough, "emissive": [0, 0, 0], "alpha_mode": "opaque",
+                                            "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": textures})
+    for name, color in PAINT.items():
+        write("materials/%s.mcmat" % name, {"format": "mce-material", "version": 1, "guid": G_MAT[name], "name": name, "base_color": color,
+                                            "metallic": 0.0, "roughness": 0.6, "emissive": [0, 0, 0], "alpha_mode": "opaque",
+                                            "alpha_cutoff": 0.5, "double_sided": False, "unlit": False, "textures": {}})
+
+
+FACES = [  # normal, four corners (counter-clockwise seen from outside)
+    ((1, 0, 0), [(1, -1, 1), (1, -1, -1), (1, 1, -1), (1, 1, 1)]),
+    ((-1, 0, 0), [(-1, -1, -1), (-1, -1, 1), (-1, 1, 1), (-1, 1, -1)]),
+    ((0, 1, 0), [(-1, 1, 1), (1, 1, 1), (1, 1, -1), (-1, 1, -1)]),
+    ((0, -1, 0), [(-1, -1, -1), (1, -1, -1), (1, -1, 1), (-1, -1, 1)]),
+    ((0, 0, 1), [(-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]),
+    ((0, 0, -1), [(1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)]),
+]
+
+
+def boxes_glb(boxes, uv_m):
+    """One glTF mesh of axis-aligned boxes (cx, cy, cz, sx, sy, sz); UVs are world metres / uv_m (0 when uv_m is None)."""
+    pos, nrm, uvs, idx = [], [], [], []
+    for cx, cy, cz, sx, sy, sz in boxes:
+        for n, corners in FACES:
+            base = len(pos)
+            for c in corners:
+                p = (cx + 0.5 * c[0] * sx, cy + 0.5 * c[1] * sy, cz + 0.5 * c[2] * sz)
+                pos.append(p)
+                nrm.append(n)
+                if uv_m is None:
+                    uvs.append((0.0, 0.0))
+                elif n[1]:
+                    uvs.append((p[0] / uv_m, p[2] / uv_m))
+                elif n[0]:
+                    uvs.append((p[2] / uv_m, -p[1] / uv_m))
+                else:
+                    uvs.append((p[0] / uv_m, -p[1] / uv_m))
+            idx += [base, base + 1, base + 2, base, base + 2, base + 3]
+    pb = b"".join(struct.pack("<3f", *p) for p in pos)
+    nb = b"".join(struct.pack("<3f", *p) for p in nrm)
+    ub = b"".join(struct.pack("<2f", *p) for p in uvs)
+    ib = b"".join(struct.pack("<I", i) for i in idx)
+    blob = pb + nb + ub + ib
+    lo = [min(p[k] for p in pos) for k in range(3)]
+    hi = [max(p[k] for p in pos) for k in range(3)]
+    doc = {
+        "asset": {"version": "2.0", "generator": "09_openworld gen_assets"}, "scene": 0,
+        "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "name": "surface"}],
+        "meshes": [{"name": "surface", "primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3, "material": 0}]}],
+        "materials": [{"name": "surface", "pbrMetallicRoughness": {"baseColorFactor": [1, 1, 1, 1], "metallicFactor": 0, "roughnessFactor": 0.9}}],
+        "buffers": [{"byteLength": len(blob)}],
+        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(pb), "target": 34962},
+                        {"buffer": 0, "byteOffset": len(pb), "byteLength": len(nb), "target": 34962},
+                        {"buffer": 0, "byteOffset": len(pb) + len(nb), "byteLength": len(ub), "target": 34962},
+                        {"buffer": 0, "byteOffset": len(pb) + len(nb) + len(ub), "byteLength": len(ib), "target": 34963}],
+        "accessors": [{"bufferView": 0, "componentType": 5126, "count": len(pos), "type": "VEC3", "min": lo, "max": hi},
+                      {"bufferView": 1, "componentType": 5126, "count": len(pos), "type": "VEC3"},
+                      {"bufferView": 2, "componentType": 5126, "count": len(pos), "type": "VEC2"},
+                      {"bufferView": 3, "componentType": 5125, "count": len(idx), "type": "SCALAR"}],
+    }
+    js = json.dumps(doc, separators=(",", ":")).encode()
+    js += b" " * (-len(js) % 4)
+    blob += b"\0" * (-len(blob) % 4)
+    total = 12 + 8 + len(js) + 8 + len(blob)
+    return (struct.pack("<4sII", b"glTF", 2, total) + struct.pack("<I4s", len(js), b"JSON") + js
+            + struct.pack("<I4s", len(blob), b"BIN\0") + blob)
+
+
+WRITTEN = {}
+
+
+def surface_mesh(key, boxes, uv_m):
+    """The guid of the slab/paint mesh `key`, writing it (and its sidecar) the first time it is asked for."""
+    rel = "models/surface/%s.glb" % key
+    if rel not in WRITTEN:
+        write_bytes(rel, boxes_glb(boxes, uv_m))
+        write(rel + ".mceasset", {"guid": guid(rel), "importer": "gltf", "importer_version": 3, "settings": {}})
+        WRITTEN[rel] = guid(rel)
+    return WRITTEN[rel]
+
+
+def dims(*v):
+    return "_".join(("%.2f" % x).replace(".", "p") for x in v)
+
+
+def slab(sx, sy, sz, material):
+    """A MeshRef of a box of `sx` x `sy` x `sz` centred on the entity, textured with surface `material` at its tile size."""
+    g = surface_mesh("slab_%s_%s" % (material, dims(sx, sy, sz)), [(0, 0, 0, sx, sy, sz)], SURFACES[material][0])
+    return {"mesh": "guid:" + g, "material": "guid:" + G_MAT[material], "cast_shadows": 0}
+
+
+def paint(key, boxes, colour):
+    g = surface_mesh(key, boxes, None)
+    return {"mesh": "guid:" + g, "material": "guid:" + G_MAT[colour], "cast_shadows": 0}
+
+
+def dashes(x0, x1, z, width, on=3.0, off=6.0):
+    x = x0
+    while x + on <= x1 + 1e-6:
+        yield (x + on / 2, PAINT_H / 2, z, on, PAINT_H, width)
+        x += on + off
+
+
+def road_paint(L, h, ha, hb, avenue):
+    """The road paint of one x-road of length L (traffic drives on the right: +x on the +z side) between two junctions whose
+    pads are `ha` and `hb` wide (half-widths, the junction top reaches 1 m further): returns (white, yellow) box lists."""
+    white, yellow = [], []
+    xa, xb = -L / 2 + ha + 1, L / 2 - hb - 1          # the road meets the junction tops here
+    # crosswalks across the whole road at both ends (bars along the road, every 1.2 m), a stop line before each, on the lane that arrives
+    for end, x_in, sgn in (("a", xa, 1), ("b", xb, -1)):
+        zc = -h + 0.9
+        while zc <= h - 0.9 + 1e-6:
+            white.append((x_in + sgn * 2.0, PAINT_H / 2, zc, 3.0, PAINT_H, 0.6))
+            zc += 1.2
+        # the arriving lane is -z at end a (traffic heading -x) and +z at end b
+        z0, z1 = (-h + 0.2, -0.2) if end == "a" else (0.2, h - 0.2)
+        white.append((x_in + sgn * 4.3, PAINT_H / 2, (z0 + z1) / 2, 0.5, PAINT_H, z1 - z0))
+    x0, x1 = xa + 5.5, xb - 5.5
+    white.append(((x0 + x1) / 2, PAINT_H / 2, h - 0.3, x1 - x0, PAINT_H, 0.15))
+    white.append(((x0 + x1) / 2, PAINT_H / 2, -h + 0.3, x1 - x0, PAINT_H, 0.15))
+    if avenue:
+        for z in (-0.12, 0.12):
+            yellow.append(((x0 + x1) / 2, PAINT_H / 2, z, x1 - x0, PAINT_H, 0.12))
+        for z in (-LANE_W, LANE_W):
+            white.extend(dashes(x0, x1, z, 0.15))
+    else:
+        white.extend(dashes(x0, x1, 0.0, 0.15))
+    return white, yellow
+
+
 def city_surface(scene):
-    # Ground: one big slab, the physics floor for everything.
+    # Ground: a grass slab (the visual) over a collider slab (the physics floor for everything).
     half = GRID // 2 * SPACING + 60
     scene.add("Ground", {"LocalTransform": tf((0, -0.5, 0)), "BoxCollider3D": {"half": [half, 0.5, half], "friction": 1.0}})
-    scene.add("Ground mesh", {"LocalTransform": tf((0, -0.25, 0), (2 * half, 0.5, 2 * half)), "MeshRef": mesh(GRASS, 0)})
-    # Junction pads and the road strips on top of it; sidewalks beside the roads.
+    scene.add("Ground mesh", {"LocalTransform": tf((0, -0.25, 0)), "MeshRef": slab(2 * half, 0.5, 2 * half, "grass")})
     node_half = {}
     for r in road_list():
         for n in road_ends(r):
             node_half[n] = max(node_half.get(n, 0), road_half_width(r))
+    # Junctions: a paving pad (the corners) with an asphalt top over it.
     for (i, j), h in sorted(node_half.items()):
         x, z = node_pos(i, j)
         pad = 2 * (h + SIDEWALK) + 2
-        scene.add("Corner %d_%d" % (i, j), {"LocalTransform": tf((x, 0.05, z), (pad, 0.1, pad)), "MeshRef": mesh(KERB, 0)})
-        scene.add("Junction top %d_%d" % (i, j), {"LocalTransform": tf((x, 0.07, z), (2 * h + 2, 0.14, 2 * h + 2)),
-                                                  "MeshRef": mesh(ASPHALT, 0)})
+        scene.add("Corner %d_%d" % (i, j), {"LocalTransform": tf((x, 0.05, z)), "MeshRef": slab(pad, 0.1, pad, "paving")})
+        scene.add("Junction top %d_%d" % (i, j), {"LocalTransform": tf((x, ROAD_TOP / 2, z)),
+                                                  "MeshRef": slab(2 * h + 2, ROAD_TOP, 2 * h + 2, "asphalt")})
     for r in road_list():
         kind, i, j = r
         a, b = road_ends(r)
         (ax, az), (bx, bz) = node_pos(*a), node_pos(*b)
         h = road_half_width(r)
-        length = SPACING
-        cx, cz = (ax + bx) / 2, (az + bz) / 2
+        ha, hb = node_half[a], node_half[b]
         long_x = kind == "x"
-        scene.add("Road " + road_name(r), {"LocalTransform": tf((cx, 0.07, cz), (length if long_x else 2 * h, 0.14, 2 * h if long_x else length)),
-                                           "MeshRef": mesh(ASPHALT, 0)})
-        # A dashed centre line per 10 m would be 25 boxes a road; one thin strip reads as a double line.
-        scene.add("Line " + road_name(r), {"LocalTransform": tf((cx, 0.145, cz), (length - 2 * h if long_x else 0.25, 0.01,
-                                                                                 0.25 if long_x else length - 2 * h)),
-                                           "MeshRef": mesh((0.85, 0.75, 0.2), 0)})
+        yaw = None if long_x else -math.pi / 2       # a z-road is the x-road turned so that local +x runs towards node b
+        cx, cz = (ax + bx) / 2, (az + bz) / 2
+
+        def at(lx, ly, lz=0.0):
+            """World position of a point `lx` along the road from its middle (+x towards b), `lz` to its right, `ly` high."""
+            return (cx + lx, ly, cz + lz) if long_x else (cx - lz, ly, cz + lx)
+
+        # The asphalt runs from one junction top to the other.
+        xa, xb = -SPACING / 2 + ha + 1, SPACING / 2 - hb - 1
+        scene.add("Road " + road_name(r), {"LocalTransform": tf(at((xa + xb) / 2, ROAD_TOP / 2), yaw=yaw),
+                                           "MeshRef": slab(xb - xa, ROAD_TOP, 2 * h, "asphalt")})
+        white, yellow = road_paint(SPACING, h, ha, hb, is_avenue(r))
+        key = "paint_%s_%s" % (dims(h, ha, hb), "avenue" if is_avenue(r) else "street")
+        scene.add("Paint " + road_name(r), {"LocalTransform": tf(at(0, ROAD_TOP), yaw=yaw), "MeshRef": paint(key + "_white", white, "marking_white")})
+        if yellow:
+            scene.add("Paint yellow " + road_name(r), {"LocalTransform": tf(at(0, ROAD_TOP), yaw=yaw),
+                                                       "MeshRef": paint(key + "_yellow", yellow, "marking_yellow")})
+        trim = max(ha, hb)
+        span = SPACING - 2 * trim
         for side in (-1, 1):
             off = side * (h + SIDEWALK / 2)
-            trim = max(node_half[a], node_half[b])
-            span = length - 2 * trim - 0
             scene.add("Sidewalk %s %+d" % (road_name(r), side),
-                      {"LocalTransform": tf((cx + (0 if long_x else off), 0.1, cz + (off if long_x else 0)),
-                                            (span if long_x else SIDEWALK, 0.2, SIDEWALK if long_x else span)),
-                       "MeshRef": mesh(KERB, 0)})
+                      {"LocalTransform": tf(at(0, SIDEWALK_TOP / 2, off), yaw=yaw), "MeshRef": slab(span, SIDEWALK_TOP, SIDEWALK, "paving")})
     return node_half
+
+
+def street_furniture(scene, rng, node_half):
+    """Street trees along the outer edge of the sidewalks (no collider: the crowd walks there), a bench or two per road, a hydrant and a
+    bin at the two free corners of every junction."""
+    count = 0
+    for r in road_list():
+        kind, i, j = r
+        a, b = road_ends(r)
+        (ax, az), (bx, bz) = node_pos(*a), node_pos(*b)
+        h = road_half_width(r)
+        trim = max(node_half[a], node_half[b])
+        long_x = kind == "x"
+        cx, cz = (ax + bx) / 2, (az + bz) / 2
+        for side in (-1, 1):
+            lat = side * (h + SIDEWALK - 0.5)
+            lx = -SPACING / 2 + trim + 14 + rng.uniform(0, 6)
+            while lx < SPACING / 2 - trim - 14:
+                x, z = (cx + lx, cz + lat) if long_x else (cx - lat, cz + lx)
+                model = "tree_oak" if rng.random() < 0.65 else "tree_pine"
+                sc = rng.uniform(0.7, 0.95)
+                scene.add("Street tree %s %+d %d" % (road_name(r), side, count),
+                          {"LocalTransform": tf((x, SIDEWALK_TOP, z), (sc, sc, sc), rng.uniform(0, 2 * math.pi)), "MeshRef": model_mesh(model)})
+                count += 1
+                lx += rng.uniform(26, 34)
+            # a bench in the middle of the road's pavement, its back to the buildings, facing the road
+            yaw = (0.0 if side > 0 else math.pi) if long_x else (-math.pi / 2 if side > 0 else math.pi / 2)
+            bx_, bz_ = (cx + 10 * side, cz + lat) if long_x else (cx - lat, cz + 10 * side)
+            scene.add("Bench %s %+d" % (road_name(r), side), {"LocalTransform": tf((bx_, SIDEWALK_TOP, bz_), yaw=yaw), "MeshRef": model_mesh("bench")})
+    for (i, j), h in sorted(node_half.items()):
+        x, z = node_pos(i, j)
+        c = h + 2.3
+        scene.add("Hydrant %d_%d" % (i, j), {"LocalTransform": tf((x + c, 0.1, z - c), yaw=rng.uniform(0, 6.28)), "MeshRef": model_mesh("hydrant")})
+        scene.add("Bin %d_%d" % (i, j), {"LocalTransform": tf((x - c, 0.1, z + c), yaw=rng.uniform(0, 6.28)), "MeshRef": model_mesh("bin")})
+    return count
 
 
 def block_bounds(i, j):
@@ -422,12 +622,21 @@ def buildings(scene, rng):
                     cx, cz = x0 + (a + 0.5) * lw, z0 + (b + 0.5) * ld
                     name = "Lot %d_%d.%d_%d" % (i, j, a, b)
                     if rng.random() < (0.12 if downtown else 0.25):
-                        scene.add(name + " park", {"LocalTransform": tf((cx, 0.05, cz), (lw - 6, 0.1, ld - 6)), "MeshRef": mesh(PARK, 0)})
+                        scene.add(name + " park", {"LocalTransform": tf((cx, 0.05, cz)), "MeshRef": slab(lw - 6, 0.1, ld - 6, "grass")})
                         for t in range(3):
                             tx, tz = cx + rng.uniform(-lw / 3, lw / 3), cz + rng.uniform(-ld / 3, ld / 3)
-                            prop(scene, name + " tree trunk %d" % t, (tx, 1.5, tz), (0.6, 3.0, 0.6), (0.35, 0.24, 0.14), collider=True)
-                            scene.add(name + " crown %d" % t, {"LocalTransform": tf((tx, 4.6, tz), (3.4, 3.0, 3.4)),
-                                                              "MeshRef": mesh((0.12, 0.34, 0.12))})
+                            sc = rng.uniform(0.9, 1.35)
+                            model = "tree_oak" if rng.random() < 0.6 else "tree_pine"
+                            # The collider is the trunk; the Blender tree is a child that stands on the ground under it.
+                            e = scene.add(name + " tree %d" % t, {"LocalTransform": tf((tx, 1.5, tz)), "BoxCollider3D": {"half": [0.25, 1.5, 0.25]}})
+                            scene.add(name + " tree %d mesh" % t, {"ChildOf": {"parent": scene.ref(e)},
+                                                                   "LocalTransform": tf((0, -1.5, 0), (sc, sc, sc), rng.uniform(0, 6.28)),
+                                                                   "MeshRef": model_mesh(model)})
+                        for t in range(2):
+                            scene.add(name + " bush %d" % t, {"LocalTransform": tf((cx + rng.uniform(-lw / 3, lw / 3), 0.1, cz + rng.uniform(-ld / 3, ld / 3)),
+                                                                                    (1.2, 1.2, 1.2), rng.uniform(0, 6.28)),
+                                                              "MeshRef": model_mesh("bush")})
+                        scene.add(name + " bench", {"LocalTransform": tf((cx, 0.1, cz + ld / 2 - 5), yaw=math.pi), "MeshRef": model_mesh("bench")})
                         continue
                     w, d = (lw - 8) * rng.uniform(0.7, 1.0), (ld - 8) * rng.uniform(0.7, 1.0)
                     centre = math.hypot(cx, cz)
@@ -446,6 +655,12 @@ def buildings(scene, rng):
                     scene.add(name + " mesh", {"ChildOf": {"parent": scene.ref(e)},
                                                "LocalTransform": tf((0, -h / 2, 0), (w / 2, sy, d / 2)),
                                                "MeshRef": model_mesh(model)})
+                    # A tree (or a bush) in a free corner of the lot, outside the building's box.
+                    sx, sz = rng.choice((-1, 1)), rng.choice((-1, 1))
+                    tx, tz = cx + sx * (lw / 2 - 2.2), cz + sz * (ld / 2 - 2.2)
+                    sc = rng.uniform(0.9, 1.2)
+                    scene.add(name + " tree", {"LocalTransform": tf((tx, 0.0, tz), (sc, sc, sc), rng.uniform(0, 6.28)),
+                                               "MeshRef": model_mesh("tree_oak" if rng.random() < 0.6 else "tree_pine")})
                     count += 1
     return count
 
@@ -459,6 +674,13 @@ CAR_SCALE = 0.95
 CHAR_SCALE = 0.3   # Blocky Characters are about 6 units tall; the capsule is 1.8 m
 
 
+def headlights():
+    """One spot light on the nose of a car, lit with the street lamps (the car drives toward -z, the light looks along it and a little down)."""
+    return {"SpotLight3D": {"color": [1.0, 0.92, 0.75, 1], "offset": [0, 0.55, -1.9], "direction": [0, -0.14, -1], "intensity": 9, "radius": 34,
+                            "outer_deg": 34, "inner_deg": 16},
+            "TimedLight3D": {"on_hour": 18.5, "off_hour": 5.75, "fade_minutes": 20}}
+
+
 def car_entities(model, traffic):
     """A car: a RigidBody3D/Vehicle3D root and the Kenney model as its child."""
     root = {
@@ -468,6 +690,7 @@ def car_entities(model, traffic):
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
     root.update(engine_audio(traffic))
+    root.update(headlights())
     root["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
     root["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -10, "loud_db": 0}
     if traffic:
@@ -495,6 +718,7 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     }
     comps["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
     comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
+    comps.update(headlights())
     # The siren sits on the root: the audio bridge follows an entity's own LocalTransform, a child's is relative. It sounds from the
     # wanted level the car answers; its loud wail stands in for the engine.
     comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
@@ -549,13 +773,13 @@ def lamp_material():
                                    "double_sided": False, "unlit": False, "textures": {}})
 
 
-def atmosphere(s, net):
+def atmosphere(s, net, node_half):
     """A world clock with a day cycle, a physical sky with a moon and stars, a street lamp at two corners of every junction that
     lights at dusk, and a seeded weather schedule (rain, storm, fog, lightning) with its rain and wind beds and a night bed."""
     s.add("Clock", {"LocalTransform": {}, "WorldClock": {"hour": START_HOUR, "day_length_seconds": DAY_SECONDS}, "DayCycle": {}})
     s.add("Weather", {"LocalTransform": {}, "Weather": {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED},
                       "WindGust": {}, "GroundMist": {}, "Moon": {}, "WetSurfaces": {"strength": 4, "darken": 0.5, "puddles": 0.6},
-                      "RainRipples": {}, "ThunderDelay": {}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
+                      "RainRipples": {}, "ThunderDelay": {"clip": "guid:" + audio_guid("thunder"), "volume": 1.5}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
     s.add("Rain", {"LocalTransform": tf((0, 20, 34)),
                    "Precipitation3D": {"rain_rate": 3000, "snow_rate": 0, "follow_camera": 1, "height": 12, "area": 14, "rain_speed": 18,
                                        "snow_speed": 1.5},
@@ -587,10 +811,13 @@ def atmosphere(s, net):
     for j in range(GRID):
         for i in range(GRID):
             x, z = node_pos(i, j)
-            for k, (dx, dz) in enumerate(((6.2, 6.2), (-6.2, -6.2))):
+            c = node_half[(i, j)] + 2.3
+            # Two opposite corners of the pad; the arm of the Blender pole reaches 0.9 m towards the junction and carries the lamp head.
+            for k, (dx, dz, yaw) in enumerate(((c, c, 3 * math.pi / 4), (-c, -c, -math.pi / 4))):
                 name = "Lamp %d_%d_%d" % (i, j, k)
-                s.add(name + " post", {"LocalTransform": tf((x + dx, 2.85, z + dz), (0.16, 5.5, 0.16)), "MeshRef": mesh((0.12, 0.12, 0.14))})
-                s.add(name, {"LocalTransform": tf((x + dx, 5.7, z + dz), (0.5, 0.22, 0.5)),
+                s.add(name + " post", {"LocalTransform": tf((x + dx, 0.1, z + dz), yaw=yaw), "MeshRef": model_mesh("lamp_post")})
+                hx, hz = x + dx + 0.9 * math.cos(yaw), z + dz - 0.9 * math.sin(yaw)
+                s.add(name, {"LocalTransform": tf((hx, 5.24, hz), (0.34, 0.12, 0.34)),
                              "MeshRef": {"mesh": "guid:" + G_BOX, "material": "guid:" + G_LAMP, "cast_shadows": 0},
                              "PointLight3D": {"color": [1.0, 0.72, 0.42, 1], "intensity": 16, "radius": 28},
                              "TimedLight3D": {"on_hour": 18.5 + (i + j) % 3 * 0.25, "off_hour": 5.75, "fade_minutes": 20}})
@@ -670,7 +897,8 @@ def scene():
     s.add("Environment", {"Environment3D": {"sun_direction": [-0.45, -0.8, -0.35], "sun_intensity": 3.0, "shadow_distance": 140,
                                             "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 0}, "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
-    city_surface(s)
+    node_half = city_surface(s)
+    street_furniture(s, rng, node_half)
     n_buildings = buildings(s, rng)
 
     # The player, on the sidewalk of the middle avenue, with the car to take two steps away.
@@ -784,7 +1012,7 @@ def scene():
     s.add("Pause mix", {"AudioSnapshot": {"bus": "SFX", "while_paused": True, "fade_s": 0.3, "gain_db": -12, "lowpass_hz": 900}})
     s.add("City ambience", {"AudioSource": {"clip": "guid:" + audio_guid("city_ambience"), "bus": "SFX", "loop": True,
                                             "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
-    atmosphere(s, net)
+    atmosphere(s, net, node_half)
     economy_and_missions(s, player)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
@@ -859,6 +1087,7 @@ def hud():
 
 
 models()
+surface_assets()
 lamp_material()
 audio_assets()
 hud()

@@ -55,6 +55,33 @@
      "top_db": -6,
      "parked_db": -60
     },
+    "SpotLight3D": {
+     "color": [
+      1.0,
+      0.92,
+      0.75,
+      1
+     ],
+     "offset": [
+      0,
+      0.55,
+      -1.9
+     ],
+     "direction": [
+      0,
+      -0.14,
+      -1
+     ],
+     "intensity": 9,
+     "radius": 34,
+     "outer_deg": 34,
+     "inner_deg": 16
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    },
     "ImpactAudio": {
      "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
      "min_speed": 4,
