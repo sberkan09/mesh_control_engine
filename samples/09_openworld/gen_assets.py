@@ -947,6 +947,12 @@ def economy_and_missions(s, player):
         {"HealShop3D": {"radius": 3.0, "price_per_hp": 1}, "MapMarker": {"icon": 0, "color": [1, 0.3, 0.3, 1], "label": "Medic", "always_visible": 1}})
     pad(s, "Scrapyard", 130.0, -9.0, 8.0, (0.6, 0.4, 0.2),
         {"ChopShop3D": {"radius": 6.0, "price": 400}, "MapMarker": {"icon": 0, "color": [1, 0.6, 0.1, 1], "label": "Scrapyard", "always_visible": 1}})
+    # Repair shops (RepairShop3D): park a car on the pad (nearly stopped) and it is mended, a wrecked one drives again, for 150; with no
+    # police in sight the wanted level drops too, 100 per level (pay and spray).
+    for n, (x, z) in enumerate(((-55.0, 7.0), (-175.0, -7.0)), 1):
+        pad(s, "Repair shop %d" % n, x, z, 8.0, (0.25, 0.5, 0.85),
+            {"RepairShop3D": {"radius": 6.0, "price": 150, "price_per_level": 100, "wanted_drop": 0},
+             "MapMarker": {"icon": 0, "color": [0.3, 0.6, 1, 1], "label": "Repair", "always_visible": 1}})
 
 
 # --- the scene ------------------------------------------------------------------------------------------

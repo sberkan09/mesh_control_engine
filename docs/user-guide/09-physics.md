@@ -1080,6 +1080,11 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
 - **Chop shop (M-CHOPSHOP).** Put `ChopShop3D` (`radius`, `price`) on a scrapyard entity. A stolen car (`CarOwner3D.stolen` 1, with a
   `VehicleSeat3D`) within `radius` whose driver holds a `Wallet3D` is bought: the driver is paid `price`, the car is destroyed, the
   driver steps out and `CarSold3D` is pushed. Needs `install_seats3d` for the seats.
+- **Repair shop (M-REPAIRSHOP).** Put `RepairShop3D` (`radius`, `max_speed`, `price`, `price_per_level`, `wanted_drop`, `need_unseen`) on a
+  garage pad. A car with a `VehicleSeat3D` driver who holds a `Wallet3D`, within `radius` and slower than `max_speed`, is mended for
+  `price` when it is hurt or wrecked (`repair_vehicle`: full `Health3D`, the wreck drives again, its `ParticleEmitter3D` stops), and
+  while no police sees the driver the wanted level drops by `wanted_drop` levels (0 clears it) at `price_per_level` each. All or
+  nothing, once per visit; `Repaired3D` is pushed.
 - **Confiscation (M-ARRESTLOSS).** Put `Confiscate3D` (`ammo_kept`, 0 to 1) next to `Respawn3D` and `Weapon3D` on the player: waking up
   busted leaves `reserve * ammo_kept` spare rounds (rounded down). Dying keeps them all.
 - **Medic (M-HEALSHOP).** Put `HealShop3D` (`radius`, `price_per_hp`) on a clinic entity. A living player with a `Health3D` below

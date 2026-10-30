@@ -15,6 +15,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
@@ -1235,6 +1236,60 @@ TEST_CASE("wanted3d: a chop shop buys a stolen car from its driver (M-CHOPSHOP)"
         if (k == 0) {
             s.run(10);
             CHECK(s.w.try_get<Rider3D>(p)->seated == 0);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: a repair shop mends a wreck and lowers the wanted level once per visit (M-REPAIRSHOP)") {
+    Wanted3D wd;
+    wd.heat = 45.0f;  // level 3 at 20 heat per level
+    wd.crimes = 1;
+    for (u32 k = 0; k < 4; ++k) {  // k 0: drop 1 level; k 1: too poor; k 2: drop 0 = clear; k 3: shop far away
+        Scene s;
+        install_seats3d(s.w, nullptr);
+        install_impact_damage(s.w, nullptr);
+        const Entity p = s.player(wd, 0.0f, 0.0f);
+        s.w.add(p, Rider3D{});
+        s.w.add(p, Wallet3D{k == 1 ? 200 : 1000});
+        RigidBody3D b;
+        b.half = {0.9f, 0.4f, 2.0f};
+        b.density = 1200.0f / (8.0f * 0.9f * 0.4f * 2.0f);
+        Vehicle3D v;
+        v.front_axle = -1.4f;
+        v.rear_axle = 1.4f;
+        v.track = 0.9f;
+        v.wheel_y = -0.3f;
+        Health3D hp;
+        hp.max = hp.current = 100.0f;
+        const Entity c = s.w.spawn_with(at(3.0f, 1.2f, 0.0f), b, v, VehicleSeat3D{}, hp, ParticleEmitter3D{});
+        s.w.try_get_mut<ParticleEmitter3D>(c)->emitting = 1;
+        s.run(30);
+        s.w.try_get_mut<Rider3D>(p)->enter = 1;
+        s.run(4);
+        CHECK(s.w.try_get<Rider3D>(p)->seated == 1);
+        DamageInfo d;
+        d.amount = 1000.0f;
+        CHECK(apply_damage(s.w, c, d));
+        s.run(4);
+        CHECK(s.w.try_get<Health3D>(c)->dead == 1);
+        RepairShop3D shop;
+        shop.wanted_drop = k == 2 ? 0 : 1;
+        s.w.spawn_with(at(k == 3 ? 80.0f : 3.0f, 0.0f, 0.0f), shop);
+        s.run(10);
+        const Health3D& after = *s.w.try_get<Health3D>(c);
+        if (k == 1 || k == 3) {
+            CHECK(after.dead == 1);
+            CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 1 ? 200 : 1000));
+            CHECK(s.wanted(p).level == 3);
+        } else {
+            CHECK(after.dead == 0);
+            CHECK(after.current == doctest::Approx(100.0f));
+            CHECK(s.w.try_get<ParticleEmitter3D>(c)->emitting == 0);
+            CHECK(s.w.try_get<Vehicle3D>(c)->handbrake == 0.0f);
+            CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 0 ? 750 : 550));
+            CHECK(s.wanted(p).level == (k == 0 ? 2u : 0u));
+            s.run(60);  // once per visit: nothing more is charged while it stays
+            CHECK(s.w.try_get<Wallet3D>(p)->cash == (k == 0 ? 750 : 550));
         }
     }
 }

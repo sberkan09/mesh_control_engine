@@ -1,0 +1,1 @@
+- Kit (M-REPAIRSHOP): `RepairShop3D` and `repair_vehicle`: a stopped car is mended (a wreck drives again) and its driver's wanted level drops for cash while no police sees it; event `Repaired3D`. Sample: two repair pads in `09_openworld`. Record: `docs/milestones/M-REPAIRSHOP.md`.

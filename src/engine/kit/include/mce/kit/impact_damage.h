@@ -10,6 +10,7 @@
 // "kit_impact_damage" runs in FixedUpdate_Pre and reads the previous tick's contact events (apply_damage belongs to that phase).
 // A body with ImpactDamage3D is skipped by kit_vehicle_ram, so a car does not take a ram hit and a crash hit for one touch.
 
+#include "mce/ecs/entity.h"
 #include "mce/math/math.h"
 #include "mce/refl/macros.h"
 
@@ -33,6 +34,11 @@ struct ImpactDamage3D {
 MCE_COMPONENT(ImpactDamage3D, enabled, (min_speed, Range{0, 200}, Help{"m/s the bodies must close at"}),
               (damage_per_ms, Range{0, 10000}, Help{"hp per m/s above min_speed, plus one"}),
               (occupant_share, Range{0, 1}, Help{"the driver takes this fraction of the same blow; 0 = unhurt"}))
+
+// Undoes kit_wreck: a dead or hurt car is back at full health, drives again (`use_input` 1 when a VehicleSeat3D driver sits in
+// it, the handbrake off) and its ParticleEmitter3D (the wreck's smoke) stops emitting. False without a Health3D. From a
+// FixedUpdate_Pre system or between ticks.
+bool repair_vehicle(World& world, Entity car);
 
 // Registers ImpactDamage3D and adds "kit_impact_damage" (installs the combat kit and the 3D bodies first). Idempotent.
 void install_impact_damage(World& world, asset::AssetSystem* assets);
