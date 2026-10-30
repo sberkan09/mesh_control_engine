@@ -13,6 +13,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/meteor.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
@@ -1141,6 +1142,42 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             }
         }
         scene.set_rainbow(shown);
+    }
+    {  // meteor (M-METEOR 18b): the first Meteor; without one, when disabled, with a closed gate (day, thick cloud, rain:
+       // level 0) or under an equirect sky texture the carrier is the default one (level 0), written every frame
+       // because Scene3D::begin does not reset it. Only the carrier is written; no Moon is needed.
+        render::MeteorSky shown;  // level 0 by default (off)
+        const Meteor* meteor = nullptr;
+        world.query<const Meteor&>().each([&](const Meteor& c) {
+            if (!meteor) meteor = &c;
+        });
+        if (meteor && meteor->enabled && env.sky_texture.guid == asset::Guid{}) {
+            const Weather* meteor_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!meteor_weather) meteor_weather = &c;
+            });
+            const bool raining =
+                meteor_weather && (meteor_weather->current == WeatherKind::Rain || meteor_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? meteor_weather->intensity : 0.0f;
+            // no clock (time_of_day < 0): no night fade, so night_only 1 shows nothing and night_only 0 shows it
+            const f32 night_fade = env.time_of_day >= 0.0f ? dark : 0.0f;
+            const f32 level = meteor_level(*meteor, night_fade, cloud_cover, rain);  // cloud_cover is post-apply_quality
+            if (level > 0.0f && std::isfinite(level)) {
+                render::MeteorSky m;
+                m.level = level;
+                m.rate = detail::meteor_rate(*meteor);
+                m.brightness = detail::meteor_brightness(*meteor);
+                m.length = detail::meteor_length(*meteor);
+                m.speed = detail::meteor_speed(*meteor);
+                m.seed = detail::meteor_seed(*meteor);
+                // the value set_time() gets later in this extract (scene.time() would still be last frame's), wrapped in f64
+                const f32 frame_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
+                m.time = meteor_wrap_time(static_cast<f64>(frame_time));
+                m.enabled = true;
+                shown = render::apply_quality(quality_, m);
+            }
+        }
+        scene.set_meteor(shown);
     }
     {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
         const Water* water = nullptr;
