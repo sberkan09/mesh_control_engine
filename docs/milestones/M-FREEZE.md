@@ -49,7 +49,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 20b finds that a 
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 20a | done | 924 | `WaterIce` and the pure `water_ice_amount`, `water_ice_look` in `mce/kit/water_ice.h`, registered in `install_weather`; the `13_water` scene carries one. Guide 9.19r. |
+| 20a | done | 925 | `WaterIce` and the pure `water_ice_amount`, `water_ice_look` in `mce/kit/water_ice.h`, registered in `install_weather`; the `13_water` scene carries one. Guide 9.19r. |
 | 20b | planned | | |
 | 20c | planned | | |
 | 20d | planned | | |
