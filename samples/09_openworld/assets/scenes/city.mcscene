@@ -46088,6 +46088,96 @@
      "always_visible": 1
     }
    }
+  },
+  {
+   "id": 1797,
+   "name": "Repair shop 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -55.0,
+      0.22,
+      7.0
+     ],
+     "scale": [
+      8.0,
+      0.04,
+      8.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.25,
+      0.5,
+      0.85,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "RepairShop3D": {
+     "radius": 6.0,
+     "price": 150,
+     "price_per_level": 100,
+     "wanted_drop": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.3,
+      0.6,
+      1,
+      1
+     ],
+     "label": "Repair",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1798,
+   "name": "Repair shop 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -175.0,
+      0.22,
+      -7.0
+     ],
+     "scale": [
+      8.0,
+      0.04,
+      8.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.25,
+      0.5,
+      0.85,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "RepairShop3D": {
+     "radius": 6.0,
+     "price": 150,
+     "price_per_level": 100,
+     "wanted_drop": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.3,
+      0.6,
+      1,
+      1
+     ],
+     "label": "Repair",
+     "always_visible": 1
+    }
+   }
   }
  ]
 }

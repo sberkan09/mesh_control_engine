@@ -89,6 +89,22 @@ void kit_wreck(Frame& f) {
 
 }  // namespace
 
+bool repair_vehicle(World& w, Entity car) {
+    Health3D* hp = car.is_null() || !w.alive(car) ? nullptr : w.try_get_mut<Health3D>(car);
+    if (!hp) return false;
+    hp->current = hp->max;
+    hp->dead = 0;
+    hp->dead_time = 0.0f;
+    hp->stagger_left = 0.0f;
+    if (Vehicle3D* v = w.try_get_mut<Vehicle3D>(car)) {
+        v->handbrake = 0.0f;
+        const VehicleSeat3D* seat = w.try_get<VehicleSeat3D>(car);
+        v->use_input = seat && !seat->driver.is_null() ? 1 : 0;
+    }
+    if (ParticleEmitter3D* em = w.try_get_mut<ParticleEmitter3D>(car)) em->emitting = 0;
+    return true;
+}
+
 void install_impact_damage(World& world, asset::AssetSystem* assets) {
     install_combat3d(world, assets);
     install_bodies3d(world, assets);

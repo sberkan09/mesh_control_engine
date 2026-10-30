@@ -271,6 +271,37 @@ struct Sprayed3D {
 };
 MCE_EVENT(Sprayed3D, entity, garage, paid, level)
 
+// Repair shop (M-REPAIRSHOP). `RepairShop3D` on a placed entity (a garage pad): a car with a VehicleSeat3D driver that has a
+// Wallet3D, within `radius` and slower than `max_speed`, is repaired (`repair_vehicle`: full health, a wreck drives again) for
+// `price` when it is hurt, and the driver's wanted level drops by `wanted_drop` levels (0 = cleared) at `price_per_level`
+// each, but only while no police unit sees it (`need_unseen` 1). All or nothing: a driver who cannot pay the lot gets
+// nothing. Once per visit (`served`); `Repaired3D` is pushed. System "kit3d_repairshop" (after "kit3d_chopshop").
+struct RepairShop3D {
+    f32 radius = 5.0f;           // m
+    f32 max_speed = 2.0f;        // m/s: the car must be nearly stopped
+    u16 price = 150;             // for a repair
+    u16 price_per_level = 100;   // per wanted level dropped
+    u8 wanted_drop = 0;          // levels to drop; 0 = clear it
+    u8 need_unseen = 1;          // 1: the wanted level only drops while no police sees the driver
+    u8 enabled = 1;
+    u8 pad_ = 0;
+    Entity served;               // engine-written: the car done this visit
+};
+MCE_COMPONENT(RepairShop3D, (radius, Range{0.1f, 100}, Help{"m: a car this close is served"}), (max_speed, Range{0, 50}, Help{"m/s: the car must be this slow"}),
+              (price, Help{"cash for a repair"}), (price_per_level, Help{"cash per wanted level dropped"}),
+              (wanted_drop, Help{"levels dropped; 0 = clear"}), (need_unseen, Help{"1: only while no police sees the driver"}), enabled,
+              (served, ReadOnly, Transient))
+
+// A driver had a car repaired and/or a wanted level lowered at a RepairShop3D.
+struct Repaired3D {
+    Entity driver;
+    Entity shop;
+    Entity car;
+    i32 paid = 0;
+    u32 level = 0;  // the wanted level it had
+};
+MCE_EVENT(Repaired3D, driver, shop, car, paid, level)
+
 // Ammo shop (M-AMMOSHOP). `AmmoShop3D` on a placed entity: a buyer with a Weapon3D and a Wallet3D on the same entity that
 // stands within `radius` has the weapon's `reserve` topped up to `stock_to` rounds at `price_per_round` each. A buyer that
 // cannot afford the whole top-up buys as many rounds as it can pay for. Weapons that never run dry (`magazine` 0 or

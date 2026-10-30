@@ -206,3 +206,51 @@ puts the fire out; a future repair must set `emitting 0`.
 
 Interface: `FireOn::Died` (appended) plus `ParticleBurst { u32 count; FireOn on; bool fire; u8 keep_emitting; u8 pad_; u32 fired; }`
 driving the entity's `ParticleEmitter3D` (burst and, with `keep_emitting`, `emitting = 1`).
+
+## I. Repair shop (pay and spray)
+
+A wreck stays a wreck: `kit_wreck` (`impact_damage.cpp`, FixedUpdate_Pre) re-applies `Vehicle3D.use_input 0`, throttle/steer 0,
+handbrake 1 (and AI `drive 0`) every tick while `Health3D.dead`, and section H's smoke (`ParticleEmitter3D.emitting 1`) never
+stops. Nothing restores a damaged car either. `PaySpray3D` (M-PAYSPRAY) exists but is not in the 09 scene and only clears the
+wanted level. Cash (`Wallet3D.cash`) and `Wanted3D` (`heat`, `level` = ceil(heat / heat_per_level), `seen_by` = police units that
+see it this tick, written by `kit3d_wanted`) sit on the player, who keeps them while seated (`kit3d_seat_pose` moves its
+`LocalTransform` with the car). The shops use a distance test, not `Trigger3D`; the HUD binds `Wallet3D/cash` and the stars already.
+
+**Kit change (one PR, gameplay kit only; no ECS, render or physics change).** `wanted3d.h` (fan-out 13 TUs) and `impact_damage.h`
+(8 TUs), so no seam PR.
+- `void repair_vehicle(World&, Entity car)` in `impact_damage.h/.cpp`, the undo of `kit_wreck`: `Health3D` current = max, dead 0,
+  dead_time 0, stagger_left 0 (as `kit3d_respawn` revives); `Vehicle3D` handbrake 0, `use_input` = 1 when `VehicleSeat3D.driver`
+  is set (the boarding state; `seat.saved` stays valid for the exit); `ParticleEmitter3D.emitting` 0 (live particles fade out).
+  `kit_wreck` no longer sees `dead`, so the order of the two systems does not matter. A car destroyed by `destroy_on_death` is gone.
+- `RepairShop3D` next to `PaySpray3D` (it needs the file-local `settle`), `static_assert(sizeof(RepairShop3D) == 24)`:
+  `{ f32 radius = 5; f32 max_speed = 2; u16 price = 150; u16 price_per_level = 100; u8 wanted_drop = 0; u8 need_unseen = 1;
+  u8 caption = 1; u8 enabled = 1; Entity served; }` (`served` ReadOnly, Transient).
+- System `"kit3d_repairshop"`, FixedUpdate_Pre, after `"kit3d_chopshop"` (so after `kit3d_wanted` and this tick's `seen_by`).
+  Per shop, per car with `VehicleSeat3D` + `Health3D` within `radius`, `|Vehicle3D.speed| <= max_speed`, and a driver holding
+  `Wallet3D`: once per visit (`served` = that car, cleared when it leaves `radius`; stops `wanted_drop` N from dropping a level
+  every tick). Repair part: `price` when `current < max` or dead. Wanted part: when the driver's level > 0 and (`need_unseen` 0
+  or `seen_by` 0): `wanted_drop` 0 clears it (`clear_wanted`), N lowers it by N (`heat = min(heat, (level - N) * heat_per_level)`,
+  `settle`), at `price_per_level` x levels dropped. All or nothing: too poor, nothing happens (as `PaySpray3D`). Pays with
+  `take_cash` (pushes `CashChanged3D`), pushes `Repaired3D { driver, shop, car, paid, level }` and with `caption` a `ShowCaption`
+  "REPAIRED -$N" when `Captions` is installed (the `kit3d_respawn` pattern). Seen by police: the car is repaired, the record kept.
+- `MCE_COMPONENT` with `Help` and `Save` on the four settings; registered in `install_wanted3d`, event `Repaired3D`.
+
+**Data (`gen_assets.py`).** `pad()` 8 m, appended at the end of `scene()` so the older entity order (and its hashes) stays:
+"Repair shop 1" at (-55, 9) (across the avenue from the start, 25 m from parked car 1) and "Repair shop 2" at (-175, -9) (west end, inside the
+roadblock), each `RepairShop3D {radius 5, price 150, price_per_level 100}` and `MapMarker {label "Pay 'n' Spray", always_visible 1}`.
+
+**Tests.** `tests/kit/test_wanted3d.cpp` (M-REPAIRSHOP): a car with a seated driver (`Wallet3D 1000`, `Wanted3D` level 2) killed by
+`apply_damage`; one tick: `use_input` 0, `handbrake` 1. Shop on the car: current = max, dead 0, `use_input` 1, `emitting` 0, cash
+1000 - 150 - 200, level 0, one `Repaired3D`; later ticks charge nothing; out and back in charges again. Also: moving above
+`max_speed`, no driver, too poor, `seen_by > 0` (repair only), `wanted_drop 1` (2 -> 1); same run twice, same state hash.
+`tests/kit/test_impact_damage.cpp`: `repair_vehicle` on a wreck. `tests/mcp/test_mcp_openworld.cpp`: `RepairShop3D` count == 2.
+
+**Docs.** `docs/engine/kit.md` (wanted paragraph), `docs/user-guide/09-physics.md` (beside pay-and-spray),
+`docs/skills/mce-gamedev/references/kit-components.md`, `changelog.d/M-REPAIRSHOP.md`. `capabilities.md` and
+`sample_coverage.allow` are the integration runner's.
+
+**Known limits.** A wreck cannot drive in (it must die there or be pushed in). No door, spray animation or colour change; no
+police-memory rule (a unit that saw the car does not lose it). The police check is this tick's `seen_by`, not a ray of its own.
+Traffic cars are locked, police cars have no seat, so only the player's car is served.
+
+Interface: `RepairShop3D` (24 bytes), event `Repaired3D`, system `"kit3d_repairshop"`, `repair_vehicle(World&, Entity)`.
