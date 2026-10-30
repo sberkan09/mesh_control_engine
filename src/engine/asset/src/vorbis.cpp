@@ -15,19 +15,30 @@ constexpr usize kFirstArena = 128 * 1024;
 constexpr usize kMaxArena = 16 * 1024 * 1024;
 stb_vorbis* sv(void* v) { return static_cast<stb_vorbis*>(v); }
 
-// stb_vorbis frees a comment list it could not allocate (a header that claims billions of comments): it walks
-// `comment_list_length` entries of a null `comment_list` and crashes. A comment costs at least its 4-byte length field,
-// so a count beyond what the stream can hold is refused here, before stb sees it (found by the chunk fuzz test).
-bool comment_count_fits(Span<const byte> data) {
+// stb_vorbis trusts the lengths in the comment header. A count of billions leaves it freeing a null `comment_list`, and a
+// vendor or comment length of 0xFFFFFFFF makes `len + 1` wrap to 0, so it copies four billion bytes into an empty block (both
+// found by the chunk fuzz test). A comment costs at least its 4-byte length field and no string can be longer than the stream,
+// so a header whose vendor, count or comment lengths do not fit the data is refused here, before stb sees it.
+bool comment_header_fits(Span<const byte> data) {
     static constexpr char kMagic[7] = {3, 'v', 'o', 'r', 'b', 'i', 's'};
     const usize n = data.size();
     for (usize i = 0; i + 11 <= n; ++i) {
         if (std::memcmp(data.data() + i, kMagic, sizeof(kMagic)) != 0) continue;
         auto u32_at = [&](usize at) { return static_cast<u32>(data[at]) | static_cast<u32>(data[at + 1]) << 8 | static_cast<u32>(data[at + 2]) << 16 | static_cast<u32>(data[at + 3]) << 24; };
         const usize vendor = u32_at(i + 7);
-        const usize count_at = i + 11 + vendor;
-        if (count_at + 4 > n) return true;  // truncated: stb stops at the end of data on its own
-        return u32_at(count_at) <= (n - count_at - 4) / 4 + 1;
+        if (vendor > n - (i + 11)) return false;
+        usize at = i + 11 + vendor;
+        if (at + 4 > n) return true;  // truncated: stb stops at the end of data on its own
+        const usize count = u32_at(at);
+        at += 4;
+        if (count > (n - at) / 4 + 1) return false;
+        for (usize k = 0; k < count && at + 4 <= n; ++k) {
+            const usize len = u32_at(at);
+            at += 4;
+            if (len > n - at) return false;
+            at += len;
+        }
+        return true;
     }
     return true;
 }
@@ -47,7 +58,7 @@ void VorbisReader::close() {
 Result<void> VorbisReader::open(Span<const byte> data) {
     close();
     if (data.empty() || data.size() > 0x7FFFFFFFu) return Error(Errc::InvalidArgument, kStage, "empty or oversized stream");
-    if (!comment_count_fits(data)) return Error(Errc::ImportFailed, kStage, "not an Ogg Vorbis stream");
+    if (!comment_header_fits(data)) return Error(Errc::ImportFailed, kStage, "not an Ogg Vorbis stream");
     if (arena_.size() < kFirstArena) arena_.resize(kFirstArena);
     for (;;) {
         stb_vorbis_alloc alloc;
