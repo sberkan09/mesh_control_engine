@@ -683,6 +683,19 @@ def headlights():
             "TimedLight3D": {"on_hour": 18.5, "off_hour": 5.75, "fade_minutes": 20}}
 
 
+def wreck_effects():
+    """A car that dies burns: smoke and fire (the 3D emitter, off until the car dies), a crash sound and a camera shake, all on FireOn Died."""
+    return {
+        "ParticleEmitter3D": {"color_start": [2.5, 1.0, 0.25, 0.9], "color_end": [0.06, 0.06, 0.06, 0], "offset": [0, 0.5, -1.1],
+                              "box": [0.4, 0.1, 0.4], "direction": [0, 1, 0], "gravity": [0, 1.2, 0], "spread_deg": 18, "rate": 14,
+                              "speed_min": 1.0, "speed_max": 2.2, "lifetime_min": 2.5, "lifetime_max": 3.5, "drag": 0.6,
+                              "size_start": 0.5, "size_end": 2.2, "max_particles": 128, "seed": 9, "collide": 0, "additive": 0, "emitting": 0},
+        "ParticleBurst": {"count": 60, "on": "Died", "keep_emitting": 1},
+        "SfxTrigger": {"clip": "guid:" + G_CRASHES, "gain_db": -2, "gain_jitter_db": 2, "on": "Died"},
+        "ShakeTrigger": {"trauma": 0.35, "on": "Died"},
+    }
+
+
 def car_entities(model, traffic):
     """A car: a RigidBody3D/Vehicle3D root and the Kenney model as its child."""
     root = {
@@ -698,6 +711,7 @@ def car_entities(model, traffic):
     # Crashes hurt: hard hits (ImpactDamage3D) wear the car down and hurt its driver, a dead car is a wreck that stops driving
     # (kit_wreck). A wrecked traffic car is cleared after a while and the spawner fills the slot; a parked car stays as scenery.
     root["ImpactDamage3D"] = {"min_speed": 6, "damage_per_ms": 5, "occupant_share": 0.4}
+    root.update(wreck_effects())
     if traffic:
         root["Health3D"] = {"max": 150, "team": 0, "destroy_on_death": 1, "linger": 10}
         root["TrafficDriver3D"] = {}
@@ -728,6 +742,7 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     comps["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
     comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
     comps.update(headlights())
+    comps.update(wreck_effects())
     # The siren sits on the root: the audio bridge follows an entity's own LocalTransform, a child's is relative. It sounds from the
     # wanted level the car answers; its loud wail stands in for the engine.
     comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
@@ -981,6 +996,7 @@ def scene():
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
         "AudioListener": {},
+        "CameraShake3D": {},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},

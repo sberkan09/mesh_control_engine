@@ -94,6 +94,69 @@
      "damage_per_ms": 5,
      "occupant_share": 0.4
     },
+    "ParticleEmitter3D": {
+     "color_start": [
+      2.5,
+      1.0,
+      0.25,
+      0.9
+     ],
+     "color_end": [
+      0.06,
+      0.06,
+      0.06,
+      0
+     ],
+     "offset": [
+      0,
+      0.5,
+      -1.1
+     ],
+     "box": [
+      0.4,
+      0.1,
+      0.4
+     ],
+     "direction": [
+      0,
+      1,
+      0
+     ],
+     "gravity": [
+      0,
+      1.2,
+      0
+     ],
+     "spread_deg": 18,
+     "rate": 14,
+     "speed_min": 1.0,
+     "speed_max": 2.2,
+     "lifetime_min": 2.5,
+     "lifetime_max": 3.5,
+     "drag": 0.6,
+     "size_start": 0.5,
+     "size_end": 2.2,
+     "max_particles": 128,
+     "seed": 9,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0
+    },
+    "ParticleBurst": {
+     "count": 60,
+     "on": "Died",
+     "keep_emitting": 1
+    },
+    "SfxTrigger": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "gain_db": -2,
+     "gain_jitter_db": 2,
+     "on": "Died"
+    },
+    "ShakeTrigger": {
+     "trauma": 0.35,
+     "on": "Died"
+    },
     "Health3D": {
      "max": 150,
      "team": 0,

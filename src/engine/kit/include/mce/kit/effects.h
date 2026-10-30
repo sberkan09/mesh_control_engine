@@ -19,7 +19,7 @@
 // event names the entity (as the sensor or trigger, or the other body; as either contact body), Landed when
 // a Landed3D names it (a CharacterController3D touching down), Skid when a Skid3D names it (a Vehicle3D's
 // wheel starting to skid, vehicles3d.h), Lap when a LapCompleted3D names it (a VehicleDriver3D finishing a
-// lap). `fired` counts the plays.
+// lap), Died when a Died3D names it (a Health3D entity killed by apply_damage, combat3d.h). `fired` counts the plays.
 //
 // Systems ("kit_effects" in FixedUpdate_Post, after physics so this tick's events are read;
 // "kit_camera_follow" in FixedUpdate_Post after it; "kit_nav_grid" in FixedUpdate_Pre before
@@ -43,8 +43,8 @@ class AssetSystem;
 
 namespace mce::kit {
 
-enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap };
-MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap)
+enum class FireOn : u8 { Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap, Died };
+MCE_ENUM(FireOn, Manual, Start, TriggerEnter, ContactBegin, Landed, Skid, Lap, Died)
 
 // A one-shot sound. 2D (centred, `pan`); the mixer has no resampling, so there is no pitch.
 struct SfxTrigger {
@@ -61,20 +61,24 @@ struct SfxTrigger {
 };
 MCE_COMPONENT(SfxTrigger, clip, (gain_db, Range{-60, 12}, Help{"gain in dB"}),
               (gain_jitter_db, Range{0, 24}, Help{"random +/- dB per play"}), (pan, Range{-1, 1}), bus,
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed"}),
               (fire, Help{"set to play once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
-// A burst of particles from the ParticleEmitter on the same entity.
+// A burst of particles from the ParticleEmitter (2D) or ParticleEmitter3D on the same entity. With
+// `keep_emitting` the fire also switches that 3D emitter on (a wreck's lasting smoke).
 struct ParticleBurst {
     u32 count = 20;
     FireOn on = FireOn::Manual;
     bool fire = false;
-    u8 pad_[2] = {};
+    u8 keep_emitting = 0;
+    u8 pad_ = 0;
     u32 fired = 0;
 };
 MCE_COMPONENT(ParticleBurst, (count, Range{1, 4096}, Help{"particles per burst"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
-              (fire, Help{"set to burst once (the engine clears it)"}), (fired, ReadOnly, Transient))
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed"}),
+              (fire, Help{"set to burst once (the engine clears it)"}),
+              (keep_emitting, Range{0, 1}, Help{"1: the fire also sets the entity's ParticleEmitter3D.emitting to 1"}),
+              (fired, ReadOnly, Transient))
 
 // Adds trauma to every CameraShake2D and CameraShake3D (kit/cinematic.h).
 struct ShakeTrigger {
@@ -85,7 +89,7 @@ struct ShakeTrigger {
     u32 fired = 0;
 };
 MCE_COMPONENT(ShakeTrigger, (trauma, Range{0, 1}, Help{"trauma added (0..1; the shake grows with its square)"}),
-              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors)"}),
+              (on, Help{"Manual: when 'fire' is set; Start: first tick; TriggerEnter / ContactBegin: physics events naming this entity (TriggerEnter: 2D, Trigger3D and sensors); Died: the entity was killed"}),
               (fire, Help{"set to shake once (the engine clears it)"}), (fired, ReadOnly, Transient))
 
 // Trauma screen shake (render::ScreenShake's model) on a Camera2DComponent entity: kit::primary_camera
