@@ -72,6 +72,7 @@ mce_add_test(test_kit UMBRELLA
         test_rainbow.cpp
         test_meteor.cpp
         test_season.cpp
+        test_season_extract.cpp
         test_water.cpp
         test_water_extract.cpp
         test_aurora_extract.cpp
