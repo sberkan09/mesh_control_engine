@@ -27,6 +27,7 @@
 #include "mce/kit/moon.h"
 #include "mce/kit/water.h"
 #include "mce/kit/aurora.h"
+#include "mce/kit/rainbow.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -98,6 +99,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Moon>("Moon", sizeof(Moon::pad_));  // moon.h (M-NIGHTSKY 14a)
     expect_pad<Water>("Water", sizeof(Water::pad_));  // water.h (M-WATER 15a)
     expect_pad<Aurora>("Aurora", sizeof(Aurora::pad_));  // aurora.h (M-AURORA 16a)
+    expect_pad<Rainbow>("Rainbow", sizeof(Rainbow::pad_));  // rainbow.h (M-RAINBOW 17a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

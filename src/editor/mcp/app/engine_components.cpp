@@ -65,6 +65,7 @@
 #include "mce/kit/moon.h"                 // Moon (M-NIGHTSKY 14a)
 #include "mce/kit/water.h"                // Water (M-WATER 15a)
 #include "mce/kit/aurora.h"               // Aurora (M-AURORA 16a)
+#include "mce/kit/rainbow.h"              // Rainbow (M-RAINBOW 17a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)

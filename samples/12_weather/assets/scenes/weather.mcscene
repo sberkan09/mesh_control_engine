@@ -81,6 +81,7 @@
     "GroundMist": {},
     "Moon": {},
     "Aurora": {},
+    "Rainbow": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
