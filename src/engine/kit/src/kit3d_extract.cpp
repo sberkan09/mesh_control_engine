@@ -15,6 +15,7 @@
 #include "mce/kit/cinematic.h"
 #include "mce/kit/meteor.h"
 #include "mce/kit/rainbow.h"
+#include "mce/kit/season.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/ground_mist.h"
@@ -66,6 +67,49 @@ void apply_wind_sway(f32 wind, const WindSway& s, render::InstanceBatch& b) {
     b.wind_frequency *= 1.0f + (s.frequency_gain - 1.0f) * wind;
     b.wind_ext.y = clamp(b.wind_ext.y + s.gust_gain * wind, 0.0f, 1.0f);
     b.wind_ext.z *= 1.0f + (s.flutter_gain - 1.0f) * wind;
+}
+
+// Season (M-SEASONS 19b): the first Season at the first WorldClock's day and hour (day 0, hour 0 with no clock). A flag
+// is false for no Season, enabled 0, strength 0 and the pure-summer case where the helpers return exact identities, so
+// every consumer skips its code path and frames stay bit-identical. Render-side copies only; nothing is written back.
+// Density thinning is not applied: see docs/milestones/M-SEASONS.md (the terrain scatter is row-major, so a prefix of
+// the cached copies is not an unbiased thinning).
+struct SeasonFrame {
+    bool tint_on = false;
+    bool snow_on = false;
+    math::vec3 tint{1.0f, 1.0f, 1.0f};
+    SeasonSnow snow;
+};
+
+SeasonFrame read_season(World& world) {
+    SeasonFrame out;
+    const Season* season = nullptr;
+    world.query<const Season&>().each([&](const Season& c) {
+        if (!season) season = &c;
+    });
+    if (!season) return out;
+    u32 day = 0;
+    f32 hour = 0.0f;
+    bool have_clock = false;
+    world.query<const WorldClock&>().each([&](const WorldClock& c) {
+        if (have_clock) return;
+        have_clock = true;
+        day = c.day;
+        hour = c.hour;
+    });
+    const f32 phase = season_phase(*season, day, hour);
+    out.tint = season_foliage_tint(*season, phase);
+    out.tint_on = out.tint.x != 1.0f || out.tint.y != 1.0f || out.tint.z != 1.0f;
+    out.snow = season_snow_bias(*season, phase);
+    out.snow_on = out.snow.cover_floor > 0.0f || out.snow.lee_shift > 0.0f;
+    return out;
+}
+
+// The season tint on a batch, after foliage_look and apply_wind_sway: rgb only, alpha and tint_variation untouched.
+void apply_season_tint(const math::vec3& t, render::InstanceBatch& b) {
+    b.tint.x *= t.x;
+    b.tint.y *= t.y;
+    b.tint.z *= t.z;
 }
 
 // Snow lee bias under a gust (M-WINDGUST 12b): clamp(bias * (1 + strength * gust_q / 2^24), 0, 1) with the snow bit; with
@@ -976,6 +1020,11 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             snow.wind_bias = gusted_snow_bias(snowc->wind_bias, snow_gust);
             if (snow_wd) snow.wind_dir = wind_direction_vector(*snow_wd);  // else the default +x (M-WINDDIR 8d)
             snow.noise_enabled = true;
+            const SeasonFrame season = read_season(world);  // M-SEASONS 19b: a drawn floor, the simulated cover is not raised
+            if (season.snow_on) {
+                snow.cover = std::max(snow.cover, season.snow.cover_floor * snowc->strength);
+                snow.wind_bias = std::clamp(snow.wind_bias + season.snow.lee_shift, 0.0f, 1.0f);
+            }
         }
         scene.set_snow_cover(render::apply_quality(quality_, snow));
     }
@@ -1630,6 +1679,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!wind_dir) wind_dir = &c;
     });
     const bool turn_wind = sway_weather && wind_dir;
+    const SeasonFrame season = read_season(world);  // M-SEASONS 19b
     const math::vec2 scene_wind = turn_wind ? wind_direction_vector(*wind_dir) : math::vec2{1.0f, 0.0f};
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;
@@ -1727,6 +1777,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             b.wind_direction = f.wind_direction;
             foliage_look(f, b);
             if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+            if (season.tint_on) apply_season_tint(season.tint, b);
             if (turn_wind) apply_wind_direction(scene_wind, b);
             scene.add_batch(b);
             ++stats_.foliage;
@@ -1826,6 +1877,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         b.wind_direction = f.wind_direction;
         foliage_look(f, b);
         if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+        if (season.tint_on) apply_season_tint(season.tint, b);
         if (turn_wind) apply_wind_direction(scene_wind, b);
         scene.add_batch(b);
         ++stats_.foliage;
