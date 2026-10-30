@@ -32,6 +32,8 @@ MCE_CVAR(cv_aurora, "r.aurora", true,
          "Aurora curtains in the night sky (AuroraSky; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_rainbow, "r.rainbow", true,
          "Rainbow in the sunlit sky (RainbowSky; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_meteor, "r.meteor", true,
+         "Meteors in the night sky (MeteorSky; off = the frame without them)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -58,6 +60,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.water = false;
             q.aurora = false;
             q.rainbow = false;
+            q.meteor = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -233,6 +236,18 @@ RainbowSky apply_quality(const QualitySettings& q, const RainbowSky& rainbow) {
     out.band_width = detail::ranged(rainbow.band_width, 0.5f, 2.0f, 1.0f);
     out.secondary = detail::ranged(rainbow.secondary, 0.0f, 1.0f, 0.0f);
     out.anti_solar = detail::unit_dir3_or(rainbow.anti_solar, math::vec3{0.0f, 0.0f, 1.0f});
+    return out;
+}
+
+MeteorSky apply_quality(const QualitySettings& q, const MeteorSky& meteor) {
+    MeteorSky out = meteor;
+    out.level = q.meteor && cv_meteor.get_bool() ? detail::ranged(meteor.level, 0.0f, 4.0f, 0.0f) : 0.0f;
+    out.rate = detail::ranged(meteor.rate, 0.0f, 30.0f, 4.0f);
+    out.brightness = detail::ranged(meteor.brightness, 0.0f, 4.0f, 1.0f);
+    out.length = detail::ranged(meteor.length, 0.5f, 2.0f, 1.0f);
+    out.speed = detail::ranged(meteor.speed, 0.5f, 2.0f, 1.0f);
+    out.time = std::isfinite(meteor.time) ? detail::ranged(meteor.time, 0.0f, 60.0f, 0.0f) : 0.0f;
+    out.seed = meteor.seed < 65535u ? meteor.seed : 65535u;
     return out;
 }
 
