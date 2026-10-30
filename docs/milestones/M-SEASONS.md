@@ -55,7 +55,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 19b finds the den
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 19a | done | 912 | `Season` and the pure helpers in `mce/kit/season.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19q. |
-| 19b | done | 913 | Tint and snow floor / lee shift fed from the extract (`.cpp` only). **Density thinning dropped:** the renderer caches are safe for a shorter span (`forward3d_scale.cpp` re-uploads on `g.count != n`), but `scatter_on_terrain` emits row-major cells, so a prefix removes whole rows of `TerrainFoliage3D` copies (a bare strip), not an unbiased thinning; fixing it needs a render-side change, so winter is the grey tint only. `season_foliage_density` stays as a helper. Tests: `test_season_extract.cpp`. |
+| 19b | done | 915 | Tint and snow floor / lee shift fed from the extract (`.cpp` only). **Density thinning dropped:** the renderer caches are safe for a shorter span (`forward3d_scale.cpp` re-uploads on `g.count != n`), but `scatter_on_terrain` emits row-major cells, so a prefix removes whole rows of `TerrainFoliage3D` copies (a bare strip), not an unbiased thinning; fixing it needs a render-side change, so winter is the grey tint only. `season_foliage_density` stays as a helper. Tests: `test_season_extract.cpp`. |
 | 19c | planned | | |
 | 19d | planned | | |
 
