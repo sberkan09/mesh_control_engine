@@ -195,6 +195,30 @@
 //                                         key, a non-number or a color that is not three numbers raises an error that
 //                                         names the call
 //
+// Aurora (M-AURORA step 16d) lives in the same table, next to the moon: the authoring over the first kit::Aurora
+// (mce/kit/aurora.h) and two read-only values from its helpers. Named errors as above ("weather.set_aurora: the scene has
+// no Aurora entity"); the setter never adds the component. The authoring names follow the set keys with an `aurora_`
+// prefix. aurora_gate() is kit::aurora_latitude_gate of the authored latitude (0..1); aurora_level() is
+// kit::aurora_level with the inputs Kit3DExtract uses: the night fade of the current hour (the sun's elevation, 0 by day
+// and 1 well below the horizon; 0 with no clock, so with no clock only night_only 0 shows) and the cloud coverage of the
+// first Weather and CloudLayer (the High tier's: the extract's own value before the quality gate). Both read the
+// authoring even when `enabled` is 0 (aurora_level is 0 then).
+//
+//   weather.aurora_latitude() / aurora_gate_low() / aurora_gate_high() / aurora_strength() / aurora_curtain_count() /
+//   weather.aurora_base_height() / aurora_height_span() / aurora_azimuth() / aurora_width() / aurora_speed() /
+//   weather.aurora_night_only() / aurora_enabled() -> number   latitude_deg, gate_low_deg, gate_high_deg, strength,
+//                                                              curtain_count, base_height, height_span, azimuth_deg,
+//                                                              width_deg, speed, night_only, enabled
+//   weather.aurora_low_color() / aurora_high_color() -> r, g, b
+//   weather.aurora_gate() -> number                 0..1, smoothstep(gate_low, gate_high, abs(latitude))
+//   weather.aurora_level() -> number                0..4, the brightness gain the renderer gets now
+//   weather.set_aurora{latitude=, gate_low=, gate_high=, strength=, curtain_count=, base_height=, height_span=,
+//                      azimuth=, width=, speed=, low_color={r,g,b}, high_color={r,g,b}, night_only=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (curtain_count rounded down; color lanes 0..1; night_only and enabled: any
+//                                         non-zero number is 1); an unknown key, a non-number or a color that is not
+//                                         three numbers raises an error that names the call and nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -224,6 +248,7 @@
 #include <cstring>
 
 #include "api.h"
+#include "mce/kit/aurora.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
@@ -241,6 +266,7 @@
 #include "mce/kit/moon.h"
 #include "mce/kit/water.h"
 #include "mce/kit/world_clock.h"
+#include "mce/render/atmosphere.h"
 
 namespace mce::script::detail {
 
@@ -1076,6 +1102,121 @@ int l_weather_set_moon(lua_State* L) {
     return 0;
 }
 
+// ---- Aurora (M-AURORA step 16d) ----
+
+kit::Aurora& check_aurora(lua_State* L, const char* fn) { return check_first<kit::Aurora>(L, fn, "Aurora"); }
+
+#define MCE_WEATHER_GETTER_AURORA(luaname, field)                                                        \
+    int l_weather_##luaname(lua_State* L) {                                                               \
+        lua_pushnumber(L, static_cast<double>(check_aurora(L, "weather." #luaname).field));                \
+        return 1;                                                                                        \
+    }
+MCE_WEATHER_GETTER_AURORA(aurora_latitude, latitude_deg)
+MCE_WEATHER_GETTER_AURORA(aurora_gate_low, gate_low_deg)
+MCE_WEATHER_GETTER_AURORA(aurora_gate_high, gate_high_deg)
+MCE_WEATHER_GETTER_AURORA(aurora_strength, strength)
+MCE_WEATHER_GETTER_AURORA(aurora_curtain_count, curtain_count)
+MCE_WEATHER_GETTER_AURORA(aurora_base_height, base_height)
+MCE_WEATHER_GETTER_AURORA(aurora_height_span, height_span)
+MCE_WEATHER_GETTER_AURORA(aurora_azimuth, azimuth_deg)
+MCE_WEATHER_GETTER_AURORA(aurora_width, width_deg)
+MCE_WEATHER_GETTER_AURORA(aurora_speed, speed)
+MCE_WEATHER_GETTER_AURORA(aurora_night_only, night_only)
+MCE_WEATHER_GETTER_AURORA(aurora_enabled, enabled)
+#undef MCE_WEATHER_GETTER_AURORA
+
+int push_aurora_color(lua_State* L, const math::vec3& c) {
+    lua_pushnumber(L, static_cast<double>(c.x));
+    lua_pushnumber(L, static_cast<double>(c.y));
+    lua_pushnumber(L, static_cast<double>(c.z));
+    return 3;
+}
+int l_weather_aurora_low_color(lua_State* L) { return push_aurora_color(L, check_aurora(L, "weather.aurora_low_color").low_color); }
+int l_weather_aurora_high_color(lua_State* L) { return push_aurora_color(L, check_aurora(L, "weather.aurora_high_color").high_color); }
+
+int l_weather_aurora_gate(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(kit::aurora_latitude_gate(check_aurora(L, "weather.aurora_gate"))));
+    return 1;
+}
+
+// The night fade Kit3DExtract hands aurora_level: 0 with no clock, else 1 - smoothstep of the sun's own elevation over
+// -0.1..0.1 (the sun direction of the hour, before any moonlight hand-off).
+f32 aurora_night_fade(World& w) {
+    const f32 hour = current_hour(w);
+    if (!(hour >= 0.0f)) return 0.0f;
+    const f32 elevation = -render::sun_direction_at(hour).y;
+    const f32 t = std::clamp((elevation + 0.1f) / 0.2f, 0.0f, 1.0f);
+    return 1.0f - t * t * (3.0f - 2.0f * t);
+}
+
+// The cloud coverage the extract hands aurora_level (before the quality gate): the CloudLayer's fair-to-overcast blend by
+// the first Weather's kind and intensity, times its strength; 0 without a Weather or a CloudLayer.
+f32 aurora_cloud_cover(World& w) {
+    const kit::Weather* wx = first_weather(w);
+    const kit::CloudLayer* layer = nullptr;
+    const refl::TypeRecord* type = refl::find_type(StringId("CloudLayer"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        w.query<kit::CloudLayer>().each([&](Entity, kit::CloudLayer& c) {
+            if (!layer) layer = &c;
+        });
+    }
+    if (!wx || !layer) return 0.0f;
+    f32 kind = 1.0f;  // Clear 0, Overcast / Rain / Storm 1, Snow 0.9
+    if (wx->current == kit::WeatherKind::Clear) kind = 0.0f;
+    else if (wx->current == kit::WeatherKind::Snow) kind = 0.9f;
+    f32 inten = wx->intensity;
+    inten = inten > 0.0f ? (inten < 1.0f ? inten : 1.0f) : 0.0f;
+    const f32 blend = kind * inten;
+    const f32 cover = (layer->fair_coverage + (layer->overcast_coverage - layer->fair_coverage) * blend) * layer->strength;
+    return cover > 0.0f ? (cover < 1.0f ? cover : 1.0f) : 0.0f;
+}
+
+int l_weather_aurora_level(lua_State* L) {
+    const kit::Aurora& a = check_aurora(L, "weather.aurora_level");
+    World& w = world_of(L);
+    lua_pushnumber(L, static_cast<double>(kit::aurora_level(a, aurora_night_fade(w), aurora_cloud_cover(w))));
+    return 1;
+}
+
+// weather.set_aurora{...}: validated before anything is written.
+int l_weather_set_aurora(lua_State* L) {
+    static const char* const kKeys[14] = {"latitude", "gate_low", "gate_high", "strength", "curtain_count",
+                                          "base_height", "height_span", "azimuth", "width", "speed", "low_color",
+                                          "high_color", "night_only", "enabled"};
+    f64 value[14] = {};
+    bool given[14] = {};
+    f64 low[3] = {};
+    f64 high[3] = {};
+    read_settings(L, "weather.set_aurora", kKeys, 14,
+                  "latitude, gate_low, gate_high, strength, curtain_count, base_height, height_span, azimuth, width, "
+                  "speed, low_color, high_color, night_only, enabled",
+                  value, given, 10, low, 11, high);
+    kit::Aurora& a = check_aurora(L, "weather.set_aurora");
+    if (given[0]) a.latitude_deg = static_cast<f32>(clamp_range(value[0], -90.0, 90.0));
+    if (given[1]) a.gate_low_deg = static_cast<f32>(clamp_range(value[1], 0.0, 90.0));
+    if (given[2]) a.gate_high_deg = static_cast<f32>(clamp_range(value[2], 0.0, 90.0));
+    if (given[3]) a.strength = static_cast<f32>(clamp_range(value[3], 0.0, 4.0));
+    if (given[4]) a.curtain_count = static_cast<u8>(std::floor(clamp_range(value[4], 1.0, 6.0)));
+    if (given[5]) a.base_height = static_cast<f32>(clamp_range(value[5], 0.02, 0.6));
+    if (given[6]) a.height_span = static_cast<f32>(clamp_range(value[6], 0.05, 0.8));
+    if (given[7]) a.azimuth_deg = static_cast<f32>(clamp_range(value[7], 0.0, 360.0));
+    if (given[8]) a.width_deg = static_cast<f32>(clamp_range(value[8], 10.0, 180.0));
+    if (given[9]) a.speed = static_cast<f32>(clamp_range(value[9], 0.0, 4.0));
+    if (given[10]) {
+        a.low_color.x = static_cast<f32>(clamp_range(low[0], 0.0, 1.0));
+        a.low_color.y = static_cast<f32>(clamp_range(low[1], 0.0, 1.0));
+        a.low_color.z = static_cast<f32>(clamp_range(low[2], 0.0, 1.0));
+    }
+    if (given[11]) {
+        a.high_color.x = static_cast<f32>(clamp_range(high[0], 0.0, 1.0));
+        a.high_color.y = static_cast<f32>(clamp_range(high[1], 0.0, 1.0));
+        a.high_color.z = static_cast<f32>(clamp_range(high[2], 0.0, 1.0));
+    }
+    if (given[12]) a.night_only = value[12] != 0.0 ? 1 : 0;
+    if (given[13]) a.enabled = value[13] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1362,6 +1503,23 @@ const luaL_Reg kWeatherLib[] = {
     {"moon_direction", l_weather_moon_direction},
     {"moon_level", l_weather_moon_level},
     {"set_moon", l_weather_set_moon},
+    {"aurora_latitude", l_weather_aurora_latitude},
+    {"aurora_gate_low", l_weather_aurora_gate_low},
+    {"aurora_gate_high", l_weather_aurora_gate_high},
+    {"aurora_strength", l_weather_aurora_strength},
+    {"aurora_curtain_count", l_weather_aurora_curtain_count},
+    {"aurora_base_height", l_weather_aurora_base_height},
+    {"aurora_height_span", l_weather_aurora_height_span},
+    {"aurora_azimuth", l_weather_aurora_azimuth},
+    {"aurora_width", l_weather_aurora_width},
+    {"aurora_speed", l_weather_aurora_speed},
+    {"aurora_low_color", l_weather_aurora_low_color},
+    {"aurora_high_color", l_weather_aurora_high_color},
+    {"aurora_night_only", l_weather_aurora_night_only},
+    {"aurora_enabled", l_weather_aurora_enabled},
+    {"aurora_gate", l_weather_aurora_gate},
+    {"aurora_level", l_weather_aurora_level},
+    {"set_aurora", l_weather_set_aurora},
     {nullptr, nullptr},
 };
 
