@@ -1,0 +1,1 @@
+- Tests: the status effect slot lookup (`status_find`) and the timeline easing curves (`timeline_eased`) now have cases.

@@ -332,3 +332,24 @@ TEST_CASE("timeline: cook errors name the track and the file position") {
         CHECK(text.find("bad.mctimeline:") != std::string::npos);
     }
 }
+
+TEST_CASE("timeline: timeline_eased maps u in [0, 1] and keeps both ends fixed") {
+    using asset::TimelineEase;
+    const TimelineEase all[] = {TimelineEase::Linear, TimelineEase::Smooth, TimelineEase::EaseIn,
+                                TimelineEase::EaseOut};
+    for (const TimelineEase e : all) {
+        CHECK(kit::timeline_eased(e, 0.0f) == doctest::Approx(0.0f));
+        CHECK(kit::timeline_eased(e, 1.0f) == doctest::Approx(1.0f));
+    }
+    CHECK(kit::timeline_eased(TimelineEase::Linear, 0.3f) == doctest::Approx(0.3f));
+    CHECK(kit::timeline_eased(TimelineEase::Smooth, 0.5f) == doctest::Approx(0.5f));
+    CHECK(kit::timeline_eased(TimelineEase::EaseIn, 0.5f) == doctest::Approx(0.25f));   // slow start
+    CHECK(kit::timeline_eased(TimelineEase::EaseOut, 0.5f) == doctest::Approx(0.75f));  // slow finish
+    // Step holds the first key the whole way, including at the end.
+    CHECK(kit::timeline_eased(TimelineEase::Step, 0.0f) == 0.0f);
+    CHECK(kit::timeline_eased(TimelineEase::Step, 0.99f) == 0.0f);
+    CHECK(kit::timeline_eased(TimelineEase::Step, 1.0f) == 0.0f);
+    // Ease-in lags the line and ease-out leads it.
+    CHECK(kit::timeline_eased(TimelineEase::EaseIn, 0.4f) < 0.4f);
+    CHECK(kit::timeline_eased(TimelineEase::EaseOut, 0.4f) > 0.4f);
+}

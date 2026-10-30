@@ -274,3 +274,17 @@ TEST_CASE("status: a Health3D replaced at run time gets the bonus again and lose
     CHECK(r.hp().armor == doctest::Approx(0.25f));  // the base, not below it
     CHECK(r.hp().max == doctest::Approx(100.0f));
 }
+
+TEST_CASE("status: status_find looks a slot up by key, never matches an empty slot or key 0") {
+    StatusEffects s;
+    CHECK(status_find(s, status_key("regen")) == -1);  // nothing active
+    CHECK(status_find(s, 0) == -1);                    // key 0 is the empty marker, not an effect
+    s.key[2] = status_key("regen");
+    s.key[5] = status_key("poison");
+    CHECK(status_find(s, status_key("regen")) == 2);
+    CHECK(status_find(s, status_key("poison")) == 5);
+    CHECK(status_find(s, status_key("shield")) == -1);
+    CHECK(status_find(s, 0) == -1);  // the empty slots still do not match
+    CHECK(status_key("regen") != 0);
+    CHECK(status_key("") != 0);  // never 0, even for an empty id
+}
