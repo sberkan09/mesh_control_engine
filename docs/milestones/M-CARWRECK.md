@@ -24,3 +24,7 @@ player car kept answering input. A wreck must stop being driven.
 - The driver is not thrown out when the car dies (the seat is freed by `kit3d_seats` when the car is destroyed); stepping out of a wreck needs `max_exit_speed`, which a stopped wreck meets.
 
 Slice test: `tests/kit/test_gta_slice.cpp` (a car driven into a wall: wrecked, driver hurt, input off).
+
+## Step 2: in `samples/09_openworld` (2026-10-30)
+
+Every car (traffic and parked) has `Health3D` and `ImpactDamage3D` (min 6 m/s, 5 hp per m/s, the driver takes 40%); traffic cars have 150 hp and are removed 10 s after dying (the spawner refills), the player's cars 200 hp and stay as wrecks. Parked cars also have `VehicleRam3D` (5 m/s, 12 hp per m/s), so running a pedestrian over hurts and counts as a crime. Traffic cars have no ram zone on purpose (a following car would wreck the one ahead). Still open: fire and smoke on a wreck, police cars have no impact damage, no repair shop.
