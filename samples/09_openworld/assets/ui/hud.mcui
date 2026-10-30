@@ -444,6 +444,166 @@
    "format": "$ %.0f"
   },
   {
+   "name": "bag",
+   "kind": "Text",
+   "text": "BAG  (H to use)",
+   "style": {
+    "text_size": 20,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.8,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     338
+    ],
+    "offset_max": [
+     -16,
+     362
+    ]
+   }
+  },
+  {
+   "name": "slot_1",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     364
+    ],
+    "offset_max": [
+     -16,
+     390
+    ]
+   }
+  },
+  {
+   "name": "slot_2",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     392
+    ],
+    "offset_max": [
+     -16,
+     418
+    ]
+   }
+  },
+  {
+   "name": "slot_3",
+   "kind": "Text",
+   "text": "",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.7,
+     1.0,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     0
+    ],
+    "max": [
+     1,
+     0
+    ],
+    "offset_min": [
+     -280,
+     420
+    ],
+    "offset_max": [
+     -16,
+     446
+    ]
+   }
+  },
+  {
    "name": "objective",
    "kind": "Text",
    "text": "Walk onto a yellow pad to start a mission",

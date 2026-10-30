@@ -432,6 +432,8 @@ catalog: weighted entries, nested tables, guaranteed entries, quantity ranges an
   order; a quantity saturates instead of wrapping. The same table and the same stream give the same list on every machine.
 - `LootDrop` (on an entity with `Health3D`): when `Died3D` fires, rolls `table` once and spawns each result as an `ItemPickup3D` with
   a sphere `Trigger3D` (`radius`) on a fixed ring (`scatter` metres; a second ring beyond eight). `dropped` and `rolls` are saved.
+  With `mesh` set each pickup also gets a `MeshRef` (`tint`, `mesh_scale`) and sits `lift` metres above the body's origin; empty `mesh`: invisible pickups.
+- `ItemHotkey3D` (on an entity with an `Inventory`): the `UseItem` input action sends a `UseItem` for the first consumable slot (the 09_openworld bag uses H).
 - `Container` (a chest; give the entity an `Inventory` on the same catalog): the first `OpenContainer{container, opener}` rolls
   `table` into the chest's own `Inventory` (slots you pre-filled stay), then the opener takes as much as fits (stacks and weight
   cap apply). The rest stays; a later open takes more. `ContainerOpened{taken, left}` and an `ItemAdded` per move are sent. An opener

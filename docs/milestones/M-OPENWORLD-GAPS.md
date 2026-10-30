@@ -29,7 +29,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
 | A10 | **Carjacking** done (E8, parked cars 2 and 3 are owned, witnessed theft adds heat); still open: **vehicle damage and wrecks, ramming pedestrians** | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
-| A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; the ammo shop came with the gun-on-player change; still open: loot, inventory | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
+| A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; the ammo shop came with the gun-on-player change; loot and a bag done ([M-LOOTVIS](M-LOOTVIS.md): walkers drop bandages and medkits, H uses one) | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
 | A12 | **Pause menu, options, save/load** in the sample (the stock player has Esc pause; no game screens) | `ui_flow`, save system | `ui_screens` |
 | A13 | **HLOD / `ChunkLod3D` skyline and scene streaming**: the whole city is one scene (714 entities) | A3/A4 steps, `samples/hlod_city` | `hlod_city` |
 | A14 | **Floating origin**: not set (1 km² never reaches the threshold); matters if the map grows | `FloatingOrigin3D` | — |
