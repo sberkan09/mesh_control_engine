@@ -454,3 +454,31 @@ TEST_CASE("effects: the Died wreck run twice has the same state hash") {
     };
     CHECK(run() == run());
 }
+
+TEST_CASE("effects: FireOn Fired bursts the weapon's aim_from camera and kicks the view") {
+    World w;
+    w.register_components<LocalTransform>();
+    install_particles(w, nullptr);
+    install_combat3d(w, nullptr);
+    install_effects(w, nullptr);
+    ParticleBurst b;
+    b.count = 6;
+    b.on = FireOn::Fired;
+    ShakeTrigger kick;
+    kick.trauma = 0.04f;
+    kick.on = FireOn::Fired;
+    const Entity cam = w.spawn_with(at(0, 2, 5), ParticleEmitter3D{}, b, kick, CameraShake3D{});
+    Weapon3D gun;
+    gun.aim_from = cam;
+    gun.magazine = 0;  // never runs dry
+    const Entity player = w.spawn_with(at(0, 1, 0), gun);
+    u64 t = 0;
+    for (u32 i = 0; i < 3; ++i) w.tick(kDt, t++);
+    CHECK(w.try_get<ParticleBurst>(cam)->fired == 0);
+
+    w.try_get_mut<Weapon3D>(player)->fire = 1;
+    for (u32 i = 0; i < 3; ++i) w.tick(kDt, t++);
+    CHECK(w.try_get<ParticleBurst>(cam)->fired >= 1);
+    CHECK(w.try_get<ParticleEmitter3D>(cam)->burst_version >= 1);
+    CHECK(w.try_get<ShakeTrigger>(cam)->fired >= 1);
+}

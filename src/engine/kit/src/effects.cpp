@@ -62,6 +62,7 @@ struct Named {
     Array<Entity> skid;    // vehicles a wheel of which started to skid (Skid3D)
     Array<Entity> lap;     // vehicles whose driver completed a lap (LapCompleted3D)
     Array<Entity> died;    // entities killed this tick (Died3D)
+    Array<Entity> fired;   // weapons that shot this tick, and the cameras they aim from (WeaponFired3D)
 };
 
 void add_unique(Array<Entity>& list, Entity e) {
@@ -89,6 +90,7 @@ bool should_fire(FireOn on, bool& fire, u32 fired, Entity e, const Named& n) {
     case FireOn::Skid: go = go || named(n.skid, e); break;
     case FireOn::Lap: go = go || named(n.lap, e); break;
     case FireOn::Died: go = go || named(n.died, e); break;
+    case FireOn::Fired: go = go || named(n.fired, e); break;
     }
     return go;
 }
@@ -149,6 +151,12 @@ void record_physics_events(Frame& f, Named& n) {
         for (const LapCompleted3D& ev : events.read<LapCompleted3D>()) add_unique(n.lap, ev.vehicle);
     if (w.event_queue<Died3D>())
         for (const Died3D& ev : events.read<Died3D>()) add_unique(n.died, ev.entity);
+    if (w.event_queue<WeaponFired3D>())
+        for (const WeaponFired3D& ev : events.read<WeaponFired3D>()) {
+            add_unique(n.fired, ev.weapon);
+            const Weapon3D* wp = w.alive(ev.weapon) ? w.try_get<Weapon3D>(ev.weapon) : nullptr;
+            if (wp && !wp->aim_from.is_null()) add_unique(n.fired, wp->aim_from);
+        }
     if (w.event_queue<Landed3D>())
         for (const Landed3D& ev : events.read<Landed3D>()) add_unique(n.landed, ev.entity);
     if (w.event_queue<ContactBegin3D>())

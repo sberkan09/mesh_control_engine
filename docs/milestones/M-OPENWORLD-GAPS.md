@@ -46,7 +46,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 - **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
 - **No third-person feel**: the player does not face its movement direction (the engine has no facing component for
   `use_input` characters), the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
-- **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
+- **Visible feedback on shooting**: ~~no muzzle flash~~ **muzzle flash and a small view kick done ([M-SHOTFX](M-SHOTFX.md))**; still no tracer, impact decal or hit marker (`WeaponFired3D`/`WeaponHit3D` carry the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
 - ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213, PR #859).** The cars did spawn and
   drive (24 alive within 10 s); two things hid them and the crowd. (1) The orbit camera started at yaw 0, hung over the
