@@ -1,0 +1,1 @@
+- Sample (M-CARWRECK 3): the four `09_openworld` police cars take crash damage like other cars (a wrecked one stops chasing). Record: `docs/milestones/M-CARWRECK.md`.

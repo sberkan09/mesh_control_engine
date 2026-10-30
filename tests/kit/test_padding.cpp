@@ -29,6 +29,7 @@
 #include "mce/kit/aurora.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/meteor.h"
+#include "mce/kit/season.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -102,6 +103,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Aurora>("Aurora", sizeof(Aurora::pad_));  // aurora.h (M-AURORA 16a)
     expect_pad<Rainbow>("Rainbow", sizeof(Rainbow::pad_));  // rainbow.h (M-RAINBOW 17a)
     expect_pad<Meteor>("Meteor", sizeof(Meteor::pad_));  // meteor.h (M-METEOR 18a)
+    expect_pad<Season>("Season", sizeof(Season::pad_));  // season.h (M-SEASONS 19a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 
