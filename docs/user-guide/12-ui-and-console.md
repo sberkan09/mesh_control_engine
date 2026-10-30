@@ -184,9 +184,11 @@ Gameplay never includes `mce/ui`; it talks to the screens only through data:
   as `"format"`, a printf format with one `%f` / `%e` / `%g`, default `%g`; other widgets as their
   value). The field is read from the screen's own entity when it has the component, else from the
   first scene entity that does, and the binding waits until one does.
-  A Panel or Image with a `"bind"` shows or hides: it is visible while the field is at least the first number
-  of its `"range": [lo, hi, step]` (`samples/09_openworld`'s wanted stars are five Panels bound to
-  `Wanted3D/level` with `lo` 1 to 5, each holding a Text `*`). Start such a widget with `"visible": false`.
+  A Panel or Image with a `"bind"` shows or hides: it is visible while the field is within its
+  `"range": [lo, hi, step]`, `lo <= value <= hi` (`samples/09_openworld`'s wanted stars are five Panels bound to
+  `Wanted3D/level` with `lo` 1 to 5; each mission's HUD shows its Active panel with `[1, 1, 0]` on `Mission/state`,
+  PASSED with `[2, 2, 0]`). A reflected enum field binds as its number (`Mission/state`: Idle 0, Active 1, Complete 2,
+  Failed 3). Start such a widget with `"visible": false`. A Slider bound to a field is a read-only bar (`"interactable": false`).
 - **Buttons to gameplay**: a widget's `"action": "Resume"` raises that input action. A confirmed
   button presses it for one tick, a slider, toggle or tabs change presses it with `x` = the new
   value, and a cancelled modal panel (Cancel / Esc) presses its own action. The action rides in

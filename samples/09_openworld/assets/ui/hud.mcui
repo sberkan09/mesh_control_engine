@@ -446,7 +446,7 @@
   {
    "name": "objective",
    "kind": "Text",
-   "text": "OBJECTIVE: take the car on the avenue",
+   "text": "Walk onto a yellow pad to start a mission",
    "style": {
     "text_size": 24,
     "text_outline": 2,

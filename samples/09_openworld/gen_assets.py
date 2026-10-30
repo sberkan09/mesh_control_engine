@@ -630,6 +630,9 @@ def economy_and_missions(s, player):
                  "MissionReward3D": {"cash": reward, "fail_fee": fee},
                  "MissionRetry": {"delay": 8},
                  "SaveKey": save_key()}
+        ident = title.lower().replace(" ", "_")
+        mission_hud(ident, title, len(stops), limit, reward)
+        comps["UiScreen"] = {"document": "guid:" + guid("ui/mission_%s.mcui" % ident)}  # reads Mission/* from this entity
         if wanted_fail:
             comps["MissionWantedFail"] = {"level": wanted_fail}
         m = s.add("Mission " + title, comps)
@@ -787,41 +790,70 @@ def scene():
     return len(s.ents), n_buildings
 
 
-def hud():
-    """The HUD: health, wanted level, cash and the minimap and the ammo (hud.mcui, bound to the Player and its gun)."""
-    def text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
-        w = {"name": name, "kind": "Text", "text": label, "style": {"text_size": size, "text_outline": 2, "text_outline_color": [0, 0, 0, 1]},
-             "text_align": align, "anchors": anchors}
-        if color:
-            w["style"]["text_color"] = color
-        if bind:
-            w["bind"], w["format"] = bind, fmt
+def hud_text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
+    w = {"name": name, "kind": "Text", "text": label, "style": {"text_size": size, "text_outline": 2, "text_outline_color": [0, 0, 0, 1]},
+         "text_align": align}
+    if anchors:
+        w["anchors"] = anchors
+    if color:
+        w["style"]["text_color"] = color
+    if bind:
+        w["bind"], w["format"] = bind, fmt
+    return w
+
+
+def hud_box(x0, y0, x1, y1, ax=0, ay=0):
+    return {"min": [ax, ay], "max": [ax, ay], "offset_min": [x0, y0], "offset_max": [x1, y1]}
+
+
+def mission_hud(mission_id, title, steps, limit, reward):
+    """One mission's HUD (bound to its Mission entity, which carries the UiScreen): while Active (state 1) its name, the stops
+    reached, a drain bar and the clock; PASSED (state 2) and FAILED (state 3) banners after. `visible` is driven by Mission/state
+    through a Panel's range [lo, hi]."""
+    def shown(name, state, children):
+        return {"name": name, "kind": "Panel", "visible": False, "style": {"tint": [0, 0, 0, 0]}, "range": [state, state, 0], "value": state,
+                "bind": "Mission/state", "anchors": hud_box(24, 60, 500, 170), "children": children}
+
+    def banner(label, size, color):
+        w = hud_text("banner", label, size, None, None, None, color)
+        w["fill"] = True  # a lone child fills its panel (no stack to size it)
         return w
 
-    def box(x0, y0, x1, y1, ax=0, ay=0):
-        return {"min": [ax, ay], "max": [ax, ay], "offset_min": [x0, y0], "offset_max": [x1, y1]}
+    gold = [1.0, 0.85, 0.25, 1]
+    active = shown("active", 1, [{"name": "rows", "kind": "Stack", "fill": True, "stack": {"axis": "Vertical", "spacing": 4}, "children": [
+        hud_text("title", "%s  +$%d" % (title.upper(), reward), 26, None, None, None, gold),
+        hud_text("steps", "STOPS 0 / %d" % steps, 22, None, "Mission/done", "STOPS %.0f / " + str(steps), [1, 1, 1, 1]),
+        {"name": "bar", "kind": "Slider", "range": [0, limit, 0], "value": 0, "interactable": False, "bind": "Mission/elapsed"},
+        hud_text("clock", "TIME 0 / %d s" % limit, 20, None, "Mission/elapsed", "TIME %.0f / " + str(limit) + " s", [0.8, 0.8, 0.8, 1])]}])
+    done = shown("passed", 2, [banner("%s PASSED" % title.upper(), 30, [0.45, 1.0, 0.5, 1])])
+    failed = shown("failed", 3, [banner("%s FAILED, retry at its pad" % title.upper(), 24, [1.0, 0.35, 0.3, 1])])
+    write("ui/mission_%s.mcui" % mission_id, {"format": "mce-ui", "version": 1, "guid": guid("ui/mission_%s.mcui" % mission_id),
+                                              "modal": False, "widgets": [active, done, failed]})
 
+
+def hud():
+    """The HUD: health, wanted level, cash and the minimap and the ammo (hud.mcui, bound to the Player and its gun)."""
     def wanted_stars():
         """Five stars at the right: star n is a Panel bound to Wanted3D/level that shows from level n up (range lo = n)."""
         stars = []
         for n in range(1, 6):
             x1 = -16 - (5 - n) * 34
             stars.append({"name": "star%d" % n, "kind": "Panel", "visible": False, "style": {"tint": [0, 0, 0, 0]},
-                          "range": [n, 5, 1], "value": n, "bind": "Wanted3D/level", "anchors": box(x1 - 34, 248, x1, 290, 1, 0),
+                          "range": [n, 5, 1], "value": n, "bind": "Wanted3D/level", "anchors": hud_box(x1 - 34, 248, x1, 290, 1, 0),
                           "children": [{"name": "glyph", "kind": "Text", "text": "*", "fill": True, "text_align": "Center",
                                         "style": {"text_size": 52, "text_color": [1.0, 0.85, 0.25, 1], "text_outline": 2,
                                                   "text_outline_color": [0, 0, 0, 1]}}]})
         return stars
 
     write("ui/hud.mcui", {"format": "mce-ui", "version": 1, "guid": G_HUD, "modal": False, "widgets": [
-        text("health", "HEALTH 100", 28, box(24, -64, 280, -24, 0, 1), "Health3D/current", "HEALTH %.0f", [0.45, 1.0, 0.5, 1]),
-        text("wanted", "WANTED", 22, box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
+        hud_text("health", "HEALTH 100", 28, hud_box(24, -64, 280, -24, 0, 1), "Health3D/current", "HEALTH %.0f", [0.45, 1.0, 0.5, 1]),
+        hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),
-        text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
-        text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
-        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
-        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
-        {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
+        hud_text("cash", "$ 0", 30, hud_box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
+        hud_text("objective", "Walk onto a yellow pad to start a mission", 24, hud_box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
+        hud_text("ammo", "AMMO 15", 30, hud_box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
+        hud_text("reserve", "/ 150", 24, hud_box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
+        {"name": "mini", "kind": "Minimap", "anchors": hud_box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
                      "background": [0.05, 0.07, 0.06, 0.75]}}]})
 

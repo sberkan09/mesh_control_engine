@@ -33,6 +33,13 @@ struct UiHealth {
 };
 MCE_COMPONENT(UiHealth, hp, lives, shielded)
 
+enum class UiPhase : u8 { Idle, Active, Done };
+MCE_ENUM(UiPhase, Idle, Active, Done)
+struct UiMission {
+    UiPhase phase = UiPhase::Idle;
+};
+MCE_COMPONENT(UiMission, phase)
+
 // The built-in font as a headless Font (no renderer; the set id is a CPU-only sprite set).
 struct Fixture {
     render::FontMetrics metrics;
@@ -646,7 +653,7 @@ TEST_CASE("ui: a health bar bound to UiHealth/hp updates on change and is untouc
     d.update(frame());
 }
 
-TEST_CASE("ui: a panel bound to a field shows from its range's lo up (wanted stars)") {
+TEST_CASE("ui: a panel bound to a field shows while the value is within its range (wanted stars, mission state)") {
     Fixture f;
     World world;
     const Entity player = world.spawn();
@@ -671,6 +678,24 @@ TEST_CASE("ui: a panel bound to a field shows from its range's lo up (wanted sta
     world.try_get_mut<UiHealth>(player)->lives = 0;
     d.update(frame());
     CHECK_FALSE(d.visible_self(low));
+
+    // Above `hi` it hides again, and an enum field reads as its number: a banner shown only while the phase is Active (1).
+    world.try_get_mut<UiHealth>(player)->lives = 6;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(low));
+    const Entity mission = world.spawn();
+    world.set(mission, UiMission{});
+    const WidgetId banner = b.panel("banner").at({0.0f, 0.0f}, {8, 8}).id();
+    d.set_range(banner, 1.0f, 1.0f, 0.0f);
+    CHECK(d.bind_property(banner, world, mission, "UiMission/phase"));
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(banner));
+    world.try_get_mut<UiMission>(mission)->phase = UiPhase::Active;
+    d.update(frame());
+    CHECK(d.visible_self(banner));
+    world.try_get_mut<UiMission>(mission)->phase = UiPhase::Done;
+    d.update(frame());
+    CHECK_FALSE(d.visible_self(banner));
 }
 
 TEST_CASE("ui: the developer console mirrors the log, runs convars and closes on cancel") {
