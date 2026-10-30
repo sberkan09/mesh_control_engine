@@ -39109,6 +39109,10 @@
     "Wallet3D": {
      "cash": 500
     },
+    "Inventory": {
+     "catalog": "guid:e97a4643-08b9-544e-903e-5f68ba9c1348"
+    },
+    "ItemHotkey3D": {},
     "StreamingFocus": {},
     "FootstepAudio": {
      "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",

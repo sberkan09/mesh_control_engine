@@ -167,6 +167,9 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"CashPickup3D","show":["CashPickup3D"]}})")) == 12);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ChopShop3D","show":["ChopShop3D"]}})")) == 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HealShop3D","show":["HealShop3D"]}})")) == 1);
+    // Loot: the player carries a bag with the use hotkey, every spawned walker may drop an item when killed.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ItemHotkey3D","show":["ItemHotkey3D","Inventory"]}})")) == 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"LootDrop","show":["LootDrop"]}})")) >= 20);
     // Standing on the Errand marker starts the mission.
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-45,0.95,-9]})");
     c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":0})");

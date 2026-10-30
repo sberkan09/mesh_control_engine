@@ -139,6 +139,17 @@
      ]
     },
     {
+     "name": "UseItem",
+     "bindings": [
+      {
+       "key": "H"
+      },
+      {
+       "gamepad_button": "RightShoulder"
+      }
+     ]
+    },
+    {
      "name": "Sprint",
      "bindings": [
       {

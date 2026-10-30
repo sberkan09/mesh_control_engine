@@ -1058,3 +1058,5 @@ on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and 
   too little cash it buys as many hit points as it can afford.
 
 Not in this step: spawning new units, and cars that follow roads.
+
+`ItemHotkey3D` (on an entity with an `Inventory`) lets the `UseItem` input action use the first consumable in the bag; `LootDrop` can draw its pickups with `mesh`, `tint`, `mesh_scale` and `lift` (`samples/09_openworld`: walkers drop bandages and medkits, H uses one).

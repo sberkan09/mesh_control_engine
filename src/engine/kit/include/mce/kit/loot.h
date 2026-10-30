@@ -23,6 +23,7 @@
 #include "mce/containers/array.h"
 #include "mce/ecs/entity.h"
 #include "mce/fixed_string.h"
+#include "mce/kit/kit3d.h"
 #include "mce/kit/procgen.h"
 #include "mce/refl/macros.h"
 
@@ -54,10 +55,23 @@ struct LootDrop {
     u8 pad_[3] = {};
     f32 radius = 1.2f;      // pickup trigger radius, metres
     f32 scatter = 0.9f;     // ring radius the pickups spread on, metres
+    asset::AssetRef<asset::Mesh> mesh;  // drawn on each pickup (null: the pickups are invisible)
+    math::vec4 tint{1.0f, 1.0f, 1.0f, 1.0f};
+    f32 mesh_scale = 0.4f;
+    f32 lift = 0.0f;        // metres the pickups sit above the dead body's origin (a negative value lowers them to the ground)
 };
 MCE_COMPONENT(LootDrop, (catalog, Save, Help{"the .mcitems catalog the table is in"}), (table, Save, Help{"the loot table id"}),
               (seed, Save, Help{"0: derived; set it for loot that must not change between runs"}), (rolls, Save, ReadOnly),
-              (dropped, Save, ReadOnly), (radius, Save, Range{0.05f, 100}), (scatter, Save, Range{0, 100}))
+              (dropped, Save, ReadOnly), (radius, Save, Range{0.05f, 100}), (scatter, Save, Range{0, 100}),
+              (mesh, Save, Help{"drawn on each pickup; empty: invisible"}), (tint, Save), (mesh_scale, Save, Range{0.01f, 10}),
+              (lift, Save, Range{-10, 10}))
+
+// Item hotkey (09_openworld): on an entity with an Inventory, the "UseItem" input action uses the first consumable in it.
+struct ItemHotkey3D {
+    u8 enabled = 1;
+    u8 pad_[3] = {};
+};
+MCE_COMPONENT(ItemHotkey3D, (enabled, Save, Help{"1: the UseItem action uses the first consumable in the Inventory"}))
 
 struct Container {
     asset::AssetRef<asset::ItemCatalogChunk> catalog;

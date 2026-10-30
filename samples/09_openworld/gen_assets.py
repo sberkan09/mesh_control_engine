@@ -64,6 +64,7 @@ G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
+G_ITEMS = guid("items/loot.mcitems")
 
 GRID = 5          # junctions per side
 SPACING = 250.0   # m between junctions: 4 blocks of 250 m = 1 km
@@ -167,6 +168,7 @@ def input_map():
         {"name": "Fire", "bindings": [{"mouse_button": "Left"}, key("J"), {"gamepad_button": "West"}]},
         {"name": "Reload", "bindings": [key("R"), {"gamepad_button": "North"}]},
         {"name": "Interact", "bindings": [key("E"), key("F"), {"gamepad_button": "East"}]},
+        {"name": "UseItem", "bindings": [key("H"), {"gamepad_button": "RightShoulder"}]},
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -730,6 +732,15 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     return car
 
 
+def items_catalog():
+    """What a killed walker may drop; the player uses the first consumable with H (ItemHotkey3D) and the HUD lists the bag."""
+    write("items/loot.mcitems", {"format": "mce-items", "version": 1, "guid": G_ITEMS, "items": [
+        {"id": "bandage", "name": "Bandage", "stack": 5, "weight": 0.1, "tags": ["consumable", "heal"], "stats": {"heal": 20}},
+        {"id": "medkit", "name": "Medkit", "stack": 3, "weight": 0.4, "tags": ["consumable", "heal"], "stats": {"heal": 60}}],
+        "tables": [{"id": "pedestrian", "rolls": [0, 1], "entries": [
+            {"item": "bandage", "weight": 3, "qty": 1}, {"item": "medkit", "weight": 1, "qty": 1}]}]})
+
+
 def prefabs():
     # Roadblock pieces: a police car that is a static box (the barricade does not roll away), and an officer who holds his ground.
     write("prefabs/roadblock_car.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_BLOCK_CAR, "name": "roadblock_car", "entities": [
@@ -753,7 +764,10 @@ def prefabs():
         # A 1.8 m kinematic capsule: the crowd stands a walker with a body on it (its origin is the capsule's centre,
         # 0.9 m above the pavement) and drives it by velocity, so the model hangs 0.9 m below.
         "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
-        "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2}}},
+        "Health3D": {"max": 30, "team": 3, "destroy_on_death": 1, "linger": 0.2},
+        # A killed walker may drop a bandage or a medkit (about every other kill), a small green box at his feet.
+        "LootDrop": {"catalog": "guid:" + G_ITEMS, "table": "pedestrian", "radius": 1.5, "scatter": 0.5, "lift": -0.7,
+                     "mesh": "guid:" + G_BOX, "tint": [0.3, 1.0, 0.4, 1], "mesh_scale": 0.35}}},
         {"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                          "MeshRef": model_mesh("character-b")}}]
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
@@ -915,6 +929,9 @@ def scene():
         # An arrest costs half the spare ammunition (Confiscate3D), a shop sells it back (AmmoShop3D).
         "Confiscate3D": {"ammo_kept": 0.5},
         "Wallet3D": {"cash": 500},
+        # The bag: killed walkers drop bandages and medkits (items/loot.mcitems); H uses the first one. The HUD lists it.
+        "Inventory": {"catalog": "guid:" + G_ITEMS},
+        "ItemHotkey3D": {},
         "StreamingFocus": {},
         "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
         # The gun is the player's (so the shop and the confiscation see it) but aims along the camera: shots leave from the
@@ -1078,6 +1095,10 @@ def hud():
         hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),
         hud_text("cash", "$ 0", 30, hud_box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
+        hud_text("bag", "BAG  (H to use)", 20, hud_box(-280, 338, -16, 362, 1, 0), None, None, [0.8, 0.8, 0.8, 1], "Right"),
+        hud_text("slot_1", "", 22, hud_box(-280, 364, -16, 390, 1, 0), None, None, [0.7, 1.0, 0.8, 1], "Right"),
+        hud_text("slot_2", "", 22, hud_box(-280, 392, -16, 418, 1, 0), None, None, [0.7, 1.0, 0.8, 1], "Right"),
+        hud_text("slot_3", "", 22, hud_box(-280, 420, -16, 446, 1, 0), None, None, [0.7, 1.0, 0.8, 1], "Right"),
         hud_text("objective", "Walk onto a yellow pad to start a mission", 24, hud_box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
         hud_text("ammo", "AMMO 15", 30, hud_box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
         hud_text("reserve", "/ 150", 24, hud_box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
@@ -1091,6 +1112,7 @@ surface_assets()
 lamp_material()
 audio_assets()
 hud()
+items_catalog()
 input_map()
 write("roads/city.mcroads", roads_doc())
 prefabs()
