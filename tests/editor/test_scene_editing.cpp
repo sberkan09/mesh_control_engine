@@ -649,6 +649,26 @@ TEST_CASE("gizmo: handles hit-test in screen pixels; drags constrain, snap and c
 
 // ---- M4: autosave + recovery -------------------------------------------------------------------
 
+TEST_CASE("autosave_path_for: inside a project, outside one, and when there is nowhere to put it") {
+    {
+        EditorSession bare;  // no project open
+        CHECK(bare.autosave_path_for("").empty());
+        const std::string out(bare.autosave_path_for("/tmp/elsewhere/level.mcscene").c_str());
+        CHECK(out == "/tmp/elsewhere/level.mcscene.autosave");
+    }
+    const std::string root = demo_project("autosave_path_for");
+    EditorSession session;
+    REQUIRE(session.open_project(StringView(root.data(), root.size())));
+    const std::string dir = root + "/.mce/autosave/";
+    CHECK(std::string(session.autosave_path_for("").c_str()) == dir + "untitled.mcscene.autosave");
+    // A path that is not under the project's assets/ falls back to "<path>.autosave" beside it.
+    CHECK(std::string(session.autosave_path_for("scenes/demo.mcscene").c_str()) == "scenes/demo.mcscene.autosave");
+    // An absolute path under assets/ maps to the same place as the relative one.
+    const std::string abs = root + "/assets/scenes/demo.mcscene";
+    CHECK(std::string(session.autosave_path_for(StringView(abs.data(), abs.size())).c_str()) ==
+          dir + "scenes/demo.mcscene.autosave");
+}
+
 TEST_CASE("autosave: written on the timer while dirty, offered after a crash, gone after save") {
     const std::string root = demo_project("autosave_demo");
     {
