@@ -53,7 +53,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 19b finds the den
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 19a | planned | | |
+| 19a | done | 911 | `Season` and the pure helpers in `mce/kit/season.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19q. |
 | 19b | planned | | |
 | 19c | planned | | |
 | 19d | planned | | |

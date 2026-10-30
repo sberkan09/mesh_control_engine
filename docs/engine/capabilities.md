@@ -143,6 +143,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Roadblock3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `RoadblockPiece3D` | `mce/kit/roadblock.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand |
 | `RoadNetwork3D` | `mce/kit/roads.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Season` | `mce/kit/season.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `VehicleSeat3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `Rider3D` | `mce/kit/seats3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Raycast3D` | `mce/kit/sensors3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
