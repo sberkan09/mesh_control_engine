@@ -433,6 +433,26 @@ declare weather: {
     -- min_darkness 0..1, seed 0..65535 rounded down; night_only and enabled: any non-zero number is 1); an unknown key or a
     -- non-number raises and nothing is written
     set_meteor: (settings: { rate: number?, brightness: number?, length: number?, speed: number?, min_darkness: number?, night_only: number?, seed: number?, enabled: number? }) -> (),
+
+    -- Season (M-SEASONS), the first one in the scene; every season function raises when there is none (set_season never adds
+    -- one). The getters use the set keys' names with a season_ prefix; the tints return r, g, b. season_phase (0..1) is the
+    -- year phase now, from the first WorldClock's day and hour (the fixed start_phase with no clock); read-only, and the
+    -- getters read the authoring even when enabled is 0.
+    season_enabled: () -> number,
+    season_year_days: () -> number,
+    season_start_phase: () -> number,
+    season_winter_density: () -> number,
+    season_snow_cover_bias: () -> number,
+    season_cold_bias: () -> number,
+    season_strength: () -> number,
+    season_spring_tint: () -> (number, number, number),
+    season_autumn_tint: () -> (number, number, number),
+    season_winter_tint: () -> (number, number, number),
+    season_phase: () -> number,
+    -- every key optional, each value clamped to the field's range (year_days 1..3650, start_phase 0..1, tints 0..4 per
+    -- channel, winter_density, snow_cover_bias, cold_bias and strength 0..1; enabled: any non-zero number is 1); an
+    -- unknown key or a non-number raises and nothing is written
+    set_season: (settings: { enabled: number?, year_days: number?, start_phase: number?, spring_tint: { number }?, autumn_tint: { number }?, winter_tint: { number }?, winter_density: number?, snow_cover_bias: number?, cold_bias: number?, strength: number? }) -> (),
 }
 
 declare water: {

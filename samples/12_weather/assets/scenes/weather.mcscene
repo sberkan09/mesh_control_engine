@@ -83,7 +83,9 @@
     "Aurora": {},
     "Rainbow": {},
     "Meteor": {},
-    "Season": {},
+    "Season": {
+     "year_days": 1
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
