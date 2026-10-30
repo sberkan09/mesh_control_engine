@@ -114,6 +114,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ItemHotkey3D` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `MapMarker` | `mce/kit/map_markers.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Meteor` | `mce/kit/meteor.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Mission` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Objective` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `MissionMarker` | `mce/kit/missions.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |

@@ -82,6 +82,7 @@
     "Moon": {},
     "Aurora": {},
     "Rainbow": {},
+    "Meteor": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
