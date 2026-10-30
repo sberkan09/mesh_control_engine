@@ -236,6 +236,22 @@
 //                                         (enabled: any non-zero number is 1); an unknown key or a non-number raises an
 //                                         error that names the call and nothing is written
 //
+// Meteor (M-METEOR step 18d) lives in the same table, next to the rainbow: the authoring over the first kit::Meteor
+// (mce/kit/meteor.h) and the read-only meteor_level(). Named errors as above ("weather.set_meteor: the scene has no Meteor
+// entity"); the setter never adds the component. The authoring names follow the set keys with a `meteor_` prefix.
+// meteor_level() is kit::meteor_level with the inputs Kit3DExtract uses: the night fade of the current hour (0 with no
+// clock, so with no clock only night_only 0 shows), the cloud coverage of the first Weather and CloudLayer and the first
+// Weather's rain (its intensity while it rains or storms). It is 0 under an equirect sky texture. The getters read the
+// authoring even when `enabled` is 0 (meteor_level is 0 then).
+//
+//   weather.meteor_rate() / meteor_brightness() / meteor_length() / meteor_speed() / meteor_min_darkness() /
+//   weather.meteor_night_only() / meteor_seed() / meteor_enabled() -> number
+//   weather.meteor_level() -> number                0..1, the level the renderer gets now
+//   weather.set_meteor{rate=, brightness=, length=, speed=, min_darkness=, night_only=, seed=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range (seed
+//                                         rounded down; night_only and enabled: any non-zero number is 1); an unknown
+//                                         key or a non-number raises an error that names the call and nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -281,6 +297,7 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
+#include "mce/kit/meteor.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
 #include "mce/kit/world_clock.h"
@@ -1307,6 +1324,74 @@ int l_weather_set_rainbow(lua_State* L) {
     return 0;
 }
 
+// ---- Meteor (M-METEOR step 18d) ----
+
+kit::Meteor& check_meteor(lua_State* L, const char* fn) { return check_first<kit::Meteor>(L, fn, "Meteor"); }
+
+#define MCE_WEATHER_GETTER_METEOR(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_meteor(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_METEOR(meteor_rate, rate)
+MCE_WEATHER_GETTER_METEOR(meteor_brightness, brightness)
+MCE_WEATHER_GETTER_METEOR(meteor_length, length)
+MCE_WEATHER_GETTER_METEOR(meteor_speed, speed)
+MCE_WEATHER_GETTER_METEOR(meteor_min_darkness, min_darkness)
+MCE_WEATHER_GETTER_METEOR(meteor_night_only, night_only)
+MCE_WEATHER_GETTER_METEOR(meteor_seed, seed)
+MCE_WEATHER_GETTER_METEOR(meteor_enabled, enabled)
+#undef MCE_WEATHER_GETTER_METEOR
+
+// weather.meteor_level(): kit::meteor_level with the inputs Kit3DExtract's meteor block uses. 0 under an equirect sky
+// texture. The night fade is the aurora's (0 with no clock, so only night_only 0 shows), the rain is the first Weather's
+// intensity while it rains or storms (0 without a Weather) and the cloud cover is the one the aurora uses (the extract's
+// own value before the quality gate).
+int l_weather_meteor_level(lua_State* L) {
+    const kit::Meteor& m = check_meteor(L, "weather.meteor_level");
+    World& w = world_of(L);
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 level = 0.0f;
+    if (m.enabled && env.sky_texture.guid == asset::Guid{}) {
+        const kit::Weather* wx = first_weather(w);
+        const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        level = kit::meteor_level(m, aurora_night_fade(w), aurora_cloud_cover(w), rain);
+        if (!std::isfinite(level)) level = 0.0f;
+    }
+    lua_pushnumber(L, static_cast<double>(level));
+    return 1;
+}
+
+// weather.set_meteor{...}: validated before anything is written.
+int l_weather_set_meteor(lua_State* L) {
+    static const char* const kKeys[8] = {"rate", "brightness", "length", "speed", "min_darkness", "night_only", "seed", "enabled"};
+    f64 value[8] = {};
+    bool given[8] = {};
+    read_settings(L, "weather.set_meteor", kKeys, 8, "rate, brightness, length, speed, min_darkness, night_only, seed, enabled",
+                  value, given);
+    kit::Meteor& m = check_meteor(L, "weather.set_meteor");
+    if (given[0]) m.rate = static_cast<f32>(clamp_range(value[0], 0.0, 30.0));
+    if (given[1]) m.brightness = static_cast<f32>(clamp_range(value[1], 0.0, 4.0));
+    if (given[2]) m.length = static_cast<f32>(clamp_range(value[2], 0.5, 2.0));
+    if (given[3]) m.speed = static_cast<f32>(clamp_range(value[3], 0.5, 2.0));
+    if (given[4]) m.min_darkness = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) m.night_only = value[5] != 0.0 ? 1 : 0;
+    if (given[6]) m.seed = static_cast<u32>(std::floor(clamp_range(value[6], 0.0, 65535.0)));
+    if (given[7]) m.enabled = value[7] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1618,6 +1703,16 @@ const luaL_Reg kWeatherLib[] = {
     {"rainbow_enabled", l_weather_rainbow_enabled},
     {"rainbow_level", l_weather_rainbow_level},
     {"set_rainbow", l_weather_set_rainbow},
+    {"meteor_rate", l_weather_meteor_rate},
+    {"meteor_brightness", l_weather_meteor_brightness},
+    {"meteor_length", l_weather_meteor_length},
+    {"meteor_speed", l_weather_meteor_speed},
+    {"meteor_min_darkness", l_weather_meteor_min_darkness},
+    {"meteor_night_only", l_weather_meteor_night_only},
+    {"meteor_seed", l_weather_meteor_seed},
+    {"meteor_enabled", l_weather_meteor_enabled},
+    {"meteor_level", l_weather_meteor_level},
+    {"set_meteor", l_weather_set_meteor},
     {nullptr, nullptr},
 };
 

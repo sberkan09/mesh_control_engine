@@ -414,6 +414,25 @@ declare weather: {
     -- min_wetness 0..1, max_sun_elevation 10..60 degrees; enabled: any non-zero number is 1); an unknown key or a
     -- non-number raises and nothing is written
     set_rainbow: (settings: { strength: number?, band_width: number?, secondary: number?, min_wetness: number?, max_sun_elevation: number?, enabled: number? }) -> (),
+
+    -- Meteor (M-METEOR), the first one in the scene; every meteor function raises when there is none (set_meteor never adds
+    -- one). The getters use the set keys' names with a meteor_ prefix. meteor_level (0..1) is the level the renderer gets
+    -- now, from the night fade of the current hour (0 with no clock, so only night_only 0 shows then), the cloud coverage of
+    -- the first Weather and CloudLayer and the first Weather's rain; read-only, and the getters read the authoring even
+    -- when enabled is 0 (the level is then 0).
+    meteor_rate: () -> number,
+    meteor_brightness: () -> number,
+    meteor_length: () -> number,
+    meteor_speed: () -> number,
+    meteor_min_darkness: () -> number,
+    meteor_night_only: () -> number,
+    meteor_seed: () -> number,
+    meteor_enabled: () -> number,
+    meteor_level: () -> number,
+    -- every key optional, each value clamped to the field's range (rate 0..30, brightness 0..4, length 0.5..2, speed 0.5..2,
+    -- min_darkness 0..1, seed 0..65535 rounded down; night_only and enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_meteor: (settings: { rate: number?, brightness: number?, length: number?, speed: number?, min_darkness: number?, night_only: number?, seed: number?, enabled: number? }) -> (),
 }
 
 declare water: {
