@@ -80,6 +80,7 @@
     "WindGust": {},
     "GroundMist": {},
     "Moon": {},
+    "Aurora": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

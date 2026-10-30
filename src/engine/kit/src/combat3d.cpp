@@ -19,7 +19,7 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Health3D) == 64);
-static_assert(sizeof(Weapon3D) == 168);
+static_assert(sizeof(Weapon3D) == 176);
 static_assert(sizeof(Projectile3D) == 44);
 
 namespace {
@@ -211,7 +211,12 @@ void kit3d_weapons(Frame& f) {
         ++wp.shots;
         math::vec3 pos, scale;
         math::quat rot;
-        world_pose(w, e, t, pos, rot, scale);
+        // A weapon carried by a character can take its aim from another entity (the camera); if that is gone it uses its own pose.
+        const LocalTransform* from = !wp.aim_from.is_null() && w.alive(wp.aim_from) ? w.try_get<LocalTransform>(wp.aim_from) : nullptr;
+        if (from)
+            world_pose(w, wp.aim_from, *from, pos, rot, scale);
+        else
+            world_pose(w, e, t, pos, rot, scale);
         shoot(f, phys, e, wp, pos, rot);
     });
 }

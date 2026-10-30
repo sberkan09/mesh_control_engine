@@ -22,14 +22,14 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; wanted stars done (Panels bound to `Wanted3D/level`, visible from `range` lo up); open: the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
 | A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission and shop markers wired in E7/E8) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
 | A3 | ~~**Missions**~~ **done (E7, 2026-10-29)**: three jobs (Errand, Courier, Long haul) started from marker pads, reward, fail fee and retry, wanted-level fail; minimap labels via `MapMarker`. Still open: kill/interact objectives, Luau chaining | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
-| A4 | **Day/night cycle** (the sun is fixed; `Environment3D` only) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
-| A5 | **Weather** (rain, wet roads, fog, lightning, wind, snow) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
-| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; still missing: radio, hit and impact sounds, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
+| A4 | **Day/night cycle**: ~~the sun is fixed~~ **done (E6, 2026-10-29)**, see [M-OPENWORLD-DAYNIGHT](M-OPENWORLD-DAYNIGHT.md) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
+| A5 | **Weather**: ~~rain, wet roads, fog, lightning, wind~~ **done (E6)** except snow (no snow cover in the city) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
+| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; still missing: radio, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
 | A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
 | A10 | **Carjacking** done (E8, parked cars 2 and 3 are owned, witnessed theft adds heat); still open: **vehicle damage and wrecks, ramming pedestrians** | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
-| A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; still open: ammo shop (the gun is on the camera, which has no wallet), loot, inventory | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
+| A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; the ammo shop came with the gun-on-player change; still open: loot, inventory | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
 | A12 | **Pause menu, options, save/load** in the sample (the stock player has Esc pause; no game screens) | `ui_flow`, save system | `ui_screens` |
 | A13 | **HLOD / `ChunkLod3D` skyline and scene streaming**: the whole city is one scene (714 entities) | A3/A4 steps, `samples/hlod_city` | `hlod_city` |
 | A14 | **Floating origin**: not set (1 km² never reaches the threshold); matters if the map grows | `FloatingOrigin3D` | — |
@@ -45,7 +45,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   rig are not played; wheels do not spin; no door, steering or lights animation.
 - **No sky**: no HDRI, no clouds, no stars; no night look; traffic lights do not change colour with the signal state.
 - **No third-person feel**: the player does not face its movement direction (the engine has no facing component for
-  `use_input` characters), the camera stays behind a fixed orbit, the gun is on the camera.
+  `use_input` characters), the camera stays behind a fixed orbit (the gun is the player's since step 2a and aims along the camera).
 - **No visible feedback on shooting**: no muzzle flash, tracer, impact decal or hit marker (`WeaponFired3D` carries the data).
 - **Sparse city**: 121 box lots, no interiors, no props (lamps, hydrants, bins, benches, signs), no vegetation beyond boxes.
 - ~~**Traffic and crowd were not seen in any of the 11 captures**~~ **Fixed (SBA-213, PR #859).** The cars did spawn and
@@ -58,7 +58,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   it. Also: `mce_player`'s headless line "714 entities" counts the scene's own entities, not the spawned ones, so it never
   showed the traffic either (not changed). Verified on captures at ticks 300 and 700 from the start position and during
   the drive script (cars on both carriageways, walkers moving on both sidewalks).
-- **The camera does not turn with the car** (open, found in SBA-213). `CameraFollow3D` keeps the yaw the player gave it;
+- **The camera does not turn with the car** (done, M-OPENWORLD-POLICE 4: `CameraFollow3D::chase`, on in the sample; found in SBA-213). `CameraFollow3D` keeps the yaw the player gave it;
   while driving, the car turns under a fixed camera, so a turn off the avenue leaves the road out of frame. Needs a chase
   option on `CameraFollow3D` (ease the yaw behind the target's heading while it moves, Look input overriding it for a
   moment), used by the sample while `Rider3D` is seated. A separate step.
@@ -109,3 +109,14 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 Steps 1 to 4 are the "make it playable" bundle; 5 to 8 make it a game; 9 to 11 are polish and scale. Each is a data-only or
 single-module change, so they can run in parallel threads on disjoint files (`samples/09_openworld` plus one module each).
+
+## F. Weapons and combat (step 2)
+
+Step 2 closes "no cover, melee, grenades or weapon switching" and moves the gun to where the shop and confiscation components look.
+
+| Step | What | Status |
+|---|---|---|
+| 2a | `Weapon3D::aim_from` (an Entity): the shot leaves from that entity's pose (plus `muzzle`) and points along its forward; null or a gone entity falls back to the weapon's own pose. The 09_openworld gun moved from the camera to the player (`aim_from` = the camera, `WeaponAudio` and the ammo readout in `hud.mcui` with it), so `Confiscate3D` (an arrest keeps half the spare rounds) and an `AmmoShop3D` on the avenue (2 cash a round, up to 150) now work. `Weapon3D` 168 to 176 bytes. | done |
+| 2b | `Loadout3D` weapon switching | open |
+| 2c | `Melee3D` | open |
+| 2d | `Cover3D` / take cover (ray from the shooter to the target against the cover) | open |

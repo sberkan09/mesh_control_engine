@@ -106,6 +106,11 @@ struct Forward3DPassU {
     vec4 water4;      // x roughness, y foam amount, z foam width (m), w 1 = the opaque depth is bound
     vec4 water5;      // xy the detail ripples' phases (rad), z detail slope (0 = none), w 0
     vec4 wave[8];     // per Gerstner wave: xy the wave vector on xz (rad/m), z amplitude (m), w phase (rad)
+    vec4 aurora;      // M-AURORA 16c: x level (0 = off), y base height, z height span (sines), w time mod kAuroraPeriod
+    vec4 aurora2;     // xy the arc centre (xz unit vector), z cos of the arc's half-width, w curtain count (1..6)
+    vec4 aurora3;     // rgb the low (base) colour, w 0
+    vec4 aurora4;     // rgb the high (top) colour, w speed (0..4)
+    vec4 free_[12];   // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -126,12 +131,21 @@ static_assert(
         offsetof(Forward3DPassU, water4) == offsetof(Forward3DPassU, water3) + 16 &&
         offsetof(Forward3DPassU, water5) == offsetof(Forward3DPassU, water4) + 16 &&
         offsetof(Forward3DPassU, wave) == offsetof(Forward3DPassU, water5) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, wave) + 8 * 16,
+        offsetof(Forward3DPassU, aurora) == offsetof(Forward3DPassU, wave) + 8 * 16 &&
+        offsetof(Forward3DPassU, aurora2) == offsetof(Forward3DPassU, aurora) + 16 &&
+        offsetof(Forward3DPassU, aurora3) == offsetof(Forward3DPassU, aurora2) + 16 &&
+        offsetof(Forward3DPassU, aurora4) == offsetof(Forward3DPassU, aurora3) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, aurora4) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 12 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
-    "p_moon2 / p_water .. p_water5 / p_wave[8] follow p_sky_rot as in MCE_GLSL_PASS_U");
-// M-WATER 15c: the water members keep PassU at 1280 bytes, a whole number of the 256-byte uniform alignment, so the
-// ring does not grow per upload.
-static_assert(sizeof(Forward3DPassU) == 1280, "PassU: 80 vec4 (the water members filled the last 256-byte slot)");
+    "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_free[12] follow p_sky_rot as in "
+    "MCE_GLSL_PASS_U");
+// PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
+// costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
+// vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
+// the main pass, at most 6 * kGiMaxBatchProbes = 192 more on a GI fill frame: 48 KiB of the 1 MiB ring); the block
+// is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding).
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot)");
 
 namespace {
 
@@ -462,6 +476,33 @@ void night_sky_params(const NightSky& n, PassU& pu) {
     pu.moon = vec4(dir, f32(std::cos(elong)));
     pu.moon2 = vec4(detail::scaled(n.moon_color.x, 1.0f, 0.0f), detail::scaled(n.moon_color.y, 1.0f, 0.0f),
                     detail::scaled(n.moon_color.z, 1.0f, 0.0f), f32(std::sin(elong)));
+}
+
+// The main pass's aurora members (M-AURORA 16c). Level 0 (the Low tier and `r.aurora 0` zero it in apply_quality, the
+// kit folds the latitude gate and the night fade into it), a NaN level or `enabled` false leave p_aurora .. p_aurora4
+// zero: the sky shader skips aurora_layer and the frame is the one without it bit for bit. The values are clamped again
+// (apply_quality's clamps: a caller may skip it). The time is the carrier's, wrapped once more in f64 to
+// kAuroraPeriod (kit::kAuroraPeriodSeconds: every rate of the curtains is a whole number of cycles per period, so the
+// wrap does not show); a non-finite time counts as 0. The half-width cosine is kept to 0..cos 5 degrees (the kit's
+// width_deg Range 10..180), so the shader's arc never has zero width. Direction-only, as the night sky: no camera
+// position, no floating origin.
+constexpr f64 kAuroraPeriod = 64.0;  // kit::kAuroraPeriodSeconds (the renderer does not include the kit)
+void aurora_params(const AuroraSky& a, PassU& pu) {
+    const f32 level = detail::ranged(a.level, 0.0f, 4.0f, 0.0f);
+    if (!a.enabled || !(level > 0.0f)) return;
+    const f32 base = detail::ranged(a.base_height, 0.02f, 0.6f, 0.18f);
+    const f32 span = detail::ranged(a.height_span, 0.05f, 0.8f, 0.35f);
+    const f64 t = std::isfinite(a.time) ? f64(a.time) : 0.0;
+    f64 tw = t - kAuroraPeriod * std::floor(t / kAuroraPeriod);
+    if (!(tw < kAuroraPeriod)) tw = 0.0;
+    const vec2 az = detail::unit_dir2_z(a.azimuth);
+    const f32 count = detail::ranged(f32(a.curtain_count), 1.0f, 6.0f, 3.0f);
+    const auto unit = [](f32 x) { return detail::ranged(x, 0.0f, 1.0f, 0.0f); };
+    pu.aurora = vec4(level, base, span, f32(tw));
+    pu.aurora2 = vec4(az.x, az.y, detail::ranged(a.half_width_cos, 0.0f, 0.9962f, 0.8192f), std::floor(count));
+    pu.aurora3 = vec4(unit(a.low_color.x), unit(a.low_color.y), unit(a.low_color.z), 0.0f);
+    pu.aurora4 = vec4(unit(a.high_color.x), unit(a.high_color.y), unit(a.high_color.z),
+                      detail::ranged(a.speed, 0.0f, 4.0f, 1.0f));
 }
 
 // ---- the water plane (M-WATER 15c). The wave tables are kit::water_wave_set's (mce/kit/water.h; the renderer does not
@@ -2036,6 +2077,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     ripple_params(scene.ripples(), scene.time(), pu);
     cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
     night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
+    aurora_params(scene.aurora(), pu);               // the aurora curtains (M-AURORA 16c): main pass only too
     if (apply_fog && water_on(scene.water()) && !water_.is_null())
         water_params(scene.water(), origin_, water_depth_, pu);  // the water plane (M-WATER 15c): the main pass only
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));

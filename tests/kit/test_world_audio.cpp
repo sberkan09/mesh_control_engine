@@ -16,6 +16,7 @@
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
 #include "mce/kit/world_audio.h"
+#include "mce/kit/world_clock.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -29,8 +30,10 @@ struct Rig {
     World w;
     u64 t = 0;
     explicit Rig(bool audio = true) {
-        w.register_components<LocalTransform, audio::AudioSource, Vehicle3D, VehicleSeat3D, CharacterController3D, Rider3D, Wanted3D>();
+        w.register_components<LocalTransform, audio::AudioSource, Vehicle3D, VehicleSeat3D, CharacterController3D, Rider3D, Wanted3D, WorldClock>();
         w.register_event<WeaponFired3D>(Phase::FixedUpdate_Pre);
+        w.register_event<WeaponHit3D>(Phase::FixedUpdate_Pre);
+        w.register_event<ContactBegin3D>(Phase::FixedUpdate_Pre);
         if (audio) w.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);  // what audio::install registers
         install_world_audio(w);
     }
@@ -160,4 +163,72 @@ TEST_CASE("world_audio: a world without audio is left untouched") {
     r.run(5);
     CHECK(r.w.try_get<audio::AudioSource>(e)->gain_db == 3.0f);
     CHECK(r.w.try_get<audio::AudioSource>(e)->pick_rate == 0);
+}
+
+TEST_CASE("world_audio: a hit plays where the shot lands, only for a weapon with a hit sound") {
+    Rig r;
+    WeaponAudio wa;
+    wa.hit.guid = clip();
+    wa.hit_gain_db = -5.0f;
+    const Entity gun = r.w.spawn_with(wa);
+    WeaponHit3D ev;
+    ev.weapon = gun;
+    ev.point = {7, 0, 1};
+    EventAccess(r.w).push(ev);
+    audio::PlaySfx played;
+    CHECK(r.run(3, &played) == 1);
+    CHECK(played.position == math::vec3{7, 0, 1});
+    CHECK(played.gain_db == doctest::Approx(-5.0f));
+    r.w.try_get_mut<WeaponAudio>(gun)->hit = {};
+    EventAccess(r.w).push(ev);
+    CHECK(r.run(3) == 0);
+}
+
+TEST_CASE("world_audio: an impact sounds by speed, not below min_speed, and not again within min_gap") {
+    Rig r;
+    ImpactAudio ia;
+    ia.clip.guid = clip();
+    const Entity car = r.w.spawn_with(ia);
+    const Entity wall = r.w.spawn_with(LocalTransform{});
+    ContactBegin3D ev;
+    ev.a = car;
+    ev.b = wall;
+    ev.point = {1, 1, 1};
+    ev.approach_speed = 2.0f;  // a nudge
+    EventAccess(r.w).push(ev);
+    CHECK(r.run(3) == 0);
+    ev.approach_speed = 12.0f;  // halfway between 4 and 20
+    EventAccess(r.w).push(ev);
+    audio::PlaySfx played;
+    CHECK(r.run(3, &played) == 1);
+    CHECK(played.gain_db == doctest::Approx(-6.0f));
+    CHECK(played.position == math::vec3{1, 1, 1});
+    EventAccess(r.w).push(ev);  // inside the 0.5 s gap
+    CHECK(r.run(3) == 0);
+    r.run(40);
+    ev.approach_speed = 40.0f;
+    EventAccess(r.w).push(ev);
+    CHECK(r.run(3, &played) == 1);
+    CHECK(played.gain_db == doctest::Approx(0.0f));
+}
+
+TEST_CASE("world_audio: a clock-driven bed rises after on_hour, falls after off_hour and wraps midnight") {
+    Rig r;
+    WorldClock clock;
+    clock.hour = 12.0f;
+    const Entity c = r.w.spawn_with(clock);
+    ClockAudio ca;  // 19:00 .. 05:00, 1.5 h fades, -60 by day, -20 at night
+    const Entity bed = r.w.spawn_with(audio::AudioSource{}, ca);
+    auto gain_at = [&](f32 hour) {
+        r.w.try_get_mut<WorldClock>(c)->hour = hour;
+        r.run(1);
+        return r.w.try_get<audio::AudioSource>(bed)->gain_db;
+    };
+    CHECK(gain_at(12.0f) == doctest::Approx(-60.0f));
+    CHECK(gain_at(19.0f) == doctest::Approx(-60.0f));
+    CHECK(gain_at(19.75f) == doctest::Approx(-40.0f));  // halfway up the fade
+    CHECK(gain_at(21.0f) == doctest::Approx(-20.0f));
+    CHECK(gain_at(2.0f) == doctest::Approx(-20.0f));    // past midnight
+    CHECK(gain_at(5.75f) == doctest::Approx(-40.0f));   // halfway down
+    CHECK(gain_at(7.0f) == doctest::Approx(-60.0f));
 }

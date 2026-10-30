@@ -17,6 +17,7 @@ import sys
 import urllib.parse
 import urllib.request
 import wave
+import zipfile
 
 import numpy as np
 
@@ -37,8 +38,18 @@ SOURCES = {
     "04-footstep.ogg": "b373ff981e44d6f7ba2291225a4803078771029615ed81606136fdb9599906d5",
     "05-footstep.ogg": "f1b4893dd3cebe23438567a0dcaf047848a52b594e7eb03e5c212d99e83d2298",
     "06-footstep.ogg": "39147cc1b98abb4b5378ad07b15d50d18f2aa0f0fd2f5514f078c1e574d14773",
+    "amb_rain_loop_1.ogg": "ae578791d46218d180a0e3aebefb5d621dbdd3f1627899c25210379f57d480b0",
+    "wind background noise 2.wav": "9f1fd5c8b37949e6889a7f6acbd822f66e0ab4e918d72bda58d8d8c2c7e85a80",
+    "crickets_1.mp3": "5b5bd1f744087888c5623543c3ff80be9c2ce106093993e7c8a8492b0280b2c0",
 }
+# One zip pack (rubberduck, "100 CC0 wood and metal SFX"): the members used here, copied unmodified
+ZIP_NAME = "100-CC0-wood-metal-SFX.zip"
+ZIP_SHA256 = "be6eba63b03409ac0c77787a956b1503a7c186403d04aef9725c52644a4b7878"
+ZIP_MEMBERS = {"metal_hit_01.ogg": "hit_1.ogg", "metal_hit_02.ogg": "hit_2.ogg", "metal_hit_03.ogg": "hit_3.ogg",
+               "metal_hit_04.ogg": "hit_4.ogg", "metal_hit_05.ogg": "hit_5.ogg", "metal_slam_01.ogg": "crash_1.ogg",
+               "metal_falling_01.ogg": "crash_2.ogg", "metal_falling_02.ogg": "crash_3.ogg"}
 RATE = 44100
+BED_RATE = 22050   # the noise beds (rain, wind, crickets) have nothing above 8 kHz worth the bytes
 
 
 def sha256(path):
@@ -49,7 +60,7 @@ def sha256(path):
 
 
 def fetch(cache):
-    for name, want in SOURCES.items():
+    for name, want in list(SOURCES.items()) + [(ZIP_NAME, ZIP_SHA256)]:
         path = os.path.join(cache, name)
         if not (os.path.isfile(path) and sha256(path) == want):
             req = urllib.request.Request(BASE + urllib.parse.quote(name), headers={"User-Agent": "mce-content/1"})
@@ -60,19 +71,19 @@ def fetch(cache):
             sys.exit("%s: sha256 is %s, pinned %s. The upstream file changed: read its licence again, then move the pin." % (name, got, want))
 
 
-def decode(path):
-    """Mono float samples at RATE."""
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(RATE), "-f", "f32le", "-"],
+def decode(path, rate=RATE):
+    """Mono float samples at `rate`."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(rate), "-f", "f32le", "-"],
                          capture_output=True, check=True).stdout
     return np.frombuffer(raw, dtype="<f4").astype(np.float64)
 
 
-def write_wav(name, x):
+def write_wav(name, x, rate=RATE):
     pcm = np.round(np.clip(x, -1.0, 1.0) * 32767.0).astype("<i2")
     with wave.open(os.path.join(OUT, name), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
-        w.setframerate(RATE)
+        w.setframerate(rate)
         w.writeframes(pcm.tobytes())
 
 
@@ -106,10 +117,10 @@ def siren(src, periods):
     return seg / max(1e-9, np.abs(seg).max()) * 0.89
 
 
-def loop_of(src, seconds, fade):
+def loop_of(src, seconds, fade, rate=RATE):
     """A crossfaded loop: the last `fade` seconds blend into the first."""
-    x = decode(src)[:int(RATE * (seconds + fade))]
-    f = int(RATE * fade)
+    x = decode(src, rate)[:int(rate * (seconds + fade))]
+    f = int(rate * fade)
     n = len(x) - f
     ramp = np.linspace(0.0, 1.0, f)
     out = x[:n].copy()
@@ -125,10 +136,17 @@ def main():
     shutil.copyfile(os.path.join(cache, "loop_0.wav"), os.path.join(OUT, "engine_loop.wav"))
     for n in range(1, 7):
         shutil.copyfile(os.path.join(cache, "0%d-footstep.ogg" % n), os.path.join(OUT, "footstep_%d.ogg" % n))
+    with zipfile.ZipFile(os.path.join(cache, ZIP_NAME)) as z:
+        for member, out in ZIP_MEMBERS.items():
+            with open(os.path.join(OUT, out), "wb") as f:
+                f.write(z.read(member))
     write_wav("shot_1.wav", shot(os.path.join(cache, "22 Pistol.wav"), 0.9))
     write_wav("shot_2.wav", shot(os.path.join(cache, "22 Magnum.wav"), 1.1))
     write_wav("siren.wav", siren(os.path.join(cache, "siren.mp3"), 8))
     write_wav("city_ambience.wav", loop_of(os.path.join(cache, "crowd_shouting.ogg"), 14.0, 1.5))
+    write_wav("rain_loop.wav", loop_of(os.path.join(cache, "amb_rain_loop_1.ogg"), 16.0, 2.0, BED_RATE), BED_RATE)
+    write_wav("wind_loop.wav", loop_of(os.path.join(cache, "wind background noise 2.wav"), 16.0, 2.0, BED_RATE), BED_RATE)
+    write_wav("night_crickets.wav", loop_of(os.path.join(cache, "crickets_1.mp3"), 10.0, 1.4, BED_RATE), BED_RATE)
     print("09_openworld audio: %d files in %s" % (len(os.listdir(OUT)), OUT))
 
 

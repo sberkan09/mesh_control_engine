@@ -264,14 +264,16 @@ lines with `kit::caption_lines` and draws them with `ui::SubtitleView`.
 
 ## 10.9 Engines, shots, footsteps and sirens
 
-A game with cars, guns and police needs sounds that follow the world. Four components put them in the scene next to
+A game with cars, guns and police needs sounds that follow the world. Six components put them in the scene next to
 an ordinary `AudioSource`, with no code (`samples/09_openworld` uses all four):
 
 | Component | Goes on | What it does |
 |---|---|---|
 | `EngineAudio` | a `Vehicle3D` entity that also has a looping, `play_on_start`, 3D `AudioSource` | The engine runs while a driver sits in the `VehicleSeat3D` or the car moves faster than 0.5 m/s, otherwise it is silent (`parked_db`). With t = \|speed\| / `top_speed` (0..1), the pitch goes from `idle_pitch` to `top_pitch` and the gain from `idle_db` to `top_db`. Traffic cars have no driver entity, so they sound while they roll |
-| `WeaponAudio` | a `Weapon3D` entity | Each shot (`WeaponFired3D`) plays `shot` at the muzzle in 3D. Give it a sound set (10.3) so shots vary |
+| `WeaponAudio` | a `Weapon3D` entity | Each shot (`WeaponFired3D`) plays `shot` at the muzzle in 3D, and each landed shot (`WeaponHit3D`) plays `hit` where it lands. Give them sound sets (10.3) so they vary |
+| `ImpactAudio` | a `RigidBody3D` with `contact_events` (a car) | A `ContactBegin3D` closing faster than `min_speed` plays `clip` at the contact, from `quiet_db` up to `loud_db` at `full_speed`, at most once per `min_gap` seconds |
 | `FootstepAudio` | a `CharacterController3D` entity | While grounded and not seated in a car, a step plays `clip` (a sound set) at the feet every `stride` metres, so running steps faster |
+| `ClockAudio` | an entity with a looping `AudioSource` | Its gain follows the `WorldClock` (chapter 9): `off_db` by day, `on_db` at night, rising over `fade_hours` after `on_hour` and falling over `fade_hours` after `off_hour`. A night bed of crickets and a city bed that thins out at night are the same component |
 | `SirenAudio` | an entity with a looping `AudioSource` | Silent until the first `Wanted3D` reaches `min_level`, then it slides to `active_db` at `slew_db_per_s` |
 
 Pitch comes from the voice's own playback rate (`AudioSource.pick_rate`, see 10.3), so do not add `AudioDoppler` to an

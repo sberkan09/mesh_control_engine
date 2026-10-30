@@ -10,6 +10,7 @@
 #include "mce/kit/seats3d.h"
 #include "mce/kit/vehicles3d.h"
 #include "mce/kit/wanted3d.h"
+#include "mce/kit/world_clock.h"
 
 namespace mce::kit {
 namespace {
@@ -58,6 +59,26 @@ void shots(Frame& f) {
         play(f, wa->shot.guid, wa->gain_db, wa->attenuation_id, ev.origin);
         ++wa->fired;
     }
+    for (const WeaponHit3D& ev : f.events().read<WeaponHit3D>()) {
+        const WeaponAudio* wa = w.alive(ev.weapon) ? w.try_get<WeaponAudio>(ev.weapon) : nullptr;
+        if (wa && !wa->hit.guid.is_null()) play(f, wa->hit.guid, wa->hit_gain_db, wa->attenuation_id, ev.point);
+    }
+}
+
+void impacts(Frame& f) {
+    World& w = f.world();
+    const f32 dt = static_cast<f32>(f.dt);
+    f.query<ImpactAudio&>().each([&](Entity, ImpactAudio& ia) { ia.wait = math::max(0.0f, ia.wait - dt); });
+    for (const ContactBegin3D& ev : f.events().read<ContactBegin3D>()) {
+        for (const Entity body : {ev.a, ev.b}) {
+            ImpactAudio* ia = !body.is_null() && w.alive(body) ? w.try_get_mut<ImpactAudio>(body) : nullptr;
+            if (!ia || ia->wait > 0.0f || ia->clip.guid.is_null() || !(ev.approach_speed >= ia->min_speed)) continue;
+            const f32 span = math::max(finite(ia->full_speed, 20.0f) - finite(ia->min_speed, 4.0f), 0.01f);
+            const f32 t = math::clamp((ev.approach_speed - ia->min_speed) / span, 0.0f, 1.0f);
+            play(f, ia->clip.guid, lerp(ia->quiet_db, ia->loud_db, t), ia->attenuation_id, ev.point);
+            ia->wait = math::max(finite(ia->min_gap, 0.5f), 0.0f);
+        }
+    }
 }
 
 void footsteps(Frame& f) {
@@ -100,20 +121,44 @@ void sirens(Frame& f) {
     });
 }
 
+// 0..1: how far `hour` is into the night between on_hour and off_hour, with a fade after each.
+f32 night_weight(f32 hour, f32 on, f32 off, f32 fade) {
+    const auto wrap = [](f32 v) { return v - 24.0f * std::floor(v / 24.0f); };
+    if (on == off) return 1.0f;
+    const f32 since = wrap(hour - on), span = wrap(off - on);
+    if (fade <= 0.0f) return since < span ? 1.0f : 0.0f;
+    if (since < span) return math::min(1.0f, since / fade);
+    return math::max(0.0f, 1.0f - (since - span) / fade);
+}
+
+void clocks(Frame& f) {
+    const WorldClock* clock = nullptr;
+    f.world().query<const WorldClock&>().each([&](Entity, const WorldClock& c) {
+        if (!clock) clock = &c;
+    });
+    if (!clock) return;
+    const f32 hour = finite(clock->hour, 0.0f);
+    f.query<const ClockAudio&, audio::AudioSource&>().each([&](Entity, const ClockAudio& ca, audio::AudioSource& src) {
+        src.gain_db = clamp_db(lerp(ca.off_db, ca.on_db, night_weight(hour, ca.on_hour, ca.off_hour, ca.fade_hours)));
+    });
+}
+
 void kit_world_audio(Frame& f) {
     World& w = f.world();
     const audio::AudioRef* ref = w.try_resource<audio::AudioRef>();
     if (!w.event_queue<audio::PlaySfx>() && !ref) return;  // no audio in this world
     engines(f, ref ? ref->device : nullptr);
     shots(f);
+    impacts(f);
     footsteps(f);
     sirens(f);
+    clocks(f);
 }
 
 }  // namespace
 
 void install_world_audio(World& world) {
-    world.register_components<EngineAudio, WeaponAudio, FootstepAudio, SirenAudio>();
+    world.register_components<EngineAudio, WeaponAudio, ImpactAudio, FootstepAudio, SirenAudio, ClockAudio>();
     world.add_system(Phase::FixedUpdate_Post, "kit_world_audio", &kit_world_audio);
 }
 

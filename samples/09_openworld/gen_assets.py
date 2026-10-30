@@ -60,7 +60,6 @@ G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
-G_AMMO = guid("ui/ammo.mcui")
 
 GRID = 5          # junctions per side
 SPACING = 250.0   # m between junctions: 4 blocks of 250 m = 1 km
@@ -246,11 +245,14 @@ def roads_doc():
 # The sound files in assets/audio/ come from tools/fetch_audio.py (CC0, see assets/audio/SOURCES.md); here only their sidecars,
 # the two sound sets and the GUIDs the scene uses are written.
 
-AUDIO_FILES = {"engine_loop": ("wav", {}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
+AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vorbis", "quality": 0.3}),
+               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
+HITS = ["hit_%d" % i for i in range(1, 6)]
+CRASHES = ["crash_%d" % i for i in range(1, 4)]
 AUDIO_EXT = {name: ext for name, (ext, _) in AUDIO_FILES.items()}
-AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS})
+AUDIO_EXT.update({name: "ogg" for name in FOOTSTEPS + HITS + CRASHES})
 
 
 def audio_guid(name):
@@ -259,16 +261,23 @@ def audio_guid(name):
 
 G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
+G_HITS = guid("audio/hits.mcsound")
+G_LAMP = guid("materials/lamp.mcmat")
+G_CRASHES = guid("audio/crashes.mcsound")
 
 
 def audio_assets():
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
-    for name in FOOTSTEPS:
+    for name in FOOTSTEPS + HITS + CRASHES:
         write("audio/%s.ogg.mceasset" % name, {"guid": audio_guid(name), "importer": "ogg", "importer_version": 2, "settings": {}})
     write("audio/footsteps.mcsound", {"format": "mce-sound", "version": 1, "guid": G_FOOTSTEPS,
                                       "clips": ["guid:" + audio_guid(n) for n in FOOTSTEPS], "pick": "random", "no_repeat": True,
                                       "pitch": [0.92, 1.08], "gain_db": [-3, 0]})
+    write("audio/hits.mcsound", {"format": "mce-sound", "version": 1, "guid": G_HITS, "clips": ["guid:" + audio_guid(n) for n in HITS],
+                                 "pick": "random", "no_repeat": True, "pitch": [0.9, 1.1], "gain_db": [-3, 0]})
+    write("audio/crashes.mcsound", {"format": "mce-sound", "version": 1, "guid": G_CRASHES, "clips": ["guid:" + audio_guid(n) for n in CRASHES],
+                                    "pick": "random", "no_repeat": True, "pitch": [0.85, 1.05], "gain_db": [-2, 0]})
     write("audio/shots.mcsound", {"format": "mce-sound", "version": 1, "guid": G_SHOTS,
                                   "clips": ["guid:" + audio_guid("shot_1"), "guid:" + audio_guid("shot_2")], "pick": "random",
                                   "no_repeat": True, "pitch": [0.96, 1.04], "gain_db": [-2, 0]})
@@ -459,6 +468,8 @@ def car_entities(model, traffic):
         "VehicleSeat3D": {"seat": [0, 0.2, 0.1], "exit": [-1.7, 0, 0]},
     }
     root.update(engine_audio(traffic))
+    root["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
+    root["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -10, "loud_db": 0}
     if traffic:
         root["TrafficDriver3D"] = {}
         root["VehicleSeat3D"]["locked"] = 1
@@ -482,6 +493,13 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
         "Health3D": {"max": 150, "team": 2, "destroy_on_death": 0},
         "Police3D": police,
     }
+    comps["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
+    comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
+    # The siren sits on the root: the audio bridge follows an entity's own LocalTransform, a child's is relative. It sounds from the
+    # wanted level the car answers; its loud wail stands in for the engine.
+    comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                  "gain_db": -60, "priority": 170},
+                  "AudioSpatial": {"attenuation_id": 1}, "SirenAudio": {"min_level": min_level, "active_db": -8}})
     car = scene.add(name, comps)
     scene.add(name + " model", {"ChildOf": {"parent": scene.ref(car)}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),
                                 "MeshRef": model_mesh("police")})
@@ -517,6 +535,65 @@ def prefabs():
     write("prefabs/pedestrian.mcprefab", {"format": "mce-prefab", "version": 1, "guid": G_WALKER, "name": "pedestrian",
                                           "entities": walker})
 
+
+# --- day and night, sky, street lamps, weather (M-OPENWORLD E6) ---------------------------------------------
+
+START_HOUR = 9.0      # the game starts on a morning
+DAY_SECONDS = 720     # twelve real minutes for 24 hours
+WEATHER_SEED = 55     # the first ten weather picks (150 s each) are clear, rain, clear, storm, overcast ... and none is snow
+
+
+def lamp_material():
+    write("materials/lamp.mcmat", {"format": "mce-material", "version": 1, "guid": G_LAMP, "name": "lamp", "base_color": [0.1, 0.1, 0.12, 1],
+                                   "metallic": 0.1, "roughness": 0.3, "emissive": [2.2, 1.6, 0.8], "alpha_mode": "opaque", "alpha_cutoff": 0.5,
+                                   "double_sided": False, "unlit": False, "textures": {}})
+
+
+def atmosphere(s, net):
+    """A world clock with a day cycle, a physical sky with a moon and stars, a street lamp at two corners of every junction that
+    lights at dusk, and a seeded weather schedule (rain, storm, fog, lightning) with its rain and wind beds and a night bed."""
+    s.add("Clock", {"LocalTransform": {}, "WorldClock": {"hour": START_HOUR, "day_length_seconds": DAY_SECONDS}, "DayCycle": {}})
+    s.add("Weather", {"LocalTransform": {}, "Weather": {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED},
+                      "WindGust": {}, "GroundMist": {}, "Moon": {}, "WetSurfaces": {"strength": 4, "darken": 0.5, "puddles": 0.6},
+                      "RainRipples": {}, "ThunderDelay": {}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
+    s.add("Rain", {"LocalTransform": tf((0, 20, 34)),
+                   "Precipitation3D": {"rain_rate": 3000, "snow_rate": 0, "follow_camera": 1, "height": 12, "area": 14, "rain_speed": 18,
+                                       "snow_speed": 1.5},
+                   "ParticleEmitter3D": {"color_start": [0.55, 0.62, 0.75, 0.35], "color_end": [0.55, 0.62, 0.75, 0.15], "offset": [0, 0, 0],
+                                         "box": [14, 0.5, 14], "direction": [0, -1, 0], "gravity": [0, -9, 0], "spread_deg": 2, "rate": 0,
+                                         "speed_min": 16.2, "speed_max": 19.8, "lifetime_min": 0.667, "lifetime_max": 0.8, "drag": 0,
+                                         "ground_height": 0, "bounce": 0, "size_start": 0.04, "size_end": 0.04, "max_particles": 4096,
+                                         "seed": 1, "burst": 0, "burst_version": 0, "collide": 0, "additive": 0, "emitting": 0}})
+    s.add("Rain splashes", {"LocalTransform": {}, "RainSplash": {},
+                            "ParticleEmitter3D": {"color_start": [0.7, 0.78, 0.9, 0.5], "color_end": [0.7, 0.78, 0.9, 0], "size_start": 0.05,
+                                                  "size_end": 0.03, "max_particles": 1024, "seed": 2, "collide": 0, "additive": 0,
+                                                  "emitting": 0, "rate": 0}})
+    s.add("Lightning", {"LocalTransform": {}, "Lightning": {"min_gap_seconds": 6, "max_gap_seconds": 16, "flash_ticks": 8, "flash_boost": 4,
+                                                              "seed": 7}, "LightningBolt": {}})
+    rain_bed = s.add("Rain bed", {"AudioSource": {"clip": "guid:" + audio_guid("rain_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                                  "gain_db": -60, "priority": 190}})
+    wind_bed = s.add("Wind bed", {"AudioSource": {"clip": "guid:" + audio_guid("wind_loop"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                                  "gain_db": -60, "priority": 190}})
+    s.ents[next(i for i, e in enumerate(s.ents) if e["name"] == "Weather")]["components"]["WeatherAudio"] = {
+        "rain_source": s.ref(rain_bed), "wind_source": s.ref(wind_bed), "rain_db": -10, "wind_db": -18, "fade_seconds": 6}
+    # The night bed rises after 19:00 and fades out after 05:00; the city bed thins a little at night.
+    s.add("Night bed", {"AudioSource": {"clip": "guid:" + audio_guid("night_crickets"), "bus": "SFX", "loop": True, "play_on_start": True,
+                                        "gain_db": -60, "priority": 190},
+                        "ClockAudio": {"on_hour": 19.5, "off_hour": 4.5, "fade_hours": 1.5, "on_db": -24, "off_db": -60}})
+    for e in s.ents:
+        if e["name"] == "City ambience":
+            e["components"]["ClockAudio"] = {"on_hour": 19.5, "off_hour": 4.5, "fade_hours": 1.5, "on_db": -30, "off_db": -22}
+    # Street lamps: two opposite corners of every junction pad (the pad is 14 m square), lit from dusk to dawn.
+    for j in range(GRID):
+        for i in range(GRID):
+            x, z = node_pos(i, j)
+            for k, (dx, dz) in enumerate(((6.2, 6.2), (-6.2, -6.2))):
+                name = "Lamp %d_%d_%d" % (i, j, k)
+                s.add(name + " post", {"LocalTransform": tf((x + dx, 2.85, z + dz), (0.16, 5.5, 0.16)), "MeshRef": mesh((0.12, 0.12, 0.14))})
+                s.add(name, {"LocalTransform": tf((x + dx, 5.7, z + dz), (0.5, 0.22, 0.5)),
+                             "MeshRef": {"mesh": "guid:" + G_BOX, "material": "guid:" + G_LAMP, "cast_shadows": 0},
+                             "PointLight3D": {"color": [1.0, 0.72, 0.42, 1], "intensity": 16, "radius": 28},
+                             "TimedLight3D": {"on_hour": 18.5 + (i + j) % 3 * 0.25, "off_hour": 5.75, "fade_minutes": 20}})
 
 # --- the loop: missions, money to find and money to spend (M-OPENWORLD E7/E8) ------------------------------------------
 # Everything here is added after the older entities so their order (and the spawners' walkers) stays as it was.
@@ -576,7 +653,6 @@ def economy_and_missions(s, player):
              "MapMarker": {"icon": 0, "color": [0.35, 0.9, 0.3, 1], "label": "$"}})
 
     # Shops. Medic: a hurt player pays 1 per hit point. Scrapyard: a stolen car (cars 2 and 3) driven here pays 400.
-    # (No ammo shop: the gun is on the camera, which carries no wallet.)
     pad(s, "Medic", -100.0, -9.0, 4.0, (0.95, 0.95, 0.95),
         {"HealShop3D": {"radius": 3.0, "price_per_hp": 1}, "MapMarker": {"icon": 0, "color": [1, 0.3, 0.3, 1], "label": "Medic", "always_visible": 1}})
     pad(s, "Scrapyard", 130.0, -9.0, 8.0, (0.6, 0.4, 0.2),
@@ -589,7 +665,7 @@ def scene():
     rng = random.Random(1009)
     s = Scene()
     s.add("Environment", {"Environment3D": {"sun_direction": [-0.45, -0.8, -0.35], "sun_intensity": 3.0, "shadow_distance": 140,
-                                            "fog_density": 0.0002, "exposure": 1.0}, "LocalTransform": {}})
+                                            "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 0}, "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     city_surface(s)
     n_buildings = buildings(s, rng)
@@ -604,33 +680,36 @@ def scene():
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
-        # (The ammo confiscation component is left out: the gun is on the camera, not on the player.)
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
+        # An arrest costs half the spare ammunition (Confiscate3D), a shop sells it back (AmmoShop3D).
+        "Confiscate3D": {"ammo_kept": 0.5},
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
         "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
-        # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
+        # The gun is the player's (so the shop and the confiscation see it) but aims along the camera: shots leave from the
+        # camera pose and its muzzle offset, past the player, and point where the camera looks. aim_from is set below.
+        "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "damage": 22, "range": 120, "rate": 6,
+                     "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
+                     "mask": 0xFFFF},
+        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
+        # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a")})
-    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view. It starts looking west along
+    # The camera orbits the player (Look); the player's gun aims along its view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
         "AudioListener": {},
-        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -2},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
-                           "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True},
-        "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
-                     "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
-                     "mask": 0xFFFF},
-        # The ammo readout: Weapon3D lives on the camera, so its screen sits here and reads the gun from this entity.
-        "UiScreen": {"document": "guid:" + G_AMMO},
+                           "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
+                           "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
+    s.ents[player]["components"]["Weapon3D"]["aim_from"] = s.ref(cam)
 
     # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
@@ -659,15 +738,8 @@ def scene():
             "MapMarker": {"color": [1.0, 0.2, 0.2, 1], "layer": 0, "always_visible": 1, "label": "Police"},
             "Weapon3D": {"kind": "Hitscan", "damage": 7, "range": 60, "rate": 2, "spread_deg": 3, "magazine": 0},
             "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.7, "gain_db": -6},
-            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "gain_db": -4},
+            "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -4, "hit_gain_db": -8},
         })
-        if n % 2 == 0:   # two of the four carry a siren; it sounds from the wanted level the unit answers (A9 gives it a car)
-            s.ents[cop]["components"].update({
-                "AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True, "gain_db": -60,
-                                "priority": 170},
-                "AudioSpatial": {"attenuation_id": 1},
-                "SirenAudio": {"min_level": 1, "active_db": -9},
-            })
         s.add("Police %d model" % (n + 1), {"ChildOf": {"parent": s.ref(cop)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                                             "MeshRef": model_mesh("character-d")})
     # The police navigate where the navmesh is baked: the middle blocks around the plaza.
@@ -699,19 +771,24 @@ def scene():
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
         s.add(name + " pad", {"LocalTransform": tf((pos[0], 0.22, pos[1]), (5.0, 0.04, 5.0)), "MeshRef": mesh(tint, 0)})
+    # An ammo shop on the avenue's sidewalk: standing on its pad refills the spare rounds at 2 cash each (AmmoShop3D).
+    s.add("Ammo shop", {"LocalTransform": tf((-30.0, 1.0, -9.0)), "AmmoShop3D": {"radius": 3, "price_per_round": 2, "stock_to": 150},
+                        "MapMarker": {"color": [1.0, 0.8, 0.2, 1], "label": "Ammo"}})
+    s.add("Ammo shop pad", {"LocalTransform": tf((-30.0, 0.22, -9.0), (4.0, 0.04, 4.0)), "MeshRef": mesh((0.9, 0.7, 0.15), 0)})
     # The mix (bus layout: Master > SFX (engines, shots, steps, sirens, ambience); Music and Voice stay free for E7/E8): a limiter
     # on the master, the pause snapshot (the world goes muffled and quieter behind the pause screen) and the city bed.
     s.add("Mixer", {"AudioLimiter": {"ceiling_db": -1}})
     s.add("Pause mix", {"AudioSnapshot": {"bus": "SFX", "while_paused": True, "fade_s": 0.3, "gain_db": -12, "lowpass_hz": 900}})
     s.add("City ambience", {"AudioSource": {"clip": "guid:" + audio_guid("city_ambience"), "bus": "SFX", "loop": True,
                                             "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
+    atmosphere(s, net)
     economy_and_missions(s, player)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
 
 def hud():
-    """The HUD: health, wanted level, cash and the minimap (hud.mcui, bound to the Player), and the ammo (ammo.mcui, bound to the camera's gun)."""
+    """The HUD: health, wanted level, cash and the minimap and the ammo (hud.mcui, bound to the Player and its gun)."""
     def text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
         w = {"name": name, "kind": "Text", "text": label, "style": {"text_size": size, "text_outline": 2, "text_outline_color": [0, 0, 0, 1]},
              "text_align": align, "anchors": anchors}
@@ -742,15 +819,15 @@ def hud():
         *wanted_stars(),
         text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
         text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
+        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
+        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
         {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
                      "background": [0.05, 0.07, 0.06, 0.75]}}]})
-    write("ui/ammo.mcui", {"format": "mce-ui", "version": 1, "guid": G_AMMO, "modal": False, "widgets": [
-        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
-        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right")]})
 
 
 models()
+lamp_material()
 audio_assets()
 hud()
 input_map()

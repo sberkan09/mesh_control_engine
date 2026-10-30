@@ -17,7 +17,8 @@
      "sun_intensity": 3.0,
      "shadow_distance": 140,
      "fog_density": 0.0002,
-     "exposure": 1.0
+     "exposure": 1.0,
+     "sky_enabled": 0
     },
     "LocalTransform": {}
    }
@@ -17135,6 +17136,9 @@
      "fine_busted": 100,
      "fine_wasted": 200
     },
+    "Confiscate3D": {
+     "ammo_kept": 0.5
+    },
     "Wallet3D": {
      "cash": 500
     },
@@ -17143,6 +17147,32 @@
      "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
      "stride": 1.9,
      "gain_db": -4
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "use_input": 1,
+     "automatic": 1,
+     "damage": 22,
+     "range": 120,
+     "rate": 6,
+     "magazine": 15,
+     "reserve": 150,
+     "reload_time": 1.4,
+     "spread_deg": 0.4,
+     "impulse": 40,
+     "muzzle": [
+      0,
+      0,
+      -6.0
+     ],
+     "mask": 65535,
+     "aim_from": "$696"
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -2,
+     "hit_gain_db": -4
     },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
@@ -17189,10 +17219,6 @@
      "far_z": 1500
     },
     "AudioListener": {},
-    "WeaponAudio": {
-     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -2
-    },
     "CameraFollow3D": {
      "target": "$694",
      "offset": [
@@ -17207,30 +17233,11 @@
      "max_pitch": 1.2,
      "orbit_speed": 2.2,
      "smoothing": 12,
-     "collide": true
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "use_input": 1,
-     "automatic": 1,
-     "owner": "$694",
-     "damage": 22,
-     "range": 120,
-     "rate": 6,
-     "magazine": 15,
-     "reserve": 150,
-     "reload_time": 1.4,
-     "spread_deg": 0.4,
-     "impulse": 40,
-     "muzzle": [
-      0,
-      0,
-      -6.0
-     ],
-     "mask": 65535
-    },
-    "UiScreen": {
-     "document": "guid:9f41b508-dabf-59c6-9aba-dc181c5e3ade"
+     "collide": true,
+     "chase": 1,
+     "chase_rate": 2.5,
+     "chase_hold": 1.5,
+     "chase_min_speed": 3
     }
    }
   },
@@ -17257,7 +17264,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17295,6 +17304,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "MapMarker": {
      "color": [
@@ -17360,7 +17376,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17398,6 +17416,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "CarOwner3D": {
      "heat": 12,
@@ -17467,7 +17492,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -17505,6 +17532,13 @@
      "idle_db": -10,
      "top_db": 0,
      "parked_db": -60
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -10,
+     "loud_db": 0
     },
     "CarOwner3D": {
      "heat": 12,
@@ -17612,22 +17646,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
-    },
-    "AudioSource": {
-     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
-     "bus": "SFX",
-     "loop": true,
-     "play_on_start": true,
-     "gain_db": -60,
-     "priority": 170
-    },
-    "AudioSpatial": {
-     "attenuation_id": 1
-    },
-    "SirenAudio": {
-     "min_level": 1,
-     "active_db": -9
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17722,7 +17743,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17817,22 +17840,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
-    },
-    "AudioSource": {
-     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
-     "bus": "SFX",
-     "loop": true,
-     "play_on_start": true,
-     "gain_db": -60,
-     "priority": 170
-    },
-    "AudioSpatial": {
-     "attenuation_id": 1
-    },
-    "SirenAudio": {
-     "min_level": 1,
-     "active_db": -9
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -17927,7 +17937,9 @@
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "gain_db": -4
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -4,
+     "hit_gain_db": -8
     }
    }
   },
@@ -18039,7 +18051,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18062,6 +18076,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 2,
+     "active_db": -8
     }
    }
   },
@@ -18118,7 +18154,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18141,6 +18179,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 2,
+     "active_db": -8
     }
    }
   },
@@ -18197,7 +18257,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18220,6 +18282,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 3,
+     "active_db": -8
     }
    }
   },
@@ -18276,7 +18360,9 @@
       0.4,
       1.5
      ],
-     "density": 300
+     "density": 300,
+     "contact_events": 1,
+     "contact_min_speed": 4
     },
     "Vehicle3D": {
      "engine_torque": 900,
@@ -18299,6 +18385,28 @@
      "search_time": 15,
      "arrest_range": 0,
      "dispatch_range": 600
+    },
+    "ImpactAudio": {
+     "clip": "guid:066adc1a-22df-5abe-82f0-9f3109c0e129",
+     "min_speed": 4,
+     "full_speed": 18,
+     "quiet_db": -8,
+     "loud_db": 0
+    },
+    "AudioSource": {
+     "clip": "guid:f27e2c91-5940-5c01-a27e-ab63fa129e04",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 170
+    },
+    "AudioSpatial": {
+     "attenuation_id": 1
+    },
+    "SirenAudio": {
+     "min_level": 3,
+     "active_db": -8
     }
    }
   },
@@ -18484,6 +18592,61 @@
   },
   {
    "id": 729,
+   "name": "Ammo shop",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      1.0,
+      -9.0
+     ]
+    },
+    "AmmoShop3D": {
+     "radius": 3,
+     "price_per_round": 2,
+     "stock_to": 150
+    },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.8,
+      0.2,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 730,
+   "name": "Ammo shop pad",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.7,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 731,
    "name": "Mixer",
    "components": {
     "AudioLimiter": {
@@ -18492,7 +18655,7 @@
    }
   },
   {
-   "id": 730,
+   "id": 732,
    "name": "Pause mix",
    "components": {
     "AudioSnapshot": {
@@ -18505,7 +18668,7 @@
    }
   },
   {
-   "id": 731,
+   "id": 733,
    "name": "City ambience",
    "components": {
     "AudioSource": {
@@ -18516,11 +18679,3482 @@
      "gain_db": -22,
      "priority": 200,
      "fade_s": 2
+    },
+    "ClockAudio": {
+     "on_hour": 19.5,
+     "off_hour": 4.5,
+     "fade_hours": 1.5,
+     "on_db": -30,
+     "off_db": -22
     }
    }
   },
   {
-   "id": 732,
+   "id": 734,
+   "name": "Clock",
+   "components": {
+    "LocalTransform": {},
+    "WorldClock": {
+     "hour": 9.0,
+     "day_length_seconds": 720
+    },
+    "DayCycle": {}
+   }
+  },
+  {
+   "id": 735,
+   "name": "Weather",
+   "components": {
+    "LocalTransform": {},
+    "Weather": {
+     "transition_seconds": 20,
+     "auto_change_seconds": 150,
+     "seed": 55
+    },
+    "WindGust": {},
+    "GroundMist": {},
+    "Moon": {},
+    "WetSurfaces": {
+     "strength": 4,
+     "darken": 0.5,
+     "puddles": 0.6
+    },
+    "RainRipples": {},
+    "ThunderDelay": {},
+    "WindDirection": {
+     "degrees": 0,
+     "drift_degrees_per_minute": 6
+    },
+    "CloudLayer": {},
+    "WeatherAudio": {
+     "rain_source": "$738",
+     "wind_source": "$739",
+     "rain_db": -10,
+     "wind_db": -18,
+     "fade_seconds": 6
+    }
+   }
+  },
+  {
+   "id": 736,
+   "name": "Rain",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      20,
+      34
+     ]
+    },
+    "Precipitation3D": {
+     "rain_rate": 3000,
+     "snow_rate": 0,
+     "follow_camera": 1,
+     "height": 12,
+     "area": 14,
+     "rain_speed": 18,
+     "snow_speed": 1.5
+    },
+    "ParticleEmitter3D": {
+     "color_start": [
+      0.55,
+      0.62,
+      0.75,
+      0.35
+     ],
+     "color_end": [
+      0.55,
+      0.62,
+      0.75,
+      0.15
+     ],
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "box": [
+      14,
+      0.5,
+      14
+     ],
+     "direction": [
+      0,
+      -1,
+      0
+     ],
+     "gravity": [
+      0,
+      -9,
+      0
+     ],
+     "spread_deg": 2,
+     "rate": 0,
+     "speed_min": 16.2,
+     "speed_max": 19.8,
+     "lifetime_min": 0.667,
+     "lifetime_max": 0.8,
+     "drag": 0,
+     "ground_height": 0,
+     "bounce": 0,
+     "size_start": 0.04,
+     "size_end": 0.04,
+     "max_particles": 4096,
+     "seed": 1,
+     "burst": 0,
+     "burst_version": 0,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0
+    }
+   }
+  },
+  {
+   "id": 737,
+   "name": "Rain splashes",
+   "components": {
+    "LocalTransform": {},
+    "RainSplash": {},
+    "ParticleEmitter3D": {
+     "color_start": [
+      0.7,
+      0.78,
+      0.9,
+      0.5
+     ],
+     "color_end": [
+      0.7,
+      0.78,
+      0.9,
+      0
+     ],
+     "size_start": 0.05,
+     "size_end": 0.03,
+     "max_particles": 1024,
+     "seed": 2,
+     "collide": 0,
+     "additive": 0,
+     "emitting": 0,
+     "rate": 0
+    }
+   }
+  },
+  {
+   "id": 738,
+   "name": "Lightning",
+   "components": {
+    "LocalTransform": {},
+    "Lightning": {
+     "min_gap_seconds": 6,
+     "max_gap_seconds": 16,
+     "flash_ticks": 8,
+     "flash_boost": 4,
+     "seed": 7
+    },
+    "LightningBolt": {}
+   }
+  },
+  {
+   "id": 739,
+   "name": "Rain bed",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:f472a20a-358c-5527-b06a-5a31fbd8aac5",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 190
+    }
+   }
+  },
+  {
+   "id": 740,
+   "name": "Wind bed",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:396a0ea6-d23d-5de4-9956-6866f216d964",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 190
+    }
+   }
+  },
+  {
+   "id": 741,
+   "name": "Night bed",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:71e720ad-8ecb-5200-8255-c37a0f8330c3",
+     "bus": "SFX",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 190
+    },
+    "ClockAudio": {
+     "on_hour": 19.5,
+     "off_hour": 4.5,
+     "fade_hours": 1.5,
+     "on_db": -24,
+     "off_db": -60
+    }
+   }
+  },
+  {
+   "id": 742,
+   "name": "Lamp 0_0_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      2.85,
+      -493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 743,
+   "name": "Lamp 0_0_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      5.7,
+      -493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 744,
+   "name": "Lamp 0_0_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      2.85,
+      -506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 745,
+   "name": "Lamp 0_0_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      5.7,
+      -506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 746,
+   "name": "Lamp 1_0_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      2.85,
+      -493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 747,
+   "name": "Lamp 1_0_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      5.7,
+      -493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 748,
+   "name": "Lamp 1_0_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      2.85,
+      -506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 749,
+   "name": "Lamp 1_0_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      5.7,
+      -506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 750,
+   "name": "Lamp 2_0_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      2.85,
+      -493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 751,
+   "name": "Lamp 2_0_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      5.7,
+      -493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 752,
+   "name": "Lamp 2_0_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      2.85,
+      -506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 753,
+   "name": "Lamp 2_0_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      5.7,
+      -506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 754,
+   "name": "Lamp 3_0_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      2.85,
+      -493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 755,
+   "name": "Lamp 3_0_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      5.7,
+      -493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 756,
+   "name": "Lamp 3_0_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      2.85,
+      -506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 757,
+   "name": "Lamp 3_0_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      5.7,
+      -506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 758,
+   "name": "Lamp 4_0_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      2.85,
+      -493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 759,
+   "name": "Lamp 4_0_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      5.7,
+      -493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 760,
+   "name": "Lamp 4_0_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      2.85,
+      -506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 761,
+   "name": "Lamp 4_0_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      5.7,
+      -506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 762,
+   "name": "Lamp 0_1_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      2.85,
+      -243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 763,
+   "name": "Lamp 0_1_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      5.7,
+      -243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 764,
+   "name": "Lamp 0_1_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      2.85,
+      -256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 765,
+   "name": "Lamp 0_1_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      5.7,
+      -256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 766,
+   "name": "Lamp 1_1_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      2.85,
+      -243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 767,
+   "name": "Lamp 1_1_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      5.7,
+      -243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 768,
+   "name": "Lamp 1_1_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      2.85,
+      -256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 769,
+   "name": "Lamp 1_1_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      5.7,
+      -256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 770,
+   "name": "Lamp 2_1_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      2.85,
+      -243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 771,
+   "name": "Lamp 2_1_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      5.7,
+      -243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 772,
+   "name": "Lamp 2_1_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      2.85,
+      -256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 773,
+   "name": "Lamp 2_1_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      5.7,
+      -256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 774,
+   "name": "Lamp 3_1_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      2.85,
+      -243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 775,
+   "name": "Lamp 3_1_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      5.7,
+      -243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 776,
+   "name": "Lamp 3_1_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      2.85,
+      -256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 777,
+   "name": "Lamp 3_1_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      5.7,
+      -256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 778,
+   "name": "Lamp 4_1_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      2.85,
+      -243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 779,
+   "name": "Lamp 4_1_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      5.7,
+      -243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 780,
+   "name": "Lamp 4_1_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      2.85,
+      -256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 781,
+   "name": "Lamp 4_1_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      5.7,
+      -256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 782,
+   "name": "Lamp 0_2_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      2.85,
+      6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 783,
+   "name": "Lamp 0_2_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      5.7,
+      6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 784,
+   "name": "Lamp 0_2_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      2.85,
+      -6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 785,
+   "name": "Lamp 0_2_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      5.7,
+      -6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 786,
+   "name": "Lamp 1_2_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      2.85,
+      6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 787,
+   "name": "Lamp 1_2_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      5.7,
+      6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 788,
+   "name": "Lamp 1_2_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      2.85,
+      -6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 789,
+   "name": "Lamp 1_2_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      5.7,
+      -6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 790,
+   "name": "Lamp 2_2_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      2.85,
+      6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 791,
+   "name": "Lamp 2_2_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      5.7,
+      6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 792,
+   "name": "Lamp 2_2_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      2.85,
+      -6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 793,
+   "name": "Lamp 2_2_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      5.7,
+      -6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 794,
+   "name": "Lamp 3_2_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      2.85,
+      6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 795,
+   "name": "Lamp 3_2_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      5.7,
+      6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 796,
+   "name": "Lamp 3_2_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      2.85,
+      -6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 797,
+   "name": "Lamp 3_2_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      5.7,
+      -6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 798,
+   "name": "Lamp 4_2_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      2.85,
+      6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 799,
+   "name": "Lamp 4_2_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      5.7,
+      6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 800,
+   "name": "Lamp 4_2_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      2.85,
+      -6.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 801,
+   "name": "Lamp 4_2_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      5.7,
+      -6.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 802,
+   "name": "Lamp 0_3_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      2.85,
+      256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 803,
+   "name": "Lamp 0_3_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      5.7,
+      256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 804,
+   "name": "Lamp 0_3_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      2.85,
+      243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 805,
+   "name": "Lamp 0_3_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      5.7,
+      243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 806,
+   "name": "Lamp 1_3_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      2.85,
+      256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 807,
+   "name": "Lamp 1_3_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      5.7,
+      256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 808,
+   "name": "Lamp 1_3_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      2.85,
+      243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 809,
+   "name": "Lamp 1_3_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      5.7,
+      243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 810,
+   "name": "Lamp 2_3_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      2.85,
+      256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 811,
+   "name": "Lamp 2_3_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      5.7,
+      256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 812,
+   "name": "Lamp 2_3_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      2.85,
+      243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 813,
+   "name": "Lamp 2_3_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      5.7,
+      243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 814,
+   "name": "Lamp 3_3_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      2.85,
+      256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 815,
+   "name": "Lamp 3_3_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      5.7,
+      256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 816,
+   "name": "Lamp 3_3_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      2.85,
+      243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 817,
+   "name": "Lamp 3_3_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      5.7,
+      243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 818,
+   "name": "Lamp 4_3_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      2.85,
+      256.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 819,
+   "name": "Lamp 4_3_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      5.7,
+      256.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 820,
+   "name": "Lamp 4_3_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      2.85,
+      243.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 821,
+   "name": "Lamp 4_3_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      5.7,
+      243.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 822,
+   "name": "Lamp 0_4_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      2.85,
+      506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 823,
+   "name": "Lamp 0_4_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -493.8,
+      5.7,
+      506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 824,
+   "name": "Lamp 0_4_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      2.85,
+      493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 825,
+   "name": "Lamp 0_4_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -506.2,
+      5.7,
+      493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 826,
+   "name": "Lamp 1_4_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      2.85,
+      506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 827,
+   "name": "Lamp 1_4_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -243.8,
+      5.7,
+      506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 828,
+   "name": "Lamp 1_4_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      2.85,
+      493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 829,
+   "name": "Lamp 1_4_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -256.2,
+      5.7,
+      493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 830,
+   "name": "Lamp 2_4_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      2.85,
+      506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 831,
+   "name": "Lamp 2_4_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      6.2,
+      5.7,
+      506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 832,
+   "name": "Lamp 2_4_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      2.85,
+      493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 833,
+   "name": "Lamp 2_4_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -6.2,
+      5.7,
+      493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.5,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 834,
+   "name": "Lamp 3_4_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      2.85,
+      506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 835,
+   "name": "Lamp 3_4_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      256.2,
+      5.7,
+      506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 836,
+   "name": "Lamp 3_4_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      2.85,
+      493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 837,
+   "name": "Lamp 3_4_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      243.8,
+      5.7,
+      493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 18.75,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 838,
+   "name": "Lamp 4_4_0 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      2.85,
+      506.2
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 839,
+   "name": "Lamp 4_4_0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      506.2,
+      5.7,
+      506.2
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 840,
+   "name": "Lamp 4_4_1 post",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      2.85,
+      493.8
+     ],
+     "scale": [
+      0.16,
+      5.5,
+      0.16
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.12,
+      0.12,
+      0.14,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 841,
+   "name": "Lamp 4_4_1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      493.8,
+      5.7,
+      493.8
+     ],
+     "scale": [
+      0.5,
+      0.22,
+      0.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "material": "guid:e07d2480-8828-542c-b678-91110afa36ad",
+     "cast_shadows": 0
+    },
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.72,
+      0.42,
+      1
+     ],
+     "intensity": 16,
+     "radius": 28
+    },
+    "TimedLight3D": {
+     "on_hour": 19.0,
+     "off_hour": 5.75,
+     "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 842,
    "name": "Errand stop 1",
    "components": {
     "LocalTransform": {
@@ -18558,12 +22192,12 @@
    }
   },
   {
-   "id": 733,
+   "id": 843,
    "name": "Errand objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$731",
+     "target": "$841",
      "radius": 4.0
     },
     "SaveKey": {
@@ -18572,12 +22206,12 @@
    }
   },
   {
-   "id": 734,
+   "id": 844,
    "name": "Mission Errand",
    "components": {
     "Mission": {
      "id": "errand",
-     "objective": "$732",
+     "objective": "$842",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 100
@@ -18595,7 +22229,7 @@
    }
   },
   {
-   "id": 735,
+   "id": 845,
    "name": "Mission Errand marker",
    "components": {
     "LocalTransform": {
@@ -18621,7 +22255,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$733",
+     "mission": "$843",
      "radius": 3.0
     },
     "MapMarker": {
@@ -18638,7 +22272,7 @@
    }
   },
   {
-   "id": 736,
+   "id": 846,
    "name": "Courier stop 1",
    "components": {
     "LocalTransform": {
@@ -18676,14 +22310,14 @@
    }
   },
   {
-   "id": 737,
+   "id": 847,
    "name": "Courier objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$735",
+     "target": "$845",
      "radius": 4.0,
-     "next": "$738"
+     "next": "$848"
     },
     "SaveKey": {
      "key": 1003
@@ -18691,7 +22325,7 @@
    }
   },
   {
-   "id": 738,
+   "id": 848,
    "name": "Courier stop 2",
    "components": {
     "LocalTransform": {
@@ -18729,12 +22363,12 @@
    }
   },
   {
-   "id": 739,
+   "id": 849,
    "name": "Courier objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$737",
+     "target": "$847",
      "radius": 4.0
     },
     "SaveKey": {
@@ -18743,12 +22377,12 @@
    }
   },
   {
-   "id": 740,
+   "id": 850,
    "name": "Mission Courier",
    "components": {
     "Mission": {
      "id": "courier",
-     "objective": "$736",
+     "objective": "$846",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 170
@@ -18769,7 +22403,7 @@
    }
   },
   {
-   "id": 741,
+   "id": 851,
    "name": "Mission Courier marker",
    "components": {
     "LocalTransform": {
@@ -18795,7 +22429,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$739",
+     "mission": "$849",
      "radius": 3.0
     },
     "MapMarker": {
@@ -18812,7 +22446,7 @@
    }
   },
   {
-   "id": 742,
+   "id": 852,
    "name": "Long haul stop 1",
    "components": {
     "LocalTransform": {
@@ -18850,12 +22484,12 @@
    }
   },
   {
-   "id": 743,
+   "id": 853,
    "name": "Long haul objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$741",
+     "target": "$851",
      "radius": 4.0
     },
     "SaveKey": {
@@ -18864,12 +22498,12 @@
    }
   },
   {
-   "id": 744,
+   "id": 854,
    "name": "Mission Long haul",
    "components": {
     "Mission": {
      "id": "long_haul",
-     "objective": "$742",
+     "objective": "$852",
      "actor": "$694",
      "fail_on_death": "$694",
      "time_limit": 150
@@ -18890,7 +22524,7 @@
    }
   },
   {
-   "id": 745,
+   "id": 855,
    "name": "Mission Long haul marker",
    "components": {
     "LocalTransform": {
@@ -18916,7 +22550,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$743",
+     "mission": "$853",
      "radius": 3.0
     },
     "MapMarker": {
@@ -18933,7 +22567,7 @@
    }
   },
   {
-   "id": 746,
+   "id": 856,
    "name": "Cash 1",
    "components": {
     "LocalTransform": {
@@ -18976,7 +22610,7 @@
    }
   },
   {
-   "id": 747,
+   "id": 857,
    "name": "Cash 2",
    "components": {
     "LocalTransform": {
@@ -19019,7 +22653,7 @@
    }
   },
   {
-   "id": 748,
+   "id": 858,
    "name": "Cash 3",
    "components": {
     "LocalTransform": {
@@ -19062,7 +22696,7 @@
    }
   },
   {
-   "id": 749,
+   "id": 859,
    "name": "Cash 4",
    "components": {
     "LocalTransform": {
@@ -19105,7 +22739,7 @@
    }
   },
   {
-   "id": 750,
+   "id": 860,
    "name": "Cash 5",
    "components": {
     "LocalTransform": {
@@ -19148,7 +22782,7 @@
    }
   },
   {
-   "id": 751,
+   "id": 861,
    "name": "Cash 6",
    "components": {
     "LocalTransform": {
@@ -19191,7 +22825,7 @@
    }
   },
   {
-   "id": 752,
+   "id": 862,
    "name": "Cash 7",
    "components": {
     "LocalTransform": {
@@ -19234,7 +22868,7 @@
    }
   },
   {
-   "id": 753,
+   "id": 863,
    "name": "Cash 8",
    "components": {
     "LocalTransform": {
@@ -19277,7 +22911,7 @@
    }
   },
   {
-   "id": 754,
+   "id": 864,
    "name": "Cash 9",
    "components": {
     "LocalTransform": {
@@ -19320,7 +22954,7 @@
    }
   },
   {
-   "id": 755,
+   "id": 865,
    "name": "Cash 10",
    "components": {
     "LocalTransform": {
@@ -19363,7 +22997,7 @@
    }
   },
   {
-   "id": 756,
+   "id": 866,
    "name": "Cash 11",
    "components": {
     "LocalTransform": {
@@ -19406,7 +23040,7 @@
    }
   },
   {
-   "id": 757,
+   "id": 867,
    "name": "Cash 12",
    "components": {
     "LocalTransform": {
@@ -19449,7 +23083,7 @@
    }
   },
   {
-   "id": 758,
+   "id": 868,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -19492,7 +23126,7 @@
    }
   },
   {
-   "id": 759,
+   "id": 869,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {

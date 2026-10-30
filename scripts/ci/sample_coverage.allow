@@ -14,9 +14,7 @@ VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample 
 ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
 PaySpray3D | M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage
 CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
-AmmoShop3D | M-AMMOSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a shop counter
 LaunchVelocity2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
-Confiscate3D | M-ARRESTLOSS: tested in tests/kit/test_wanted3d.cpp; a game puts it on the player beside Respawn3D
 RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand

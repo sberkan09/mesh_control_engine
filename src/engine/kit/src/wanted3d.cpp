@@ -23,7 +23,7 @@ namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
 static_assert(sizeof(Wanted3D) == 68);
-static_assert(sizeof(Police3D) == 68);
+static_assert(sizeof(Police3D) == 76);
 static_assert(sizeof(RespawnPoint3D) == 4);
 static_assert(sizeof(Respawn3D) == 16);
 static_assert(sizeof(Wallet3D) == 4);
@@ -111,7 +111,9 @@ bool road_aim(World& w, Wanted3DState& st, Entity car, math::vec3 pos, math::vec
         rest += math::max(end - s, 0.0f);
         s = 0.0f;
     }
-    if (!aimed) aim = goal;
+    // Past the end of the route the aim stays at the route's last point (the road spot nearest the goal), never the goal itself: that
+    // may be well off the road, and aiming at it from one tick and at the lane the next made the wheel flip between lock and straight.
+    if (!aimed) aim = road_lane_point(net, r->lanes[r->lanes.size() - 1], to.s);
     remaining = rest;
     return true;
 }
@@ -382,7 +384,18 @@ void kit3d_wanted(Frame& f) {
                         togo = remaining;
                     }
                 }
-                if (!go || dist < 4.0f || togo < 4.0f) {
+                // Pushing the throttle without moving for 2 s: back out for 1.5 s with the wheel against the way it wants to go.
+                const bool braking = !go || dist < 4.0f || togo < 4.0f;
+                if (braking) p.reverse_left = 0.0f;
+                if (p.reverse_left > 0.0f) {
+                    p.reverse_left = math::max(p.reverse_left - f.dt, 0.0f);
+                    const f32 ang = std::atan2(fwd.x * d.z - fwd.z * d.x, fwd.x * d.x + fwd.z * d.z);
+                    const f32 max_steer = math::max(v->max_steer, 1.0f) * 0.0174533f;
+                    v->steer = -math::clamp(ang / max_steer, -1.0f, 1.0f);
+                    v->throttle = -0.6f;
+                    v->brake = 0.0f;
+                } else if (braking) {
+                    p.stuck_time = 0.0f;
                     v->throttle = 0.0f;
                     v->steer = 0.0f;
                     v->brake = 1.0f;
@@ -394,6 +407,11 @@ void kit3d_wanted(Frame& f) {
                     const f32 turn = std::abs(v->steer);
                     v->throttle = math::min(1.0f - 0.6f * turn, togo < 12.0f ? 0.4f : 1.0f);
                     v->brake = 0.0f;
+                    p.stuck_time = std::abs(v->speed) < 0.5f ? p.stuck_time + f.dt : 0.0f;
+                    if (p.stuck_time >= 2.0f) {
+                        p.stuck_time = 0.0f;
+                        p.reverse_left = 1.5f;
+                    }
                 }
                 v->handbrake = 0.0f;
             }

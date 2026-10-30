@@ -108,6 +108,59 @@ TEST_CASE("combat3d: a hitscan shot hurts what it hits and says so") {
     CHECK(s.hp(tgt).last_attacker == gun);
 }
 
+TEST_CASE("combat3d: a weapon aims from another entity and falls back to its own pose when that is gone") {
+    Scene s;
+    const Entity tgt = s.target(-10.0f, 0.0f);  // 10 m down -X
+    Weapon3D g;
+    g.damage = 30.0f;
+    const Entity gun = s.gun(g);  // faces -Z: would miss the target
+    // The aim entity looks along -X (a quarter turn left).
+    LocalTransform cam = at(0, 1.0f, 0);
+    cam.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, 1.5707963f);
+    const Entity aim = s.w.spawn_with(cam);
+    s.run(30);
+    s.wep(gun).aim_from = aim;
+    s.wep(gun).fire = 1;
+    s.run(1);
+    CHECK(s.hp(tgt).current == doctest::Approx(70.0f));
+    CHECK(s.wep(gun).last_hit == tgt);
+    // The aim entity is destroyed (the player left the car and the camera changed): the shot uses the weapon's own pose.
+    s.w.destroy(aim);
+    s.wep(gun).cooldown = 0.0f;
+    s.wep(gun).fire = 1;
+    s.run(1);
+    CHECK(s.fired == 2);
+    CHECK(s.hp(tgt).current == doctest::Approx(70.0f));  // faced -Z: missed
+}
+
+TEST_CASE("combat3d: an aim entity with no transform, or a handle whose slot was reused, is not used") {
+    Scene s;
+    const Entity tgt = s.target(-10.0f, 0.0f);  // 10 m down -X: only a turned aim would hit it
+    Weapon3D g;
+    g.damage = 30.0f;
+    const Entity gun = s.gun(g);
+    const Entity bare = s.w.spawn();  // alive, but no LocalTransform
+    s.run(30);
+    s.wep(gun).aim_from = bare;
+    s.wep(gun).fire = 1;
+    s.run(1);
+    CHECK(s.fired == 1);
+    CHECK(s.hp(tgt).current == doctest::Approx(100.0f));  // its own pose: faced -Z, missed
+    // A turned aim entity is destroyed and its slot reused by an entity that faces the other way: the old handle must not match.
+    LocalTransform cam = at(0, 1.0f, 0);
+    cam.rotation = math::quat_from_axis_angle({0.0f, 1.0f, 0.0f}, 1.5707963f);
+    const Entity aim = s.w.spawn_with(cam);
+    s.w.destroy(aim);
+    const Entity reused = s.w.spawn_with(cam);
+    CHECK(reused != aim);
+    s.wep(gun).aim_from = aim;
+    s.wep(gun).cooldown = 0.0f;
+    s.wep(gun).fire = 1;
+    s.run(1);
+    CHECK(s.fired == 2);
+    CHECK(s.hp(tgt).current == doctest::Approx(100.0f));
+}
+
 TEST_CASE("combat3d: the owner is never hit and a wall stops the ray") {
     Scene s;
     const Entity tgt = s.target();

@@ -1,0 +1,1 @@
+- Claude skill `mce-gamedev` (SKILL.md and references) under `docs/skills/mce-gamedev/`: how to make a game with the engine over MCP, formats, kit components, Blender/glTF rules, CC0 sources, performance budgets, determinism and CI rules.

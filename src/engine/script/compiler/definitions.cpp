@@ -369,6 +369,34 @@ declare weather: {
     -- star_brightness 0..4, star_twinkle 0..1; light_shadows and enabled: any non-zero number is 1); an unknown key, a
     -- non-number or a color that is not three numbers raises
     set_moon: (settings: { phase_offset: number?, cycle_days: number?, freeze_phase: number?, inclination: number?, light_intensity: number?, light_color: { number }?, light_shadows: number?, disk_size: number?, disk_intensity: number?, star_density: number?, star_brightness: number?, star_twinkle: number?, enabled: number? }) -> (),
+
+    -- Aurora (M-AURORA), the first one in the scene; every aurora function raises when there is none (set_aurora never
+    -- adds one). The getters use the set keys' names with an aurora_ prefix. aurora_gate (0..1) is the latitude gate of the
+    -- authored latitude; aurora_level (0..4) is the brightness gain the renderer gets now, from the night fade of the
+    -- current hour (0 with no clock, so only night_only 0 shows) and the cloud coverage of the first Weather and
+    -- CloudLayer; both are read-only and read the authoring even when enabled is 0 (the level is then 0).
+    aurora_latitude: () -> number,
+    aurora_gate_low: () -> number,
+    aurora_gate_high: () -> number,
+    aurora_strength: () -> number,
+    aurora_curtain_count: () -> number,
+    aurora_base_height: () -> number,
+    aurora_height_span: () -> number,
+    aurora_azimuth: () -> number,
+    aurora_width: () -> number,
+    aurora_speed: () -> number,
+    aurora_night_only: () -> number,
+    aurora_enabled: () -> number,
+    aurora_low_color: () -> (number, number, number),
+    aurora_high_color: () -> (number, number, number),
+    aurora_gate: () -> number,
+    aurora_level: () -> number,
+    -- every key optional, each value clamped to the field's range (latitude -90..90 degrees, gate_low and gate_high 0..90,
+    -- strength 0..4, curtain_count 1..6 rounded down, base_height 0.02..0.6, height_span 0.05..0.8, azimuth 0..360
+    -- degrees, width 10..180 degrees, speed 0..4, low_color and high_color three lanes 0..1; night_only and enabled: any
+    -- non-zero number is 1); an unknown key, a non-number or a color that is not three numbers raises and nothing is
+    -- written
+    set_aurora: (settings: { latitude: number?, gate_low: number?, gate_high: number?, strength: number?, curtain_count: number?, base_height: number?, height_span: number?, azimuth: number?, width: number?, speed: number?, low_color: { number }?, high_color: { number }?, night_only: number?, enabled: number? }) -> (),
 }
 
 declare water: {

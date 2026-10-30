@@ -87,9 +87,11 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<RainRipples>("RainRipples", 0);  // rain_ripples.h (M-RAINFX 7c): four f32, no padding
     expect_pad<WeatherAudio>("WeatherAudio", sizeof(WeatherAudio::pad_));  // weather_audio.h (M-WEATHERAUDIO 10a)
     expect_pad<EngineAudio>("EngineAudio", 0);  // world_audio.h (M-OPENWORLD E3): seven f32
-    expect_pad<WeaponAudio>("WeaponAudio", sizeof(WeaponAudio::pad_) + sizeof(WeaponAudio::pad2_));
+    expect_pad<WeaponAudio>("WeaponAudio", sizeof(WeaponAudio::pad_));
+    expect_pad<ImpactAudio>("ImpactAudio", sizeof(ImpactAudio::pad_) + sizeof(ImpactAudio::pad2_));
     expect_pad<FootstepAudio>("FootstepAudio", sizeof(FootstepAudio::pad_) + sizeof(FootstepAudio::pad2_));
     expect_pad<SirenAudio>("SirenAudio", sizeof(SirenAudio::pad_));
+    expect_pad<ClockAudio>("ClockAudio", sizeof(ClockAudio::pad_));
     expect_pad<LightningBolt>("LightningBolt", sizeof(LightningBolt::pad_));  // lightning_bolt.h (M-LIGHTNINGBOLT 11a)
     expect_pad<WindGust>("WindGust", sizeof(WindGust::pad_));  // wind_gust.h (M-WINDGUST 12a)
     expect_pad<GroundMist>("GroundMist", sizeof(GroundMist::pad_));  // ground_mist.h (M-GROUNDMIST 13a)

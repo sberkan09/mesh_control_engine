@@ -95,6 +95,7 @@ struct Weapon3D {
     u8 infinite_ammo = 0;           // 1: reloads never use `reserve`
     u8 reloading = 0;               // engine-written
     Entity owner;                   // credited for the damage and never hit; null = the weapon's own entity
+    Entity aim_from;                // the shot leaves from (and points along) this entity's pose; null or gone = the weapon's own
     asset::AssetRef<asset::Mesh> projectile_mesh;  // Projectile: the model that flies
     u16 pellets = 1;                // rays or projectiles per shot
     u16 mask = 0xFFFF;              // physics layers it hits
@@ -112,8 +113,8 @@ struct Weapon3D {
     f32 projectile_life = 5.0f;     // s
     f32 splash_radius = 0.0f;       // m: > 0 explodes where the projectile lands
     f32 projectile_scale = 0.2f;    // the model's scale
-    math::vec3 muzzle;              // entity space: where the shot leaves
-    math::vec3 direction{0.0f, 0.0f, -1.0f};  // entity space
+    math::vec3 muzzle;              // entity space (aim_from's when set): where the shot leaves
+    math::vec3 direction{0.0f, 0.0f, -1.0f};  // entity space (aim_from's when set)
     f32 cooldown = 0.0f;            // engine-written: s until the next shot
     f32 reload_left = 0.0f;         // engine-written
     u32 shots = 0;                  // engine-written: shots fired
@@ -128,6 +129,7 @@ struct Weapon3D {
 MCE_COMPONENT(Weapon3D, kind, (use_input, Help{"1: Fire (held with `automatic`) and Reload drive it"}), automatic,
               (fire, Help{"set to shoot (the engine clears it)"}), (reload, Help{"set to reload (the engine clears it)"}), friendly_fire,
               infinite_ammo, (reloading, ReadOnly, Transient), (owner, Help{"credited and never hit; null = the weapon's own entity"}),
+              (aim_from, Help{"the shot starts at and points along this entity (a camera); null or gone = the weapon's own pose"}),
               projectile_mesh, (pellets, Range{1, 64}), (mask, Help{"physics layers it hits"}), (magazine, Help{"rounds it holds; 0 = never dry"}),
               ammo, reserve, (damage, Range{0, 1000000}), (range, Range{0.1f, 10000}), (rate, Range{0.01f, 1000}, Help{"shots/s"}),
               (spread_deg, Range{0, 90}), (impulse, Range{0, 1000000}, Help{"N*s a hit gives a dynamic body"}), (reload_time, Range{0, 60}),

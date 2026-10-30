@@ -111,6 +111,21 @@ TEST_CASE("tilemap: create, paint, fill -> saved and re-baked in the live mount;
     CHECK(y == 1);
     CHECK_FALSE(ed.tile_at(s, {-2.1f, 1.0f}, x, y));
 
+    // The rectangle of tile (1, 1) is the one tile_at found: it holds the point, one tile (0.5 m) wide.
+    math::vec2 lo, hi;
+    ed.tile_rect(s, 1, 1, lo, hi);
+    CHECK(hi.x - lo.x == doctest::Approx(0.5f));
+    CHECK(hi.y - lo.y == doctest::Approx(0.5f));
+    CHECK(lo.x <= -1.2f);
+    CHECK(hi.x >= -1.2f);
+    CHECK(lo.y <= 1.6f);
+    CHECK(hi.y >= 1.6f);
+    ed.tile_rect(s, 0, 0, lo, hi);
+    math::vec2 lo1, hi1;
+    ed.tile_rect(s, 2, 1, lo1, hi1);
+    CHECK(lo1.x - lo.x == doctest::Approx(1.0f));  // two tiles right
+    CHECK(lo1.y - lo.y == doctest::Approx(0.5f));  // one tile up
+
     // A resident handle goes stale on re-bake: that is what makes the kit rebuild its tilemap.
     asset::AssetSystem* assets = session.project().mounted();
     Result<asset::AssetHandle<asset::Tilemap>> held = assets->load_sync<asset::Tilemap>(assets->find(map.value()));
@@ -162,6 +177,15 @@ TEST_CASE("tilemap: create, paint, fill -> saved and re-baked in the live mount;
     CHECK(session.cook().diags.error_count() == 0);
     REQUIRE(session.enter_play());
     session.stop_play();
+
+    // Unbinding drops the map, its history and any stroke: nothing is left to paint or undo.
+    ed.unbind();
+    CHECK_FALSE(ed.bound());
+    CHECK(ed.entity() == kNoEntity);
+    CHECK(ed.map().is_null());
+    CHECK_FALSE(ed.can_undo());
+    CHECK_FALSE(ed.can_redo());
+    CHECK_FALSE(ed.tile_at(s, {-1.2f, 1.6f}, x, y));
 }
 
 TEST_CASE("tilemap: a tile beyond the tileset is a cook error with file:line") {
