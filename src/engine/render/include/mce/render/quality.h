@@ -62,6 +62,8 @@ struct QualitySettings {
     bool aurora = true;
     // M-RAINBOW 17b: the rainbow is honored (off: level 0, the frame without it). Low turns it off.
     bool rainbow = true;
+    // M-METEOR 18b: meteors are honored (off: level 0, the frame without them). Low turns them off.
+    bool meteor = true;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
@@ -140,5 +142,9 @@ AuroraSky apply_quality(const QualitySettings& q, const AuroraSky& aurora);
 // (NaN 0), band_width 0.5..2 (NaN 1), secondary 0..1 (NaN 0); anti_solar is normalized (NaN / zero -> (0, 0, 1));
 // `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
 RainbowSky apply_quality(const QualitySettings& q, const RainbowSky& rainbow);
+// MeteorSky: `r.meteor 0` and the Low tier (meteor false) zero `level` (the frame without it). Clamps: level 0..4
+// (NaN 0), rate 0..30 (NaN 4), brightness 0..4 (NaN 1), length 0.5..2 (NaN 1), speed 0.5..2 (NaN 1), time 0..60
+// (non-finite 0), seed 0..65535; `enabled` passes through. Returns a copy for the same reason as the SnowCover overload.
+MeteorSky apply_quality(const QualitySettings& q, const MeteorSky& meteor);
 
 }  // namespace mce::render

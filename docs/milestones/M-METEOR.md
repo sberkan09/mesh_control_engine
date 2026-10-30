@@ -60,7 +60,7 @@
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 18a | done | 900 | `Meteor` in `mce/kit/meteor.h` (28 bytes, `seed` u32 with a 2-byte zero pad) with `meteor_level`, `meteor_wrap_time`, `meteor_slot`, `meteor_slot_count(m, slot)`, `meteor_make`, `meteor_head`, `meteor_tail` and `meteor_envelope`, registered in `install_weather` after `Rainbow`, padding test, three `engine_components.cpp` includes, `capabilities.md` row (the `12_weather` scene carries a `Meteor`), guide 9.19p, `tests/kit/test_meteor.cpp`. The angular speed is 35 degrees per second times `speed`, so the arc is 14 to 42 degrees; `meteor_slot_count` takes the slot (the fractional part is a hash draw per slot). |
-| 18b | planned | | |
+| 18b | seam done, feed pending | PR TBD | Carrier merged first, the feed PR follows: `render::MeteorSky` POD (explicit zeroed `pad_[3]`), `Scene3D::set_meteor()` / `meteor()`, `QualitySettings::meteor` (Low false), cvar `r.meteor`, by-value `apply_quality(q, MeteorSky)` overload, `test_meteor_quality` in `tests/render`. Data only: no shader, no `PassU` change, nothing reads it. `scene3d.h` include fan-out before the change: 150 of 906 TUs (at the 150 warning); after: 151 of 907 TUs (one more, the new `test_meteor_quality.cpp`; over the 150 warning) |
 | 18c | planned | | |
 | 18d | planned | | |
 | 18e | planned | | |

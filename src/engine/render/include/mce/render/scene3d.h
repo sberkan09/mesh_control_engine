@@ -468,6 +468,23 @@ struct RainbowSky {
     u8 pad_[3] = {};
 };
 
+// Meteors (shooting stars) in the night sky pass (M-METEOR 18b; the kit extract drives it from the Meteor component,
+// the quality tiers gate it). `level` 0..4 is the gain with the night, cloud and rain gates already folded in (0 = off:
+// the frame is the one without it). `rate` 0..30 meteors per minute, `brightness` 0..4, `length` 0.5..2, `speed`
+// 0.5..2 (NaN -> the defaults 4, 1, 1, 1), `time` the wrapped clock in seconds 0..60 (non-finite -> 0), `seed` 0..65535.
+// `enabled` is a pass-through switch for the caller; apply_quality does not change it.
+struct MeteorSky {
+    f32 level = 0.0f;
+    f32 rate = 4.0f;
+    f32 brightness = 1.0f;
+    f32 length = 1.0f;
+    f32 speed = 1.0f;
+    f32 time = 0.0f;
+    u32 seed = 0;
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // A water plane for the forward pass (M-WATER 15b; the kit extract drives it from the Water component, the quality
 // tiers gate it). One horizontal square of `half_extent` meters centred on the camera, at `level_y`. The wave set is
 // carried as authoring parameters (the shader and the kit re-derive the same tables): `wave_count` 1..8 Gerstner
@@ -818,6 +835,7 @@ public:
     void set_water(const WaterSurface& w) { water_ = w; }
     void set_aurora(const AuroraSky& a) { aurora_ = a; }
     void set_rainbow(const RainbowSky& r) { rainbow_ = r; }
+    void set_meteor(const MeteorSky& m) { meteor_ = m; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -889,6 +907,7 @@ public:
     const WaterSurface& water() const { return water_; }
     const AuroraSky& aurora() const { return aurora_; }
     const RainbowSky& rainbow() const { return rainbow_; }
+    const MeteorSky& meteor() const { return meteor_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -985,6 +1004,7 @@ private:
     WaterSurface water_;
     AuroraSky aurora_;
     RainbowSky rainbow_;
+    MeteorSky meteor_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;
