@@ -1005,6 +1005,13 @@ def scene():
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
         "AudioListener": {},
         "CameraShake3D": {},
+        # Shot feedback (FireOn Fired names the camera the gun aims from): a muzzle flash where the shot leaves, and a small kick.
+        "ParticleEmitter3D": {"color_start": [6.0, 4.0, 1.2, 1.0], "color_end": [1.5, 0.4, 0.05, 0], "offset": [0.25, -0.3, -5.8],
+                              "box": [0.03, 0.03, 0.03], "direction": [0, 0, -1], "gravity": [0, 0, 0], "spread_deg": 25, "rate": 0,
+                              "speed_min": 1.0, "speed_max": 3.0, "lifetime_min": 0.05, "lifetime_max": 0.1, "drag": 0,
+                              "size_start": 0.35, "size_end": 0.05, "max_particles": 64, "seed": 5, "collide": 0, "additive": 1, "emitting": 1},
+        "ParticleBurst": {"count": 6, "on": "Fired"},
+        "ShakeTrigger": {"trauma": 0.04, "on": "Fired"},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},

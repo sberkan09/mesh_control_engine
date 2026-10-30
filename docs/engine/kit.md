@@ -221,7 +221,7 @@ out. `install_sensors3d` (from `install_stock`, after `install_bodies3d`): `"kit
 `"kit3d_triggers"`. Tests: `tests/kit/test_sensors3d.cpp`.
 
 `effects.h` (M-DATA-REACH 4): `FireOn` (`Manual` via the `fire` flag, `Start`, `TriggerEnter`,
-`ContactBegin`, `Died` when a `Died3D` names the entity); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`; at the entity when it has `AudioSpatial`), `ParticleBurst` (also fires a `ParticleEmitter3D`; `keep_emitting` switches it on for lasting smoke),
+`ContactBegin`, `Died` when a `Died3D` names the entity, `Fired` when a `WeaponFired3D` names the weapon or the camera it aims from); `SfxTrigger` (a `PlaySfx` with dB jitter, `audio::AudioBus`; at the entity when it has `AudioSpatial`), `ParticleBurst` (also fires a `ParticleEmitter3D`; `keep_emitting` switches it on for lasting smoke),
 `ShakeTrigger`, `CameraShake2D` (added to the view by `primary_camera`), `CameraFollow2D` (offset,
 dead zone, smoothing, look-ahead, bounds), `CameraFollow3D` (orbit with yaw/pitch, Look-input
 orbit; M-MOVE3D 2: a spring arm over `World3D::camera_sweep`, look-ahead, first person, lock-on), `PhysicsEvents` (engine-written last 2D trigger/contact pairs and counts), `NavGridSource`
