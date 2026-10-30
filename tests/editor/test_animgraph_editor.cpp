@@ -279,3 +279,40 @@ TEST_CASE("animgraph editor: the preview poses clips and runs the graph without 
     AnimPreview none;
     CHECK_FALSE(none.start(session, kNoEntity));
 }
+
+TEST_CASE("animgraph editor: selection is exclusive and set_transition edits one transition") {
+    const std::string root = anim_project("ag_ed_transition");
+    EditorSession session;
+    open_stage(session, root);
+    AnimGraphEditor ed;
+    REQUIRE(ed.open(session, kGraphGuid));
+    REQUIRE(ed.doc().transitions.size() >= 1);
+
+    ed.select_state(0);
+    CHECK(ed.selected_state() == 0);
+    ed.select_transition(0);
+    CHECK(ed.selected_transition() == 0);
+    CHECK(ed.selected_state() == kNoState);
+    ed.select_state(0);
+    CHECK(ed.selected_transition() == kNoTransition);
+    ed.select_transition(999);  // out of range selects nothing
+    CHECK(ed.selected_transition() == kNoTransition);
+    CHECK(ed.selected_state() == kNoState);
+
+    cook::AnimGraphDocTransition t = ed.doc().transitions[0];
+    t.fade = 0.5f;
+    const u64 rev = ed.revision();
+    REQUIRE(ed.set_transition(0, t));
+    CHECK(ed.doc().transitions[0].fade == 0.5f);
+    CHECK(ed.selected_transition() == 0);
+    CHECK(ed.revision() > rev);
+    CHECK(ed.dirty());
+
+    // An index past the end, and a target state that does not exist, change nothing.
+    const u64 rev2 = ed.revision();
+    CHECK_FALSE(ed.set_transition(999, t));
+    t.to = 99;
+    CHECK_FALSE(ed.set_transition(0, t));
+    CHECK(ed.revision() == rev2);
+    CHECK(ed.doc().transitions[0].fade == 0.5f);
+}
