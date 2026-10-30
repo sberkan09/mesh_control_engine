@@ -13,16 +13,8 @@ FloatingOrigin3D | tested in tests/scene/test_streaming.cpp and tests/kit/test_o
 VehicleRam3D | M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample
 ImpactDamage3D | M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample
 PaySpray3D | M-PAYSPRAY: tested in tests/kit/test_wanted3d.cpp; a game places it as a garage
-MissionReward3D | M-MISSIONPAY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
-CarOwner3D | M-CARJACK: tested in tests/kit/test_wanted3d.cpp; a game puts it on parked cars
 CashDrop3D | M-CASH: tested in tests/kit/test_wanted3d.cpp; a game adds it to the people worth robbing
-HealShop3D | M-HEALSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a clinic
-MissionMarker | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a map marker
-MissionWantedFail | M-MISSIONSTART: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
 LaunchVelocity2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
-CashPickup3D | M-CASHPICKUP: tested in tests/kit/test_wanted3d.cpp; a game puts it on dropped or placed cash
-MissionRetry | M-MISSIONRETRY: tested in tests/kit/test_wanted3d.cpp; a game puts it on a mission entity
-ChopShop3D | M-CHOPSHOP: tested in tests/kit/test_wanted3d.cpp; a game puts it on a scrapyard entity
 RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand

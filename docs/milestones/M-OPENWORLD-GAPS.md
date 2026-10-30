@@ -20,16 +20,16 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | # | Missing in the sample | Exists as | Demo elsewhere |
 |---|---|---|---|
 | A1 | **HUD** (E2 done in the HUD PR: health, wanted level, cash, ammo, objective hint; wanted stars done (Panels bound to `Wanted3D/level`, visible from `range` lo up); open: the objective text is static until E7 missions): no health bar, ammo, wanted stars or any on-screen text. The player cannot tell the wanted level, health or that a crime was counted | `.mcui` documents, `Wanted3D`/`Health3D` events | `samples/10_missions/assets/ui/hud.mcui` |
-| A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission markers wait for E7) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
-| A3 | **Missions** (reach, kill, deliver, timers, Luau chaining, retry, pay) | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
+| A2 | **Minimap and map markers** (E2: minimap with car and police markers wired; mission and shop markers wired in E7/E8) | `MapMarker`, `Minimap` widget (M-MISSION step 2) | `10_missions` |
+| A3 | ~~**Missions**~~ **done (E7, 2026-10-29)**: three jobs (Errand, Courier, Long haul) started from marker pads, reward, fail fee and retry, wanted-level fail; minimap labels via `MapMarker`. Still open: kill/interact objectives, Luau chaining | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
 | A4 | **Day/night cycle**: ~~the sun is fixed~~ **done (E6, 2026-10-29)**, see [M-OPENWORLD-DAYNIGHT](M-OPENWORLD-DAYNIGHT.md) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
 | A5 | **Weather**: ~~rain, wet roads, fog, lightning, wind~~ **done (E6)** except snow (no snow cover in the city) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
 | A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; still missing: radio, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
 | A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
-| A10 | **Carjacking, vehicle damage and wrecks, ramming pedestrians** | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
-| A11 | **Loot, shops, inventory** (ammo, health, chop shop) | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
+| A10 | **Carjacking** done (E8, parked cars 2 and 3 are owned, witnessed theft adds heat); still open: **vehicle damage and wrecks, ramming pedestrians** | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
+| A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; the ammo shop came with the gun-on-player change; still open: loot, inventory | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
 | A12 | **Pause menu, options, save/load** in the sample (the stock player has Esc pause; no game screens) | `ui_flow`, save system | `ui_screens` |
 | A13 | **HLOD / `ChunkLod3D` skyline and scene streaming**: the whole city is one scene (714 entities) | A3/A4 steps, `samples/hlod_city` | `hlod_city` |
 | A14 | **Floating origin**: not set (1 km² never reaches the threshold); matters if the map grows | `FloatingOrigin3D` | — |

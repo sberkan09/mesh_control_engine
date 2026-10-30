@@ -161,4 +161,39 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(pc.get("Health3D").get("current").as_number() > 50.0);
     CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
     CHECK(pc.get("Wallet3D").get("cash").as_number() == 300);  // each run starts from the saved scene: 500 - 200
+
+    // M-OPENWORLD E7/E8: missions, money to find and shops, all data on existing kit components.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})")) == 3);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"CashPickup3D","show":["CashPickup3D"]}})")) == 12);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ChopShop3D","show":["ChopShop3D"]}})")) == 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HealShop3D","show":["HealShop3D"]}})")) == 1);
+    // Standing on the Errand marker starts the mission.
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-45,0.95,-9]})");
+    c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":0})");
+    c.ok("scene_save");
+    const auto errand_state = [&](const char* ticks) {
+        auto r = c.ok("run_headless", std::string(R"({"ticks":)") + ticks +
+                                          R"(,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})");
+        CHECK(r.v().get("log").get("errors").as_number() == 0);
+        for (u32 i = 0; i < count(r); ++i) {
+            const cook::JsonValue m = comps(r, i).get("Mission");
+            if (str(m.get("id")) == "errand") return str(m.get("state"));
+        }
+        return std::string("missing");
+    };
+    CHECK(errand_state("30") == "Active");
+    // Standing at the Errand's destination with the mission started completes it: 500 + 250.
+    c.ok("component_set", R"({"entity":"Mission Errand","component":"Mission","path":"start","value":1})");
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[95,0.95,-9]})");
+    c.ok("scene_save");
+    CHECK(errand_state("60") == "Complete");
+    auto rich = c.ok("run_headless", R"({"ticks":60,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
+    REQUIRE(count(rich) == 1);
+    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 750);
+    // Standing on a cash pad picks it up (the pad pays 40 to 100).
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-170,0.95,9]})");
+    c.ok("scene_save");
+    auto found = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
+    REQUIRE(count(found) == 1);
+    CHECK(comps(found, 0).get("Wallet3D").get("cash").as_number() > 500.0);
 }

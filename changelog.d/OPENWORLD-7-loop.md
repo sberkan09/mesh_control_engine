@@ -1,0 +1,1 @@
+- 09_openworld (M-OPENWORLD E7/E8): three missions from marker pads, cash pads, a medic, a scrapyard and owned parked cars, all data in `gen_assets.py`.

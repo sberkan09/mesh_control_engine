@@ -17424,6 +17424,10 @@
      "quiet_db": -10,
      "loud_db": 0
     },
+    "CarOwner3D": {
+     "heat": 12,
+     "needs_witness": 1
+    },
     "MapMarker": {
      "color": [
       0.3,
@@ -17535,6 +17539,10 @@
      "full_speed": 18,
      "quiet_db": -10,
      "loud_db": 0
+    },
+    "CarOwner3D": {
+     "heat": 12,
+     "needs_witness": 1
     },
     "MapMarker": {
      "color": [
@@ -22142,6 +22150,1021 @@
      "on_hour": 19.0,
      "off_hour": 5.75,
      "fade_minutes": 20
+    }
+   }
+  },
+  {
+   "id": 842,
+   "name": "Errand stop 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      95.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.3,
+      0.7,
+      1.0,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.3,
+      0.7,
+      1.0,
+      1
+     ],
+     "label": "Errand 1"
+    }
+   }
+  },
+  {
+   "id": 843,
+   "name": "Errand objective 1",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$841",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1001
+    }
+   }
+  },
+  {
+   "id": 844,
+   "name": "Mission Errand",
+   "components": {
+    "Mission": {
+     "id": "errand",
+     "objective": "$842",
+     "actor": "$694",
+     "fail_on_death": "$694",
+     "time_limit": 100
+    },
+    "MissionReward3D": {
+     "cash": 250,
+     "fail_fee": 0
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1002
+    }
+   }
+  },
+  {
+   "id": 845,
+   "name": "Mission Errand marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -45.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$843",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Errand",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 846,
+   "name": "Courier stop 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -120.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.4,
+      1.0,
+      0.5,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.4,
+      1.0,
+      0.5,
+      1
+     ],
+     "label": "Courier 1"
+    }
+   }
+  },
+  {
+   "id": 847,
+   "name": "Courier objective 1",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$845",
+     "radius": 4.0,
+     "next": "$848"
+    },
+    "SaveKey": {
+     "key": 1003
+    }
+   }
+  },
+  {
+   "id": 848,
+   "name": "Courier stop 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      150.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.4,
+      1.0,
+      0.5,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.4,
+      1.0,
+      0.5,
+      1
+     ],
+     "label": "Courier 2"
+    }
+   }
+  },
+  {
+   "id": 849,
+   "name": "Courier objective 2",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$847",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1004
+    }
+   }
+  },
+  {
+   "id": 850,
+   "name": "Mission Courier",
+   "components": {
+    "Mission": {
+     "id": "courier",
+     "objective": "$846",
+     "actor": "$694",
+     "fail_on_death": "$694",
+     "time_limit": 170
+    },
+    "MissionReward3D": {
+     "cash": 700,
+     "fail_fee": 100
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1005
+    },
+    "MissionWantedFail": {
+     "level": 3
+    }
+   }
+  },
+  {
+   "id": 851,
+   "name": "Mission Courier marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      60.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$849",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Courier",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 852,
+   "name": "Long haul stop 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      180.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.45,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1.0,
+      0.45,
+      0.3,
+      1
+     ],
+     "label": "Long haul 1"
+    }
+   }
+  },
+  {
+   "id": 853,
+   "name": "Long haul objective 1",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$851",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1006
+    }
+   }
+  },
+  {
+   "id": 854,
+   "name": "Mission Long haul",
+   "components": {
+    "Mission": {
+     "id": "long_haul",
+     "objective": "$852",
+     "actor": "$694",
+     "fail_on_death": "$694",
+     "time_limit": 150
+    },
+    "MissionReward3D": {
+     "cash": 1000,
+     "fail_fee": 200
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1007
+    },
+    "MissionWantedFail": {
+     "level": 3
+    }
+   }
+  },
+  {
+   "id": 855,
+   "name": "Mission Long haul marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -190.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$853",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Long haul",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 856,
+   "name": "Cash 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -170,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 40,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 857,
+   "name": "Cash 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -140,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 100,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 858,
+   "name": "Cash 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -95,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 40,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 859,
+   "name": "Cash 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -20,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 40,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 860,
+   "name": "Cash 5",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -10,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 80,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 861,
+   "name": "Cash 6",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -35,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 100,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 862,
+   "name": "Cash 7",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      75,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 60,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 863,
+   "name": "Cash 8",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      85,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 100,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 864,
+   "name": "Cash 9",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      110,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 60,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 865,
+   "name": "Cash 10",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      140,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 80,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 866,
+   "name": "Cash 11",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      170,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 60,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 867,
+   "name": "Cash 12",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      200,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "CashPickup3D": {
+     "cash": 80,
+     "radius": 1.6,
+     "respawn": 120
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.35,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "$"
+    }
+   }
+  },
+  {
+   "id": 868,
+   "name": "Medic",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -100.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.95,
+      0.95,
+      0.95,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "HealShop3D": {
+     "radius": 3.0,
+     "price_per_hp": 1
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.3,
+      0.3,
+      1
+     ],
+     "label": "Medic",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 869,
+   "name": "Scrapyard",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      130.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      8.0,
+      0.04,
+      8.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.6,
+      0.4,
+      0.2,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "ChopShop3D": {
+     "radius": 6.0,
+     "price": 400
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.6,
+      0.1,
+      1
+     ],
+     "label": "Scrapyard",
+     "always_visible": 1
     }
    }
   }
