@@ -454,6 +454,20 @@ struct AuroraSky {
     u8 pad_[3] = {};
 };
 
+// A rainbow in the sky pass (M-RAINBOW 17b; the kit extract drives it from the Rainbow component, the quality tiers
+// gate it). `level` 0..4 is the brightness gain with the sun, wetness, rain and cloud gates already folded in (0 =
+// off: the frame is the one without it). `band_width` 0.5..2 scales the angular width of the bands (NaN -> 1),
+// `secondary` 0..1 the strength of the faint second bow (NaN -> 0), `anti_solar` the unit direction opposite the sun
+// (non-finite / zero -> (0, 0, 1)). `enabled` is a pass-through switch for the caller; apply_quality does not change it.
+struct RainbowSky {
+    f32 level = 0.0f;
+    f32 band_width = 1.0f;
+    f32 secondary = 0.0f;
+    math::vec3 anti_solar{0.0f, 0.0f, 1.0f};
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // A water plane for the forward pass (M-WATER 15b; the kit extract drives it from the Water component, the quality
 // tiers gate it). One horizontal square of `half_extent` meters centred on the camera, at `level_y`. The wave set is
 // carried as authoring parameters (the shader and the kit re-derive the same tables): `wave_count` 1..8 Gerstner
@@ -803,6 +817,7 @@ public:
     void set_night_sky(const NightSky& n) { night_sky_ = n; }
     void set_water(const WaterSurface& w) { water_ = w; }
     void set_aurora(const AuroraSky& a) { aurora_ = a; }
+    void set_rainbow(const RainbowSky& r) { rainbow_ = r; }
     void set_shadows(const ShadowSettings& shadows) { shadow_settings_ = shadows; }
     void set_local_shadows(const LocalShadowSettings& local) { local_shadows_ = local; }
     void set_cluster_grid(const ClusterGridDesc& grid) { cluster_grid_ = grid; }
@@ -873,6 +888,7 @@ public:
     const NightSky& night_sky() const { return night_sky_; }
     const WaterSurface& water() const { return water_; }
     const AuroraSky& aurora() const { return aurora_; }
+    const RainbowSky& rainbow() const { return rainbow_; }
     const ShadowSettings& shadow_settings() const { return shadow_settings_; }
     const LocalShadowSettings& local_shadow_settings() const { return local_shadows_; }
     Span<const PointLight> point_lights() const { return point_lights_.span(); }
@@ -968,6 +984,7 @@ private:
     NightSky night_sky_;
     WaterSurface water_;
     AuroraSky aurora_;
+    RainbowSky rainbow_;
     ShadowSettings shadow_settings_;
     LocalShadowSettings local_shadows_;
     ClusterGridDesc cluster_grid_;

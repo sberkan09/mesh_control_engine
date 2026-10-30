@@ -30,6 +30,8 @@ MCE_CVAR(cv_water, "r.water", true,
          "Water plane from the Water component (WaterSurface; off = the frame without a plane)", CVarFlags::Saved);
 MCE_CVAR(cv_aurora, "r.aurora", true,
          "Aurora curtains in the night sky (AuroraSky; off = the frame without them)", CVarFlags::Saved);
+MCE_CVAR(cv_rainbow, "r.rainbow", true,
+         "Rainbow in the sunlit sky (RainbowSky; off = the frame without it)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -55,6 +57,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.night_sky = false;
             q.water = false;
             q.aurora = false;
+            q.rainbow = false;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};
@@ -221,6 +224,15 @@ AuroraSky apply_quality(const QualitySettings& q, const AuroraSky& aurora) {
     out.speed = detail::ranged(aurora.speed, 0.0f, 4.0f, 1.0f);
     out.low_color = math::vec3{unit(aurora.low_color.x), unit(aurora.low_color.y), unit(aurora.low_color.z)};
     out.high_color = math::vec3{unit(aurora.high_color.x), unit(aurora.high_color.y), unit(aurora.high_color.z)};
+    return out;
+}
+
+RainbowSky apply_quality(const QualitySettings& q, const RainbowSky& rainbow) {
+    RainbowSky out = rainbow;
+    out.level = q.rainbow && cv_rainbow.get_bool() ? detail::ranged(rainbow.level, 0.0f, 4.0f, 0.0f) : 0.0f;
+    out.band_width = detail::ranged(rainbow.band_width, 0.5f, 2.0f, 1.0f);
+    out.secondary = detail::ranged(rainbow.secondary, 0.0f, 1.0f, 0.0f);
+    out.anti_solar = detail::unit_dir3_or(rainbow.anti_solar, math::vec3{0.0f, 0.0f, 1.0f});
     return out;
 }
 
