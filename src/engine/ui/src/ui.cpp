@@ -538,7 +538,7 @@ bool Document::bind_property(WidgetId w, const World& world, Entity entity, Stri
         return false;
     }
     const refl::FieldKind k = ref.value().kind;
-    const bool numeric = k == refl::FieldKind::Bool || (k >= refl::FieldKind::I8 && k <= refl::FieldKind::F64);
+    const bool numeric = k == refl::FieldKind::Bool || k == refl::FieldKind::Enum || (k >= refl::FieldKind::I8 && k <= refl::FieldKind::F64);  // an enum reads as its number
     if (!numeric || ref.value().count != 1) {
         MCE_LOG_ERROR("ui: property '{}' is not a numeric or bool leaf", path);
         return false;
@@ -560,8 +560,10 @@ bool Document::bind_property(WidgetId w, const World& world, Entity entity, Stri
 }
 
 namespace {
-f64 read_number(const void* p, refl::FieldKind k) {
+f64 read_number(const void* p, refl::FieldKind k, u32 size) {
     switch (k) {
+        case refl::FieldKind::Enum:  // the underlying integer (reflected enums are unsigned or small)
+            return size == 1 ? *static_cast<const u8*>(p) : size == 2 ? *static_cast<const u16*>(p) : size == 4 ? *static_cast<const u32*>(p) : 0.0;
         case refl::FieldKind::Bool: return *static_cast<const bool*>(p) ? 1.0 : 0.0;
         case refl::FieldKind::I8: return *static_cast<const i8*>(p);
         case refl::FieldKind::I16: return *static_cast<const i16*>(p);
@@ -593,7 +595,7 @@ void Document::sync_properties() {
         if (b.component == ecs::kInvalidComponent) continue;
         const void* obj = b.world->get_raw(b.entity, b.component);
         if (!obj) continue;
-        const f64 v = read_number(static_cast<const byte*>(obj) + b.ref.offset, b.ref.kind);
+        const f64 v = read_number(static_cast<const byte*>(obj) + b.ref.offset, b.ref.kind, b.ref.size);
         if (b.has_last && v == b.last) continue;
         b.last = v;
         b.has_last = true;
@@ -603,7 +605,7 @@ void Document::sync_properties() {
             std::snprintf(text, sizeof(text), b.format.empty() ? "%g" : b.format.c_str(), v);
             set_text(b.widget, text);
         } else if (n->kind == WidgetKind::Panel || n->kind == WidgetKind::Image) {
-            set_visible(b.widget, static_cast<f32>(v) >= n->lo);  // shown from `lo` up: a wanted star, a low-health flash
+            set_visible(b.widget, static_cast<f32>(v) >= n->lo && static_cast<f32>(v) <= n->hi);  // shown while lo <= value <= hi: a wanted star, a mission state
         } else {
             n->value = static_cast<f32>(v) < n->lo ? n->lo : (static_cast<f32>(v) > n->hi ? n->hi : static_cast<f32>(v));
         }
