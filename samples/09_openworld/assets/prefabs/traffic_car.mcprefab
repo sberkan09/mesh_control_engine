@@ -89,6 +89,17 @@
      "quiet_db": -10,
      "loud_db": 0
     },
+    "ImpactDamage3D": {
+     "min_speed": 6,
+     "damage_per_ms": 5,
+     "occupant_share": 0.4
+    },
+    "Health3D": {
+     "max": 150,
+     "team": 0,
+     "destroy_on_death": 1,
+     "linger": 10
+    },
     "TrafficDriver3D": {}
    }
   },

@@ -39310,6 +39310,20 @@
      "quiet_db": -10,
      "loud_db": 0
     },
+    "ImpactDamage3D": {
+     "min_speed": 6,
+     "damage_per_ms": 5,
+     "occupant_share": 0.4
+    },
+    "Health3D": {
+     "max": 200,
+     "team": 0,
+     "destroy_on_death": 0
+    },
+    "VehicleRam3D": {
+     "min_speed": 5,
+     "damage_per_ms": 12
+    },
     "MapMarker": {
      "color": [
       0.3,
@@ -39448,6 +39462,20 @@
      "full_speed": 18,
      "quiet_db": -10,
      "loud_db": 0
+    },
+    "ImpactDamage3D": {
+     "min_speed": 6,
+     "damage_per_ms": 5,
+     "occupant_share": 0.4
+    },
+    "Health3D": {
+     "max": 200,
+     "team": 0,
+     "destroy_on_death": 0
+    },
+    "VehicleRam3D": {
+     "min_speed": 5,
+     "damage_per_ms": 12
     },
     "CarOwner3D": {
      "heat": 12,
@@ -39591,6 +39619,20 @@
      "full_speed": 18,
      "quiet_db": -10,
      "loud_db": 0
+    },
+    "ImpactDamage3D": {
+     "min_speed": 6,
+     "damage_per_ms": 5,
+     "occupant_share": 0.4
+    },
+    "Health3D": {
+     "max": 200,
+     "team": 0,
+     "destroy_on_death": 0
+    },
+    "VehicleRam3D": {
+     "min_speed": 5,
+     "damage_per_ms": 12
     },
     "CarOwner3D": {
      "heat": 12,

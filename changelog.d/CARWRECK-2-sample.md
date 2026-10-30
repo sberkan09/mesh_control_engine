@@ -1,0 +1,1 @@
+- Sample (M-CARWRECK 2): `09_openworld` cars have `Health3D` and `ImpactDamage3D` (crashes wear them down, a dead car is a wreck; traffic wrecks are cleared after 10 s), the cars the player can take also carry `VehicleRam3D`. Record: `docs/milestones/M-CARWRECK.md`.

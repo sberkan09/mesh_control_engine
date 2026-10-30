@@ -88,7 +88,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
-| `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-CONTACTEVENTS 4: tested in tests/kit/test_impact_damage.cpp; a sample car with crash damage comes with the city sample |
+| `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |
@@ -161,7 +161,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `TrafficDriver3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TrafficSpawner3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `UiFlowRules` | `mce/kit/ui_flow.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | allowed: tested in tests/kit/test_ui_flow.cpp; a sample screen reacting to a signal needs the Undertow ending, a later PR |
-| `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | allowed: M-VEHICLEHIT: tested in tests/kit/test_vehicle_ram.cpp; a sample car with a ram zone comes with the city sample |
+| `VehicleRam3D` | `mce/kit/vehicle_ram.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Vehicle3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Waypoint3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/08_movement/assets/scenes/race.mcscene |
 | `VehicleDriver3D` | `mce/kit/vehicles3d.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/race.mcscene |

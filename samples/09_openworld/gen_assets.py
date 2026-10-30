@@ -695,10 +695,17 @@ def car_entities(model, traffic):
     root.update(headlights())
     root["RigidBody3D"].update(contact_events=1, contact_min_speed=4)
     root["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -10, "loud_db": 0}
+    # Crashes hurt: hard hits (ImpactDamage3D) wear the car down and hurt its driver, a dead car is a wreck that stops driving
+    # (kit_wreck). A wrecked traffic car is cleared after a while and the spawner fills the slot; a parked car stays as scenery.
+    root["ImpactDamage3D"] = {"min_speed": 6, "damage_per_ms": 5, "occupant_share": 0.4}
     if traffic:
+        root["Health3D"] = {"max": 150, "team": 0, "destroy_on_death": 1, "linger": 10}
         root["TrafficDriver3D"] = {}
         root["VehicleSeat3D"]["locked"] = 1
     else:
+        # A car the player takes also runs people over: the zone ahead of the bumper hurts walkers above 5 m/s.
+        root["Health3D"] = {"max": 200, "team": 0, "destroy_on_death": 0}
+        root["VehicleRam3D"] = {"min_speed": 5, "damage_per_ms": 12}
         root["VehicleSeat3D"]["enter_radius"] = 4.0
     ents = [{"name": "Car", "components": root}]
     # One Kenney car (body and wheels in one model, wheels do not spin); the model's front faces +z, the car drives toward -z.
