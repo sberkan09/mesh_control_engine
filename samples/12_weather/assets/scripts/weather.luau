@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, and the "aurora:" lines, the Aurora's latitude, gate and level).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, and the "rainbow:" lines, the Rainbow's level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -64,5 +64,11 @@ function update()
         weather.set_aurora{latitude = 45 + t / 45}
         mce.log(string.format("aurora: latitude %.2f gate %.3f level %.3f at tick %d",
             weather.aurora_latitude(), weather.aurora_gate(), weather.aurora_level(), t))
+        -- M-RAINBOW: the Rainbow on the Weather entity. rainbow_level is the kit helper on the sun elevation of the hour, the
+        -- ground wetness, the rain intensity and the cloud cover: 0 by night (the clock starts at 5:00, sunrise at about
+        -- 6:00 = tick 1500), 0 while it rains or storms, and it rises once the rain is gone and the sun is up while the
+        -- ground is still wet (the snow gives way to clear at tick 2100); the bow follows the drying of the ground.
+        mce.log(string.format("rainbow: level %.3f wetness %.3f at tick %d",
+            weather.rainbow_level(), weather.wetness(), t))
     end
 end

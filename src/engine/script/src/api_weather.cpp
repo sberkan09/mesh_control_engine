@@ -219,6 +219,23 @@
 //                                         non-zero number is 1); an unknown key, a non-number or a color that is not
 //                                         three numbers raises an error that names the call and nothing is written
 //
+// Rainbow (M-RAINBOW step 17d) lives in the same table, next to the aurora: the authoring over the first kit::Rainbow
+// (mce/kit/rainbow.h) and the read-only rainbow_level(). Named errors as above ("weather.set_rainbow: the scene has no
+// Rainbow entity"); the setter never adds the component. The authoring names follow the set keys with a `rainbow_`
+// prefix. rainbow_level() is kit::rainbow_level with the inputs Kit3DExtract uses: the sun elevation of the current hour
+// (Environment3D.time_of_day, else its sun_direction), the first Weather's wetness and rain (its intensity while it rains
+// or storms), and the cloud coverage of the first Weather and CloudLayer. It is 0 without a Weather. The getters read the
+// authoring even when `enabled` is 0 (rainbow_level is 0 then).
+//
+//   weather.rainbow_strength() / rainbow_band_width() / rainbow_secondary() / rainbow_min_wetness() /
+//   weather.rainbow_max_sun_elevation() / rainbow_enabled() -> number   strength, band_width, secondary, min_wetness,
+//                                                                       max_sun_elevation_deg, enabled
+//   weather.rainbow_level() -> number               0..4, the brightness gain the renderer gets now
+//   weather.set_rainbow{strength=, band_width=, secondary=, min_wetness=, max_sun_elevation=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (enabled: any non-zero number is 1); an unknown key or a non-number raises an
+//                                         error that names the call and nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -264,6 +281,7 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
+#include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
 #include "mce/kit/world_clock.h"
 #include "mce/render/atmosphere.h"
@@ -1217,6 +1235,78 @@ int l_weather_set_aurora(lua_State* L) {
     return 0;
 }
 
+// ---- Rainbow (M-RAINBOW step 17d) ----
+
+kit::Rainbow& check_rainbow(lua_State* L, const char* fn) { return check_first<kit::Rainbow>(L, fn, "Rainbow"); }
+
+#define MCE_WEATHER_GETTER_RAINBOW(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                               \
+        lua_pushnumber(L, static_cast<double>(check_rainbow(L, "weather." #luaname).field));               \
+        return 1;                                                                                        \
+    }
+MCE_WEATHER_GETTER_RAINBOW(rainbow_strength, strength)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_band_width, band_width)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_secondary, secondary)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_min_wetness, min_wetness)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_max_sun_elevation, max_sun_elevation_deg)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_enabled, enabled)
+#undef MCE_WEATHER_GETTER_RAINBOW
+
+// weather.rainbow_level(): kit::rainbow_level with the inputs Kit3DExtract's rainbow block uses. 0 without a Weather,
+// under an equirect sky texture or with a non-finite input (the extract's default carrier). The sun elevation is the
+// asin of the unit light direction's -y: sun_direction_at(hour) with a clock, else the Environment3D's sun_direction;
+// wetness is the first Weather's, rain its intensity while it rains or storms, and the cloud cover is the one the
+// aurora uses (the extract's own value before the quality gate).
+int l_weather_rainbow_level(lua_State* L) {
+    const kit::Rainbow& r = check_rainbow(L, "weather.rainbow_level");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 level = 0.0f;
+    if (r.enabled && wx && env.sky_texture.guid == asset::Guid{}) {
+        const math::vec3 light = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
+        const f32 len = std::sqrt(light.x * light.x + light.y * light.y + light.z * light.z);
+        const bool raining = wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm;
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        const f32 cover = aurora_cloud_cover(w);
+        if (std::isfinite(len) && len > 1e-6f && std::isfinite(wx->wetness) && std::isfinite(rain) && std::isfinite(cover)) {
+            const f32 sine = std::clamp(-light.y / len, -1.0f, 1.0f);
+            const f32 elevation_deg = static_cast<f32>(std::asin(static_cast<f64>(sine)) * (180.0 / 3.14159265358979323846));
+            level = kit::rainbow_level(r, elevation_deg, wx->wetness, rain, cover);
+            if (!std::isfinite(level)) level = 0.0f;
+        }
+    }
+    lua_pushnumber(L, static_cast<double>(level));
+    return 1;
+}
+
+// weather.set_rainbow{...}: validated before anything is written.
+int l_weather_set_rainbow(lua_State* L) {
+    static const char* const kKeys[6] = {"strength", "band_width", "secondary", "min_wetness", "max_sun_elevation", "enabled"};
+    f64 value[6] = {};
+    bool given[6] = {};
+    read_settings(L, "weather.set_rainbow", kKeys, 6, "strength, band_width, secondary, min_wetness, max_sun_elevation, enabled",
+                  value, given);
+    kit::Rainbow& r = check_rainbow(L, "weather.set_rainbow");
+    if (given[0]) r.strength = static_cast<f32>(clamp_range(value[0], 0.0, 4.0));
+    if (given[1]) r.band_width = static_cast<f32>(clamp_range(value[1], 0.5, 2.0));
+    if (given[2]) r.secondary = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) r.min_wetness = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) r.max_sun_elevation_deg = static_cast<f32>(clamp_range(value[4], 10.0, 60.0));
+    if (given[5]) r.enabled = value[5] != 0.0 ? 1 : 0;
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1520,6 +1610,14 @@ const luaL_Reg kWeatherLib[] = {
     {"aurora_gate", l_weather_aurora_gate},
     {"aurora_level", l_weather_aurora_level},
     {"set_aurora", l_weather_set_aurora},
+    {"rainbow_strength", l_weather_rainbow_strength},
+    {"rainbow_band_width", l_weather_rainbow_band_width},
+    {"rainbow_secondary", l_weather_rainbow_secondary},
+    {"rainbow_min_wetness", l_weather_rainbow_min_wetness},
+    {"rainbow_max_sun_elevation", l_weather_rainbow_max_sun_elevation},
+    {"rainbow_enabled", l_weather_rainbow_enabled},
+    {"rainbow_level", l_weather_rainbow_level},
+    {"set_rainbow", l_weather_set_rainbow},
     {nullptr, nullptr},
 };
 
