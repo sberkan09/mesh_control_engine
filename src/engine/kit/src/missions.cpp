@@ -85,7 +85,7 @@ bool evaluate(World& w, const Mission& m, Objective& o, const Inputs& in, f32 dt
         }
         case ObjectiveKind::Kill: {
             const bool any = o.target.is_null() && o.tag.empty();
-            if (!any && !o.target.is_null() && dead(w, o.target)) return true;  // already dead or gone: nothing left to kill
+            if (o.ticks == 1 && !any && !o.target.is_null() && dead(w, o.target)) return true;  // dead or gone before the step began: nothing left to kill
             for (const Died3D& d : in.died) {
                 if (o.team != 0) {
                     const Health3D* h = w.try_get<Health3D>(d.entity);
