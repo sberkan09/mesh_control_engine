@@ -47,8 +47,8 @@ Steps stack in this order (17a, then 17b, then 17c, then 17d, then 17e); each ta
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 17a | done | | `Rainbow` in `mce/kit/rainbow.h` with `rainbow_level`, `rainbow_intensity` and `rainbow_color`, registered in `install_weather` after `Aurora`, explicit 3-byte zero pad, padding test, three `engine_components.cpp` includes, `capabilities.md` row (the `12_weather` Weather entity carries a `Rainbow`), guide 9.19o, `tests/kit/test_rainbow.cpp`. Bows are `(1 - x^2)^2` bumps (primary 42 +- 1.7, secondary 51 +- 2.8 times `band_width`, secondary peak 0.35); the Alexander band is zero emission with the gap-facing skirts steepened by 1.15; `rainbow_color` is a seven-colour linear table independent of `band_width`. |
-| 17b | planned | | |
+| 17a | done | 889 | `Rainbow` in `mce/kit/rainbow.h` with `rainbow_level`, `rainbow_intensity` and `rainbow_color`, registered in `install_weather` after `Aurora`, explicit 3-byte zero pad, padding test, three `engine_components.cpp` includes, `capabilities.md` row (the `12_weather` Weather entity carries a `Rainbow`), guide 9.19o, `tests/kit/test_rainbow.cpp`. Bows are `(1 - x^2)^2` bumps (primary 42 +- 1.7, secondary 51 +- 2.8 times `band_width`, secondary peak 0.35); the Alexander band is zero emission with the gap-facing skirts steepened by 1.15; `rainbow_color` is a seven-colour linear table independent of `band_width`. |
+| 17b | seam PR | | Carrier merged first, the feed PR follows: `render::RainbowSky` POD (explicit zeroed `pad_[3]`), `Scene3D::set_rainbow()` / `rainbow()`, `QualitySettings::rainbow` (Low false), cvar `r.rainbow`, by-value `apply_quality(q, RainbowSky)` overload, `test_rainbow_quality` in `tests/render`. Data only: no shader, no `PassU` change, nothing reads it. `scene3d.h` include fan-out before the change: 147 of 900 TUs (under the 150 warning) |
 | 17c | planned | | |
 | 17d | planned | | |
 | 17e | planned | | |
