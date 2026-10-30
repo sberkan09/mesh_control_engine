@@ -51,6 +51,7 @@ mce_add_test(test_editor UMBRELLA
         test_play_session.cpp
         test_prefab_overrides.cpp
         test_prefab_preview.cpp
+        test_project_settings.cpp
         test_scene_editing.cpp
         test_skeleton2d_editor.cpp
         test_stub_world.cpp
