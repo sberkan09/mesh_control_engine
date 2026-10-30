@@ -165,3 +165,44 @@ from a future wanted-cleared event would do it). Interact shares E with entering
 
 Interface: `Objective { ...; u8 team = 0; u8 by_actor = 0; ... }` (replaces `u16 pad_`, size unchanged) plus "a resolved
 Kill target that is already dead completes the step".
+
+## H. Fire and smoke on a wrecked car
+
+Closes the M-CARWRECK remainder ("fire and smoke on a wreck"). It is not content-only today: `FireOn` has no death condition,
+and `ParticleBurst` calls `ParticleSystem::burst`, which only feeds 2D `ParticleEmitter`s, so it does nothing on a car's
+`ParticleEmitter3D`. A one-time burst alone would also leave no lasting smoke.
+
+**Kit change (one PR, `effects.h` + `effects.cpp`; fan-out of `effects.h` is 20 TUs, so no seam PR).**
+- Append `Died` to `FireOn` and to its `MCE_ENUM` list (value 7; earlier values unchanged). `record_physics_events` adds
+  `if (w.event_queue<Died3D>()) for (d : read<Died3D>()) add_unique(n.died, d.entity)` (`combat3d.h` included by the .cpp
+  only); `should_fire` gets `case FireOn::Died`. `Died3D` is produced in FixedUpdate_Pre and read in Post, as `Landed3D` is.
+- `ParticleBurst` also drives a `ParticleEmitter3D` on the entity: `burst = count`, `++burst_version` (Kit3DExtract's
+  one-shot path). Its `pad_[2]` becomes `u8 keep_emitting = 0; u8 pad_ = 0` (size stays 12, `static_assert` unchanged):
+  1 = the fire also sets that emitter's `emitting = 1`. That is the continuous smoke: authored `emitting 0`, switched on at
+  death, saved with the scene, so a loaded wreck still smokes without `Died` firing again.
+- `SfxTrigger` on an entity with `AudioSpatial` fills `PlaySfx.attenuation_id` and `position` from it, so a wreck is heard
+  where it burns (cars already carry `AudioSpatial{attenuation_id 1}`). `Help` strings of the three `on` fields name `Died`.
+
+**Data (`gen_assets.py`).** A helper `wreck_effects()` merged into the root by `car_entities` (traffic prefab and the 3 parked
+cars) and `police_car`:
+- `ParticleEmitter3D`: color_start [2.5, 1.0, 0.25, 0.9], color_end [0.06, 0.06, 0.06, 0], offset [0, 0.5, -1.1] (the hood;
+  cars drive toward -z), box [0.4, 0.1, 0.4], direction [0, 1, 0], gravity [0, 1.2, 0], spread_deg 18, rate 14, speed 1..2.2,
+  lifetime 2.5..3.5, drag 0.6, size 0.5 -> 2.2, max_particles 128, seed 9, collide 0, additive 0, emitting 0.
+- `ParticleBurst {count 60, on Died, keep_emitting 1}`; `SfxTrigger {clip guid:G_CRASHES (crashes.mcsound, a set PlaySfx
+  resolves), gain_db -2, gain_jitter_db 2, on Died}`; `ShakeTrigger {trauma 0.35, on Died}`.
+- The "Camera" entity gets `CameraShake3D {}` (defaults: 0.15 m, 0.03 rad, decay 1.5/s); without it the shake is a no-op.
+
+**Tests.** `tests/kit/test_effects.cpp`: an entity with `Health3D`, the emitter, burst, Sfx and shake triggers, killed by
+`apply_damage`: next tick `burst_version` 1, `burst` 60, `emitting` 1, each `fired` 1, one `PlaySfx` with the entity's
+position, camera trauma 0.35; a living neighbour unchanged; no second fire on later ticks; `FireOn` "Died" round-trips by name;
+same run twice gives the same state hash. `tests/mcp/test_mcp_openworld.cpp`: `ParticleBurst` count >= 3 at tick 1 (parked
+cars; police and traffic add more); set the first parked car's `Health3D.current` 0, run 2 ticks: its `ParticleEmitter3D.emitting`
+1 and `ParticleBurst.fired` 1. `sample_coverage.allow` and `capabilities.md` are left to the integration runner.
+
+**Known limits.** One emitter per entity, so fire and smoke share one colour ramp (no flame light, no separate fireball
+sprite); the burst uses the smoke's speeds. The shake has no distance falloff (traffic spawns near the player, so it is rare
+from far away). No blast damage or impulse to neighbours. A traffic wreck's smoke ends with the car 10 s after death. Nothing
+puts the fire out; a future repair must set `emitting 0`.
+
+Interface: `FireOn::Died` (appended) plus `ParticleBurst { u32 count; FireOn on; bool fire; u8 keep_emitting; u8 pad_; u32 fired; }`
+driving the entity's `ParticleEmitter3D` (burst and, with `keep_emitting`, `emitting = 1`).

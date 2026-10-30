@@ -173,6 +173,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     // Cars: crashes wear them down (every car), and the cars the player can take also run people over.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleRam3D","show":["VehicleRam3D"]}})")) >= 3);
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
+    CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ParticleBurst","show":["ParticleBurst"]}})")) >= 3);
     // Kill and interact objectives (Hit, Cop killer, Pickup): the objectives exist with the right kinds; the logic is tested in test_missions.
     {
         auto obj = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Objective","show":["Objective"]}})");
