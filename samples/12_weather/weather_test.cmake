@@ -33,6 +33,11 @@
 #      The level is the kit's aurora_level on the night fade of the hour (the clock starts at 5:00, so the night fades through
 #      the dawn) and the CloudLayer's cover: 0.512 at tick 900, 0.588 at 1050 and falling to 0.000 from tick 2250 (day). The
 #      Aurora is pure data here: it changes the state hash (a new column) and nothing else; the entity count stays 14.
+#  14. (M-RAINBOW 17d) the "rainbow:" lines: weather.rainbow_level() of the Rainbow on the Weather entity (read only, the script
+#      writes nothing, so the state hash is the 17a one). The level is 0.000 by night (the clock starts at 5:00) and while it
+#      rains or storms, and rises once the sun is up (tick 1500) over the still wet ground: 0.048 at tick 1800 under the
+#      snow, 0.091 at 2250 after the weather is called clear, 0.103 at 2400 (wetness 0.213) and falling again at 2550 as
+#      the ground dries below the bow's wetness gate.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -89,6 +94,7 @@ expect("${first}" "script: moon: phase 0.507 illumination 1.000 level 1.000 dir 
 expect("${first}" "script: moon: phase 0.507 illumination 0.999 level 0.469 dir 0.97 -0.15 0.19 at tick 450\n" "the rain did not damp the moon as it sinks")
 expect("${first}" "script: aurora: latitude 45.00 gate 0.000 level 0.000 at tick 0\n" "the aurora did not start with a closed gate")
 expect("${first}" "script: aurora: latitude 55.00 gate 0.000 level 0.000 at tick 450\n" "the aurora gate is not closed at its low edge")
+expect("${first}" "script: rainbow: level 0.000 wetness 0.035 at tick 450\n" "the rainbow shows in the rain before dawn")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -136,6 +142,11 @@ expect("${forecast}" "script: aurora: latitude 65.00 gate 1.000 level 0.512 at t
 expect("${forecast}" "script: aurora: latitude 68.33 gate 1.000 level 0.588 at tick 1050\n" "the aurora level is wrong in the dark")
 expect("${forecast}" "script: aurora: latitude 78.33 gate 1.000 level 0.210 at tick 1500\n" "the dawn did not fade the aurora")
 expect("${forecast}" "script: aurora: latitude 90.00 gate 1.000 level 0.000 at tick 2400\n" "the aurora shows by day")
+expect("${forecast}" "script: rainbow: level 0.000 wetness 0.165 at tick 1500\n" "the rainbow shows at sunrise in the storm")
+expect("${forecast}" "script: rainbow: level 0.048 wetness 0.194 at tick 1800\n" "the rainbow did not start with the sun over the wet ground")
+expect("${forecast}" "script: rainbow: level 0.091 wetness 0.220 at tick 2250\n" "the rainbow did not rise after the weather cleared")
+expect("${forecast}" "script: rainbow: level 0.103 wetness 0.213 at tick 2400\n" "the rainbow is wrong in the clear morning")
+expect("${forecast}" "script: rainbow: level 0.064 wetness 0.193 at tick 2550\n" "the rainbow did not fade as the ground dried")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

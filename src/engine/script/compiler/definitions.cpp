@@ -397,6 +397,23 @@ declare weather: {
     -- non-zero number is 1); an unknown key, a non-number or a color that is not three numbers raises and nothing is
     -- written
     set_aurora: (settings: { latitude: number?, gate_low: number?, gate_high: number?, strength: number?, curtain_count: number?, base_height: number?, height_span: number?, azimuth: number?, width: number?, speed: number?, low_color: { number }?, high_color: { number }?, night_only: number?, enabled: number? }) -> (),
+
+    -- Rainbow (M-RAINBOW), the first one in the scene; every rainbow function raises when there is none (set_rainbow never
+    -- adds one). The getters use the set keys' names with a rainbow_ prefix. rainbow_level (0..4) is the brightness gain
+    -- the renderer gets now, from the sun elevation of the current hour, the first Weather's wetness and rain and the cloud
+    -- coverage of the first Weather and CloudLayer (0 without a Weather); read-only, and the getters read the authoring
+    -- even when enabled is 0 (the level is then 0).
+    rainbow_strength: () -> number,
+    rainbow_band_width: () -> number,
+    rainbow_secondary: () -> number,
+    rainbow_min_wetness: () -> number,
+    rainbow_max_sun_elevation: () -> number,
+    rainbow_enabled: () -> number,
+    rainbow_level: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..4, band_width 0.5..2, secondary 0..1,
+    -- min_wetness 0..1, max_sun_elevation 10..60 degrees; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_rainbow: (settings: { strength: number?, band_width: number?, secondary: number?, min_wetness: number?, max_sun_elevation: number?, enabled: number? }) -> (),
 }
 
 declare water: {
