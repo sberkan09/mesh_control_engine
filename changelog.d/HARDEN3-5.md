@@ -1,0 +1,1 @@
+- Tests: the animation graph editor's transition selection and `set_transition`, and the UI document editor's `subtree_end` and `is_inside`, now have cases.
