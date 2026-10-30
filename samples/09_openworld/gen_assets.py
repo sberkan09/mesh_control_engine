@@ -518,6 +518,9 @@ def city_surface(scene):
     half = GRID // 2 * SPACING + 60
     scene.add("Ground", {"LocalTransform": tf((0, -0.5, 0)), "BoxCollider3D": {"half": [half, 0.5, half], "friction": 1.0}})
     scene.add("Ground mesh", {"LocalTransform": tf((0, -0.25, 0)), "MeshRef": slab(2 * half, 0.5, 2 * half, "grass")})
+    # The world edge: four invisible walls on the slab's rim, so nothing (player, car, walker) walks or drives off the map.
+    for n, (x, z, hx, hz) in enumerate(((half + 1, 0, 1, half + 2), (-half - 1, 0, 1, half + 2), (0, half + 1, half + 2, 1), (0, -half - 1, half + 2, 1))):
+        scene.add("World edge %d" % n, {"LocalTransform": tf((x, 10.0, z)), "BoxCollider3D": {"half": [hx, 10.0, hz]}})
     node_half = {}
     for r in road_list():
         for n in road_ends(r):
