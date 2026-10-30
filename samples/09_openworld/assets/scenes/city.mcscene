@@ -39103,6 +39103,9 @@
      "fine_busted": 100,
      "fine_wasted": 200
     },
+    "Confiscate3D": {
+     "ammo_kept": 0.5
+    },
     "Wallet3D": {
      "cash": 500
     },
@@ -39111,6 +39114,32 @@
      "clip": "guid:b57e0db8-cb3f-50ad-8c46-b012a118fa6b",
      "stride": 1.9,
      "gain_db": -4
+    },
+    "Weapon3D": {
+     "kind": "Hitscan",
+     "use_input": 1,
+     "automatic": 1,
+     "damage": 22,
+     "range": 120,
+     "rate": 6,
+     "magazine": 15,
+     "reserve": 150,
+     "reload_time": 1.4,
+     "spread_deg": 0.4,
+     "impulse": 40,
+     "muzzle": [
+      0,
+      0,
+      -6.0
+     ],
+     "mask": 65535,
+     "aim_from": "$1605"
+    },
+    "WeaponAudio": {
+     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
+     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
+     "gain_db": -2,
+     "hit_gain_db": -4
     },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
@@ -39157,12 +39186,6 @@
      "far_z": 1500
     },
     "AudioListener": {},
-    "WeaponAudio": {
-     "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
-     "hit": "guid:d03f2c26-29cf-530a-a894-903529b27c3c",
-     "gain_db": -2,
-     "hit_gain_db": -4
-    },
     "CameraFollow3D": {
      "target": "$1603",
      "offset": [
@@ -39182,29 +39205,6 @@
      "chase_rate": 2.5,
      "chase_hold": 1.5,
      "chase_min_speed": 3
-    },
-    "Weapon3D": {
-     "kind": "Hitscan",
-     "use_input": 1,
-     "automatic": 1,
-     "owner": "$1603",
-     "damage": 22,
-     "range": 120,
-     "rate": 6,
-     "magazine": 15,
-     "reserve": 150,
-     "reload_time": 1.4,
-     "spread_deg": 0.4,
-     "impulse": 40,
-     "muzzle": [
-      0,
-      0,
-      -6.0
-     ],
-     "mask": 65535
-    },
-    "UiScreen": {
-     "document": "guid:9f41b508-dabf-59c6-9aba-dc181c5e3ade"
     }
    }
   },
@@ -40740,6 +40740,61 @@
   },
   {
    "id": 1638,
+   "name": "Ammo shop",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      1.0,
+      -9.0
+     ]
+    },
+    "AmmoShop3D": {
+     "radius": 3,
+     "price_per_round": 2,
+     "stock_to": 150
+    },
+    "MapMarker": {
+     "color": [
+      1.0,
+      0.8,
+      0.2,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1639,
+   "name": "Ammo shop pad",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.7,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    }
+   }
+  },
+  {
+   "id": 1640,
    "name": "Mixer",
    "components": {
     "AudioLimiter": {
@@ -40748,7 +40803,7 @@
    }
   },
   {
-   "id": 1639,
+   "id": 1641,
    "name": "Pause mix",
    "components": {
     "AudioSnapshot": {
@@ -40761,7 +40816,7 @@
    }
   },
   {
-   "id": 1640,
+   "id": 1642,
    "name": "City ambience",
    "components": {
     "AudioSource": {
@@ -40783,7 +40838,7 @@
    }
   },
   {
-   "id": 1641,
+   "id": 1643,
    "name": "Clock",
    "components": {
     "LocalTransform": {},
@@ -40795,7 +40850,7 @@
    }
   },
   {
-   "id": 1642,
+   "id": 1644,
    "name": "Weather",
    "components": {
     "LocalTransform": {},
@@ -40823,8 +40878,8 @@
     },
     "CloudLayer": {},
     "WeatherAudio": {
-     "rain_source": "$1645",
-     "wind_source": "$1646",
+     "rain_source": "$1647",
+     "wind_source": "$1648",
      "rain_db": -10,
      "wind_db": -18,
      "fade_seconds": 6
@@ -40832,7 +40887,7 @@
    }
   },
   {
-   "id": 1643,
+   "id": 1645,
    "name": "Rain",
    "components": {
     "LocalTransform": {
@@ -40906,7 +40961,7 @@
    }
   },
   {
-   "id": 1644,
+   "id": 1646,
    "name": "Rain splashes",
    "components": {
     "LocalTransform": {},
@@ -40936,7 +40991,7 @@
    }
   },
   {
-   "id": 1645,
+   "id": 1647,
    "name": "Lightning",
    "components": {
     "LocalTransform": {},
@@ -40951,7 +41006,7 @@
    }
   },
   {
-   "id": 1646,
+   "id": 1648,
    "name": "Rain bed",
    "components": {
     "AudioSource": {
@@ -40965,7 +41020,7 @@
    }
   },
   {
-   "id": 1647,
+   "id": 1649,
    "name": "Wind bed",
    "components": {
     "AudioSource": {
@@ -40979,7 +41034,7 @@
    }
   },
   {
-   "id": 1648,
+   "id": 1650,
    "name": "Night bed",
    "components": {
     "AudioSource": {
@@ -41000,7 +41055,7 @@
    }
   },
   {
-   "id": 1649,
+   "id": 1651,
    "name": "Lamp 0_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41022,7 +41077,7 @@
    }
   },
   {
-   "id": 1650,
+   "id": 1652,
    "name": "Lamp 0_0_0",
    "components": {
     "LocalTransform": {
@@ -41060,7 +41115,7 @@
    }
   },
   {
-   "id": 1651,
+   "id": 1653,
    "name": "Lamp 0_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41082,7 +41137,7 @@
    }
   },
   {
-   "id": 1652,
+   "id": 1654,
    "name": "Lamp 0_0_1",
    "components": {
     "LocalTransform": {
@@ -41120,7 +41175,7 @@
    }
   },
   {
-   "id": 1653,
+   "id": 1655,
    "name": "Lamp 1_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41142,7 +41197,7 @@
    }
   },
   {
-   "id": 1654,
+   "id": 1656,
    "name": "Lamp 1_0_0",
    "components": {
     "LocalTransform": {
@@ -41180,7 +41235,7 @@
    }
   },
   {
-   "id": 1655,
+   "id": 1657,
    "name": "Lamp 1_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41202,7 +41257,7 @@
    }
   },
   {
-   "id": 1656,
+   "id": 1658,
    "name": "Lamp 1_0_1",
    "components": {
     "LocalTransform": {
@@ -41240,7 +41295,7 @@
    }
   },
   {
-   "id": 1657,
+   "id": 1659,
    "name": "Lamp 2_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41262,7 +41317,7 @@
    }
   },
   {
-   "id": 1658,
+   "id": 1660,
    "name": "Lamp 2_0_0",
    "components": {
     "LocalTransform": {
@@ -41300,7 +41355,7 @@
    }
   },
   {
-   "id": 1659,
+   "id": 1661,
    "name": "Lamp 2_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41322,7 +41377,7 @@
    }
   },
   {
-   "id": 1660,
+   "id": 1662,
    "name": "Lamp 2_0_1",
    "components": {
     "LocalTransform": {
@@ -41360,7 +41415,7 @@
    }
   },
   {
-   "id": 1661,
+   "id": 1663,
    "name": "Lamp 3_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41382,7 +41437,7 @@
    }
   },
   {
-   "id": 1662,
+   "id": 1664,
    "name": "Lamp 3_0_0",
    "components": {
     "LocalTransform": {
@@ -41420,7 +41475,7 @@
    }
   },
   {
-   "id": 1663,
+   "id": 1665,
    "name": "Lamp 3_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41442,7 +41497,7 @@
    }
   },
   {
-   "id": 1664,
+   "id": 1666,
    "name": "Lamp 3_0_1",
    "components": {
     "LocalTransform": {
@@ -41480,7 +41535,7 @@
    }
   },
   {
-   "id": 1665,
+   "id": 1667,
    "name": "Lamp 4_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41502,7 +41557,7 @@
    }
   },
   {
-   "id": 1666,
+   "id": 1668,
    "name": "Lamp 4_0_0",
    "components": {
     "LocalTransform": {
@@ -41540,7 +41595,7 @@
    }
   },
   {
-   "id": 1667,
+   "id": 1669,
    "name": "Lamp 4_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41562,7 +41617,7 @@
    }
   },
   {
-   "id": 1668,
+   "id": 1670,
    "name": "Lamp 4_0_1",
    "components": {
     "LocalTransform": {
@@ -41600,7 +41655,7 @@
    }
   },
   {
-   "id": 1669,
+   "id": 1671,
    "name": "Lamp 0_1_0 post",
    "components": {
     "LocalTransform": {
@@ -41622,7 +41677,7 @@
    }
   },
   {
-   "id": 1670,
+   "id": 1672,
    "name": "Lamp 0_1_0",
    "components": {
     "LocalTransform": {
@@ -41660,7 +41715,7 @@
    }
   },
   {
-   "id": 1671,
+   "id": 1673,
    "name": "Lamp 0_1_1 post",
    "components": {
     "LocalTransform": {
@@ -41682,7 +41737,7 @@
    }
   },
   {
-   "id": 1672,
+   "id": 1674,
    "name": "Lamp 0_1_1",
    "components": {
     "LocalTransform": {
@@ -41720,7 +41775,7 @@
    }
   },
   {
-   "id": 1673,
+   "id": 1675,
    "name": "Lamp 1_1_0 post",
    "components": {
     "LocalTransform": {
@@ -41742,7 +41797,7 @@
    }
   },
   {
-   "id": 1674,
+   "id": 1676,
    "name": "Lamp 1_1_0",
    "components": {
     "LocalTransform": {
@@ -41780,7 +41835,7 @@
    }
   },
   {
-   "id": 1675,
+   "id": 1677,
    "name": "Lamp 1_1_1 post",
    "components": {
     "LocalTransform": {
@@ -41802,7 +41857,7 @@
    }
   },
   {
-   "id": 1676,
+   "id": 1678,
    "name": "Lamp 1_1_1",
    "components": {
     "LocalTransform": {
@@ -41840,7 +41895,7 @@
    }
   },
   {
-   "id": 1677,
+   "id": 1679,
    "name": "Lamp 2_1_0 post",
    "components": {
     "LocalTransform": {
@@ -41862,7 +41917,7 @@
    }
   },
   {
-   "id": 1678,
+   "id": 1680,
    "name": "Lamp 2_1_0",
    "components": {
     "LocalTransform": {
@@ -41900,7 +41955,7 @@
    }
   },
   {
-   "id": 1679,
+   "id": 1681,
    "name": "Lamp 2_1_1 post",
    "components": {
     "LocalTransform": {
@@ -41922,7 +41977,7 @@
    }
   },
   {
-   "id": 1680,
+   "id": 1682,
    "name": "Lamp 2_1_1",
    "components": {
     "LocalTransform": {
@@ -41960,7 +42015,7 @@
    }
   },
   {
-   "id": 1681,
+   "id": 1683,
    "name": "Lamp 3_1_0 post",
    "components": {
     "LocalTransform": {
@@ -41982,7 +42037,7 @@
    }
   },
   {
-   "id": 1682,
+   "id": 1684,
    "name": "Lamp 3_1_0",
    "components": {
     "LocalTransform": {
@@ -42020,7 +42075,7 @@
    }
   },
   {
-   "id": 1683,
+   "id": 1685,
    "name": "Lamp 3_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42042,7 +42097,7 @@
    }
   },
   {
-   "id": 1684,
+   "id": 1686,
    "name": "Lamp 3_1_1",
    "components": {
     "LocalTransform": {
@@ -42080,7 +42135,7 @@
    }
   },
   {
-   "id": 1685,
+   "id": 1687,
    "name": "Lamp 4_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42102,7 +42157,7 @@
    }
   },
   {
-   "id": 1686,
+   "id": 1688,
    "name": "Lamp 4_1_0",
    "components": {
     "LocalTransform": {
@@ -42140,7 +42195,7 @@
    }
   },
   {
-   "id": 1687,
+   "id": 1689,
    "name": "Lamp 4_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42162,7 +42217,7 @@
    }
   },
   {
-   "id": 1688,
+   "id": 1690,
    "name": "Lamp 4_1_1",
    "components": {
     "LocalTransform": {
@@ -42200,7 +42255,7 @@
    }
   },
   {
-   "id": 1689,
+   "id": 1691,
    "name": "Lamp 0_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42222,7 +42277,7 @@
    }
   },
   {
-   "id": 1690,
+   "id": 1692,
    "name": "Lamp 0_2_0",
    "components": {
     "LocalTransform": {
@@ -42260,7 +42315,7 @@
    }
   },
   {
-   "id": 1691,
+   "id": 1693,
    "name": "Lamp 0_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42282,7 +42337,7 @@
    }
   },
   {
-   "id": 1692,
+   "id": 1694,
    "name": "Lamp 0_2_1",
    "components": {
     "LocalTransform": {
@@ -42320,7 +42375,7 @@
    }
   },
   {
-   "id": 1693,
+   "id": 1695,
    "name": "Lamp 1_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42342,7 +42397,7 @@
    }
   },
   {
-   "id": 1694,
+   "id": 1696,
    "name": "Lamp 1_2_0",
    "components": {
     "LocalTransform": {
@@ -42380,7 +42435,7 @@
    }
   },
   {
-   "id": 1695,
+   "id": 1697,
    "name": "Lamp 1_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42402,7 +42457,7 @@
    }
   },
   {
-   "id": 1696,
+   "id": 1698,
    "name": "Lamp 1_2_1",
    "components": {
     "LocalTransform": {
@@ -42440,7 +42495,7 @@
    }
   },
   {
-   "id": 1697,
+   "id": 1699,
    "name": "Lamp 2_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42462,7 +42517,7 @@
    }
   },
   {
-   "id": 1698,
+   "id": 1700,
    "name": "Lamp 2_2_0",
    "components": {
     "LocalTransform": {
@@ -42500,7 +42555,7 @@
    }
   },
   {
-   "id": 1699,
+   "id": 1701,
    "name": "Lamp 2_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42522,7 +42577,7 @@
    }
   },
   {
-   "id": 1700,
+   "id": 1702,
    "name": "Lamp 2_2_1",
    "components": {
     "LocalTransform": {
@@ -42560,7 +42615,7 @@
    }
   },
   {
-   "id": 1701,
+   "id": 1703,
    "name": "Lamp 3_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42582,7 +42637,7 @@
    }
   },
   {
-   "id": 1702,
+   "id": 1704,
    "name": "Lamp 3_2_0",
    "components": {
     "LocalTransform": {
@@ -42620,7 +42675,7 @@
    }
   },
   {
-   "id": 1703,
+   "id": 1705,
    "name": "Lamp 3_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42642,7 +42697,7 @@
    }
   },
   {
-   "id": 1704,
+   "id": 1706,
    "name": "Lamp 3_2_1",
    "components": {
     "LocalTransform": {
@@ -42680,7 +42735,7 @@
    }
   },
   {
-   "id": 1705,
+   "id": 1707,
    "name": "Lamp 4_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42702,7 +42757,7 @@
    }
   },
   {
-   "id": 1706,
+   "id": 1708,
    "name": "Lamp 4_2_0",
    "components": {
     "LocalTransform": {
@@ -42740,7 +42795,7 @@
    }
   },
   {
-   "id": 1707,
+   "id": 1709,
    "name": "Lamp 4_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42762,7 +42817,7 @@
    }
   },
   {
-   "id": 1708,
+   "id": 1710,
    "name": "Lamp 4_2_1",
    "components": {
     "LocalTransform": {
@@ -42800,7 +42855,7 @@
    }
   },
   {
-   "id": 1709,
+   "id": 1711,
    "name": "Lamp 0_3_0 post",
    "components": {
     "LocalTransform": {
@@ -42822,7 +42877,7 @@
    }
   },
   {
-   "id": 1710,
+   "id": 1712,
    "name": "Lamp 0_3_0",
    "components": {
     "LocalTransform": {
@@ -42860,7 +42915,7 @@
    }
   },
   {
-   "id": 1711,
+   "id": 1713,
    "name": "Lamp 0_3_1 post",
    "components": {
     "LocalTransform": {
@@ -42882,7 +42937,7 @@
    }
   },
   {
-   "id": 1712,
+   "id": 1714,
    "name": "Lamp 0_3_1",
    "components": {
     "LocalTransform": {
@@ -42920,7 +42975,7 @@
    }
   },
   {
-   "id": 1713,
+   "id": 1715,
    "name": "Lamp 1_3_0 post",
    "components": {
     "LocalTransform": {
@@ -42942,7 +42997,7 @@
    }
   },
   {
-   "id": 1714,
+   "id": 1716,
    "name": "Lamp 1_3_0",
    "components": {
     "LocalTransform": {
@@ -42980,7 +43035,7 @@
    }
   },
   {
-   "id": 1715,
+   "id": 1717,
    "name": "Lamp 1_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43002,7 +43057,7 @@
    }
   },
   {
-   "id": 1716,
+   "id": 1718,
    "name": "Lamp 1_3_1",
    "components": {
     "LocalTransform": {
@@ -43040,7 +43095,7 @@
    }
   },
   {
-   "id": 1717,
+   "id": 1719,
    "name": "Lamp 2_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43062,7 +43117,7 @@
    }
   },
   {
-   "id": 1718,
+   "id": 1720,
    "name": "Lamp 2_3_0",
    "components": {
     "LocalTransform": {
@@ -43100,7 +43155,7 @@
    }
   },
   {
-   "id": 1719,
+   "id": 1721,
    "name": "Lamp 2_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43122,7 +43177,7 @@
    }
   },
   {
-   "id": 1720,
+   "id": 1722,
    "name": "Lamp 2_3_1",
    "components": {
     "LocalTransform": {
@@ -43160,7 +43215,7 @@
    }
   },
   {
-   "id": 1721,
+   "id": 1723,
    "name": "Lamp 3_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43182,7 +43237,7 @@
    }
   },
   {
-   "id": 1722,
+   "id": 1724,
    "name": "Lamp 3_3_0",
    "components": {
     "LocalTransform": {
@@ -43220,7 +43275,7 @@
    }
   },
   {
-   "id": 1723,
+   "id": 1725,
    "name": "Lamp 3_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43242,7 +43297,7 @@
    }
   },
   {
-   "id": 1724,
+   "id": 1726,
    "name": "Lamp 3_3_1",
    "components": {
     "LocalTransform": {
@@ -43280,7 +43335,7 @@
    }
   },
   {
-   "id": 1725,
+   "id": 1727,
    "name": "Lamp 4_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43302,7 +43357,7 @@
    }
   },
   {
-   "id": 1726,
+   "id": 1728,
    "name": "Lamp 4_3_0",
    "components": {
     "LocalTransform": {
@@ -43340,7 +43395,7 @@
    }
   },
   {
-   "id": 1727,
+   "id": 1729,
    "name": "Lamp 4_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43362,7 +43417,7 @@
    }
   },
   {
-   "id": 1728,
+   "id": 1730,
    "name": "Lamp 4_3_1",
    "components": {
     "LocalTransform": {
@@ -43400,7 +43455,7 @@
    }
   },
   {
-   "id": 1729,
+   "id": 1731,
    "name": "Lamp 0_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43422,7 +43477,7 @@
    }
   },
   {
-   "id": 1730,
+   "id": 1732,
    "name": "Lamp 0_4_0",
    "components": {
     "LocalTransform": {
@@ -43460,7 +43515,7 @@
    }
   },
   {
-   "id": 1731,
+   "id": 1733,
    "name": "Lamp 0_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43482,7 +43537,7 @@
    }
   },
   {
-   "id": 1732,
+   "id": 1734,
    "name": "Lamp 0_4_1",
    "components": {
     "LocalTransform": {
@@ -43520,7 +43575,7 @@
    }
   },
   {
-   "id": 1733,
+   "id": 1735,
    "name": "Lamp 1_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43542,7 +43597,7 @@
    }
   },
   {
-   "id": 1734,
+   "id": 1736,
    "name": "Lamp 1_4_0",
    "components": {
     "LocalTransform": {
@@ -43580,7 +43635,7 @@
    }
   },
   {
-   "id": 1735,
+   "id": 1737,
    "name": "Lamp 1_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43602,7 +43657,7 @@
    }
   },
   {
-   "id": 1736,
+   "id": 1738,
    "name": "Lamp 1_4_1",
    "components": {
     "LocalTransform": {
@@ -43640,7 +43695,7 @@
    }
   },
   {
-   "id": 1737,
+   "id": 1739,
    "name": "Lamp 2_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43662,7 +43717,7 @@
    }
   },
   {
-   "id": 1738,
+   "id": 1740,
    "name": "Lamp 2_4_0",
    "components": {
     "LocalTransform": {
@@ -43700,7 +43755,7 @@
    }
   },
   {
-   "id": 1739,
+   "id": 1741,
    "name": "Lamp 2_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43722,7 +43777,7 @@
    }
   },
   {
-   "id": 1740,
+   "id": 1742,
    "name": "Lamp 2_4_1",
    "components": {
     "LocalTransform": {
@@ -43760,7 +43815,7 @@
    }
   },
   {
-   "id": 1741,
+   "id": 1743,
    "name": "Lamp 3_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43782,7 +43837,7 @@
    }
   },
   {
-   "id": 1742,
+   "id": 1744,
    "name": "Lamp 3_4_0",
    "components": {
     "LocalTransform": {
@@ -43820,7 +43875,7 @@
    }
   },
   {
-   "id": 1743,
+   "id": 1745,
    "name": "Lamp 3_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43842,7 +43897,7 @@
    }
   },
   {
-   "id": 1744,
+   "id": 1746,
    "name": "Lamp 3_4_1",
    "components": {
     "LocalTransform": {
@@ -43880,7 +43935,7 @@
    }
   },
   {
-   "id": 1745,
+   "id": 1747,
    "name": "Lamp 4_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43902,7 +43957,7 @@
    }
   },
   {
-   "id": 1746,
+   "id": 1748,
    "name": "Lamp 4_4_0",
    "components": {
     "LocalTransform": {
@@ -43940,7 +43995,7 @@
    }
   },
   {
-   "id": 1747,
+   "id": 1749,
    "name": "Lamp 4_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43962,7 +44017,7 @@
    }
   },
   {
-   "id": 1748,
+   "id": 1750,
    "name": "Lamp 4_4_1",
    "components": {
     "LocalTransform": {

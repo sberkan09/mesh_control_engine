@@ -64,7 +64,6 @@ G_BLOCK_COP = guid("prefabs/roadblock_officer.mcprefab")
 G_INPUT = guid("input/openworld.mcinput")
 G_SCENE = guid("scenes/city.mcscene")
 G_HUD = guid("ui/hud.mcui")
-G_AMMO = guid("ui/ammo.mcui")
 
 GRID = 5          # junctions per side
 SPACING = 250.0   # m between junctions: 4 blocks of 250 m = 1 km
@@ -846,34 +845,36 @@ def scene():
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
-        # (The ammo confiscation component is left out: the gun is on the camera, not on the player.)
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
+        # An arrest costs half the spare ammunition (Confiscate3D), a shop sells it back (AmmoShop3D).
+        "Confiscate3D": {"ammo_kept": 0.5},
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
         "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
-        # The HUD document (health, wanted level, cash, minimap); bound fields are read from this entity.
+        # The gun is the player's (so the shop and the confiscation see it) but aims along the camera: shots leave from the
+        # camera pose and its muzzle offset, past the player, and point where the camera looks. aim_from is set below.
+        "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "damage": 22, "range": 120, "rate": 6,
+                     "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
+                     "mask": 0xFFFF},
+        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
+        # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a")})
-    # The camera orbits the player (Look) and carries the gun: shots leave along the camera's view. It starts looking west along
+    # The camera orbits the player (Look); the player's gun aims along its view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
     cam = s.add("Camera", {
         "LocalTransform": {},
         "Camera3DComponent": {"fov_deg": 65, "far_z": 1500},
         "AudioListener": {},
-        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
         "CameraFollow3D": {"target": s.ref(player), "offset": [0, 1.6, 0], "distance": 5.5, "yaw": math.pi / 2, "pitch": 0.3, "min_pitch": -0.3,
                            "max_pitch": 1.2, "orbit_speed": 2.2, "smoothing": 12, "collide": True,
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},
-        "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "owner": s.ref(player), "damage": 22, "range": 120, "rate": 6,
-                     "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
-                     "mask": 0xFFFF},
-        # The ammo readout: Weapon3D lives on the camera, so its screen sits here and reads the gun from this entity.
-        "UiScreen": {"document": "guid:" + G_AMMO},
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
+    s.ents[player]["components"]["Weapon3D"]["aim_from"] = s.ref(cam)
 
     # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
@@ -932,6 +933,10 @@ def scene():
     for name, kind, pos, tint in (("Hospital", "Hospital", (-150.0, 9.0), (0.9, 0.9, 0.95)), ("Police station", "Station", (40.0, -9.0), (0.15, 0.25, 0.7))):
         s.add(name, {"LocalTransform": tf((pos[0], 1.0, pos[1])), "RespawnPoint3D": {"kind": kind}})
         s.add(name + " pad", {"LocalTransform": tf((pos[0], 0.22, pos[1]), (5.0, 0.04, 5.0)), "MeshRef": mesh(tint, 0)})
+    # An ammo shop on the avenue's sidewalk: standing on its pad refills the spare rounds at 2 cash each (AmmoShop3D).
+    s.add("Ammo shop", {"LocalTransform": tf((-30.0, 1.0, -9.0)), "AmmoShop3D": {"radius": 3, "price_per_round": 2, "stock_to": 150},
+                        "MapMarker": {"color": [1.0, 0.8, 0.2, 1], "label": "Ammo"}})
+    s.add("Ammo shop pad", {"LocalTransform": tf((-30.0, 0.22, -9.0), (4.0, 0.04, 4.0)), "MeshRef": mesh((0.9, 0.7, 0.15), 0)})
     # The mix (bus layout: Master > SFX (engines, shots, steps, sirens, ambience); Music and Voice stay free for E7/E8): a limiter
     # on the master, the pause snapshot (the world goes muffled and quieter behind the pause screen) and the city bed.
     s.add("Mixer", {"AudioLimiter": {"ceiling_db": -1}})
@@ -944,7 +949,7 @@ def scene():
 
 
 def hud():
-    """The HUD: health, wanted level, cash and the minimap (hud.mcui, bound to the Player), and the ammo (ammo.mcui, bound to the camera's gun)."""
+    """The HUD: health, wanted level, cash and the minimap and the ammo (hud.mcui, bound to the Player and its gun)."""
     def text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
         w = {"name": name, "kind": "Text", "text": label, "style": {"text_size": size, "text_outline": 2, "text_outline_color": [0, 0, 0, 1]},
              "text_align": align, "anchors": anchors}
@@ -975,12 +980,11 @@ def hud():
         *wanted_stars(),
         text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
         text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
+        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
+        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
         {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
                      "background": [0.05, 0.07, 0.06, 0.75]}}]})
-    write("ui/ammo.mcui", {"format": "mce-ui", "version": 1, "guid": G_AMMO, "modal": False, "widgets": [
-        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
-        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right")]})
 
 
 models()
