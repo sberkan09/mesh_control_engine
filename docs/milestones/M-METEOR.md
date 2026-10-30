@@ -59,7 +59,7 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 18a | planned | | |
+| 18a | done | 900 | `Meteor` in `mce/kit/meteor.h` (28 bytes, `seed` u32 with a 2-byte zero pad) with `meteor_level`, `meteor_wrap_time`, `meteor_slot`, `meteor_slot_count(m, slot)`, `meteor_make`, `meteor_head`, `meteor_tail` and `meteor_envelope`, registered in `install_weather` after `Rainbow`, padding test, three `engine_components.cpp` includes, `capabilities.md` row (the `12_weather` scene carries a `Meteor`), guide 9.19p, `tests/kit/test_meteor.cpp`. The angular speed is 35 degrees per second times `speed`, so the arc is 14 to 42 degrees; `meteor_slot_count` takes the slot (the fractional part is a hash draw per slot). |
 | 18b | planned | | |
 | 18c | planned | | |
 | 18d | planned | | |
