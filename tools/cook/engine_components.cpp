@@ -44,6 +44,7 @@
 #include "mce/kit/crowd.h"             // Pedestrian3D, CrowdSpawner3D (M-OPENWORLD B3)
 #include "mce/kit/roads.h"             // RoadNetwork3D (M-OPENWORLD B1)
 #include "mce/kit/roadblock.h"         // Roadblock3D, RoadblockPiece3D (M-OPENWORLD-POLICE 3)
+#include "mce/kit/loadout3d.h"          // Loadout3D (M-OPENWORLD-GAPS 2b)
 #include "mce/kit/traffic.h"           // TrafficDriver3D, TrafficSpawner3D (M-OPENWORLD B2)
 #include "mce/kit/vehicles3d.h"        // Vehicle3D
 #include "mce/kit/seats3d.h"           // VehicleSeat3D, Rider3D (M-OPENWORLD C1)

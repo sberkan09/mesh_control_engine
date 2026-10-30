@@ -522,7 +522,7 @@
      -72
     ]
    },
-   "bind": "Weapon3D/ammo",
+   "bind": "Loadout3D/ammo",
    "format": "AMMO %.0f"
   },
   {
@@ -564,7 +564,7 @@
      -30
     ]
    },
-   "bind": "Weapon3D/reserve",
+   "bind": "Loadout3D/reserve",
    "format": "RESERVE %.0f"
   },
   {

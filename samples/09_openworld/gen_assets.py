@@ -162,6 +162,10 @@ def input_map():
         {"name": "Jump", "bindings": [key("Space"), {"gamepad_button": "South"}]},
         {"name": "Fire", "bindings": [{"mouse_button": "Left"}, key("J"), {"gamepad_button": "West"}]},
         {"name": "Reload", "bindings": [key("R"), {"gamepad_button": "North"}]},
+        {"name": "NextWeapon", "bindings": [key("Q"), {"gamepad_button": "RightShoulder"}]},
+        {"name": "PrevWeapon", "bindings": [key("Tab")]},
+        {"name": "Weapon1", "bindings": [key("Num1")]},
+        {"name": "Weapon2", "bindings": [key("Num2")]},
         {"name": "Interact", "bindings": [key("E"), key("F"), {"gamepad_button": "East"}]},
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
@@ -623,12 +627,8 @@ def scene():
         "Wallet3D": {"cash": 500},
         "StreamingFocus": {},
         "FootstepAudio": {"clip": "guid:" + G_FOOTSTEPS, "stride": 1.9, "gain_db": -4},
-        # The gun is the player's (so the shop and the confiscation see it) but aims along the camera: shots leave from the
-        # camera pose and its muzzle offset, past the player, and point where the camera looks. aim_from is set below.
-        "Weapon3D": {"kind": "Hitscan", "use_input": 1, "automatic": 1, "damage": 22, "range": 120, "rate": 6,
-                     "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
-                     "mask": 0xFFFF},
-        "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
+        # The guns are two child entities (Rifle, Shotgun) named by the Loadout3D: Q / Tab / 1 / 2 switch, each keeps its own ammo.
+        "Loadout3D": {"use_input": 1, "switch_time": 0.4},
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
@@ -646,7 +646,19 @@ def scene():
                            "chase": 1, "chase_rate": 2.5, "chase_hold": 1.5, "chase_min_speed": 3},
     })
     s.ents[player]["components"]["Rider3D"]["camera"] = s.ref(cam)
-    s.ents[player]["components"]["Weapon3D"]["aim_from"] = s.ref(cam)
+    # Both guns aim from the camera (shots leave at its position plus the muzzle offset and point where it looks) and are credited to
+    # the player; the audio sits on each gun because the shot sound is played for the entity that fired.
+    audio = {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4}
+    guns = (("Rifle", {"kind": "Hitscan", "automatic": 1, "damage": 22, "range": 120, "rate": 6, "magazine": 15, "reserve": 150,
+                       "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40}),
+            ("Shotgun", {"kind": "Hitscan", "automatic": 0, "pellets": 8, "damage": 9, "range": 45, "rate": 1.2, "magazine": 6, "reserve": 30,
+                         "reload_time": 2.2, "spread_deg": 5.0, "impulse": 25}))
+    slots = []
+    for name, gun in guns:
+        gun = dict(gun, owner=s.ref(player), aim_from=s.ref(cam), muzzle=[0, 0, -6.0], mask=0xFFFF)
+        slots.append(s.add(name, {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": {}, "Weapon3D": gun, "WeaponAudio": audio}))
+    for i, g in enumerate(slots):
+        s.ents[player]["components"]["Loadout3D"]["slot%d" % i] = s.ref(g)
 
     # Parked cars on the avenue's sidewalk (walkers turn round at them): take the first one.
     for n, (x, z, yaw) in enumerate(((-72.0, -9.2, math.pi / 2), (-110.0, 9.2, -math.pi / 2), (120.0, 9.2, -math.pi / 2))):
@@ -752,8 +764,8 @@ def hud():
         *wanted_stars(),
         text("cash", "$ 0", 30, box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
         text("objective", "OBJECTIVE: take the car on the avenue", 24, box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
-        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
-        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
+        text("ammo", "AMMO 15", 30, box(-300, -112, -24, -72, 1, 1), "Loadout3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
+        text("reserve", "/ 150", 24, box(-300, -66, -24, -30, 1, 1), "Loadout3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
         {"name": "mini", "kind": "Minimap", "anchors": box(-216, 16, -16, 216, 1, 0),
          "minimap": {"track": "Player", "radius": 60, "zoom": 1, "rotate_with_heading": False, "clamp_to_rim": True,
                      "background": [0.05, 0.07, 0.06, 0.75]}}]})
