@@ -484,6 +484,90 @@
    }
   },
   {
+   "name": "ammo",
+   "kind": "Text",
+   "text": "AMMO 15",
+   "style": {
+    "text_size": 30,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -112
+    ],
+    "offset_max": [
+     -24,
+     -72
+    ]
+   },
+   "bind": "Weapon3D/ammo",
+   "format": "AMMO %.0f"
+  },
+  {
+   "name": "reserve",
+   "kind": "Text",
+   "text": "/ 150",
+   "style": {
+    "text_size": 24,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.8,
+     0.8,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -66
+    ],
+    "offset_max": [
+     -24,
+     -30
+    ]
+   },
+   "bind": "Weapon3D/reserve",
+   "format": "RESERVE %.0f"
+  },
+  {
    "name": "mini",
    "kind": "Minimap",
    "anchors": {
