@@ -762,6 +762,27 @@ TEST_CASE("golden: rainbow_water: the bows and their reflection on a calm sea") 
     check_golden("rainbow_water", f);
 }
 
+// ---- M-METEOR 18c: the meteors -----------------------------------------------------------------------------------
+
+// Three streaks in flight at once over the star field (meteor_sky_scene at the fixture's clock and seed: rate 30, slot
+// 8 1.938 s in), the camera looking up into the night.
+TEST_CASE("golden: meteor_sky: three meteor streaks over the night sky at a fixed clock") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { meteor_sky_scene(s, meteor_carrier()); });
+    check_golden("meteor_sky", f);
+}
+
+// One streak falling toward the horizon over a calm night sea (a 0.05 m swell), and its reflection.
+TEST_CASE("golden: meteor_water: a meteor streak and its reflection on a calm night sea") {
+    Fixture3D f;
+    water_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        meteor_water_scene(s, meteor_carrier(1.0f, kMeteorWaterTime, kMeteorWaterSeed), water_carrier(0.05f));
+    });
+    check_golden("meteor_water", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

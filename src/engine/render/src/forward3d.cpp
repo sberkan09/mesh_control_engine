@@ -112,7 +112,9 @@ struct Forward3DPassU {
     vec4 aurora4;     // rgb the high (top) colour, w speed (0..4)
     vec4 rainbow;     // M-RAINBOW 17c: x level (0 = off), y band width (0.5..2), z secondary (0..1), w 0
     vec4 rainbow2;    // xyz the anti-solar direction (unit), w 0
-    vec4 free_[10];   // the rest of the 1536-byte block, unused (always 0)
+    vec4 meteor;      // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
+    vec4 meteor2;     // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
+    vec4 free_[8];    // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -139,18 +141,21 @@ static_assert(
         offsetof(Forward3DPassU, aurora4) == offsetof(Forward3DPassU, aurora3) + 16 &&
         offsetof(Forward3DPassU, rainbow) == offsetof(Forward3DPassU, aurora4) + 16 &&
         offsetof(Forward3DPassU, rainbow2) == offsetof(Forward3DPassU, rainbow) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, rainbow2) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 10 * 16,
+        offsetof(Forward3DPassU, meteor) == offsetof(Forward3DPassU, rainbow2) + 16 &&
+        offsetof(Forward3DPassU, meteor2) == offsetof(Forward3DPassU, meteor) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, meteor2) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 8 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
-    "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_free[10] follow "
-    "p_sky_rot as in MCE_GLSL_PASS_U");
+    "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
+    "p_meteor2 / p_free[8] follow p_sky_rot as in MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
 // the main pass, at most 6 * kGiMaxBatchProbes = 192 more on a GI fill frame: 48 KiB of the 1 MiB ring); the block
 // is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding). M-RAINBOW
-// 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged.
-static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 10 vec4 free)");
+// 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
+// (p_meteor, p_meteor2): 8 free, the size unchanged.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 8 vec4 free)");
 
 namespace {
 
@@ -522,6 +527,23 @@ void rainbow_params(const RainbowSky& r, PassU& pu) {
     pu.rainbow = vec4(level, detail::ranged(r.band_width, 0.5f, 2.0f, 1.0f), detail::ranged(r.secondary, 0.0f, 1.0f, 0.0f),
                       0.0f);
     pu.rainbow2 = vec4(a.x, a.y, a.z, 0.0f);
+}
+
+// The main pass's meteor members (M-METEOR 18c). Level 0 (the Low tier and `r.meteor 0` zero it in apply_quality, the
+// kit folds the night, cloud and rain gates into it), a NaN level, `enabled` false, `rate` 0 or `brightness` 0 leave
+// p_meteor and p_meteor2 zero: the sky shader skips meteor_layer and the frame is the one without it bit for bit. The
+// values are clamped again (apply_quality's clamps: a caller may skip it); the time is the carrier's, already wrapped
+// to the 60 s period by the extract (kit::meteor_wrap_time; non-finite: 0), the seed goes over as an exact float.
+// Direction-only, as the night sky: no camera position, no floating origin.
+void meteor_params(const MeteorSky& m, PassU& pu) {
+    const f32 level = detail::ranged(m.level, 0.0f, 4.0f, 0.0f);
+    const f32 rate = detail::ranged(m.rate, 0.0f, 30.0f, 4.0f);
+    const f32 brightness = detail::ranged(m.brightness, 0.0f, 4.0f, 1.0f);
+    if (!m.enabled || !(level > 0.0f) || !(rate > 0.0f) || !(brightness > 0.0f)) return;
+    const f32 t = std::isfinite(m.time) ? detail::ranged(m.time, 0.0f, 60.0f, 0.0f) : 0.0f;
+    pu.meteor = vec4(level, brightness, detail::ranged(m.length, 0.5f, 2.0f, 1.0f),
+                     detail::ranged(m.speed, 0.5f, 2.0f, 1.0f));
+    pu.meteor2 = vec4(rate, t, f32(m.seed < 65535u ? m.seed : 65535u), 0.0f);
 }
 
 // ---- the water plane (M-WATER 15c). The wave tables are kit::water_wave_set's (mce/kit/water.h; the renderer does not
@@ -2098,6 +2120,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
     aurora_params(scene.aurora(), pu);               // the aurora curtains (M-AURORA 16c): main pass only too
     rainbow_params(scene.rainbow(), pu);             // the rainbow (M-RAINBOW 17c): main pass only too
+    meteor_params(scene.meteor(), pu);               // the meteors (M-METEOR 18c): main pass only too
     if (apply_fog && water_on(scene.water()) && !water_.is_null())
         water_params(scene.water(), origin_, water_depth_, pu);  // the water plane (M-WATER 15c): the main pass only
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
