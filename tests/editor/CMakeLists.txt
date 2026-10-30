@@ -10,6 +10,7 @@ mce_add_test(test_editor UMBRELLA
         test_quick_open.cpp
         test_selection_history.cpp
         test_selection_sets.cpp
+        test_field_masks.cpp
         test_hierarchy_filter.cpp
         test_batch_rename.cpp
         test_select_related.cpp
