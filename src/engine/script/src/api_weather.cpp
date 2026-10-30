@@ -252,6 +252,22 @@
 //                                         rounded down; night_only and enabled: any non-zero number is 1); an unknown
 //                                         key or a non-number raises an error that names the call and nothing is written
 //
+// Season (M-SEASONS step 19c) lives in the same table: the authoring over the first kit::Season (mce/kit/season.h) and the
+// read-only season_phase(). Named errors as above ("weather.set_season: the scene has no Season entity"); the setter never
+// adds the component. The authoring names follow the set keys with a `season_` prefix; the tints return r, g, b.
+// season_phase() is kit::season_phase on the first WorldClock's day and hour (day 0 and hour 0 with no clock, so the fixed
+// start_phase). The getters read the authoring even when `enabled` is 0.
+//
+//   weather.season_enabled() / season_year_days() / season_start_phase() / season_winter_density() /
+//   weather.season_snow_cover_bias() / season_cold_bias() / season_strength() -> number
+//   weather.season_spring_tint() / season_autumn_tint() / season_winter_tint() -> r, g, b
+//   weather.season_phase() -> number                0..1, the year phase now
+//   weather.set_season{enabled=, year_days=, start_phase=, spring_tint={r,g,b}, autumn_tint={r,g,b}, winter_tint={r,g,b},
+//                      winter_density=, snow_cover_bias=, cold_bias=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (tints
+//                                         0..4 per channel; enabled: any non-zero number is 1); an unknown key or a
+//                                         non-number raises an error that names the call and nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -298,6 +314,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/meteor.h"
+#include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
 #include "mce/kit/world_clock.h"
@@ -634,7 +651,8 @@ int l_weather_set_snow(lua_State* L) {
 // Reads the settings table at index 1 into value[]/given[] (slot i is keys[i]); raises on a non-name key, an unknown
 // key or a non-number (NaN included) before anything is written. `list` is the key list for the messages.
 void read_settings(lua_State* L, const char* fn, const char* const* keys, int n, const char* list, f64* value,
-                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr, int vec3b_slot = -1, f64* vec3b = nullptr) {
+                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr, int vec3b_slot = -1, f64* vec3b = nullptr, int vec3c_slot = -1,
+                   f64* vec3c = nullptr) {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_pushnil(L);
     while (lua_next(L, 1) != 0) {
@@ -645,7 +663,10 @@ void read_settings(lua_State* L, const char* fn, const char* const* keys, int n,
             if (std::strcmp(key, keys[i]) == 0) slot = i;
         }
         if (slot < 0) luaL_error(L, "%s: unknown key '%s' (%s)", fn, key, list);
-        f64* const triple = slot == vec3_slot && vec3 ? vec3 : (slot == vec3b_slot && vec3b ? vec3b : nullptr);
+        f64* const triple = slot == vec3_slot && vec3    ? vec3
+                            : slot == vec3b_slot && vec3b ? vec3b
+                            : slot == vec3c_slot && vec3c ? vec3c
+                                                          : nullptr;
         if (triple) {  // a {r, g, b} table of three numbers
             if (lua_type(L, -1) != LUA_TTABLE) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
             for (int i = 0; i < 3; ++i) {
@@ -1392,6 +1413,86 @@ int l_weather_set_meteor(lua_State* L) {
     return 0;
 }
 
+// ---- Season (M-SEASONS step 19c) ----
+
+kit::Season& check_season(lua_State* L, const char* fn) { return check_first<kit::Season>(L, fn, "Season"); }
+
+#define MCE_WEATHER_GETTER_SEASON(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_season(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_SEASON(season_enabled, enabled)
+MCE_WEATHER_GETTER_SEASON(season_year_days, year_days)
+MCE_WEATHER_GETTER_SEASON(season_start_phase, start_phase)
+MCE_WEATHER_GETTER_SEASON(season_winter_density, winter_density)
+MCE_WEATHER_GETTER_SEASON(season_snow_cover_bias, snow_cover_bias)
+MCE_WEATHER_GETTER_SEASON(season_cold_bias, cold_bias)
+MCE_WEATHER_GETTER_SEASON(season_strength, strength)
+#undef MCE_WEATHER_GETTER_SEASON
+
+int push_season_tint(lua_State* L, const math::vec3& c) {
+    lua_pushnumber(L, static_cast<double>(c.x));
+    lua_pushnumber(L, static_cast<double>(c.y));
+    lua_pushnumber(L, static_cast<double>(c.z));
+    return 3;
+}
+int l_weather_season_spring_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_spring_tint").spring_tint); }
+int l_weather_season_autumn_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_autumn_tint").autumn_tint); }
+int l_weather_season_winter_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_winter_tint").winter_tint); }
+
+// weather.season_phase(): kit::season_phase on the first WorldClock's day and hour (day 0, hour 0 with no clock).
+int l_weather_season_phase(lua_State* L) {
+    const kit::Season& s = check_season(L, "weather.season_phase");
+    World& w = world_of(L);
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    lua_pushnumber(L, static_cast<double>(kit::season_phase(s, day, hour)));
+    return 1;
+}
+
+// weather.set_season{...}: validated before anything is written.
+int l_weather_set_season(lua_State* L) {
+    static const char* const kKeys[10] = {"enabled", "year_days", "start_phase", "spring_tint", "autumn_tint",
+                                          "winter_tint", "winter_density", "snow_cover_bias", "cold_bias", "strength"};
+    f64 value[10] = {};
+    bool given[10] = {};
+    f64 spring[3] = {};
+    f64 autumn[3] = {};
+    f64 winter[3] = {};
+    read_settings(L, "weather.set_season", kKeys, 10,
+                  "enabled, year_days, start_phase, spring_tint, autumn_tint, winter_tint, winter_density, "
+                  "snow_cover_bias, cold_bias, strength",
+                  value, given, 3, spring, 4, autumn, 5, winter);
+    kit::Season& s = check_season(L, "weather.set_season");
+    auto tint = [](math::vec3& dst, const f64* c) {
+        dst.x = static_cast<f32>(clamp_range(c[0], 0.0, 4.0));
+        dst.y = static_cast<f32>(clamp_range(c[1], 0.0, 4.0));
+        dst.z = static_cast<f32>(clamp_range(c[2], 0.0, 4.0));
+    };
+    if (given[0]) s.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) s.year_days = static_cast<f32>(clamp_range(value[1], 1.0, 3650.0));
+    if (given[2]) s.start_phase = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) tint(s.spring_tint, spring);
+    if (given[4]) tint(s.autumn_tint, autumn);
+    if (given[5]) tint(s.winter_tint, winter);
+    if (given[6]) s.winter_density = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) s.snow_cover_bias = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) s.cold_bias = static_cast<f32>(clamp_range(value[8], 0.0, 1.0));
+    if (given[9]) s.strength = static_cast<f32>(clamp_range(value[9], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1713,6 +1814,18 @@ const luaL_Reg kWeatherLib[] = {
     {"meteor_enabled", l_weather_meteor_enabled},
     {"meteor_level", l_weather_meteor_level},
     {"set_meteor", l_weather_set_meteor},
+    {"season_enabled", l_weather_season_enabled},
+    {"season_year_days", l_weather_season_year_days},
+    {"season_start_phase", l_weather_season_start_phase},
+    {"season_winter_density", l_weather_season_winter_density},
+    {"season_snow_cover_bias", l_weather_season_snow_cover_bias},
+    {"season_cold_bias", l_weather_season_cold_bias},
+    {"season_strength", l_weather_season_strength},
+    {"season_spring_tint", l_weather_season_spring_tint},
+    {"season_autumn_tint", l_weather_season_autumn_tint},
+    {"season_winter_tint", l_weather_season_winter_tint},
+    {"season_phase", l_weather_season_phase},
+    {"set_season", l_weather_set_season},
     {nullptr, nullptr},
 };
 

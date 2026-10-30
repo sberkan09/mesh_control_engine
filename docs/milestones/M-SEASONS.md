@@ -56,7 +56,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 19b finds the den
 |---|---|---|---|
 | 19a | done | 912 | `Season` and the pure helpers in `mce/kit/season.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19q. |
 | 19b | done | 915 | Tint and snow floor / lee shift fed from the extract (`.cpp` only). **Density thinning dropped:** the renderer caches are safe for a shorter span (`forward3d_scale.cpp` re-uploads on `g.count != n`), but `scatter_on_terrain` emits row-major cells, so a prefix removes whole rows of `TerrainFoliage3D` copies (a bare strip), not an unbiased thinning; fixing it needs a render-side change, so winter is the grey tint only. `season_foliage_density` stays as a helper. Tests: `test_season_extract.cpp`. |
-| 19c | planned | | |
+| 19c | done | 917 | `weather.set_season`, the `weather.season_<key>()` getters (tints return r, g, b) and read-only `weather.season_phase()`, typed in `definitions.cpp`; `12_weather` sets `year_days` 1 (its 600 s day) and logs `season:` every 150 ticks. Tests: `test_script_season.cpp`. |
 | 19d | planned | | |
 
 Candidates recorded at planning: per-entity season opt-out, a season-driven simulated snow target (hashed), leaf-fall particles, a season event (`SeasonChanged`) next to `DayPassed`, temperature feeding `Weather` kind odds.

@@ -43,6 +43,10 @@
 #      through the dark hours: 0.422 at tick 0, falling as the dawn gate closes and as the rain (from tick 60) and the storm
 #      (from tick 600) thicken the cloud cover (0.030 at 450, 0.002 at 600 in the storm), 0.252 at 1050 once the
 #      storm has eased, and exactly 0.000 from sunrise (1500) on, including the clear morning at 2400.
+#  16. (M-SEASONS 19c) the "season:" lines: weather.season_phase() of the Season on the Weather entity (read only, the script
+#      writes nothing). The scene sets year_days 1 (the WorldClock day is 600 s = 36000 ticks, so a 12-day year would not
+#      move in a run): the phase starts at start_phase 0.1 plus 5/24 for the 5:00 start = 0.308 and gains 1/36000 per tick,
+#      0.313 at tick 150 and 0.375 (the centre of summer) at tick 2400; the line also logs the authored spring tint.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -102,6 +106,8 @@ expect("${first}" "script: aurora: latitude 55.00 gate 0.000 level 0.000 at tick
 expect("${first}" "script: rainbow: level 0.000 wetness 0.035 at tick 450\n" "the rainbow shows in the rain before dawn")
 expect("${first}" "script: meteor: level 0.422 at tick 0\n" "the meteors did not start at night")
 expect("${first}" "script: meteor: level 0.030 at tick 450\n" "the rain did not damp the meteors")
+expect("${first}" "script: season: phase 0.308 spring tint 0.75 1.05 0.70 at tick 0\n" "the season did not start at the 5:00 phase")
+expect("${first}" "script: season: phase 0.321 spring tint 0.75 1.05 0.70 at tick 450\n" "the season phase did not follow the clock")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -158,6 +164,8 @@ expect("${forecast}" "script: meteor: level 0.002 at tick 600\n" "the storm did 
 expect("${forecast}" "script: meteor: level 0.252 at tick 1050\n" "the meteors are wrong in the dark")
 expect("${forecast}" "script: meteor: level 0.000 at tick 1500\n" "the meteors show at sunrise")
 expect("${forecast}" "script: meteor: level 0.000 at tick 2400\n" "the meteors show by day")
+expect("${forecast}" "script: season: phase 0.350 spring tint 0.75 1.05 0.70 at tick 1500\n" "the season phase is wrong at sunrise")
+expect("${forecast}" "script: season: phase 0.375 spring tint 0.75 1.05 0.70 at tick 2400\n" "the season did not reach the centre of summer")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")
