@@ -13,6 +13,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/rainbow.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/ground_mist.h"
@@ -1099,6 +1100,47 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             }
         }
         scene.set_aurora(shown);
+    }
+    {  // rainbow (M-RAINBOW 17b): the first Rainbow; without one, when disabled, with a closed gate (night, rain, dry
+       // ground, thick cloud: level 0), under an equirect sky texture or with non-finite inputs the carrier is the default
+       // one (level 0, off), written every frame so a stale one never survives. Only the carrier is written.
+        render::RainbowSky shown;  // level 0 by default (off)
+        const Rainbow* rainbow = nullptr;
+        world.query<const Rainbow&>().each([&](const Rainbow& c) {
+            if (!rainbow) rainbow = &c;
+        });
+        const Weather* rain_weather = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!rain_weather) rain_weather = &c;
+        });
+        if (rainbow && rainbow->enabled && rain_weather && env.sky_texture.guid == asset::Guid{}) {
+            // Sun.direction is the way the light travels (from the sun toward the scene), so the direction from the
+            // camera toward the sun is its negation and the direction toward the anti-solar point is the light direction
+            // itself. The elevation is asin of the sun's height: -direction.y of the unit light direction (the sine, which
+            // sun_elevation_natural is for a unit direction), in degrees. The moonlight hand-off above is not applied.
+            const math::vec3 light = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
+            const f32 len = std::sqrt(light.x * light.x + light.y * light.y + light.z * light.z);
+            const f32 wetness = rain_weather->wetness;  // the ground wetness the Weather system keeps (0 = dry, no bow)
+            const bool raining = rain_weather->current == WeatherKind::Rain || rain_weather->current == WeatherKind::Storm;
+            const f32 rain = raining ? rain_weather->intensity : 0.0f;
+            if (std::isfinite(len) && len > 1e-6f && std::isfinite(wetness) && std::isfinite(rain) && std::isfinite(cloud_cover)) {
+                const math::vec3 anti = light * (1.0f / len);  // unit, camera toward the anti-solar point
+                const f32 sine = std::clamp(-anti.y, -1.0f, 1.0f);
+                const f32 elevation_deg = static_cast<f32>(std::asin(static_cast<f64>(sine)) * (180.0 / 3.14159265358979323846));
+                const f32 level = rainbow_level(*rainbow, elevation_deg, wetness, rain, cloud_cover);  // post-apply_quality cover
+                if (level > 0.0f && std::isfinite(level)) {
+                    using detail::rainbow_clamp;
+                    render::RainbowSky r;
+                    r.level = level;
+                    r.band_width = rainbow_clamp(rainbow->band_width, 1.0f, 0.5f, 2.0f);
+                    r.secondary = rainbow_clamp(rainbow->secondary, 1.0f, 0.0f, 1.0f);
+                    r.anti_solar = anti;
+                    r.enabled = true;
+                    shown = render::apply_quality(quality_, r);
+                }
+            }
+        }
+        scene.set_rainbow(shown);
     }
     {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
         const Water* water = nullptr;
