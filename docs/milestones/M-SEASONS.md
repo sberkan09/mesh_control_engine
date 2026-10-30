@@ -1,6 +1,6 @@
 # M-SEASONS — Foliage colour and snow bias that follow the time of year, from the world clock's day count (milestone record)
 
-**Status:** planned (2026-10-30), steps 19a to 19d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DAYNIGHT (`WorldClock` and its `day` counter), M-WINDSWAY (the extract-only batch feed the tint copies), M-SNOWCOVER and M-WEATHER (the snow cover and the kinds the bias leans on), M-GROUNDMIST (the pure-helper, no-shader, no-system pattern). Today a scene looks the same on day 1 and day 300: `WorldClock` counts days and emits `DayPassed`, but nothing reads the count for the look, so foliage is always the authored green and snow comes only with the weather. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-10-30), steps 19a to 19d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DAYNIGHT (`WorldClock` and its `day` counter), M-WINDSWAY (the extract-only batch feed the tint copies), M-SNOWCOVER and M-WEATHER (the snow cover and the kinds the bias leans on), M-GROUNDMIST (the pure-helper, no-shader, no-system pattern). Today a scene looks the same on day 1 and day 300: `WorldClock` counts days and emits `DayPassed`, but nothing reads the count for the look, so foliage is always the authored green and snow comes only with the weather. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Season` turns the `WorldClock` day count into a season phase (0..1 over an authored year length in days) and pure helpers turn the phase into a foliage tint (spring light green, summer the authored colour, autumn orange and red, winter bare and grey), a foliage density scale and a snow bias (winter leans cold, summer none). `Kit3DExtract` applies them to the *render-side copies only*: the foliage batches' tint and the snow-cover values it already builds. No new shader, pass, render field or system state. A scene without `Season` hashes, simulates and renders exactly as today.
 
@@ -57,6 +57,17 @@ No step needs Opus: nothing writes a shader or a draw path. If 19b finds the den
 | 19a | done | 912 | `Season` and the pure helpers in `mce/kit/season.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19q. |
 | 19b | done | 915 | Tint and snow floor / lee shift fed from the extract (`.cpp` only). **Density thinning dropped:** the renderer caches are safe for a shorter span (`forward3d_scale.cpp` re-uploads on `g.count != n`), but `scatter_on_terrain` emits row-major cells, so a prefix removes whole rows of `TerrainFoliage3D` copies (a bare strip), not an unbiased thinning; fixing it needs a render-side change, so winter is the grey tint only. `season_foliage_density` stays as a helper. Tests: `test_season_extract.cpp`. |
 | 19c | done | 917 | `weather.set_season`, the `weather.season_<key>()` getters (tints return r, g, b) and read-only `weather.season_phase()`, typed in `definitions.cpp`; `12_weather` sets `year_days` 1 (its 600 s day) and logs `season:` every 150 ticks. Tests: `test_script_season.cpp`. |
-| 19d | planned | | |
+| 19d | done | 918 | Docs only: guide 9.19q completed (the phase, the four seasons and their centres, the tint as a multiplier of the authored colour, the density helper that exists but is not used by the extract and why, the snow bias as a drawn floor, the no-clock case, the Luau API), the 08-3d Seasons paragraph, the `12_weather` clause in 18-samples (already added in 19c), changelog, this record, the ROADMAP row. |
+
+## Follow-ups
+
+From the 19a to 19d close; none blocks the milestone.
+- No per-entity opt-out: evergreens and rocks change with the season (a field on `Foliage3D`, a wide header).
+- The snow bias is a drawn floor; a hashed, simulated season-driven snow target would let gameplay see it.
+- Leaf-fall particles in autumn.
+- A `SeasonChanged` event next to `DayPassed`.
+- Density thinning needs a render-side scatter-order fix (or a per-copy keep test) first; `TerrainFoliage3D` scatters row by row, so a span prefix is a strip.
+- `season_foliage_density` is currently unused by the extract.
+- The tints are not tuned against a strong dusk key (an orange autumn tint under a warm sunset can look saturated).
 
 Candidates recorded at planning: per-entity season opt-out, a season-driven simulated snow target (hashed), leaf-fall particles, a season event (`SeasonChanged`) next to `DayPassed`, temperature feeding `Weather` kind odds.
