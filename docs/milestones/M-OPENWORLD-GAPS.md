@@ -70,7 +70,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 ## C. Gameplay depth
 
 - **Player stuck behaviour.** Sprinting into a building face stops the player with no slide or feedback; the sample has no
-  fall-off or out-of-bounds handling (the ground is a 1120 m slab; the world edge has no wall).
+  fall-off handling; ~~the world edge has no wall~~ **four invisible edge walls added (M-WORLDEDGE)** on the 1120 m slab's rim.
 - **No cover, melee, grenades or weapon switching.** One hitscan gun (`Weapon3D`), reload, no ammo pickups.
 - **Pedestrians did not visibly react** to gunfire or cars: the kit has M-PEDFLEE (hurt, shot nearby, panic spreads) and
   M-PEDCRASH (crash, car bearing down) and the walkers did switch to `Flee`, but they were frozen in place (B, SBA-213), so
