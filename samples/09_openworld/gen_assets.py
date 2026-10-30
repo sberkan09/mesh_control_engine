@@ -743,6 +743,8 @@ def police_car(scene, name, pos, yaw, min_level, dispatch):
     comps["ImpactAudio"] = {"clip": "guid:" + G_CRASHES, "min_speed": 4, "full_speed": 18, "quiet_db": -8, "loud_db": 0}
     comps.update(headlights())
     comps.update(wreck_effects())
+    # Police cars wear down in crashes like any car (a dead one stops chasing, kit_wreck); the officer inside is not an entity, so no occupant share.
+    comps["ImpactDamage3D"] = {"min_speed": 6, "damage_per_ms": 5, "occupant_share": 0}
     # The siren sits on the root: the audio bridge follows an entity's own LocalTransform, a child's is relative. It sounds from the
     # wanted level the car answers; its loud wail stands in for the engine.
     comps.update({"AudioSource": {"clip": "guid:" + audio_guid("siren"), "bus": "SFX", "loop": True, "play_on_start": True,
