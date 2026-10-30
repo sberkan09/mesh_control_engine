@@ -784,4 +784,42 @@ inline void aurora_sky_scene(Scene3D& s, const AuroraSky& aurora) {
     s.set_aurora(aurora);
 }
 
+// ---- M-RAINBOW 17c: the rainbow ----------------------------------------------------------------------------------
+
+// The rainbow sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z) under a
+// rain-washed grey-blue gradient, the sun 10 degrees up behind the camera on its left, so the anti-solar point is 10
+// degrees under the horizon, 35 degrees right of the view: the primary bow (42 degrees from it) crosses the frame's
+// lower half and the secondary (51 degrees) its middle, diagonally. The light travels toward the anti-solar point.
+inline constexpr vec3 kRainbowAntiSolar{0.56486252f, -0.17364818f, -0.80670728f};  // (sin 35 cos 10, -sin 10, ...)
+
+// The rainbow as the kit extract hands it over: `level`, the default band width and the full secondary bow.
+inline RainbowSky rainbow_carrier(f32 level = 1.0f, f32 band_width = 1.0f, f32 secondary = 1.0f) {
+    RainbowSky r;
+    r.level = level;
+    r.band_width = band_width;
+    r.secondary = secondary;
+    r.anti_solar = kRainbowAntiSolar;
+    r.enabled = true;
+    return r;
+}
+
+inline void rainbow_sky_scene(Scene3D& s, const RainbowSky& rainbow) {
+    DirectionalLight sun;
+    sun.direction = kRainbowAntiSolar;
+    s.set_light(sun);
+    Sky sky;
+    sky.zenith = {0.10f, 0.13f, 0.22f};
+    sky.horizon = {0.30f, 0.33f, 0.38f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_rainbow(rainbow);
+}
+
+// The same sky over a calm sea (water_camera: low, looking 8 degrees down toward -z), the bows above the horizon and
+// their reflection below it.
+inline void rainbow_water_scene(Scene3D& s, const RainbowSky& rainbow, const WaterSurface& w) {
+    rainbow_sky_scene(s, rainbow);
+    s.set_water(w);
+}
+
 }  // namespace mce::render_test
