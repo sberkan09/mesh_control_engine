@@ -243,3 +243,76 @@ TEST_CASE("missions: the same run twice has the same state hash") {
     };
     CHECK(run() == run());
 }
+
+namespace {
+// A mission with one Kill objective on a world with the player and three victims of different teams.
+struct KillRig {
+    World w;
+    u64 t = 0;
+    Entity player, other, cop1, cop2, cop3, kill, mission;
+    explicit KillRig(u8 team, bool by_actor, u32 count, Entity target = Entity{}) {
+        w.register_components<LocalTransform, SaveKey>();
+        install_missions(w, nullptr);
+        player = w.spawn_with(SaveKey{1}, at(0, 0, 0), Health3D{});
+        auto victim = [&](u32 key, u8 tm) {
+            Health3D h;
+            h.max = h.current = 10.0f;
+            h.team = tm;
+            return w.spawn_with(SaveKey{key}, at(5, 0, 0), h);
+        };
+        other = victim(2, 3);
+        cop1 = victim(3, 2);
+        cop2 = victim(4, 2);
+        cop3 = victim(5, 2);
+        Objective o;
+        o.kind = ObjectiveKind::Kill;
+        o.team = team;
+        o.by_actor = by_actor ? 1 : 0;
+        o.count = count;
+        o.target = target;
+        kill = w.spawn_with(SaveKey{6}, o);
+        Mission m;
+        m.id = "kill";
+        m.objective = kill;
+        m.actor = player;
+        m.start_on_load = 1;
+        mission = w.spawn_with(SaveKey{7}, m);
+    }
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) w.tick(kDt, t++);
+    }
+    void shoot(Entity victim, Entity by) {
+        DamageInfo hit;
+        hit.amount = 100.0f;
+        hit.instigator = by;
+        REQUIRE(apply_damage(w, victim, hit));
+        run(2);
+    }
+    u32 progress() { return w.try_get<Objective>(kill)->progress; }
+    MissionState state() { return w.try_get<Mission>(mission)->state; }
+};
+}  // namespace
+
+TEST_CASE("missions: a kill objective can count one team and only the actor's kills (M-MISSIONKILL)") {
+    KillRig r(2, true, 2);
+    r.run(2);
+    r.shoot(r.other, r.player);  // wrong team
+    CHECK(r.progress() == 0);
+    r.shoot(r.cop1, Entity{});   // right team, not the actor's
+    CHECK(r.progress() == 0);
+    r.shoot(r.cop2, r.player);
+    CHECK(r.progress() == 1);
+    CHECK(r.state() == MissionState::Active);
+    r.shoot(r.cop3, r.player);
+    CHECK(r.state() == MissionState::Complete);
+}
+
+TEST_CASE("missions: a kill objective whose target is already dead is done (M-MISSIONKILL)") {
+    KillRig d(0, false, 1, Entity{});
+    d.w.try_get_mut<Objective>(d.kill)->target = d.other;
+    DamageInfo hit;
+    hit.amount = 100.0f;
+    REQUIRE(apply_damage(d.w, d.other, hit));
+    d.run(4);
+    CHECK(d.state() == MissionState::Complete);
+}

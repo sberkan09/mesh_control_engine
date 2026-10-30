@@ -44532,6 +44532,521 @@
   },
   {
    "id": 1765,
+   "name": "Hit target",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      165.0,
+      0.95,
+      9.0
+     ]
+    },
+    "RigidBody3D": {
+     "type": "Kinematic",
+     "shape": "Capsule",
+     "radius": 0.3,
+     "half_height": 0.6
+    },
+    "Health3D": {
+     "max": 40,
+     "team": 4,
+     "destroy_on_death": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.2,
+      0.2,
+      1
+     ],
+     "label": "Target",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1766,
+   "name": "Hit target model",
+   "components": {
+    "ChildOf": {
+     "parent": "$1764"
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      -0.9,
+      0
+     ],
+     "rotation": [
+      0,
+      1.0,
+      0,
+      0.0
+     ],
+     "scale": [
+      0.3,
+      0.3,
+      0.3
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:d53afc10-cfe8-5b5c-9e50-8595b27b03d8"
+    }
+   }
+  },
+  {
+   "id": 1767,
+   "name": "Hit objective 1",
+   "components": {
+    "Objective": {
+     "kind": "Kill",
+     "target": "$1764",
+     "count": 1,
+     "next": "$1768"
+    },
+    "SaveKey": {
+     "key": 1008
+    }
+   }
+  },
+  {
+   "id": 1768,
+   "name": "Hit stop 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -150.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.25,
+      0.25,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1.0,
+      0.25,
+      0.25,
+      1
+     ],
+     "label": "Hit 2"
+    }
+   }
+  },
+  {
+   "id": 1769,
+   "name": "Hit objective 2",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$1767",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1009
+    }
+   }
+  },
+  {
+   "id": 1770,
+   "name": "Mission Hit",
+   "components": {
+    "Mission": {
+     "id": "hit",
+     "objective": "$1766",
+     "actor": "$1603",
+     "fail_on_death": "$1603",
+     "time_limit": 180
+    },
+    "MissionReward3D": {
+     "cash": 900,
+     "fail_fee": 150
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1010
+    },
+    "UiScreen": {
+     "document": "guid:83270a33-e8b5-5998-a378-3a3fcd084283"
+    }
+   }
+  },
+  {
+   "id": 1771,
+   "name": "Mission Hit marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      20.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$1769",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Hit",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1772,
+   "name": "Cop killer objective 1",
+   "components": {
+    "Objective": {
+     "kind": "Kill",
+     "team": 2,
+     "by_actor": 1,
+     "count": 3,
+     "next": "$1773"
+    },
+    "SaveKey": {
+     "key": 1011
+    }
+   }
+  },
+  {
+   "id": 1773,
+   "name": "Cop killer stop 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      200.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.55,
+      0.45,
+      1.0,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.55,
+      0.45,
+      1.0,
+      1
+     ],
+     "label": "Cop killer 2"
+    }
+   }
+  },
+  {
+   "id": 1774,
+   "name": "Cop killer objective 2",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$1772",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1012
+    }
+   }
+  },
+  {
+   "id": 1775,
+   "name": "Mission Cop killer",
+   "components": {
+    "Mission": {
+     "id": "cop_killer",
+     "objective": "$1771",
+     "actor": "$1603",
+     "fail_on_death": "$1603",
+     "time_limit": 240
+    },
+    "MissionReward3D": {
+     "cash": 1200,
+     "fail_fee": 200
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1013
+    },
+    "UiScreen": {
+     "document": "guid:fd08f9f3-f51e-56d0-9167-45d021758631"
+    }
+   }
+  },
+  {
+   "id": 1776,
+   "name": "Mission Cop killer marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -80.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$1774",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Cop killer",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1777,
+   "name": "Pickup stop 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -130.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      2.5,
+      0.04,
+      2.5
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.95,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.95,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "Pickup 1"
+    }
+   }
+  },
+  {
+   "id": 1778,
+   "name": "Pickup objective 1",
+   "components": {
+    "Objective": {
+     "kind": "Interact",
+     "target": "$1776",
+     "radius": 2.5,
+     "next": "$1779"
+    },
+    "SaveKey": {
+     "key": 1014
+    }
+   }
+  },
+  {
+   "id": 1779,
+   "name": "Pickup stop 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      100.0,
+      0.22,
+      9.0
+     ],
+     "scale": [
+      5.0,
+      0.04,
+      5.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.95,
+      0.9,
+      0.3,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.95,
+      0.9,
+      0.3,
+      1
+     ],
+     "label": "Pickup 2"
+    }
+   }
+  },
+  {
+   "id": 1780,
+   "name": "Pickup objective 2",
+   "components": {
+    "Objective": {
+     "kind": "ReachZone",
+     "target": "$1778",
+     "radius": 4.0
+    },
+    "SaveKey": {
+     "key": 1015
+    }
+   }
+  },
+  {
+   "id": 1781,
+   "name": "Mission Pickup",
+   "components": {
+    "Mission": {
+     "id": "pickup",
+     "objective": "$1777",
+     "actor": "$1603",
+     "fail_on_death": "$1603",
+     "time_limit": 150
+    },
+    "MissionReward3D": {
+     "cash": 400,
+     "fail_fee": 50
+    },
+    "MissionRetry": {
+     "delay": 8
+    },
+    "SaveKey": {
+     "key": 1016
+    },
+    "UiScreen": {
+     "document": "guid:4d4bad1b-e274-5202-9cd8-a808bd560817"
+    },
+    "MissionWantedFail": {
+     "level": 3
+    }
+   }
+  },
+  {
+   "id": 1782,
+   "name": "Mission Pickup marker",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -20.0,
+      0.22,
+      -9.0
+     ],
+     "scale": [
+      4.0,
+      0.04,
+      4.0
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      1.0,
+      0.85,
+      0.1,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "MissionMarker": {
+     "mission": "$1780",
+     "radius": 3.0
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      1,
+      0.85,
+      0.1,
+      1
+     ],
+     "label": "Pickup",
+     "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1783,
    "name": "Cash 1",
    "components": {
     "LocalTransform": {
@@ -44574,7 +45089,7 @@
    }
   },
   {
-   "id": 1766,
+   "id": 1784,
    "name": "Cash 2",
    "components": {
     "LocalTransform": {
@@ -44617,7 +45132,7 @@
    }
   },
   {
-   "id": 1767,
+   "id": 1785,
    "name": "Cash 3",
    "components": {
     "LocalTransform": {
@@ -44660,7 +45175,7 @@
    }
   },
   {
-   "id": 1768,
+   "id": 1786,
    "name": "Cash 4",
    "components": {
     "LocalTransform": {
@@ -44703,7 +45218,7 @@
    }
   },
   {
-   "id": 1769,
+   "id": 1787,
    "name": "Cash 5",
    "components": {
     "LocalTransform": {
@@ -44746,7 +45261,7 @@
    }
   },
   {
-   "id": 1770,
+   "id": 1788,
    "name": "Cash 6",
    "components": {
     "LocalTransform": {
@@ -44789,7 +45304,7 @@
    }
   },
   {
-   "id": 1771,
+   "id": 1789,
    "name": "Cash 7",
    "components": {
     "LocalTransform": {
@@ -44832,7 +45347,7 @@
    }
   },
   {
-   "id": 1772,
+   "id": 1790,
    "name": "Cash 8",
    "components": {
     "LocalTransform": {
@@ -44875,7 +45390,7 @@
    }
   },
   {
-   "id": 1773,
+   "id": 1791,
    "name": "Cash 9",
    "components": {
     "LocalTransform": {
@@ -44918,7 +45433,7 @@
    }
   },
   {
-   "id": 1774,
+   "id": 1792,
    "name": "Cash 10",
    "components": {
     "LocalTransform": {
@@ -44961,7 +45476,7 @@
    }
   },
   {
-   "id": 1775,
+   "id": 1793,
    "name": "Cash 11",
    "components": {
     "LocalTransform": {
@@ -45004,7 +45519,7 @@
    }
   },
   {
-   "id": 1776,
+   "id": 1794,
    "name": "Cash 12",
    "components": {
     "LocalTransform": {
@@ -45047,7 +45562,7 @@
    }
   },
   {
-   "id": 1777,
+   "id": 1795,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -45090,7 +45605,7 @@
    }
   },
   {
-   "id": 1778,
+   "id": 1796,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {

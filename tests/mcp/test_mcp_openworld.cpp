@@ -163,7 +163,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(pc.get("Wallet3D").get("cash").as_number() == 300);  // each run starts from the saved scene: 500 - 200
 
     // M-OPENWORLD E7/E8: missions, money to find and shops, all data on existing kit components.
-    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})")) == 3);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})")) == 6);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"CashPickup3D","show":["CashPickup3D"]}})")) == 12);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ChopShop3D","show":["ChopShop3D"]}})")) == 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HealShop3D","show":["HealShop3D"]}})")) == 1);
@@ -173,6 +173,19 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     // Cars: crashes wear them down (every car), and the cars the player can take also run people over.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleRam3D","show":["VehicleRam3D"]}})")) >= 3);
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
+    // Kill and interact objectives (Hit, Cop killer, Pickup): the objectives exist with the right kinds; the logic is tested in test_missions.
+    {
+        auto obj = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Objective","show":["Objective"]}})");
+        u32 kills = 0, interacts = 0;
+        for (u32 i = 0; i < count(obj); ++i) {
+            const std::string kind = str(comps(obj, i).get("Objective").get("kind"));
+            kills += kind == "Kill" ? 1u : 0u;
+            interacts += kind == "Interact" ? 1u : 0u;
+        }
+        CHECK(kills == 2);
+        CHECK(interacts == 1);
+        CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Health3D","show":["Health3D"]}})")) >= 1);
+    }
     // Standing on the Errand marker starts the mission.
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-45,0.95,-9]})");
     c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":0})");

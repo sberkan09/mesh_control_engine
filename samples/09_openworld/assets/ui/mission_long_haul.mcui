@@ -76,7 +76,7 @@
       {
        "name": "steps",
        "kind": "Text",
-       "text": "STOPS 0 / 1",
+       "text": "STEPS 0 / 1",
        "style": {
         "text_size": 22,
         "text_outline": 2,
@@ -95,7 +95,7 @@
        },
        "text_align": "Left",
        "bind": "Mission/done",
-       "format": "STOPS %.0f / 1"
+       "format": "STEPS %.0f / 1"
       },
       {
        "name": "bar",
