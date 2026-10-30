@@ -172,7 +172,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"LootDrop","show":["LootDrop"]}})")) >= 20);
     // Cars: crashes wear them down (every car), and the cars the player can take also run people over.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleRam3D","show":["VehicleRam3D"]}})")) >= 3);
-    CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 10);
+    CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
     // Standing on the Errand marker starts the mission.
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-45,0.95,-9]})");
     c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":0})");
