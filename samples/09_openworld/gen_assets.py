@@ -866,11 +866,27 @@ def economy_and_missions(s, player):
     def mission(title, start, stops, limit, reward, fee, wanted_fail, tint):
         """A marker pad at `start`, a chain of ReachZone objectives at `stops` and the Mission that ties them."""
         objectives = []
-        for n, (x, z) in enumerate(stops):
-            dest = pad(s, "%s stop %d" % (title, n + 1), x, z, 5.0, tint,
-                       {"MapMarker": {"icon": 0, "color": list(tint) + [1], "label": "%s %d" % (title, n + 1)}})
-            objectives.append(s.add("%s objective %d" % (title, n + 1), {
-                "Objective": {"kind": "ReachZone", "target": s.ref(dest), "radius": 4.0}, "SaveKey": save_key()}))
+        for n, stop in enumerate(stops):
+            what = stop[0] if isinstance(stop[0], str) else "reach"
+            label = "%s %d" % (title, n + 1)
+            if what == "kill_team":  # kill `count` of Health3D.team `team` yourself (no place to go)
+                obj = {"kind": "Kill", "team": stop[1], "by_actor": 1, "count": stop[2]}
+            elif what == "kill_target":  # a named man stands at (x, z); the step is done when he is dead
+                man = s.add(title + " target", {
+                    "LocalTransform": tf((stop[1], 0.95, stop[2])),
+                    "RigidBody3D": {"type": "Kinematic", "shape": "Capsule", "radius": 0.3, "half_height": 0.6},
+                    "Health3D": {"max": 40, "team": 4, "destroy_on_death": 0},
+                    "MapMarker": {"icon": 0, "color": [1, 0.2, 0.2, 1], "label": "Target", "always_visible": 1}})
+                s.add(title + " target model", {"ChildOf": {"parent": s.ref(man)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
+                                                "MeshRef": model_mesh("character-e")})
+                obj = {"kind": "Kill", "target": s.ref(man), "count": 1}
+            else:
+                x, z = (stop[1], stop[2]) if what == "interact" else stop
+                dest = pad(s, "%s stop %d" % (title, n + 1), x, z, 2.5 if what == "interact" else 5.0, tint,
+                           {"MapMarker": {"icon": 0, "color": list(tint) + [1], "label": label}})
+                obj = {"kind": "Interact", "target": s.ref(dest), "radius": 2.5} if what == "interact" else \
+                      {"kind": "ReachZone", "target": s.ref(dest), "radius": 4.0}
+            objectives.append(s.add("%s objective %d" % (title, n + 1), {"Objective": obj, "SaveKey": save_key()}))
         for a, b in zip(objectives, objectives[1:]):
             s.ents[a]["components"]["Objective"]["next"] = s.ref(b)
         comps = {"Mission": {"id": title.lower().replace(" ", "_"), "objective": s.ref(objectives[0]), "actor": actor,
@@ -893,6 +909,12 @@ def economy_and_missions(s, player):
     mission("Errand", (-45.0, -9.0), [(95.0, -9.0)], 100, 250, 0, 0, (0.3, 0.7, 1.0))
     mission("Courier", (60.0, 9.0), [(-120.0, 9.0), (150.0, -9.0)], 170, 700, 100, 3, (0.4, 1.0, 0.5))
     mission("Long haul", (-190.0, -9.0), [(180.0, 9.0)], 150, 1000, 200, 3, (1.0, 0.45, 0.3))
+
+    # Three more kinds of job: kill a named man, kill three police officers yourself (raise your wanted level first), and fetch a package
+    # (stand on the pad and press E, the pad stays more than 6 m from any parked car because E also gets into one).
+    mission("Hit", (20.0, -9.0), [("kill_target", 165.0, 9.0), (-150.0, 9.0)], 180, 900, 150, 0, (1.0, 0.25, 0.25))
+    mission("Cop killer", (-80.0, 9.0), [("kill_team", 2, 3), (200.0, -9.0)], 240, 1200, 200, 0, (0.55, 0.45, 1.0))
+    mission("Pickup", (-20.0, -9.0), [("interact", -130.0, -9.0), (100.0, 9.0)], 150, 400, 50, 3, (0.95, 0.9, 0.3))
 
     # Money lying around: a pad each, back after two minutes.
     rng = random.Random(2027)
@@ -1074,7 +1096,7 @@ def mission_hud(mission_id, title, steps, limit, reward):
     gold = [1.0, 0.85, 0.25, 1]
     active = shown("active", 1, [{"name": "rows", "kind": "Stack", "fill": True, "stack": {"axis": "Vertical", "spacing": 4}, "children": [
         hud_text("title", "%s  +$%d" % (title.upper(), reward), 26, None, None, None, gold),
-        hud_text("steps", "STOPS 0 / %d" % steps, 22, None, "Mission/done", "STOPS %.0f / " + str(steps), [1, 1, 1, 1]),
+        hud_text("steps", "STEPS 0 / %d" % steps, 22, None, "Mission/done", "STEPS %.0f / " + str(steps), [1, 1, 1, 1]),
         {"name": "bar", "kind": "Slider", "range": [0, limit, 0], "value": 0, "interactable": False, "bind": "Mission/elapsed"},
         hud_text("clock", "TIME 0 / %d s" % limit, 20, None, "Mission/elapsed", "TIME %.0f / " + str(limit) + " s", [0.8, 0.8, 0.8, 1])]}])
     done = shown("passed", 2, [banner("%s PASSED" % title.upper(), 30, [0.45, 1.0, 0.5, 1])])
