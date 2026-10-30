@@ -122,7 +122,8 @@ struct Weapon3D {
     Entity last_hit;                // engine-written: what the last ray hit
     math::vec3 last_point;          // engine-written
     u8 primed = 0;                  // engine-written
-    u8 pad_[3] = {};
+    u8 stowed = 0;                  // 1: in a Loadout3D's pack - its timers run but it never shoots or takes the Fire input (engine-written)
+    u8 pad_[2] = {};
     f32 bonus_applied = 0.0f;       // engine-written: what the wielder's worn items' "damage" stats have added to `damage` (M-GAMEPLAYFIX)
     u32 pad2_ = 0;                  // explicit tail padding: state_hash hashes the raw bytes
 };
@@ -137,7 +138,7 @@ MCE_COMPONENT(Weapon3D, kind, (use_input, Help{"1: Fire (held with `automatic`) 
               (splash_radius, Range{0, 1000}, Help{"m: > 0 explodes where the projectile lands"}), (projectile_scale, Range{0.01f, 100}),
               (muzzle, Help{"entity space"}), (direction, Help{"entity space; forward is -Z"}), (cooldown, ReadOnly, Transient),
               (reload_left, ReadOnly, Transient), (shots, ReadOnly, Transient), (seed, ReadOnly, Transient), (last_hit, ReadOnly, Transient),
-              (last_point, ReadOnly, Transient), (primed, ReadOnly, Transient), (bonus_applied, ReadOnly, Transient))
+              (last_point, ReadOnly, Transient), (primed, ReadOnly, Transient), (stowed, ReadOnly, Transient), (bonus_applied, ReadOnly, Transient))
 
 // A shot in flight. The engine steps it (a ray along each tick's move, gravity on its velocity).
 struct Projectile3D {

@@ -60,22 +60,28 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     // round at a car in its way, but a car that drives into one meets a solid kinematic capsule, which can knock the car
     // aside and stop the drive early. So the check is "moved well west", not a fixed end point.
 
-    // The gun is the player's and aims from the camera; the ammo shop on the avenue refills the spare rounds for 2 cash each.
+    // The guns are the player's (a Loadout3D over a Rifle and a Shotgun) and aim from the camera; the ammo shop on the avenue refills
+    // the spare rounds of the one in hand for 2 cash each; keys 1 and 2 switch.
     {
-        auto gun = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Weapon3D","Confiscate3D"]}})");
+        auto gun = c.ok("run_headless", R"({"ticks":2,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Loadout3D","Confiscate3D"]}})");
         REQUIRE(count(gun) == 1);
-        CHECK(comps(gun, 0).get("Weapon3D").get("reserve").as_number() == 150);
-        // The scene was saved and reloaded for this run: the weapon still names an entity (the camera) after the remap.
-        CHECK(str(comps(gun, 0).get("Weapon3D").get("aim_from")).substr(0, 1) == "$");
+        CHECK(comps(gun, 0).get("Loadout3D").get("reserve").as_number() == 150);
+        CHECK(comps(gun, 0).get("Loadout3D").get("ammo").as_number() == 15);
         CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"AmmoShop3D","show":["AmmoShop3D"]}})")) == 1);
+        // Weapon2 on tick 5 draws the shotgun: 6 rounds, 30 spare.
+        auto drew = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"input":"5-6 Weapon2","inspect":{"component":"Respawn3D","show":["Loadout3D"]}})");
+        CHECK(comps(drew, 0).get("Loadout3D").get("active").as_number() == 1);
+        CHECK(comps(drew, 0).get("Loadout3D").get("ammo").as_number() == 6);
+        CHECK(comps(drew, 0).get("Loadout3D").get("reserve").as_number() == 30);
         c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-30,0.95,-9]})");
-        c.ok("component_set", R"({"entity":"Player","component":"Weapon3D","path":"reserve","value":10})");
+        c.ok("component_set", R"({"entity":"Rifle","component":"Weapon3D","path":"reserve","value":10})");
         c.ok("scene_save");
-        auto bought = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Weapon3D","Wallet3D"]}})");
+        auto bought = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Loadout3D","Wallet3D"]}})");
         CHECK(bought.v().get("log").get("errors").as_number() == 0);
-        CHECK(comps(bought, 0).get("Weapon3D").get("reserve").as_number() == 150);
+        CHECK(comps(bought, 0).get("Loadout3D").get("active").as_number() == 0);  // the saved scene: the rifle is in hand
+        CHECK(comps(bought, 0).get("Loadout3D").get("reserve").as_number() == 150);
         CHECK(comps(bought, 0).get("Wallet3D").get("cash").as_number() == 220);  // 140 rounds at 2
-        c.ok("component_set", R"({"entity":"Player","component":"Weapon3D","path":"reserve","value":150})");
+        c.ok("component_set", R"({"entity":"Rifle","component":"Weapon3D","path":"reserve","value":150})");
     }
 
     // A fight: the player stands 14 m from a police officer on the plaza with the camera level and fires. The officer
@@ -129,7 +135,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     const auto wake = [&](const char* ticks) {
         c.ok("scene_save");
         auto r = c.ok("run_headless", std::string(R"({"ticks":)") + ticks +
-                                          R"(,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Respawn3D","Health3D","LocalTransform","Wanted3D","Wallet3D","Weapon3D"]}})");
+                                          R"(,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Respawn3D","Health3D","LocalTransform","Wanted3D","Wallet3D","Loadout3D"]}})");
         CHECK(r.v().get("log").get("errors").as_number() == 0);
         REQUIRE(count(r) == 1);
         return r;
@@ -141,7 +147,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(pc.get("LocalTransform").get("position").at(0).as_number() > 30.0);  // the station is at x = 40
     CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
     CHECK(pc.get("Wallet3D").get("cash").as_number() == 400);
-    CHECK(pc.get("Weapon3D").get("reserve").as_number() == 75);  // Confiscate3D: half the spare rounds are kept
+    CHECK(pc.get("Loadout3D").get("reserve").as_number() == 75);  // Confiscate3D: half the spare rounds are kept
 
     // Level 4 with the player 110 m from the east marker (and 310 m from the west one): only the east block stands, 2 cars + 2 officers.
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[100,0.95,60]})");

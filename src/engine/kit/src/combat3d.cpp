@@ -196,6 +196,7 @@ void kit3d_weapons(Frame& f) {
             if (in->has_action(kReload)) want_reload = want_reload || in->pressed(kReload);
         }
         wp.fire = wp.reload = 0;
+        if (wp.stowed) return;  // in a pack (Loadout3D): the timers above ran, nothing else does
         const bool can_refill = wp.magazine > 0 && wp.ammo < wp.magazine && (wp.infinite_ammo || wp.reserve > 0);
         if (!wp.reloading && can_refill && (want_reload || wp.ammo == 0)) {
             wp.reloading = 1;

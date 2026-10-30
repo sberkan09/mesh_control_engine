@@ -125,6 +125,41 @@
      ]
     },
     {
+     "name": "NextWeapon",
+     "bindings": [
+      {
+       "key": "Q"
+      },
+      {
+       "gamepad_button": "RightShoulder"
+      }
+     ]
+    },
+    {
+     "name": "PrevWeapon",
+     "bindings": [
+      {
+       "key": "Tab"
+      }
+     ]
+    },
+    {
+     "name": "Weapon1",
+     "bindings": [
+      {
+       "key": "Num1"
+      }
+     ]
+    },
+    {
+     "name": "Weapon2",
+     "bindings": [
+      {
+       "key": "Num2"
+      }
+     ]
+    },
+    {
      "name": "Interact",
      "bindings": [
       {

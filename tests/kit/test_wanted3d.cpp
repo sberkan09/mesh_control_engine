@@ -16,6 +16,7 @@
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/loadout3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/roads.h"
@@ -984,6 +985,56 @@ TEST_CASE("wanted3d: a shop tops up the reserve for a price (M-AMMOSHOP)") {
             CHECK(s.ammo_sales == 0);
             CHECK(s.w.try_get<Weapon3D>(p)->reserve == 20);
         }
+    }
+}
+
+TEST_CASE("wanted3d: the shop and the arrest look at a Loadout3D's weapons (M-OPENWORLD-GAPS 2b)") {
+    const auto armed = [](Scene& s, f32 x) {
+        const Entity p = s.player({}, x, 0.0f);
+        Weapon3D a;
+        a.owner = p;
+        a.magazine = 12;
+        a.reserve = 20;
+        Weapon3D b = a;
+        b.reserve = 40;
+        Loadout3D l;
+        l.slot0 = s.w.spawn_with(at(x, 1.0f, 0.0f), a);
+        l.slot1 = s.w.spawn_with(at(x, 1.0f, 0.0f), b);
+        l.active = 1;
+        s.w.add(p, l);
+        s.w.add(p, Wallet3D{1000});
+        return p;
+    };
+    {  // the shop fills the weapon in hand only
+        Scene s;
+        const Entity p = armed(s, 1.0f);
+        AmmoShop3D a;
+        a.price_per_round = 2;
+        a.stock_to = 100;
+        s.w.spawn_with(at(0.0f, 1.0f, 0.0f), a);
+        s.run(4);
+        const Loadout3D& l = *s.w.try_get<Loadout3D>(p);
+        CHECK(s.w.try_get<Weapon3D>(l.slot1)->reserve == 100);
+        CHECK(s.w.try_get<Weapon3D>(l.slot0)->reserve == 20);
+        CHECK(s.w.try_get<Wallet3D>(p)->cash == 880);  // 60 rounds x 2
+    }
+    {  // an arrest takes its share from every weapon
+        Wanted3D wd;
+        wd.heat = 5.0f;
+        wd.crimes = 1;
+        Scene s;
+        const Entity p = armed(s, 0.0f);
+        s.wanted(p) = wd;
+        Respawn3D r;
+        r.delay = 1.0f;
+        s.w.add(p, r);
+        s.w.add(p, Confiscate3D{0.5f});
+        s.cop(2.0f, 0.0f);
+        s.run(60 * 6);
+        CHECK(s.respawns == 1);
+        const Loadout3D& l = *s.w.try_get<Loadout3D>(p);
+        CHECK(s.w.try_get<Weapon3D>(l.slot0)->reserve == 10);
+        CHECK(s.w.try_get<Weapon3D>(l.slot1)->reserve == 20);
     }
 }
 

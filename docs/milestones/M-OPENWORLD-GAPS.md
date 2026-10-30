@@ -71,7 +71,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 - **Player stuck behaviour.** Sprinting into a building face stops the player with no slide or feedback; the sample has no
   fall-off or out-of-bounds handling (the ground is a 1120 m slab; the world edge has no wall).
-- **No cover, melee, grenades or weapon switching.** One hitscan gun (`Weapon3D`), reload, no ammo pickups.
+- **No cover, melee or grenades.** Weapon switching exists (step 2b: rifle and shotgun in 09_openworld), reload, no ammo pickups.
 - **Pedestrians did not visibly react** to gunfire or cars: the kit has M-PEDFLEE (hurt, shot nearby, panic spreads) and
   M-PEDCRASH (crash, car bearing down) and the walkers did switch to `Flee`, but they were frozen in place (B, SBA-213), so
   nobody ran. With the fix they run. Still missing: no reaction to the player walking into them, no phone calls to police,
@@ -117,6 +117,6 @@ Step 2 closes "no cover, melee, grenades or weapon switching" and moves the gun 
 | Step | What | Status |
 |---|---|---|
 | 2a | `Weapon3D::aim_from` (an Entity): the shot leaves from that entity's pose (plus `muzzle`) and points along its forward; null or a gone entity falls back to the weapon's own pose. The 09_openworld gun moved from the camera to the player (`aim_from` = the camera, `WeaponAudio` and the ammo readout in `hud.mcui` with it), so `Confiscate3D` (an arrest keeps half the spare rounds) and an `AmmoShop3D` on the avenue (2 cash a round, up to 150) now work. `Weapon3D` 168 to 176 bytes. | done |
-| 2b | `Loadout3D` weapon switching | open |
+| 2b | `Loadout3D`: up to four weapon entities (each its own `Weapon3D`, nothing copied), `NextWeapon`/`PrevWeapon`/`Weapon1..4` or `select`, `Weapon3D::stowed` for the pack, `switch_time` delay, an ammo/reserve mirror for the HUD; the shop fills the weapon in hand, `Confiscate3D` takes from all. 09_openworld: Rifle + Shotgun children of the player (Q/Tab/1/2). | done |
 | 2c | `Melee3D` | open |
 | 2d | `Cover3D` / take cover (ray from the shooter to the target against the cover) | open |
