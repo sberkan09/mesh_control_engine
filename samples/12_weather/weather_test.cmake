@@ -38,6 +38,11 @@
 #      rains or storms, and rises once the sun is up (tick 1500) over the still wet ground: 0.048 at tick 1800 under the
 #      snow, 0.091 at 2250 after the weather is called clear, 0.103 at 2400 (wetness 0.213) and falling again at 2550 as
 #      the ground dries below the bow's wetness gate.
+#  15. (M-METEOR 18d) the "meteor:" lines: weather.meteor_level() of the Meteor on the Weather entity (read only, the script
+#      writes nothing). The clock starts at 5:00 and the night lasts until about 6:00 (tick 1500), so the level is non-zero
+#      through the dark hours: 0.422 at tick 0, falling as the dawn gate closes and as the rain (from tick 60) and the storm
+#      (from tick 600) thicken the cloud cover (0.030 at 450, 0.002 at 600 in the storm), 0.252 at 1050 once the
+#      storm has eased, and exactly 0.000 from sunrise (1500) on, including the clear morning at 2400.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -95,6 +100,8 @@ expect("${first}" "script: moon: phase 0.507 illumination 0.999 level 0.469 dir 
 expect("${first}" "script: aurora: latitude 45.00 gate 0.000 level 0.000 at tick 0\n" "the aurora did not start with a closed gate")
 expect("${first}" "script: aurora: latitude 55.00 gate 0.000 level 0.000 at tick 450\n" "the aurora gate is not closed at its low edge")
 expect("${first}" "script: rainbow: level 0.000 wetness 0.035 at tick 450\n" "the rainbow shows in the rain before dawn")
+expect("${first}" "script: meteor: level 0.422 at tick 0\n" "the meteors did not start at night")
+expect("${first}" "script: meteor: level 0.030 at tick 450\n" "the rain did not damp the meteors")
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -147,6 +154,10 @@ expect("${forecast}" "script: rainbow: level 0.048 wetness 0.194 at tick 1800\n"
 expect("${forecast}" "script: rainbow: level 0.091 wetness 0.220 at tick 2250\n" "the rainbow did not rise after the weather cleared")
 expect("${forecast}" "script: rainbow: level 0.103 wetness 0.213 at tick 2400\n" "the rainbow is wrong in the clear morning")
 expect("${forecast}" "script: rainbow: level 0.064 wetness 0.193 at tick 2550\n" "the rainbow did not fade as the ground dried")
+expect("${forecast}" "script: meteor: level 0.002 at tick 600\n" "the storm did not damp the meteors")
+expect("${forecast}" "script: meteor: level 0.252 at tick 1050\n" "the meteors are wrong in the dark")
+expect("${forecast}" "script: meteor: level 0.000 at tick 1500\n" "the meteors show at sunrise")
+expect("${forecast}" "script: meteor: level 0.000 at tick 2400\n" "the meteors show by day")
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

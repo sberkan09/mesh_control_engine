@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, and the "rainbow:" lines, the Rainbow's level).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, and the "meteor:" lines, the Meteor's level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -70,5 +70,9 @@ function update()
         -- ground is still wet (the snow gives way to clear at tick 2100); the bow follows the drying of the ground.
         mce.log(string.format("rainbow: level %.3f wetness %.3f at tick %d",
             weather.rainbow_level(), weather.wetness(), t))
+        -- M-METEOR: the Meteor on the Weather entity. meteor_level is the kit helper on the night fade of the hour, the cloud
+        -- cover and the rain intensity: non-zero through the dark hours (the clock starts at 5:00, sunrise at about tick 1500), damped by the
+        -- cloud cover and the rain and the storm, and exactly 0 by day (night_only is on); read only, the script writes nothing.
+        mce.log(string.format("meteor: level %.3f at tick %d", weather.meteor_level(), t))
     end
 end
