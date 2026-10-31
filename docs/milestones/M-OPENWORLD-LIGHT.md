@@ -47,7 +47,7 @@ feature PR. Captures: `screenshots/gta-isik-2-2026-10-31/` in the project files.
 | Step | PR | Status |
 |---|---|---|
 | Seam: `Environment3D.auto_exposure_min/max` (kit3d.h), `Atmosphere::sky_sun_direction/sky_sun_light` (atmosphere.h), Scene3D honours them | #952 | merged |
-| Feature: smooth dusk hand-off, sky IBL level, auto exposure on in 09_openworld | (feature PR) | review |
+| Feature: smooth dusk hand-off, sky IBL level, auto exposure on in 09_openworld | #954 | merged |
 
 What was wrong and what changed (all in `Kit3DExtract` and one line of `Forward3D`; scenes without a DayCycle are unchanged):
 
@@ -67,6 +67,10 @@ What was wrong and what changed (all in `Kit3DExtract` and one line of `Forward3
 
 Open: the DayCycle's dusk keys still light the clouds brightly while the sun is under the horizon (they read
 `ambient_sky`). Real-GPU cost of the per-frame `atmosphere_sky_ambient` (cached per sun position) is not measured.
+Not verified: auto exposure was not measured frame by frame (the captures sample every 6 game minutes, 3 s real; the
+0.8..2 clamp bounds the range at about 1.3 EV, about 1 s to settle at the default speeds), and no pixel diff was made on the
+other DayCycle samples (11_daynight, 12_weather, 14_seasons): they have no atmosphere and every new path is gated on it,
+so they are unchanged by construction; their GPU tests run in `--task`.
 
 ## Verification
 
