@@ -137,6 +137,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     }
     CHECK(foot == 3);  // the officer that was shot is gone
     CHECK(hunting >= 2);
+    // The player model faces where it walks (M-FACEMOVE).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FaceVelocity3D","show":["FaceVelocity3D"]}})")) >= 1);
     // Hit marker (M-HITMARKER): the Player carries HitMarker3D; the HUD has the two panels bound to it.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HitMarker3D","show":["HitMarker3D"]}})")) >= 1);
     auto wanted = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Wanted3D","show":["Wanted3D"]}})");

@@ -29,6 +29,7 @@ mce_add_library(mce_gameplay_kit
         src/world_clock.cpp
         src/day_cycle.cpp
         src/timed_light.cpp
+        src/face_velocity.cpp
         src/hit_marker.cpp
         src/vehicle_extras.cpp
         src/weather.cpp
