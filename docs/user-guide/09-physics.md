@@ -421,6 +421,13 @@ in a car, `kmh`, `gear` (-1 reverse, 0 neutral, 1.. forward) and `rpm` mirror th
 there. One emitter serves every shooter; two hits in one tick show the last. `samples/09_openworld` has a spark
 emitter that the player's shots light.
 
+### Fall death
+
+`mce/kit/fall_death.h`: put `FallDeath3D` (`min_y`) on an entity that has a `Health3D`. When its y drops below `min_y` it
+takes lethal damage through `apply_damage`, so `Damage3D` and `Died3D` fire and a `Respawn3D` on it wakes it at the
+nearest hospital. A hole in the ground or a launch off the map ends in WASTED instead of an endless fall; an
+invulnerable entity keeps falling. `samples/09_openworld` gives the player `min_y` -40.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

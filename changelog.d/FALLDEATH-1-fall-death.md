@@ -1,0 +1,1 @@
+- Kit (M-FALLDEATH): `FallDeath3D` (`mce/kit/fall_death.h`): an entity with a `Health3D` that drops below `min_y` dies through `apply_damage`, so `Respawn3D` wakes it. Sample: the player at -40 m. Record: `docs/milestones/M-FALLDEATH.md`.
