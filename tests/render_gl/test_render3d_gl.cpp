@@ -1916,6 +1916,31 @@ TEST_CASE("render3d_gl: the atmosphere's sun goes orange at sunset; its sky is b
     CHECK(f.device->validation_error_count() == 0);
 }
 
+TEST_CASE("render3d_gl: Sky::texture_additive adds the gradient under the atmosphere's sky (the twilight floor)") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;  // the top rows are sky
+    const auto dusk = [](bool additive) {
+        return [additive](Scene3D& s) {
+            atmosphere_scene(s, 19.5f);  // the sun well under the horizon: the single-scattering sky is near black
+            Sky sky;
+            sky.zenith = {0.05f, 0.1f, 0.3f};
+            sky.horizon = sky.ground = {0.2f, 0.3f, 0.6f};
+            sky.texture_additive = additive;
+            s.set_sky(sky);
+        };
+    };
+    f.render(0.0f, true, dusk(false));
+    const Rgb plain = pixel_at(f, kW / 2, 2);
+    const Array<u8> plain_frame = f.pixels;
+    f.render(0.0f, true, dusk(true));
+    const Rgb floor = pixel_at(f, kW / 2, 2);
+    INFO("plain " << plain.r << "," << plain.g << "," << plain.b << "; floor " << floor.r << "," << floor.g << "," << floor.b);
+    CHECK(floor.b > plain.b + 10);
+    f.render(0.0f, true, dusk(false));  // off again: the atmosphere's sky alone, as before
+    CHECK(differing_bytes(f.pixels, plain_frame) == 0);
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 TEST_CASE("render3d_gl: the atmosphere bakes once per sun position, and its IBL with it") {
     Fixture3D f;
     const Forward3D& fw = f.renderer.forward_3d();

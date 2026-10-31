@@ -1,7 +1,9 @@
-// The atmosphere next to a day cycle and the moon in Kit3DExtract (M-OPENWORLD-LOOK): a DayCycle that is writing the
-// environment keeps the ambient (the atmosphere then draws the sky and tints the sun only), and while the moon holds the
-// directional light the atmosphere steps aside and the sky clears to the fog colour instead of painting daylight around
-// the moon. Without a DayCycle, or with the sun up, the atmosphere behaves as it always did.
+// The atmosphere next to a day cycle and the moon in Kit3DExtract (M-OPENWORLD-LOOK, M-OPENWORLD-LIGHT): a DayCycle that is
+// writing the environment keeps the ambient (the atmosphere then draws the sky and tints the sun only). While the moon holds
+// the directional light the atmosphere's sky follows the sun itself with a DayCycle (Atmosphere::sky_sun_direction, plus a
+// fog-coloured twilight floor), and without one it steps aside and the sky clears to the fog colour. With a DayCycle the sky
+// IBL's diffuse is scaled to the DayCycle's ambient. Without a DayCycle, or with the sun up, the atmosphere behaves as it
+// always did.
 
 #include <doctest/doctest.h>
 
@@ -107,4 +109,50 @@ TEST_CASE("atmosphere extract: auto exposure's clamps reach the post chain") {
     r.frame(12.0f);
     CHECK(r.scene.post().auto_exposure.min_exposure == doctest::Approx(0.5f));
     CHECK(r.scene.post().auto_exposure.max_exposure == doctest::Approx(1.5f));
+}
+
+TEST_CASE("atmosphere extract: with a DayCycle the sky follows the sun through the moon's hand-off") {
+    Rig r;
+    r.world.spawn_with(SaveKey{2}, DayCycle{});
+    r.world.spawn_with(SaveKey{3}, Moon{});
+    r.env().fog_color = {0.2f, 0.3f, 0.6f};
+    r.frame(12.0f);  // noon: as before, no override and no floor
+    CHECK(r.scene.atmosphere().enabled);
+    CHECK(math::length_sq(r.scene.atmosphere().sky_sun_direction) == 0.0f);
+    CHECK_FALSE(r.scene.sky().texture_additive);
+    r.frame(0.0f);  // midnight: the moon holds the light, the sky stays the atmosphere's, lit by the sun under the ground
+    CHECK(r.scene.atmosphere().enabled);
+    CHECK(r.scene.sky().enabled);
+    const math::vec3 s = r.scene.atmosphere().sky_sun_direction;
+    const math::vec3 natural = render::sun_direction_at(0.0f);
+    CHECK(s.x == doctest::Approx(natural.x));
+    CHECK(s.y == doctest::Approx(natural.y));
+    CHECK(s.z == doctest::Approx(natural.z));
+    CHECK(s.y > 0.0f);  // the light travels up: the sun is below the horizon
+    CHECK(r.scene.light().direction.y < 0.0f);  // the moonlight comes down from above
+    // The twilight floor: the fog colour at the horizon, darker at the zenith, added under the atmosphere's sky.
+    CHECK(r.scene.sky().texture_additive);
+    CHECK(r.scene.sky().horizon.z == doctest::Approx(0.6f));
+    CHECK(r.scene.sky().zenith.z < r.scene.sky().horizon.z);
+    CHECK(r.env().atmosphere == 1);  // Environment3D is never written
+    CHECK(r.env().sky_texture_additive == 0);
+}
+
+TEST_CASE("atmosphere extract: the sky IBL's diffuse follows the DayCycle's ambient") {
+    Rig r;
+    r.env().sky_ibl = 1;
+    r.frame(12.0f);
+    CHECK(r.scene.sky().diffuse_ambient == doctest::Approx(1.0f));  // no DayCycle: the IBL as it was
+    r.world.spawn_with(SaveKey{2}, DayCycle{});
+    r.env().ambient_sky = {1.0f, 1.1f, 1.3f};
+    r.frame(12.0f);
+    const f32 bright = r.scene.sky().diffuse_ambient;
+    CHECK(bright > 1.0f);  // the single-scattering sky is dimmer than the authored ambient
+    CHECK(bright <= 32.0f);
+    r.env().ambient_sky = {0.5f, 0.55f, 0.65f};
+    r.frame(12.0f);
+    CHECK(r.scene.sky().diffuse_ambient == doctest::Approx(bright * 0.5f).epsilon(1e-3));
+    r.env().sky_ibl = 0;
+    r.frame(12.0f);
+    CHECK(r.scene.sky().diffuse_ambient == doctest::Approx(1.0f));
 }

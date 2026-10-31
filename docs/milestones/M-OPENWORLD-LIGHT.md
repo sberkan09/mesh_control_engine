@@ -41,12 +41,32 @@ Both are render-side copies; `Environment3D` is never written, and scenes withou
 
 ## Follow-up (2026-10-31): twilight, sky IBL, auto exposure
 
-Closes the three open items above. Shipped as a seam PR (wide headers) then the feature PR.
+Closes the three open items above (sky IBL, auto exposure, dusk hand-off). Shipped as a seam PR (wide headers), then the
+feature PR. Captures: `screenshots/gta-isik-2-2026-10-31/` in the project files.
 
 | Step | PR | Status |
 |---|---|---|
-| Seam: `Environment3D.auto_exposure_min/max` (kit3d.h), `Atmosphere::sky_sun_direction/sky_sun_light` (atmosphere.h), Scene3D honours them | (this PR) | review |
-| Feature: smooth dusk hand-off, sky IBL level, auto exposure on in 09_openworld | — | open |
+| Seam: `Environment3D.auto_exposure_min/max` (kit3d.h), `Atmosphere::sky_sun_direction/sky_sun_light` (atmosphere.h), Scene3D honours them | #952 | merged |
+| Feature: smooth dusk hand-off, sky IBL level, auto exposure on in 09_openworld | (feature PR) | review |
+
+What was wrong and what changed (all in `Kit3DExtract` and one line of `Forward3D`; scenes without a DayCycle are unchanged):
+
+- **Dusk.** With the full moon of day 0 the moon takes the light at about 18:50 (sun 11° under the horizon). Until then the
+  atmosphere sky was black above the fog with the clouds lit by the DayCycle ambient; in one frame it switched to a flat
+  fog-coloured sky without clouds, which stayed until the night keys. Now, with a DayCycle, the atmosphere stays on and its
+  sky follows the sun itself (`sky_sun_direction`), and a twilight floor (a gradient in the fog colour, zenith 15 %)
+  fades in under it between sun elevation +0.05 and -0.1 (stepped in 1/64, so the IBL re-bakes rarely). Forward3D now
+  reads `Sky::texture_additive` under the atmosphere (gradient + baked sky). Without a DayCycle the atmosphere still
+  yields to the moon as in #950.
+- **sky_ibl.** Not a bake bug: the single-scattering sky's irradiance is about a third of the DayCycle's authored ambient
+  (that ambient was doubled in #950 for the same reason), and the kit never set `Sky::diffuse_ambient`, so nothing could
+  scale it. Now the diffuse IBL is scaled so its upward irradiance (`atmosphere_sky_ambient`, plus the floor) matches
+  the DayCycle's `ambient_sky` (clamped to 32). The IBL adds the sky's colour and direction (bluish from above).
+- **auto_exposure.** Clamped with the new fields: 09_openworld uses 0.8..2 (a night is lifted one stop at most, a day
+  darkened a third of a stop at most). Unclamped, the night was lifted to look like day.
+
+Open: the DayCycle's dusk keys still light the clouds brightly while the sun is under the horizon (they read
+`ambient_sky`). Real-GPU cost of the per-frame `atmosphere_sky_ambient` (cached per sun position) is not measured.
 
 ## Verification
 

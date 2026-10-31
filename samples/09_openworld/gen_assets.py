@@ -1163,7 +1163,11 @@ def scene():
                                             "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 1,
                                             # M-VISUAL looks (quality tiers cap the cost: TAA on High only, Low drops SSR, contact shadows, GI updates)
                                             "atmosphere": 1, "ssao": 1, "ssao_radius": 0.8, "ssao_intensity": 1.0, "ssr": 1, "contact_shadows": 1,
-                                            "color_grade": "guid:" + G_GRADE, "color_grade_strength": 0.8}, "LocalTransform": {}})
+                                            "color_grade": "guid:" + G_GRADE, "color_grade_strength": 0.8,
+                                            # sky IBL (scaled to the DayCycle's ambient by Kit3DExtract) and auto exposure clamped
+                                            # to -1/3 .. +1 stop, so a night stays a night
+                                            "sky_ibl": 1, "auto_exposure": 1, "auto_exposure_min": 0.8, "auto_exposure_max": 2.0},
+                       "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     node_half = city_surface(s)
     street_furniture(s, rng, node_half)

@@ -904,6 +904,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     u32 moon_day = 0;
     bool moon_holds_light = false;
     const f32 sun_elevation_natural = -sun.direction.y;  // the sun's own elevation, before any hand-off
+    const render::DirectionalLight sun_natural = sun;     // the sun itself: what the atmosphere's sky follows
     {  // moonlight (M-NIGHTSKY 14b): hand the one directional slot to the moon at night; local copy only, never Environment3D
         world.query<const Moon&>().each([&](const Moon& c) {
             if (!moon) moon = &c;
@@ -960,24 +961,57 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     // The sky pass draws its sun disk at -light.direction; while the moon holds the light that disk would sit on the
     // phased moon, so the local Sky copy drops it (M-NIGHTSKY 14e). Never Environment3D; unchanged otherwise.
     if (moon_holds_light) sky.sun_intensity = 0.0f;
-    // The atmosphere's sun is the light's direction: while the moon holds the light it would paint a daylight sky around the moon.
-    // The sky then clears to the fog colour (the night sky draws the stars and the moon) and the atmosphere steps aside.
-    const bool atmosphere_yields_to_moon = moon_holds_light && env.atmosphere != 0;
-    if (atmosphere_yields_to_moon) sky.enabled = false;
-    scene.set_sky(sky);
+    // An enabled DayCycle writing the environment (with a clock hour) owns the ambient: its keys are authored, the
+    // atmosphere's single-scattering sky is dim in the shade and black soon after sunset.
+    bool day_cycle_owns_ambient = false;
+    world.query<const DayCycle&>().each([&](const DayCycle& c) { day_cycle_owns_ambient = day_cycle_owns_ambient || c.enabled != 0; });
+    day_cycle_owns_ambient = day_cycle_owns_ambient && env.time_of_day >= 0.0f;
+    const bool atmosphere_on = env.atmosphere != 0;
     render::Fog fog;
     fog.color = env.fog_color;
     fog.density = env.fog_density;
+    // The atmosphere's sun is the light's direction, and at night the moon holds the light: it would paint a daylight
+    // sky around the moon. With a DayCycle the sky then follows the sun itself (Atmosphere::sky_sun_direction), so the
+    // hand-off changes nothing in the sky: it darkens with the sun, continuously. Without one the atmosphere steps
+    // aside while the moon holds the light and the sky clears to the fog colour (the stars and the moon draw over it).
+    const bool atmosphere_yields_to_moon = moon_holds_light && atmosphere_on && !day_cycle_owns_ambient;
+    if (atmosphere_yields_to_moon) sky.enabled = false;
     render::Atmosphere atmosphere;
-    atmosphere.enabled = env.atmosphere != 0 && !atmosphere_yields_to_moon;
+    atmosphere.enabled = atmosphere_on && !atmosphere_yields_to_moon;
     atmosphere.intensity = env.atmosphere_intensity;
     atmosphere.mie = env.atmosphere_haze;
-    {  // A DayCycle that is writing the environment owns the ambient (its keys are authored, the atmosphere's is dim in the shade);
-       // the atmosphere still draws the sky and tints the sun. Without one the atmosphere sets the ambient as before.
-        bool day_cycle_owns_ambient = false;
-        world.query<const DayCycle&>().each([&](const DayCycle& c) { day_cycle_owns_ambient = day_cycle_owns_ambient || c.enabled != 0; });
-        if (day_cycle_owns_ambient && env.time_of_day >= 0.0f) atmosphere.ambient = false;
+    if (day_cycle_owns_ambient) atmosphere.ambient = false;  // the atmosphere still draws the sky and tints the sun
+    if (atmosphere_on && day_cycle_owns_ambient && moon_holds_light) {
+        atmosphere.sky_sun_direction = sun_natural.direction;
+        atmosphere.sky_sun_light = sun_natural.color * sun_natural.intensity;
     }
+    if (atmosphere_on) sky.texture_additive = false;  // Forward3D reads it under the atmosphere: only the floor sets it
+    if (atmosphere_on && day_cycle_owns_ambient) {
+        // The twilight floor: the single-scattering sky goes black within a few degrees under the horizon while the
+        // DayCycle's dusk lasts hours, so a gradient in the (DayCycle-driven) fog colour fades in under the
+        // atmosphere's sky as the sun sets: the horizon in the fog colour, the zenith darker. By night it is the
+        // pre-atmosphere night sky (the fog colour) behind the stars. Stepped in 1/64 so the IBL re-bakes rarely.
+        const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.15f, 0.0f, 1.0f);  // 0 at -0.1, 1 at +0.05
+        const f32 floor_w = std::round((1.0f - t * t * (3.0f - 2.0f * t)) * 64.0f) / 64.0f;
+        if (floor_w > 0.0f) {
+            sky.texture_additive = true;
+            sky.horizon = env.fog_color * floor_w;
+            sky.ground = env.fog_color * floor_w;
+            sky.zenith = env.fog_color * (0.15f * floor_w);
+        }
+    }
+    if (atmosphere_on && day_cycle_owns_ambient && sky.ibl) {
+        // The sky's image-based diffuse at the DayCycle's level: the IBL keeps the sky's colour and direction, the
+        // authored ambient sets how bright the shade is (the atmosphere's own sky is about a third of it by day).
+        const render::DirectionalLight& sky_sun = moon_holds_light ? sun_natural : sun;
+        const math::vec3 toward = render::atmosphere_quantized_sun(atmosphere, -math::normalize(sky_sun.direction));
+        const math::vec3 above = sky_sun.color * sky_sun.intensity * 3.14159265f;
+        math::vec3 sky_up = render::atmosphere_sky_ambient(atmosphere, toward) * above;
+        if (sky.texture_additive) sky_up = sky_up + (sky.zenith + sky.horizon) * 0.5f;  // the floor, roughly
+        const auto luma = [](math::vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+        sky.diffuse_ambient = clamp(luma(env.ambient_sky) / max(luma(sky_up), 1e-4f), 0.0f, 32.0f);
+    }
+    scene.set_sky(sky);
     scene.set_atmosphere(atmosphere);
     render::Volumetrics vol;
     vol.enabled = env.volumetric_fog != 0;
