@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -175,6 +176,22 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
     CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ParticleBurst","show":["ParticleBurst"]}})")) >= 3);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RepairShop3D","show":["RepairShop3D"]}})")) == 2);
+    // The pause menu (Esc): two hidden screens, one rule set (SAVE, LOAD); Pause shows the menu and holds the player, Resume walks again.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlow","show":["UiFlow"]}})")) == 2);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlowRules","show":["UiFlowRules"]}})")) == 1);
+    {
+        const auto player_z = [&](const char* input) {
+            auto r = c.ok("run_headless", std::string(R"({"ticks":120,"log_lines":0,"input":")") + input +
+                                              R"(","inspect":{"component":"CharacterController3D","show":["LocalTransform"]}})");
+            CHECK(r.v().get("log").get("errors").as_number() == 0);
+            return comps(r, 0).get("LocalTransform").get("position").at(2).as_number();
+        };
+        const double start = player_z("");
+        const double paused = player_z("5 Pause\\n10-110 Move=0,1");
+        const double resumed = player_z("5 Pause\\n10 Resume\\n20-110 Move=0,1");
+        CHECK(std::abs(paused - start) < 0.01);
+        CHECK(std::abs(resumed - start) > 1.0);
+    }
     // Kill and interact objectives (Hit, Cop killer, Pickup): the objectives exist with the right kinds; the logic is tested in test_missions.
     {
         auto obj = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Objective","show":["Objective"]}})");

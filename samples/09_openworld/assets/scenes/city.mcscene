@@ -39178,6 +39178,9 @@
      "regen_delay": 5
     },
     "Wanted3D": {},
+    "SaveKey": {
+     "key": 999
+    },
     "Respawn3D": {
      "delay": 3,
      "fine_busted": 100,
@@ -46332,6 +46335,65 @@
      ],
      "label": "Repair",
      "always_visible": 1
+    }
+   }
+  },
+  {
+   "id": 1803,
+   "name": "Pause menu",
+   "components": {
+    "UiScreen": {
+     "document": "guid:0727284b-91a4-5e69-822c-2695841a6622",
+     "order": 10,
+     "visible": false
+    },
+    "UiFlow": {
+     "show_on": "Pause",
+     "hide_on": "Resume",
+     "quit_on": "Quit",
+     "pause": true
+    },
+    "UiFlowRules": {
+     "rules": [
+      {
+       "when": "Action",
+       "name": "Save",
+       "act": "SaveSlot",
+       "act2": "Hide",
+       "field": ""
+      },
+      {
+       "when": "Action",
+       "name": "Load",
+       "act": "LoadSlot",
+       "act2": "Hide",
+       "field": "",
+       "scene": "guid:3c128b64-06d5-5e13-8c44-ede7724a9451"
+      },
+      {},
+      {},
+      {},
+      {},
+      {},
+      {}
+     ]
+    }
+   }
+  },
+  {
+   "id": 1804,
+   "name": "Options menu",
+   "components": {
+    "UiScreen": {
+     "document": "guid:16ef8a1a-ea2c-5a62-a8d5-d00d58abdde2",
+     "order": 11,
+     "visible": false
+    },
+    "UiFlow": {
+     "show_on": "Options",
+     "hide_on": "Back",
+     "pause": true,
+     "keep_audio": true
     }
    }
   }

@@ -21,9 +21,11 @@ namespace mce::kit {
 enum class UiFlowWhen : u8 { Action, Signal, FieldEquals, FieldAbove, FieldBelow };
 MCE_ENUM(UiFlowWhen, Action, Signal, FieldEquals, FieldAbove, FieldBelow)
 
-// What a rule does to the UiScreen on its entity (Load and Quit are the game's, like UiFlow's).
-enum class UiFlowDo : u8 { None, Show, Hide, Toggle, Load, Quit };
-MCE_ENUM(UiFlowDo, None, Show, Hide, Toggle, Load, Quit)
+// What a rule does to the UiScreen on its entity (Load and Quit are the game's, like UiFlow's). SaveSlot writes the save slot named by
+// the rule's `field` (empty: "quick"; 1 to 64 letters, digits, '_' or '-'); LoadSlot applies that slot after the tick, on top of the rule's
+// `scene` (or the loaded one) when the slot exists, else it only logs. They run while paused, so a pause menu can save and load.
+enum class UiFlowDo : u8 { None, Show, Hide, Toggle, Load, Quit, SaveSlot, LoadSlot };
+MCE_ENUM(UiFlowDo, None, Show, Hide, Toggle, Load, Quit, SaveSlot, LoadSlot)
 
 struct UiFlowRule {
     UiFlowWhen when = UiFlowWhen::Signal;
@@ -31,7 +33,7 @@ struct UiFlowRule {
     UiFlowDo act2 = UiFlowDo::None;
     u8 pad_ = 0;
     FixedString<32> name;   // Action: an input action. Signal: the signal id.
-    FixedString<48> field;  // Field*: "Component/field" of a numeric or bool field
+    FixedString<48> field;  // Field*: "Component/field" of a numeric or bool field. SaveSlot / LoadSlot: the slot name
     f32 value = 0.0f;       // Field*: what the field is compared with
     asset::AssetRef<asset::Scene> scene;  // Load: the scene to load
 };

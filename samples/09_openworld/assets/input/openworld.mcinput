@@ -250,6 +250,17 @@
        "gamepad_button": "East"
       }
      ]
+    },
+    {
+     "name": "Resume",
+     "bindings": [
+      {
+       "key": "Escape"
+      },
+      {
+       "gamepad_button": "Start"
+      }
+     ]
     }
    ]
   }
