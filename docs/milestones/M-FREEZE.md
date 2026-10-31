@@ -1,6 +1,6 @@
 # M-FREEZE — Water that freezes in winter: calm, pale, rough ice from the season, with no shader (milestone record)
 
-**Status:** planned (2026-10-30), steps 20a to 20d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WATER (`Water`, `render::WaterSurface`, the extract feed), M-SEASONS (`Season`, `season_phase`, the winter weight), M-SNOWCOVER and M-WEATHER (the cold look it matches), M-GROUNDMIST (the pure-helper, no-shader, no-system pattern). Today the sea of `13_water` looks the same in July and in January: M-SEASONS tints foliage and frosts the ground in winter, but the water keeps its waves, its blue and its shore foam. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-10-31), steps 20a to 20d (PRs 925, 927, 933, 934). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-WATER (`Water`, `render::WaterSurface`, the extract feed), M-SEASONS (`Season`, `season_phase`, the winter weight), M-SNOWCOVER and M-WEATHER (the cold look it matches), M-GROUNDMIST (the pure-helper, no-shader, no-system pattern). Today the sea of `13_water` looks the same in July and in January: M-SEASONS tints foliage and frosts the ground in winter, but the water keeps its waves, its blue and its shore foam. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `WaterIce` turns the season (the `Season` winter weight at the `WorldClock` day and hour) into a freeze amount 0..1, with a manual floor for a scene that wants a permanently frozen lake. Pure helpers turn the amount into an ice look: wave amplitude, steepness and speed scaled toward 0, the shallow and deep colours mixed toward a pale ice colour, the depth scale shortened so the tint is opaque, the roughness raised, the sky reflection lowered and the shore foam faded. `Kit3DExtract` applies the look to the *local `render::WaterSurface` only*, before `render::apply_quality`. No new shader, pass, render field or system state. A scene without `WaterIce` hashes, simulates and renders exactly as today.
 
@@ -52,8 +52,14 @@ No step needs Opus: nothing writes a shader or a draw path. If 20b finds that a 
 | 20a | done | 925 | `WaterIce` and the pure `water_ice_amount`, `water_ice_look` in `mce/kit/water_ice.h`, registered in `install_weather`; the `13_water` scene carries one. Guide 9.19r. |
 | 20b | done | 927 | `Kit3DExtract` applies `water_ice_look` to the local `render::WaterSurface` before `apply_quality` (first `WaterIce`, `Season`, `WorldClock`; skipped at an amount of 0). `.cpp` only. |
 | 20c | done | 933 | `weather.set_water_ice`, `weather.water_ice_<key>()` and read-only `weather.water_frozen()` (`api_weather.cpp`, typed in the script definitions); `13_water` gets a `Season` (30 days, start phase 0.6) and a `WorldClock` (2 s day, `drive_environment` 0: the sun does not move, no `DayCycle`) on its Water entity and logs `ice:`. |
-| 20d | planned | | |
+| 20d | done | 934 | Docs only: guide 9.19r completed (the freeze amount and its two drivers, the ice look field by field, the drawn-only rule, the no-clock and no-`Season` cases, the Luau API, what `13_water` shows at which ticks), the 08-3d Water freezes paragraph, the `13_water` clause in 18-samples (already added in 20c, verified), changelog, this record, the ROADMAP row. |
 
 ## Follow-ups
 
-Candidates recorded at planning: snow lying on the ice (reuse the snow cover), a gameplay-visible freeze (`water.height_at` flat when frozen, hashed), partial freezing from the shore inwards, a cracked-ice shader step, a `WaterFroze` / `WaterThawed` event next to `DayPassed`, steam over unfrozen water in the cold, a temperature value feeding `Weather` kind odds and the freeze together.
+From the 20a to 20d close; none blocks the milestone.
+- Floating ice sheets and cracks as geometry or a shader step (today the ice is a recolouring and a calming of the water plane).
+- An ice-aware `water.height_at` (flat when frozen, hashed), so gameplay sees the freeze; today it reads the authored waves.
+- A frozen-surface footstep sound.
+- Snow lying on the ice, reusing the snow cover (`SnowCover`).
+- Per-body freeze (one global amount today; partial freezing from the shore inwards).
+- A `WaterFroze` / `WaterThawed` event next to `DayPassed`.

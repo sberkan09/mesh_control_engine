@@ -1,6 +1,7 @@
 mce_add_test(test_core
     SOURCES
         test_app.cpp
+        test_basics.cpp
         test_containers.cpp
         test_convar.cpp
         test_crash.cpp
