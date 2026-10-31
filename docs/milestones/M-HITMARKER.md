@@ -8,4 +8,6 @@ Kit: `HitMarker3D` (`mce/kit/hit_marker.h`), system `kit_hit_marker` (FixedUpdat
 
 Sample (`09_openworld`): `HitMarker3D` on the Player; `hud.mcui` gets a white "x" bound to `HitMarker3D/timer` and a red "X" bound to `HitMarker3D/kill_timer`, both `range [0.001, 10]` so they show only while the timer runs, centred on the crosshair.
 
-Tests: `tests/kit/test_hit_marker.cpp` (3 cases), the MCP openworld test checks the component. Limits: no sound on a hit (a `PlaySfx` hook is a small follow-up), no per-body-part marker, no fade (it blinks on/off).
+Tests: `tests/kit/test_hit_marker.cpp` (3 cases), the MCP openworld test checks the component. Sound (follow-up): `hit_clip` plays a 2D tick on a landed shot and `kill_clip` a ding on a kill (`audio::PlaySfx`, `gain_db`); the sample's two blips are synthesized by `gen_assets.py`.
+
+Limits: no per-body-part marker, no fade (it blinks on/off).

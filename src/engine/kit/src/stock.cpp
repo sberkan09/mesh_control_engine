@@ -161,7 +161,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_precipitation(world, assets);
     install_map_markers(world, assets);
     install_wanted3d(world);
-    install_hit_marker(world);
+    install_hit_marker(world, assets);
     install_vehicle_ram(world, assets);
     install_impact_damage(world, assets);
     install_sensors3d(world, assets);

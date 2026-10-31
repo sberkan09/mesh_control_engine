@@ -3,6 +3,7 @@
 
 #include <doctest/doctest.h>
 
+#include "mce/audio/components.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/combat3d.h"
@@ -25,19 +26,31 @@ struct Scene {
         w.register_components<LocalTransform>();
         install_combat3d(w, nullptr);
         install_hit_marker(w);
-        shooter = w.spawn_with(at(0, 1, 0), Health3D{}, HitMarker3D{});
+        w.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
+        HitMarker3D hm;
+        hm.hit_clip.guid = asset::Guid{1, 2};
+        hm.kill_clip.guid = asset::Guid{3, 4};
+        shooter = w.spawn_with(at(0, 1, 0), Health3D{}, hm);
         victim = w.spawn_with(at(5, 1, 0), Health3D{});
         wall = w.spawn_with(at(9, 1, 0));
         run(2);
-    }
-    void run(u32 n) {
-        for (u32 i = 0; i < n; ++i) w.tick(kDt, t++);
     }
     void shot(Entity owner, Entity target) {
         WeaponHit3D h;
         h.owner = owner;
         h.target = target;
         EventAccess(w).push(h);
+    }
+    u32 sfx = 0;
+    asset::Guid last_clip{};
+    void run(u32 n) {
+        for (u32 i = 0; i < n; ++i) {
+            w.tick(kDt, t++);
+            for (const audio::PlaySfx& e : EventAccess(w).read<audio::PlaySfx>()) {
+                ++sfx;
+                last_clip = e.clip;
+            }
+        }
     }
     HitMarker3D& m() { return *w.try_get_mut<HitMarker3D>(shooter); }
 };
@@ -49,6 +62,8 @@ TEST_CASE("hit_marker: a shot on a living target lights the marker, which decays
     s.shot(s.shooter, s.victim);
     s.run(2);
     CHECK(s.m().hits == 1);
+    CHECK(s.sfx == 1);  // the tick
+    CHECK(s.last_clip == asset::Guid{1, 2});
     CHECK(s.m().timer > 0.0f);
     CHECK(s.m().kill_timer == doctest::Approx(0.0f));
     s.run(20);  // 0.33 s > duration
@@ -71,6 +86,8 @@ TEST_CASE("hit_marker: a kill lights the kill marker for its killer only") {
     EventAccess(s.w).push(Died3D{s.victim, s.shooter});
     s.run(2);
     CHECK(s.m().kill_timer > 0.0f);
+    CHECK(s.sfx == 1);  // the ding
+    CHECK(s.last_clip == asset::Guid{3, 4});
     s.run(40);
     CHECK(s.m().kill_timer == doctest::Approx(0.0f));
     EventAccess(s.w).push(Died3D{s.shooter, s.victim});

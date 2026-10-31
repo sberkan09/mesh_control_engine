@@ -256,7 +256,7 @@ def roads_doc():
 # the two sound sets and the GUIDs the scene uses are written.
 
 AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vorbis", "quality": 0.3}),
-               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}), "horn": ("wav", {}), "radio_1": ("wav", {"compress": "vorbis", "quality": 0.4}), "radio_2": ("wav", {"compress": "vorbis", "quality": 0.4}),
+               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}), "horn": ("wav", {}), "hit_tick": ("wav", {}), "kill_ding": ("wav", {}), "radio_1": ("wav", {"compress": "vorbis", "quality": 0.4}), "radio_2": ("wav", {"compress": "vorbis", "quality": 0.4}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
 HITS = ["hit_%d" % i for i in range(1, 6)]
@@ -288,6 +288,26 @@ def horn_wav():
         frames += struct.pack("<h", int(max(-1.0, min(1.0, v * fade)) * 30000))
     import io
     import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(bytes(frames))
+    return buf.getvalue()
+
+
+def blip_wav(freqs, seconds, decay):
+    """A short UI blip: sine partials with an exponential decay and a 2 ms attack, mono 44.1 kHz. Synthesized."""
+    import io
+    import wave
+    rate = 44100
+    n = int(rate * seconds)
+    frames = bytearray()
+    for i in range(n):
+        t = i / rate
+        v = sum(math.sin(2 * math.pi * f * t) for f in freqs) / len(freqs) * math.exp(-decay * t) * min(1.0, i / (0.002 * rate))
+        frames += struct.pack("<h", int(max(-1.0, min(1.0, v)) * 26000))
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
@@ -373,6 +393,8 @@ def radio_tracks():
 def audio_assets():
     radio_tracks()
     write_bytes("audio/horn.wav", horn_wav())
+    write_bytes("audio/hit_tick.wav", blip_wav((1800.0, 2700.0), 0.06, 60.0))  # the hit marker's tick
+    write_bytes("audio/kill_ding.wav", blip_wav((880.0, 1320.0, 1760.0), 0.35, 9.0))  # and its kill ding
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
     for name in FOOTSTEPS + HITS + CRASHES + THUNDER:
@@ -1081,7 +1103,7 @@ def scene():
         "Rider3D": {"use_input": 1},
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
-        "HitMarker3D": {},  # the HUD's hit / kill marker (M-HITMARKER)
+        "HitMarker3D": {"hit_clip": "guid:" + audio_guid("hit_tick"), "kill_clip": "guid:" + audio_guid("kill_ding")},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
