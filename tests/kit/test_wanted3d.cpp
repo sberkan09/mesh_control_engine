@@ -135,6 +135,23 @@ TEST_CASE("wanted3d: a civilian hit counts only when police see it") {
     CHECK(s.wanted(p).crimes == 1);
 }
 
+TEST_CASE("wanted3d: Wanted3D.kills counts the deaths the entity caused, seen or not") {
+    Scene s;
+    const Entity p = s.player();
+    const Entity c = s.civilian(5, 0);
+    const Entity d = s.civilian(8, 0);
+    s.hit(p, c, 0.1f);  // a hit is not a kill
+    s.run(2);
+    CHECK(s.wanted(p).kills == 0);
+    s.hit(p, c, 1000.0f);
+    s.run(2);
+    CHECK(s.wanted(p).kills == 1);  // no witness: no heat, still a kill
+    CHECK(s.wanted(p).heat == doctest::Approx(0.0f));
+    s.hit(p, d, 1000.0f);
+    s.run(2);
+    CHECK(s.wanted(p).kills == 2);
+}
+
 TEST_CASE("wanted3d: a wall hides the crime, a far cop does not see it") {
     Scene s;
     const Entity p = s.player();

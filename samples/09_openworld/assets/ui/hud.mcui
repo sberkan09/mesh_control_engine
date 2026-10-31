@@ -47,6 +47,48 @@
    "format": "HEALTH %.0f"
   },
   {
+   "name": "kills",
+   "kind": "Text",
+   "text": "KILLS 0",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.6,
+     0.45,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -96
+    ],
+    "offset_max": [
+     280,
+     -68
+    ]
+   },
+   "bind": "Wanted3D/kills",
+   "format": "KILLS %.0f"
+  },
+  {
    "name": "wanted",
    "kind": "Text",
    "text": "WANTED",
