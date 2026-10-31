@@ -30,7 +30,7 @@ No step needs Opus: nothing writes a shader. If 23b finds that an additive sprit
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 23a | done | | `Firefly` and the pure `firefly_amount`, `firefly_look` in `mce/kit/firefly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.5). Guide 9.19u. |
+| 23a | done | 956 | `Firefly` and the pure `firefly_amount`, `firefly_look` in `mce/kit/firefly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.5). Guide 9.19u. |
 | 23b | planned | | |
 | 23c | planned | | |
 | 23d | planned | | |
