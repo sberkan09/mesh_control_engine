@@ -1,9 +1,11 @@
 // Pure render helpers no GPU is needed for: the 3D sort key's field layout and ordering, the sRGB colour
-// packing, and the flipbook clip's step and frame arithmetic.
+// packing, and the flipbook clip's step and frame arithmetic, the screen-shake offset and the quality tier names.
 
 #include <doctest/doctest.h>
 
 #include "mce/math/math.h"
+#include "mce/render/camera2d.h"
+#include "mce/render/quality.h"
 #include "mce/render/sort_key.h"
 #include "mce/render/sprite_animation.h"
 #include "mce/render/types.h"
@@ -86,4 +88,43 @@ TEST_CASE("sprite animation: step and frame arithmetic for loop, ping-pong and o
     single.frames = Span<const u32>(one, 1);
     single.mode = PlayMode::PingPong;
     CHECK(render::detail::clip_frame_for_step(single, 5) == 0);
+}
+
+TEST_CASE("shake: shake_offset is zero without trauma and bounded by trauma squared times the maxima") {
+    const ShakeOffset none = shake_offset(7, 1.25f, 0.0f, 0.5f, 0.05f, 15.0f);
+    CHECK(none.translation.x == 0.0f);
+    CHECK(none.translation.y == 0.0f);
+    CHECK(none.rotation == 0.0f);
+
+    // Magnitude is trauma^2 x max_*: at trauma 0.5 the bound is a quarter of the maximum.
+    for (int i = 0; i < 64; ++i) {
+        const ShakeOffset o = shake_offset(7, 0.1f * f32(i), 0.5f, 0.8f, 0.2f, 15.0f);
+        CHECK(std::abs(o.translation.x) <= 0.25f * 0.8f + 1e-5f);
+        CHECK(std::abs(o.translation.y) <= 0.25f * 0.8f + 1e-5f);
+        CHECK(std::abs(o.rotation) <= 0.25f * 0.2f + 1e-5f);
+    }
+}
+
+TEST_CASE("shake: shake_offset is deterministic in its inputs and varies with seed and time") {
+    const ShakeOffset a = shake_offset(1, 0.37f, 1.0f, 1.0f, 0.1f, 15.0f);
+    const ShakeOffset b = shake_offset(1, 0.37f, 1.0f, 1.0f, 0.1f, 15.0f);
+    CHECK(a.translation.x == b.translation.x);
+    CHECK(a.translation.y == b.translation.y);
+    CHECK(a.rotation == b.rotation);
+
+    bool seed_differs = false, time_differs = false;
+    for (int i = 0; i < 16; ++i) {
+        const f32 t = 0.05f + 0.07f * f32(i);
+        const ShakeOffset base = shake_offset(1, t, 1.0f, 1.0f, 0.1f, 15.0f);
+        if (shake_offset(2, t, 1.0f, 1.0f, 0.1f, 15.0f).translation.x != base.translation.x) seed_differs = true;
+        if (shake_offset(1, t + 0.5f, 1.0f, 1.0f, 0.1f, 15.0f).translation.x != base.translation.x) time_differs = true;
+    }
+    CHECK(seed_differs);
+    CHECK(time_differs);
+}
+
+TEST_CASE("quality: quality_tier_name names each tier") {
+    CHECK(StringView(quality_tier_name(QualityTier::Low)) == "low");
+    CHECK(StringView(quality_tier_name(QualityTier::Medium)) == "medium");
+    CHECK(StringView(quality_tier_name(QualityTier::High)) == "high");
 }
