@@ -53,7 +53,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 21b finds that th
 |---|---|---|---|
 | 21a | done | 939 | `LeafFall` and the pure `leaf_fall_amount`, `leaf_fall_look` in `mce/kit/leaf_fall.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19s. |
 | 21b | done | `940` | `Kit3DExtract` adds one local `render::ParticleEmitter` (id `0xFFFF0001`) from `leaf_fall_look`, above and following the camera, wind from `effective_wind` (sway bit) and `WindDirection`; Low tier halves rate and budget; `test_leaf_fall_extract.cpp`. |
-| 21c | done | `PRNUM` | `weather.set_leaf_fall`, the `weather.leaf_fall_<key>()` getters and read-only `weather.leaf_falling()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_leaf_fall.cpp`. `12_weather` never reaches autumn in its run (phase 0.308 to 0.375), so its `LeafFall` sets `manual` 0.6 and the script logs `leaves:` every 150 ticks. |
+| 21c | done | `942` | `weather.set_leaf_fall`, the `weather.leaf_fall_<key>()` getters and read-only `weather.leaf_falling()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_leaf_fall.cpp`. `12_weather` never reaches autumn in its run (phase 0.308 to 0.375), so its `LeafFall` sets `manual` 0.6 and the script logs `leaves:` every 150 ticks. |
 | 21d | planned |  |  |
 
 ## Follow-ups
