@@ -363,12 +363,16 @@ void Scene3D::build() {
     stats_.instances = static_cast<u32>(instances_.size());
     if (atmosphere_.enabled) {
         // The light above the air, then through it; the ambient from the sky and the lit ground.
-        const vec3 sun = atmosphere_quantized_sun(atmosphere_, -normalize(light_.direction));
-        const vec3 above = light_.color * light_.intensity;
+        // Atmosphere::sky_sun_direction (when set) lights the sky in place of the light; the light keeps its own tint.
+        const vec3 light_sun = atmosphere_quantized_sun(atmosphere_, -normalize(light_.direction));
+        const bool own_sun = math::length_sq(atmosphere_.sky_sun_direction) > 0.0f;
+        const vec3 sun = own_sun ? atmosphere_quantized_sun(atmosphere_, -normalize(atmosphere_.sky_sun_direction)) : light_sun;
+        const vec3 above = own_sun ? atmosphere_.sky_sun_light : light_.color * light_.intensity;
         atmosphere_sun_ = sun;
         sun_irradiance_ = above * math::kPi;
         const vec3 t = atmosphere_transmittance(atmosphere_, atmosphere_.altitude, sun);
-        if (atmosphere_.sun_transmittance) light_.color = light_.color * t;
+        if (atmosphere_.sun_transmittance)
+            light_.color = light_.color * (own_sun ? atmosphere_transmittance(atmosphere_, atmosphere_.altitude, light_sun) : t);
         if (atmosphere_.ambient) {
             const vec3 sky = atmosphere_sky_ambient(atmosphere_, sun) * sun_irradiance_;
             light_.ambient_sky = sky;

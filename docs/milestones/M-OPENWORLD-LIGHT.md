@@ -39,6 +39,15 @@ Both are render-side copies; `Environment3D` is never written, and scenes withou
 - The grass is still dark in deep shade and the trees are flat-shaded low poly: art direction (see the assessment), not lighting.
 - Not done: volumetric fog (cost; the exp² fog stays), lamp-post light pools at night were not re-checked.
 
+## Follow-up (2026-10-31): twilight, sky IBL, auto exposure
+
+Closes the three open items above. Shipped as a seam PR (wide headers) then the feature PR.
+
+| Step | PR | Status |
+|---|---|---|
+| Seam: `Environment3D.auto_exposure_min/max` (kit3d.h), `Atmosphere::sky_sun_direction/sky_sun_light` (atmosphere.h), Scene3D honours them | (this PR) | review |
+| Feature: smooth dusk hand-off, sky IBL level, auto exposure on in 09_openworld | — | open |
+
 ## Verification
 
 - Xvfb + llvmpipe captures, same camera and ticks (90, 500) before and after, plus 21:30 after: shade readable, sky with horizon and clouds, windows reflect, night dark with the moon.
