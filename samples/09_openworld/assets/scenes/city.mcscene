@@ -18,7 +18,15 @@
      "shadow_distance": 140,
      "fog_density": 0.0002,
      "exposure": 1.0,
-     "sky_enabled": 0
+     "sky_enabled": 1,
+     "atmosphere": 1,
+     "ssao": 1,
+     "ssao_radius": 0.8,
+     "ssao_intensity": 1.0,
+     "ssr": 1,
+     "contact_shadows": 1,
+     "color_grade": "guid:f9bc81df-95f3-5d20-b97b-7d493efe00bc",
+     "color_grade_strength": 0.8
     },
     "LocalTransform": {}
    }
@@ -40968,7 +40976,44 @@
      "hour": 9.0,
      "day_length_seconds": 720
     },
-    "DayCycle": {}
+    "DayCycle": {
+     "k1_sky": [
+      0.7,
+      0.74,
+      0.9,
+      1
+     ],
+     "k1_ground": [
+      0.38,
+      0.34,
+      0.3,
+      1
+     ],
+     "k2_sky": [
+      1.0,
+      1.15,
+      1.4,
+      1
+     ],
+     "k2_ground": [
+      0.55,
+      0.52,
+      0.45,
+      1
+     ],
+     "k3_sky": [
+      0.8,
+      0.65,
+      0.75,
+      1
+     ],
+     "k3_ground": [
+      0.35,
+      0.28,
+      0.25,
+      1
+     ]
+    }
    }
   },
   {

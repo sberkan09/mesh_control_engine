@@ -17,7 +17,7 @@
 
 - **`atmosphere` is off.** The physically based sky is the nicer daytime sky, but together with `DayCycle` (which also writes sun colour and ambient) the
   day was dim and grey, and without `DayCycle` the dusk and night were black. A flat fog-coloured sky with the moon, stars and lamps looks consistent at every
-  hour. Open item: tune a `DayCycle` preset for the atmosphere (sun colour is then the light above the air) or drive the atmosphere's own ambient; that touches the render path
+  hour. **Update 2026-10-31:** done in [M-OPENWORLD-LIGHT](M-OPENWORLD-LIGHT.md) (atmosphere on, the DayCycle owns the ambient, the atmosphere yields to the moon). Old open item: tune a `DayCycle` preset for the atmosphere (sun colour is then the light above the air) or drive the atmosphere's own ambient; that touches the render path
   (Aurora) and was left alone.
 - **Hard black shadows** (from buildings at a low sun) are the engine's shadow ambient, not a change here; they show in the baseline too.
 - **Snow.** The seeded schedule picks among all five weather kinds; seed 55 has no snow in its first ten picks (25 minutes), `Precipitation3D.snow_rate` is 0 and
