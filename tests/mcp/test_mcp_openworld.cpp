@@ -139,6 +139,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(hunting >= 2);
     // Sparks where a shot lands (M-IMPACTFX).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ImpactFx3D","show":["ImpactFx3D"]}})")) >= 1);
+    // A safety net under the world (M-FALLDEATH).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"DriveReadout3D","show":["DriveReadout3D"]}})")) >= 1);
     // The player model faces where it walks (M-FACEMOVE).

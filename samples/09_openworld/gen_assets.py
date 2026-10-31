@@ -1189,6 +1189,7 @@ def scene():
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
         "DriveReadout3D": {},  # the HUD's speed and gear in a car (M-DRIVEHUD)
+        "FallDeath3D": {"min_y": -40},  # a fall through the map ends in WASTED (M-FALLDEATH)
         "HitMarker3D": {"hit_clip": "guid:" + audio_guid("hit_tick"), "kill_clip": "guid:" + audio_guid("kill_ding")},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
