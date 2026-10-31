@@ -15,6 +15,7 @@ mce_add_test(test_script UMBRELLA
         test_script_season.cpp
         test_script_water_ice.cpp
         test_script_leaf_fall.cpp
+        test_script_firefly.cpp
         test_script_rainbow.cpp
         test_daynight_demo.cpp
         test_weather_demo.cpp

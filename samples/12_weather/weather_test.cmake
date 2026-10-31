@@ -51,6 +51,12 @@
 #      writes nothing). The Season only climbs from 0.308 to 0.375 in the run and never reaches the autumn window (0.5 to
 #      0.75), so the LeafFall carries manual 0.6, the floor of the amount: every line is 0.600 and the leaf emitter is drawn
 #      in all the checked frames. The entity count stays 14.
+#  18. (M-FIREFLIES 23c) the "fireflies:" lines: weather.fireflies_glowing() of the Firefly on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.5, the summer window) times the night gate times (1 - rain): the Season
+#      only climbs from 0.308 to 0.375 (the window is 0.3 to 0.45, so 1.0 from the start), so it is 1.000 at tick 0 in the
+#      dark, falls as the dawn closes the night gate and the rain (from tick 60) and the storm (from 600) thicken (0.850 at tick
+#      150, 0.100 at 600 in the storm), recovers to 0.782 at 1050 once the storm has eased, and is exactly 0.000 from sunrise
+#      (1500) on. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -114,6 +120,13 @@ expect("${first}" "script: season: phase 0.308 spring tint 0.75 1.05 0.70 at tic
 expect("${first}" "script: season: phase 0.321 spring tint 0.75 1.05 0.70 at tick 450\n" "the season phase did not follow the clock")
 expect("${first}" "script: leaves: 0.600 at tick 0\n" "the leaves did not start at the manual floor")
 expect("${first}" "script: leaves: 0.600 at tick 450\n" "the leaves did not keep the manual floor")
+expect("${first}" "script: fireflies: 1.000 at tick 0\n" "the fireflies did not start at full strength in the dark")
+expect("${first}" "script: fireflies: 0.850 at tick 150\n" "the dawn and the rain did not thin the fireflies")
+string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies600 "${first}")
+list(LENGTH fireflies600 n_fireflies600)
+if(NOT n_fireflies600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 fireflies lines in 600 ticks, got ${n_fireflies600}")
+endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
 if(NOT n_leaves600 EQUAL 4)
@@ -182,6 +195,15 @@ string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves2700 "${forec
 list(LENGTH leaves2700 n_leaves2700)
 if(NOT n_leaves2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 leaves lines in 2700 ticks, got ${n_leaves2700}")
+endif()
+expect("${forecast}" "script: fireflies: 0.100 at tick 600\n" "the storm did not damp the fireflies")
+expect("${forecast}" "script: fireflies: 0.782 at tick 1050\n" "the fireflies are wrong in the dark after the storm")
+expect("${forecast}" "script: fireflies: 0.000 at tick 1500\n" "the fireflies show at sunrise")
+expect("${forecast}" "script: fireflies: 0.000 at tick 2400\n" "the fireflies show by day")
+string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies2700 "${forecast}")
+list(LENGTH fireflies2700 n_fireflies2700)
+if(NOT n_fireflies2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 fireflies lines in 2700 ticks, got ${n_fireflies2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 

@@ -32,5 +32,5 @@ No step needs Opus: nothing writes a shader. If 23b finds that an additive sprit
 |---|---|---|---|
 | 23a | done | 956 | `Firefly` and the pure `firefly_amount`, `firefly_look` in `mce/kit/firefly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.5). Guide 9.19u. |
 | 23b | done | 958 | `Kit3DExtract` adds the local additive firefly emitter (id `0xFFFF0002`, camera-following, Low tier halves rate and budget); night fade from the Environment3D time of day as the meteor block, cloud cover from the scene's clouds. |
-| 23c | planned | | |
+| 23c | done | | `weather.set_firefly`, the `weather.firefly_<key>()` getters and read-only `weather.fireflies_glowing()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_firefly.cpp`. `12_weather` logs `fireflies:` every 150 ticks (1.000 at tick 0 in the dark, 0.100 in the storm at 600, 0.000 from sunrise at 1500). |
 | 23d | planned | | |
