@@ -79,6 +79,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Pedestrian3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `CrowdSpawner3D` | `mce/kit/crowd.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `DayCycle` | `mce/kit/day_cycle.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `DriveReadout3D` | `mce/kit/drive_readout.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ShakeTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/08_movement/assets/scenes/course.mcscene |

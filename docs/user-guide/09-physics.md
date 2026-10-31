@@ -407,6 +407,13 @@ model turns about Y towards its ground velocity at `turn_rate_deg` degrees a sec
 seated rider is ignored. `yaw_offset` (pi) is for a mesh that faces +Z. Only the rotation is written.
 `samples/09_openworld` puts it on the `Player model`.
 
+### Speed and gear on the HUD
+
+`mce/kit/drive_readout.h`: put `DriveReadout3D` on the entity that holds the `Rider3D` (the player). While it is seated
+in a car, `kmh`, `gear` (-1 reverse, 0 neutral, 1.. forward) and `rpm` mirror the car's `Vehicle3D`; on foot they read
+-1000, so a HUD widget bound to one with a `range` starting above that (for example `[-0.5, 1000, 0]`) shows only in a car.
+`samples/09_openworld` draws "N KM/H" and "GEAR n" at the bottom right.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
