@@ -26,7 +26,11 @@
      "ssr": 1,
      "contact_shadows": 1,
      "color_grade": "guid:f9bc81df-95f3-5d20-b97b-7d493efe00bc",
-     "color_grade_strength": 0.8
+     "color_grade_strength": 0.8,
+     "sky_ibl": 1,
+     "auto_exposure": 1,
+     "auto_exposure_min": 0.8,
+     "auto_exposure_max": 2.0
     },
     "LocalTransform": {}
    }

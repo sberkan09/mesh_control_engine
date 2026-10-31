@@ -377,7 +377,9 @@ rhi::TextureHandle sky_params(const TextureStore& textures, rhi::RenderDevice& d
         // Rotation 0 stays (1, 0): the shader takes its no-rotation branch (sin == 0), so the frame is unchanged.
         pu.sky_rot = sky.rotation != 0.0f ? vec4(std::cos(sky.rotation), std::sin(sky.rotation), 0.0f, 0.0f) : vec4(1.0f, 0.0f, 0.0f, 0.0f);
     } else {
-        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, 0.0f};  // the atmosphere's baked sky has no yaw
+        // The atmosphere's baked sky has no yaw. Sky::texture_additive adds the gradient under it, as under a star
+        // texture (Kit3DExtract's twilight floor: the single-scattering sky goes black soon after sunset).
+        pu.sun = {sky.sun_size, sky.sun_intensity, 1.0f, sky.texture_additive ? 1.0f : 0.0f};
         pu.sky_rot = vec4(1.0f, 0.0f, 0.0f, 0.0f);
     }
     return sky_tex;

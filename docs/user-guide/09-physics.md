@@ -581,6 +581,14 @@ system reads `Environment3D.time_of_day` (the clock writes it) and writes the ga
   the first key a day later). At a key's hour the values are exactly the key's. One key is a constant.
 - **Determinism.** The same hour gives the same values, and the system only writes the resource, so replays and the
   state hash are stable. `evaluate_day_cycle(cycle, hour)` is the pure function behind it.
+- **With the atmosphere sky** (`Environment3D.atmosphere` 1; the renderer's copy only, `Environment3D` is not written):
+  the DayCycle's ambient wins over the atmosphere's own (which is dim in the shade). As the sun sets a gradient in the
+  current `fog_color` fades in under the physically based sky (from 3° above to 6° below the horizon; the zenith at 15 %
+  of the fog colour), because that sky goes black within a few degrees under the horizon while the dusk keys last hours;
+  by night it is the fog-coloured night sky behind the stars. When a `Moon` takes the light the sky keeps following the
+  sun itself, so the hand-off does not show in the sky. With `sky_ibl` 1 the image-based diffuse light is scaled so that
+  its upward irradiance matches the DayCycle's `ambient_sky` (the sky keeps its colour and direction, the keys set how
+  bright the shade is). `samples/09_openworld` uses all of this with `auto_exposure` clamped to 0.8..2.
 
 ## 9.18 Timed lights (M-DAYNIGHT)
 
