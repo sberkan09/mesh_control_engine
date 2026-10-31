@@ -1,0 +1,1 @@
+- Tests: render's `shake_offset` (zero without trauma, trauma² bound, determinism, seed and time sensitivity) and `quality_tier_name` get direct tests.
