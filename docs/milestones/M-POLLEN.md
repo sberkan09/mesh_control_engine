@@ -30,7 +30,7 @@ No step needs Opus: nothing writes a shader. If 24b finds that an alpha-blended 
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 24a | done | | `Pollen` and the pure `pollen_amount`, `pollen_look` in `mce/kit/pollen.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19v. |
+| 24a | done | 965 | `Pollen` and the pure `pollen_amount`, `pollen_look` in `mce/kit/pollen.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19v. |
 | 24b | planned | | |
 | 24c | planned | | |
 | 24d | planned | | |
