@@ -1,0 +1,1 @@
+- Kit (M-HITMARKER): `HitMarker3D` (`mce/kit/hit_marker.h`): a shot that lands on a living `Health3D` (and a kill) lights a timer the HUD binds to. Sample: white x / red X on the `09_openworld` crosshair. Record: `docs/milestones/M-HITMARKER.md`.

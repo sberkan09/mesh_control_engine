@@ -87,6 +87,102 @@
    }
   },
   {
+   "name": "hit_marker",
+   "kind": "Text",
+   "text": "x",
+   "text_align": "Center",
+   "visible": false,
+   "range": [
+    0.001,
+    10,
+    0
+   ],
+   "value": 0,
+   "bind": "HitMarker3D/timer",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 44,
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
+   "name": "kill_marker",
+   "kind": "Text",
+   "text": "X",
+   "text_align": "Center",
+   "visible": false,
+   "range": [
+    0.001,
+    10,
+    0
+   ],
+   "value": 0,
+   "bind": "HitMarker3D/kill_timer",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 54,
+    "text_color": [
+     1.0,
+     0.2,
+     0.15,
+     1
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
    "name": "kills",
    "kind": "Text",
    "text": "KILLS 0",
