@@ -46,7 +46,11 @@
 #  16. (M-SEASONS 19c) the "season:" lines: weather.season_phase() of the Season on the Weather entity (read only, the script
 #      writes nothing). The scene sets year_days 1 (the WorldClock day is 600 s = 36000 ticks, so a 12-day year would not
 #      move in a run): the phase starts at start_phase 0.1 plus 5/24 for the 5:00 start = 0.308 and gains 1/36000 per tick,
-#      0.313 at tick 150 and 0.375 (the centre of summer) at tick 2400; the line also logs the authored spring tint.
+#      0.313 at tick 150 and 0.375 (the centre of summer) at tick 2400; the line also logs the authored spring tint;
+#  17. (M-LEAFFALL 21c) the "leaves:" lines: weather.leaf_falling() of the LeafFall on the Weather entity (read only, the script
+#      writes nothing). The Season only climbs from 0.308 to 0.375 in the run and never reaches the autumn window (0.5 to
+#      0.75), so the LeafFall carries manual 0.6, the floor of the amount: every line is 0.600 and the leaf emitter is drawn
+#      in all the checked frames. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -108,6 +112,13 @@ expect("${first}" "script: meteor: level 0.422 at tick 0\n" "the meteors did not
 expect("${first}" "script: meteor: level 0.030 at tick 450\n" "the rain did not damp the meteors")
 expect("${first}" "script: season: phase 0.308 spring tint 0.75 1.05 0.70 at tick 0\n" "the season did not start at the 5:00 phase")
 expect("${first}" "script: season: phase 0.321 spring tint 0.75 1.05 0.70 at tick 450\n" "the season phase did not follow the clock")
+expect("${first}" "script: leaves: 0.600 at tick 0\n" "the leaves did not start at the manual floor")
+expect("${first}" "script: leaves: 0.600 at tick 450\n" "the leaves did not keep the manual floor")
+string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
+list(LENGTH leaves600 n_leaves600)
+if(NOT n_leaves600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 leaves lines in 600 ticks, got ${n_leaves600}")
+endif()
 expect("${first}" "script: weather: rain intensity 0.150 wind 0.160 wetness 0.002 at tick 150\n" "rain did not fade in")
 expect("${first}" "script: weather: rain intensity 0.400 wind 0.260 wetness 0.013 at tick 300\n" "rain did not follow the 10 s transition")
 expect("${first}" "script: weather: rain intensity 0.650 wind 0.360 wetness 0.035 at tick 450\n" "rain did not keep rising")
@@ -166,6 +177,12 @@ expect("${forecast}" "script: meteor: level 0.000 at tick 1500\n" "the meteors s
 expect("${forecast}" "script: meteor: level 0.000 at tick 2400\n" "the meteors show by day")
 expect("${forecast}" "script: season: phase 0.350 spring tint 0.75 1.05 0.70 at tick 1500\n" "the season phase is wrong at sunrise")
 expect("${forecast}" "script: season: phase 0.375 spring tint 0.75 1.05 0.70 at tick 2400\n" "the season did not reach the centre of summer")
+expect("${forecast}" "script: leaves: 0.600 at tick 2550\n" "the leaves did not stay at the manual floor")
+string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves2700 "${forecast}")
+list(LENGTH leaves2700 n_leaves2700)
+if(NOT n_leaves2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 leaves lines in 2700 ticks, got ${n_leaves2700}")
+endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
 message(STATUS "12_weather holds: rain 0.900 at tick 600, storm 0.602 at 1500, snow 0.400 at 2100, clear at 2400, state_hash ${hash_a} (twice)")

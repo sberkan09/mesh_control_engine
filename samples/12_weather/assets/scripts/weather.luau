@@ -80,5 +80,9 @@ function update()
         -- spring multiplier. Read only, the script writes nothing.
         local sr, sg, sb = weather.season_spring_tint()
         mce.log(string.format("season: phase %.3f spring tint %.2f %.2f %.2f at tick %d", weather.season_phase(), sr, sg, sb, t))
+        -- M-LEAFFALL: the LeafFall on the Weather entity. The Season never reaches autumn in this run (the phase climbs from 0.308
+        -- to 0.375), so the scene sets manual 0.6, the floor of the amount: leaf_falling is 0.600 on every line and the camera-
+        -- following leaf emitter is drawn all run. Read only, the script writes nothing.
+        mce.log(string.format("leaves: %.3f at tick %d", weather.leaf_falling(), t))
     end
 end
