@@ -86,6 +86,7 @@
     "Season": {
      "year_days": 1
     },
+    "LeafFall": {},
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
