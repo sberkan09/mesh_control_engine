@@ -172,6 +172,14 @@
      ]
     },
     {
+     "name": "Radio",
+     "bindings": [
+      {
+       "key": "Q"
+      }
+     ]
+    },
+    {
      "name": "Horn",
      "bindings": [
       {

@@ -63,6 +63,21 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         CHECK(honks == 1);
         CHECK(on == 1);
     }
+    // The car radio (M-OWRADIO): one script, two Music-bus sources; Q cycles stations only while seated.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ScriptSystem","show":["ScriptSystem"]}})")) == 1);
+    {
+        const auto radio_gain = [&](const std::string& input, const char* name) {
+            auto r = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + input +
+                                              R"(","inspect":{"entities":[")" + name + R"("],"show":["AudioSource"]}})");
+            CHECK(r.v().get("log").get("errors").as_number() == 0);
+            return comps(r, 0).get("AudioSource").get("gain_db").as_number();
+        };
+        const std::string drive = "1-100 Move=0,1\\n110 Interact";
+        CHECK(radio_gain(drive + "\\n150 Radio", "Radio 1") == doctest::Approx(-8.0));
+        CHECK(radio_gain(drive + "\\n150 Radio", "Radio 2") == doctest::Approx(-60.0));
+        CHECK(radio_gain(drive + "\\n150 Radio\\n160 Radio\\n170 Radio", "Radio 1") == doctest::Approx(-60.0));
+        CHECK(radio_gain("150 Radio", "Radio 1") == doctest::Approx(-60.0));  // on foot Q does nothing
+    }
     const std::string run_args = R"({"ticks":600,"log_lines":0,"input":")" + in +
                                  R"(","inspect":{"component":"Rider3D","show":["Rider3D","LocalTransform"]}})";
     auto drove = c.ok("run_headless", run_args);

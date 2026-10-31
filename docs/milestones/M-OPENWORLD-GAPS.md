@@ -24,7 +24,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A3 | ~~**Missions**~~ **done (E7, 2026-10-29)**: three jobs (Errand, Courier, Long haul) started from marker pads, reward, fail fee and retry, wanted-level fail; minimap labels via `MapMarker`. Still open: kill/interact objectives, Luau chaining | M-MISSION, M-MISSIONSTART/-PAY/-RETRY | `10_missions` |
 | A4 | **Day/night cycle**: ~~the sun is fixed~~ **done (E6, 2026-10-29)**, see [M-OPENWORLD-DAYNIGHT](M-OPENWORLD-DAYNIGHT.md) | `WorldClock`, day cycle, moon (M-DAYNIGHT) | `11_daynight` |
 | A5 | **Weather**: ~~rain, wet roads, fog, lightning, wind~~ **done (E6)** except snow (no snow cover in the city) | M-WEATHER, M-WEATHERAUDIO | `12_weather` |
-| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; still missing: radio, music) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
+| A6 | **Audio** (done 2026-10-29, E3: engine by speed, shots, footsteps, sirens, city bed; shots land and cars crash with sounds; radio done: [M-OWRADIO](M-OWRADIO.md); still missing: an on-foot music bed) | `mce_audio`, M-AUDIO2, vehicle/weapon audio events | other samples |
 | A7 | **Busted and wasted**: ~~dying or being arrested ends the game for good~~ **done (E4, 2026-10-29)**: hospital and station respawn | `Respawn3D`, `RespawnPoint3D` (M-WASTED) | none |
 | A8 | **Arrest and reinforcements** | `Police3D` arrest, dispatch (M-ARREST 1-2) | none |
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
@@ -362,3 +362,52 @@ ramp; the enum round-trips by name; a two-run hash check. `tests/mcp/test_mcp_op
 and `AssetSystem` and includes `asset/handle.h`, `refl/macros.h` and `math.h` only, so `scripts/ci/include_fanout.py` shows
 no new wide header. `kit3d.h`/`components.h` umbrellas are not grown; `seats3d.h`, `timed_light.h`, `audio/components.h`
 and the light component header are included from the `.cpp` only.
+
+## L. Car radio and music
+
+Goal: a car radio in `samples/09_openworld` (seated: a button cycles station 1, 2, 3, off; volume on the `Music` bus) and an
+optional quiet bed on foot. **No new component and no engine change:** looping `AudioSource`s on the `Music` bus plus one
+Luau `ScriptSystem` that sets their `gain_db` (a change ramps over 10 ms; -60 dB is the mute `EngineAudio` already uses when
+parked). Golden component count stays 181, no header changes, so no fan-out. `EngineAudio`/`SfxTrigger`/`UiFlowRules`
+were checked and do not fit: none reads an input action and holds a cycling state; `AudioSnapshot` changes a bus, not a track.
+
+**Input.** R is `Reload`, G/L/H/E are horn, lights, item and interact, so add a `Radio` action on `key("Q")` (the
+usual radio key in driving games; free in the Gameplay map) to `input_map()`. No gamepad binding for now (the face and
+shoulder buttons are taken; a d-pad binding waits until the input map gains d-pad names).
+
+**Data (`gen_assets.py`).** Scene-level entities appended after "City ambience", **not** in `car_entities()`: that builds
+every parked and traffic car, so per-car radios would multiply voices and entity counts. The radio is 2D (no
+`AudioSpatial`), so it is the same sound in whichever car the player drives.
+- "Radio 1".."Radio 3": `AudioSource{clip radio_N, bus Music, loop, play_on_start, gain_db -60, priority 200}`.
+- "Music bed" (optional, default on): `AudioSource{clip radio_3, bus Music, loop, play_on_start, gain_db -60}`.
+- "Script: radio": `ScriptSystem{script scripts/radio.luau, phase Pre}` and `ScriptVars` (v[1] = station 0..3, saved with
+  `SaveKey 998`, so a quick save keeps the dial).
+- `scripts/radio.luau` (about 20 lines, no state outside `ScriptVars`): reads `Rider3D.seated` on "Player"; on
+  `mce.pressed("Radio")` while seated, station = (station + 1) % 4; then sets `gain_db` = -8 on the selected radio when
+  seated, -60 on the others; the bed gets -24 on foot and -60 when seated. Three voices keep playing muted, so a station
+  resumes mid-loop like a real radio. `Music` streams two clips at a time; the rest play from memory (cheap for short loops).
+- The player's volume is the existing `audio.music_db` convar; add an `audio.music_db` slider [-40, 0, 2] under MASTER in
+  `options_menu()` (section J) if J has landed, otherwise the console does it.
+
+**Music files (CC0 by construction, no network).** `music_wav(name, bpm, beats, chords, voice)` in `gen_assets.py` writes
+48 kHz stereo 16-bit PCM with the stdlib `wave` and `math` only, like the synthesized horn (`audio_assets/horn_wav`), and
+the `AUDIO_FILES` entries with `importer_version 2`. Integer-sample loop lengths so the loop is gapless:
+- `radio_1` "pop": 120 BPM, 8 beats = 4.0 s; I-V-vi-IV in C, eighth-note triangle arpeggio, sine bass on the root.
+- `radio_2` "lounge": 90 BPM, 8 beats = 5.333 s (256000 samples); ii-V-I-vi in F with 7ths, soft sine pads and a slow
+  arpeggio panned ±0.3.
+- `radio_3` "drive": 150 BPM, 16 beats = 6.4 s; Am-F-C-G, square-ish (3 odd harmonics) sixteenths, noise hats from
+  `random.Random(3)` (fixed seed).
+Each note has a 5 ms attack and an exponential decay that ends before the loop point; the mix is normalised to -3 dBFS with
+a fixed divisor (not the measured peak) and rounded with `int(round())`, so a rerun writes identical bytes. List them in
+`assets/audio/SOURCES.md` and `CREDITS.md` as "generated by gen_assets.py, CC0".
+
+**Tests.** Kit: none needed (no new system); the script's logic is covered by a `tests/script/test_scene_scripts.cpp` case
+on a small world (seated, press three times: station 3 at -8 dB, others -60; unseated: all -60, bed -24; same state hash
+on two runs). `tests/mcp/test_mcp_openworld.cpp`: `ScriptSystem` == 1, four `Music`-bus `AudioSource`s; with input
+"10 Interact" near the parked car then "40 Radio", "Radio 1" `gain_db` == -8 at tick 60; "70 Radio\n80 Radio\n90 Radio"
+gives all -60 at tick 100; the existing entity-count expectations grow by 5. Smoke only, under 60 s.
+
+**Docs.** `docs/user-guide/10-audio.md` 10.9 "Bus layout of the sample" (music on `Music`), `docs/user-guide/18-samples.md`
+(the Q key), `changelog.d/M-OWRADIO.md`. Generated files are left to the integration runner.
+
+**Known limits.** No station name on the HUD, one dial for all cars, no duck under voice lines (`AudioDuck` later).

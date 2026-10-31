@@ -171,6 +171,7 @@ def input_map():
         {"name": "UseItem", "bindings": [key("H"), {"gamepad_button": "RightShoulder"}]},
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
+        {"name": "Radio", "bindings": [key("Q")]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -255,7 +256,7 @@ def roads_doc():
 # the two sound sets and the GUIDs the scene uses are written.
 
 AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vorbis", "quality": 0.3}),
-               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}), "horn": ("wav", {}),
+               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}), "horn": ("wav", {}), "radio_1": ("wav", {"compress": "vorbis", "quality": 0.4}), "radio_2": ("wav", {"compress": "vorbis", "quality": 0.4}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
 HITS = ["hit_%d" % i for i in range(1, 6)]
@@ -296,7 +297,81 @@ def horn_wav():
     return buf.getvalue()
 
 
+RATE_MUSIC = 24000
+G_RADIO_SCRIPT = guid("scripts/radio.luau")
+
+
+def music_wav(bpm, beats, chords, bass, voice, seed=0, pan=0.0):
+    """A looping stereo track, synthesized (stdlib only, fixed seed and fixed gain, so every run writes the same bytes).
+    `chords` is a list of triads (MIDI notes), one per bar of four beats; `voice` is 'tri', 'sine' or 'sq'."""
+    n = int(round(beats * 60.0 / bpm * RATE_MUSIC))
+    left, right = [0.0] * n, [0.0] * n
+    rnd = random.Random(seed)
+
+    def hz(m):
+        return 440.0 * 2 ** ((m - 69) / 12.0)
+
+    def wave_at(kind, ph):
+        if kind == "sine":
+            return math.sin(ph)
+        if kind == "tri":
+            return 2.0 / math.pi * math.asin(math.sin(ph))
+        return (math.sin(ph) + math.sin(3 * ph) / 3 + math.sin(5 * ph) / 5) * 0.8
+
+    def note(t0, dur, m, amp, kind, pn):
+        i0, ln = int(t0 * RATE_MUSIC), int(dur * RATE_MUSIC)
+        f = hz(m) * 2 * math.pi / RATE_MUSIC
+        for k in range(ln):
+            i = i0 + k
+            if i >= n:
+                break
+            env = min(1.0, k / (0.005 * RATE_MUSIC)) * math.exp(-4.0 * k / ln)
+            v = wave_at(kind, f * k) * amp * env
+            left[i] += v * (1 - 0.5 * pn)
+            right[i] += v * (1 + 0.5 * pn)
+
+    beat = 60.0 / bpm
+    for bar, chord in enumerate(chords):
+        t_bar = bar * 4 * beat
+        if t_bar >= n / RATE_MUSIC:
+            break
+        note(t_bar, 4 * beat * 0.95, chord[0] - 24 if bass else chord[0] - 12, 0.30, "sine", 0.0)
+        steps = 8
+        for st in range(steps):
+            m = chord[st % len(chord)] + (12 if st % 2 else 0)
+            note(t_bar + st * beat / 2, beat * 0.6, m, 0.16, voice, pan * (1 if st % 2 else -1))
+        if voice == "sq":
+            for st in range(16):  # noise hats on the off sixteenths
+                if st % 2:
+                    t0 = int((t_bar + st * beat / 4) * RATE_MUSIC)
+                    for k in range(int(0.03 * RATE_MUSIC)):
+                        if t0 + k < n:
+                            h = (rnd.random() * 2 - 1) * 0.06 * math.exp(-k / (0.008 * RATE_MUSIC))
+                            left[t0 + k] += h
+                            right[t0 + k] += h
+    frames = bytearray()
+    for i in range(n):
+        for ch in (left[i], right[i]):
+            frames += struct.pack("<h", int(round(max(-1.0, min(1.0, ch * 0.7)) * 32000)))
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(RATE_MUSIC)
+        w.writeframes(bytes(frames))
+    return buf.getvalue()
+
+
+def radio_tracks():
+    """Two stations (a pop loop and a driving loop), each a whole number of bars."""
+    write_bytes("audio/radio_1.wav", music_wav(120, 8, [(60, 64, 67), (55, 59, 62)], True, "tri"))
+    write_bytes("audio/radio_2.wav", music_wav(150, 16, [(57, 60, 64), (53, 57, 60), (60, 64, 67), (55, 59, 62)], True, "sq", seed=3))
+
+
 def audio_assets():
+    radio_tracks()
     write_bytes("audio/horn.wav", horn_wav())
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
@@ -1123,8 +1198,19 @@ def scene():
     atmosphere(s, net, node_half)
     economy_and_missions(s, player)
     pause_menu(s)
+    radio(s)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
+
+
+def radio(s):
+    """The car radio: two looping stations on the Music bus (it streams two clips at a time), both playing muted so a station resumes
+    mid-loop; scripts/radio.luau unmutes the chosen one while the player sits in a car (Q cycles 1, 2, off)."""
+    write("scripts/radio.luau.mceasset", {"guid": G_RADIO_SCRIPT, "importer": "script", "importer_version": 2, "settings": {}})
+    for n in (1, 2):
+        s.add("Radio %d" % n, {"AudioSource": {"clip": "guid:" + audio_guid("radio_%d" % n), "bus": "Music", "loop": True,
+                                               "play_on_start": True, "gain_db": -60, "priority": 200}})
+    s.add("Script: radio", {"ScriptSystem": {"script": "guid:" + G_RADIO_SCRIPT, "phase": "Pre"}, "ScriptVars": {}, "SaveKey": {"key": 998}})
 
 
 def hud_text(name, label, size, anchors, bind=None, fmt=None, color=None, align="Left"):
