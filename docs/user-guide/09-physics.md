@@ -397,7 +397,7 @@ binds Horn to G (stick press) and Lights to L (D-pad right).
 `mce/kit/hit_marker.h`: put `HitMarker3D` on the shooter (the player). A shot of its weapon that lands on another living
 entity with a `Health3D` sets `HitMarker3D.timer` to `duration` seconds (`hits` counts them); a death it caused sets
 `kill_timer`. Both count down to 0, so a HUD widget bound to `HitMarker3D/timer` or `HitMarker3D/kill_timer` with
-`range` `[0.001, 10, 0]` shows only while the marker is up. `samples/09_openworld` draws a white x and a red X on the crosshair.
+`range` `[0.001, 10, 0]` shows only while the marker is up. `hit_clip` and `kill_clip` play a 2D tick on a hit and a ding on a kill. `samples/09_openworld` draws a white x and a red X on the crosshair.
 
 ## 9.10 Configuration
 

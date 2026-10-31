@@ -27,3 +27,4 @@ repository (CC0-1.0).
 The car horn (`assets/audio/horn.wav`) is synthesized by `gen_assets.py` (two softened square tones at 400 and 500 Hz); it has no source file and no licence.
 
 The two radio stations (`assets/audio/radio_1.wav`, `radio_2.wav`) are synthesized by `gen_assets.py` (`music_wav`, fixed seed); they have no source file and no licence.
+The hit tick and kill ding (`assets/audio/hit_tick.wav`, `kill_ding.wav`) are synthesized by `gen_assets.py` (decaying sine partials); no source file and no licence.
