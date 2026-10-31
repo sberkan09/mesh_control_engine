@@ -52,7 +52,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 21b finds that th
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 21a | done | 939 | `LeafFall` and the pure `leaf_fall_amount`, `leaf_fall_look` in `mce/kit/leaf_fall.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19s. |
-| 21b | done | `PRNUM` | `Kit3DExtract` adds one local `render::ParticleEmitter` (id `0xFFFF0001`) from `leaf_fall_look`, above and following the camera, wind from `effective_wind` (sway bit) and `WindDirection`; Low tier halves rate and budget; `test_leaf_fall_extract.cpp`. |
+| 21b | done | `940` | `Kit3DExtract` adds one local `render::ParticleEmitter` (id `0xFFFF0001`) from `leaf_fall_look`, above and following the camera, wind from `effective_wind` (sway bit) and `WindDirection`; Low tier halves rate and budget; `test_leaf_fall_extract.cpp`. |
 | 21c | planned |  |  |
 | 21d | planned |  |  |
 
