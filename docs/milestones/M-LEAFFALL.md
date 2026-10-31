@@ -1,6 +1,6 @@
 # M-LEAFFALL — Drifting autumn leaves around the camera, from the season and the wind, with no shader (milestone record)
 
-**Status:** planned (2026-10-31), steps 21a to 21d, PR column empty. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SEASONS (the "leaf-fall particles in autumn" follow-up; `Season`, `season_phase`, `season_foliage_tint`), M-WEATHER and M-RAINFX (the particle feed of rain and snow, and `Weather.wind`), M-METEOR and M-FREEZE (the opt-in kit pattern: a pure-helper header, a drawn-only extract feed, no system, no shader). Today autumn is a foliage tint only: the trees turn orange but nothing ever falls. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-10-31), steps 21a to 21d (PRs 937, 939, 940, 942, 945). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SEASONS (the "leaf-fall particles in autumn" follow-up; `Season`, `season_phase`, `season_foliage_tint`), M-WEATHER and M-RAINFX (the particle feed of rain and snow, and `Weather.wind`), M-METEOR and M-FREEZE (the opt-in kit pattern: a pure-helper header, a drawn-only extract feed, no system, no shader). Today autumn is a foliage tint only: the trees turn orange but nothing ever falls. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `LeafFall` turns the `Season` autumn weight (the phase quarter around 0.625, `kSeasonAutumnCentre`) at the `WorldClock` day and hour into a strength 0..1, with a manual floor for a scene that wants leaves all year. Pure helpers turn the strength into an emitter look: spawn rate, the drift velocity from the scene wind, leaf size, lifetime, gravity and drag (a slow, swaying fall) and a colour from the season foliage tint. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** that follows the camera, the same existing GPU particle path rain and snow use. No new shader, pass, render field or system state, and no component is written. A scene without `LeafFall` hashes, simulates and renders exactly as today.
 
@@ -52,16 +52,18 @@ No step needs Opus: nothing writes a shader or a draw path. If 21b finds that th
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 21a | done | 939 | `LeafFall` and the pure `leaf_fall_amount`, `leaf_fall_look` in `mce/kit/leaf_fall.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19s. |
-| 21b | done | `940` | `Kit3DExtract` adds one local `render::ParticleEmitter` (id `0xFFFF0001`) from `leaf_fall_look`, above and following the camera, wind from `effective_wind` (sway bit) and `WindDirection`; Low tier halves rate and budget; `test_leaf_fall_extract.cpp`. |
+| 21b | done | 940 | `Kit3DExtract` adds one local `render::ParticleEmitter` (id `0xFFFF0001`) from `leaf_fall_look`, above and following the camera, wind from `effective_wind` (sway bit) and `WindDirection`; Low tier halves rate and budget; `test_leaf_fall_extract.cpp`. |
 | 21c | done | 942 | `weather.set_leaf_fall`, the `weather.leaf_fall_<key>()` getters and read-only `weather.leaf_falling()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_leaf_fall.cpp`. `12_weather` never reaches autumn in its run (phase 0.308 to 0.375), so its `LeafFall` sets `manual` 0.6 and the script logs `leaves:` every 150 ticks. |
-| 21d | planned |  |  |
+| 21d | done | 945 | Docs only: guide 9.19s completed (window and manual floor, the look field by field with the real alpha, drawn-only rule, wind, no-clock and no-`Season` cases, Luau API, the `12_weather` run), the 08-3d Leaves fall paragraph, the 18-samples and 27-scripting rows checked, changelog. |
 
 ## Follow-ups
 
-Candidates recorded at planning; none blocks the milestone.
-- Leaves spawned from the canopies of `Foliage3D` / `TerrainFoliage3D` copies instead of a box around the camera.
-- Leaf meshes with spin and lit two-sided shading (a render seam milestone).
-- Leaves lying on the ground, and sweeping in a gust.
-- A rustle sound that follows the strength.
-- A `SeasonChanged` event next to `DayPassed` (carried over from M-SEASONS).
-- Falling petals in spring and pollen in summer reusing the same helper with another window and colour.
+From the 21a to 21d close; none blocks the milestone.
+- Real leaf meshes with spin and lit two-sided shading (a render seam milestone; today the leaves are camera-facing alpha sprites).
+- Leaves spawned from actual trees (`Foliage3D` / `TerrainFoliage3D` canopies) instead of one box around the camera.
+- Ground pile-up and collision: leaves lying on the ground, and stopping on roofs and props.
+- A real particle quality switch in `quality.h` (today the Low tier is recognised by its other settings and halves rate and budget; there is no `r.particles`).
+- A `LeafFallChanged` / season event next to `DayPassed`.
+- An alpha fade-in, if the render ramp allows (today the colour starts at 0.9 * amount alpha and only fades out).
+- A demo scene whose `Season` really reaches autumn (`12_weather` uses the `manual` floor because its run never gets there).
+- A per-entity opt-out (there is none, as with the season foliage tint).
