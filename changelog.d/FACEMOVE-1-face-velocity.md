@@ -1,0 +1,1 @@
+- Kit (M-FACEMOVE): `FaceVelocity3D` (`mce/kit/face_velocity.h`): a model turns about Y towards the ground velocity of its `source` character. Sample: the 09_openworld player model walks facing its movement. Record: `docs/milestones/M-FACEMOVE.md`.

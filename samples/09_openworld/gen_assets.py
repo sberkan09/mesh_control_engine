@@ -9,15 +9,20 @@ Cars, characters and buildings are CC0 Kenney models (`mce content add`, see CRE
 are textured slabs with road paint (E7: textures from tools/gen_textures.py, meshes written here); trees, lamp posts, benches,
 hydrants and bins are Blender models (blender/gen_models.py); the unit cube is left for the pads and the lamp heads.
 """
+import glob
 import json
 import math
 import os
 import random
+import re
 import struct
+import sys
 import uuid
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "tools"))
+import gen_buildings  # noqa: E402
 NS = uuid.UUID("0b0e0000-0000-4000-8000-0000000000e1")
 
 
@@ -141,6 +146,12 @@ def models():
     names = set(CAR_MODELS) | set(CHARACTERS) | set(PROPS) | {n for n, _ in DOWNTOWN_MODELS + SUBURB_MODELS + RESIDENTIAL_MODELS}
     for n in sorted(names):
         write(model_rel(n) + ".mceasset", {"guid": model_guid(n), "importer": "gltf", "importer_version": 3, "settings": {}})
+    # The tree and bush textures sit next to their models (blender/gen_models.py references them as Textures/*.png).
+    for tex in sorted(os.listdir(os.path.join(HERE, "assets", "models", "props", "Textures"))):
+        if tex.endswith(".png"):
+            rel = "models/props/Textures/" + tex
+            write(rel + ".mceasset", {"guid": guid(rel), "importer": "texture", "importer_version": 1,
+                                      "settings": {"srgb": False} if tex.endswith("_normal.png") else {}})
 
 
 # --- input ----------------------------------------------------------------------------------------------
@@ -766,8 +777,31 @@ DOWNTOWN = [(0.55, 0.58, 0.64), (0.62, 0.60, 0.56), (0.48, 0.52, 0.58), (0.70, 0
 SUBURB = [(0.74, 0.58, 0.45), (0.80, 0.72, 0.58), (0.62, 0.45, 0.38), (0.78, 0.76, 0.70), (0.55, 0.62, 0.50)]
 
 
+def building_model(name, w, d, h, downtown, r):
+    """Writes the .glb (and sidecar) of one lot's building and returns its path relative to assets/."""
+    style = r.choice(["glass_tower", "concrete_office", "modern_white", "brick"] if downtown and h > 30 else
+                     ["concrete_office", "modern_white", "brick"] if downtown else ["brick", "stucco", "modern_white", "concrete_office"])
+    rel = "models/buildings/lot_%s.glb" % re.sub(r"[^0-9a-z]+", "_", name.lower()).strip("_")
+    write_bytes(rel, gen_buildings.building_glb(w, d, h, style, r.choice(["a", "b"]), r.randrange(1 << 30)))
+    write(rel + ".mceasset", {"guid": guid(rel), "importer": "gltf", "importer_version": 3, "settings": {}})
+    return rel
+
+
+def building_textures():
+    """Sidecars of the facade textures (the files come from tools/gen_buildings.py)."""
+    for tex, srgb in gen_buildings.texture_files():
+        rel = "models/buildings/Textures/" + tex
+        write(rel + ".mceasset", {"guid": guid(rel), "importer": "texture", "importer_version": 1, "settings": {} if srgb else {"srgb": False}})
+
+
 def buildings(scene, rng):
     count = 0
+    bdir = os.path.join(HERE, "assets", "models", "buildings")
+    if not os.path.isdir(os.path.join(bdir, "Textures")):
+        gen_buildings.write_textures()
+    for old in glob.glob(os.path.join(bdir, "lot_*")):
+        os.remove(old)
+    building_textures()
     for j in range(GRID - 1):
         for i in range(GRID - 1):
             x0, x1, z0, z1 = block_bounds(i, j)
@@ -808,10 +842,12 @@ def buildings(scene, rng):
                     # (the model spans 0..top+1 in y, 2 x 2 in plan, so the scale is the box over the model).
                     e = scene.add(name, {"LocalTransform": tf((bx, h / 2, bz)),
                                          "BoxCollider3D": {"half": [round(w / 2, 3), round(h / 2, 3), round(d / 2, 3)]}})
-                    sy = h / (top + 1.0)
+                    # The visual is a building made for this lot (tools/gen_buildings.py): exact size, windows in whole bays and floors.
+                    # `model` and `top` above are still drawn so the lot sequence of the random stream stays what it was.
+                    lot_model = building_model(name, w, d, h, downtown, random.Random(zlib.crc32(name.encode())))
                     scene.add(name + " mesh", {"ChildOf": {"parent": scene.ref(e)},
-                                               "LocalTransform": tf((0, -h / 2, 0), (w / 2, sy, d / 2)),
-                                               "MeshRef": model_mesh(model)})
+                                               "LocalTransform": tf((0, -h / 2, 0)),
+                                               "MeshRef": {"mesh": "guid:" + guid(lot_model)}})
                     # A tree (or a bush) in a free corner of the lot, outside the building's box.
                     sx, sz = rng.choice((-1, 1)), rng.choice((-1, 1))
                     tx, tz = cx + sx * (lw / 2 - 2.2), cz + sz * (ld / 2 - 2.2)
@@ -1163,8 +1199,10 @@ def scene():
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
+    # The model turns to face where the player walks (M-FACEMOVE); the Kenney character faces +Z, hence the pi offset.
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                           "MeshRef": model_mesh("character-a")})
+                           "MeshRef": model_mesh("character-a"),
+                           "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
     # The camera orbits the player (Look); the player's gun aims along its view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
