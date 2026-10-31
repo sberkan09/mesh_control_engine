@@ -25,6 +25,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -103,6 +104,25 @@ SeasonFrame read_season(World& world) {
     out.snow = season_snow_bias(*season, phase);
     out.snow_on = out.snow.cover_floor > 0.0f || out.snow.lee_shift > 0.0f;
     return out;
+}
+
+// Water ice (M-FREEZE 20b): the first WaterIce at the first Season's phase (day 0, hour 0 with no WorldClock; no Season is
+// the manual floor only). Edits the local render::WaterSurface only, before apply_quality; nothing is written back. Not
+// called when the amount is 0, so the carrier stays bit-identical.
+void apply_water_ice(const WaterIce& ice, const WaterIceLook& look, render::WaterSurface& s) {
+    s.amplitude *= look.amplitude_scale;
+    s.steepness *= look.steepness_scale;
+    s.speed_scale *= look.speed_scale;
+    const math::vec3 c = water_ice_color(ice);
+    const f32 m = look.ice_mix;
+    s.shallow_color = math::vec3{s.shallow_color.x + (c.x - s.shallow_color.x) * m, s.shallow_color.y + (c.y - s.shallow_color.y) * m,
+                                 s.shallow_color.z + (c.z - s.shallow_color.z) * m};
+    s.deep_color = math::vec3{s.deep_color.x + (c.x - s.deep_color.x) * m, s.deep_color.y + (c.y - s.deep_color.y) * m,
+                              s.deep_color.z + (c.z - s.deep_color.z) * m};
+    s.depth_scale_m += (look.depth_scale_m - s.depth_scale_m) * m;
+    s.roughness = std::max(s.roughness, look.roughness_floor);
+    s.reflectivity *= look.reflectivity_scale;
+    s.foam_amount *= look.foam_scale;
 }
 
 // The season tint on a batch, after foliage_look and apply_wind_sway: rgb only, alpha and tint_variation untouched.
@@ -1263,6 +1283,30 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             surf.foam_amount = water->foam_amount;
             surf.foam_width_m = water->foam_width_m;
             surf.enabled = true;
+            {  // M-FREEZE 20b: the freeze look on the local carrier, before the quality tier; skipped at an amount of 0
+                const WaterIce* ice = nullptr;
+                const Season* ice_season = nullptr;
+                world.query<const WaterIce&>().each([&](const WaterIce& c) {
+                    if (!ice) ice = &c;
+                });
+                if (ice) {
+                    world.query<const Season&>().each([&](const Season& c) {
+                        if (!ice_season) ice_season = &c;
+                    });
+                    u32 day = 0;
+                    f32 hour = 0.0f;
+                    bool have_clock = false;
+                    world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                        if (have_clock) return;
+                        have_clock = true;
+                        day = c.day;
+                        hour = c.hour;
+                    });
+                    const f32 phase = ice_season ? season_phase(*ice_season, day, hour) : 0.0f;
+                    const f32 amount = water_ice_amount(*ice, ice_season, phase);
+                    if (amount > 0.0f) apply_water_ice(*ice, water_ice_look(*ice, amount), surf);
+                }
+            }
             scene.set_water(render::apply_quality(quality_, surf));
         }
     }
