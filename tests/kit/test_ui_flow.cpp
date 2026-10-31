@@ -3,7 +3,10 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
+
 #include "mce/audio/components.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/input/ecs.h"
@@ -306,4 +309,77 @@ TEST_CASE("ui flow: keep_audio lets a Sfx trigger fire under a pause screen; wit
         CHECK(w.try_get<kit::SfxTrigger>(sfx)->fired == 1);
         CHECK_FALSE(w.held());
     }
+}
+
+namespace {
+struct Purse {
+    u32 cash = 0;
+};
+MCE_COMPONENT(Purse, (cash, Save))
+
+kit::UiFlowRule slot_rule(const char* action, kit::UiFlowDo act, const char* slot) {
+    kit::UiFlowRule r;
+    r.when = kit::UiFlowWhen::Action;
+    r.name = action;
+    r.act = act;
+    r.field = slot;
+    return r;
+}
+}  // namespace
+
+TEST_CASE("ui flow rules: SaveSlot writes the slot while paused, LoadSlot asks the host to apply it") {
+    save::set_root((std::filesystem::path(MCE_TEST_TMP_DIR) / "ui_flow_saves").generic_string());
+    std::filesystem::remove_all(std::filesystem::path(MCE_TEST_TMP_DIR) / "ui_flow_saves");
+    World w;
+    input::install(w);
+    kit::install_ui_flow(w);
+    w.register_components<Purse, SaveKey>();
+    const Entity p = w.spawn_with(SaveKey{1}, Purse{50});
+    kit::UiFlow pause;
+    pause.pause = true;
+    pause.hide_on = "Play";
+    const Entity menu = w.spawn();
+    w.add(menu, kit::UiScreen{});
+    w.add(menu, pause);
+    kit::UiFlowRules rules;
+    rules.rules[0] = slot_rule("Save", kit::UiFlowDo::SaveSlot, "");
+    rules.rules[1] = slot_rule("Load", kit::UiFlowDo::LoadSlot, "");
+    w.add(menu, rules);
+
+    u64 t = 0;
+    tick(w, t);
+    CHECK(w.held());
+    CHECK_FALSE(save::exists("quick"));
+    tick(w, t, "Load");  // nothing saved yet: nothing requested
+    const scene::SceneChange* c = w.try_resource<scene::SceneChange>();
+    CHECK((!c || c->load_slot.empty()));
+    const u64 before = w.state_hash();
+    tick(w, t, "Save");  // held, and the file appears
+    CHECK(save::exists("quick"));
+    CHECK(w.held());
+    CHECK(w.state_hash() == before);
+
+    w.try_get_mut<Purse>(p)->cash = 7;
+    tick(w, t, "Load");
+    c = w.try_resource<scene::SceneChange>();
+    REQUIRE(c);
+    CHECK(c->load_slot.view() == "quick");
+    REQUIRE(save::load_game(w, "quick"));  // what the host does next
+    CHECK(w.try_get<Purse>(p)->cash == 50);
+}
+
+TEST_CASE("ui flow rules: a bad slot name is refused") {
+    save::set_root((std::filesystem::path(MCE_TEST_TMP_DIR) / "ui_flow_saves2").generic_string());
+    std::filesystem::remove_all(std::filesystem::path(MCE_TEST_TMP_DIR) / "ui_flow_saves2");
+    World w;
+    input::install(w);
+    kit::install_ui_flow(w);
+    kit::UiFlowRules rules;
+    rules.rules[0] = slot_rule("Save", kit::UiFlowDo::SaveSlot, "../evil");
+    w.spawn_with(rules);
+    u64 t = 0;
+    tick(w, t);
+    tick(w, t, "Save");
+    CHECK_FALSE(save::exists("../evil"));
+    CHECK_FALSE(std::filesystem::exists(std::filesystem::path(MCE_TEST_TMP_DIR) / "evil.sav"));
 }

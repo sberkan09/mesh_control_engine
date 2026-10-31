@@ -179,6 +179,7 @@ def input_map():
             key("D"), key("A", -1), key("W", axis="y"), key("S", -1, "y")]},
         {"name": "Confirm", "bindings": [key("Return"), key("Space"), {"gamepad_button": "South"}]},
         {"name": "Cancel", "bindings": [key("Escape"), {"gamepad_button": "East"}]},
+        {"name": "Resume", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},  # also what the pause menu's button emits
     ]
     write("input/openworld.mcinput", {"format": "mce-input", "version": 1, "guid": G_INPUT, "maps": [
         {"name": "Gameplay", "actions": gameplay}, {"name": "UI", "blocks_below": True, "actions": ui}]})
@@ -979,6 +980,7 @@ def scene():
         "Rider3D": {"use_input": 1},
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
+        "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
         # An arrest costs half the spare ammunition (Confiscate3D), a shop sells it back (AmmoShop3D).
@@ -1094,6 +1096,7 @@ def scene():
                                             "play_on_start": True, "gain_db": -22, "priority": 200, "fade_s": 2}})
     atmosphere(s, net, node_half)
     economy_and_missions(s, player)
+    pause_menu(s)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
     return len(s.ents), n_buildings
 
@@ -1139,6 +1142,65 @@ def mission_hud(mission_id, title, steps, limit, reward):
                                               "modal": False, "widgets": [active, done, failed]})
 
 
+G_PAUSE = guid("ui/pause.mcui")
+G_OPTIONS = guid("ui/options.mcui")
+
+
+def menu_button(name, label, action, up=None, down=None, focus=False):
+    b = {"name": name, "kind": "Button", "text": label, "style": {"text_size": 24}, "action": action}
+    nav = {}
+    if up:
+        nav["up"] = "veil/menu/" + up
+    if down:
+        nav["down"] = "veil/menu/" + down
+    if nav:
+        b["nav"] = nav
+    if focus:
+        b["default_focus"] = True
+    return b
+
+
+def menu_doc(guid_, title, rows):
+    return {"format": "mce-ui", "version": 1, "guid": guid_, "modal": True, "widgets": [
+        {"name": "veil", "fill": True, "blocks_pointer": True, "style": {"tint": [0, 0, 0, 0.6]}, "children": [
+            {"name": "menu", "kind": "Stack", "at": [0.5, 0.5, 360, 0], "stack": {"spacing": 14}, "children": [
+                {"name": "title", "kind": "Text", "text": title, "font_role": "Title", "style": {"text_size": 36}}] + rows}]}]}
+
+
+def menus():
+    """The pause menu (Esc / gamepad Start) and its options page: Resume, Save, Load, Options, Quit; master volume and look speed."""
+    items = [("resume", "RESUME", "Resume"), ("save", "SAVE", "Save"), ("load", "LOAD", "Load"),
+             ("options", "OPTIONS", "Options"), ("quit", "QUIT TO DESKTOP", "Quit")]
+    rows = [menu_button(n, label, act, items[i - 1][0] if i else None, items[i + 1][0] if i + 1 < len(items) else None, i == 0)
+            for i, (n, label, act) in enumerate(items)]
+    write("ui/pause.mcui", menu_doc(G_PAUSE, "PAUSED", rows))
+    write("ui/options.mcui", menu_doc(G_OPTIONS, "OPTIONS", [
+        {"name": "volume_label", "kind": "Text", "text": "MASTER VOLUME", "style": {"text_size": 20}},
+        {"name": "volume", "kind": "Slider", "range": [-40, 0, 2], "convar": "audio.master_db", "default_focus": True,
+         "nav": {"down": "veil/menu/look"}},
+        {"name": "look_label", "kind": "Text", "text": "LOOK SPEED", "style": {"text_size": 20}},
+        {"name": "look", "kind": "Slider", "range": [0.25, 3, 0.05], "convar": "input.look_sensitivity",
+         "nav": {"up": "veil/menu/volume", "down": "veil/menu/back"}},
+        menu_button("back", "BACK", "Back", "look")]))
+
+
+def pause_menu(s):
+    """Two hidden screens: the pause menu holds the game while visible; SAVE writes the 'quick' slot, LOAD reads it back
+    (on top of this city scene). The options page opens over it and is closed by BACK."""
+    def rule(action, act, act2="None", field="", scene_guid=None):
+        r = {"when": "Action", "name": action, "act": act, "act2": act2, "field": field}
+        if scene_guid:
+            r["scene"] = "guid:" + scene_guid
+        return r
+
+    rules = [rule("Save", "SaveSlot", "Hide"), rule("Load", "LoadSlot", "Hide", scene_guid=G_SCENE)] + [{}] * 6
+    s.add("Pause menu", {"UiScreen": {"document": "guid:" + G_PAUSE, "order": 10, "visible": False},
+                         "UiFlow": {"show_on": "Pause", "hide_on": "Resume", "quit_on": "Quit", "pause": True},
+                         "UiFlowRules": {"rules": rules}})
+    s.add("Options menu", {"UiScreen": {"document": "guid:" + G_OPTIONS, "order": 11, "visible": False},
+                           "UiFlow": {"show_on": "Options", "hide_on": "Back", "pause": True, "keep_audio": True}})
+
+
 def hud():
     """The HUD: health, wanted level, cash and the minimap and the ammo (hud.mcui, bound to the Player and its gun)."""
     def wanted_stars():
@@ -1175,6 +1237,7 @@ surface_assets()
 lamp_material()
 audio_assets()
 hud()
+menus()
 items_catalog()
 input_map()
 write("roads/city.mcroads", roads_doc())

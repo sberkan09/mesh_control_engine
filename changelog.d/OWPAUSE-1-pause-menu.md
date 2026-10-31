@@ -1,0 +1,1 @@
+- Kit (M-OWPAUSE): `UiFlowDo::SaveSlot` and `LoadSlot` (slot name in `field`, empty: `quick`) save and load from a `UiFlowRules` rule, also while the game is held. Sample: `09_openworld` has an Esc pause menu (resume, save, load, options with volume and look speed, quit). Record: `docs/milestones/M-OWPAUSE.md`.

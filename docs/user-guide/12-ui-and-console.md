@@ -259,6 +259,12 @@ also on held ticks (a paused game can still open a screen).
   `write_scene_component` do this for you. A typo in a field path never fires and is not reported.
 - `act` and `act2` run in that order: `Show`, `Hide`, `Toggle` act on this entity's `UiScreen`; `Load` loads
   `scene`; `Quit` ends the game. Rules and `UiFlow` can sit on the same screen.
+- `SaveSlot` writes the save slot named in `field` (empty: `quick`; letters, digits, `_` and `-`, up to 64) with
+  `save::save_game`, and `LoadSlot` asks the host to apply it after the tick (`scene::request_load`; `scene` is
+  the scene to load first, if set). Both run while a pause screen holds the game, so a pause menu's SAVE and LOAD
+  are two rules. A bad name or a missing slot is logged and does nothing. Only fields marked `Save` on entities
+  with a `SaveKey` are stored (`13-sequences-fsm-saves.md`). `samples/09_openworld`'s Esc menu uses this, with an
+  options page of two sliders bound to `audio.master_db` and `input.look_sensitivity`.
 
 `projects/Undertow` uses all of this (`tools/author_ui_mcp.py`): a title, a pause menu, an options
 page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two

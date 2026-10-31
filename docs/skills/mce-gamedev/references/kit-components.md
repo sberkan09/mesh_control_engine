@@ -29,7 +29,7 @@ Tam liste ve hangi örnekte gösterildiği: `docs/engine/capabilities.md` (CI ü
 | Envanter | `Inventory`, `Equipment`, `ItemPickup3D`, `LootDrop`, `Container`, `CraftingStation`, `StatusEffects` | `.mcitems` katalogu |
 | Zaman/hava | `WorldClock`, `DayCycle`, `TimedLight3D`, `Weather`, `Precipitation3D`, `Lightning`, `WindDirection`, `WindGust`, `WindSway`, `WetSurfaces`, `RainSplash`, `RainRipples`, `SnowCover`, `GroundMist`, `CloudLayer`, `Moon`, `Aurora` | 9.16-9.19; "Low" kalite katmanı bunları kapatır (`r.nightsky`, `r.aurora`, `r.water`...) |
 | Ses | `AudioSource`, `AudioSpatial`, `AudioListener`, `AudioOcclusion`, `AudioDoppler`, `AudioReverb`, `AudioDuck`, `AudioSnapshot`, `AudioBusEffects`, `AudioLimiter`, `EngineAudio`, `WeaponAudio`, `ImpactAudio`, `FootstepAudio`, `SirenAudio`, `WeatherAudio`, `SfxTrigger`, `SoundCaption` | docs 10 §10.9 |
-| UI | `UiScreen`, `UiFlow`, `UiFlowRules`, `UiScreenView`, `.mcui` | 12 |
+| UI | `UiScreen`, `UiFlow`, `UiFlowRules`, `UiScreenView`, `.mcui` | 12; `UiFlowRules` `SaveSlot`/`LoadSlot` kaydeder/yükler (menü), `field` yuva adıdır |
 | Diğer | `ScriptSystem`/`ScriptVars`/`ScriptParams` (Luau), `Dialogue`/`DialogueInput`/`StoryState` (roman), `SaveKey`, `ProcLevel*`, `CoopGame`/`PlayerSpawn`/`LocalPlayer`, `VideoPlayer`, `NetReplicated`/`NetOwner` | |
 
 ## GTA tarzı örnekten (samples/09_openworld) çıkan kurallar

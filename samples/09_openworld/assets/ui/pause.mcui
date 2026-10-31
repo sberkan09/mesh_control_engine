@@ -1,0 +1,111 @@
+{
+ "format": "mce-ui",
+ "version": 1,
+ "guid": "0727284b-91a4-5e69-822c-2695841a6622",
+ "modal": true,
+ "widgets": [
+  {
+   "name": "veil",
+   "fill": true,
+   "blocks_pointer": true,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0.6
+    ]
+   },
+   "children": [
+    {
+     "name": "menu",
+     "kind": "Stack",
+     "at": [
+      0.5,
+      0.5,
+      360,
+      0
+     ],
+     "stack": {
+      "spacing": 14
+     },
+     "children": [
+      {
+       "name": "title",
+       "kind": "Text",
+       "text": "PAUSED",
+       "font_role": "Title",
+       "style": {
+        "text_size": 36
+       }
+      },
+      {
+       "name": "resume",
+       "kind": "Button",
+       "text": "RESUME",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Resume",
+       "nav": {
+        "down": "veil/menu/save"
+       },
+       "default_focus": true
+      },
+      {
+       "name": "save",
+       "kind": "Button",
+       "text": "SAVE",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Save",
+       "nav": {
+        "up": "veil/menu/resume",
+        "down": "veil/menu/load"
+       }
+      },
+      {
+       "name": "load",
+       "kind": "Button",
+       "text": "LOAD",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Load",
+       "nav": {
+        "up": "veil/menu/save",
+        "down": "veil/menu/options"
+       }
+      },
+      {
+       "name": "options",
+       "kind": "Button",
+       "text": "OPTIONS",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Options",
+       "nav": {
+        "up": "veil/menu/load",
+        "down": "veil/menu/quit"
+       }
+      },
+      {
+       "name": "quit",
+       "kind": "Button",
+       "text": "QUIT TO DESKTOP",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Quit",
+       "nav": {
+        "up": "veil/menu/options"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -30,7 +30,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 | A9 | **Police cars and roadblocks**: ~~all four police are on foot~~ **done (E4)**: 4 pursuit cars, 2 roadblocks | `drive_car` on `Police3D` (M-ARREST 3) | none |
 | A10 | **Carjacking** done (E8, parked cars 2 and 3 are owned, witnessed theft adds heat); vehicle damage, wrecks and ramming pedestrians done ([M-CARWRECK](M-CARWRECK.md) step 2); still open: fire/smoke on a wreck, repair | M-CARJACK, M-CARWRECK, `vehicle_ram.h`, M-VEHICLEHIT | none |
 | A11 | **Shops and money** done (E8): 12 cash pads, a medic, a scrapyard that buys a stolen car; the ammo shop came with the gun-on-player change; loot and a bag done ([M-LOOTVIS](M-LOOTVIS.md): walkers drop bandages and medkits, H uses one) | `loot.h`, `inventory.h`, M-AMMOSHOP/-HEALSHOP/-CHOPSHOP | `12_loot` |
-| A12 | **Pause menu, options, save/load** in the sample (the stock player has Esc pause; no game screens) | `ui_flow`, save system | `ui_screens` |
+| A12 | **Pause menu, options, save/load** ~~in the sample~~ **done (2026-10-31)**, see [M-OWPAUSE](M-OWPAUSE.md) | `ui_flow`, save system | `ui_screens` |
 | A13 | **HLOD / `ChunkLod3D` skyline and scene streaming**: the whole city is one scene (714 entities) | A3/A4 steps, `samples/hlod_city` | `hlod_city` |
 | A14 | **Floating origin**: not set (1 km² never reaches the threshold); matters if the map grows | `FloatingOrigin3D` | — |
 
@@ -254,3 +254,55 @@ police-memory rule (a unit that saw the car does not lose it). The police check 
 Traffic cars are locked, police cars have no seat, so only the player's car is served.
 
 Interface: `RepairShop3D` (24 bytes), event `Repaired3D`, system `"kit3d_repairshop"`, `repair_vehicle(World&, Entity)`.
+
+## J. Pause menu, options, save/load (A12)
+
+Esc does nothing in 09 today, so the A12 note "the stock player has Esc pause" does not hold here. The scene has `UiScreen`s
+(HUD, mission HUDs), so `mce_player` suppresses its own overlay (`screens_.active()`) and passes Esc on as the `Pause` action of
+`openworld.mcinput`, which no system reads. That orphans the scene's "Pause mix" `AudioSnapshot{while_paused}` too (only the
+overlay's `paused_` fades it in). Show, hide, hold and quit are already data (`UiFlow`). Volume and look sensitivity are data too
+(a widget's `"convar"`: `audio.master_db` and `input.look_sensitivity` are Saved convars the player writes and applies; neither
+touches the sim, so no hash changes). Save and Load cannot be data only: `UiFlowDo` has no save act, nothing in the kit writes a
+save, and a Luau `mce.save` never sees the button, because `script.pre/post` do not run on held ticks (only `run_during_cutscenes`).
+
+**Kit change (one PR, `ui_flow.h` + `ui_flow.cpp`; fan-out of `ui_flow.h` is 6 TUs, so no seam PR).** No new component.
+- Append `SaveSlot, LoadSlot` to `UiFlowDo` and its `MCE_ENUM` (values 6, 7; earlier values unchanged). The slot name is the
+  rule's `field` (unused by Action and Signal rules; Help says so; empty means "quick"), checked like Luau's `slot_arg`
+  (1..64 of `[A-Za-z0-9_-]`). Add `static_assert(sizeof(UiFlowRule) == 128)`; no size or padding change.
+- `SaveSlot`: `save::save_game` with `SceneChange.current_guid`, `f.tick` and the playtime, as `l_save` does. `kit_ui_flow`
+  already `run_when_held`, so the save is taken while the menu is up. It only reads the world, so the state hash is unchanged.
+- `LoadSlot`: when `save::exists(slot)`, it sets `load = scene` (when set) and calls `scene::request_load(slot)`. The host's
+  `apply_change` restarts the scene, then applies the slot: a fresh city plus the saved deltas, with the screens back at their
+  authored `visible`. A missing slot does nothing and logs at info (`openworld_test.cmake` fails on `[warn]`).
+
+**Data (`gen_assets.py`).** `pause_menu()` and `options_menu()` write `ui/pause.mcui` and `ui/options.mcui` (modal, the
+`ui_screens` layout). Both entities are appended at the end of `scene()`:
+- "Pause menu": `UiScreen{pause.mcui, order 10, visible false}`, `UiFlow{show_on Pause, hide_on Resume, quit_on Quit, pause 1}`.
+  `UiFlowRules`: Action "Save" -> `SaveSlot` (field "quick"), then Hide; Action "Load" -> `LoadSlot` (field "quick",
+  scene `G_SCENE`). Buttons: RESUME, SAVE, LOAD, OPTIONS, QUIT TO DESKTOP. The veil panel's `"action": "Resume"` makes Esc
+  (UI map Cancel) resume.
+- "Options menu": `UiScreen{options.mcui, order 11, visible false}`, `UiFlow{show_on Options, hide_on Back, pause 1, keep_audio 1}`
+  (the volume can be heard while it moves). Sliders `audio.master_db` [-40, 0, 2] and `input.look_sensitivity` [0.25, 3, 0.05],
+  plus a BACK button; the panel's Cancel presses Back, and the pause menu stays underneath.
+- `"SaveKey": {"key": 999}` on "Player" (missions keep 1001+): position, cash, wanted heat and bag are saved. The input map
+  adds `gamepad Start` to UI `Cancel`.
+
+**Tests.** `tests/kit/test_ui_flow.cpp` (`save::set_root` to a temporary folder): `SaveSlot` on a held tick writes the slot and
+leaves the state hash as it was. `LoadSlot` restores a changed `Wallet3D.cash` after `apply_change` and queues the scene. A missing
+slot does nothing. A bad slot name is refused. The enum round-trips by name. `tests/mcp/test_mcp_openworld.cpp`: `UiFlow` == 2,
+`UiFlowRules` == 1; with input "10 Pause\n12-60 Move=0,1", "Pause menu" is visible and the Player has not moved at tick 60.
+"61 Resume" lets it walk. A second headless test (`openworld_save.input`, `-save_dir <build>/saves`): Pause, Save, walk, Pause,
+Load ends with `quick.mcesave` present, the Player back at the start position, and the same hash on two plays.
+
+**Docs.** `docs/user-guide/12-ui-and-console.md` (the two new acts beside `UiFlowRules`), `13-sequences-fsm-saves.md`,
+`docs/skills/mce-gamedev/references/kit-components.md`, `changelog.d/M-OWPAUSE.md`. `capabilities.md` and
+`sample_coverage.allow` are left to the integration runner. Gameplay kit and sample only: no change to ECS, render, physics,
+the player or `.mcui`.
+
+**Known limits.** There is one slot and no confirmation, slot list or "saved" toast: SAVE closes the menu as feedback. Fields
+without `Save` (`Health3D.current`, `Weapon3D` ammo, seat state, traffic, police) come back as authored. A save taken while
+driving loads the player standing where the car was, and the car at its spawn. The pause itself is silent (no `keep_audio`):
+the "Pause mix" snapshot stays unused and could be removed. Invert-look is left out: there is no convar for it, so it would
+need an input change.
+
+Interface: `UiFlowDo::SaveSlot`, `UiFlowDo::LoadSlot` (appended; slot in `UiFlowRule.field`, scene to restart in `scene`).
