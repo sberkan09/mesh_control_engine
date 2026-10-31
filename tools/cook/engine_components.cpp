@@ -73,6 +73,7 @@
 #include "mce/kit/meteor.h"               // Meteor (M-METEOR 18a)
 #include "mce/kit/season.h"               // Season (M-SEASONS 19a)
 #include "mce/kit/water_ice.h"            // WaterIce (M-FREEZE 20a)
+#include "mce/kit/leaf_fall.h"            // LeafFall (M-LEAFFALL 21a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
