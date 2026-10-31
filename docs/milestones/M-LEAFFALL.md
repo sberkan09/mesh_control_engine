@@ -51,7 +51,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 21b finds that th
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 21a | done | PRNUM | `LeafFall` and the pure `leaf_fall_amount`, `leaf_fall_look` in `mce/kit/leaf_fall.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19s. |
+| 21a | done | 939 | `LeafFall` and the pure `leaf_fall_amount`, `leaf_fall_look` in `mce/kit/leaf_fall.h`, registered in `install_weather`; the `12_weather` scene carries one. Guide 9.19s. |
 | 21b | planned |  |  |
 | 21c | planned |  |  |
 | 21d | planned |  |  |
