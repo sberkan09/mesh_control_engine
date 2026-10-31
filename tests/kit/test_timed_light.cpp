@@ -156,3 +156,38 @@ TEST_CASE("timed_light: DuskStarted and DawnStarted fire once per crossing") {
     CHECK(l.dusks.size() == 2);
     CHECK(l.dawns.size() == 1);
 }
+
+TEST_CASE(
+    "timed light: timed_light_ramp fades after on_hour and after off_hour, wraps midnight, and has two edge modes") {
+    TimedLight3D t;
+    t.on_hour = 18.0f;
+    t.off_hour = 6.0f;
+    t.fade_minutes = 30.0f;                                       // half an hour
+    CHECK(timed_light_ramp(t, 12.0f) == doctest::Approx(0.0f));   // daytime
+    CHECK(timed_light_ramp(t, 18.0f) == doctest::Approx(0.0f));   // the fade starts at on_hour
+    CHECK(timed_light_ramp(t, 18.25f) == doctest::Approx(0.5f));  // halfway up
+    CHECK(timed_light_ramp(t, 18.5f) == doctest::Approx(1.0f));   // fully on
+    CHECK(timed_light_ramp(t, 23.0f) == doctest::Approx(1.0f));
+    CHECK(timed_light_ramp(t, 2.0f) == doctest::Approx(1.0f));   // across midnight
+    CHECK(timed_light_ramp(t, 6.0f) == doctest::Approx(1.0f));   // the fade down starts at off_hour
+    CHECK(timed_light_ramp(t, 6.25f) == doctest::Approx(0.5f));  // halfway down
+    CHECK(timed_light_ramp(t, 6.5f) == doctest::Approx(0.0f));
+    CHECK(timed_light_ramp(t, 30.0f) == doctest::Approx(timed_light_ramp(t, 6.0f)));  // the clock wraps at 24
+    CHECK(timed_light_ramp(t, -6.0f) == doctest::Approx(timed_light_ramp(t, 18.0f)));
+
+    // No fade: a hard edge at both hours.
+    t.fade_minutes = 0.0f;
+    CHECK(timed_light_ramp(t, 17.99f) == 0.0f);
+    CHECK(timed_light_ramp(t, 18.0f) == 1.0f);
+    CHECK(timed_light_ramp(t, 5.99f) == 1.0f);
+    CHECK(timed_light_ramp(t, 6.0f) == 0.0f);
+    t.fade_minutes = -5.0f;  // a negative fade is treated as none
+    CHECK(timed_light_ramp(t, 12.0f) == 0.0f);
+    CHECK(timed_light_ramp(t, 20.0f) == 1.0f);
+
+    // on_hour == off_hour: always on, whatever the hour.
+    t.off_hour = t.on_hour;
+    t.fade_minutes = 30.0f;
+    CHECK(timed_light_ramp(t, 3.0f) == 1.0f);
+    CHECK(timed_light_ramp(t, 18.0f) == 1.0f);
+}

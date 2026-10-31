@@ -75,6 +75,7 @@ struct Wanted3D {
     math::vec3 last_known;          // engine-written: where a unit last saw it
     u32 seen_by = 0;                // engine-written: units that see it now
     u32 crimes = 0;                 // engine-written: crimes counted
+    u32 kills = 0;                  // engine-written: deaths this entity caused (any team, not itself)
     u8 max_level = 5;
     u8 level = 0;                   // engine-written
     u8 police_team = 2;             // Health3D::team of police
@@ -86,7 +87,7 @@ MCE_COMPONENT(Wanted3D, (heat, Save, Range{0, 1000}), (heat_per_level, Range{1, 
               (kill_civilian, Range{0, 1000}), (hit_police, Range{0, 1000}), (kill_police, Range{0, 1000}),
               (witness_range, Range{0, 1000}, Help{"m"}), (cooldown_delay, Range{0, 3600}, Help{"s unseen before heat decays"}),
               (decay, Range{0, 1000}, Help{"heat/s"}), (unseen_time, Save, ReadOnly), (last_known, Save, ReadOnly),
-              (seen_by, ReadOnly, Transient), (crimes, Save, ReadOnly), (max_level, Range{1, 10}), (level, ReadOnly, Transient),
+              (seen_by, ReadOnly, Transient), (crimes, Save, ReadOnly), (kills, Save, ReadOnly, Help{"deaths this entity caused (its shots, rams); a HUD counter can bind to it"}), (max_level, Range{1, 10}), (level, ReadOnly, Transient),
               (police_team, Help{"Health3D::team of police units"}), (civilian_team, Help{"Health3D::team of civilians"}),
               (require_witness, Help{"1: a civilian hit counts only when a police unit sees the victim"}))
 
