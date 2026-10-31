@@ -29,6 +29,7 @@ mce_add_library(mce_gameplay_kit
         src/world_clock.cpp
         src/day_cycle.cpp
         src/timed_light.cpp
+        src/vehicle_extras.cpp
         src/weather.cpp
         src/weather_audio.cpp
         src/world_audio.cpp

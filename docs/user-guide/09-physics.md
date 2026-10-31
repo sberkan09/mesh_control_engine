@@ -382,6 +382,16 @@ code, `physics::World3D` has the same vehicles with any number of wheels and axl
 (`create_vehicle(VehicleDesc3D)` with `anti_roll_bars` and shift points, `set_vehicle_input`,
 `vehicle_state` with each wheel's `longitudinal_slip` and `lateral_slip`); the replay hash covers them.
 
+### Horn and headlights
+
+`mce/kit/vehicle_extras.h` gives the car the player drives a horn and a headlight switch. Put `VehicleHorn3D` (`clip`,
+`gain_db`, `min_gap_s`, `attenuation_id`) and/or `VehicleLights3D` on a car that has a `VehicleSeat3D`. While a `Rider3D`
+with `use_input` sits in it, the `Horn` action plays the clip once at the car (3D, never faster than `min_gap_s`; `honks`
+counts them) and the `Lights` action cycles `VehicleLights3D.mode`: `Auto` (the day cycle decides, `TimedLight3D`), `On`
+(the car's `SpotLight3D` at its authored intensity) and `Off`. Setting `VehicleHorn3D.honk` to 1 honks once without
+input (scripts, tests). Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
+binds Horn to G (stick press) and Lights to L (D-pad right).
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

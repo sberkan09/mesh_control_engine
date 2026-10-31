@@ -32,6 +32,7 @@
 #include "mce/kit/missions.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/timed_light.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/world_audio.h"
@@ -154,6 +155,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_world_clock(world, assets);
     install_day_cycle(world, assets);
     install_timed_light(world, assets);
+    install_vehicle_extras(world, assets);
     install_weather(world, assets);
     install_precipitation(world, assets);
     install_map_markers(world, assets);

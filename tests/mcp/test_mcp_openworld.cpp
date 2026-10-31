@@ -50,6 +50,19 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     const std::string in = drive_input();
     auto seated = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
     CHECK(comps(seated, 0).get("Rider3D").get("seated").as_number() == 1);
+    // Horn and headlights (M-OWHORN): the player's car has both; G honks once while seated, L turns the headlights on.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleHorn3D","show":["VehicleHorn3D"]}})")) >= 1);
+    {
+        auto honked = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(\n250 Horn\n260 Lights","inspect":{"component":"VehicleHorn3D","show":["VehicleHorn3D","VehicleLights3D"]}})");
+        double honks = 0;
+        u32 on = 0;
+        for (u32 i = 0; i < count(honked); ++i) {
+            honks += comps(honked, i).get("VehicleHorn3D").get("honks").as_number();
+            on += str(comps(honked, i).get("VehicleLights3D").get("mode")) == "On" ? 1u : 0u;
+        }
+        CHECK(honks == 1);
+        CHECK(on == 1);
+    }
     const std::string run_args = R"({"ticks":600,"log_lines":0,"input":")" + in +
                                  R"(","inspect":{"component":"Rider3D","show":["Rider3D","LocalTransform"]}})";
     auto drove = c.ok("run_headless", run_args);
