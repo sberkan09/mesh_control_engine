@@ -268,6 +268,25 @@
 //                                         0..4 per channel; enabled: any non-zero number is 1); an unknown key or a
 //                                         non-number raises an error that names the call and nothing is written
 //
+// Water ice (M-FREEZE step 20c) lives in the same table: the authoring over the first kit::WaterIce (mce/kit/water_ice.h)
+// and the read-only water_frozen(). Named errors as above ("weather.set_water_ice: the scene has no WaterIce entity"); the
+// setter never adds the component. The getters are named weather.water_ice_<key>; the colour returns r, g, b.
+// water_frozen() is kit::water_ice_amount on the first Season at the first WorldClock's day and hour (day 0 and hour 0 with
+// no clock; no Season is the manual floor), the same amount the extract draws, 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.water_ice_enabled() / water_ice_freeze_start() / water_ice_freeze_full() / water_ice_manual() /
+//   weather.water_ice_ice_roughness() / water_ice_ice_reflectivity() / water_ice_ice_depth_m() / water_ice_calm() /
+//   weather.water_ice_strength() -> number
+//   weather.water_ice_ice_color() -> r, g, b
+//   weather.water_frozen() -> number                0..1, the freeze amount now
+//   weather.set_water_ice{enabled=, freeze_start=, freeze_full=, manual=, ice_color={r,g,b}, ice_roughness=,
+//                         ice_reflectivity=, ice_depth_m=, calm=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (ice_depth_m
+//                                         0.05..10, the rest 0..1, colour lanes 0..1; enabled: any non-zero number is 1);
+//                                         an unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -317,6 +336,7 @@
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_ice.h"
 #include "mce/kit/world_clock.h"
 #include "mce/render/atmosphere.h"
 
@@ -1493,6 +1513,88 @@ int l_weather_set_season(lua_State* L) {
     return 0;
 }
 
+// ---- Water ice (M-FREEZE step 20c) ----
+
+kit::WaterIce& check_water_ice(lua_State* L, const char* fn) { return check_first<kit::WaterIce>(L, fn, "WaterIce"); }
+
+#define MCE_WEATHER_GETTER_ICE(luaname, field)                                                          \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_water_ice(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_ICE(water_ice_enabled, enabled)
+MCE_WEATHER_GETTER_ICE(water_ice_freeze_start, freeze_start)
+MCE_WEATHER_GETTER_ICE(water_ice_freeze_full, freeze_full)
+MCE_WEATHER_GETTER_ICE(water_ice_manual, manual)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_roughness, ice_roughness)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_reflectivity, ice_reflectivity)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_depth_m, ice_depth_m)
+MCE_WEATHER_GETTER_ICE(water_ice_calm, calm)
+MCE_WEATHER_GETTER_ICE(water_ice_strength, strength)
+#undef MCE_WEATHER_GETTER_ICE
+
+int l_weather_water_ice_ice_color(lua_State* L) {
+    return push_season_tint(L, check_water_ice(L, "weather.water_ice_ice_color").ice_color);
+}
+
+// weather.water_frozen(): kit::water_ice_amount on the first Season at the first WorldClock's day and hour, as the extract
+// computes it (day 0, hour 0 with no clock; no Season is the manual floor).
+int l_weather_water_frozen(lua_State* L) {
+    const kit::WaterIce& ice = check_water_ice(L, "weather.water_frozen");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    lua_pushnumber(L, static_cast<double>(kit::water_ice_amount(ice, season, phase)));
+    return 1;
+}
+
+// weather.set_water_ice{...}: validated before anything is written.
+int l_weather_set_water_ice(lua_State* L) {
+    static const char* const kKeys[10] = {"enabled", "freeze_start", "freeze_full", "manual", "ice_color",
+                                          "ice_roughness", "ice_reflectivity", "ice_depth_m", "calm", "strength"};
+    f64 value[10] = {};
+    bool given[10] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_water_ice", kKeys, 10,
+                  "enabled, freeze_start, freeze_full, manual, ice_color, ice_roughness, ice_reflectivity, ice_depth_m, "
+                  "calm, strength",
+                  value, given, 4, color);
+    kit::WaterIce& ice = check_water_ice(L, "weather.set_water_ice");
+    if (given[0]) ice.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) ice.freeze_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) ice.freeze_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) ice.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) {
+        ice.ice_color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        ice.ice_color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        ice.ice_color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[5]) ice.ice_roughness = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) ice.ice_reflectivity = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) ice.ice_depth_m = static_cast<f32>(clamp_range(value[7], 0.05, 10.0));
+    if (given[8]) ice.calm = static_cast<f32>(clamp_range(value[8], 0.0, 1.0));
+    if (given[9]) ice.strength = static_cast<f32>(clamp_range(value[9], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1826,6 +1928,18 @@ const luaL_Reg kWeatherLib[] = {
     {"season_winter_tint", l_weather_season_winter_tint},
     {"season_phase", l_weather_season_phase},
     {"set_season", l_weather_set_season},
+    {"water_ice_enabled", l_weather_water_ice_enabled},
+    {"water_ice_freeze_start", l_weather_water_ice_freeze_start},
+    {"water_ice_freeze_full", l_weather_water_ice_freeze_full},
+    {"water_ice_manual", l_weather_water_ice_manual},
+    {"water_ice_ice_roughness", l_weather_water_ice_ice_roughness},
+    {"water_ice_ice_reflectivity", l_weather_water_ice_ice_reflectivity},
+    {"water_ice_ice_depth_m", l_weather_water_ice_ice_depth_m},
+    {"water_ice_calm", l_weather_water_ice_calm},
+    {"water_ice_strength", l_weather_water_ice_strength},
+    {"water_ice_ice_color", l_weather_water_ice_ice_color},
+    {"water_frozen", l_weather_water_frozen},
+    {"set_water_ice", l_weather_set_water_ice},
     {nullptr, nullptr},
 };
 

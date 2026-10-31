@@ -1,9 +1,9 @@
 # 13_water: M-WATER's demo (step 15d), a data-only game the stock mce_player plays (assets/ + one Luau script, no C++).
 # A sloped sand island rises out of a sea: a seabed box, a thick box tilted 8 degrees so its top crosses the water level
-# about 28 m east of the origin (a shore for the depth tint and the foam), a fixed sun and sky (Environment3D, no clock),
+# about 28 m east of the origin (a shore for the depth tint and the foam), a fixed sun and sky (Environment3D; the WorldClock has drive_environment 0),
 # one default Water (level 0, four Gerstner waves, 0.4 m) and a crate. assets/scripts/water.luau puts the crate on
 # water.height_at(x, z) every tick, tilts it to water.normal_at and logs `water:` every 150 ticks. 12_weather is untouched
-# (its hashes and goldens do not move); the meshes are 10_missions' two boxes (same bytes), scaled. input.txt is empty.
+# (its hashes and goldens do not move); M-FREEZE 20c adds a WaterIce, a Season and a WorldClock (2 s day) to the Water entity and an `ice:` log; the meshes are 10_missions' two boxes (same bytes), scaled. input.txt is empty.
 # `mce_player -pack <build>/samples/13_water/project/assets.mce -input samples/13_water/input.txt`
 if(NOT TARGET mce_cook OR NOT MCE_WITH_SCRIPT)
     return()
