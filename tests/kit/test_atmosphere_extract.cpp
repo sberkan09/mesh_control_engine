@@ -95,3 +95,16 @@ TEST_CASE("atmosphere extract: the atmosphere yields to the moon at night and re
     CHECK(n.scene.atmosphere().enabled);
     CHECK(n.scene.sky().enabled);
 }
+
+TEST_CASE("atmosphere extract: auto exposure's clamps reach the post chain") {
+    Rig r;
+    r.env().auto_exposure = 1;
+    r.frame(12.0f);
+    CHECK(r.scene.post().auto_exposure.min_exposure == doctest::Approx(0.03f));  // the defaults are PostFx's
+    CHECK(r.scene.post().auto_exposure.max_exposure == doctest::Approx(32.0f));
+    r.env().auto_exposure_min = 0.5f;
+    r.env().auto_exposure_max = 1.5f;
+    r.frame(12.0f);
+    CHECK(r.scene.post().auto_exposure.min_exposure == doctest::Approx(0.5f));
+    CHECK(r.scene.post().auto_exposure.max_exposure == doctest::Approx(1.5f));
+}

@@ -1346,6 +1346,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.auto_exposure.compensation = env.exposure_compensation;
     post.auto_exposure.speed_up = env.auto_exposure_speed_up;
     post.auto_exposure.speed_down = env.auto_exposure_speed_down;
+    post.auto_exposure.min_exposure = env.auto_exposure_min;
+    post.auto_exposure.max_exposure = env.auto_exposure_max;
     post.auto_exposure.dt = frame_dt_;
     const u32 lut = texture_key(env.color_grade.guid);
     post.lut_key = lut == ~0u ? 0u : lut;  // texture_key's "none" is ~0u, PostFx's is 0
