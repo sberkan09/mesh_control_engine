@@ -6,4 +6,4 @@ Changed from the design: two stations and no on-foot bed, because `Music` stream
 
 Tests: `test_mcp_openworld` (one `ScriptSystem`; seated + Q gives station 1 at -8 dB and station 2 muted; three presses end off; on foot Q does nothing).
 
-Limits: no station name on the HUD, one dial for every car, no duck under voice lines, no gamepad binding.
+Limits: no station name on the HUD, one dial for every car, no duck under voice lines. Gamepad: D-pad left (added with M-GAMEPAD).

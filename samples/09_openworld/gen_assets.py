@@ -183,7 +183,7 @@ def input_map():
         {"name": "UseItem", "bindings": [key("H"), {"gamepad_button": "RightShoulder"}]},
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
-        {"name": "Radio", "bindings": [key("Q")]},
+        {"name": "Radio", "bindings": [key("Q"), {"gamepad_button": "DpadLeft"}]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -191,11 +191,17 @@ def input_map():
     ui = [
         {"name": "Navigate", "type": "axis2d", "bindings": [
             key("Right"), key("Left", -1), key("Up", axis="y"), key("Down", -1, "y"),
-            key("D"), key("A", -1), key("W", axis="y"), key("S", -1, "y")]},
+            key("D"), key("A", -1), key("W", axis="y"), key("S", -1, "y"),
+            {"gamepad_button": "DpadRight"}, {"gamepad_button": "DpadLeft", "scale": -1},
+            {"gamepad_button": "DpadUp", "axis": "y"}, {"gamepad_button": "DpadDown", "axis": "y", "scale": -1},
+            {"gamepad_axis": "LeftX", "deadzone": [0.4, 1]}, {"gamepad_axis": "LeftY", "axis": "y", "deadzone": [0.4, 1], "scale": -1}]},
         {"name": "Confirm", "bindings": [key("Return"), key("Space"), {"gamepad_button": "South"}]},
         {"name": "Cancel", "bindings": [key("Escape"), {"gamepad_button": "East"}]},
         {"name": "Resume", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},  # also what the pause menu's button emits
     ]
+    # Every action can be played on a gamepad (a new action without a pad binding fails the generator, not a player).
+    for action in gameplay + ui:
+        assert any("gamepad_button" in b or "gamepad_axis" in b for b in action["bindings"]), "no gamepad binding: " + action["name"]
     write("input/openworld.mcinput", {"format": "mce-input", "version": 1, "guid": G_INPUT, "maps": [
         {"name": "Gameplay", "actions": gameplay}, {"name": "UI", "blocks_below": True, "actions": ui}]})
 
