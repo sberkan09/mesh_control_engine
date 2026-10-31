@@ -1,6 +1,6 @@
 # M-SEASONTOUR — One minute, one year: a sample that shows every season, the frozen lake and the falling leaves in one run (milestone record)
 
-**Status:** planned (2026-10-31), steps 22a to 22c. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SEASONS (`Season`, `season_phase`, the foliage tint and density), M-FREEZE (`WaterIce`, `water_ice_amount`) and M-LEAFFALL (`LeafFall`, `leaf_fall_amount`), and of M-SNOWCOVER and M-WEATHER (the winter frost and the wind the leaves read). Today no single run shows the whole seasonal line: `samples/12_weather` has a `Season` with `year_days` 1 and a 600 s day, so its phase only climbs from 0.308 to 0.375 in the run and never reaches autumn (its `LeafFall` therefore sets `manual` 0.6 to keep the leaves drawn); `samples/13_water` has a 60 s year (`year_days` 30, a 2 s day, `start_phase` 0.6) but only the sea, so the ice shows at the start and the trees, the leaves and the snow are not there at all. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-10-31), steps 22a and 22b (PRs 947, 948; 22c was not needed). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SEASONS (`Season`, `season_phase`, the foliage tint and density), M-FREEZE (`WaterIce`, `water_ice_amount`) and M-LEAFFALL (`LeafFall`, `leaf_fall_amount`), and of M-SNOWCOVER and M-WEATHER (the winter frost and the wind the leaves read). Today no single run shows the whole seasonal line: `samples/12_weather` has a `Season` with `year_days` 1 and a 600 s day, so its phase only climbs from 0.308 to 0.375 in the run and never reaches autumn (its `LeafFall` therefore sets `manual` 0.6 to keep the leaves drawn); `samples/13_water` has a 60 s year (`year_days` 30, a 2 s day, `start_phase` 0.6) but only the sea, so the ice shows at the start and the trees, the leaves and the snow are not there at all. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** A new data-only sample `samples/14_seasons`, played by the stock `mce_player` (assets plus one Luau script, no C++), that runs **one whole year in 60 s of real time** (3600 simulation ticks at 60 Hz): one scene with a ground, a small lake (`Water` plus `WaterIce`), a few trees (trunk boxes under `Foliage3D` canopies, so the `Season` tint and density act on them), a `SnowCover` and a `Weather` in clear weather (wind for the sway and the leaves), a `LeafFall` with `manual` 0 so the leaves fall **only because the season reaches autumn**, a fixed sun, and a slowly orbiting camera. A Luau script logs `season: phase %.3f frozen %.3f leaves %.3f at tick %d` every 150 ticks, so the headless test pins the four season centres (ticks 450, 1350, 2250, 3150) and the windowed run is the picture of the whole line: green spring, full summer, orange autumn with falling leaves, bare white winter with an ice-covered lake, thaw. It adds no engine code: it is the demo that closes the seasonal line and corrects the "demo scene whose `Season` really reaches autumn" follow-up of M-LEAFFALL.
 
@@ -59,12 +59,13 @@ No step needs Opus: no step writes engine code. If 22b finds that a feature cann
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 22a | planned |  | This plan, the ROADMAP row and the changelog fragment. |
-| 22b | planned |  | `samples/14_seasons`, the headless test (four season centres), the windowed smoke tests, the 18-samples row, guide 9.19t, changelog. |
-| 22c | planned |  | Optional: polish from the first look and the milestone close. Only opened if 22b leaves work. |
+| 22b | done | 948 | `samples/14_seasons`, the headless test (four season centres, pinned from a real run), the windowed smoke tests, the 18-samples row, guide 9.19t, changelog. |
+| 22c | skipped |  | Not needed: 22b shipped the sample and its docs; the first windowed look is a follow-up (the GPU captures were not run in the cloud build). |
 
 ## Follow-ups
 
-None yet (filled at the close). Known candidates:
+From the 22a and 22b close; none blocks the milestone:
+- A first look at the windowed GPU captures (tint, thinning and lake colours, camera height and radius), the one thing the logs cannot show.
 - A real tree prefab (a CC0 model with a `CREDITS.md` line) instead of boxes, and a `Terrain3D` / `TerrainFoliage3D` variant with a generated `.mcterrain`.
 - A contact-sheet capture (four frames in one image) for the user guide, if `mce_player` gets a multi-frame capture.
 - Weather in the year: a rain or snow forecast on top of the seasons (the `12_weather` script as a model).

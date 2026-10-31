@@ -582,6 +582,8 @@ const Golden kGolden[] = {
     {"samples/12_weather/models/platform.glb", 0x9f74288193d02af7ull},
     {"samples/13_water/models/floor.glb", 0xa593f3ca5b7db3f2ull},
     {"samples/13_water/models/platform.glb", 0x9f74288193d02af7ull},
+    {"samples/14_seasons/models/floor.glb", 0xa593f3ca5b7db3f2ull},
+    {"samples/14_seasons/models/platform.glb", 0x9f74288193d02af7ull},
     {"samples/cinema_demo/models/crate.glb", 0x75071bac877d3561ull},
     {"samples/cinema_demo/models/floor.glb", 0xc1a71f9c9bc7ef7eull},
     {"samples/cinema_demo/models/hero.glb", 0x4af44d6ba68f71b7ull},
