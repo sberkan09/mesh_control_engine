@@ -11,6 +11,7 @@
 #include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/chunk_lod3d.h"
+#include "mce/kit/leaf_fall.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/meteor.h"
@@ -104,6 +105,19 @@ SeasonFrame read_season(World& world) {
     out.snow = season_snow_bias(*season, phase);
     out.snow_on = out.snow.cover_floor > 0.0f || out.snow.lee_shift > 0.0f;
     return out;
+}
+
+// Leaf fall (M-LEAFFALL 21b): the id of the one render-side emitter the extract adds. ParticleEmitter3D emitters use
+// `e.index + 1`, and an entity index is a row of the world's location table, so it stays far below 0xFFFF0001 (that would
+// be 4.29 billion live entities, 64 GB of locations alone); the reserved value cannot collide with one. The foliage batch
+// ids live in Forward3D's separate batch id space (batch_gpu_), not the emitter one (emitters_gpu_). A test pins it.
+constexpr u32 kLeafFallEmitterId = 0xFFFF0001u;
+
+// QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
+// step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
+bool is_low_quality(const render::QualitySettings& q) {
+    const render::QualitySettings low = render::quality_settings(render::QualityTier::Low);
+    return q.msaa == low.msaa && q.gi_updates == low.gi_updates && q.volumetrics == low.volumetrics;
 }
 
 // Water ice (M-FREEZE 20b): the first WaterIce at the first Season's phase (day 0, hour 0 with no WorldClock; no Season is
@@ -2008,6 +2022,76 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         scene.add_particle_emitter(em);
         ++stats_.particle_emitters;
     });
+    {  // leaf fall (M-LEAFFALL 21b): one render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const LeafFall* leaf = nullptr;
+        world.query<const LeafFall&>().each([&](const LeafFall& c) {
+            if (!leaf) leaf = &c;
+        });
+        if (leaf) {
+            const Season* leaf_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!leaf_season) leaf_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = leaf_season ? season_phase(*leaf_season, day, hour) : 0.0f;
+            const f32 amount = leaf_fall_amount(*leaf, leaf_season, phase);
+            if (amount > 0.0f) {
+                const Weather* leaf_weather = nullptr;
+                world.query<const Weather&>().each([&](const Weather& c) {
+                    if (!leaf_weather) leaf_weather = &c;
+                });
+                const WindGust* leaf_gust = nullptr;
+                world.query<const WindGust&>().each([&](const WindGust& c) {
+                    if (!leaf_gust) leaf_gust = &c;
+                });
+                const WindDirection* leaf_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!leaf_wd) leaf_wd = &c;
+                });
+                // No Weather: calm. The gust sway bit: leaves move like the foliage. No WindDirection (or no Weather): +x.
+                const f32 wind = leaf_weather ? effective_wind(*leaf_weather, leaf_gust, kGustSway) : 0.0f;
+                const math::vec2 wdir = leaf_weather && leaf_wd ? wind_direction_vector(*leaf_wd) : math::vec2{1.0f, 0.0f};
+                const LeafFallLook look = leaf_fall_look(*leaf, amount, wind, wdir, season_foliage_tint(leaf_season, phase));
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);  // no particle hook in QualitySettings: Low halves rate and budget
+                    render::ParticleEmitter em;
+                    em.id = kLeafFallEmitterId;
+                    em.max_particles = std::clamp(leaf->max_particles, 64u, 8192u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = leaf->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
     for (usize i = 0; i < bursts_.size();) {
         if (bursts_[i].stamp == frame_stamp_) {
             ++i;
