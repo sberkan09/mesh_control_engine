@@ -47,6 +47,46 @@
    "format": "HEALTH %.0f"
   },
   {
+   "name": "crosshair",
+   "kind": "Text",
+   "text": "+",
+   "text_align": "Center",
+   "anchors": {
+    "min": [
+     0.5,
+     0.5
+    ],
+    "max": [
+     0.5,
+     0.5
+    ],
+    "offset_min": [
+     -20,
+     -20
+    ],
+    "offset_max": [
+     20,
+     20
+    ]
+   },
+   "style": {
+    "text_size": 34,
+    "text_color": [
+     1,
+     1,
+     1,
+     0.85
+    ],
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ]
+   }
+  },
+  {
    "name": "kills",
    "kind": "Text",
    "text": "KILLS 0",
