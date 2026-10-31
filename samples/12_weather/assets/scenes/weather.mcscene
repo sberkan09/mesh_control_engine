@@ -89,6 +89,9 @@
     "LeafFall": {
      "manual": 0.6
     },
+    "Firefly": {
+     "manual": 0.5
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
