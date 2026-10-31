@@ -176,6 +176,9 @@
      "bindings": [
       {
        "key": "Q"
+      },
+      {
+       "gamepad_button": "DpadLeft"
       }
      ]
     },
@@ -252,6 +255,38 @@
       {
        "key": "S",
        "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_button": "DpadRight"
+      },
+      {
+       "gamepad_button": "DpadLeft",
+       "scale": -1
+      },
+      {
+       "gamepad_button": "DpadUp",
+       "axis": "y"
+      },
+      {
+       "gamepad_button": "DpadDown",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.4,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.4,
+        1
+       ],
        "scale": -1
       }
      ]

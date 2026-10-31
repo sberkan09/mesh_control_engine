@@ -1,0 +1,1 @@
+- Sample (M-GAMEPAD): 09_openworld Radio on D-pad left, the pause menu navigable with the D-pad and left stick; the generator asserts every action has a pad binding. Record: `docs/milestones/M-GAMEPAD.md`.
