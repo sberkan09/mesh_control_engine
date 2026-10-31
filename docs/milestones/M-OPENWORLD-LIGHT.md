@@ -35,6 +35,7 @@ Both are render-side copies; `Environment3D` is never written, and scenes withou
   `Sky::diffuse_ambient` did not change it). IBL on the gradient sky works. Needs a render-core look (bake units of the atmosphere sky).
 - **`auto_exposure` stays off here.** It aims at middle grey, so a dark night is lifted to look like day (Environment3D has no min/max exposure; `PostFx::AutoExposure`
   has `min_exposure` / `max_exposure` but the extract leaves them at 0.03 / 32). Exposing a clamp (a header seam PR) would allow it.
+- **Dusk hand-off is abrupt (follow-up).** The atmosphere yields to the moon on the same discrete flag as the light itself (`moon_holds_light`), so the sky switches from the atmosphere to the fog colour in one frame. The sun is below the horizon then and the atmosphere sky is nearly dark, but the transition frames were not captured. To do: smooth it (fade by the moon weight) and verify the transition frames with captures. Separate task, not in this PR.
 - The grass is still dark in deep shade and the trees are flat-shaded low poly: art direction (see the assessment), not lighting.
 - Not done: volumetric fog (cost; the exp² fog stays), lamp-post light pools at night were not re-checked.
 
