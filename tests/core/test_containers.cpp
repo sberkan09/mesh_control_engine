@@ -328,3 +328,19 @@ TEST_CASE("FixedString truncates safely") {
     s.append(" there");
     CHECK(s == "hi ther");
 }
+
+TEST_CASE("RingBuffer size_approx follows pushes and pops, and capacity is what was asked for") {
+    RingBuffer<int> rb(mem::heap(), 4);
+    CHECK(rb.capacity() == 4);
+    CHECK(rb.size_approx() == 0);
+    CHECK(rb.push(1));
+    CHECK(rb.push(2));
+    CHECK(rb.size_approx() == 2);
+    int out = 0;
+    CHECK(rb.pop(out));
+    CHECK(rb.size_approx() == 1);
+    for (int i = 0; i < 3; ++i) CHECK(rb.push(i));
+    CHECK(rb.size_approx() == 4);
+    CHECK_FALSE(rb.push(9));  // full
+    CHECK(rb.size_approx() == 4);
+}
