@@ -31,6 +31,6 @@ No step needs Opus: nothing writes a shader. If 23b finds that an additive sprit
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 23a | done | 956 | `Firefly` and the pure `firefly_amount`, `firefly_look` in `mce/kit/firefly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.5). Guide 9.19u. |
-| 23b | done | | `Kit3DExtract` adds the local additive firefly emitter (id `0xFFFF0002`, camera-following, Low tier halves rate and budget); night fade from the Environment3D time of day as the meteor block, cloud cover from the scene's clouds. |
+| 23b | done | 958 | `Kit3DExtract` adds the local additive firefly emitter (id `0xFFFF0002`, camera-following, Low tier halves rate and budget); night fade from the Environment3D time of day as the meteor block, cloud cover from the scene's clouds. |
 | 23c | planned | | |
 | 23d | planned | | |
