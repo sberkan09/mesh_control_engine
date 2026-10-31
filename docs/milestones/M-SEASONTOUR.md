@@ -59,7 +59,7 @@ No step needs Opus: no step writes engine code. If 22b finds that a feature cann
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 22a | planned |  | This plan, the ROADMAP row and the changelog fragment. |
-| 22b | planned |  | `samples/14_seasons`, the headless test (four season centres), the windowed smoke tests, the 18-samples row, guide 9.19t, changelog. |
+| 22b | done | PRNUM | `samples/14_seasons`, the headless test (four season centres, pinned from a real run), the windowed smoke tests, the 18-samples row, guide 9.19t, changelog. |
 | 22c | planned |  | Optional: polish from the first look and the milestone close. Only opened if 22b leaves work. |
 
 ## Follow-ups
