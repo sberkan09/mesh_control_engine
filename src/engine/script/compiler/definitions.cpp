@@ -503,6 +503,37 @@ declare weather: {
     -- wind_follow 0..2, max_particles 64..8192, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
     -- non-number raises and nothing is written
     set_leaf_fall: (settings: { enabled: number?, autumn_start: number?, autumn_full: number?, autumn_end_full: number?, autumn_end: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, leaf_color: { number }?, tint_follow: number?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Fireflies (M-FIREFLIES), the first Firefly in the scene; every firefly function raises when there is none
+    -- (set_firefly never adds one). The getters are firefly_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. fireflies_glowing (0..1) is the firefly amount now, the same one the renderer draws:
+    -- the summer window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by
+    -- manual, times the night gate (the Environment3D hour; 0 with no clock, so only night_only 0 shows) and the dryness
+    -- (1 - rain); with no Season it is the manual floor; 0 when enabled or strength is 0. Read-only.
+    firefly_enabled: () -> number,
+    firefly_summer_start: () -> number,
+    firefly_summer_full: () -> number,
+    firefly_summer_end_full: () -> number,
+    firefly_summer_end: () -> number,
+    firefly_manual: () -> number,
+    firefly_night_only: () -> number,
+    firefly_min_darkness: () -> number,
+    firefly_rate: () -> number,
+    firefly_box_xz_m: () -> number,
+    firefly_height_m: () -> number,
+    firefly_size_m: () -> number,
+    firefly_lifetime_s: () -> number,
+    firefly_drift_speed: () -> number,
+    firefly_max_particles: () -> number,
+    firefly_seed: () -> number,
+    firefly_strength: () -> number,
+    firefly_color: () -> (number, number, number),
+    fireflies_glowing: () -> number,
+    -- every key optional, each value clamped to the field's range (summer_*, manual, min_darkness, strength and each colour
+    -- channel 0..1, rate 0..200, box_xz_m 1..100, height_m 1..20, size_m 0.02..0.5, lifetime_s 1..30, drift_speed 0..2,
+    -- max_particles 16..4096, seed 0..4294967295; enabled and night_only: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_firefly: (settings: { enabled: number?, summer_start: number?, summer_full: number?, summer_end_full: number?, summer_end: number?, manual: number?, night_only: number?, min_darkness: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, drift_speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
