@@ -1124,8 +1124,10 @@ def scene():
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
+    # The model turns to face where the player walks (M-FACEMOVE); the Kenney character faces +Z, hence the pi offset.
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
-                           "MeshRef": model_mesh("character-a")})
+                           "MeshRef": model_mesh("character-a"),
+                           "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
     # The camera orbits the player (Look); the player's gun aims along its view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.

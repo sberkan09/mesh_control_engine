@@ -399,6 +399,14 @@ entity with a `Health3D` sets `HitMarker3D.timer` to `duration` seconds (`hits` 
 `kill_timer`. Both count down to 0, so a HUD widget bound to `HitMarker3D/timer` or `HitMarker3D/kill_timer` with
 `range` `[0.001, 10, 0]` shows only while the marker is up. `hit_clip` and `kill_clip` play a 2D tick on a hit and a ding on a kill. `samples/09_openworld` draws a white x and a red X on the crosshair.
 
+### Facing the movement
+
+`mce/kit/face_velocity.h`: put `FaceVelocity3D` on a model entity (usually the child that holds the character mesh) and
+name the entity with the `CharacterController3D` in `source`. While that character moves faster than `min_speed`, the
+model turns about Y towards its ground velocity at `turn_rate_deg` degrees a second; standing still keeps the heading, a
+seated rider is ignored. `yaw_offset` (pi) is for a mesh that faces +Z. Only the rotation is written.
+`samples/09_openworld` puts it on the `Player model`.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

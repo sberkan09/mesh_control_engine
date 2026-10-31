@@ -32,6 +32,7 @@
 #include "mce/kit/missions.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/timed_light.h"
+#include "mce/kit/face_velocity.h"
 #include "mce/kit/hit_marker.h"
 #include "mce/kit/vehicle_extras.h"
 #include "mce/kit/precipitation.h"
@@ -162,6 +163,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_map_markers(world, assets);
     install_wanted3d(world);
     install_hit_marker(world, assets);
+    install_face_velocity(world);
     install_vehicle_ram(world, assets);
     install_impact_damage(world, assets);
     install_sensors3d(world, assets);

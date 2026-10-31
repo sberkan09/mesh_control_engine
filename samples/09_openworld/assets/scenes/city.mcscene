@@ -39264,6 +39264,11 @@
     },
     "MeshRef": {
      "mesh": "guid:5385e46b-690b-5f7c-bfe9-71e0a30f33b0"
+    },
+    "FaceVelocity3D": {
+     "source": "$1607",
+     "turn_rate_deg": 540,
+     "yaw_offset": 3.141592653589793
     }
    }
   },
