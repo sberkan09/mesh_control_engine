@@ -171,6 +171,8 @@ def input_map():
         {"name": "UseItem", "bindings": [key("H"), {"gamepad_button": "RightShoulder"}]},
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
+        {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
+        {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
     ]
     ui = [
@@ -253,7 +255,7 @@ def roads_doc():
 # the two sound sets and the GUIDs the scene uses are written.
 
 AUDIO_FILES = {"engine_loop": ("wav", {}), "rain_loop": ("wav", {"compress": "vorbis", "quality": 0.3}),
-               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}),
+               "wind_loop": ("wav", {"compress": "vorbis", "quality": 0.3}), "night_crickets": ("wav", {"compress": "vorbis", "quality": 0.3}), "shot_1": ("wav", {}), "shot_2": ("wav", {}), "siren": ("wav", {}), "horn": ("wav", {}),
                "city_ambience": ("wav", {"compress": "vorbis", "quality": 0.4})}
 FOOTSTEPS = ["footstep_%d" % i for i in range(1, 7)]
 HITS = ["hit_%d" % i for i in range(1, 6)]
@@ -274,7 +276,28 @@ G_LAMP = guid("materials/lamp.mcmat")
 G_CRASHES = guid("audio/crashes.mcsound")
 
 
+def horn_wav():
+    """A car horn: two tones (400 and 500 Hz, softened squares) for 0.5 s, 10 ms fades, mono 44.1 kHz. Synthesized, no source file."""
+    rate, n = 44100, 22050
+    frames = bytearray()
+    for i in range(n):
+        t = i / rate
+        v = sum(math.tanh(3.0 * math.sin(2 * math.pi * f * t)) for f in (400.0, 500.0)) * 0.35
+        fade = min(1.0, i / (0.01 * rate), (n - 1 - i) / (0.01 * rate))
+        frames += struct.pack("<h", int(max(-1.0, min(1.0, v * fade)) * 30000))
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(bytes(frames))
+    return buf.getvalue()
+
+
 def audio_assets():
+    write_bytes("audio/horn.wav", horn_wav())
     for name, (ext, settings) in AUDIO_FILES.items():
         write("audio/%s.%s.mceasset" % (name, ext), {"guid": audio_guid(name), "importer": ext, "importer_version": 2, "settings": settings})
     for name in FOOTSTEPS + HITS + CRASHES + THUNDER:
@@ -725,6 +748,9 @@ def car_entities(model, traffic):
         root["Health3D"] = {"max": 200, "team": 0, "destroy_on_death": 0}
         root["VehicleRam3D"] = {"min_speed": 5, "damage_per_ms": 12}
         root["VehicleSeat3D"]["enter_radius"] = 4.0
+        # The driver's horn (G, stick press) and headlights (L, D-pad right): kit_vehicle_extras.
+        root["VehicleHorn3D"] = {"clip": "guid:" + audio_guid("horn"), "gain_db": -4, "attenuation_id": 1}
+        root["VehicleLights3D"] = {}
     ents = [{"name": "Car", "components": root}]
     # One Kenney car (body and wheels in one model, wheels do not spin); the model's front faces +z, the car drives toward -z.
     ents.append({"name": "Model", "components": {"ChildOf": {"parent": "$0"}, "LocalTransform": tf((0, -0.4, 0), (CAR_SCALE,) * 3, math.pi),

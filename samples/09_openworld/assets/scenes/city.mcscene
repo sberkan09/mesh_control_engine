@@ -39527,6 +39527,12 @@
      "min_speed": 5,
      "damage_per_ms": 12
     },
+    "VehicleHorn3D": {
+     "clip": "guid:62aa4221-d600-55d2-bed2-f698cdd8ad45",
+     "gain_db": -4,
+     "attenuation_id": 1
+    },
+    "VehicleLights3D": {},
     "MapMarker": {
      "color": [
       0.3,
@@ -39743,6 +39749,12 @@
      "min_speed": 5,
      "damage_per_ms": 12
     },
+    "VehicleHorn3D": {
+     "clip": "guid:62aa4221-d600-55d2-bed2-f698cdd8ad45",
+     "gain_db": -4,
+     "attenuation_id": 1
+    },
+    "VehicleLights3D": {},
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1
@@ -39963,6 +39975,12 @@
      "min_speed": 5,
      "damage_per_ms": 12
     },
+    "VehicleHorn3D": {
+     "clip": "guid:62aa4221-d600-55d2-bed2-f698cdd8ad45",
+     "gain_db": -4,
+     "attenuation_id": 1
+    },
+    "VehicleLights3D": {},
     "CarOwner3D": {
      "heat": 12,
      "needs_witness": 1

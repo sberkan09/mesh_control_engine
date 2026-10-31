@@ -23,3 +23,5 @@ Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by G
 
 The ground textures (`assets/textures/`, `tools/gen_textures.py`) and the Blender props (`assets/models/props/`, `blender/gen_models.py`) are original to this
 repository (CC0-1.0).
+
+The car horn (`assets/audio/horn.wav`) is synthesized by `gen_assets.py` (two softened square tones at 400 and 500 Hz); it has no source file and no licence.

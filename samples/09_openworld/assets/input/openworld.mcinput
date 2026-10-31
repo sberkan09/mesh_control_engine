@@ -172,6 +172,28 @@
      ]
     },
     {
+     "name": "Horn",
+     "bindings": [
+      {
+       "key": "G"
+      },
+      {
+       "gamepad_button": "LeftStick"
+      }
+     ]
+    },
+    {
+     "name": "Lights",
+     "bindings": [
+      {
+       "key": "L"
+      },
+      {
+       "gamepad_button": "DpadRight"
+      }
+     ]
+    },
+    {
      "name": "Pause",
      "bindings": [
       {
