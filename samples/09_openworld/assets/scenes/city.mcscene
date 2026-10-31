@@ -46414,6 +46414,48 @@
      "keep_audio": true
     }
    }
+  },
+  {
+   "id": 1805,
+   "name": "Radio 1",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:dcca4b51-8451-5117-9b3c-215159023a94",
+     "bus": "Music",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 200
+    }
+   }
+  },
+  {
+   "id": 1806,
+   "name": "Radio 2",
+   "components": {
+    "AudioSource": {
+     "clip": "guid:06b1f97e-cdfc-5501-8b8a-3f83f9554c1a",
+     "bus": "Music",
+     "loop": true,
+     "play_on_start": true,
+     "gain_db": -60,
+     "priority": 200
+    }
+   }
+  },
+  {
+   "id": 1807,
+   "name": "Script: radio",
+   "components": {
+    "ScriptSystem": {
+     "script": "guid:f9764043-bb96-582a-b9e8-f33cce1daf38",
+     "phase": "Pre"
+    },
+    "ScriptVars": {},
+    "SaveKey": {
+     "key": 998
+    }
+   }
   }
  ]
 }
