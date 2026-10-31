@@ -414,6 +414,13 @@ in a car, `kmh`, `gear` (-1 reverse, 0 neutral, 1.. forward) and `rpm` mirror th
 -1000, so a HUD widget bound to one with a `range` starting above that (for example `[-0.5, 1000, 0]`) shows only in a car.
 `samples/09_openworld` draws "N KM/H" and "GEAR n" at the bottom right.
 
+### Impact sparks
+
+`mce/kit/impact_fx.h`: put `ImpactFx3D` (`count`, `lift`) on an entity with a `ParticleEmitter3D` that has `rate` 0. Each
+`WeaponHit3D` moves it to the hit point (lifted along the surface normal) and, one tick later, bursts `count` particles
+there. One emitter serves every shooter; two hits in one tick show the last. `samples/09_openworld` has a spark
+emitter that the player's shots light.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

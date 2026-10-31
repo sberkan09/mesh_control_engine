@@ -1208,6 +1208,14 @@ def scene():
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a"),
                            "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
+    # Sparks where a shot lands (M-IMPACTFX): one pooled emitter that moves to each WeaponHit3D point and bursts.
+    s.add("Impact sparks", {"LocalTransform": tf((0, -50, 0)),
+                            "ParticleEmitter3D": {"color_start": [5.0, 3.0, 0.8, 1.0], "color_end": [1.2, 0.3, 0.05, 0], "offset": [0, 0, 0],
+                                                  "box": [0.02, 0.02, 0.02], "direction": [0, 1, 0], "gravity": [0, -9, 0], "spread_deg": 70,
+                                                  "rate": 0, "speed_min": 1.5, "speed_max": 4.0, "lifetime_min": 0.15, "lifetime_max": 0.35,
+                                                  "drag": 0.5, "size_start": 0.07, "size_end": 0.02, "max_particles": 64, "seed": 9,
+                                                  "collide": 0, "additive": 1, "emitting": 1},
+                            "ImpactFx3D": {"count": 10}})
     # The camera orbits the player (Look); the player's gun aims along its view. It starts looking west along
     # the avenue (yaw pi/2: behind the player on +x), so the first frame shows the road, its traffic and walkers and the car
     # to take; at yaw 0 it hung over the avenue looking north into a block and no car or walker was ever in frame.
