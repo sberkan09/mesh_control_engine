@@ -51,7 +51,7 @@ No step needs Opus: nothing writes a shader or a draw path. If 20b finds that a 
 |---|---|---|---|
 | 20a | done | 925 | `WaterIce` and the pure `water_ice_amount`, `water_ice_look` in `mce/kit/water_ice.h`, registered in `install_weather`; the `13_water` scene carries one. Guide 9.19r. |
 | 20b | done | 927 | `Kit3DExtract` applies `water_ice_look` to the local `render::WaterSurface` before `apply_quality` (first `WaterIce`, `Season`, `WorldClock`; skipped at an amount of 0). `.cpp` only. |
-| 20c | done | 928 | `weather.set_water_ice`, `weather.water_ice_<key>()` and read-only `weather.water_frozen()` (`api_weather.cpp`, typed in the script definitions); `13_water` gets a `Season` (30 days, start phase 0.6) and a `WorldClock` (2 s day, `drive_environment` 0: the sun does not move, no `DayCycle`) on its Water entity and logs `ice:`. |
+| 20c | done | 933 | `weather.set_water_ice`, `weather.water_ice_<key>()` and read-only `weather.water_frozen()` (`api_weather.cpp`, typed in the script definitions); `13_water` gets a `Season` (30 days, start phase 0.6) and a `WorldClock` (2 s day, `drive_environment` 0: the sun does not move, no `DayCycle`) on its Water entity and logs `ice:`. |
 | 20d | planned | | |
 
 ## Follow-ups
