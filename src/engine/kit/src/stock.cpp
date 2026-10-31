@@ -35,6 +35,7 @@
 #include "mce/kit/drive_readout.h"
 #include "mce/kit/face_velocity.h"
 #include "mce/kit/hit_marker.h"
+#include "mce/kit/impact_fx.h"
 #include "mce/kit/vehicle_extras.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/weather.h"
@@ -172,6 +173,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
+    install_impact_fx(world);
     install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick

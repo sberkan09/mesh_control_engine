@@ -93,6 +93,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `HitMarker3D` | `mce/kit/hit_marker.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
+| `ImpactFx3D` | `mce/kit/impact_fx.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Inventory` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Equipment` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
 | `ItemPickup3D` | `mce/kit/inventory.h` | yes | yes | yes | docs/user-guide/27-scripting.md | samples/12_loot/assets/scripts/loot.luau |
