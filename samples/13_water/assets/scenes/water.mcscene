@@ -105,6 +105,15 @@
    "components": {
     "Water": {},
     "WaterIce": {},
+    "WorldClock": {
+     "hour": 12,
+     "day_length_seconds": 2,
+     "drive_environment": 0
+    },
+    "Season": {
+     "year_days": 30,
+     "start_phase": 0.6
+    },
     "Aurora": {},
     "LocalTransform": {}
    }

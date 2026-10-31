@@ -4,6 +4,10 @@
 -- crate and two submerged tests (a point 0.3 m under the surface at the crate, and one 0.3 m over it; submerged is about
 -- the waves only, the island is geometry the water does not know). The
 -- log lines ("water: height ... at tick 150") are what samples/13_water/water_test.cmake pins.
+-- M-FREEZE: the Water entity also carries a WaterIce, a Season (a 30-day year) and a WorldClock whose 2 s day makes the year
+-- 60 s (drive_environment 0, so the clock never moves the fixed sun); the sea freezes in winter and thaws in spring. The
+-- "ice:" line logs weather.water_frozen(), the freeze amount the renderer draws, every 150 ticks. The waves the crate rides
+-- are the authored ones: the freeze changes only how the water is drawn.
 local X, Z, LIFT = 8, 4, 0.1
 function update()
     local crate = mce.find("Crate")
@@ -18,5 +22,6 @@ function update()
     if t % 150 == 0 then
         mce.log(string.format("water: height %.3f crate %.3f tilt %.3f submerged %s above %s at tick %d",
             h, h + LIFT, ny, tostring(water.submerged(X, h - 0.3, Z)), tostring(water.submerged(X, h + 0.3, Z)), t))
+        mce.log(string.format("ice: frozen %.3f phase %.3f at tick %d", weather.water_frozen(), weather.season_phase(), t))
     end
 end

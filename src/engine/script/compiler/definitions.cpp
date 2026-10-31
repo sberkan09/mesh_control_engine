@@ -453,6 +453,26 @@ declare weather: {
     -- channel, winter_density, snow_cover_bias, cold_bias and strength 0..1; enabled: any non-zero number is 1); an
     -- unknown key or a non-number raises and nothing is written
     set_season: (settings: { enabled: number?, year_days: number?, start_phase: number?, spring_tint: { number }?, autumn_tint: { number }?, winter_tint: { number }?, winter_density: number?, snow_cover_bias: number?, cold_bias: number?, strength: number? }) -> (),
+
+    -- Water ice (M-FREEZE), the first WaterIce in the scene; every water-ice function raises when there is none
+    -- (set_water_ice never adds one). The getters are water_ice_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. water_frozen (0..1) is the freeze amount now, the same one the renderer draws: the
+    -- Season's winter weight at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by manual; with
+    -- no Season it is manual only; 0 when enabled or strength is 0. Read-only.
+    water_ice_enabled: () -> number,
+    water_ice_freeze_start: () -> number,
+    water_ice_freeze_full: () -> number,
+    water_ice_manual: () -> number,
+    water_ice_ice_color: () -> (number, number, number),
+    water_ice_ice_roughness: () -> number,
+    water_ice_ice_reflectivity: () -> number,
+    water_ice_ice_depth_m: () -> number,
+    water_ice_calm: () -> number,
+    water_ice_strength: () -> number,
+    water_frozen: () -> number,
+    -- every key optional, each value clamped to the field's range (ice_depth_m 0.05..10, the others and each colour
+    -- channel 0..1; enabled: any non-zero number is 1); an unknown key or a non-number raises and nothing is written
+    set_water_ice: (settings: { enabled: number?, freeze_start: number?, freeze_full: number?, manual: number?, ice_color: { number }?, ice_roughness: number?, ice_reflectivity: number?, ice_depth_m: number?, calm: number?, strength: number? }) -> (),
 }
 
 declare water: {
