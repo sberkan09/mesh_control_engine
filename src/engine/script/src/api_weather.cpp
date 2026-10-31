@@ -287,6 +287,27 @@
 //                                         an unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Leaf fall (M-LEAFFALL step 21c) lives in the same table: the authoring over the first kit::LeafFall (mce/kit/leaf_fall.h)
+// and the read-only leaf_falling(). Named errors as above ("weather.set_leaf_fall: the scene has no LeafFall entity"); the
+// setter never adds the component. The getters are named weather.leaf_fall_<key>; the colour returns r, g, b.
+// leaf_falling() is kit::leaf_fall_amount on the first Season at the first WorldClock's day and hour (day 0 and hour 0 with
+// no clock; no Season is the manual floor), the same amount the extract draws, 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.leaf_fall_enabled() / leaf_fall_autumn_start() / leaf_fall_autumn_full() / leaf_fall_autumn_end_full() /
+//   weather.leaf_fall_autumn_end() / leaf_fall_manual() / leaf_fall_rate() / leaf_fall_box_xz_m() / leaf_fall_height_m() /
+//   weather.leaf_fall_size_m() / leaf_fall_lifetime_s() / leaf_fall_fall_speed() / leaf_fall_wind_follow() /
+//   weather.leaf_fall_tint_follow() / leaf_fall_max_particles() / leaf_fall_seed() / leaf_fall_strength() -> number
+//   weather.leaf_fall_leaf_color() -> r, g, b
+//   weather.leaf_falling() -> number                0..1, the leaf amount now
+//   weather.set_leaf_fall{enabled=, autumn_start=, autumn_full=, autumn_end_full=, autumn_end=, manual=, rate=, box_xz_m=,
+//                         height_m=, size_m=, lifetime_s=, fall_speed=, wind_follow=, leaf_color={r,g,b}, tint_follow=,
+//                         max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/leaf_fall.h; colour lanes 0..1; enabled: any non-zero number is 1);
+//                                         an unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -333,6 +354,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/meteor.h"
+#include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
@@ -1595,6 +1617,105 @@ int l_weather_set_water_ice(lua_State* L) {
     return 0;
 }
 
+// ---- Leaf fall (M-LEAFFALL step 21c) ----
+
+kit::LeafFall& check_leaf_fall(lua_State* L, const char* fn) { return check_first<kit::LeafFall>(L, fn, "LeafFall"); }
+
+#define MCE_WEATHER_GETTER_LEAF(luaname, field)                                                         \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_leaf_fall(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_LEAF(leaf_fall_enabled, enabled)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_start, autumn_start)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_full, autumn_full)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_end_full, autumn_end_full)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_end, autumn_end)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_manual, manual)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_rate, rate)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_height_m, height_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_size_m, size_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_fall_speed, fall_speed)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_tint_follow, tint_follow)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_max_particles, max_particles)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_seed, seed)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_strength, strength)
+#undef MCE_WEATHER_GETTER_LEAF
+
+int l_weather_leaf_fall_leaf_color(lua_State* L) {
+    return push_season_tint(L, check_leaf_fall(L, "weather.leaf_fall_leaf_color").leaf_color);
+}
+
+// weather.leaf_falling(): kit::leaf_fall_amount on the first Season at the first WorldClock's day and hour, as the extract
+// computes it (day 0, hour 0 with no clock; no Season is the manual floor).
+int l_weather_leaf_falling(lua_State* L) {
+    const kit::LeafFall& lf = check_leaf_fall(L, "weather.leaf_falling");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    lua_pushnumber(L, static_cast<double>(kit::leaf_fall_amount(lf, season, phase)));
+    return 1;
+}
+
+// weather.set_leaf_fall{...}: validated before anything is written.
+int l_weather_set_leaf_fall(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled",   "autumn_start", "autumn_full",    "autumn_end_full", "autumn_end",   "manual",
+                                          "rate",      "box_xz_m",     "height_m",       "size_m",          "lifetime_s",   "fall_speed",
+                                          "wind_follow", "leaf_color", "tint_follow",    "max_particles",   "seed",         "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_leaf_fall", kKeys, 18,
+                  "enabled, autumn_start, autumn_full, autumn_end_full, autumn_end, manual, rate, box_xz_m, height_m, size_m, "
+                  "lifetime_s, fall_speed, wind_follow, leaf_color, tint_follow, max_particles, seed, strength",
+                  value, given, 13, color);
+    kit::LeafFall& lf = check_leaf_fall(L, "weather.set_leaf_fall");
+    if (given[0]) lf.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) lf.autumn_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) lf.autumn_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) lf.autumn_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) lf.autumn_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) lf.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) lf.rate = static_cast<f32>(clamp_range(value[6], 0.0, 500.0));
+    if (given[7]) lf.box_xz_m = static_cast<f32>(clamp_range(value[7], 1.0, 100.0));
+    if (given[8]) lf.height_m = static_cast<f32>(clamp_range(value[8], 1.0, 50.0));
+    if (given[9]) lf.size_m = static_cast<f32>(clamp_range(value[9], 0.02, 1.0));
+    if (given[10]) lf.lifetime_s = static_cast<f32>(clamp_range(value[10], 1.0, 30.0));
+    if (given[11]) lf.fall_speed = static_cast<f32>(clamp_range(value[11], 0.0, 5.0));
+    if (given[12]) lf.wind_follow = static_cast<f32>(clamp_range(value[12], 0.0, 2.0));
+    if (given[13]) {
+        lf.leaf_color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        lf.leaf_color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        lf.leaf_color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[14]) lf.tint_follow = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    if (given[15]) lf.max_particles = static_cast<u32>(clamp_range(value[15], 64.0, 8192.0));
+    if (given[16]) lf.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) lf.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1940,6 +2061,26 @@ const luaL_Reg kWeatherLib[] = {
     {"water_ice_ice_color", l_weather_water_ice_ice_color},
     {"water_frozen", l_weather_water_frozen},
     {"set_water_ice", l_weather_set_water_ice},
+    {"leaf_fall_enabled", l_weather_leaf_fall_enabled},
+    {"leaf_fall_autumn_start", l_weather_leaf_fall_autumn_start},
+    {"leaf_fall_autumn_full", l_weather_leaf_fall_autumn_full},
+    {"leaf_fall_autumn_end_full", l_weather_leaf_fall_autumn_end_full},
+    {"leaf_fall_autumn_end", l_weather_leaf_fall_autumn_end},
+    {"leaf_fall_manual", l_weather_leaf_fall_manual},
+    {"leaf_fall_rate", l_weather_leaf_fall_rate},
+    {"leaf_fall_box_xz_m", l_weather_leaf_fall_box_xz_m},
+    {"leaf_fall_height_m", l_weather_leaf_fall_height_m},
+    {"leaf_fall_size_m", l_weather_leaf_fall_size_m},
+    {"leaf_fall_lifetime_s", l_weather_leaf_fall_lifetime_s},
+    {"leaf_fall_fall_speed", l_weather_leaf_fall_fall_speed},
+    {"leaf_fall_wind_follow", l_weather_leaf_fall_wind_follow},
+    {"leaf_fall_tint_follow", l_weather_leaf_fall_tint_follow},
+    {"leaf_fall_max_particles", l_weather_leaf_fall_max_particles},
+    {"leaf_fall_seed", l_weather_leaf_fall_seed},
+    {"leaf_fall_strength", l_weather_leaf_fall_strength},
+    {"leaf_fall_leaf_color", l_weather_leaf_fall_leaf_color},
+    {"leaf_falling", l_weather_leaf_falling},
+    {"set_leaf_fall", l_weather_set_leaf_fall},
     {nullptr, nullptr},
 };
 
