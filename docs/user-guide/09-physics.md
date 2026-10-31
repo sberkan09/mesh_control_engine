@@ -1004,7 +1004,7 @@ components are opt-in; scenes without them are unchanged.
 ## 9.13 Wanted level and police (M-OPENWORLD C3)
 
 `mce/kit/wanted3d.h` has two components. `Wanted3D` goes on the offender (the player): it holds the `heat`,
-the `level` made from it (0..`max_level`, `heat_per_level` heat for each) and how crimes count. `Police3D` goes
+the `level` made from it (0..`max_level`, `heat_per_level` heat for each) and how crimes count (`kills` counts the deaths the offender caused). `Police3D` goes
 on a police unit (give it a `Health3D` with the police `team`, a `Weapon3D` and a `NavAgent3D` as needed).
 
 - **Crimes.** A `Damage3D` or `Died3D` (9.12) whose instigator is the offender (or hangs under it) adds heat when

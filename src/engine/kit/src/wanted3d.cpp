@@ -23,7 +23,7 @@
 namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(Wanted3D) == 68);
+static_assert(sizeof(Wanted3D) == 72);
 static_assert(sizeof(Police3D) == 76);
 static_assert(sizeof(RespawnPoint3D) == 4);
 static_assert(sizeof(Respawn3D) == 16);
@@ -233,7 +233,8 @@ void kit3d_wanted(Frame& f) {
         const Entity off = wanted_holder(w, d.killer);
         const Entity vic = health_holder(w, d.entity);
         if (off.is_null() || vic.is_null() || off == vic) continue;
-        const Wanted3D* wd = w.try_get<Wanted3D>(off);
+        Wanted3D* wd = w.try_get_mut<Wanted3D>(off);
+        ++wd->kills;
         const u8 team = w.try_get<Health3D>(vic)->team;
         if (team == 0) continue;
         const math::vec3 at = position_of(w, vic);
