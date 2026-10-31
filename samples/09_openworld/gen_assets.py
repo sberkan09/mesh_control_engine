@@ -1140,6 +1140,7 @@ def scene():
         "Rider3D": {"use_input": 1},
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
+        "DriveReadout3D": {},  # the HUD's speed and gear in a car (M-DRIVEHUD)
         "HitMarker3D": {"hit_clip": "guid:" + audio_guid("hit_tick"), "kill_clip": "guid:" + audio_guid("kill_ding")},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
@@ -1401,6 +1402,11 @@ def hud():
         {"name": "kill_marker", "kind": "Text", "text": "X", "text_align": "Center", "visible": False, "range": [0.001, 10, 0],
          "value": 0.001, "bind": "HitMarker3D/kill_timer", "anchors": hud_box(-20, -20, 20, 20, 0.5, 0.5),
          "style": {"text_size": 54, "text_color": [1.0, 0.2, 0.15, 1], "text_outline": 2, "text_outline_color": [0, 0, 0, 1]}},
+        # Speed and gear, bottom right: shown only in a car (the readout reads -1000 on foot, below the range).
+        {**hud_text("speed", "0 KM/H", 40, hud_box(-300, -214, -24, -160, 1, 1), "DriveReadout3D/kmh", "%.0f KM/H", [1, 1, 1, 1], "Right"),
+         "visible": False, "range": [-0.5, 1000, 0], "value": 0},
+        {**hud_text("gear", "GEAR 1", 22, hud_box(-300, -246, -24, -216, 1, 1), "DriveReadout3D/gear", "GEAR %.0f", [0.8, 0.9, 1.0, 1], "Right"),
+         "visible": False, "range": [-1.5, 20, 0], "value": 0},
         hud_text("kills", "KILLS 0", 22, hud_box(24, -96, 280, -68, 0, 1), "Wanted3D/kills", "KILLS %.0f", [1.0, 0.6, 0.45, 1]),
         hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),

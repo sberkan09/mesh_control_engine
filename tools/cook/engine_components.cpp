@@ -55,6 +55,7 @@
 #include "mce/kit/vehicle_extras.h"    // VehicleHorn3D, VehicleLights3D (M-OWHORN)
 #include "mce/kit/hit_marker.h"         // HitMarker3D (M-HITMARKER)
 #include "mce/kit/face_velocity.h"     // FaceVelocity3D (M-FACEMOVE)
+#include "mce/kit/drive_readout.h"      // DriveReadout3D (M-DRIVEHUD)
 #include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)
 #include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
 #include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)

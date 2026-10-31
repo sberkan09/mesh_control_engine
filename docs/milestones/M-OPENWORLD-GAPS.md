@@ -78,7 +78,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 - **Traffic**: no lane changes, no overtaking, no horns, no reaction to a car crash; a car stopped for a still pedestrian waits.
 - **Police**: the navmesh covers only the middle blocks, so units stay there; no police cars (A9), no helicopters, no
   roadblocks; wanted level has no on-screen indicator (A1) and no flashing sirens.
-- **Driving**: one car type for the player, no radio, no gears display, no lights toggle, no horn, no damage model on the
+- **Driving**: one car type for the player, ~~no radio, no gears display, no lights toggle, no horn~~ (radio, horn and lights done; speed and gear on the HUD: [M-DRIVEHUD](M-DRIVEHUD.md)), no damage model on the
   drive path in the sample.
 - **No progression or goal**: nothing to do after the 3 car and police interactions; no economy, no story.
 - **No gamepad or touch walk-through** of the openworld input map was tried (the map has gamepad bindings).

@@ -49,6 +49,7 @@ mce_add_test(test_kit UMBRELLA
         test_world_clock.cpp
         test_day_cycle.cpp
         test_timed_light.cpp
+        test_drive_readout.cpp
         test_face_velocity.cpp
         test_hit_marker.cpp
         test_vehicle_extras.cpp

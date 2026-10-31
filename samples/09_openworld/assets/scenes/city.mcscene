@@ -38618,6 +38618,7 @@
      "regen_delay": 5
     },
     "Wanted3D": {},
+    "DriveReadout3D": {},
     "HitMarker3D": {
      "hit_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
      "kill_clip": "guid:fb824104-ebe2-580e-afb3-0b9f149bb034"

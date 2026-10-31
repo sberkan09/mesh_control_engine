@@ -183,6 +183,104 @@
    }
   },
   {
+   "name": "speed",
+   "kind": "Text",
+   "text": "0 KM/H",
+   "style": {
+    "text_size": 40,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -214
+    ],
+    "offset_max": [
+     -24,
+     -160
+    ]
+   },
+   "bind": "DriveReadout3D/kmh",
+   "format": "%.0f KM/H",
+   "visible": false,
+   "range": [
+    -0.5,
+    1000,
+    0
+   ],
+   "value": 0
+  },
+  {
+   "name": "gear",
+   "kind": "Text",
+   "text": "GEAR 1",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     0.8,
+     0.9,
+     1.0,
+     1
+    ]
+   },
+   "text_align": "Right",
+   "anchors": {
+    "min": [
+     1,
+     1
+    ],
+    "max": [
+     1,
+     1
+    ],
+    "offset_min": [
+     -300,
+     -246
+    ],
+    "offset_max": [
+     -24,
+     -216
+    ]
+   },
+   "bind": "DriveReadout3D/gear",
+   "format": "GEAR %.0f",
+   "visible": false,
+   "range": [
+    -1.5,
+    20,
+    0
+   ],
+   "value": 0
+  },
+  {
    "name": "kills",
    "kind": "Text",
    "text": "KILLS 0",
