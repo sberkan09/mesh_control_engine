@@ -1081,6 +1081,7 @@ def scene():
         "Rider3D": {"use_input": 1},
         "Health3D": {"max": 100, "team": 1, "regen": 4, "regen_delay": 5},
         "Wanted3D": {},
+        "HitMarker3D": {},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
         "Respawn3D": {"delay": 3, "fine_busted": 100, "fine_wasted": 200},
@@ -1332,6 +1333,13 @@ def hud():
         # The aim point: shots leave the camera along its forward axis, which is the middle of the screen.
         {"name": "crosshair", "kind": "Text", "text": "+", "text_align": "Center", "anchors": hud_box(-20, -20, 20, 20, 0.5, 0.5),
          "style": {"text_size": 34, "text_color": [1, 1, 1, 0.85], "text_outline": 2, "text_outline_color": [0, 0, 0, 1]}},
+        # Hit marker: a white x while HitMarker3D.timer > 0 (a shot landed), a red X while kill_timer > 0 (the target died).
+        {"name": "hit_marker", "kind": "Text", "text": "x", "text_align": "Center", "visible": False, "range": [0.001, 10, 0],
+         "value": 0.001, "bind": "HitMarker3D/timer", "anchors": hud_box(-20, -20, 20, 20, 0.5, 0.5),
+         "style": {"text_size": 44, "text_color": [1, 1, 1, 1], "text_outline": 2, "text_outline_color": [0, 0, 0, 1]}},
+        {"name": "kill_marker", "kind": "Text", "text": "X", "text_align": "Center", "visible": False, "range": [0.001, 10, 0],
+         "value": 0.001, "bind": "HitMarker3D/kill_timer", "anchors": hud_box(-20, -20, 20, 20, 0.5, 0.5),
+         "style": {"text_size": 54, "text_color": [1.0, 0.2, 0.15, 1], "text_outline": 2, "text_outline_color": [0, 0, 0, 1]}},
         hud_text("kills", "KILLS 0", 22, hud_box(24, -96, 280, -68, 0, 1), "Wanted3D/kills", "KILLS %.0f", [1.0, 0.6, 0.45, 1]),
         hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),

@@ -53,6 +53,7 @@
 #include "mce/kit/day_cycle.h"          // DayCycle (M-DAYNIGHT 2)
 #include "mce/kit/timed_light.h"       // TimedLight3D (M-DAYNIGHT 3)
 #include "mce/kit/vehicle_extras.h"    // VehicleHorn3D, VehicleLights3D (M-OWHORN)
+#include "mce/kit/hit_marker.h"         // HitMarker3D (M-HITMARKER)
 #include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)
 #include "mce/kit/weather.h"            // Weather (M-WEATHER 1)
 #include "mce/kit/wet_surfaces.h"       // WetSurfaces (M-WETSURFACE 5c)

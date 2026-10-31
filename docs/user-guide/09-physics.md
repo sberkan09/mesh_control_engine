@@ -392,6 +392,13 @@ counts them) and the `Lights` action cycles `VehicleLights3D.mode`: `Auto` (the 
 input (scripts, tests). Traffic and police cars have no rider with `use_input`, so they never respond. `samples/09_openworld`
 binds Horn to G (stick press) and Lights to L (D-pad right).
 
+### Hit marker
+
+`mce/kit/hit_marker.h`: put `HitMarker3D` on the shooter (the player). A shot of its weapon that lands on another living
+entity with a `Health3D` sets `HitMarker3D.timer` to `duration` seconds (`hits` counts them); a death it caused sets
+`kill_timer`. Both count down to 0, so a HUD widget bound to `HitMarker3D/timer` or `HitMarker3D/kill_timer` with
+`range` `[0.001, 10, 0]` shows only while the marker is up. `samples/09_openworld` draws a white x and a red X on the crosshair.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
