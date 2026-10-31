@@ -1,0 +1,1 @@
+- Tests: core's `is_pow2`/`align_up`/`next_pow2`, the draw-cause names and hints, `errc_name`, `make_sid` and `engine_describe` now have cases.
