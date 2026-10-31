@@ -97,7 +97,7 @@
     10,
     0
    ],
-   "value": 0,
+   "value": 0.001,
    "bind": "HitMarker3D/timer",
    "anchors": {
     "min": [
@@ -145,7 +145,7 @@
     10,
     0
    ],
-   "value": 0,
+   "value": 0.001,
    "bind": "HitMarker3D/kill_timer",
    "anchors": {
     "min": [
