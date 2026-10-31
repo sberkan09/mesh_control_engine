@@ -1,0 +1,1 @@
+- Kit (M-HITMARKER sound): `HitMarker3D.hit_clip` / `kill_clip` play a 2D tick on a landed shot and a ding on a kill; the sample has both. Record: `docs/milestones/M-HITMARKER.md`.
