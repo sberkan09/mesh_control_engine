@@ -353,3 +353,36 @@ TEST_CASE("timeline: timeline_eased maps u in [0, 1] and keeps both ends fixed")
     CHECK(kit::timeline_eased(TimelineEase::EaseIn, 0.4f) < 0.4f);
     CHECK(kit::timeline_eased(TimelineEase::EaseOut, 0.4f) > 0.4f);
 }
+
+TEST_CASE("timeline: timeline_skip jumps to the end, fires the cues it passes once, and refuses a non-player") {
+    Stage s;
+    const asset::SequenceStep listen[] = {kit::SequenceRegistry::wait_event("beat")};
+    REQUIRE(s.world.resource<kit::SequenceRegistry>().define("listen", listen));
+    kit::SequencePlayer sp;
+    sp.name.assign("listen");
+    const Entity listener = s.world.spawn_with(sp);
+    s.run(2);  // the player has started and the listener waits for "beat"
+    REQUIRE(s.player().playing);
+    REQUIRE(s.world.try_get<kit::SequencePlayer>(listener)->active);
+
+    Frame f(s.world);
+    f.dt = kDt;
+    REQUIRE(kit::timeline_skip(f, s.e[0]));
+    CHECK(s.player().time == doctest::Approx(2.0f));
+    CHECK(s.player().finished);
+    CHECK_FALSE(s.player().playing);
+    CHECK(s.door().x == doctest::Approx(6.0f));  // the state tracks are applied at the end
+    CHECK(s.cam(5).primary == 1);
+    CHECK(s.cam(2).primary == 0);
+    // The animation track's last key starts its clip, and the event cue at 1 s still fires.
+    const kit::Animator* actor = s.world.try_get<kit::Animator>(s.e[4]);
+    CHECK(actor->clip.view() == StringView("wave"));
+    CHECK(actor->loop);
+    s.run(2);
+    CHECK_FALSE(s.world.try_get<kit::SequencePlayer>(listener)->active);  // "beat" reached the sequence
+
+    // Skipping again passes no cue (the player already fired everything) and still succeeds.
+    CHECK(kit::timeline_skip(f, s.e[0]));
+    CHECK(s.player().finished);
+    CHECK_FALSE(kit::timeline_skip(f, s.e[1]));  // not a player
+}
