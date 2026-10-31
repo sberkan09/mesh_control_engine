@@ -1,6 +1,6 @@
 # M-FIREFLIES — Fireflies on warm summer nights: drifting glow points around the camera, from the season and the night, with no shader (milestone record)
 
-**Status:** planned (2026-10-31), steps 23a to 23d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, summer centre 0.375), M-NIGHTSKY and M-METEOR (the night fade the sky layers gate on) and M-WEATHER (`Weather` rain and cloud cover). Summer nights are plain dark today: the season thins nothing and lights nothing. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-10-31), steps 23a to 23d (PRs 953, 956, 958, 959, 962). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, summer centre 0.375), M-NIGHTSKY and M-METEOR (the night fade the sky layers gate on) and M-WEATHER (`Weather` rain and cloud cover). Summer nights are plain dark today: the season thins nothing and lights nothing. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Firefly` turns the `Season` summer weight (a trapezoid around the phase 0.375, `kSeasonSummerCentre`), the night fade and the weather (dry, not stormy) into a strength 0..1, with a manual floor for a scene that wants fireflies all year. Pure helpers turn the strength into an emitter look: a slow hovering drift (tiny gravity, high drag, a small random-ish spread), a short pulse-free lifetime, a small additive warm yellow-green sprite. `Kit3DExtract` adds one **render-side additive `render::ParticleEmitter`** with a reserved id (`0xFFFF0002u`), in a low box around the camera, the same path rain, snow and leaves use. No new shader, pass, render field or system state; no component is written. A scene without `Firefly` is bit-identical.
 
@@ -33,4 +33,11 @@ No step needs Opus: nothing writes a shader. If 23b finds that an additive sprit
 | 23a | done | 956 | `Firefly` and the pure `firefly_amount`, `firefly_look` in `mce/kit/firefly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.5). Guide 9.19u. |
 | 23b | done | 958 | `Kit3DExtract` adds the local additive firefly emitter (id `0xFFFF0002`, camera-following, Low tier halves rate and budget); night fade from the Environment3D time of day as the meteor block, cloud cover from the scene's clouds. |
 | 23c | done | 959 | `weather.set_firefly`, the `weather.firefly_<key>()` getters and read-only `weather.fireflies_glowing()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_firefly.cpp`. `12_weather` logs `fireflies:` every 150 ticks (1.000 at tick 0 in the dark, 0.100 in the storm at 600, 0.000 from sunrise at 1500). |
-| 23d | planned | | |
+| 23d | done | 962 | Docs only: guide 9.19u complete, the `08-3d` "Fireflies glow." paragraph, the `18-samples` clause and `27-scripting` rows (landed with 23c), changelog, status, follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- A real GPU/windowed look at the additive points (size, brightness against the bloom) and a per-point blink (needs a render field).
+- Fireflies that spawn near water or bushes instead of one box around the camera.
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves).
