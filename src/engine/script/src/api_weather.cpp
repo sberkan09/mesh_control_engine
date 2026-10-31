@@ -308,6 +308,27 @@
 //                                         an unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Fireflies (M-FIREFLIES step 23c) live in the same table: the authoring over the first kit::Firefly (mce/kit/firefly.h) and
+// the read-only fireflies_glowing(). Named errors as above ("weather.set_firefly: the scene has no Firefly entity"); the
+// setter never adds the component. The getters are named weather.firefly_<key>; the colour returns r, g, b.
+// fireflies_glowing() is kit::firefly_amount on the first Season at the first WorldClock's day and hour, with the inputs the
+// extract uses: the night fade of the Environment3D hour (0 with no clock, so only night_only 0 shows) and the first Weather's rain intensity while it rains or storms (0 without a Weather); no Season is the manual
+// floor. 0 when `enabled` or `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.firefly_enabled() / firefly_summer_start() / firefly_summer_full() / firefly_summer_end_full() /
+//   weather.firefly_summer_end() / firefly_manual() / firefly_night_only() / firefly_min_darkness() / firefly_rate() /
+//   weather.firefly_box_xz_m() / firefly_height_m() / firefly_size_m() / firefly_lifetime_s() / firefly_drift_speed() /
+//   weather.firefly_max_particles() / firefly_seed() / firefly_strength() -> number
+//   weather.firefly_color() -> r, g, b
+//   weather.fireflies_glowing() -> number           0..1, the firefly amount now
+//   weather.set_firefly{enabled=, summer_start=, summer_full=, summer_end_full=, summer_end=, manual=, night_only=,
+//                       min_darkness=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, drift_speed=, color={r,g,b},
+//                       max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/firefly.h; colour lanes 0..1; enabled and night_only: any non-zero number
+//                                         is 1); an unknown key or a non-number raises an error that names the call and
+//                                         nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -354,6 +375,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/meteor.h"
+#include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -1716,6 +1738,111 @@ int l_weather_set_leaf_fall(lua_State* L) {
     return 0;
 }
 
+// ---- Fireflies (M-FIREFLIES step 23c) ----
+
+kit::Firefly& check_firefly(lua_State* L, const char* fn) { return check_first<kit::Firefly>(L, fn, "Firefly"); }
+
+#define MCE_WEATHER_GETTER_FIREFLY(luaname, field)                                                      \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_firefly(L, "weather." #luaname).field));              \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_FIREFLY(firefly_enabled, enabled)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_start, summer_start)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_full, summer_full)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_end_full, summer_end_full)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_end, summer_end)
+MCE_WEATHER_GETTER_FIREFLY(firefly_manual, manual)
+MCE_WEATHER_GETTER_FIREFLY(firefly_night_only, night_only)
+MCE_WEATHER_GETTER_FIREFLY(firefly_min_darkness, min_darkness)
+MCE_WEATHER_GETTER_FIREFLY(firefly_rate, rate)
+MCE_WEATHER_GETTER_FIREFLY(firefly_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_height_m, height_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_size_m, size_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_FIREFLY(firefly_drift_speed, drift_speed)
+MCE_WEATHER_GETTER_FIREFLY(firefly_max_particles, max_particles)
+MCE_WEATHER_GETTER_FIREFLY(firefly_seed, seed)
+MCE_WEATHER_GETTER_FIREFLY(firefly_strength, strength)
+#undef MCE_WEATHER_GETTER_FIREFLY
+
+int l_weather_firefly_color(lua_State* L) {
+    return push_season_tint(L, check_firefly(L, "weather.firefly_color").color);
+}
+
+// weather.fireflies_glowing(): kit::firefly_amount with the inputs the extract's firefly block uses: the first Season at the
+// first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock) and the first Weather's rain intensity while it rains or storms.
+int l_weather_fireflies_glowing(lua_State* L) {
+    const kit::Firefly& ff = check_firefly(L, "weather.fireflies_glowing");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::firefly_amount(ff, season, phase, aurora_night_fade(w), aurora_cloud_cover(w), rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_firefly{...}: validated before anything is written.
+int l_weather_set_firefly(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled",  "summer_start", "summer_full", "summer_end_full", "summer_end",    "manual",
+                                          "night_only", "min_darkness", "rate",       "box_xz_m",        "height_m",     "size_m",
+                                          "lifetime_s", "drift_speed", "color",       "max_particles",   "seed",         "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_firefly", kKeys, 18,
+                  "enabled, summer_start, summer_full, summer_end_full, summer_end, manual, night_only, min_darkness, rate, "
+                  "box_xz_m, height_m, size_m, lifetime_s, drift_speed, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::Firefly& ff = check_firefly(L, "weather.set_firefly");
+    if (given[0]) ff.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) ff.summer_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) ff.summer_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) ff.summer_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) ff.summer_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) ff.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) ff.night_only = value[6] != 0.0 ? 1 : 0;
+    if (given[7]) ff.min_darkness = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) ff.rate = static_cast<f32>(clamp_range(value[8], 0.0, 200.0));
+    if (given[9]) ff.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) ff.height_m = static_cast<f32>(clamp_range(value[10], 1.0, 20.0));
+    if (given[11]) ff.size_m = static_cast<f32>(clamp_range(value[11], 0.02, 0.5));
+    if (given[12]) ff.lifetime_s = static_cast<f32>(clamp_range(value[12], 1.0, 30.0));
+    if (given[13]) ff.drift_speed = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) {
+        ff.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        ff.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        ff.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) ff.max_particles = static_cast<u32>(clamp_range(value[15], 16.0, 4096.0));
+    if (given[16]) ff.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) ff.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2081,6 +2208,26 @@ const luaL_Reg kWeatherLib[] = {
     {"leaf_fall_leaf_color", l_weather_leaf_fall_leaf_color},
     {"leaf_falling", l_weather_leaf_falling},
     {"set_leaf_fall", l_weather_set_leaf_fall},
+    {"firefly_enabled", l_weather_firefly_enabled},
+    {"firefly_summer_start", l_weather_firefly_summer_start},
+    {"firefly_summer_full", l_weather_firefly_summer_full},
+    {"firefly_summer_end_full", l_weather_firefly_summer_end_full},
+    {"firefly_summer_end", l_weather_firefly_summer_end},
+    {"firefly_manual", l_weather_firefly_manual},
+    {"firefly_night_only", l_weather_firefly_night_only},
+    {"firefly_min_darkness", l_weather_firefly_min_darkness},
+    {"firefly_rate", l_weather_firefly_rate},
+    {"firefly_box_xz_m", l_weather_firefly_box_xz_m},
+    {"firefly_height_m", l_weather_firefly_height_m},
+    {"firefly_size_m", l_weather_firefly_size_m},
+    {"firefly_lifetime_s", l_weather_firefly_lifetime_s},
+    {"firefly_drift_speed", l_weather_firefly_drift_speed},
+    {"firefly_max_particles", l_weather_firefly_max_particles},
+    {"firefly_seed", l_weather_firefly_seed},
+    {"firefly_strength", l_weather_firefly_strength},
+    {"firefly_color", l_weather_firefly_color},
+    {"fireflies_glowing", l_weather_fireflies_glowing},
+    {"set_firefly", l_weather_set_firefly},
     {nullptr, nullptr},
 };
 

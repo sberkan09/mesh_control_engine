@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, and the "season:" lines, the Season's phase and tint).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines and the "fireflies:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -84,5 +84,10 @@ function update()
         -- to 0.375), so the scene sets manual 0.6, the floor of the amount: leaf_falling is 0.600 on every line and the camera-
         -- following leaf emitter is drawn all run. Read only, the script writes nothing.
         mce.log(string.format("leaves: %.3f at tick %d", weather.leaf_falling(), t))
+        -- M-FIREFLIES: the Firefly on the Weather entity (manual 0.5, the floor of the amount). fireflies_glowing is the kit amount:
+        -- max(manual, summer window) times the night gate (the Environment3D hour, from the 5:00 start to the dawn at about tick
+        -- 1500) times the dryness (1 - rain intensity): the glow thins with the dawn and in the rain and is exactly 0 by day.
+        -- Read only, the script writes nothing.
+        mce.log(string.format("fireflies: %.3f at tick %d", weather.fireflies_glowing(), t))
     end
 end
