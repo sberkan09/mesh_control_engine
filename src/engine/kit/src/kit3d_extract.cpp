@@ -19,6 +19,7 @@
 #include "mce/kit/season.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/day_cycle.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/world_clock.h"
@@ -959,14 +960,24 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     // The sky pass draws its sun disk at -light.direction; while the moon holds the light that disk would sit on the
     // phased moon, so the local Sky copy drops it (M-NIGHTSKY 14e). Never Environment3D; unchanged otherwise.
     if (moon_holds_light) sky.sun_intensity = 0.0f;
+    // The atmosphere's sun is the light's direction: while the moon holds the light it would paint a daylight sky around the moon.
+    // The sky then clears to the fog colour (the night sky draws the stars and the moon) and the atmosphere steps aside.
+    const bool atmosphere_yields_to_moon = moon_holds_light && env.atmosphere != 0;
+    if (atmosphere_yields_to_moon) sky.enabled = false;
     scene.set_sky(sky);
     render::Fog fog;
     fog.color = env.fog_color;
     fog.density = env.fog_density;
     render::Atmosphere atmosphere;
-    atmosphere.enabled = env.atmosphere != 0;
+    atmosphere.enabled = env.atmosphere != 0 && !atmosphere_yields_to_moon;
     atmosphere.intensity = env.atmosphere_intensity;
     atmosphere.mie = env.atmosphere_haze;
+    {  // A DayCycle that is writing the environment owns the ambient (its keys are authored, the atmosphere's is dim in the shade);
+       // the atmosphere still draws the sky and tints the sun. Without one the atmosphere sets the ambient as before.
+        bool day_cycle_owns_ambient = false;
+        world.query<const DayCycle&>().each([&](const DayCycle& c) { day_cycle_owns_ambient = day_cycle_owns_ambient || c.enabled != 0; });
+        if (day_cycle_owns_ambient && env.time_of_day >= 0.0f) atmosphere.ambient = false;
+    }
     scene.set_atmosphere(atmosphere);
     render::Volumetrics vol;
     vol.enabled = env.volumetric_fog != 0;

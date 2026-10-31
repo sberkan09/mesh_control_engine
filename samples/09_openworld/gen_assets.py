@@ -15,6 +15,7 @@ import os
 import random
 import struct
 import uuid
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NS = uuid.UUID("0b0e0000-0000-4000-8000-0000000000e1")
@@ -274,6 +275,7 @@ G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
 G_HITS = guid("audio/hits.mcsound")
 G_LAMP = guid("materials/lamp.mcmat")
+G_GRADE = guid("textures/city_grade.png")
 G_CRASHES = guid("audio/crashes.mcsound")
 
 
@@ -494,6 +496,35 @@ G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + li
 PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
 ROAD_TOP = 0.14
 SIDEWALK_TOP = 0.2
+
+
+def color_grade_lut():
+    """The city's color grade (Environment3D.color_grade): a 256 x 16 strip of 16 tiles (blue), each 16 x 16 (red across, green down).
+    A mild film look: contrast S-curve, +12 % saturation, a touch of warmth in the highlights and teal in the shadows."""
+    size = 16
+    rows = []
+    for g in range(size):
+        row = bytearray([0])
+        for b in range(size):
+            for r in range(size):
+                c = [r / (size - 1), g / (size - 1), b / (size - 1)]
+                luma = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+                c = [luma + (v - luma) * 1.12 for v in c]
+                c = [v + 0.35 * (v - 0.5) * (1 - abs(2 * v - 1)) for v in c]  # S-curve, fixes 0, 0.5 and 1
+                warm = luma * luma
+                cool = (1 - luma) * (1 - luma)
+                c = [c[0] + 0.03 * warm - 0.015 * cool, c[1] + 0.005 * warm + 0.005 * cool, c[2] - 0.03 * warm + 0.02 * cool]
+                row.extend(int(round(min(max(v, 0.0), 1.0) * 255)) for v in c)
+        rows.append(bytes(row))
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size * size, size, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+    write_bytes("textures/city_grade.png", png)
+    write("textures/city_grade.png.mceasset", {"guid": G_GRADE, "importer": "texture", "importer_version": 1,
+                                               "settings": {"srgb": False, "mips": False}})
 
 
 def surface_assets():
@@ -941,7 +972,12 @@ def lamp_material():
 def atmosphere(s, net, node_half):
     """A world clock with a day cycle, a physical sky with a moon and stars, a street lamp at two corners of every junction that
     lights at dusk, and a seeded weather schedule (rain, storm, fog, lightning) with its rain and wind beds and a night bed."""
-    s.add("Clock", {"LocalTransform": {}, "WorldClock": {"hour": START_HOUR, "day_length_seconds": DAY_SECONDS}, "DayCycle": {}})
+    s.add("Clock", {"LocalTransform": {}, "WorldClock": {"hour": START_HOUR, "day_length_seconds": DAY_SECONDS},
+                     # The default curve's daytime ambient (0.35) is a tenth of the sun, so shade (grass under a building) went black:
+                     # the day keys (dawn, noon, dusk) carry about twice the sky and ground ambient; the night keys stay as they were.
+                     "DayCycle": {"k1_sky": [0.70, 0.74, 0.90, 1], "k1_ground": [0.38, 0.34, 0.30, 1],
+                                  "k2_sky": [1.00, 1.15, 1.40, 1], "k2_ground": [0.55, 0.52, 0.45, 1],
+                                  "k3_sky": [0.80, 0.65, 0.75, 1], "k3_ground": [0.35, 0.28, 0.25, 1]}})
     s.add("Weather", {"LocalTransform": {}, "Weather": {"transition_seconds": 20, "auto_change_seconds": 150, "seed": WEATHER_SEED},
                       "WindGust": {}, "GroundMist": {}, "Moon": {}, "WetSurfaces": {"strength": 4, "darken": 0.5, "puddles": 0.6},
                       "RainRipples": {}, "ThunderDelay": {"clip": "guid:" + audio_guid("thunder"), "volume": 1.5}, "WindDirection": {"degrees": 0, "drift_degrees_per_minute": 6}, "CloudLayer": {}})
@@ -1088,7 +1124,10 @@ def scene():
     rng = random.Random(1009)
     s = Scene()
     s.add("Environment", {"Environment3D": {"sun_direction": [-0.45, -0.8, -0.35], "sun_intensity": 3.0, "shadow_distance": 140,
-                                            "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 0}, "LocalTransform": {}})
+                                            "fog_density": 0.0002, "exposure": 1.0, "sky_enabled": 1,
+                                            # M-VISUAL looks (quality tiers cap the cost: TAA on High only, Low drops SSR, contact shadows, GI updates)
+                                            "atmosphere": 1, "ssao": 1, "ssao_radius": 0.8, "ssao_intensity": 1.0, "ssr": 1, "contact_shadows": 1,
+                                            "color_grade": "guid:" + G_GRADE, "color_grade_strength": 0.8}, "LocalTransform": {}})
     net = s.add("Road network", {"LocalTransform": {}, "RoadNetwork3D": {"roads": "guid:" + G_ROADS}})
     node_half = city_surface(s)
     street_furniture(s, rng, node_half)
@@ -1223,6 +1262,9 @@ def scene():
     pause_menu(s)
     radio(s)
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
+    # Last, so the older entities keep their order: one irradiance volume over the middle of the city: bounce light into the shade of the buildings and the grass.
+    s.add("GI volume", {"LocalTransform": tf((0, 12, 0)), "GiVolume3D": {"half_extents": [120, 14, 120], "probes_x": 16, "probes_y": 4, "probes_z": 16,
+                                                                          "probes_per_frame": 32, "intensity": 1.0}})
     return len(s.ents), n_buildings
 
 
@@ -1380,6 +1422,7 @@ def hud():
 
 models()
 surface_assets()
+color_grade_lut()
 lamp_material()
 audio_assets()
 hud()

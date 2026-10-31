@@ -70,6 +70,7 @@ mce_add_test(test_kit UMBRELLA
         test_ground_mist.cpp
         test_moon.cpp
         test_moon_extract.cpp
+        test_atmosphere_extract.cpp
         test_aurora.cpp
         test_rainbow.cpp
         test_meteor.cpp
