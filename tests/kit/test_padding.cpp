@@ -33,6 +33,7 @@
 #include "mce/kit/water_ice.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/firefly.h"
+#include "mce/kit/pollen.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -110,6 +111,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<WaterIce>("WaterIce", sizeof(WaterIce::pad_));  // water_ice.h (M-FREEZE 20a)
     expect_pad<LeafFall>("LeafFall", sizeof(LeafFall::pad_));  // leaf_fall.h (M-LEAFFALL 21a)
     expect_pad<Firefly>("Firefly", sizeof(Firefly::pad_));  // firefly.h (M-FIREFLIES 23a)
+    expect_pad<Pollen>("Pollen", sizeof(Pollen::pad_));  // pollen.h (M-POLLEN 24a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

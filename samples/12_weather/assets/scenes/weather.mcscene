@@ -92,6 +92,9 @@
     "Firefly": {
      "manual": 0.5
     },
+    "Pollen": {
+     "manual": 0.4
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

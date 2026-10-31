@@ -135,6 +135,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `NavAgent3D` | `mce/kit/nav3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Perceiver` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `Stimulus` | `mce/kit/perception.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard.mcscene |
+| `Pollen` | `mce/kit/pollen.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Precipitation3D` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Lightning` | `mce/kit/precipitation.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `RichPresence` | `mce/kit/presence.h` | yes | yes | yes | docs/user-guide/26-steam.md | samples/steam_demo/assets/scenes/main.mcscene |
