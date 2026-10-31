@@ -473,6 +473,36 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (ice_depth_m 0.05..10, the others and each colour
     -- channel 0..1; enabled: any non-zero number is 1); an unknown key or a non-number raises and nothing is written
     set_water_ice: (settings: { enabled: number?, freeze_start: number?, freeze_full: number?, manual: number?, ice_color: { number }?, ice_roughness: number?, ice_reflectivity: number?, ice_depth_m: number?, calm: number?, strength: number? }) -> (),
+
+    -- Leaf fall (M-LEAFFALL), the first LeafFall in the scene; every leaf-fall function raises when there is none
+    -- (set_leaf_fall never adds one). The getters are leaf_fall_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. leaf_falling (0..1) is the leaf amount now, the same one the renderer draws: the
+    -- autumn window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by
+    -- manual; with no Season it is manual only; 0 when enabled or strength is 0. Read-only.
+    leaf_fall_enabled: () -> number,
+    leaf_fall_autumn_start: () -> number,
+    leaf_fall_autumn_full: () -> number,
+    leaf_fall_autumn_end_full: () -> number,
+    leaf_fall_autumn_end: () -> number,
+    leaf_fall_manual: () -> number,
+    leaf_fall_rate: () -> number,
+    leaf_fall_box_xz_m: () -> number,
+    leaf_fall_height_m: () -> number,
+    leaf_fall_size_m: () -> number,
+    leaf_fall_lifetime_s: () -> number,
+    leaf_fall_fall_speed: () -> number,
+    leaf_fall_wind_follow: () -> number,
+    leaf_fall_leaf_color: () -> (number, number, number),
+    leaf_fall_tint_follow: () -> number,
+    leaf_fall_max_particles: () -> number,
+    leaf_fall_seed: () -> number,
+    leaf_fall_strength: () -> number,
+    leaf_falling: () -> number,
+    -- every key optional, each value clamped to the field's range (autumn_*, manual, tint_follow, strength and each colour
+    -- channel 0..1, rate 0..500, box_xz_m 1..100, height_m 1..50, size_m 0.02..1, lifetime_s 1..30, fall_speed 0..5,
+    -- wind_follow 0..2, max_particles 64..8192, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_leaf_fall: (settings: { enabled: number?, autumn_start: number?, autumn_full: number?, autumn_end_full: number?, autumn_end: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, leaf_color: { number }?, tint_follow: number?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
