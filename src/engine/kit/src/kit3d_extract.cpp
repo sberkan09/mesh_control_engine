@@ -11,6 +11,7 @@
 #include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/chunk_lod3d.h"
+#include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
@@ -113,6 +114,9 @@ SeasonFrame read_season(World& world) {
 // be 4.29 billion live entities, 64 GB of locations alone); the reserved value cannot collide with one. The foliage batch
 // ids live in Forward3D's separate batch id space (batch_gpu_), not the emitter one (emitters_gpu_). A test pins it.
 constexpr u32 kLeafFallEmitterId = 0xFFFF0001u;
+
+// Fireflies (M-FIREFLIES 23b): the id of the second render-side emitter (same collision argument as the leaf id).
+constexpr u32 kFireflyEmitterId = 0xFFFF0002u;
 
 // QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
 // step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
@@ -295,6 +299,32 @@ void apply_env_override(Environment3D& env, const EnvOverride& o) {
         }
         default: break;
     }
+}
+
+// The environment the frame uses: the Environment3D resource, else the first component, else defaults, then the r.env
+// overrides. Shared by apply_environment and the firefly feed (which needs the same time of day).
+Environment3D resolve_environment(World& world) {
+    Environment3D env;
+    if (const Environment3D* r = world.try_resource<Environment3D>()) {
+        env = *r;
+    } else {
+        bool found = false;
+        world.query<const Environment3D&>().each([&](const Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    {
+        static EnvOverrides parsed;
+        const StringView want = cv_env_override.get_string();
+        if (want != parsed.text.view()) {
+            parsed.text.assign(want);
+            parse_env_overrides(want, parsed);
+        }
+        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
+    }
+    return env;
 }
 
 }  // namespace
@@ -873,26 +903,7 @@ bool Kit3DExtract::base_view_of(World& world, Entity e, const Camera3DComponent&
 }
 
 void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
-    Environment3D env;
-    if (const Environment3D* r = world.try_resource<Environment3D>()) {
-        env = *r;
-    } else {
-        bool found = false;
-        world.query<const Environment3D&>().each([&](const Environment3D& c) {
-            if (found) return;
-            found = true;
-            env = c;
-        });
-    }
-    {
-        static EnvOverrides parsed;
-        const StringView want = cv_env_override.get_string();
-        if (want != parsed.text.view()) {
-            parsed.text.assign(want);
-            parse_env_overrides(want, parsed);
-        }
-        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
-    }
+    const Environment3D env = resolve_environment(world);
     render::DirectionalLight sun;
     sun.direction = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
     sun.color = env.sun_color;
@@ -2136,6 +2147,75 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     scene.add_particle_emitter(em);
                     ++stats_.particle_emitters;
                 }
+            }
+        }
+    }
+    {  // fireflies (M-FIREFLIES 23b): one additive render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Firefly* ff = nullptr;
+        world.query<const Firefly&>().each([&](const Firefly& c) {
+            if (!ff) ff = &c;
+        });
+        if (ff) {
+            const Season* ff_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!ff_season) ff_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = ff_season ? season_phase(*ff_season, day, hour) : 0.0f;
+            const Weather* ff_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!ff_weather) ff_weather = &c;
+            });
+            const bool raining =
+                ff_weather && (ff_weather->current == WeatherKind::Rain || ff_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? ff_weather->intensity : 0.0f;
+            // the night fade the meteor block uses (apply_environment's `dark`); no clock (time_of_day < 0): 0
+            const Environment3D ff_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (ff_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(ff_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const f32 cloud = scene.clouds().coverage;  // post-apply_quality, as the meteor block reads it
+            const f32 amount = firefly_amount(*ff, ff_season, phase, night_fade, cloud, rain);
+            const FireflyLook look = firefly_look(*ff, amount);
+            if (look.active) {
+                const bool low = is_low_quality(quality_);
+                render::ParticleEmitter em;
+                em.id = kFireflyEmitterId;
+                em.max_particles = std::clamp(ff->max_particles, 16u, 4096u);
+                if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                em.seed = ff->seed;
+                em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                em.box = math::vec3{look.box, 0.0f, look.box};
+                em.direction = look.direction;
+                em.spread = look.spread;
+                em.rate = low ? look.rate * 0.5f : look.rate;
+                em.burst = 0;
+                em.emitting = true;
+                em.speed_min = look.speed_min;
+                em.speed_max = look.speed_max;
+                em.lifetime_min = look.lifetime_min;
+                em.lifetime_max = look.lifetime_max;
+                em.gravity = look.gravity;
+                em.drag = look.drag;
+                em.collide = false;
+                em.size_start = look.size;
+                em.size_end = look.size;
+                em.color_start = look.color_start;
+                em.color_end = look.color_end;
+                em.additive = true;
+                scene.add_particle_emitter(em);
+                ++stats_.particle_emitters;
             }
         }
     }
