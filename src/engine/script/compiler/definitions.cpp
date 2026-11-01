@@ -534,6 +534,38 @@ declare weather: {
     -- max_particles 16..4096, seed 0..4294967295; enabled and night_only: any non-zero number is 1); an unknown key or a
     -- non-number raises and nothing is written
     set_firefly: (settings: { enabled: number?, summer_start: number?, summer_full: number?, summer_end_full: number?, summer_end: number?, manual: number?, night_only: number?, min_darkness: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, drift_speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Pollen (M-POLLEN), the first Pollen in the scene; every pollen function raises when there is none (set_pollen
+    -- never adds one). The getters are pollen_ plus the set key; the colour returns r, g, b. They read the authoring even
+    -- when enabled is 0. pollen_drifting (0..1) is the pollen amount now, the same one the renderer draws: the spring
+    -- window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by manual,
+    -- times the day gate (the Environment3D hour; 0 night fade with no clock) and the dryness (1 - rain); with no Season it
+    -- is the manual floor; 0 when enabled or strength is 0. Read-only.
+    pollen_enabled: () -> number,
+    pollen_spring_start: () -> number,
+    pollen_spring_full: () -> number,
+    pollen_spring_end_full: () -> number,
+    pollen_spring_end: () -> number,
+    pollen_manual: () -> number,
+    pollen_day_only: () -> number,
+    pollen_min_daylight: () -> number,
+    pollen_rate: () -> number,
+    pollen_box_xz_m: () -> number,
+    pollen_height_m: () -> number,
+    pollen_size_m: () -> number,
+    pollen_lifetime_s: () -> number,
+    pollen_fall_speed: () -> number,
+    pollen_wind_follow: () -> number,
+    pollen_max_particles: () -> number,
+    pollen_seed: () -> number,
+    pollen_strength: () -> number,
+    pollen_color: () -> (number, number, number),
+    pollen_drifting: () -> number,
+    -- every key optional, each value clamped to the field's range (spring_*, manual, min_daylight, strength and each colour
+    -- channel 0..1, rate 0..200, box_xz_m 1..100, height_m 1..30, size_m 0.02..0.5, lifetime_s 1..30, fall_speed 0..2,
+    -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled and day_only: any non-zero number is 1); an
+    -- unknown key or a non-number raises and nothing is written
+    set_pollen: (settings: { enabled: number?, spring_start: number?, spring_full: number?, spring_end_full: number?, spring_end: number?, manual: number?, day_only: number?, min_daylight: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {

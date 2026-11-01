@@ -57,6 +57,12 @@
 #      dark, falls as the dawn closes the night gate and the rain (from tick 60) and the storm (from 600) thicken (0.850 at tick
 #      150, 0.100 at 600 in the storm), recovers to 0.782 at 1050 once the storm has eased, and is exactly 0.000 from sunrise
 #      (1500) on. The entity count stays 14.
+#  19. (M-POLLEN 24c) the "pollen:" lines: weather.pollen_drifting() of the Pollen on the Weather entity (read only, the script
+#      writes nothing). The amount is max(manual 0.4, the spring window) times the day gate times (1 - rain): the Season only
+#      climbs from 0.308 to 0.375 (the spring window is over at 0.32, so the floor 0.4 is what shows), the day gate is closed
+#      in the dark (0.000 at tick 0 and through the rain and the storm up to the dawn at about 1500), opens with the sun
+#      (0.068 at 1650 in the storm, 0.251 at 1800, 0.380 at 1950) and the amount is the full floor 0.400 from tick 2100
+#      (the snow does not close it). The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -126,6 +132,12 @@ string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies600 "
 list(LENGTH fireflies600 n_fireflies600)
 if(NOT n_fireflies600 EQUAL 4)
     message(FATAL_ERROR "expected 4 fireflies lines in 600 ticks, got ${n_fireflies600}")
+endif()
+expect("${first}" "script: pollen: 0.000 at tick 0\n" "the pollen shows in the dark")
+string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen600 "${first}")
+list(LENGTH pollen600 n_pollen600)
+if(NOT n_pollen600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 pollen lines in 600 ticks, got ${n_pollen600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -204,6 +216,17 @@ string(REGEX MATCHALL "script: fireflies: [0-9.]+ at tick [0-9]+" fireflies2700 
 list(LENGTH fireflies2700 n_fireflies2700)
 if(NOT n_fireflies2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 fireflies lines in 2700 ticks, got ${n_fireflies2700}")
+endif()
+expect("${forecast}" "script: pollen: 0.000 at tick 600\n" "the pollen shows in the dark and the storm")
+expect("${forecast}" "script: pollen: 0.000 at tick 1500\n" "the pollen shows before the day gate opens")
+expect("${forecast}" "script: pollen: 0.068 at tick 1650\n" "the day gate and the storm are wrong for the pollen")
+expect("${forecast}" "script: pollen: 0.251 at tick 1800\n" "the pollen did not rise with the daylight")
+expect("${forecast}" "script: pollen: 0.380 at tick 1950\n" "the pollen did not rise with the daylight")
+expect("${forecast}" "script: pollen: 0.400 at tick 2250\n" "the pollen is not at the manual floor by day")
+string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen2700 "${forecast}")
+list(LENGTH pollen2700 n_pollen2700)
+if(NOT n_pollen2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 pollen lines in 2700 ticks, got ${n_pollen2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 

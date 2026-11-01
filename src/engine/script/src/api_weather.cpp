@@ -329,6 +329,28 @@
 //                                         is 1); an unknown key or a non-number raises an error that names the call and
 //                                         nothing is written
 //
+// Pollen (M-POLLEN step 24c) lives in the same table: the authoring over the first kit::Pollen (mce/kit/pollen.h) and the
+// read-only pollen_drifting(). Named errors as above ("weather.set_pollen: the scene has no Pollen entity"); the setter
+// never adds the component. The getters are named weather.pollen_<key>; the colour returns r, g, b. pollen_drifting() is
+// kit::pollen_amount on the first Season at the first WorldClock's day and hour, with the inputs the extract uses: the night
+// fade of the Environment3D hour (0 with no clock, so only day_only 0 shows) and the first Weather's rain intensity while it
+// rains or storms (0 without a Weather); no Season is the manual floor. 0 when `enabled` or `strength` is 0. The getters read
+// the authoring even when `enabled` is 0.
+//
+//   weather.pollen_enabled() / pollen_spring_start() / pollen_spring_full() / pollen_spring_end_full() /
+//   weather.pollen_spring_end() / pollen_manual() / pollen_day_only() / pollen_min_daylight() / pollen_rate() /
+//   weather.pollen_box_xz_m() / pollen_height_m() / pollen_size_m() / pollen_lifetime_s() / pollen_fall_speed() /
+//   weather.pollen_wind_follow() / pollen_max_particles() / pollen_seed() / pollen_strength() -> number
+//   weather.pollen_color() -> r, g, b
+//   weather.pollen_drifting() -> number           0..1, the pollen amount now
+//   weather.set_pollen{enabled=, spring_start=, spring_full=, spring_end_full=, spring_end=, manual=, day_only=,
+//                      min_daylight=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, fall_speed=, wind_follow=,
+//                      color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/pollen.h; colour lanes 0..1; enabled and day_only: any non-zero number
+//                                         is 1); an unknown key or a non-number raises an error that names the call and
+//                                         nothing is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -376,6 +398,7 @@
 #include "mce/kit/moon.h"
 #include "mce/kit/meteor.h"
 #include "mce/kit/firefly.h"
+#include "mce/kit/pollen.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -1843,6 +1866,108 @@ int l_weather_set_firefly(lua_State* L) {
     return 0;
 }
 
+// ---- Pollen (M-POLLEN step 24c) ----
+
+kit::Pollen& check_pollen(lua_State* L, const char* fn) { return check_first<kit::Pollen>(L, fn, "Pollen"); }
+
+#define MCE_WEATHER_GETTER_POLLEN(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_pollen(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_POLLEN(pollen_enabled, enabled)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_start, spring_start)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_full, spring_full)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_end_full, spring_end_full)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_end, spring_end)
+MCE_WEATHER_GETTER_POLLEN(pollen_manual, manual)
+MCE_WEATHER_GETTER_POLLEN(pollen_day_only, day_only)
+MCE_WEATHER_GETTER_POLLEN(pollen_min_daylight, min_daylight)
+MCE_WEATHER_GETTER_POLLEN(pollen_rate, rate)
+MCE_WEATHER_GETTER_POLLEN(pollen_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_height_m, height_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_size_m, size_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_POLLEN(pollen_fall_speed, fall_speed)
+MCE_WEATHER_GETTER_POLLEN(pollen_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_POLLEN(pollen_max_particles, max_particles)
+MCE_WEATHER_GETTER_POLLEN(pollen_seed, seed)
+MCE_WEATHER_GETTER_POLLEN(pollen_strength, strength)
+#undef MCE_WEATHER_GETTER_POLLEN
+
+int l_weather_pollen_color(lua_State* L) { return push_season_tint(L, check_pollen(L, "weather.pollen_color").color); }
+
+// weather.pollen_drifting(): kit::pollen_amount with the inputs the extract's pollen block uses: the first Season at the
+// first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock) and the first Weather's rain intensity while it rains or storms.
+int l_weather_pollen_drifting(lua_State* L) {
+    const kit::Pollen& po = check_pollen(L, "weather.pollen_drifting");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::pollen_amount(po, season, phase, aurora_night_fade(w), rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_pollen{...}: validated before anything is written.
+int l_weather_set_pollen(lua_State* L) {
+    static const char* const kKeys[19] = {"enabled", "spring_start", "spring_full", "spring_end_full", "spring_end", "manual", "day_only", "min_daylight", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "fall_speed", "wind_follow", "color", "max_particles", "seed", "strength"};
+    f64 value[19] = {};
+    bool given[19] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_pollen", kKeys, 19,
+                  "enabled, spring_start, spring_full, spring_end_full, spring_end, manual, day_only, min_daylight, rate, box_xz_m, height_m, size_m, lifetime_s, fall_speed, wind_follow, color, max_particles, seed, strength",
+                  value, given, 15, color);
+    kit::Pollen& po = check_pollen(L, "weather.set_pollen");
+    if (given[0]) po.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) po.spring_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) po.spring_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) po.spring_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) po.spring_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) po.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) po.day_only = value[6] != 0.0 ? 1 : 0;
+    if (given[7]) po.min_daylight = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) po.rate = static_cast<f32>(clamp_range(value[8], 0.0, 200.0));
+    if (given[9]) po.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) po.height_m = static_cast<f32>(clamp_range(value[10], 1.0, 30.0));
+    if (given[11]) po.size_m = static_cast<f32>(clamp_range(value[11], 0.02, 0.5));
+    if (given[12]) po.lifetime_s = static_cast<f32>(clamp_range(value[12], 1.0, 30.0));
+    if (given[13]) po.fall_speed = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) po.wind_follow = static_cast<f32>(clamp_range(value[14], 0.0, 2.0));
+    if (given[15]) {
+        po.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        po.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        po.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[16]) po.max_particles = static_cast<u32>(clamp_range(value[16], 16.0, 4096.0));
+    if (given[17]) po.seed = static_cast<u32>(clamp_range(value[17], 0.0, 4294967295.0));
+    if (given[18]) po.strength = static_cast<f32>(clamp_range(value[18], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2228,6 +2353,27 @@ const luaL_Reg kWeatherLib[] = {
     {"firefly_color", l_weather_firefly_color},
     {"fireflies_glowing", l_weather_fireflies_glowing},
     {"set_firefly", l_weather_set_firefly},
+    {"pollen_enabled", l_weather_pollen_enabled},
+    {"pollen_spring_start", l_weather_pollen_spring_start},
+    {"pollen_spring_full", l_weather_pollen_spring_full},
+    {"pollen_spring_end_full", l_weather_pollen_spring_end_full},
+    {"pollen_spring_end", l_weather_pollen_spring_end},
+    {"pollen_manual", l_weather_pollen_manual},
+    {"pollen_day_only", l_weather_pollen_day_only},
+    {"pollen_min_daylight", l_weather_pollen_min_daylight},
+    {"pollen_rate", l_weather_pollen_rate},
+    {"pollen_box_xz_m", l_weather_pollen_box_xz_m},
+    {"pollen_height_m", l_weather_pollen_height_m},
+    {"pollen_size_m", l_weather_pollen_size_m},
+    {"pollen_lifetime_s", l_weather_pollen_lifetime_s},
+    {"pollen_fall_speed", l_weather_pollen_fall_speed},
+    {"pollen_wind_follow", l_weather_pollen_wind_follow},
+    {"pollen_max_particles", l_weather_pollen_max_particles},
+    {"pollen_seed", l_weather_pollen_seed},
+    {"pollen_strength", l_weather_pollen_strength},
+    {"pollen_color", l_weather_pollen_color},
+    {"pollen_drifting", l_weather_pollen_drifting},
+    {"set_pollen", l_weather_set_pollen},
     {nullptr, nullptr},
 };
 

@@ -32,5 +32,5 @@ No step needs Opus: nothing writes a shader. If 24b finds that an alpha-blended 
 |---|---|---|---|
 | 24a | done | 965 | `Pollen` and the pure `pollen_amount`, `pollen_look` in `mce/kit/pollen.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19v. |
 | 24b | done | 967 | `Kit3DExtract` adds the local alpha-blended pollen emitter (id `0xFFFF0003`, camera-following box, Low tier halves rate and budget); night fade as the firefly block, wind as the leaf block. |
-| 24c | planned | | |
+| 24c | done | 968 | `weather.set_pollen`, the `weather.pollen_<key>()` getters and read-only `weather.pollen_drifting()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_pollen.cpp`. `12_weather` logs `pollen:` every 150 ticks (0.000 in the dark and the storm up to sunrise, 0.068 at 1650, 0.251 at 1800, 0.400 from 2100). |
 | 24d | planned | | |
