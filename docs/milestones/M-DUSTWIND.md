@@ -41,4 +41,4 @@ None blocks the milestone.
 - The 25a thresholds were first written in m/s while `Weather.wind` is 0..1; 25b moved them to the 0..1 scale (0.3 and 0.8). A wind speed in m/s (if the engine ever exposes one) would need its own conversion.
 - A real GPU/windowed look at the alpha-blended specks (size, alpha against the bright sky) and per-speck tumbling (needs a render field).
 - Dust that lifts from specific ground patches (desert, dry fields) instead of one box around the camera, and a sand-storm visibility or fog change.
-- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies and pollen).
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies and pollen). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).

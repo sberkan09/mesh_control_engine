@@ -1,6 +1,6 @@
 # M-PARTICLEQ — A real particle quality knob: the render-side weather particles scale with the quality tier through `QualitySettings`, not through a recognised Low profile (milestone record)
 
-**Status:** planned (2026-11-01), steps 28a to 28c. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LEAFFALL, M-FIREFLIES, M-POLLEN, M-DUSTWIND, M-BIRDFLOCK and M-BUTTERFLY, whose records all list "a real particle quality switch in `quality.h`" as an open follow-up. Today `Kit3DExtract` halves the rate and budget of the six opt-in emitters (and the weather rain and snow blocks that share the helper) on the Low tier by calling `is_low_quality`, which *recognises* Low from the settings it alone sets (single-sample, no GI updates, no volumetrics) because `QualitySettings` has no particle field. That guess breaks the moment another tier shares those three settings, and a phone cannot pick a particle budget separately from the rest of the tier. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 28a to 28c (PRs 991, 992, 994, 995). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LEAFFALL, M-FIREFLIES, M-POLLEN, M-DUSTWIND, M-BIRDFLOCK and M-BUTTERFLY, whose records all list "a real particle quality switch in `quality.h`" as an open follow-up. Today `Kit3DExtract` halves the rate and budget of the six opt-in emitters on the Low tier by calling `is_low_quality`, which *recognises* Low from the settings it alone sets (single-sample, no GI updates, no volumetrics) because `QualitySettings` has no particle field. That guess breaks the moment another tier shares those three settings, and a phone cannot pick a particle budget separately from the rest of the tier. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** `QualitySettings` gets one field, `particle_scale` (0..1, default 1): the share of the authored emitter rate and `max_particles` a render-side weather emitter keeps. Low is 0.5, Medium and High are 1. `Kit3DExtract` reads `quality_.particle_scale` in every block that now calls `is_low_quality` and drops that function. The result is bit-identical to today on every tier (Low halves, the others do not), but the knob is now explicit, testable and tunable per tier.
 
@@ -28,4 +28,11 @@ No step needs Opus: nothing writes a shader.
 |---|---|---|---|
 | 28a | done | 992 | |
 | 28b | done | 994 | |
-| 28c | planned | | |
+| 28c | done | 995 | The six sibling records' follow-up line closed; the milestone record closed with follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- A user-facing `r.particles` console variable (a phone could trade particles for frame time without changing the tier); the knob is `QualitySettings::particle_scale`, so it is one `MCE_CVAR` and one multiply in `quality_settings`.
+- A non-zero Medium value (for example 0.75 on a phone-class Medium) once a real device measurement says the weather particles cost frame time.
+- The weather rain and snow particles are drawn by the precipitation path, not the six opt-in emitters, and still use their own budget; routing them through `particle_scale` is open.

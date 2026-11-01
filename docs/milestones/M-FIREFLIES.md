@@ -40,4 +40,4 @@ No step needs Opus: nothing writes a shader. If 23b finds that an additive sprit
 None blocks the milestone.
 - A real GPU/windowed look at the additive points (size, brightness against the bloom) and a per-point blink (needs a render field).
 - Fireflies that spawn near water or bushes instead of one box around the camera.
-- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves).
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).

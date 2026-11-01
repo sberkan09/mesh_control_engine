@@ -62,7 +62,7 @@ From the 21a to 21d close; none blocks the milestone.
 - Real leaf meshes with spin and lit two-sided shading (a render seam milestone; today the leaves are camera-facing alpha sprites).
 - Leaves spawned from actual trees (`Foliage3D` / `TerrainFoliage3D` canopies) instead of one box around the camera.
 - Ground pile-up and collision: leaves lying on the ground, and stopping on roofs and props.
-- A real particle quality switch in `quality.h` (today the Low tier is recognised by its other settings and halves rate and budget; there is no `r.particles`).
+- A real particle quality switch in `quality.h` (today the Low tier is recognised by its other settings and halves rate and budget; there is no `r.particles`). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).
 - A `LeafFallChanged` / season event next to `DayPassed`.
 - An alpha fade-in, if the render ramp allows (today the colour starts at 0.9 * amount alpha and only fades out).
 - A demo scene whose `Season` really reaches autumn (`12_weather` uses the `manual` floor because its run never gets there).

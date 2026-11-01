@@ -40,4 +40,4 @@ No step needs Opus: nothing writes a shader. If 24b finds that an alpha-blended 
 None blocks the milestone.
 - A real GPU/windowed look at the alpha-blended specks (size, alpha against the bright sky) and a per-speck spin or shimmer (needs a render field).
 - Pollen that spawns from specific trees or flowers instead of one box around the camera.
-- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves and fireflies).
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves and fireflies). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).

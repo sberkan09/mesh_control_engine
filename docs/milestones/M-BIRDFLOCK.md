@@ -40,4 +40,4 @@ No step needs Opus: nothing writes a shader. If 26b finds that a dark alpha-blen
 None blocks the milestone.
 - A real GPU/windowed look at the dark alpha-blended specks against the dawn and dusk sky (size, alpha; whether they read as birds) and wing flapping or a V formation (needs per-particle motion or a render field).
 - Flocks that start from specific places (a lake, a roost) or turn with the camera, and bird calls (sound).
-- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies, pollen and dust).
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies, pollen and dust). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).
