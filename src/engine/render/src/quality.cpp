@@ -34,6 +34,8 @@ MCE_CVAR(cv_rainbow, "r.rainbow", true,
          "Rainbow in the sunlit sky (RainbowSky; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_meteor, "r.meteor", true,
          "Meteors in the night sky (MeteorSky; off = the frame without them)", CVarFlags::Saved);
+MCE_CVAR(cv_particles, "r.particles", 1.0f,
+         "Share (0..1) of the weather particles kept, on top of the tier's particle_scale (0 = none)", CVarFlags::Saved);
 
 }  // namespace
 
@@ -77,6 +79,9 @@ QualitySettings quality_settings(QualityTier tier) {
             q.taa = true;
             break;
     }
+    // M-PARTICLEUSER 29a: r.particles (0..1, NaN reads 1) scales the tier's share; the default 1 changes nothing.
+    const f32 user = cv_particles.get_float();
+    q.particle_scale *= user == user ? unit01(user) : 1.0f;
     return q;
 }
 

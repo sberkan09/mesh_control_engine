@@ -2,6 +2,7 @@
 
 #include <doctest/doctest.h>
 
+#include "mce/convar.h"
 #include "mce/render/quality.h"
 
 using namespace mce;
@@ -25,4 +26,36 @@ TEST_CASE("particle quality: every tier is within (0, 1]") {
         CHECK(s > 0.0f);
         CHECK(s <= 1.0f);
     }
+}
+
+namespace {
+
+ConVar& particles_cvar() {
+    ConVar* cv = ConVar::find(StringId("r.particles"));
+    REQUIRE(cv != nullptr);
+    return *cv;
+}
+
+struct ResetParticlesCvar {
+    ~ResetParticlesCvar() { particles_cvar().reset(); }
+};
+
+}  // namespace
+
+// M-PARTICLEUSER 29a: r.particles multiplies the tier's particle_scale.
+TEST_CASE("particle quality: r.particles defaults to 1 and leaves the tiers unchanged") {
+    ResetParticlesCvar reset;
+    CHECK(quality_settings(QualityTier::Low).particle_scale == 0.5f);
+    CHECK(quality_settings(QualityTier::High).particle_scale == 1.0f);
+}
+
+TEST_CASE("particle quality: r.particles scales the tier, clamps to 0..1, and 0 keeps none") {
+    ResetParticlesCvar reset;
+    particles_cvar().set_string("0.5");
+    CHECK(quality_settings(QualityTier::High).particle_scale == doctest::Approx(0.5f));
+    CHECK(quality_settings(QualityTier::Low).particle_scale == doctest::Approx(0.25f));
+    particles_cvar().set_string("3");
+    CHECK(quality_settings(QualityTier::Low).particle_scale == doctest::Approx(0.5f));
+    particles_cvar().set_string("-1");
+    CHECK(quality_settings(QualityTier::High).particle_scale == 0.0f);
 }

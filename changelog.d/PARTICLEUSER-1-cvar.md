@@ -1,0 +1,1 @@
+- M-PARTICLEUSER 29a: a saved `r.particles` cvar (0..1, default 1) multiplies the tier's `particle_scale`; test in `test_particle_quality.cpp`.
