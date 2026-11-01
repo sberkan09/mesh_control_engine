@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines and the "pollen:" lines).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines and the "dust:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -93,5 +93,9 @@ function update()
         -- max(manual, spring window) times the day gate (the Environment3D hour; none before the dawn lifts the daylight over
         -- min_daylight) times the dryness (1 - rain intensity). Read only, the script writes nothing.
         mce.log(string.format("pollen: %.3f at tick %d", weather.pollen_drifting(), t))
+        -- M-DUSTWIND: the Dust on the Weather entity (manual 0.4, the floor of the amount). dust_blowing is the kit amount:
+        -- max(manual, smoothstep(wind_start, wind_full, gusted wind)) times the dryness (1 - rain intensity). Read only, the
+        -- script writes nothing.
+        mce.log(string.format("dust: %.3f at tick %d", weather.dust_blowing(), t))
     end
 end

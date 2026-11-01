@@ -566,6 +566,34 @@ declare weather: {
     -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled and day_only: any non-zero number is 1); an
     -- unknown key or a non-number raises and nothing is written
     set_pollen: (settings: { enabled: number?, spring_start: number?, spring_full: number?, spring_end_full: number?, spring_end: number?, manual: number?, day_only: number?, min_daylight: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Dust (M-DUSTWIND), the first Dust in the scene; every dust function raises when there is none (set_dust never adds
+    -- one). The getters are dust_ plus the set key; the colour returns r, g, b. They read the authoring even when enabled
+    -- is 0. dust_blowing (0..1) is the dust amount now, the same one the renderer draws: max(manual, smoothstep(wind_start,
+    -- wind_full, wind)) times the dryness (1 - rain) times strength, with the wind the first Weather's effective wind with
+    -- the gust sway of the first WindGust (calm with no Weather) and the rain the first Weather's intensity while it rains
+    -- or storms; 0 when enabled or strength is 0. Read-only.
+    dust_enabled: () -> number,
+    dust_wind_start: () -> number,
+    dust_wind_full: () -> number,
+    dust_manual: () -> number,
+    dust_rate: () -> number,
+    dust_box_xz_m: () -> number,
+    dust_height_m: () -> number,
+    dust_size_m: () -> number,
+    dust_lifetime_s: () -> number,
+    dust_speed: () -> number,
+    dust_wind_follow: () -> number,
+    dust_max_particles: () -> number,
+    dust_seed: () -> number,
+    dust_strength: () -> number,
+    dust_color: () -> (number, number, number),
+    dust_blowing: () -> number,
+    -- every key optional, each value clamped to the field's range (wind_start, wind_full, manual, strength and each colour
+    -- channel 0..1, rate 0..400, box_xz_m 1..100, height_m 1..20, size_m 0.01..0.5, lifetime_s 0.5..10, speed 0..30,
+    -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_dust: (settings: { enabled: number?, wind_start: number?, wind_full: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
