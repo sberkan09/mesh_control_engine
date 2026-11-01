@@ -13,6 +13,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
+#include "mce/kit/dust.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
@@ -121,6 +122,9 @@ constexpr u32 kFireflyEmitterId = 0xFFFF0002u;
 
 // Pollen (M-POLLEN 24b): the id of the third render-side emitter (same collision argument as the leaf id).
 constexpr u32 kPollenEmitterId = 0xFFFF0003u;
+
+// Wind-blown dust (M-DUSTWIND 25b): the id of the fourth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kDustEmitterId = 0xFFFF0004u;
 
 // QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
 // step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
@@ -2279,6 +2283,65 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = std::clamp(po->max_particles, 16u, 4096u);
                     if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
                     em.seed = po->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // dust (M-DUSTWIND 25b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Dust* du = nullptr;
+        world.query<const Dust&>().each([&](const Dust& c) {
+            if (!du) du = &c;
+        });
+        if (du && du->enabled != 0 && du->strength > 0.0f) {
+            const Weather* du_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!du_weather) du_weather = &c;
+            });
+            const bool raining =
+                du_weather && (du_weather->current == WeatherKind::Rain || du_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? du_weather->intensity : 0.0f;
+            const WindGust* du_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!du_gust) du_gust = &c;
+            });
+            // As the leaf block: no Weather is calm, the gust sway bit.
+            const f32 wind = du_weather ? effective_wind(*du_weather, du_gust, kGustSway) : 0.0f;
+            const f32 amount = dust_amount(*du, wind, rain);
+            if (amount > 0.0f) {
+                const WindDirection* du_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!du_wd) du_wd = &c;
+                });
+                const math::vec2 wdir = du_weather && du_wd ? wind_direction_vector(*du_wd) : math::vec2{1.0f, 0.0f};
+                const DustLook look = dust_look(*du, amount, wind, wdir);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kDustEmitterId;
+                    em.max_particles = std::clamp(du->max_particles, 16u, 4096u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = du->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;

@@ -2,8 +2,8 @@
 // Wind-blown dust as data (M-DUSTWIND step 25a). One optional Dust per scene (the first in ECS order is read).
 // install_weather registers the component; there is no system and nothing is stored between ticks.
 //
-//   Dust     Authoring (all Save, clamped to the Range when read and never rewritten): `enabled` (1); `wind_start` (4,
-//            0..40) and `wind_full` (12, 0..60) the scene wind speed in m/s where the dust starts to blow and reaches full
+//   Dust     Authoring (all Save, clamped to the Range when read and never rewritten): `enabled` (1); `wind_start` (0.3,
+//            0..1) and `wind_full` (0.8, 0..1) the scene wind strength (Weather.wind, 0..1, not m/s) where the dust starts to blow and reaches full
 //            strength (an inverted or empty pair falls back to the defaults); `manual` (0, 0..1) a floor for the amount,
 //            so a desert scene can show dust in a calm; `rate` (40, 0..400) specks per second at full strength;
 //            `box_xz_m` (14, 1..100) half extent of the spawn box around the camera; `height_m` (3, 1..20) height of the
@@ -29,8 +29,8 @@
 namespace mce::kit {
 
 struct Dust {
-    f32 wind_start = 4.0f;
-    f32 wind_full = 12.0f;
+    f32 wind_start = 0.3f;
+    f32 wind_full = 0.8f;
     f32 manual = 0.0f;
     f32 rate = 40.0f;
     f32 box_xz_m = 14.0f;
@@ -47,8 +47,8 @@ struct Dust {
     u8 pad_[3] = {};  // explicit pad (state_hash hashes whole columns); always zero
 };
 MCE_COMPONENT(Dust, (enabled, Save, Range{0, 1}, Help{"0: the dust is off"}),
-              (wind_start, Save, Range{0, 40}, Help{"scene wind speed (m/s) where dust starts to blow"}),
-              (wind_full, Save, Range{0, 60}, Help{"scene wind speed (m/s) where dust is at full strength"}),
+              (wind_start, Save, Range{0, 1}, Help{"scene wind strength 0..1 (not m/s) where dust starts to blow"}),
+              (wind_full, Save, Range{0, 1}, Help{"scene wind strength 0..1 (not m/s) where dust is at full strength"}),
               (manual, Save, Range{0, 1}, Help{"floor for the amount; shows dust in a calm"}),
               (rate, Save, Range{0, 400}, Help{"specks per second at full strength"}),
               (box_xz_m, Save, Range{1, 100}, Help{"half extent of the spawn box around the camera, metres"}),
@@ -88,8 +88,6 @@ namespace detail {
 
 inline f32 dust_unit(f32 v, f32 def) { return season_clamp(v, def, 0.0f, 1.0f); }
 
-// The wind speed (m/s) the specks follow at most, so a storm cannot blow them out of the box.
-inline constexpr f32 kDustMaxWind = 20.0f;
 // The small downward tilt of the stream and the weak gravity and drag of a speck.
 inline constexpr f32 kDustTilt = 0.08f;
 inline constexpr f32 kDustGravity = 0.4f;
@@ -97,17 +95,17 @@ inline constexpr f32 kDustDrag = 0.3f;
 
 }  // namespace detail
 
-// The dust amount 0..1. `wind` is the scene wind speed in m/s (effective wind with the gust sway), `rain` the 0..1 rain
+// The dust amount 0..1. `wind` is the scene wind strength 0..1 (effective wind with the gust sway), `rain` the 0..1 rain
 // intensity. NaN wind counts as calm, so only the manual floor remains. Exactly 0 for `enabled` 0 and `strength` 0.
 inline f32 dust_amount(const Dust& d, f32 wind, f32 rain) {
     if (d.enabled == 0) return 0.0f;
     const f32 st = detail::dust_unit(d.strength, 1.0f);
     if (!(st > 0.0f)) return 0.0f;
-    f32 lo = detail::season_clamp(d.wind_start, 4.0f, 0.0f, 40.0f);
-    f32 hi = detail::season_clamp(d.wind_full, 12.0f, 0.0f, 60.0f);
+    f32 lo = detail::season_clamp(d.wind_start, 0.3f, 0.0f, 1.0f);
+    f32 hi = detail::season_clamp(d.wind_full, 0.8f, 0.0f, 1.0f);
     if (!(lo < hi)) {
-        lo = 4.0f;
-        hi = 12.0f;
+        lo = 0.3f;
+        hi = 0.8f;
     }
     const f32 w = std::isnan(wind) ? 0.0f : wind;
     const f32 blow = detail::season_smooth(lo, hi, w);
@@ -116,7 +114,7 @@ inline f32 dust_amount(const Dust& d, f32 wind, f32 rain) {
     return std::clamp(std::max(manual, blow) * dry * st, 0.0f, 1.0f);
 }
 
-// The emitter look at an amount (clamped to 0..1, NaN is 0), the scene wind speed and its horizontal direction (x, z).
+// The emitter look at an amount (clamped to 0..1, NaN is 0), the scene wind strength (0..1) and its horizontal direction (x, z).
 inline DustLook dust_look(const Dust& d, f32 amount, f32 wind, const math::vec2& wind_dir) {
     DustLook out;
     if (d.enabled == 0 || !(detail::dust_unit(d.strength, 1.0f) > 0.0f)) return out;
@@ -126,9 +124,9 @@ inline DustLook dust_look(const Dust& d, f32 amount, f32 wind, const math::vec2&
     out.rate = detail::season_clamp(d.rate, 40.0f, 0.0f, 400.0f) * a;
     const f32 sp = detail::season_clamp(d.speed, 6.0f, 0.0f, 30.0f);
     const f32 follow = detail::season_clamp(d.wind_follow, 0.8f, 0.0f, 2.0f);
-    f32 full = detail::season_clamp(d.wind_full, 12.0f, 0.0f, 60.0f);
-    if (!(full > 0.0f)) full = 12.0f;
-    const f32 wv = std::isnan(wind) ? 0.0f : std::clamp(wind, 0.0f, detail::kDustMaxWind);
+    f32 full = detail::season_clamp(d.wind_full, 0.8f, 0.0f, 1.0f);
+    if (!(full > 0.0f)) full = 0.8f;
+    const f32 wv = std::isnan(wind) ? 0.0f : std::clamp(wind, 0.0f, 1.0f);
     // 0.5 in a calm up to 1 at full wind: a manual floor still blows a little.
     const f32 gain = 0.5f + 0.5f * std::min(wv / full, 1.0f);
     const f32 s = sp * follow * gain;
