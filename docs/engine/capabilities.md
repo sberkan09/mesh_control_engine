@@ -120,6 +120,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Loadout3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `ItemHotkey3D` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
