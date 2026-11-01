@@ -1,0 +1,1 @@
+- Tests: `mouse_button_name`, `gamepad_button_name`, `gamepad_axis_name` (input), `rtc_path_name` and `relay_refusal_name` (net) have tests of their own.

@@ -339,3 +339,13 @@ TEST_CASE("net relay: with host migration the lowest member takes over and the r
     plain.step(10);
     CHECK(plain.players[1].room.state() == RelayClient::State::Closed);
 }
+
+TEST_CASE("relay: relay_refusal_name says why a request was refused") {
+    CHECK(relay_refusal_name(RelayRefusal::None) == StringView("none"));
+    CHECK(relay_refusal_name(RelayRefusal::NoSuchRoom) == StringView("no such room"));
+    CHECK(relay_refusal_name(RelayRefusal::RoomFull) == StringView("room full"));
+    CHECK(relay_refusal_name(RelayRefusal::AlreadyInRoom) == StringView("already in a room"));
+    CHECK(relay_refusal_name(RelayRefusal::BadRequest) == StringView("bad request"));
+    CHECK(relay_refusal_name(RelayRefusal::TooManyRooms) == StringView("too many rooms"));
+    CHECK(relay_refusal_name(static_cast<RelayRefusal>(200)) == StringView("unknown"));
+}

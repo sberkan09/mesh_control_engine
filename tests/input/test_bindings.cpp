@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "mce/input/binding_names.h"
 #include "mce/input/bindings.h"
 
 using namespace mce;
@@ -95,4 +96,33 @@ TEST_CASE("bindings: read_bindings refuses a file without the header, an unknown
     CHECK_FALSE(read_bindings(header + "code = 1\n", out).has_value());  // a field outside a record
     CHECK_FALSE(read_bindings(header + "[BindingOverride]\ncode = x\n", out).has_value());
     CHECK_FALSE(read_bindings(header + "[BindingOverride]\ncode\n", out).has_value());
+}
+
+TEST_CASE("binding names: mouse buttons, gamepad buttons and gamepad axes have the names an options screen shows") {
+    using platform::GamepadAxis;
+    using platform::GamepadButton;
+    using platform::MouseButton;
+    CHECK(StringView(mouse_button_name(MouseButton::Left)) == StringView("Mouse Left"));
+    CHECK(StringView(mouse_button_name(MouseButton::Right)) == StringView("Mouse Right"));
+    CHECK(StringView(mouse_button_name(MouseButton::X1)) == StringView("Mouse 4"));
+    CHECK(StringView(mouse_button_name(MouseButton::X2)) == StringView("Mouse 5"));
+    CHECK(StringView(mouse_button_name(static_cast<MouseButton>(99))) == StringView("Mouse"));
+
+    CHECK(StringView(gamepad_button_name(GamepadButton::South)) == StringView("Pad South"));
+    CHECK(StringView(gamepad_button_name(GamepadButton::LeftShoulder)) == StringView("Left Shoulder"));
+    CHECK(StringView(gamepad_button_name(GamepadButton::DpadUp)) == StringView("D-Pad Up"));
+    CHECK(StringView(gamepad_button_name(GamepadButton::Touchpad)) == StringView("Touchpad"));
+    CHECK(StringView(gamepad_button_name(GamepadButton::Misc1)) == StringView("Pad Button"));  // an unnamed one
+    // Every real button has a non-empty, ASCII-only name (the built-in UI font draws every one).
+    for (u32 i = 0; i < static_cast<u32>(GamepadButton::Count); ++i) {
+        const StringView n(gamepad_button_name(static_cast<GamepadButton>(i)));
+        CHECK_FALSE(n.empty());
+        for (const char c : n) CHECK((static_cast<unsigned char>(c) >= 0x20 && static_cast<unsigned char>(c) < 0x7F));
+    }
+
+    CHECK(StringView(gamepad_axis_name(GamepadAxis::LeftX)) == StringView("Left Stick X"));
+    CHECK(StringView(gamepad_axis_name(GamepadAxis::RightY)) == StringView("Right Stick Y"));
+    CHECK(StringView(gamepad_axis_name(GamepadAxis::LeftTrigger)) == StringView("Left Trigger"));
+    CHECK(StringView(gamepad_axis_name(GamepadAxis::RightTrigger)) == StringView("Right Trigger"));
+    CHECK(StringView(gamepad_axis_name(static_cast<GamepadAxis>(99))) == StringView("Pad Axis"));
 }
