@@ -3,7 +3,7 @@
 
 Takes ctest test names, reads each test's command from `ctest --show-only=json-v1`, runs it twice (real GPU through
 SDL's offscreen video driver, then Mesa llvmpipe under Xvfb), and compares the two captured PPM frames. Optional
-`name@tick` overrides `-capture_tick`. Prints, per frame: mean RGB, stddev (a blank frame has ~0), the share of pixels
+`name@tick` overrides `-capture_tick`. Prints (set GPUCMP_ASCII=1 for the preview), per frame: mean RGB, stddev (a blank frame has ~0), the share of pixels
 that differ by more than 12/255 between the two renderers, and a 64x20 luminance preview of the real-GPU frame.
 
     gpu_compare.py <build dir> <test>[@tick] ...
@@ -40,6 +40,8 @@ for spec in specs:
             print(f"## {spec}: command has no -capture"); break
         c[c.index("-capture") + 1] = dst
         if tick and "-capture_tick" in c: c[c.index("-capture_tick") + 1] = tick
+        elif tick and "-frames" in c:  # frame count depends on wall-clock catch-up; pin the simulation tick instead
+            i = c.index("-frames"); c[i:i + 2] = ["-capture_tick", tick]
         try:
             r = run(c, env, wrap); res[mode] = (dst, r.returncode, (r.stdout + r.stderr)[-300:])
         except Exception as e:
@@ -53,6 +55,7 @@ for spec in specs:
         d = np.abs(a - b).max(axis=2)
         print(f"   {a.shape[1]}x{a.shape[0]} gpu mean={a.reshape(-1,3).mean(0).round(1).tolist()} std={a.std():.1f} "
               f"sw mean={b.reshape(-1,3).mean(0).round(1).tolist()} | diff>12: {100*(d>12).mean():.2f}% mean|d|={np.abs(a-b).mean():.2f}")
+        if os.environ.get("GPUCMP_ASCII") != "1": continue
         lum = Image.fromarray(a.astype(np.uint8)).convert("L").resize((64, 20))
         ramp = " .:-=+*#%@"
         for row in np.asarray(lum):
