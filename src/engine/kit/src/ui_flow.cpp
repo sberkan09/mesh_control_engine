@@ -1,5 +1,6 @@
 #include "mce/kit/ui_flow.h"
 
+#include "mce/ecs/save.h"
 #include "mce/ecs/world.h"
 #include "mce/input/actions.h"
 #include "mce/kit/ai.h"
@@ -9,11 +10,48 @@
 #include "mce/kit/timeline.h"
 #include "mce/refl/property_path.h"
 #include "mce/refl/type.h"
+#include "mce/log.h"
 #include "mce/scene/scene.h"
 
 namespace mce::kit {
 
+// Padding-free: World::state_hash hashes component bytes.
+static_assert(sizeof(UiFlowRule) == 128);
+
 namespace {
+
+// The slot a SaveSlot / LoadSlot rule names: "quick" when empty, else 1 to 64 letters, digits, '_' or '-'.
+bool slot_of(const UiFlowRule& r, FixedString<64>& out) {
+    StringView sv = r.field.view();
+    if (sv.empty()) sv = StringView("quick");
+    bool ok = sv.size() <= 64;
+    for (char c : sv) ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-');
+    if (ok) out.assign(sv);
+    return ok;
+}
+
+void save_slot_rule(Frame& f, const UiFlowRule& r) {
+    FixedString<64> slot;
+    if (!slot_of(r, slot)) {
+        MCE_LOG_INFO("ui_flow: SaveSlot: '{}' is not a valid slot name", r.field.c_str());
+        return;
+    }
+    save::SaveInfo info;
+    if (const scene::SceneChange* c = f.world().try_resource<scene::SceneChange>()) info.scene = c->current_guid;
+    info.tick = f.tick;
+    info.playtime = static_cast<f64>(f.tick) * static_cast<f64>(f.dt);
+    if (Result<void> res = save::save_game(f.world(), slot.view(), info); !res) MCE_LOG_INFO("ui_flow: SaveSlot '{}' failed", slot.c_str());
+}
+
+void load_slot_rule(Frame& f, const UiFlowRule& r, asset::Guid& load) {
+    FixedString<64> slot;
+    if (!slot_of(r, slot) || !save::exists(slot.view())) {
+        MCE_LOG_INFO("ui_flow: LoadSlot: no usable save slot '{}'", r.field.c_str());
+        return;
+    }
+    if (!r.scene.guid.is_null() && load.is_null()) load = r.scene.guid;
+    scene::request_load(f.world(), slot.view());
+}
 
 f64 read_number(const void* p, refl::FieldKind k) {
     switch (k) {
@@ -126,6 +164,8 @@ void apply_ui_flow_rules(Frame& f, const input::InputState* in, asset::Guid& loa
                         if (!r.scene.guid.is_null() && load.is_null()) load = r.scene.guid;
                         break;
                     case UiFlowDo::Quit: scene::request_quit(f.world()); break;
+                    case UiFlowDo::SaveSlot: save_slot_rule(f, r); break;
+                    case UiFlowDo::LoadSlot: load_slot_rule(f, r, load); break;
                     case UiFlowDo::None: break;
                 }
             }

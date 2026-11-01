@@ -1,0 +1,103 @@
+{
+ "format": "mce-ui",
+ "version": 1,
+ "guid": "16ef8a1a-ea2c-5a62-a8d5-d00d58abdde2",
+ "modal": true,
+ "widgets": [
+  {
+   "name": "veil",
+   "fill": true,
+   "blocks_pointer": true,
+   "style": {
+    "tint": [
+     0,
+     0,
+     0,
+     0.6
+    ]
+   },
+   "children": [
+    {
+     "name": "menu",
+     "kind": "Stack",
+     "at": [
+      0.5,
+      0.5,
+      360,
+      0
+     ],
+     "stack": {
+      "spacing": 14
+     },
+     "children": [
+      {
+       "name": "title",
+       "kind": "Text",
+       "text": "OPTIONS",
+       "font_role": "Title",
+       "style": {
+        "text_size": 36
+       }
+      },
+      {
+       "name": "volume_label",
+       "kind": "Text",
+       "text": "MASTER VOLUME",
+       "style": {
+        "text_size": 20
+       }
+      },
+      {
+       "name": "volume",
+       "kind": "Slider",
+       "range": [
+        -40,
+        0,
+        2
+       ],
+       "convar": "audio.master_db",
+       "default_focus": true,
+       "nav": {
+        "down": "veil/menu/look"
+       }
+      },
+      {
+       "name": "look_label",
+       "kind": "Text",
+       "text": "LOOK SPEED",
+       "style": {
+        "text_size": 20
+       }
+      },
+      {
+       "name": "look",
+       "kind": "Slider",
+       "range": [
+        0.25,
+        3,
+        0.05
+       ],
+       "convar": "input.look_sensitivity",
+       "nav": {
+        "up": "veil/menu/volume",
+        "down": "veil/menu/back"
+       }
+      },
+      {
+       "name": "back",
+       "kind": "Button",
+       "text": "BACK",
+       "style": {
+        "text_size": 24
+       },
+       "action": "Back",
+       "nav": {
+        "up": "veil/menu/look"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

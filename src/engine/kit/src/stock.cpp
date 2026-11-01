@@ -32,6 +32,12 @@
 #include "mce/kit/missions.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/timed_light.h"
+#include "mce/kit/drive_readout.h"
+#include "mce/kit/face_velocity.h"
+#include "mce/kit/hit_marker.h"
+#include "mce/kit/impact_fx.h"
+#include "mce/kit/fall_death.h"
+#include "mce/kit/vehicle_extras.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/world_audio.h"
@@ -154,16 +160,22 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_world_clock(world, assets);
     install_day_cycle(world, assets);
     install_timed_light(world, assets);
+    install_vehicle_extras(world, assets);
     install_weather(world, assets);
     install_precipitation(world, assets);
     install_map_markers(world, assets);
     install_wanted3d(world);
+    install_hit_marker(world, assets);
+    install_face_velocity(world);
+    install_drive_readout(world);
     install_vehicle_ram(world, assets);
     install_impact_damage(world, assets);
     install_sensors3d(world, assets);
     install_world_settings(world);
     install_ui_flow(world);
     install_effects(world, assets);
+    install_impact_fx(world);
+    install_fall_death(world);
     install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick

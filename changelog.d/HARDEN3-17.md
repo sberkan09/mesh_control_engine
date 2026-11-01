@@ -1,0 +1,1 @@
+- Tests: core's `ConVar::mark_command_line`/`from_command_line` and `crash::add_context`/`remove_context` (the four-writer limit) get direct tests.

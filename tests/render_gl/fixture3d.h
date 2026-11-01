@@ -784,4 +784,82 @@ inline void aurora_sky_scene(Scene3D& s, const AuroraSky& aurora) {
     s.set_aurora(aurora);
 }
 
+// ---- M-RAINBOW 17c: the rainbow ----------------------------------------------------------------------------------
+
+// The rainbow sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z) under a
+// rain-washed grey-blue gradient, the sun 10 degrees up behind the camera on its left, so the anti-solar point is 10
+// degrees under the horizon, 35 degrees right of the view: the primary bow (42 degrees from it) crosses the frame's
+// lower half and the secondary (51 degrees) its middle, diagonally. The light travels toward the anti-solar point.
+inline constexpr vec3 kRainbowAntiSolar{0.56486252f, -0.17364818f, -0.80670728f};  // (sin 35 cos 10, -sin 10, ...)
+
+// The rainbow as the kit extract hands it over: `level`, the default band width and the full secondary bow.
+inline RainbowSky rainbow_carrier(f32 level = 1.0f, f32 band_width = 1.0f, f32 secondary = 1.0f) {
+    RainbowSky r;
+    r.level = level;
+    r.band_width = band_width;
+    r.secondary = secondary;
+    r.anti_solar = kRainbowAntiSolar;
+    r.enabled = true;
+    return r;
+}
+
+inline void rainbow_sky_scene(Scene3D& s, const RainbowSky& rainbow) {
+    DirectionalLight sun;
+    sun.direction = kRainbowAntiSolar;
+    s.set_light(sun);
+    Sky sky;
+    sky.zenith = {0.10f, 0.13f, 0.22f};
+    sky.horizon = {0.30f, 0.33f, 0.38f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_rainbow(rainbow);
+}
+
+// The same sky over a calm sea (water_camera: low, looking 8 degrees down toward -z), the bows above the horizon and
+// their reflection below it.
+inline void rainbow_water_scene(Scene3D& s, const RainbowSky& rainbow, const WaterSurface& w) {
+    rainbow_sky_scene(s, rainbow);
+    s.set_water(w);
+}
+
+// ---- M-METEOR 18c: the meteors -----------------------------------------------------------------------------------
+
+// The meteor sky: aurora_sky_scene's night (night_sky_scene's dark sky with the star field at density 0.6, no moon)
+// seen through the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up toward -z). At the default
+// clock and seed (rate 30: two or three candidates per 5 s slot) slot 8 is 1.938 s in and all three of its streaks
+// are in flight inside the frame (kit::meteor_make: heads at about 19, 34 and 25 degrees up, 20 right, 4 left and 5
+// right of the view, envelopes 0.79, 0.91 and 0.94).
+inline constexpr f32 kMeteorSkyTime = 41.938f;
+inline constexpr u32 kMeteorSkySeed = 17427;
+// The meteor sea (water_camera: low, looking 8 degrees down toward -z): slot 6 is 0.276 s in, one streak rises from
+// 6 to 13 degrees up a little right of the view (envelope 0.99), over the horizon and in the reflection under it.
+inline constexpr f32 kMeteorWaterTime = 30.276f;
+inline constexpr u32 kMeteorWaterSeed = 7;
+
+// The meteors as the kit extract hands them over: `level`, the maximum rate (30 per minute), the default brightness,
+// length and speed, the wrapped clock `time` and `seed`.
+inline MeteorSky meteor_carrier(f32 level = 1.0f, f32 time = kMeteorSkyTime, u32 seed = kMeteorSkySeed) {
+    MeteorSky m;
+    m.level = level;
+    m.rate = 30.0f;
+    m.brightness = 1.0f;
+    m.length = 1.0f;
+    m.speed = 1.0f;
+    m.time = time;
+    m.seed = seed;
+    m.enabled = true;
+    return m;
+}
+
+inline void meteor_sky_scene(Scene3D& s, const MeteorSky& meteor) {
+    night_sky_scene(s, night_sky_carrier(0.5f, 0.6f, 0.0f));
+    s.set_meteor(meteor);
+}
+
+// The same night over a calm sea (water_camera), the streak above the horizon and its reflection below it.
+inline void meteor_water_scene(Scene3D& s, const MeteorSky& meteor, const WaterSurface& w) {
+    meteor_sky_scene(s, meteor);
+    s.set_water(w);
+}
+
 }  // namespace mce::render_test

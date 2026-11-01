@@ -285,3 +285,11 @@ a world without audio (a headless sim) is left untouched. The fields they write 
 master has an `AudioLimiter` (-1 dB) so a gunfight does not clip, and an `AudioSnapshot` with `while_paused` muffles and
 lowers `SFX` behind the pause screen.
 
+
+
+**A radio with no code.** `samples/09_openworld` plays two looping stations on the `Music` bus as ordinary `AudioSource`s that
+play muted all the time (`gain_db` -60), so a station resumes mid-loop when it is switched on. A small Luau script
+(`scripts/radio.luau`) keeps the dial in `ScriptVars` and, while the player's `Rider3D.seated` is 1, lets Q (`Radio`) cycle
+station 1, station 2, off by setting `gain_db` with `mce.set`. `Music` streams two clips at a time (a third would play from
+memory and log a warning), so a game with more stations sets the others to `SFX`-bus sources or swaps clips. The tracks are
+written by `gen_assets.py` with the standard library only.

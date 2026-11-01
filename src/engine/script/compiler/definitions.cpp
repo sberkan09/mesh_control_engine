@@ -397,6 +397,264 @@ declare weather: {
     -- non-zero number is 1); an unknown key, a non-number or a color that is not three numbers raises and nothing is
     -- written
     set_aurora: (settings: { latitude: number?, gate_low: number?, gate_high: number?, strength: number?, curtain_count: number?, base_height: number?, height_span: number?, azimuth: number?, width: number?, speed: number?, low_color: { number }?, high_color: { number }?, night_only: number?, enabled: number? }) -> (),
+
+    -- Rainbow (M-RAINBOW), the first one in the scene; every rainbow function raises when there is none (set_rainbow never
+    -- adds one). The getters use the set keys' names with a rainbow_ prefix. rainbow_level (0..4) is the brightness gain
+    -- the renderer gets now, from the sun elevation of the current hour, the first Weather's wetness and rain and the cloud
+    -- coverage of the first Weather and CloudLayer (0 without a Weather); read-only, and the getters read the authoring
+    -- even when enabled is 0 (the level is then 0).
+    rainbow_strength: () -> number,
+    rainbow_band_width: () -> number,
+    rainbow_secondary: () -> number,
+    rainbow_min_wetness: () -> number,
+    rainbow_max_sun_elevation: () -> number,
+    rainbow_enabled: () -> number,
+    rainbow_level: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..4, band_width 0.5..2, secondary 0..1,
+    -- min_wetness 0..1, max_sun_elevation 10..60 degrees; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_rainbow: (settings: { strength: number?, band_width: number?, secondary: number?, min_wetness: number?, max_sun_elevation: number?, enabled: number? }) -> (),
+
+    -- Meteor (M-METEOR), the first one in the scene; every meteor function raises when there is none (set_meteor never adds
+    -- one). The getters use the set keys' names with a meteor_ prefix. meteor_level (0..1) is the level the renderer gets
+    -- now, from the night fade of the current hour (0 with no clock, so only night_only 0 shows then), the cloud coverage of
+    -- the first Weather and CloudLayer and the first Weather's rain; read-only, and the getters read the authoring even
+    -- when enabled is 0 (the level is then 0).
+    meteor_rate: () -> number,
+    meteor_brightness: () -> number,
+    meteor_length: () -> number,
+    meteor_speed: () -> number,
+    meteor_min_darkness: () -> number,
+    meteor_night_only: () -> number,
+    meteor_seed: () -> number,
+    meteor_enabled: () -> number,
+    meteor_level: () -> number,
+    -- every key optional, each value clamped to the field's range (rate 0..30, brightness 0..4, length 0.5..2, speed 0.5..2,
+    -- min_darkness 0..1, seed 0..65535 rounded down; night_only and enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_meteor: (settings: { rate: number?, brightness: number?, length: number?, speed: number?, min_darkness: number?, night_only: number?, seed: number?, enabled: number? }) -> (),
+
+    -- Season (M-SEASONS), the first one in the scene; every season function raises when there is none (set_season never adds
+    -- one). The getters use the set keys' names with a season_ prefix; the tints return r, g, b. season_phase (0..1) is the
+    -- year phase now, from the first WorldClock's day and hour (the fixed start_phase with no clock); read-only, and the
+    -- getters read the authoring even when enabled is 0.
+    season_enabled: () -> number,
+    season_year_days: () -> number,
+    season_start_phase: () -> number,
+    season_winter_density: () -> number,
+    season_snow_cover_bias: () -> number,
+    season_cold_bias: () -> number,
+    season_strength: () -> number,
+    season_spring_tint: () -> (number, number, number),
+    season_autumn_tint: () -> (number, number, number),
+    season_winter_tint: () -> (number, number, number),
+    season_phase: () -> number,
+    -- every key optional, each value clamped to the field's range (year_days 1..3650, start_phase 0..1, tints 0..4 per
+    -- channel, winter_density, snow_cover_bias, cold_bias and strength 0..1; enabled: any non-zero number is 1); an
+    -- unknown key or a non-number raises and nothing is written
+    set_season: (settings: { enabled: number?, year_days: number?, start_phase: number?, spring_tint: { number }?, autumn_tint: { number }?, winter_tint: { number }?, winter_density: number?, snow_cover_bias: number?, cold_bias: number?, strength: number? }) -> (),
+
+    -- Water ice (M-FREEZE), the first WaterIce in the scene; every water-ice function raises when there is none
+    -- (set_water_ice never adds one). The getters are water_ice_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. water_frozen (0..1) is the freeze amount now, the same one the renderer draws: the
+    -- Season's winter weight at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by manual; with
+    -- no Season it is manual only; 0 when enabled or strength is 0. Read-only.
+    water_ice_enabled: () -> number,
+    water_ice_freeze_start: () -> number,
+    water_ice_freeze_full: () -> number,
+    water_ice_manual: () -> number,
+    water_ice_ice_color: () -> (number, number, number),
+    water_ice_ice_roughness: () -> number,
+    water_ice_ice_reflectivity: () -> number,
+    water_ice_ice_depth_m: () -> number,
+    water_ice_calm: () -> number,
+    water_ice_strength: () -> number,
+    water_frozen: () -> number,
+    -- every key optional, each value clamped to the field's range (ice_depth_m 0.05..10, the others and each colour
+    -- channel 0..1; enabled: any non-zero number is 1); an unknown key or a non-number raises and nothing is written
+    set_water_ice: (settings: { enabled: number?, freeze_start: number?, freeze_full: number?, manual: number?, ice_color: { number }?, ice_roughness: number?, ice_reflectivity: number?, ice_depth_m: number?, calm: number?, strength: number? }) -> (),
+
+    -- Leaf fall (M-LEAFFALL), the first LeafFall in the scene; every leaf-fall function raises when there is none
+    -- (set_leaf_fall never adds one). The getters are leaf_fall_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. leaf_falling (0..1) is the leaf amount now, the same one the renderer draws: the
+    -- autumn window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by
+    -- manual; with no Season it is manual only; 0 when enabled or strength is 0. Read-only.
+    leaf_fall_enabled: () -> number,
+    leaf_fall_autumn_start: () -> number,
+    leaf_fall_autumn_full: () -> number,
+    leaf_fall_autumn_end_full: () -> number,
+    leaf_fall_autumn_end: () -> number,
+    leaf_fall_manual: () -> number,
+    leaf_fall_rate: () -> number,
+    leaf_fall_box_xz_m: () -> number,
+    leaf_fall_height_m: () -> number,
+    leaf_fall_size_m: () -> number,
+    leaf_fall_lifetime_s: () -> number,
+    leaf_fall_fall_speed: () -> number,
+    leaf_fall_wind_follow: () -> number,
+    leaf_fall_leaf_color: () -> (number, number, number),
+    leaf_fall_tint_follow: () -> number,
+    leaf_fall_max_particles: () -> number,
+    leaf_fall_seed: () -> number,
+    leaf_fall_strength: () -> number,
+    leaf_falling: () -> number,
+    -- every key optional, each value clamped to the field's range (autumn_*, manual, tint_follow, strength and each colour
+    -- channel 0..1, rate 0..500, box_xz_m 1..100, height_m 1..50, size_m 0.02..1, lifetime_s 1..30, fall_speed 0..5,
+    -- wind_follow 0..2, max_particles 64..8192, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_leaf_fall: (settings: { enabled: number?, autumn_start: number?, autumn_full: number?, autumn_end_full: number?, autumn_end: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, leaf_color: { number }?, tint_follow: number?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Fireflies (M-FIREFLIES), the first Firefly in the scene; every firefly function raises when there is none
+    -- (set_firefly never adds one). The getters are firefly_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. fireflies_glowing (0..1) is the firefly amount now, the same one the renderer draws:
+    -- the summer window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by
+    -- manual, times the night gate (the Environment3D hour; 0 with no clock, so only night_only 0 shows) and the dryness
+    -- (1 - rain); with no Season it is the manual floor; 0 when enabled or strength is 0. Read-only.
+    firefly_enabled: () -> number,
+    firefly_summer_start: () -> number,
+    firefly_summer_full: () -> number,
+    firefly_summer_end_full: () -> number,
+    firefly_summer_end: () -> number,
+    firefly_manual: () -> number,
+    firefly_night_only: () -> number,
+    firefly_min_darkness: () -> number,
+    firefly_rate: () -> number,
+    firefly_box_xz_m: () -> number,
+    firefly_height_m: () -> number,
+    firefly_size_m: () -> number,
+    firefly_lifetime_s: () -> number,
+    firefly_drift_speed: () -> number,
+    firefly_max_particles: () -> number,
+    firefly_seed: () -> number,
+    firefly_strength: () -> number,
+    firefly_color: () -> (number, number, number),
+    fireflies_glowing: () -> number,
+    -- every key optional, each value clamped to the field's range (summer_*, manual, min_darkness, strength and each colour
+    -- channel 0..1, rate 0..200, box_xz_m 1..100, height_m 1..20, size_m 0.02..0.5, lifetime_s 1..30, drift_speed 0..2,
+    -- max_particles 16..4096, seed 0..4294967295; enabled and night_only: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_firefly: (settings: { enabled: number?, summer_start: number?, summer_full: number?, summer_end_full: number?, summer_end: number?, manual: number?, night_only: number?, min_darkness: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, drift_speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Pollen (M-POLLEN), the first Pollen in the scene; every pollen function raises when there is none (set_pollen
+    -- never adds one). The getters are pollen_ plus the set key; the colour returns r, g, b. They read the authoring even
+    -- when enabled is 0. pollen_drifting (0..1) is the pollen amount now, the same one the renderer draws: the spring
+    -- window of the first Season at the first WorldClock's day and hour (day 0 hour 0 with no clock), floored by manual,
+    -- times the day gate (the Environment3D hour; 0 night fade with no clock) and the dryness (1 - rain); with no Season it
+    -- is the manual floor; 0 when enabled or strength is 0. Read-only.
+    pollen_enabled: () -> number,
+    pollen_spring_start: () -> number,
+    pollen_spring_full: () -> number,
+    pollen_spring_end_full: () -> number,
+    pollen_spring_end: () -> number,
+    pollen_manual: () -> number,
+    pollen_day_only: () -> number,
+    pollen_min_daylight: () -> number,
+    pollen_rate: () -> number,
+    pollen_box_xz_m: () -> number,
+    pollen_height_m: () -> number,
+    pollen_size_m: () -> number,
+    pollen_lifetime_s: () -> number,
+    pollen_fall_speed: () -> number,
+    pollen_wind_follow: () -> number,
+    pollen_max_particles: () -> number,
+    pollen_seed: () -> number,
+    pollen_strength: () -> number,
+    pollen_color: () -> (number, number, number),
+    pollen_drifting: () -> number,
+    -- every key optional, each value clamped to the field's range (spring_*, manual, min_daylight, strength and each colour
+    -- channel 0..1, rate 0..200, box_xz_m 1..100, height_m 1..30, size_m 0.02..0.5, lifetime_s 1..30, fall_speed 0..2,
+    -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled and day_only: any non-zero number is 1); an
+    -- unknown key or a non-number raises and nothing is written
+    set_pollen: (settings: { enabled: number?, spring_start: number?, spring_full: number?, spring_end_full: number?, spring_end: number?, manual: number?, day_only: number?, min_daylight: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, fall_speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Dust (M-DUSTWIND), the first Dust in the scene; every dust function raises when there is none (set_dust never adds
+    -- one). The getters are dust_ plus the set key; the colour returns r, g, b. They read the authoring even when enabled
+    -- is 0. dust_blowing (0..1) is the dust amount now, the same one the renderer draws: max(manual, smoothstep(wind_start,
+    -- wind_full, wind)) times the dryness (1 - rain) times strength, with the wind the first Weather's effective wind with
+    -- the gust sway of the first WindGust (calm with no Weather) and the rain the first Weather's intensity while it rains
+    -- or storms; 0 when enabled or strength is 0. Read-only.
+    dust_enabled: () -> number,
+    dust_wind_start: () -> number,
+    dust_wind_full: () -> number,
+    dust_manual: () -> number,
+    dust_rate: () -> number,
+    dust_box_xz_m: () -> number,
+    dust_height_m: () -> number,
+    dust_size_m: () -> number,
+    dust_lifetime_s: () -> number,
+    dust_speed: () -> number,
+    dust_wind_follow: () -> number,
+    dust_max_particles: () -> number,
+    dust_seed: () -> number,
+    dust_strength: () -> number,
+    dust_color: () -> (number, number, number),
+    dust_blowing: () -> number,
+    -- every key optional, each value clamped to the field's range (wind_start, wind_full, manual, strength and each colour
+    -- channel 0..1, rate 0..400, box_xz_m 1..100, height_m 1..20, size_m 0.01..0.5, lifetime_s 0.5..10, speed 0..30,
+    -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
+    -- non-number raises and nothing is written
+    set_dust: (settings: { enabled: number?, wind_start: number?, wind_full: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Flock (M-BIRDFLOCK), the first Flock in the scene; every flock function raises when there is none (set_flock never
+    -- adds one). The getters are flock_ plus the set key; the colour returns r, g, b. They read the authoring even when
+    -- enabled is 0. flock_flying (0..1) is the flock amount now, the same one the renderer draws: max(manual, migration)
+    -- times the twilight gate times the dryness (1 - rain) times strength, with the season phase of the first Season at the
+    -- first WorldClock, the sun height of the Environment3D (day clock, else the fixed sun_direction) and the rain the first
+    -- Weather's intensity while it rains or storms; 0 when enabled or strength is 0. Read-only.
+    flock_enabled: () -> number,
+    flock_migration_full: () -> number,
+    flock_migration_end: () -> number,
+    flock_manual: () -> number,
+    flock_twilight_width: () -> number,
+    flock_rate: () -> number,
+    flock_box_xz_m: () -> number,
+    flock_height_m: () -> number,
+    flock_size_m: () -> number,
+    flock_lifetime_s: () -> number,
+    flock_speed: () -> number,
+    flock_heading_deg: () -> number,
+    flock_max_particles: () -> number,
+    flock_seed: () -> number,
+    flock_strength: () -> number,
+    flock_color: () -> (number, number, number),
+    flock_flying: () -> number,
+    -- every key optional, each value clamped to the field's range (migration_full, migration_end 0..0.5, manual, strength and
+    -- each colour channel 0..1, twilight_width 0.01..1, rate 0..60, box_xz_m 1..200, height_m 1..120, size_m 0.05..2,
+    -- lifetime_s 1..40, speed 0..40, heading_deg 0..360, max_particles 8..1024, seed 0..4294967295; enabled: any non-zero
+    -- number is 1); an unknown key or a non-number raises and nothing is written
+    set_flock: (settings: { enabled: number?, migration_full: number?, migration_end: number?, manual: number?, twilight_width: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, heading_deg: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Butterfly (M-BUTTERFLY), the first Butterfly in the scene; every butterfly function raises when there is none
+    -- (set_butterfly never adds one). The getters are butterfly_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. butterfly_flying (0..1) is the butterfly amount now, the same one the renderer
+    -- draws: max(manual, summer window) times the day gate times the calm gate times the dryness (1 - rain) times strength,
+    -- with the season phase of the first Season at the first WorldClock, the night fade of the Environment3D hour, the wind
+    -- (with the gust sway) and the rain the first Weather's intensity while it rains or storms; 0 when enabled or strength
+    -- is 0. Read-only.
+    butterfly_enabled: () -> number,
+    butterfly_window_full: () -> number,
+    butterfly_window_end: () -> number,
+    butterfly_manual: () -> number,
+    butterfly_min_daylight: () -> number,
+    butterfly_wind_calm: () -> number,
+    butterfly_wind_still: () -> number,
+    butterfly_rate: () -> number,
+    butterfly_box_xz_m: () -> number,
+    butterfly_height_m: () -> number,
+    butterfly_size_m: () -> number,
+    butterfly_lifetime_s: () -> number,
+    butterfly_speed: () -> number,
+    butterfly_lift: () -> number,
+    butterfly_max_particles: () -> number,
+    butterfly_seed: () -> number,
+    butterfly_strength: () -> number,
+    butterfly_color: () -> (number, number, number),
+    butterfly_flying: () -> number,
+    -- every key optional, each value clamped to the field's range (window_full, window_end 0..0.5, manual, min_daylight,
+    -- wind_calm, wind_still, strength and each colour channel 0..1, rate 0..60, box_xz_m 1..100, height_m 1..20, size_m
+    -- 0.02..1, lifetime_s 1..30, speed 0..4, lift 0..2, max_particles 8..512, seed 0..4294967295; enabled: any non-zero
+    -- number is 1); an unknown key or a non-number raises and nothing is written
+    set_butterfly: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, min_daylight: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, lift: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {

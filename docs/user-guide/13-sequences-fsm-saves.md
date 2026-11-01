@@ -93,6 +93,9 @@ applied on top of the base scene on load ("base world plus deltas"). You decide 
 3. Bump the module version in `MCE_GAME_MODULE` when the meaning of saved fields changes; a
    mismatch is reported in `LoadStats`, not fatal.
 
+A menu needs no code: a `UiFlowRules` rule with `SaveSlot` or `LoadSlot` saves and loads a slot while the
+game is paused (`12-ui-and-console.md`, `samples/09_openworld`'s Esc menu).
+
 The player runtime does the file work: `-save <slot>` loads the slot at start if it exists and
 writes it on a clean quit. From code (a custom host or a menu action):
 

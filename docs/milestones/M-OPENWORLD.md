@@ -42,6 +42,12 @@ pursue). User guide 29.7 and 18. Engine fix found on the way: the scene cook did
 could not reference a `.mcroads` (scene_importer.cpp, inspector.cpp; part of the E1 PR).
 Linear: the SBA workspace is at its free issue limit (save_issue refused the E1 issue), so this record is the tracker.
 
+E7/E8 as built (2026-10-29, `gen_assets.py` `economy_and_missions`, appended after the older entities): three missions with
+`MissionMarker` pads (Errand 250, Courier 700 with two stops, Long haul 1000; `MissionReward3D.fail_fee`, `MissionRetry` 8 s, the
+last two fail at wanted level 3), twelve `CashPickup3D` pads that come back after 120 s, a medic (`HealShop3D`) and a scrapyard
+(`ChopShop3D`, 400) on the avenue sidewalks, and `CarOwner3D` on parked cars 2 and 3. Gate: `test_mcp_openworld` (counts, a mission
+starts and pays, a cash pad pays). No HUD text for cash or mission state yet (HUD thread).
+
 Open items and risks (E1):
 - Art (E1 content set, 2026-10-18): cars, characters and the 120 lot buildings are now Kenney CC0 models from the ledger
   (`mce content add` with `--only`; `CREDITS.md`, `third_party_content.json` beside the sample). Roads, ground, kerbs and the
@@ -56,9 +62,9 @@ Open items and risks (E1):
   minimap (M-MISSION). `FloatingOrigin3D` is not set: 1 km² never reaches its 1024 m threshold.
 - The whole city is one scene (buildings are not streamed in chunks yet); the navmesh covers only the middle blocks (police stay
   there). Police are on foot; no police cars, roadblocks or arrests (C3 open items).
-- Traffic-light visuals do not follow the light state; a dead pedestrian vanishes after 0.2 s (`Pedestrian3D` ignores `Health3D`):
-  a small kit PR (stop and ragdoll) is the fix.
-- The player does not face its movement (the engine has no facing component for `use_input` characters); the camera carries the gun.
+- Traffic-light visuals do not follow the light state. ~~A dead pedestrian vanishes after 0.2 s~~ done: a pedestrian with a dead
+  `Health3D` stops where it fell and is removed after `kPedestrianCorpseSeconds` (10 s, `crowd.h`).
+- ~~The player does not face its movement~~ done: `FaceVelocity3D` turns the model towards the velocity ([M-FACEMOVE](M-FACEMOVE.md)); the camera carries the gun.
 - Budget counters in `local_ci.sh` are not added: the sample has entity and cars/walkers counts in the MCP test only.
 
 ## Gates

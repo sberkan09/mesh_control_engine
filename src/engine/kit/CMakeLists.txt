@@ -30,6 +30,12 @@ mce_add_library(mce_gameplay_kit
         src/world_clock.cpp
         src/day_cycle.cpp
         src/timed_light.cpp
+        src/drive_readout.cpp
+        src/face_velocity.cpp
+        src/hit_marker.cpp
+        src/impact_fx.cpp
+        src/fall_death.cpp
+        src/vehicle_extras.cpp
         src/weather.cpp
         src/weather_audio.cpp
         src/world_audio.cpp

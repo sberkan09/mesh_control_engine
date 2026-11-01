@@ -1,0 +1,1 @@
+- Tests: `timeline_skip` (the cutscene skip) now has a case: it jumps to the end, applies the state tracks, fires the passed cues once and refuses a non-player.

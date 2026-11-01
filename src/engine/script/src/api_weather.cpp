@@ -219,6 +219,200 @@
 //                                         non-zero number is 1); an unknown key, a non-number or a color that is not
 //                                         three numbers raises an error that names the call and nothing is written
 //
+// Rainbow (M-RAINBOW step 17d) lives in the same table, next to the aurora: the authoring over the first kit::Rainbow
+// (mce/kit/rainbow.h) and the read-only rainbow_level(). Named errors as above ("weather.set_rainbow: the scene has no
+// Rainbow entity"); the setter never adds the component. The authoring names follow the set keys with a `rainbow_`
+// prefix. rainbow_level() is kit::rainbow_level with the inputs Kit3DExtract uses: the sun elevation of the current hour
+// (Environment3D.time_of_day, else its sun_direction), the first Weather's wetness and rain (its intensity while it rains
+// or storms), and the cloud coverage of the first Weather and CloudLayer. It is 0 without a Weather. The getters read the
+// authoring even when `enabled` is 0 (rainbow_level is 0 then).
+//
+//   weather.rainbow_strength() / rainbow_band_width() / rainbow_secondary() / rainbow_min_wetness() /
+//   weather.rainbow_max_sun_elevation() / rainbow_enabled() -> number   strength, band_width, secondary, min_wetness,
+//                                                                       max_sun_elevation_deg, enabled
+//   weather.rainbow_level() -> number               0..4, the brightness gain the renderer gets now
+//   weather.set_rainbow{strength=, band_width=, secondary=, min_wetness=, max_sun_elevation=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range
+//                                         (enabled: any non-zero number is 1); an unknown key or a non-number raises an
+//                                         error that names the call and nothing is written
+//
+// Meteor (M-METEOR step 18d) lives in the same table, next to the rainbow: the authoring over the first kit::Meteor
+// (mce/kit/meteor.h) and the read-only meteor_level(). Named errors as above ("weather.set_meteor: the scene has no Meteor
+// entity"); the setter never adds the component. The authoring names follow the set keys with a `meteor_` prefix.
+// meteor_level() is kit::meteor_level with the inputs Kit3DExtract uses: the night fade of the current hour (0 with no
+// clock, so with no clock only night_only 0 shows), the cloud coverage of the first Weather and CloudLayer and the first
+// Weather's rain (its intensity while it rains or storms). It is 0 under an equirect sky texture. The getters read the
+// authoring even when `enabled` is 0 (meteor_level is 0 then).
+//
+//   weather.meteor_rate() / meteor_brightness() / meteor_length() / meteor_speed() / meteor_min_darkness() /
+//   weather.meteor_night_only() / meteor_seed() / meteor_enabled() -> number
+//   weather.meteor_level() -> number                0..1, the level the renderer gets now
+//   weather.set_meteor{rate=, brightness=, length=, speed=, min_darkness=, night_only=, seed=, enabled=}
+//                                         a table, every key optional, each value clamped to the field's Range (seed
+//                                         rounded down; night_only and enabled: any non-zero number is 1); an unknown
+//                                         key or a non-number raises an error that names the call and nothing is written
+//
+// Season (M-SEASONS step 19c) lives in the same table: the authoring over the first kit::Season (mce/kit/season.h) and the
+// read-only season_phase(). Named errors as above ("weather.set_season: the scene has no Season entity"); the setter never
+// adds the component. The authoring names follow the set keys with a `season_` prefix; the tints return r, g, b.
+// season_phase() is kit::season_phase on the first WorldClock's day and hour (day 0 and hour 0 with no clock, so the fixed
+// start_phase). The getters read the authoring even when `enabled` is 0.
+//
+//   weather.season_enabled() / season_year_days() / season_start_phase() / season_winter_density() /
+//   weather.season_snow_cover_bias() / season_cold_bias() / season_strength() -> number
+//   weather.season_spring_tint() / season_autumn_tint() / season_winter_tint() -> r, g, b
+//   weather.season_phase() -> number                0..1, the year phase now
+//   weather.set_season{enabled=, year_days=, start_phase=, spring_tint={r,g,b}, autumn_tint={r,g,b}, winter_tint={r,g,b},
+//                      winter_density=, snow_cover_bias=, cold_bias=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (tints
+//                                         0..4 per channel; enabled: any non-zero number is 1); an unknown key or a
+//                                         non-number raises an error that names the call and nothing is written
+//
+// Water ice (M-FREEZE step 20c) lives in the same table: the authoring over the first kit::WaterIce (mce/kit/water_ice.h)
+// and the read-only water_frozen(). Named errors as above ("weather.set_water_ice: the scene has no WaterIce entity"); the
+// setter never adds the component. The getters are named weather.water_ice_<key>; the colour returns r, g, b.
+// water_frozen() is kit::water_ice_amount on the first Season at the first WorldClock's day and hour (day 0 and hour 0 with
+// no clock; no Season is the manual floor), the same amount the extract draws, 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.water_ice_enabled() / water_ice_freeze_start() / water_ice_freeze_full() / water_ice_manual() /
+//   weather.water_ice_ice_roughness() / water_ice_ice_reflectivity() / water_ice_ice_depth_m() / water_ice_calm() /
+//   weather.water_ice_strength() -> number
+//   weather.water_ice_ice_color() -> r, g, b
+//   weather.water_frozen() -> number                0..1, the freeze amount now
+//   weather.set_water_ice{enabled=, freeze_start=, freeze_full=, manual=, ice_color={r,g,b}, ice_roughness=,
+//                         ice_reflectivity=, ice_depth_m=, calm=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (ice_depth_m
+//                                         0.05..10, the rest 0..1, colour lanes 0..1; enabled: any non-zero number is 1);
+//                                         an unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
+// Leaf fall (M-LEAFFALL step 21c) lives in the same table: the authoring over the first kit::LeafFall (mce/kit/leaf_fall.h)
+// and the read-only leaf_falling(). Named errors as above ("weather.set_leaf_fall: the scene has no LeafFall entity"); the
+// setter never adds the component. The getters are named weather.leaf_fall_<key>; the colour returns r, g, b.
+// leaf_falling() is kit::leaf_fall_amount on the first Season at the first WorldClock's day and hour (day 0 and hour 0 with
+// no clock; no Season is the manual floor), the same amount the extract draws, 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.leaf_fall_enabled() / leaf_fall_autumn_start() / leaf_fall_autumn_full() / leaf_fall_autumn_end_full() /
+//   weather.leaf_fall_autumn_end() / leaf_fall_manual() / leaf_fall_rate() / leaf_fall_box_xz_m() / leaf_fall_height_m() /
+//   weather.leaf_fall_size_m() / leaf_fall_lifetime_s() / leaf_fall_fall_speed() / leaf_fall_wind_follow() /
+//   weather.leaf_fall_tint_follow() / leaf_fall_max_particles() / leaf_fall_seed() / leaf_fall_strength() -> number
+//   weather.leaf_fall_leaf_color() -> r, g, b
+//   weather.leaf_falling() -> number                0..1, the leaf amount now
+//   weather.set_leaf_fall{enabled=, autumn_start=, autumn_full=, autumn_end_full=, autumn_end=, manual=, rate=, box_xz_m=,
+//                         height_m=, size_m=, lifetime_s=, fall_speed=, wind_follow=, leaf_color={r,g,b}, tint_follow=,
+//                         max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/leaf_fall.h; colour lanes 0..1; enabled: any non-zero number is 1);
+//                                         an unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
+// Fireflies (M-FIREFLIES step 23c) live in the same table: the authoring over the first kit::Firefly (mce/kit/firefly.h) and
+// the read-only fireflies_glowing(). Named errors as above ("weather.set_firefly: the scene has no Firefly entity"); the
+// setter never adds the component. The getters are named weather.firefly_<key>; the colour returns r, g, b.
+// fireflies_glowing() is kit::firefly_amount on the first Season at the first WorldClock's day and hour, with the inputs the
+// extract uses: the night fade of the Environment3D hour (0 with no clock, so only night_only 0 shows) and the first Weather's rain intensity while it rains or storms (0 without a Weather); no Season is the manual
+// floor. 0 when `enabled` or `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.firefly_enabled() / firefly_summer_start() / firefly_summer_full() / firefly_summer_end_full() /
+//   weather.firefly_summer_end() / firefly_manual() / firefly_night_only() / firefly_min_darkness() / firefly_rate() /
+//   weather.firefly_box_xz_m() / firefly_height_m() / firefly_size_m() / firefly_lifetime_s() / firefly_drift_speed() /
+//   weather.firefly_max_particles() / firefly_seed() / firefly_strength() -> number
+//   weather.firefly_color() -> r, g, b
+//   weather.fireflies_glowing() -> number           0..1, the firefly amount now
+//   weather.set_firefly{enabled=, summer_start=, summer_full=, summer_end_full=, summer_end=, manual=, night_only=,
+//                       min_darkness=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, drift_speed=, color={r,g,b},
+//                       max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/firefly.h; colour lanes 0..1; enabled and night_only: any non-zero number
+//                                         is 1); an unknown key or a non-number raises an error that names the call and
+//                                         nothing is written
+//
+// Pollen (M-POLLEN step 24c) lives in the same table: the authoring over the first kit::Pollen (mce/kit/pollen.h) and the
+// read-only pollen_drifting(). Named errors as above ("weather.set_pollen: the scene has no Pollen entity"); the setter
+// never adds the component. The getters are named weather.pollen_<key>; the colour returns r, g, b. pollen_drifting() is
+// kit::pollen_amount on the first Season at the first WorldClock's day and hour, with the inputs the extract uses: the night
+// fade of the Environment3D hour (0 with no clock, so only day_only 0 shows) and the first Weather's rain intensity while it
+// rains or storms (0 without a Weather); no Season is the manual floor. 0 when `enabled` or `strength` is 0. The getters read
+// the authoring even when `enabled` is 0.
+//
+//   weather.pollen_enabled() / pollen_spring_start() / pollen_spring_full() / pollen_spring_end_full() /
+//   weather.pollen_spring_end() / pollen_manual() / pollen_day_only() / pollen_min_daylight() / pollen_rate() /
+//   weather.pollen_box_xz_m() / pollen_height_m() / pollen_size_m() / pollen_lifetime_s() / pollen_fall_speed() /
+//   weather.pollen_wind_follow() / pollen_max_particles() / pollen_seed() / pollen_strength() -> number
+//   weather.pollen_color() -> r, g, b
+//   weather.pollen_drifting() -> number           0..1, the pollen amount now
+//   weather.set_pollen{enabled=, spring_start=, spring_full=, spring_end_full=, spring_end=, manual=, day_only=,
+//                      min_daylight=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, fall_speed=, wind_follow=,
+//                      color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/pollen.h; colour lanes 0..1; enabled and day_only: any non-zero number
+//                                         is 1); an unknown key or a non-number raises an error that names the call and
+//                                         nothing is written
+//
+// Dust (M-DUSTWIND step 25c) lives in the same table: the authoring over the first kit::Dust (mce/kit/dust.h) and the
+// read-only dust_blowing(). Named errors as above ("weather.set_dust: the scene has no Dust entity"); the setter never adds
+// the component. The getters are named weather.dust_<key>; the colour returns r, g, b. dust_blowing() is kit::dust_amount
+// with the inputs the extract uses: the effective wind of the first Weather with the gust sway of the first WindGust (0
+// with no Weather) and the first Weather's rain intensity while it rains or storms. 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.dust_enabled() / dust_wind_start() / dust_wind_full() / dust_manual() / dust_rate() / dust_box_xz_m() /
+//   weather.dust_height_m() / dust_size_m() / dust_lifetime_s() / dust_speed() / dust_wind_follow() /
+//   weather.dust_max_particles() / dust_seed() / dust_strength() -> number
+//   weather.dust_color() -> r, g, b
+//   weather.dust_blowing() -> number              0..1, the dust amount now
+//   weather.set_dust{enabled=, wind_start=, wind_full=, manual=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=,
+//                    speed=, wind_follow=, color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/dust.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
+// Flock (M-BIRDFLOCK step 26c) lives in the same table: the authoring over the first kit::Flock (mce/kit/flock.h) and the
+// read-only flock_flying(). Named errors as above ("weather.set_flock: the scene has no Flock entity"); the setter never
+// adds the component. The getters are named weather.flock_<key>; the colour returns r, g, b. flock_flying() is
+// kit::flock_amount with the inputs the extract's flock block uses: the first Season at the first WorldClock's day and hour
+// (no Season is the manual floor), the sun height (sun_direction_at(time_of_day).y, or the unit Environment3D sun_direction's
+// y when time_of_day is negative) and the first Weather's rain intensity while it rains or storms. 0 when `enabled` or
+// `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.flock_enabled() / flock_migration_full() / flock_migration_end() / flock_manual() / flock_twilight_width() /
+//   weather.flock_rate() / flock_box_xz_m() / flock_height_m() / flock_size_m() / flock_lifetime_s() / flock_speed() /
+//   weather.flock_heading_deg() / flock_max_particles() / flock_seed() / flock_strength() -> number
+//   weather.flock_color() -> r, g, b
+//   weather.flock_flying() -> number              0..1, the flock amount now
+//   weather.set_flock{enabled=, migration_full=, migration_end=, manual=, twilight_width=, rate=, box_xz_m=, height_m=,
+//                     size_m=, lifetime_s=, speed=, heading_deg=, color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/flock.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
+// Butterfly (M-BUTTERFLY step 27c) lives in the same table: the authoring over the first kit::Butterfly
+// (mce/kit/butterfly.h) and the read-only butterfly_flying(). Named errors as above ("weather.set_butterfly: the scene has
+// no Butterfly entity"); the setter never adds the component. The getters are named weather.butterfly_<key>; the colour
+// returns r, g, b. butterfly_flying() is kit::butterfly_amount with the inputs the extract's butterfly block uses: the first
+// Season at the first WorldClock's day and hour (no Season is the manual floor), the night fade of the Environment3D hour (0
+// with no clock), the effective wind with the gust sway of the first WindGust (calm with no Weather) and the first
+// Weather's rain intensity while it rains or storms. 0 when `enabled` or `strength` is 0. The getters read the authoring
+// even when `enabled` is 0.
+//
+//   weather.butterfly_enabled() / butterfly_window_full() / butterfly_window_end() / butterfly_manual() /
+//   weather.butterfly_min_daylight() / butterfly_wind_calm() / butterfly_wind_still() / butterfly_rate() /
+//   weather.butterfly_box_xz_m() / butterfly_height_m() / butterfly_size_m() / butterfly_lifetime_s() / butterfly_speed() /
+//   weather.butterfly_lift() / butterfly_max_particles() / butterfly_seed() / butterfly_strength() -> number
+//   weather.butterfly_color() -> r, g, b
+//   weather.butterfly_flying() -> number          0..1, the butterfly amount now
+//   weather.set_butterfly{enabled=, window_full=, window_end=, manual=, min_daylight=, wind_calm=, wind_still=, rate=,
+//                         box_xz_m=, height_m=, size_m=, lifetime_s=, speed=, lift=, color={r,g,b}, max_particles=, seed=,
+//                         strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/butterfly.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -264,7 +458,17 @@
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/moon.h"
+#include "mce/kit/meteor.h"
+#include "mce/kit/firefly.h"
+#include "mce/kit/pollen.h"
+#include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
+#include "mce/kit/leaf_fall.h"
+#include "mce/kit/season.h"
+#include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_ice.h"
 #include "mce/kit/world_clock.h"
 #include "mce/render/atmosphere.h"
 
@@ -599,7 +803,8 @@ int l_weather_set_snow(lua_State* L) {
 // Reads the settings table at index 1 into value[]/given[] (slot i is keys[i]); raises on a non-name key, an unknown
 // key or a non-number (NaN included) before anything is written. `list` is the key list for the messages.
 void read_settings(lua_State* L, const char* fn, const char* const* keys, int n, const char* list, f64* value,
-                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr, int vec3b_slot = -1, f64* vec3b = nullptr) {
+                   bool* given, int vec3_slot = -1, f64* vec3 = nullptr, int vec3b_slot = -1, f64* vec3b = nullptr, int vec3c_slot = -1,
+                   f64* vec3c = nullptr) {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_pushnil(L);
     while (lua_next(L, 1) != 0) {
@@ -610,7 +815,10 @@ void read_settings(lua_State* L, const char* fn, const char* const* keys, int n,
             if (std::strcmp(key, keys[i]) == 0) slot = i;
         }
         if (slot < 0) luaL_error(L, "%s: unknown key '%s' (%s)", fn, key, list);
-        f64* const triple = slot == vec3_slot && vec3 ? vec3 : (slot == vec3b_slot && vec3b ? vec3b : nullptr);
+        f64* const triple = slot == vec3_slot && vec3    ? vec3
+                            : slot == vec3b_slot && vec3b ? vec3b
+                            : slot == vec3c_slot && vec3c ? vec3c
+                                                          : nullptr;
         if (triple) {  // a {r, g, b} table of three numbers
             if (lua_type(L, -1) != LUA_TTABLE) luaL_error(L, "%s: '%s' is not a table of three numbers", fn, key);
             for (int i = 0; i < 3; ++i) {
@@ -1217,6 +1425,918 @@ int l_weather_set_aurora(lua_State* L) {
     return 0;
 }
 
+// ---- Rainbow (M-RAINBOW step 17d) ----
+
+kit::Rainbow& check_rainbow(lua_State* L, const char* fn) { return check_first<kit::Rainbow>(L, fn, "Rainbow"); }
+
+#define MCE_WEATHER_GETTER_RAINBOW(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                               \
+        lua_pushnumber(L, static_cast<double>(check_rainbow(L, "weather." #luaname).field));               \
+        return 1;                                                                                        \
+    }
+MCE_WEATHER_GETTER_RAINBOW(rainbow_strength, strength)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_band_width, band_width)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_secondary, secondary)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_min_wetness, min_wetness)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_max_sun_elevation, max_sun_elevation_deg)
+MCE_WEATHER_GETTER_RAINBOW(rainbow_enabled, enabled)
+#undef MCE_WEATHER_GETTER_RAINBOW
+
+// weather.rainbow_level(): kit::rainbow_level with the inputs Kit3DExtract's rainbow block uses. 0 without a Weather,
+// under an equirect sky texture or with a non-finite input (the extract's default carrier). The sun elevation is the
+// asin of the unit light direction's -y: sun_direction_at(hour) with a clock, else the Environment3D's sun_direction;
+// wetness is the first Weather's, rain its intensity while it rains or storms, and the cloud cover is the one the
+// aurora uses (the extract's own value before the quality gate).
+int l_weather_rainbow_level(lua_State* L) {
+    const kit::Rainbow& r = check_rainbow(L, "weather.rainbow_level");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 level = 0.0f;
+    if (r.enabled && wx && env.sky_texture.guid == asset::Guid{}) {
+        const math::vec3 light = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
+        const f32 len = std::sqrt(light.x * light.x + light.y * light.y + light.z * light.z);
+        const bool raining = wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm;
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        const f32 cover = aurora_cloud_cover(w);
+        if (std::isfinite(len) && len > 1e-6f && std::isfinite(wx->wetness) && std::isfinite(rain) && std::isfinite(cover)) {
+            const f32 sine = std::clamp(-light.y / len, -1.0f, 1.0f);
+            const f32 elevation_deg = static_cast<f32>(std::asin(static_cast<f64>(sine)) * (180.0 / 3.14159265358979323846));
+            level = kit::rainbow_level(r, elevation_deg, wx->wetness, rain, cover);
+            if (!std::isfinite(level)) level = 0.0f;
+        }
+    }
+    lua_pushnumber(L, static_cast<double>(level));
+    return 1;
+}
+
+// weather.set_rainbow{...}: validated before anything is written.
+int l_weather_set_rainbow(lua_State* L) {
+    static const char* const kKeys[6] = {"strength", "band_width", "secondary", "min_wetness", "max_sun_elevation", "enabled"};
+    f64 value[6] = {};
+    bool given[6] = {};
+    read_settings(L, "weather.set_rainbow", kKeys, 6, "strength, band_width, secondary, min_wetness, max_sun_elevation, enabled",
+                  value, given);
+    kit::Rainbow& r = check_rainbow(L, "weather.set_rainbow");
+    if (given[0]) r.strength = static_cast<f32>(clamp_range(value[0], 0.0, 4.0));
+    if (given[1]) r.band_width = static_cast<f32>(clamp_range(value[1], 0.5, 2.0));
+    if (given[2]) r.secondary = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) r.min_wetness = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) r.max_sun_elevation_deg = static_cast<f32>(clamp_range(value[4], 10.0, 60.0));
+    if (given[5]) r.enabled = value[5] != 0.0 ? 1 : 0;
+    return 0;
+}
+
+// ---- Meteor (M-METEOR step 18d) ----
+
+kit::Meteor& check_meteor(lua_State* L, const char* fn) { return check_first<kit::Meteor>(L, fn, "Meteor"); }
+
+#define MCE_WEATHER_GETTER_METEOR(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_meteor(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_METEOR(meteor_rate, rate)
+MCE_WEATHER_GETTER_METEOR(meteor_brightness, brightness)
+MCE_WEATHER_GETTER_METEOR(meteor_length, length)
+MCE_WEATHER_GETTER_METEOR(meteor_speed, speed)
+MCE_WEATHER_GETTER_METEOR(meteor_min_darkness, min_darkness)
+MCE_WEATHER_GETTER_METEOR(meteor_night_only, night_only)
+MCE_WEATHER_GETTER_METEOR(meteor_seed, seed)
+MCE_WEATHER_GETTER_METEOR(meteor_enabled, enabled)
+#undef MCE_WEATHER_GETTER_METEOR
+
+// weather.meteor_level(): kit::meteor_level with the inputs Kit3DExtract's meteor block uses. 0 under an equirect sky
+// texture. The night fade is the aurora's (0 with no clock, so only night_only 0 shows), the rain is the first Weather's
+// intensity while it rains or storms (0 without a Weather) and the cloud cover is the one the aurora uses (the extract's
+// own value before the quality gate).
+int l_weather_meteor_level(lua_State* L) {
+    const kit::Meteor& m = check_meteor(L, "weather.meteor_level");
+    World& w = world_of(L);
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 level = 0.0f;
+    if (m.enabled && env.sky_texture.guid == asset::Guid{}) {
+        const kit::Weather* wx = first_weather(w);
+        const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        level = kit::meteor_level(m, aurora_night_fade(w), aurora_cloud_cover(w), rain);
+        if (!std::isfinite(level)) level = 0.0f;
+    }
+    lua_pushnumber(L, static_cast<double>(level));
+    return 1;
+}
+
+// weather.set_meteor{...}: validated before anything is written.
+int l_weather_set_meteor(lua_State* L) {
+    static const char* const kKeys[8] = {"rate", "brightness", "length", "speed", "min_darkness", "night_only", "seed", "enabled"};
+    f64 value[8] = {};
+    bool given[8] = {};
+    read_settings(L, "weather.set_meteor", kKeys, 8, "rate, brightness, length, speed, min_darkness, night_only, seed, enabled",
+                  value, given);
+    kit::Meteor& m = check_meteor(L, "weather.set_meteor");
+    if (given[0]) m.rate = static_cast<f32>(clamp_range(value[0], 0.0, 30.0));
+    if (given[1]) m.brightness = static_cast<f32>(clamp_range(value[1], 0.0, 4.0));
+    if (given[2]) m.length = static_cast<f32>(clamp_range(value[2], 0.5, 2.0));
+    if (given[3]) m.speed = static_cast<f32>(clamp_range(value[3], 0.5, 2.0));
+    if (given[4]) m.min_darkness = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) m.night_only = value[5] != 0.0 ? 1 : 0;
+    if (given[6]) m.seed = static_cast<u32>(std::floor(clamp_range(value[6], 0.0, 65535.0)));
+    if (given[7]) m.enabled = value[7] != 0.0 ? 1 : 0;
+    return 0;
+}
+
+// ---- Season (M-SEASONS step 19c) ----
+
+kit::Season& check_season(lua_State* L, const char* fn) { return check_first<kit::Season>(L, fn, "Season"); }
+
+#define MCE_WEATHER_GETTER_SEASON(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_season(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_SEASON(season_enabled, enabled)
+MCE_WEATHER_GETTER_SEASON(season_year_days, year_days)
+MCE_WEATHER_GETTER_SEASON(season_start_phase, start_phase)
+MCE_WEATHER_GETTER_SEASON(season_winter_density, winter_density)
+MCE_WEATHER_GETTER_SEASON(season_snow_cover_bias, snow_cover_bias)
+MCE_WEATHER_GETTER_SEASON(season_cold_bias, cold_bias)
+MCE_WEATHER_GETTER_SEASON(season_strength, strength)
+#undef MCE_WEATHER_GETTER_SEASON
+
+int push_season_tint(lua_State* L, const math::vec3& c) {
+    lua_pushnumber(L, static_cast<double>(c.x));
+    lua_pushnumber(L, static_cast<double>(c.y));
+    lua_pushnumber(L, static_cast<double>(c.z));
+    return 3;
+}
+int l_weather_season_spring_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_spring_tint").spring_tint); }
+int l_weather_season_autumn_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_autumn_tint").autumn_tint); }
+int l_weather_season_winter_tint(lua_State* L) { return push_season_tint(L, check_season(L, "weather.season_winter_tint").winter_tint); }
+
+// weather.season_phase(): kit::season_phase on the first WorldClock's day and hour (day 0, hour 0 with no clock).
+int l_weather_season_phase(lua_State* L) {
+    const kit::Season& s = check_season(L, "weather.season_phase");
+    World& w = world_of(L);
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    lua_pushnumber(L, static_cast<double>(kit::season_phase(s, day, hour)));
+    return 1;
+}
+
+// weather.set_season{...}: validated before anything is written.
+int l_weather_set_season(lua_State* L) {
+    static const char* const kKeys[10] = {"enabled", "year_days", "start_phase", "spring_tint", "autumn_tint",
+                                          "winter_tint", "winter_density", "snow_cover_bias", "cold_bias", "strength"};
+    f64 value[10] = {};
+    bool given[10] = {};
+    f64 spring[3] = {};
+    f64 autumn[3] = {};
+    f64 winter[3] = {};
+    read_settings(L, "weather.set_season", kKeys, 10,
+                  "enabled, year_days, start_phase, spring_tint, autumn_tint, winter_tint, winter_density, "
+                  "snow_cover_bias, cold_bias, strength",
+                  value, given, 3, spring, 4, autumn, 5, winter);
+    kit::Season& s = check_season(L, "weather.set_season");
+    auto tint = [](math::vec3& dst, const f64* c) {
+        dst.x = static_cast<f32>(clamp_range(c[0], 0.0, 4.0));
+        dst.y = static_cast<f32>(clamp_range(c[1], 0.0, 4.0));
+        dst.z = static_cast<f32>(clamp_range(c[2], 0.0, 4.0));
+    };
+    if (given[0]) s.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) s.year_days = static_cast<f32>(clamp_range(value[1], 1.0, 3650.0));
+    if (given[2]) s.start_phase = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) tint(s.spring_tint, spring);
+    if (given[4]) tint(s.autumn_tint, autumn);
+    if (given[5]) tint(s.winter_tint, winter);
+    if (given[6]) s.winter_density = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) s.snow_cover_bias = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) s.cold_bias = static_cast<f32>(clamp_range(value[8], 0.0, 1.0));
+    if (given[9]) s.strength = static_cast<f32>(clamp_range(value[9], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Water ice (M-FREEZE step 20c) ----
+
+kit::WaterIce& check_water_ice(lua_State* L, const char* fn) { return check_first<kit::WaterIce>(L, fn, "WaterIce"); }
+
+#define MCE_WEATHER_GETTER_ICE(luaname, field)                                                          \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_water_ice(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_ICE(water_ice_enabled, enabled)
+MCE_WEATHER_GETTER_ICE(water_ice_freeze_start, freeze_start)
+MCE_WEATHER_GETTER_ICE(water_ice_freeze_full, freeze_full)
+MCE_WEATHER_GETTER_ICE(water_ice_manual, manual)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_roughness, ice_roughness)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_reflectivity, ice_reflectivity)
+MCE_WEATHER_GETTER_ICE(water_ice_ice_depth_m, ice_depth_m)
+MCE_WEATHER_GETTER_ICE(water_ice_calm, calm)
+MCE_WEATHER_GETTER_ICE(water_ice_strength, strength)
+#undef MCE_WEATHER_GETTER_ICE
+
+int l_weather_water_ice_ice_color(lua_State* L) {
+    return push_season_tint(L, check_water_ice(L, "weather.water_ice_ice_color").ice_color);
+}
+
+// weather.water_frozen(): kit::water_ice_amount on the first Season at the first WorldClock's day and hour, as the extract
+// computes it (day 0, hour 0 with no clock; no Season is the manual floor).
+int l_weather_water_frozen(lua_State* L) {
+    const kit::WaterIce& ice = check_water_ice(L, "weather.water_frozen");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    lua_pushnumber(L, static_cast<double>(kit::water_ice_amount(ice, season, phase)));
+    return 1;
+}
+
+// weather.set_water_ice{...}: validated before anything is written.
+int l_weather_set_water_ice(lua_State* L) {
+    static const char* const kKeys[10] = {"enabled", "freeze_start", "freeze_full", "manual", "ice_color",
+                                          "ice_roughness", "ice_reflectivity", "ice_depth_m", "calm", "strength"};
+    f64 value[10] = {};
+    bool given[10] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_water_ice", kKeys, 10,
+                  "enabled, freeze_start, freeze_full, manual, ice_color, ice_roughness, ice_reflectivity, ice_depth_m, "
+                  "calm, strength",
+                  value, given, 4, color);
+    kit::WaterIce& ice = check_water_ice(L, "weather.set_water_ice");
+    if (given[0]) ice.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) ice.freeze_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) ice.freeze_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) ice.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) {
+        ice.ice_color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        ice.ice_color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        ice.ice_color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[5]) ice.ice_roughness = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) ice.ice_reflectivity = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) ice.ice_depth_m = static_cast<f32>(clamp_range(value[7], 0.05, 10.0));
+    if (given[8]) ice.calm = static_cast<f32>(clamp_range(value[8], 0.0, 1.0));
+    if (given[9]) ice.strength = static_cast<f32>(clamp_range(value[9], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Leaf fall (M-LEAFFALL step 21c) ----
+
+kit::LeafFall& check_leaf_fall(lua_State* L, const char* fn) { return check_first<kit::LeafFall>(L, fn, "LeafFall"); }
+
+#define MCE_WEATHER_GETTER_LEAF(luaname, field)                                                         \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_leaf_fall(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_LEAF(leaf_fall_enabled, enabled)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_start, autumn_start)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_full, autumn_full)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_end_full, autumn_end_full)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_autumn_end, autumn_end)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_manual, manual)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_rate, rate)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_height_m, height_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_size_m, size_m)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_fall_speed, fall_speed)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_tint_follow, tint_follow)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_max_particles, max_particles)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_seed, seed)
+MCE_WEATHER_GETTER_LEAF(leaf_fall_strength, strength)
+#undef MCE_WEATHER_GETTER_LEAF
+
+int l_weather_leaf_fall_leaf_color(lua_State* L) {
+    return push_season_tint(L, check_leaf_fall(L, "weather.leaf_fall_leaf_color").leaf_color);
+}
+
+// weather.leaf_falling(): kit::leaf_fall_amount on the first Season at the first WorldClock's day and hour, as the extract
+// computes it (day 0, hour 0 with no clock; no Season is the manual floor).
+int l_weather_leaf_falling(lua_State* L) {
+    const kit::LeafFall& lf = check_leaf_fall(L, "weather.leaf_falling");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    lua_pushnumber(L, static_cast<double>(kit::leaf_fall_amount(lf, season, phase)));
+    return 1;
+}
+
+// weather.set_leaf_fall{...}: validated before anything is written.
+int l_weather_set_leaf_fall(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled",   "autumn_start", "autumn_full",    "autumn_end_full", "autumn_end",   "manual",
+                                          "rate",      "box_xz_m",     "height_m",       "size_m",          "lifetime_s",   "fall_speed",
+                                          "wind_follow", "leaf_color", "tint_follow",    "max_particles",   "seed",         "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_leaf_fall", kKeys, 18,
+                  "enabled, autumn_start, autumn_full, autumn_end_full, autumn_end, manual, rate, box_xz_m, height_m, size_m, "
+                  "lifetime_s, fall_speed, wind_follow, leaf_color, tint_follow, max_particles, seed, strength",
+                  value, given, 13, color);
+    kit::LeafFall& lf = check_leaf_fall(L, "weather.set_leaf_fall");
+    if (given[0]) lf.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) lf.autumn_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) lf.autumn_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) lf.autumn_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) lf.autumn_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) lf.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) lf.rate = static_cast<f32>(clamp_range(value[6], 0.0, 500.0));
+    if (given[7]) lf.box_xz_m = static_cast<f32>(clamp_range(value[7], 1.0, 100.0));
+    if (given[8]) lf.height_m = static_cast<f32>(clamp_range(value[8], 1.0, 50.0));
+    if (given[9]) lf.size_m = static_cast<f32>(clamp_range(value[9], 0.02, 1.0));
+    if (given[10]) lf.lifetime_s = static_cast<f32>(clamp_range(value[10], 1.0, 30.0));
+    if (given[11]) lf.fall_speed = static_cast<f32>(clamp_range(value[11], 0.0, 5.0));
+    if (given[12]) lf.wind_follow = static_cast<f32>(clamp_range(value[12], 0.0, 2.0));
+    if (given[13]) {
+        lf.leaf_color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        lf.leaf_color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        lf.leaf_color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[14]) lf.tint_follow = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    if (given[15]) lf.max_particles = static_cast<u32>(clamp_range(value[15], 64.0, 8192.0));
+    if (given[16]) lf.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) lf.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Fireflies (M-FIREFLIES step 23c) ----
+
+kit::Firefly& check_firefly(lua_State* L, const char* fn) { return check_first<kit::Firefly>(L, fn, "Firefly"); }
+
+#define MCE_WEATHER_GETTER_FIREFLY(luaname, field)                                                      \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_firefly(L, "weather." #luaname).field));              \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_FIREFLY(firefly_enabled, enabled)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_start, summer_start)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_full, summer_full)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_end_full, summer_end_full)
+MCE_WEATHER_GETTER_FIREFLY(firefly_summer_end, summer_end)
+MCE_WEATHER_GETTER_FIREFLY(firefly_manual, manual)
+MCE_WEATHER_GETTER_FIREFLY(firefly_night_only, night_only)
+MCE_WEATHER_GETTER_FIREFLY(firefly_min_darkness, min_darkness)
+MCE_WEATHER_GETTER_FIREFLY(firefly_rate, rate)
+MCE_WEATHER_GETTER_FIREFLY(firefly_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_height_m, height_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_size_m, size_m)
+MCE_WEATHER_GETTER_FIREFLY(firefly_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_FIREFLY(firefly_drift_speed, drift_speed)
+MCE_WEATHER_GETTER_FIREFLY(firefly_max_particles, max_particles)
+MCE_WEATHER_GETTER_FIREFLY(firefly_seed, seed)
+MCE_WEATHER_GETTER_FIREFLY(firefly_strength, strength)
+#undef MCE_WEATHER_GETTER_FIREFLY
+
+int l_weather_firefly_color(lua_State* L) {
+    return push_season_tint(L, check_firefly(L, "weather.firefly_color").color);
+}
+
+// weather.fireflies_glowing(): kit::firefly_amount with the inputs the extract's firefly block uses: the first Season at the
+// first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock) and the first Weather's rain intensity while it rains or storms.
+int l_weather_fireflies_glowing(lua_State* L) {
+    const kit::Firefly& ff = check_firefly(L, "weather.fireflies_glowing");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::firefly_amount(ff, season, phase, aurora_night_fade(w), aurora_cloud_cover(w), rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_firefly{...}: validated before anything is written.
+int l_weather_set_firefly(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled",  "summer_start", "summer_full", "summer_end_full", "summer_end",    "manual",
+                                          "night_only", "min_darkness", "rate",       "box_xz_m",        "height_m",     "size_m",
+                                          "lifetime_s", "drift_speed", "color",       "max_particles",   "seed",         "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_firefly", kKeys, 18,
+                  "enabled, summer_start, summer_full, summer_end_full, summer_end, manual, night_only, min_darkness, rate, "
+                  "box_xz_m, height_m, size_m, lifetime_s, drift_speed, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::Firefly& ff = check_firefly(L, "weather.set_firefly");
+    if (given[0]) ff.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) ff.summer_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) ff.summer_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) ff.summer_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) ff.summer_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) ff.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) ff.night_only = value[6] != 0.0 ? 1 : 0;
+    if (given[7]) ff.min_darkness = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) ff.rate = static_cast<f32>(clamp_range(value[8], 0.0, 200.0));
+    if (given[9]) ff.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) ff.height_m = static_cast<f32>(clamp_range(value[10], 1.0, 20.0));
+    if (given[11]) ff.size_m = static_cast<f32>(clamp_range(value[11], 0.02, 0.5));
+    if (given[12]) ff.lifetime_s = static_cast<f32>(clamp_range(value[12], 1.0, 30.0));
+    if (given[13]) ff.drift_speed = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) {
+        ff.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        ff.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        ff.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) ff.max_particles = static_cast<u32>(clamp_range(value[15], 16.0, 4096.0));
+    if (given[16]) ff.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) ff.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Pollen (M-POLLEN step 24c) ----
+
+kit::Pollen& check_pollen(lua_State* L, const char* fn) { return check_first<kit::Pollen>(L, fn, "Pollen"); }
+
+#define MCE_WEATHER_GETTER_POLLEN(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_pollen(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_POLLEN(pollen_enabled, enabled)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_start, spring_start)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_full, spring_full)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_end_full, spring_end_full)
+MCE_WEATHER_GETTER_POLLEN(pollen_spring_end, spring_end)
+MCE_WEATHER_GETTER_POLLEN(pollen_manual, manual)
+MCE_WEATHER_GETTER_POLLEN(pollen_day_only, day_only)
+MCE_WEATHER_GETTER_POLLEN(pollen_min_daylight, min_daylight)
+MCE_WEATHER_GETTER_POLLEN(pollen_rate, rate)
+MCE_WEATHER_GETTER_POLLEN(pollen_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_height_m, height_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_size_m, size_m)
+MCE_WEATHER_GETTER_POLLEN(pollen_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_POLLEN(pollen_fall_speed, fall_speed)
+MCE_WEATHER_GETTER_POLLEN(pollen_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_POLLEN(pollen_max_particles, max_particles)
+MCE_WEATHER_GETTER_POLLEN(pollen_seed, seed)
+MCE_WEATHER_GETTER_POLLEN(pollen_strength, strength)
+#undef MCE_WEATHER_GETTER_POLLEN
+
+int l_weather_pollen_color(lua_State* L) { return push_season_tint(L, check_pollen(L, "weather.pollen_color").color); }
+
+// weather.pollen_drifting(): kit::pollen_amount with the inputs the extract's pollen block uses: the first Season at the
+// first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock) and the first Weather's rain intensity while it rains or storms.
+int l_weather_pollen_drifting(lua_State* L) {
+    const kit::Pollen& po = check_pollen(L, "weather.pollen_drifting");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::pollen_amount(po, season, phase, aurora_night_fade(w), rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_pollen{...}: validated before anything is written.
+int l_weather_set_pollen(lua_State* L) {
+    static const char* const kKeys[19] = {"enabled", "spring_start", "spring_full", "spring_end_full", "spring_end", "manual", "day_only", "min_daylight", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "fall_speed", "wind_follow", "color", "max_particles", "seed", "strength"};
+    f64 value[19] = {};
+    bool given[19] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_pollen", kKeys, 19,
+                  "enabled, spring_start, spring_full, spring_end_full, spring_end, manual, day_only, min_daylight, rate, box_xz_m, height_m, size_m, lifetime_s, fall_speed, wind_follow, color, max_particles, seed, strength",
+                  value, given, 15, color);
+    kit::Pollen& po = check_pollen(L, "weather.set_pollen");
+    if (given[0]) po.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) po.spring_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) po.spring_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) po.spring_end_full = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) po.spring_end = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) po.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) po.day_only = value[6] != 0.0 ? 1 : 0;
+    if (given[7]) po.min_daylight = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) po.rate = static_cast<f32>(clamp_range(value[8], 0.0, 200.0));
+    if (given[9]) po.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) po.height_m = static_cast<f32>(clamp_range(value[10], 1.0, 30.0));
+    if (given[11]) po.size_m = static_cast<f32>(clamp_range(value[11], 0.02, 0.5));
+    if (given[12]) po.lifetime_s = static_cast<f32>(clamp_range(value[12], 1.0, 30.0));
+    if (given[13]) po.fall_speed = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) po.wind_follow = static_cast<f32>(clamp_range(value[14], 0.0, 2.0));
+    if (given[15]) {
+        po.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        po.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        po.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[16]) po.max_particles = static_cast<u32>(clamp_range(value[16], 16.0, 4096.0));
+    if (given[17]) po.seed = static_cast<u32>(clamp_range(value[17], 0.0, 4294967295.0));
+    if (given[18]) po.strength = static_cast<f32>(clamp_range(value[18], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Dust (M-DUSTWIND step 25c) ----
+
+kit::Dust& check_dust(lua_State* L, const char* fn) { return check_first<kit::Dust>(L, fn, "Dust"); }
+
+#define MCE_WEATHER_GETTER_DUST(luaname, field)                                                         \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_dust(L, "weather." #luaname).field));                 \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_DUST(dust_enabled, enabled)
+MCE_WEATHER_GETTER_DUST(dust_wind_start, wind_start)
+MCE_WEATHER_GETTER_DUST(dust_wind_full, wind_full)
+MCE_WEATHER_GETTER_DUST(dust_manual, manual)
+MCE_WEATHER_GETTER_DUST(dust_rate, rate)
+MCE_WEATHER_GETTER_DUST(dust_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_DUST(dust_height_m, height_m)
+MCE_WEATHER_GETTER_DUST(dust_size_m, size_m)
+MCE_WEATHER_GETTER_DUST(dust_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_DUST(dust_speed, speed)
+MCE_WEATHER_GETTER_DUST(dust_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_DUST(dust_max_particles, max_particles)
+MCE_WEATHER_GETTER_DUST(dust_seed, seed)
+MCE_WEATHER_GETTER_DUST(dust_strength, strength)
+#undef MCE_WEATHER_GETTER_DUST
+
+int l_weather_dust_color(lua_State* L) { return push_season_tint(L, check_dust(L, "weather.dust_color").color); }
+
+// weather.dust_blowing(): kit::dust_amount with the inputs the extract's dust block uses: the first Weather's rain
+// intensity while it rains or storms and its effective wind with the gust sway of the first WindGust (calm, rain 0 with no
+// Weather).
+int l_weather_dust_blowing(lua_State* L) {
+    const kit::Dust& du = check_dust(L, "weather.dust_blowing");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    const kit::WindGust* gust = nullptr;
+    const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+    if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+            if (!gust) gust = &c;
+        });
+    }
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+    f32 amount = kit::dust_amount(du, wind, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_dust{...}: validated before anything is written.
+int l_weather_set_dust(lua_State* L) {
+    static const char* const kKeys[15] = {"enabled", "wind_start", "wind_full", "manual", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "wind_follow", "color", "max_particles", "seed", "strength"};
+    f64 value[15] = {};
+    bool given[15] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_dust", kKeys, 15, "enabled, wind_start, wind_full, manual, rate, box_xz_m, height_m, size_m, lifetime_s, speed, wind_follow, color, max_particles, seed, strength",
+                  value, given, 11, color);
+    kit::Dust& du = check_dust(L, "weather.set_dust");
+    if (given[0]) du.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) du.wind_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) du.wind_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) du.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) du.rate = static_cast<f32>(clamp_range(value[4], 0.0, 400.0));
+    if (given[5]) du.box_xz_m = static_cast<f32>(clamp_range(value[5], 1.0, 100.0));
+    if (given[6]) du.height_m = static_cast<f32>(clamp_range(value[6], 1.0, 20.0));
+    if (given[7]) du.size_m = static_cast<f32>(clamp_range(value[7], 0.01, 0.5));
+    if (given[8]) du.lifetime_s = static_cast<f32>(clamp_range(value[8], 0.5, 10.0));
+    if (given[9]) du.speed = static_cast<f32>(clamp_range(value[9], 0.0, 30.0));
+    if (given[10]) du.wind_follow = static_cast<f32>(clamp_range(value[10], 0.0, 2.0));
+    if (given[11]) {
+        du.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        du.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        du.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[12]) du.max_particles = static_cast<u32>(clamp_range(value[12], 16.0, 4096.0));
+    if (given[13]) du.seed = static_cast<u32>(clamp_range(value[13], 0.0, 4294967295.0));
+    if (given[14]) du.strength = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Flock (M-BIRDFLOCK step 26c) ----
+
+kit::Flock& check_flock(lua_State* L, const char* fn) { return check_first<kit::Flock>(L, fn, "Flock"); }
+
+#define MCE_WEATHER_GETTER_FLOCK(luaname, field)                                                        \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_flock(L, "weather." #luaname).field));                \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_FLOCK(flock_enabled, enabled)
+MCE_WEATHER_GETTER_FLOCK(flock_migration_full, migration_full)
+MCE_WEATHER_GETTER_FLOCK(flock_migration_end, migration_end)
+MCE_WEATHER_GETTER_FLOCK(flock_manual, manual)
+MCE_WEATHER_GETTER_FLOCK(flock_twilight_width, twilight_width)
+MCE_WEATHER_GETTER_FLOCK(flock_rate, rate)
+MCE_WEATHER_GETTER_FLOCK(flock_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_FLOCK(flock_height_m, height_m)
+MCE_WEATHER_GETTER_FLOCK(flock_size_m, size_m)
+MCE_WEATHER_GETTER_FLOCK(flock_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_FLOCK(flock_speed, speed)
+MCE_WEATHER_GETTER_FLOCK(flock_heading_deg, heading_deg)
+MCE_WEATHER_GETTER_FLOCK(flock_max_particles, max_particles)
+MCE_WEATHER_GETTER_FLOCK(flock_seed, seed)
+MCE_WEATHER_GETTER_FLOCK(flock_strength, strength)
+#undef MCE_WEATHER_GETTER_FLOCK
+
+int l_weather_flock_color(lua_State* L) { return push_season_tint(L, check_flock(L, "weather.flock_color").color); }
+
+// weather.flock_flying(): kit::flock_amount with the inputs the extract's flock block uses: the first Season at the first
+// WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the sun height as the extract
+// resolves it (the day-night sun at Environment3D.time_of_day, or the y of the unit sun_direction when time_of_day is
+// negative; high noon when neither is usable) and the first Weather's rain intensity while it rains or storms.
+int l_weather_flock_flying(lua_State* L) {
+    const kit::Flock& fl = check_flock(L, "weather.flock_flying");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 sun_y = 1.0f;
+    if (env.time_of_day >= 0.0f) {
+        sun_y = render::sun_direction_at(env.time_of_day).y;
+    } else {
+        const f32 len = std::sqrt(env.sun_direction.x * env.sun_direction.x + env.sun_direction.y * env.sun_direction.y +
+                                  env.sun_direction.z * env.sun_direction.z);
+        if (len > 0.0f) sun_y = env.sun_direction.y / len;
+    }
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::flock_amount(fl, season, phase, sun_y, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_flock{...}: validated before anything is written.
+int l_weather_set_flock(lua_State* L) {
+    static const char* const kKeys[16] = {"enabled", "migration_full", "migration_end", "manual", "twilight_width", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "heading_deg", "color", "max_particles", "seed", "strength"};
+    f64 value[16] = {};
+    bool given[16] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_flock", kKeys, 16, "enabled, migration_full, migration_end, manual, twilight_width, rate, box_xz_m, height_m, size_m, lifetime_s, speed, heading_deg, color, max_particles, seed, strength",
+                  value, given, 12, color);
+    kit::Flock& fl = check_flock(L, "weather.set_flock");
+    if (given[0]) fl.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) fl.migration_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) fl.migration_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) fl.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) fl.twilight_width = static_cast<f32>(clamp_range(value[4], 0.01, 1.0));
+    if (given[5]) fl.rate = static_cast<f32>(clamp_range(value[5], 0.0, 60.0));
+    if (given[6]) fl.box_xz_m = static_cast<f32>(clamp_range(value[6], 1.0, 200.0));
+    if (given[7]) fl.height_m = static_cast<f32>(clamp_range(value[7], 1.0, 120.0));
+    if (given[8]) fl.size_m = static_cast<f32>(clamp_range(value[8], 0.05, 2.0));
+    if (given[9]) fl.lifetime_s = static_cast<f32>(clamp_range(value[9], 1.0, 40.0));
+    if (given[10]) fl.speed = static_cast<f32>(clamp_range(value[10], 0.0, 40.0));
+    if (given[11]) fl.heading_deg = static_cast<f32>(clamp_range(value[11], 0.0, 360.0));
+    if (given[12]) {
+        fl.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        fl.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        fl.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[13]) fl.max_particles = static_cast<u32>(clamp_range(value[13], 8.0, 1024.0));
+    if (given[14]) fl.seed = static_cast<u32>(clamp_range(value[14], 0.0, 4294967295.0));
+    if (given[15]) fl.strength = static_cast<f32>(clamp_range(value[15], 0.0, 1.0));
+    return 0;
+}
+
+// ---- Butterfly (M-BUTTERFLY step 27c) ----
+
+kit::Butterfly& check_butterfly(lua_State* L, const char* fn) { return check_first<kit::Butterfly>(L, fn, "Butterfly"); }
+
+#define MCE_WEATHER_GETTER_BUTTERFLY(luaname, field)                                                    \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_butterfly(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_enabled, enabled)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_window_full, window_full)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_window_end, window_end)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_manual, manual)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_min_daylight, min_daylight)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_wind_calm, wind_calm)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_wind_still, wind_still)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_rate, rate)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_height_m, height_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_size_m, size_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_speed, speed)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_lift, lift)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_max_particles, max_particles)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_seed, seed)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_strength, strength)
+#undef MCE_WEATHER_GETTER_BUTTERFLY
+
+int l_weather_butterfly_color(lua_State* L) { return push_season_tint(L, check_butterfly(L, "weather.butterfly_color").color); }
+
+// weather.butterfly_flying(): kit::butterfly_amount with the inputs the extract's butterfly block uses: the first Season at
+// the first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock), the effective wind with the gust sway of the first WindGust (calm with no Weather)
+// and the first Weather's rain intensity while it rains or storms.
+int l_weather_butterfly_flying(lua_State* L) {
+    const kit::Butterfly& bf = check_butterfly(L, "weather.butterfly_flying");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const kit::WindGust* gust = nullptr;
+    const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+    if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+            if (!gust) gust = &c;
+        });
+    }
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+    f32 amount = kit::butterfly_amount(bf, season, phase, aurora_night_fade(w), wind, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_butterfly{...}: validated before anything is written.
+int l_weather_set_butterfly(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled", "window_full", "window_end", "manual", "min_daylight", "wind_calm", "wind_still", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "lift", "color", "max_particles", "seed", "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_butterfly", kKeys, 18, "enabled, window_full, window_end, manual, min_daylight, wind_calm, wind_still, rate, box_xz_m, height_m, size_m, lifetime_s, speed, lift, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::Butterfly& bf = check_butterfly(L, "weather.set_butterfly");
+    if (given[0]) bf.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) bf.window_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) bf.window_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) bf.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) bf.min_daylight = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) bf.wind_calm = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) bf.wind_still = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) bf.rate = static_cast<f32>(clamp_range(value[7], 0.0, 60.0));
+    if (given[8]) bf.box_xz_m = static_cast<f32>(clamp_range(value[8], 1.0, 100.0));
+    if (given[9]) bf.height_m = static_cast<f32>(clamp_range(value[9], 1.0, 20.0));
+    if (given[10]) bf.size_m = static_cast<f32>(clamp_range(value[10], 0.02, 1.0));
+    if (given[11]) bf.lifetime_s = static_cast<f32>(clamp_range(value[11], 1.0, 30.0));
+    if (given[12]) bf.speed = static_cast<f32>(clamp_range(value[12], 0.0, 4.0));
+    if (given[13]) bf.lift = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) {
+        bf.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        bf.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        bf.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) bf.max_particles = static_cast<u32>(clamp_range(value[15], 8.0, 512.0));
+    if (given[16]) bf.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) bf.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -1520,6 +2640,164 @@ const luaL_Reg kWeatherLib[] = {
     {"aurora_gate", l_weather_aurora_gate},
     {"aurora_level", l_weather_aurora_level},
     {"set_aurora", l_weather_set_aurora},
+    {"rainbow_strength", l_weather_rainbow_strength},
+    {"rainbow_band_width", l_weather_rainbow_band_width},
+    {"rainbow_secondary", l_weather_rainbow_secondary},
+    {"rainbow_min_wetness", l_weather_rainbow_min_wetness},
+    {"rainbow_max_sun_elevation", l_weather_rainbow_max_sun_elevation},
+    {"rainbow_enabled", l_weather_rainbow_enabled},
+    {"rainbow_level", l_weather_rainbow_level},
+    {"set_rainbow", l_weather_set_rainbow},
+    {"meteor_rate", l_weather_meteor_rate},
+    {"meteor_brightness", l_weather_meteor_brightness},
+    {"meteor_length", l_weather_meteor_length},
+    {"meteor_speed", l_weather_meteor_speed},
+    {"meteor_min_darkness", l_weather_meteor_min_darkness},
+    {"meteor_night_only", l_weather_meteor_night_only},
+    {"meteor_seed", l_weather_meteor_seed},
+    {"meteor_enabled", l_weather_meteor_enabled},
+    {"meteor_level", l_weather_meteor_level},
+    {"set_meteor", l_weather_set_meteor},
+    {"season_enabled", l_weather_season_enabled},
+    {"season_year_days", l_weather_season_year_days},
+    {"season_start_phase", l_weather_season_start_phase},
+    {"season_winter_density", l_weather_season_winter_density},
+    {"season_snow_cover_bias", l_weather_season_snow_cover_bias},
+    {"season_cold_bias", l_weather_season_cold_bias},
+    {"season_strength", l_weather_season_strength},
+    {"season_spring_tint", l_weather_season_spring_tint},
+    {"season_autumn_tint", l_weather_season_autumn_tint},
+    {"season_winter_tint", l_weather_season_winter_tint},
+    {"season_phase", l_weather_season_phase},
+    {"set_season", l_weather_set_season},
+    {"water_ice_enabled", l_weather_water_ice_enabled},
+    {"water_ice_freeze_start", l_weather_water_ice_freeze_start},
+    {"water_ice_freeze_full", l_weather_water_ice_freeze_full},
+    {"water_ice_manual", l_weather_water_ice_manual},
+    {"water_ice_ice_roughness", l_weather_water_ice_ice_roughness},
+    {"water_ice_ice_reflectivity", l_weather_water_ice_ice_reflectivity},
+    {"water_ice_ice_depth_m", l_weather_water_ice_ice_depth_m},
+    {"water_ice_calm", l_weather_water_ice_calm},
+    {"water_ice_strength", l_weather_water_ice_strength},
+    {"water_ice_ice_color", l_weather_water_ice_ice_color},
+    {"water_frozen", l_weather_water_frozen},
+    {"set_water_ice", l_weather_set_water_ice},
+    {"leaf_fall_enabled", l_weather_leaf_fall_enabled},
+    {"leaf_fall_autumn_start", l_weather_leaf_fall_autumn_start},
+    {"leaf_fall_autumn_full", l_weather_leaf_fall_autumn_full},
+    {"leaf_fall_autumn_end_full", l_weather_leaf_fall_autumn_end_full},
+    {"leaf_fall_autumn_end", l_weather_leaf_fall_autumn_end},
+    {"leaf_fall_manual", l_weather_leaf_fall_manual},
+    {"leaf_fall_rate", l_weather_leaf_fall_rate},
+    {"leaf_fall_box_xz_m", l_weather_leaf_fall_box_xz_m},
+    {"leaf_fall_height_m", l_weather_leaf_fall_height_m},
+    {"leaf_fall_size_m", l_weather_leaf_fall_size_m},
+    {"leaf_fall_lifetime_s", l_weather_leaf_fall_lifetime_s},
+    {"leaf_fall_fall_speed", l_weather_leaf_fall_fall_speed},
+    {"leaf_fall_wind_follow", l_weather_leaf_fall_wind_follow},
+    {"leaf_fall_tint_follow", l_weather_leaf_fall_tint_follow},
+    {"leaf_fall_max_particles", l_weather_leaf_fall_max_particles},
+    {"leaf_fall_seed", l_weather_leaf_fall_seed},
+    {"leaf_fall_strength", l_weather_leaf_fall_strength},
+    {"leaf_fall_leaf_color", l_weather_leaf_fall_leaf_color},
+    {"leaf_falling", l_weather_leaf_falling},
+    {"set_leaf_fall", l_weather_set_leaf_fall},
+    {"firefly_enabled", l_weather_firefly_enabled},
+    {"firefly_summer_start", l_weather_firefly_summer_start},
+    {"firefly_summer_full", l_weather_firefly_summer_full},
+    {"firefly_summer_end_full", l_weather_firefly_summer_end_full},
+    {"firefly_summer_end", l_weather_firefly_summer_end},
+    {"firefly_manual", l_weather_firefly_manual},
+    {"firefly_night_only", l_weather_firefly_night_only},
+    {"firefly_min_darkness", l_weather_firefly_min_darkness},
+    {"firefly_rate", l_weather_firefly_rate},
+    {"firefly_box_xz_m", l_weather_firefly_box_xz_m},
+    {"firefly_height_m", l_weather_firefly_height_m},
+    {"firefly_size_m", l_weather_firefly_size_m},
+    {"firefly_lifetime_s", l_weather_firefly_lifetime_s},
+    {"firefly_drift_speed", l_weather_firefly_drift_speed},
+    {"firefly_max_particles", l_weather_firefly_max_particles},
+    {"firefly_seed", l_weather_firefly_seed},
+    {"firefly_strength", l_weather_firefly_strength},
+    {"firefly_color", l_weather_firefly_color},
+    {"fireflies_glowing", l_weather_fireflies_glowing},
+    {"set_firefly", l_weather_set_firefly},
+    {"pollen_enabled", l_weather_pollen_enabled},
+    {"pollen_spring_start", l_weather_pollen_spring_start},
+    {"pollen_spring_full", l_weather_pollen_spring_full},
+    {"pollen_spring_end_full", l_weather_pollen_spring_end_full},
+    {"pollen_spring_end", l_weather_pollen_spring_end},
+    {"pollen_manual", l_weather_pollen_manual},
+    {"pollen_day_only", l_weather_pollen_day_only},
+    {"pollen_min_daylight", l_weather_pollen_min_daylight},
+    {"pollen_rate", l_weather_pollen_rate},
+    {"pollen_box_xz_m", l_weather_pollen_box_xz_m},
+    {"pollen_height_m", l_weather_pollen_height_m},
+    {"pollen_size_m", l_weather_pollen_size_m},
+    {"pollen_lifetime_s", l_weather_pollen_lifetime_s},
+    {"pollen_fall_speed", l_weather_pollen_fall_speed},
+    {"pollen_wind_follow", l_weather_pollen_wind_follow},
+    {"pollen_max_particles", l_weather_pollen_max_particles},
+    {"pollen_seed", l_weather_pollen_seed},
+    {"pollen_strength", l_weather_pollen_strength},
+    {"pollen_color", l_weather_pollen_color},
+    {"pollen_drifting", l_weather_pollen_drifting},
+    {"set_pollen", l_weather_set_pollen},
+    {"dust_enabled", l_weather_dust_enabled},
+    {"dust_wind_start", l_weather_dust_wind_start},
+    {"dust_wind_full", l_weather_dust_wind_full},
+    {"dust_manual", l_weather_dust_manual},
+    {"dust_rate", l_weather_dust_rate},
+    {"dust_box_xz_m", l_weather_dust_box_xz_m},
+    {"dust_height_m", l_weather_dust_height_m},
+    {"dust_size_m", l_weather_dust_size_m},
+    {"dust_lifetime_s", l_weather_dust_lifetime_s},
+    {"dust_speed", l_weather_dust_speed},
+    {"dust_wind_follow", l_weather_dust_wind_follow},
+    {"dust_max_particles", l_weather_dust_max_particles},
+    {"dust_seed", l_weather_dust_seed},
+    {"dust_strength", l_weather_dust_strength},
+    {"dust_color", l_weather_dust_color},
+    {"dust_blowing", l_weather_dust_blowing},
+    {"set_dust", l_weather_set_dust},
+    {"flock_enabled", l_weather_flock_enabled},
+    {"flock_migration_full", l_weather_flock_migration_full},
+    {"flock_migration_end", l_weather_flock_migration_end},
+    {"flock_manual", l_weather_flock_manual},
+    {"flock_twilight_width", l_weather_flock_twilight_width},
+    {"flock_rate", l_weather_flock_rate},
+    {"flock_box_xz_m", l_weather_flock_box_xz_m},
+    {"flock_height_m", l_weather_flock_height_m},
+    {"flock_size_m", l_weather_flock_size_m},
+    {"flock_lifetime_s", l_weather_flock_lifetime_s},
+    {"flock_speed", l_weather_flock_speed},
+    {"flock_heading_deg", l_weather_flock_heading_deg},
+    {"flock_max_particles", l_weather_flock_max_particles},
+    {"flock_seed", l_weather_flock_seed},
+    {"flock_strength", l_weather_flock_strength},
+    {"flock_color", l_weather_flock_color},
+    {"flock_flying", l_weather_flock_flying},
+    {"set_flock", l_weather_set_flock},
+    {"butterfly_enabled", l_weather_butterfly_enabled},
+    {"butterfly_window_full", l_weather_butterfly_window_full},
+    {"butterfly_window_end", l_weather_butterfly_window_end},
+    {"butterfly_manual", l_weather_butterfly_manual},
+    {"butterfly_min_daylight", l_weather_butterfly_min_daylight},
+    {"butterfly_wind_calm", l_weather_butterfly_wind_calm},
+    {"butterfly_wind_still", l_weather_butterfly_wind_still},
+    {"butterfly_rate", l_weather_butterfly_rate},
+    {"butterfly_box_xz_m", l_weather_butterfly_box_xz_m},
+    {"butterfly_height_m", l_weather_butterfly_height_m},
+    {"butterfly_size_m", l_weather_butterfly_size_m},
+    {"butterfly_lifetime_s", l_weather_butterfly_lifetime_s},
+    {"butterfly_speed", l_weather_butterfly_speed},
+    {"butterfly_lift", l_weather_butterfly_lift},
+    {"butterfly_max_particles", l_weather_butterfly_max_particles},
+    {"butterfly_seed", l_weather_butterfly_seed},
+    {"butterfly_strength", l_weather_butterfly_strength},
+    {"butterfly_color", l_weather_butterfly_color},
+    {"butterfly_flying", l_weather_butterfly_flying},
+    {"set_butterfly", l_weather_set_butterfly},
     {nullptr, nullptr},
 };
 

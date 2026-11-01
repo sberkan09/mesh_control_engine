@@ -35,6 +35,14 @@ inline math::vec3 unit_dir3(math::vec3 d) {
     return math::vec3{d.x / len, d.y / len, d.z / len};
 }
 
+// A unit direction; NaN/inf or length below 1e-6 -> `fallback` (the rainbow's anti-solar point).
+inline math::vec3 unit_dir3_or(math::vec3 d, math::vec3 fallback) {
+    const f32 len2 = d.x * d.x + d.y * d.y + d.z * d.z;
+    if (!(len2 >= 1.0e-12f) || len2 > 3.0e38f) return fallback;
+    const f32 len = std::sqrt(len2);
+    return math::vec3{d.x / len, d.y / len, d.z / len};
+}
+
 // lo..hi, NaN -> `nan_to` (the water plane's scalars).
 inline f32 ranged(f32 x, f32 lo, f32 hi, f32 nan_to) { return x == x ? (x > lo ? (x < hi ? x : hi) : lo) : nan_to; }
 

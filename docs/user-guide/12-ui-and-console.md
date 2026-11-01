@@ -184,9 +184,11 @@ Gameplay never includes `mce/ui`; it talks to the screens only through data:
   as `"format"`, a printf format with one `%f` / `%e` / `%g`, default `%g`; other widgets as their
   value). The field is read from the screen's own entity when it has the component, else from the
   first scene entity that does, and the binding waits until one does.
-  A Panel or Image with a `"bind"` shows or hides: it is visible while the field is at least the first number
-  of its `"range": [lo, hi, step]` (`samples/09_openworld`'s wanted stars are five Panels bound to
-  `Wanted3D/level` with `lo` 1 to 5, each holding a Text `*`). Start such a widget with `"visible": false`.
+  A Panel or Image with a `"bind"` shows or hides: it is visible while the field is within its
+  `"range": [lo, hi, step]`, `lo <= value <= hi` (`samples/09_openworld`'s wanted stars are five Panels bound to
+  `Wanted3D/level` with `lo` 1 to 5; each mission's HUD shows its Active panel with `[1, 1, 0]` on `Mission/state`,
+  PASSED with `[2, 2, 0]`). A reflected enum field binds as its number (`Mission/state`: Idle 0, Active 1, Complete 2,
+  Failed 3). Start such a widget with `"visible": false`. A Slider bound to a field is a read-only bar (`"interactable": false`).
 - **Buttons to gameplay**: a widget's `"action": "Resume"` raises that input action. A confirmed
   button presses it for one tick, a slider, toggle or tabs change presses it with `x` = the new
   value, and a cancelled modal panel (Cancel / Esc) presses its own action. The action rides in
@@ -257,6 +259,12 @@ also on held ticks (a paused game can still open a screen).
   `write_scene_component` do this for you. A typo in a field path never fires and is not reported.
 - `act` and `act2` run in that order: `Show`, `Hide`, `Toggle` act on this entity's `UiScreen`; `Load` loads
   `scene`; `Quit` ends the game. Rules and `UiFlow` can sit on the same screen.
+- `SaveSlot` writes the save slot named in `field` (empty: `quick`; letters, digits, `_` and `-`, up to 64) with
+  `save::save_game`, and `LoadSlot` asks the host to apply it after the tick (`scene::request_load`; `scene` is
+  the scene to load first, if set). Both run while a pause screen holds the game, so a pause menu's SAVE and LOAD
+  are two rules. A bad name or a missing slot is logged and does nothing. Only fields marked `Save` on entities
+  with a `SaveKey` are stored (`13-sequences-fsm-saves.md`). `samples/09_openworld`'s Esc menu uses this, with an
+  options page of two sliders bound to `audio.master_db` and `input.look_sensitivity`.
 
 `projects/Undertow` uses all of this (`tools/author_ui_mcp.py`): a title, a pause menu, an options
 page with music and effects volume, and a HUD bound to the drone, the same documents drawn in two

@@ -75,6 +75,7 @@ struct Wanted3D {
     math::vec3 last_known;          // engine-written: where a unit last saw it
     u32 seen_by = 0;                // engine-written: units that see it now
     u32 crimes = 0;                 // engine-written: crimes counted
+    u32 kills = 0;                  // engine-written: deaths this entity caused (any team, not itself)
     u8 max_level = 5;
     u8 level = 0;                   // engine-written
     u8 police_team = 2;             // Health3D::team of police
@@ -86,7 +87,7 @@ MCE_COMPONENT(Wanted3D, (heat, Save, Range{0, 1000}), (heat_per_level, Range{1, 
               (kill_civilian, Range{0, 1000}), (hit_police, Range{0, 1000}), (kill_police, Range{0, 1000}),
               (witness_range, Range{0, 1000}, Help{"m"}), (cooldown_delay, Range{0, 3600}, Help{"s unseen before heat decays"}),
               (decay, Range{0, 1000}, Help{"heat/s"}), (unseen_time, Save, ReadOnly), (last_known, Save, ReadOnly),
-              (seen_by, ReadOnly, Transient), (crimes, Save, ReadOnly), (max_level, Range{1, 10}), (level, ReadOnly, Transient),
+              (seen_by, ReadOnly, Transient), (crimes, Save, ReadOnly), (kills, Save, ReadOnly, Help{"deaths this entity caused (its shots, rams); a HUD counter can bind to it"}), (max_level, Range{1, 10}), (level, ReadOnly, Transient),
               (police_team, Help{"Health3D::team of police units"}), (civilian_team, Help{"Health3D::team of civilians"}),
               (require_witness, Help{"1: a civilian hit counts only when a police unit sees the victim"}))
 
@@ -270,6 +271,37 @@ struct Sprayed3D {
     u32 level = 0;  // the level it had
 };
 MCE_EVENT(Sprayed3D, entity, garage, paid, level)
+
+// Repair shop (M-REPAIRSHOP). `RepairShop3D` on a placed entity (a garage pad): a car with a VehicleSeat3D driver that has a
+// Wallet3D, within `radius` and slower than `max_speed`, is repaired (`repair_vehicle`: full health, a wreck drives again) for
+// `price` when it is hurt, and the driver's wanted level drops by `wanted_drop` levels (0 = cleared) at `price_per_level`
+// each, but only while no police unit sees it (`need_unseen` 1). All or nothing: a driver who cannot pay the lot gets
+// nothing. Once per visit (`served`); `Repaired3D` is pushed. System "kit3d_repairshop" (after "kit3d_chopshop").
+struct RepairShop3D {
+    f32 radius = 5.0f;           // m
+    f32 max_speed = 2.0f;        // m/s: the car must be nearly stopped
+    u16 price = 150;             // for a repair
+    u16 price_per_level = 100;   // per wanted level dropped
+    u8 wanted_drop = 0;          // levels to drop; 0 = clear it
+    u8 need_unseen = 1;          // 1: the wanted level only drops while no police sees the driver
+    u8 enabled = 1;
+    u8 pad_ = 0;
+    Entity served;               // engine-written: the car done this visit
+};
+MCE_COMPONENT(RepairShop3D, (radius, Range{0.1f, 100}, Help{"m: a car this close is served"}), (max_speed, Range{0, 50}, Help{"m/s: the car must be this slow"}),
+              (price, Help{"cash for a repair"}), (price_per_level, Help{"cash per wanted level dropped"}),
+              (wanted_drop, Help{"levels dropped; 0 = clear"}), (need_unseen, Help{"1: only while no police sees the driver"}), enabled,
+              (served, ReadOnly, Transient))
+
+// A driver had a car repaired and/or a wanted level lowered at a RepairShop3D.
+struct Repaired3D {
+    Entity driver;
+    Entity shop;
+    Entity car;
+    i32 paid = 0;
+    u32 level = 0;  // the wanted level it had
+};
+MCE_EVENT(Repaired3D, driver, shop, car, paid, level)
 
 // Ammo shop (M-AMMOSHOP). `AmmoShop3D` on a placed entity: a buyer with a Weapon3D and a Wallet3D on the same entity that
 // stands within `radius` has the weapon's `reserve` topped up to `stock_to` rounds at `price_per_round` each. A buyer that

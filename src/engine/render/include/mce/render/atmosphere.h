@@ -27,6 +27,12 @@ struct Atmosphere {
     // ... and sets its ambient_sky / ambient_ground to the sky's and the lit ground's light.
     bool ambient = true;
     f32 rebake_degrees = 0.25f;       // how far the sun moves before Forward3D re-bakes the sky texture
+    // The sun that lights the sky when it is not the scene's DirectionalLight (a moon holding the light at night):
+    // the way its light travels (as DirectionalLight::direction; zero = the light's, the default) and its color ×
+    // intensity above the air. The sky, its irradiance and the ambient follow it; the light is still tinted by the
+    // air along its own direction (a low moon reddens too).
+    math::vec3 sky_sun_direction{0.0f, 0.0f, 0.0f};
+    math::vec3 sky_sun_light{0.0f, 0.0f, 0.0f};
 };
 
 // Air between a point at `altitude` meters and space along `dir` (unit, y up): 0 where the ray

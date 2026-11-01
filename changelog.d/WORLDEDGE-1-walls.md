@@ -1,0 +1,1 @@
+- Sample (M-WORLDEDGE): `09_openworld` has four invisible walls on the map edge. Record: `docs/milestones/M-WORLDEDGE.md`.

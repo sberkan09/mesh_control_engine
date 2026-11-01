@@ -1,0 +1,1 @@
+- M-BUTTERFLY done: the user guide gets "Butterflies flutter." in `08-3d.md` (the opt-in `Butterfly` component, drawn as one camera-following alpha-blended particle emitter on calm, dry summer days, with the Luau `weather.set_butterfly` API from 9.19y); the milestone record is closed with follow-ups.

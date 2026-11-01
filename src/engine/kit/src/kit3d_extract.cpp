@@ -11,10 +11,20 @@
 #include "mce/ecs/origin.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/chunk_lod3d.h"
+#include "mce/kit/firefly.h"
+#include "mce/kit/leaf_fall.h"
+#include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
+#include "mce/kit/pollen.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
+#include "mce/kit/meteor.h"
+#include "mce/kit/rainbow.h"
+#include "mce/kit/season.h"
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/day_cycle.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/world_clock.h"
@@ -22,6 +32,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -64,6 +75,94 @@ void apply_wind_sway(f32 wind, const WindSway& s, render::InstanceBatch& b) {
     b.wind_frequency *= 1.0f + (s.frequency_gain - 1.0f) * wind;
     b.wind_ext.y = clamp(b.wind_ext.y + s.gust_gain * wind, 0.0f, 1.0f);
     b.wind_ext.z *= 1.0f + (s.flutter_gain - 1.0f) * wind;
+}
+
+// Season (M-SEASONS 19b): the first Season at the first WorldClock's day and hour (day 0, hour 0 with no clock). A flag
+// is false for no Season, enabled 0, strength 0 and the pure-summer case where the helpers return exact identities, so
+// every consumer skips its code path and frames stay bit-identical. Render-side copies only; nothing is written back.
+// Density thinning is not applied: see docs/milestones/M-SEASONS.md (the terrain scatter is row-major, so a prefix of
+// the cached copies is not an unbiased thinning).
+struct SeasonFrame {
+    bool tint_on = false;
+    bool snow_on = false;
+    math::vec3 tint{1.0f, 1.0f, 1.0f};
+    SeasonSnow snow;
+};
+
+SeasonFrame read_season(World& world) {
+    SeasonFrame out;
+    const Season* season = nullptr;
+    world.query<const Season&>().each([&](const Season& c) {
+        if (!season) season = &c;
+    });
+    if (!season) return out;
+    u32 day = 0;
+    f32 hour = 0.0f;
+    bool have_clock = false;
+    world.query<const WorldClock&>().each([&](const WorldClock& c) {
+        if (have_clock) return;
+        have_clock = true;
+        day = c.day;
+        hour = c.hour;
+    });
+    const f32 phase = season_phase(*season, day, hour);
+    out.tint = season_foliage_tint(*season, phase);
+    out.tint_on = out.tint.x != 1.0f || out.tint.y != 1.0f || out.tint.z != 1.0f;
+    out.snow = season_snow_bias(*season, phase);
+    out.snow_on = out.snow.cover_floor > 0.0f || out.snow.lee_shift > 0.0f;
+    return out;
+}
+
+// Leaf fall (M-LEAFFALL 21b): the id of the one render-side emitter the extract adds. ParticleEmitter3D emitters use
+// `e.index + 1`, and an entity index is a row of the world's location table, so it stays far below 0xFFFF0001 (that would
+// be 4.29 billion live entities, 64 GB of locations alone); the reserved value cannot collide with one. The foliage batch
+// ids live in Forward3D's separate batch id space (batch_gpu_), not the emitter one (emitters_gpu_). A test pins it.
+constexpr u32 kLeafFallEmitterId = 0xFFFF0001u;
+
+// Fireflies (M-FIREFLIES 23b): the id of the second render-side emitter (same collision argument as the leaf id).
+constexpr u32 kFireflyEmitterId = 0xFFFF0002u;
+
+// Pollen (M-POLLEN 24b): the id of the third render-side emitter (same collision argument as the leaf id).
+constexpr u32 kPollenEmitterId = 0xFFFF0003u;
+
+// Wind-blown dust (M-DUSTWIND 25b): the id of the fourth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kDustEmitterId = 0xFFFF0004u;
+// Bird flocks (M-BIRDFLOCK 26b): the id of the fifth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kFlockEmitterId = 0xFFFF0005u;
+// Summer butterflies (M-BUTTERFLY 27b): the id of the sixth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
+
+// QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
+// step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
+bool is_low_quality(const render::QualitySettings& q) {
+    const render::QualitySettings low = render::quality_settings(render::QualityTier::Low);
+    return q.msaa == low.msaa && q.gi_updates == low.gi_updates && q.volumetrics == low.volumetrics;
+}
+
+// Water ice (M-FREEZE 20b): the first WaterIce at the first Season's phase (day 0, hour 0 with no WorldClock; no Season is
+// the manual floor only). Edits the local render::WaterSurface only, before apply_quality; nothing is written back. Not
+// called when the amount is 0, so the carrier stays bit-identical.
+void apply_water_ice(const WaterIce& ice, const WaterIceLook& look, render::WaterSurface& s) {
+    s.amplitude *= look.amplitude_scale;
+    s.steepness *= look.steepness_scale;
+    s.speed_scale *= look.speed_scale;
+    const math::vec3 c = water_ice_color(ice);
+    const f32 m = look.ice_mix;
+    s.shallow_color = math::vec3{s.shallow_color.x + (c.x - s.shallow_color.x) * m, s.shallow_color.y + (c.y - s.shallow_color.y) * m,
+                                 s.shallow_color.z + (c.z - s.shallow_color.z) * m};
+    s.deep_color = math::vec3{s.deep_color.x + (c.x - s.deep_color.x) * m, s.deep_color.y + (c.y - s.deep_color.y) * m,
+                              s.deep_color.z + (c.z - s.deep_color.z) * m};
+    s.depth_scale_m += (look.depth_scale_m - s.depth_scale_m) * m;
+    s.roughness = std::max(s.roughness, look.roughness_floor);
+    s.reflectivity *= look.reflectivity_scale;
+    s.foam_amount *= look.foam_scale;
+}
+
+// The season tint on a batch, after foliage_look and apply_wind_sway: rgb only, alpha and tint_variation untouched.
+void apply_season_tint(const math::vec3& t, render::InstanceBatch& b) {
+    b.tint.x *= t.x;
+    b.tint.y *= t.y;
+    b.tint.z *= t.z;
 }
 
 // Snow lee bias under a gust (M-WINDGUST 12b): clamp(bias * (1 + strength * gust_q / 2^24), 0, 1) with the snow bit; with
@@ -214,6 +313,32 @@ void apply_env_override(Environment3D& env, const EnvOverride& o) {
         }
         default: break;
     }
+}
+
+// The environment the frame uses: the Environment3D resource, else the first component, else defaults, then the r.env
+// overrides. Shared by apply_environment and the firefly feed (which needs the same time of day).
+Environment3D resolve_environment(World& world) {
+    Environment3D env;
+    if (const Environment3D* r = world.try_resource<Environment3D>()) {
+        env = *r;
+    } else {
+        bool found = false;
+        world.query<const Environment3D&>().each([&](const Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    {
+        static EnvOverrides parsed;
+        const StringView want = cv_env_override.get_string();
+        if (want != parsed.text.view()) {
+            parsed.text.assign(want);
+            parse_env_overrides(want, parsed);
+        }
+        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
+    }
+    return env;
 }
 
 }  // namespace
@@ -792,26 +917,7 @@ bool Kit3DExtract::base_view_of(World& world, Entity e, const Camera3DComponent&
 }
 
 void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
-    Environment3D env;
-    if (const Environment3D* r = world.try_resource<Environment3D>()) {
-        env = *r;
-    } else {
-        bool found = false;
-        world.query<const Environment3D&>().each([&](const Environment3D& c) {
-            if (found) return;
-            found = true;
-            env = c;
-        });
-    }
-    {
-        static EnvOverrides parsed;
-        const StringView want = cv_env_override.get_string();
-        if (want != parsed.text.view()) {
-            parsed.text.assign(want);
-            parse_env_overrides(want, parsed);
-        }
-        for (u32 i = 0; i < parsed.count; ++i) apply_env_override(env, parsed.items[i]);
-    }
+    const Environment3D env = resolve_environment(world);
     render::DirectionalLight sun;
     sun.direction = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
     sun.color = env.sun_color;
@@ -823,6 +929,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     u32 moon_day = 0;
     bool moon_holds_light = false;
     const f32 sun_elevation_natural = -sun.direction.y;  // the sun's own elevation, before any hand-off
+    const render::DirectionalLight sun_natural = sun;     // the sun itself: what the atmosphere's sky follows
     {  // moonlight (M-NIGHTSKY 14b): hand the one directional slot to the moon at night; local copy only, never Environment3D
         world.query<const Moon&>().each([&](const Moon& c) {
             if (!moon) moon = &c;
@@ -879,14 +986,57 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     // The sky pass draws its sun disk at -light.direction; while the moon holds the light that disk would sit on the
     // phased moon, so the local Sky copy drops it (M-NIGHTSKY 14e). Never Environment3D; unchanged otherwise.
     if (moon_holds_light) sky.sun_intensity = 0.0f;
-    scene.set_sky(sky);
+    // An enabled DayCycle writing the environment (with a clock hour) owns the ambient: its keys are authored, the
+    // atmosphere's single-scattering sky is dim in the shade and black soon after sunset.
+    bool day_cycle_owns_ambient = false;
+    world.query<const DayCycle&>().each([&](const DayCycle& c) { day_cycle_owns_ambient = day_cycle_owns_ambient || c.enabled != 0; });
+    day_cycle_owns_ambient = day_cycle_owns_ambient && env.time_of_day >= 0.0f;
+    const bool atmosphere_on = env.atmosphere != 0;
     render::Fog fog;
     fog.color = env.fog_color;
     fog.density = env.fog_density;
+    // The atmosphere's sun is the light's direction, and at night the moon holds the light: it would paint a daylight
+    // sky around the moon. With a DayCycle the sky then follows the sun itself (Atmosphere::sky_sun_direction), so the
+    // hand-off changes nothing in the sky: it darkens with the sun, continuously. Without one the atmosphere steps
+    // aside while the moon holds the light and the sky clears to the fog colour (the stars and the moon draw over it).
+    const bool atmosphere_yields_to_moon = moon_holds_light && atmosphere_on && !day_cycle_owns_ambient;
+    if (atmosphere_yields_to_moon) sky.enabled = false;
     render::Atmosphere atmosphere;
-    atmosphere.enabled = env.atmosphere != 0;
+    atmosphere.enabled = atmosphere_on && !atmosphere_yields_to_moon;
     atmosphere.intensity = env.atmosphere_intensity;
     atmosphere.mie = env.atmosphere_haze;
+    if (day_cycle_owns_ambient) atmosphere.ambient = false;  // the atmosphere still draws the sky and tints the sun
+    if (atmosphere_on && day_cycle_owns_ambient && moon_holds_light) {
+        atmosphere.sky_sun_direction = sun_natural.direction;
+        atmosphere.sky_sun_light = sun_natural.color * sun_natural.intensity;
+    }
+    if (atmosphere_on) sky.texture_additive = false;  // Forward3D reads it under the atmosphere: only the floor sets it
+    if (atmosphere_on && day_cycle_owns_ambient) {
+        // The twilight floor: the single-scattering sky goes black within a few degrees under the horizon while the
+        // DayCycle's dusk lasts hours, so a gradient in the (DayCycle-driven) fog colour fades in under the
+        // atmosphere's sky as the sun sets: the horizon in the fog colour, the zenith darker. By night it is the
+        // pre-atmosphere night sky (the fog colour) behind the stars. Stepped in 1/64 so the IBL re-bakes rarely.
+        const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.15f, 0.0f, 1.0f);  // 0 at -0.1, 1 at +0.05
+        const f32 floor_w = std::round((1.0f - t * t * (3.0f - 2.0f * t)) * 64.0f) / 64.0f;
+        if (floor_w > 0.0f) {
+            sky.texture_additive = true;
+            sky.horizon = env.fog_color * floor_w;
+            sky.ground = env.fog_color * floor_w;
+            sky.zenith = env.fog_color * (0.15f * floor_w);
+        }
+    }
+    if (atmosphere_on && day_cycle_owns_ambient && sky.ibl) {
+        // The sky's image-based diffuse at the DayCycle's level: the IBL keeps the sky's colour and direction, the
+        // authored ambient sets how bright the shade is (the atmosphere's own sky is about a third of it by day).
+        const render::DirectionalLight& sky_sun = moon_holds_light ? sun_natural : sun;
+        const math::vec3 toward = render::atmosphere_quantized_sun(atmosphere, -math::normalize(sky_sun.direction));
+        const math::vec3 above = sky_sun.color * sky_sun.intensity * 3.14159265f;
+        math::vec3 sky_up = render::atmosphere_sky_ambient(atmosphere, toward) * above;
+        if (sky.texture_additive) sky_up = sky_up + (sky.zenith + sky.horizon) * 0.5f;  // the floor, roughly
+        const auto luma = [](math::vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+        sky.diffuse_ambient = clamp(luma(env.ambient_sky) / max(luma(sky_up), 1e-4f), 0.0f, 32.0f);
+    }
+    scene.set_sky(sky);
     scene.set_atmosphere(atmosphere);
     render::Volumetrics vol;
     vol.enabled = env.volumetric_fog != 0;
@@ -974,6 +1124,11 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             snow.wind_bias = gusted_snow_bias(snowc->wind_bias, snow_gust);
             if (snow_wd) snow.wind_dir = wind_direction_vector(*snow_wd);  // else the default +x (M-WINDDIR 8d)
             snow.noise_enabled = true;
+            const SeasonFrame season = read_season(world);  // M-SEASONS 19b: a drawn floor, the simulated cover is not raised
+            if (season.snow_on) {
+                snow.cover = std::max(snow.cover, season.snow.cover_floor * snowc->strength);
+                snow.wind_bias = std::clamp(snow.wind_bias + season.snow.lee_shift, 0.0f, 1.0f);
+            }
         }
         scene.set_snow_cover(render::apply_quality(quality_, snow));
     }
@@ -1100,6 +1255,83 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         }
         scene.set_aurora(shown);
     }
+    {  // rainbow (M-RAINBOW 17b): the first Rainbow; without one, when disabled, with a closed gate (night, rain, dry
+       // ground, thick cloud: level 0), under an equirect sky texture or with non-finite inputs the carrier is the default
+       // one (level 0, off), written every frame so a stale one never survives. Only the carrier is written.
+        render::RainbowSky shown;  // level 0 by default (off)
+        const Rainbow* rainbow = nullptr;
+        world.query<const Rainbow&>().each([&](const Rainbow& c) {
+            if (!rainbow) rainbow = &c;
+        });
+        const Weather* rain_weather = nullptr;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!rain_weather) rain_weather = &c;
+        });
+        if (rainbow && rainbow->enabled && rain_weather && env.sky_texture.guid == asset::Guid{}) {
+            // Sun.direction is the way the light travels (from the sun toward the scene), so the direction from the
+            // camera toward the sun is its negation and the direction toward the anti-solar point is the light direction
+            // itself. The elevation is asin of the sun's height: -direction.y of the unit light direction (the sine, which
+            // sun_elevation_natural is for a unit direction), in degrees. The moonlight hand-off above is not applied.
+            const math::vec3 light = env.time_of_day >= 0.0f ? render::sun_direction_at(env.time_of_day) : env.sun_direction;
+            const f32 len = std::sqrt(light.x * light.x + light.y * light.y + light.z * light.z);
+            const f32 wetness = rain_weather->wetness;  // the ground wetness the Weather system keeps (0 = dry, no bow)
+            const bool raining = rain_weather->current == WeatherKind::Rain || rain_weather->current == WeatherKind::Storm;
+            const f32 rain = raining ? rain_weather->intensity : 0.0f;
+            if (std::isfinite(len) && len > 1e-6f && std::isfinite(wetness) && std::isfinite(rain) && std::isfinite(cloud_cover)) {
+                const math::vec3 anti = light * (1.0f / len);  // unit, camera toward the anti-solar point
+                const f32 sine = std::clamp(-anti.y, -1.0f, 1.0f);
+                const f32 elevation_deg = static_cast<f32>(std::asin(static_cast<f64>(sine)) * (180.0 / 3.14159265358979323846));
+                const f32 level = rainbow_level(*rainbow, elevation_deg, wetness, rain, cloud_cover);  // post-apply_quality cover
+                if (level > 0.0f && std::isfinite(level)) {
+                    using detail::rainbow_clamp;
+                    render::RainbowSky r;
+                    r.level = level;
+                    r.band_width = rainbow_clamp(rainbow->band_width, 1.0f, 0.5f, 2.0f);
+                    r.secondary = rainbow_clamp(rainbow->secondary, 1.0f, 0.0f, 1.0f);
+                    r.anti_solar = anti;
+                    r.enabled = true;
+                    shown = render::apply_quality(quality_, r);
+                }
+            }
+        }
+        scene.set_rainbow(shown);
+    }
+    {  // meteor (M-METEOR 18b): the first Meteor; without one, when disabled, with a closed gate (day, thick cloud, rain:
+       // level 0) or under an equirect sky texture the carrier is the default one (level 0), written every frame
+       // because Scene3D::begin does not reset it. Only the carrier is written; no Moon is needed.
+        render::MeteorSky shown;  // level 0 by default (off)
+        const Meteor* meteor = nullptr;
+        world.query<const Meteor&>().each([&](const Meteor& c) {
+            if (!meteor) meteor = &c;
+        });
+        if (meteor && meteor->enabled && env.sky_texture.guid == asset::Guid{}) {
+            const Weather* meteor_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!meteor_weather) meteor_weather = &c;
+            });
+            const bool raining =
+                meteor_weather && (meteor_weather->current == WeatherKind::Rain || meteor_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? meteor_weather->intensity : 0.0f;
+            // no clock (time_of_day < 0): no night fade, so night_only 1 shows nothing and night_only 0 shows it
+            const f32 night_fade = env.time_of_day >= 0.0f ? dark : 0.0f;
+            const f32 level = meteor_level(*meteor, night_fade, cloud_cover, rain);  // cloud_cover is post-apply_quality
+            if (level > 0.0f && std::isfinite(level)) {
+                render::MeteorSky m;
+                m.level = level;
+                m.rate = detail::meteor_rate(*meteor);
+                m.brightness = detail::meteor_brightness(*meteor);
+                m.length = detail::meteor_length(*meteor);
+                m.speed = detail::meteor_speed(*meteor);
+                m.seed = detail::meteor_seed(*meteor);
+                // the value set_time() gets later in this extract (scene.time() would still be last frame's), wrapped in f64
+                const f32 frame_time = !bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_;
+                m.time = meteor_wrap_time(static_cast<f64>(frame_time));
+                m.enabled = true;
+                shown = render::apply_quality(quality_, m);
+            }
+        }
+        scene.set_meteor(shown);
+    }
     {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
         const Water* water = nullptr;
         const WindDirection* water_wd = nullptr;
@@ -1135,6 +1367,30 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             surf.foam_amount = water->foam_amount;
             surf.foam_width_m = water->foam_width_m;
             surf.enabled = true;
+            {  // M-FREEZE 20b: the freeze look on the local carrier, before the quality tier; skipped at an amount of 0
+                const WaterIce* ice = nullptr;
+                const Season* ice_season = nullptr;
+                world.query<const WaterIce&>().each([&](const WaterIce& c) {
+                    if (!ice) ice = &c;
+                });
+                if (ice) {
+                    world.query<const Season&>().each([&](const Season& c) {
+                        if (!ice_season) ice_season = &c;
+                    });
+                    u32 day = 0;
+                    f32 hour = 0.0f;
+                    bool have_clock = false;
+                    world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                        if (have_clock) return;
+                        have_clock = true;
+                        day = c.day;
+                        hour = c.hour;
+                    });
+                    const f32 phase = ice_season ? season_phase(*ice_season, day, hour) : 0.0f;
+                    const f32 amount = water_ice_amount(*ice, ice_season, phase);
+                    if (amount > 0.0f) apply_water_ice(*ice, water_ice_look(*ice, amount), surf);
+                }
+            }
             scene.set_water(render::apply_quality(quality_, surf));
         }
     }
@@ -1149,6 +1405,8 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.auto_exposure.compensation = env.exposure_compensation;
     post.auto_exposure.speed_up = env.auto_exposure_speed_up;
     post.auto_exposure.speed_down = env.auto_exposure_speed_down;
+    post.auto_exposure.min_exposure = env.auto_exposure_min;
+    post.auto_exposure.max_exposure = env.auto_exposure_max;
     post.auto_exposure.dt = frame_dt_;
     const u32 lut = texture_key(env.color_grade.guid);
     post.lut_key = lut == ~0u ? 0u : lut;  // texture_key's "none" is ~0u, PostFx's is 0
@@ -1551,6 +1809,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (!wind_dir) wind_dir = &c;
     });
     const bool turn_wind = sway_weather && wind_dir;
+    const SeasonFrame season = read_season(world);  // M-SEASONS 19b
     const math::vec2 scene_wind = turn_wind ? wind_direction_vector(*wind_dir) : math::vec2{1.0f, 0.0f};
     world.query<const Foliage3D&>().each([&](Entity e, const Foliage3D& f) {
         if (!f.enabled || f.count == 0) return;
@@ -1648,6 +1907,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             b.wind_direction = f.wind_direction;
             foliage_look(f, b);
             if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+            if (season.tint_on) apply_season_tint(season.tint, b);
             if (turn_wind) apply_wind_direction(scene_wind, b);
             scene.add_batch(b);
             ++stats_.foliage;
@@ -1747,6 +2007,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         b.wind_direction = f.wind_direction;
         foliage_look(f, b);
         if (sway_weather && sway) apply_wind_sway(sway_wind, *sway, b);
+        if (season.tint_on) apply_season_tint(season.tint, b);
         if (turn_wind) apply_wind_direction(scene_wind, b);
         scene.add_batch(b);
         ++stats_.foliage;
@@ -1833,6 +2094,432 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         scene.add_particle_emitter(em);
         ++stats_.particle_emitters;
     });
+    {  // leaf fall (M-LEAFFALL 21b): one render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const LeafFall* leaf = nullptr;
+        world.query<const LeafFall&>().each([&](const LeafFall& c) {
+            if (!leaf) leaf = &c;
+        });
+        if (leaf) {
+            const Season* leaf_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!leaf_season) leaf_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = leaf_season ? season_phase(*leaf_season, day, hour) : 0.0f;
+            const f32 amount = leaf_fall_amount(*leaf, leaf_season, phase);
+            if (amount > 0.0f) {
+                const Weather* leaf_weather = nullptr;
+                world.query<const Weather&>().each([&](const Weather& c) {
+                    if (!leaf_weather) leaf_weather = &c;
+                });
+                const WindGust* leaf_gust = nullptr;
+                world.query<const WindGust&>().each([&](const WindGust& c) {
+                    if (!leaf_gust) leaf_gust = &c;
+                });
+                const WindDirection* leaf_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!leaf_wd) leaf_wd = &c;
+                });
+                // No Weather: calm. The gust sway bit: leaves move like the foliage. No WindDirection (or no Weather): +x.
+                const f32 wind = leaf_weather ? effective_wind(*leaf_weather, leaf_gust, kGustSway) : 0.0f;
+                const math::vec2 wdir = leaf_weather && leaf_wd ? wind_direction_vector(*leaf_wd) : math::vec2{1.0f, 0.0f};
+                const LeafFallLook look = leaf_fall_look(*leaf, amount, wind, wdir, season_foliage_tint(leaf_season, phase));
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);  // no particle hook in QualitySettings: Low halves rate and budget
+                    render::ParticleEmitter em;
+                    em.id = kLeafFallEmitterId;
+                    em.max_particles = std::clamp(leaf->max_particles, 64u, 8192u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = leaf->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // fireflies (M-FIREFLIES 23b): one additive render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Firefly* ff = nullptr;
+        world.query<const Firefly&>().each([&](const Firefly& c) {
+            if (!ff) ff = &c;
+        });
+        if (ff) {
+            const Season* ff_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!ff_season) ff_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = ff_season ? season_phase(*ff_season, day, hour) : 0.0f;
+            const Weather* ff_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!ff_weather) ff_weather = &c;
+            });
+            const bool raining =
+                ff_weather && (ff_weather->current == WeatherKind::Rain || ff_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? ff_weather->intensity : 0.0f;
+            // the night fade the meteor block uses (apply_environment's `dark`); no clock (time_of_day < 0): 0
+            const Environment3D ff_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (ff_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(ff_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const f32 cloud = scene.clouds().coverage;  // post-apply_quality, as the meteor block reads it
+            const f32 amount = firefly_amount(*ff, ff_season, phase, night_fade, cloud, rain);
+            const FireflyLook look = firefly_look(*ff, amount);
+            if (look.active) {
+                const bool low = is_low_quality(quality_);
+                render::ParticleEmitter em;
+                em.id = kFireflyEmitterId;
+                em.max_particles = std::clamp(ff->max_particles, 16u, 4096u);
+                if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                em.seed = ff->seed;
+                em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                em.box = math::vec3{look.box, 0.0f, look.box};
+                em.direction = look.direction;
+                em.spread = look.spread;
+                em.rate = low ? look.rate * 0.5f : look.rate;
+                em.burst = 0;
+                em.emitting = true;
+                em.speed_min = look.speed_min;
+                em.speed_max = look.speed_max;
+                em.lifetime_min = look.lifetime_min;
+                em.lifetime_max = look.lifetime_max;
+                em.gravity = look.gravity;
+                em.drag = look.drag;
+                em.collide = false;
+                em.size_start = look.size;
+                em.size_end = look.size;
+                em.color_start = look.color_start;
+                em.color_end = look.color_end;
+                em.additive = true;
+                scene.add_particle_emitter(em);
+                ++stats_.particle_emitters;
+            }
+        }
+    }
+    {  // pollen (M-POLLEN 24b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Pollen* po = nullptr;
+        world.query<const Pollen&>().each([&](const Pollen& c) {
+            if (!po) po = &c;
+        });
+        if (po) {
+            const Season* po_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!po_season) po_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = po_season ? season_phase(*po_season, day, hour) : 0.0f;
+            const Weather* po_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!po_weather) po_weather = &c;
+            });
+            const bool raining =
+                po_weather && (po_weather->current == WeatherKind::Rain || po_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? po_weather->intensity : 0.0f;
+            // the night fade as the firefly block derives it; no clock (time_of_day < 0): 0
+            const Environment3D po_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (po_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(po_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const f32 amount = pollen_amount(*po, po_season, phase, night_fade, rain);
+            if (amount > 0.0f) {
+                const WindGust* po_gust = nullptr;
+                world.query<const WindGust&>().each([&](const WindGust& c) {
+                    if (!po_gust) po_gust = &c;
+                });
+                const WindDirection* po_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!po_wd) po_wd = &c;
+                });
+                // As the leaf block: no Weather is calm, the gust sway bit, no WindDirection (or no Weather) is +x.
+                const f32 wind = po_weather ? effective_wind(*po_weather, po_gust, kGustSway) : 0.0f;
+                const math::vec2 wdir = po_weather && po_wd ? wind_direction_vector(*po_wd) : math::vec2{1.0f, 0.0f};
+                const PollenLook look = pollen_look(*po, amount, wind, wdir);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kPollenEmitterId;
+                    em.max_particles = std::clamp(po->max_particles, 16u, 4096u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = po->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // dust (M-DUSTWIND 25b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Dust* du = nullptr;
+        world.query<const Dust&>().each([&](const Dust& c) {
+            if (!du) du = &c;
+        });
+        if (du && du->enabled != 0 && du->strength > 0.0f) {
+            const Weather* du_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!du_weather) du_weather = &c;
+            });
+            const bool raining =
+                du_weather && (du_weather->current == WeatherKind::Rain || du_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? du_weather->intensity : 0.0f;
+            const WindGust* du_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!du_gust) du_gust = &c;
+            });
+            // As the leaf block: no Weather is calm, the gust sway bit.
+            const f32 wind = du_weather ? effective_wind(*du_weather, du_gust, kGustSway) : 0.0f;
+            const f32 amount = dust_amount(*du, wind, rain);
+            if (amount > 0.0f) {
+                const WindDirection* du_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!du_wd) du_wd = &c;
+                });
+                const math::vec2 wdir = du_weather && du_wd ? wind_direction_vector(*du_wd) : math::vec2{1.0f, 0.0f};
+                const DustLook look = dust_look(*du, amount, wind, wdir);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kDustEmitterId;
+                    em.max_particles = std::clamp(du->max_particles, 16u, 4096u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = du->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // flock (M-BIRDFLOCK 26b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Flock* fl = nullptr;
+        world.query<const Flock&>().each([&](const Flock& c) {
+            if (!fl) fl = &c;
+        });
+        if (fl && fl->enabled != 0 && fl->strength > 0.0f) {
+            const Season* fl_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!fl_season) fl_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = fl_season ? season_phase(*fl_season, day, hour) : 0.0f;
+            const Weather* fl_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!fl_weather) fl_weather = &c;
+            });
+            const bool raining =
+                fl_weather && (fl_weather->current == WeatherKind::Rain || fl_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? fl_weather->intensity : 0.0f;
+            // The sun height as the sun block resolves it: the day clock when time_of_day >= 0, else the environment's fixed
+            // sun_direction (its y, normalised). The twilight gate uses |y|, so the sign convention does not matter.
+            const Environment3D fl_env = resolve_environment(world);
+            f32 sun_y = 1.0f;
+            if (fl_env.time_of_day >= 0.0f) {
+                sun_y = render::sun_direction_at(fl_env.time_of_day).y;
+            } else if (length(fl_env.sun_direction) > 0.0f) {
+                sun_y = normalize(fl_env.sun_direction).y;
+            }
+            const f32 amount = flock_amount(*fl, fl_season, phase, sun_y, rain);
+            if (amount > 0.0f) {
+                const FlockLook look = flock_look(*fl, amount);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kFlockEmitterId;
+                    em.max_particles = std::clamp(fl->max_particles, 16u, 1024u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = fl->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // butterflies (M-BUTTERFLY 27b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Butterfly* bf = nullptr;
+        world.query<const Butterfly&>().each([&](const Butterfly& c) {
+            if (!bf) bf = &c;
+        });
+        if (bf && bf->enabled != 0 && bf->strength > 0.0f) {
+            const Season* bf_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!bf_season) bf_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = bf_season ? season_phase(*bf_season, day, hour) : 0.0f;
+            const Weather* bf_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!bf_weather) bf_weather = &c;
+            });
+            const bool raining =
+                bf_weather && (bf_weather->current == WeatherKind::Rain || bf_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? bf_weather->intensity : 0.0f;
+            // the night fade as the pollen block derives it; no clock (time_of_day < 0): 0
+            const Environment3D bf_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (bf_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(bf_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const WindGust* bf_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!bf_gust) bf_gust = &c;
+            });
+            // As the dust block: no Weather is calm, the gust sway bit.
+            const f32 wind = bf_weather ? effective_wind(*bf_weather, bf_gust, kGustSway) : 0.0f;
+            const f32 amount = butterfly_amount(*bf, bf_season, phase, night_fade, wind, rain);
+            if (amount > 0.0f) {
+                const ButterflyLook look = butterfly_look(*bf, amount);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kButterflyEmitterId;
+                    em.max_particles = std::clamp(bf->max_particles, 8u, 512u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = bf->seed;
+                    em.position = scene.view().position;
+                    em.box = math::vec3{look.box, look.height, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
     for (usize i = 0; i < bursts_.size();) {
         if (bursts_[i].stamp == frame_stamp_) {
             ++i;

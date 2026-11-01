@@ -4,6 +4,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/hash.h"
+#include "mce/input/actions.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/inventory.h"
@@ -14,6 +15,7 @@ namespace mce::kit {
 namespace {
 struct LootInstalled {};
 
+constexpr StringId kUseItem{"UseItem"};
 constexpr u32 kMaxResults = 4096;
 constexpr u32 kMaxWork = 16384;  // draws and entries visited in one roll: a hostile chain of tables cannot hang a frame
 
@@ -83,6 +85,23 @@ bool resolve_table(ItemRegistry& reg, const asset::AssetRef<asset::ItemCatalogCh
     return true;
 }
 
+void kit_item_hotkey(Frame& f) {
+    World& w = f.world();
+    const input::InputState* in = w.try_resource<input::InputState>();
+    if (!in || !in->has_action(kUseItem) || !in->pressed(kUseItem)) return;
+    ItemRegistry& reg = w.resource<ItemRegistry>();
+    f.query<ItemHotkey3D, Inventory>().each([&](Entity e, ItemHotkey3D& hk, Inventory& inv) {
+        const asset::ItemCatalog* c = hk.enabled ? reg.resolve(inv.catalog) : nullptr;
+        if (!c) return;
+        for (u32 s = 0; s < kInventorySlots; ++s) {
+            if (inv.item[s] == 0 || inv.qty[s] == 0 || inv.item[s] - 1u >= c->items().size()) continue;
+            if (!c->has_tag(c->items()[inv.item[s] - 1u], "consumable")) continue;
+            f.events().push(UseItem{e, s});
+            return;
+        }
+    });
+}
+
 void kit_loot(Frame& f) {
     World& w = f.world();
     ItemRegistry& reg = w.resource<ItemRegistry>();
@@ -117,7 +136,18 @@ void kit_loot(Frame& f) {
             trig.radius = drop->radius;
             f32 ox = 0, oz = 0;
             ring_offset(i++, drop->scatter, ox, oz);
-            f.commands().spawn(LocalTransform{{origin.x + ox, origin.y, origin.z + oz}, math::quat::identity(), {1, 1, 1}}, p, trig);
+            const LocalTransform lt{{origin.x + ox, origin.y + drop->lift, origin.z + oz}, math::quat::identity(), {1, 1, 1}};
+            if (drop->mesh.guid.is_null()) {
+                f.commands().spawn(lt, p, trig);
+            } else {
+                MeshRef m;
+                m.mesh = drop->mesh;
+                m.tint = drop->tint;
+                m.cull_radius = 0.0f;
+                LocalTransform vis = lt;
+                vis.scale = {drop->mesh_scale, drop->mesh_scale, drop->mesh_scale};
+                f.commands().spawn(vis, p, trig, m);
+            }
         }
     }
 
@@ -179,10 +209,11 @@ void install_loot(World& world, asset::AssetSystem* assets) {
     install_bodies3d(world, assets);
     if (world.try_resource<LootInstalled>()) return;
     world.set_resource(LootInstalled{});
-    world.register_components<LootDrop, Container>();
+    world.register_components<LootDrop, Container, ItemHotkey3D>();
     world.register_event<OpenContainer>(Phase::FixedUpdate_Pre);
     world.register_event<ContainerOpened>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit_loot", &kit_loot, "kit_inventory");
+    world.add_system(Phase::FixedUpdate_Pre, "kit_item_hotkey", &kit_item_hotkey, "kit_loot");
 }
 
 }  // namespace mce::kit

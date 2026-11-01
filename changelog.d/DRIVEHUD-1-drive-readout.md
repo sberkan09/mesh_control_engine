@@ -1,0 +1,1 @@
+- Kit (M-DRIVEHUD): `DriveReadout3D` (`mce/kit/drive_readout.h`): the rider's speed (km/h), gear and rpm for the HUD, off (-1000) on foot. Sample: speed and gear text while driving. Record: `docs/milestones/M-DRIVEHUD.md`.

@@ -81,6 +81,29 @@
     "GroundMist": {},
     "Moon": {},
     "Aurora": {},
+    "Rainbow": {},
+    "Meteor": {},
+    "Season": {
+     "year_days": 1
+    },
+    "LeafFall": {
+     "manual": 0.6
+    },
+    "Firefly": {
+     "manual": 0.5
+    },
+    "Pollen": {
+     "manual": 0.4
+    },
+    "Dust": {
+     "manual": 0.4
+    },
+    "Flock": {
+     "manual": 0.4
+    },
+    "Butterfly": {
+     "manual": 0.4
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

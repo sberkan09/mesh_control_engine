@@ -50,6 +50,12 @@ mce_add_test(test_kit UMBRELLA
         test_world_clock.cpp
         test_day_cycle.cpp
         test_timed_light.cpp
+        test_drive_readout.cpp
+        test_face_velocity.cpp
+        test_hit_marker.cpp
+        test_impact_fx.cpp
+        test_fall_death.cpp
+        test_vehicle_extras.cpp
         test_weather.cpp
         test_weather_env.cpp
         test_wet_surfaces.cpp
@@ -69,10 +75,31 @@ mce_add_test(test_kit UMBRELLA
         test_ground_mist.cpp
         test_moon.cpp
         test_moon_extract.cpp
+        test_atmosphere_extract.cpp
         test_aurora.cpp
+        test_rainbow.cpp
+        test_meteor.cpp
+        test_season.cpp
+        test_water_ice.cpp
+        test_leaf_fall.cpp
+        test_firefly.cpp
+        test_pollen.cpp
+        test_dust.cpp
+        test_flock.cpp
+        test_butterfly.cpp
+        test_firefly_extract.cpp
+        test_pollen_extract.cpp
+        test_dust_extract.cpp
+        test_flock_extract.cpp
+        test_butterfly_extract.cpp
+        test_leaf_fall_extract.cpp
+        test_season_extract.cpp
         test_water.cpp
         test_water_extract.cpp
+        test_water_ice_extract.cpp
         test_aurora_extract.cpp
+        test_rainbow_extract.cpp
+        test_meteor_extract.cpp
         test_night_sky_extract.cpp
         test_ground_mist_extract.cpp
         test_wind_gust_extract.cpp

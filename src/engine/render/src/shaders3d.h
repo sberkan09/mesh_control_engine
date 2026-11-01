@@ -81,7 +81,11 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_aurora2;        // xy the arc centre (xz unit vector), z cos of the arc's half-width, w curtain count (1..6)
     vec4 p_aurora3;        // rgb the low (base) colour, w 0
     vec4 p_aurora4;        // rgb the high (top) colour, w speed (0..4)
-    vec4 p_free[12];       // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_rainbow;        // M-RAINBOW 17c: x level (0 = off), y band width (0.5..2), z secondary (0..1), w 0
+    vec4 p_rainbow2;       // xyz the anti-solar direction (unit), w 0
+    vec4 p_meteor;         // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
+    vec4 p_meteor2;        // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
+    vec4 p_free[8];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1555,9 +1559,9 @@ void main() {
 )";
 
 // The sky's layers over sky_radiance(), shared by the sky pass (kSkyFS) and the water's reflection (kWaterFS, M-WATER
-// 15c): the cloud layer, the stars and the moon, and the aurora (M-AURORA 16c). Functions of a direction (and, for the
-// night layer and the aurora, the angular size of a pixel along it), so the water reflects them through the same code
-// rather than a copy.
+// 15c): the cloud layer, the stars and the moon, the aurora (M-AURORA 16c), the rainbow (M-RAINBOW 17c) and the meteors
+// (M-METEOR 18c). Functions of a direction (and, for the night layer, the aurora, the rainbow and the meteors, the
+// angular size of a pixel along it), so the water reflects them through the same code rather than a copy.
 #define MCE_GLSL_SKY_LAYERS \
     R"(
 // ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
@@ -1811,6 +1815,171 @@ vec3 aurora_layer(vec3 c, vec3 d, float pix) {
     float pulse = 1.0 - kAuroraPulse + kAuroraPulse * aurora_sin_turns(aurora_turns(kAuroraCyclesPulse), 0.0);
     return c + band * (0.25 * p_aurora.x * kAuroraGain * ends * rays * pulse * smoothstep(0.0, 0.25, d.y));
 }
+// ---- the rainbow (M-RAINBOW 17c), behind p_rainbow.x > 0 (level, with the kit's sun, wetness, rain and cloud gates
+// folded in; 0 = the frame without it bit for bit). A function of the view direction only (no camera position, no
+// floating origin, no parallax, no clock). Up-going rays only; additive emission over the day sky, under the clouds
+// and the fog.
+//   a      the angle of d from the anti-solar point p_rainbow2.xyz, degrees: acos(dot(d, anti_solar)).
+//   bows   rainbow_intensity: the primary (1 - x^2)^2 bump around 42 degrees, half-width 1.7 * band width, the
+//          secondary's around 51, half-width 2.8 * band width and peak 0.35 * p_rainbow.z; the side of each bow that
+//          faces the gap between them has its offset x scaled by 1.15 (the Alexander band: no emission between them).
+//   colour rainbow_color on the angle mapped back to the default width, per bow: the seven-colour table linearly
+//          interpolated, s = 0.5 - 0.5 x (primary: red outside, violet inside) and 0.5 + 0.5 x (secondary,
+//          reversed), x the bow's unsteepened offset clamped to -1..1. The bows' supports never overlap (band width
+//          2: 44.96 against 46.13), so the sum of the two is the kit's intensity times its colour.
+//   filter a box over the pixel's angular footprint pix (4 samples across it, in the radial direction, where the
+//          bands vary): the violet edge, under a degree wide at band width 0.5, neither aliases nor crawls.
+//   total  c + level * kRainbowGain * the above, faded into the horizon by smoothstep(0, 0.1, d.y).
+// The constants below are the kit's (mce/kit/rainbow.h), copied as a block: a change there goes here too, and
+// test_render3d_rainbow_gl compares the drawn intensity and colour with kit::rainbow_intensity and
+// kit::rainbow_color at probe points.
+const float kRainbowPrimaryCenter = 42.0;    // kit::detail::kRainbowPrimaryCenter, degrees from the anti-solar point
+const float kRainbowPrimaryHalf = 1.7;       // kRainbowPrimaryHalf, times the band width
+const float kRainbowSecondaryCenter = 51.0;  // kRainbowSecondaryCenter
+const float kRainbowSecondaryHalf = 2.8;     // kRainbowSecondaryHalf, times the band width
+const float kRainbowSecondaryPeak = 0.35;    // kRainbowSecondaryPeak, times p_rainbow.z
+const float kRainbowGapSteepness = 1.15;     // kRainbowGapSteepness
+const vec3 kRainbowRamp[7] = vec3[7](vec3(1.00, 0.04, 0.02),   // red      (rainbow_color's kTable)
+                                     vec3(1.00, 0.30, 0.02),   // orange
+                                     vec3(1.00, 0.85, 0.05),   // yellow
+                                     vec3(0.10, 0.85, 0.10),   // green
+                                     vec3(0.05, 0.60, 0.90),   // cyan
+                                     vec3(0.10, 0.25, 1.00),   // blue
+                                     vec3(0.45, 0.10, 0.95));  // violet
+// Shader only (not in the kit): the emission at level 1 and full intensity.
+const float kRainbowGain = 0.3;
+float rainbow_bump(float x) {  // (1 - x^2)^2 for |x| < 1, else 0
+    float q = 1.0 - x * x;
+    return q > 0.0 ? q * q : 0.0;
+}
+vec3 rainbow_ramp(float s) {  // s 0 = red .. 1 = violet
+    float x = clamp(s, 0.0, 1.0) * 6.0;
+    int i = min(int(x), 5);
+    return clamp(mix(kRainbowRamp[i], kRainbowRamp[i + 1], x - float(i)), 0.0, 1.0);
+}
+// Intensity times colour of the two bows at `a` degrees (w the band width, sec the secondary's strength).
+vec3 rainbow_emission(float a, float w, float sec) {
+    float xp = (a - kRainbowPrimaryCenter) / (kRainbowPrimaryHalf * w);
+    vec3 e = rainbow_bump(xp > 0.0 ? xp * kRainbowGapSteepness : xp) * rainbow_ramp(0.5 - 0.5 * clamp(xp, -1.0, 1.0));
+    if (sec > 0.0) {
+        float xs = (a - kRainbowSecondaryCenter) / (kRainbowSecondaryHalf * w);
+        e += (kRainbowSecondaryPeak * sec * rainbow_bump(xs < 0.0 ? xs * kRainbowGapSteepness : xs)) *
+             rainbow_ramp(0.5 + 0.5 * clamp(xs, -1.0, 1.0));
+    }
+    return e;
+}
+// The rainbow over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_rainbow; the water: the reflected ray's screen derivative).
+vec3 rainbow_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float w = clamp(p_rainbow.y, 0.5, 2.0);
+    float sec = clamp(p_rainbow.z, 0.0, 1.0);
+    float a = degrees(acos(clamp(dot(d, p_rainbow2.xyz), -1.0, 1.0)));
+    float pd = min(degrees(pix), 2.0);  // the pixel's footprint in degrees (capped: a far zoom-out keeps 4 samples)
+    float lo = kRainbowPrimaryCenter - kRainbowPrimaryHalf * w, hi = kRainbowSecondaryCenter + kRainbowSecondaryHalf * w;
+    if (a + 0.5 * pd <= lo || a - 0.5 * pd >= hi) return c;
+    vec3 e = vec3(0.0);
+    for (int k = 0; k < 4; ++k) e += rainbow_emission(a + pd * (float(k) * 0.25 - 0.375), w, sec);
+    return c + e * (0.25 * p_rainbow.x * kRainbowGain * smoothstep(0.0, 0.1, d.y));
+}
+// ---- the meteors (M-METEOR 18c), behind p_meteor.x > 0 (level, with the kit's night, cloud and rain gates folded in;
+// 0 = the frame without it bit for bit). A function of the view direction and of the wrapped clock p_meteor2.y only
+// (no camera position, no floating origin, no parallax). Up-going rays only; additive emission over the night sky,
+// under the clouds and the fog. The streaks are the kit's (mce/kit/meteor.h), re-derived per fragment from uniform
+// inputs only (the same for every pixel of a frame):
+//   slot   the 5 s slot of the 60 s period holding the clock (meteor_slot) and the seconds into it; only its own
+//          candidates are evaluated: a streak starts in the first half of its slot and lasts at most 2.4 s (1.2 s /
+//          the smallest speed 0.5), so it ends inside its slot (2.5 + 2.4 = 4.9 s) and no previous slot is needed.
+//   count  meteor_slot_count: floor(rate / 12) candidates plus one when the slot's hash draw (salt 0xC0FFEE ^ seed)
+//          is under the fractional part, at most 3 (kMeteorMaxPerSlot).
+//   streak meteor_make: base = pcg2d(slot, index << 16 | seed); draws 0..4 from pcg2d(base, k) as uniforms of the top
+//          24 bits: azimuth, sine of the start elevation in [0.1, 0.95], travel angle in the start's tangent plane
+//          (from the horizontal tangent e = (z, 0, -x) / r toward n = start x e), start time 0..2.5 s, duration
+//          (0.4 .. 1.2 s) / speed; the head is the start rotated along the travel by 35 degrees per second times
+//          speed times the age (meteor_head), the tail 8 degrees times length behind it on the same great circle
+//          (meteor_tail); the envelope meteor_envelope: smoothstep(0, 0.15, x) (1 - smoothstep(0.15, 1, x)), x the
+//          age over the duration, 0 outside it.
+//   glow   the distance from d to the head-tail segment in the gnomonic projection at the head (great circles are
+//          straight lines there, the arc behind the head the segment from 0 to tan(tail angle) on one axis: dot
+//          products only), exp2(-(dist / width)^2), width = max(0.15 degrees, pix): never thinner than the pixel's
+//          footprint, so a streak neither aliases nor crawls; the peak is not lowered as it widens (it stays visible).
+//          Times the tail fade along the segment: 1 at the head, linearly to 0 at the tail. A pixel farther from the
+//          head than the tail angle plus 4 widths is skipped before the segment maths.
+//   total  c + level * brightness * kMeteorGain * kMeteorColor * the sum over the slot's streaks, faded into the
+//          horizon haze by smoothstep(0, 0.25, d.y) as the stars.
+// The hash and the constants below are the kit's, copied as a block (meteor_hash is pcg2d's one lane, cloud_hash
+// above, bit for bit): a change there goes here too, and test_render3d_meteor_gl compares the drawn heads, tails and
+// streak light with kit::meteor_make, kit::meteor_head, kit::meteor_tail and kit::meteor_envelope at probe times.
+const float kMeteorSlotSeconds = 5.0;                 // kit::kMeteorSlotSeconds
+const uint kMeteorSlotsPerPeriod = 12u;               // kit::kMeteorSlotsPerPeriod (the period is 60 s)
+const uint kMeteorMaxPerSlot = 3u;                    // kit::kMeteorMaxPerSlot
+const uint kMeteorCountSalt = 0xC0FFEEu;              // meteor_slot_count's draw: hash(slot, 0xC0FFEE ^ seed)
+const float kMeteorTwoPi = 6.2831853071795864769;     // kit::detail::kMeteorTwoPi
+const float kMeteorDegToRad = 0.017453292519943295769;
+const float kMeteorSpeedDegPerSec = 35.0;             // kMeteorSpeedDegPerSec, times speed
+const float kMeteorTailDeg = 8.0;                     // kMeteorTailDeg, times length
+const float kMeteorStartWindow = 0.5;                 // kMeteorStartWindow, of the slot
+const float kMeteorDurationMin = 0.4;                 // kMeteorDurationMin, seconds at speed 1
+const float kMeteorDurationSpan = 0.8;                // kMeteorDurationSpan
+const float kMeteorSinElMin = 0.1;                    // kMeteorSinElMin
+const float kMeteorSinElSpan = 0.85;                  // kMeteorSinElSpan
+// Shader only (not in the kit): the streak's narrowest half-width (radians, 0.15 degrees), the emission at level 1,
+// brightness 1 and full envelope, and a faint warm tint.
+const float kMeteorWidth = 0.0026179939;
+const float kMeteorGain = 1.0;
+const vec3 kMeteorColor = vec3(1.0, 0.95, 0.85);
+uint meteor_hash(uint x, uint y) { return cloud_hash(uvec2(x, y)); }  // kit::detail::meteor_hash
+float meteor_unit(uint h) { return float(h >> 8u) * (1.0 / 16777216.0); }  // kit::detail::meteor_unit
+// The meteors over sky colour c along d; pix: radians per pixel along d (the sky pass: the neighbouring pixel's ray,
+// apply_meteor; the water: the reflected ray's screen derivative).
+vec3 meteor_layer(vec3 c, vec3 d, float pix) {
+    if (d.y <= 0.0) return c;
+    float t = clamp(p_meteor2.y, 0.0, 60.0);
+    uint seed = uint(clamp(p_meteor2.z, 0.0, 65535.0));
+    uint slot = min(uint(t / kMeteorSlotSeconds), kMeteorSlotsPerPeriod - 1u);
+    float ts = t - float(slot) * kMeteorSlotSeconds;  // seconds into the slot
+    float per_slot = clamp(p_meteor2.x, 0.0, 30.0) / float(kMeteorSlotsPerPeriod);
+    float whole = floor(per_slot);
+    uint n = uint(whole);
+    if (per_slot - whole > 0.0 && meteor_unit(meteor_hash(slot, kMeteorCountSalt ^ seed)) < per_slot - whole) ++n;
+    n = min(n, kMeteorMaxPerSlot);
+    float speed = clamp(p_meteor.w, 0.5, 2.0);
+    float tail = kMeteorTailDeg * kMeteorDegToRad * clamp(p_meteor.z, 0.5, 2.0);
+    float len = tan(tail);
+    float w = max(kMeteorWidth, min(pix, 2.0 * kMeteorDegToRad));  // capped like the rainbow: a rough sea must not break the projection
+    float reach = cos(tail + 4.0 * w);  // the cosine of the bounding angle around the head
+    vec3 sum = vec3(0.0);
+    for (uint i = 0u; i < kMeteorMaxPerSlot; ++i) {
+        if (i >= n) break;
+        uint base = meteor_hash(slot, ((i & 0xFFFFu) << 16u) | seed);
+        float start = meteor_unit(meteor_hash(base, 3u)) * (kMeteorStartWindow * kMeteorSlotSeconds);
+        float dur = (kMeteorDurationMin + kMeteorDurationSpan * meteor_unit(meteor_hash(base, 4u))) / speed;
+        float age = ts - start;
+        if (age < 0.0 || age > dur) continue;
+        float x = age / dur;
+        float env = smoothstep(0.0, 0.15, x) * (1.0 - smoothstep(0.15, 1.0, x));
+        if (env <= 0.0) continue;
+        float az = meteor_unit(meteor_hash(base, 0u)) * kMeteorTwoPi;
+        float y = kMeteorSinElMin + kMeteorSinElSpan * meteor_unit(meteor_hash(base, 1u));
+        float ta = meteor_unit(meteor_hash(base, 2u)) * kMeteorTwoPi;
+        float r = sqrt(1.0 - y * y);
+        vec3 s0 = vec3(r * cos(az), y, r * sin(az));
+        vec3 e = vec3(s0.z / r, 0.0, -s0.x / r);
+        vec3 tv = cos(ta) * e + sin(ta) * cross(s0, e);
+        float ang = kMeteorSpeedDegPerSec * kMeteorDegToRad * speed * age;
+        vec3 head = cos(ang) * s0 + sin(ang) * tv;
+        float ch = dot(d, head);
+        if (ch < reach) continue;  // farther from the head than the streak reaches
+        vec3 fwd = cos(ang) * tv - sin(ang) * s0;  // the travel direction at the head
+        float u = -dot(d, fwd) / ch;               // along the segment, toward the tail (0 .. len)
+        float v = dot(d, cross(s0, tv)) / ch;      // across it (the great circle's pole)
+        float along = clamp(u, 0.0, len);
+        vec2 off = vec2(u - along, v);
+        float q2 = dot(off, off) / (w * w);
+        sum += kMeteorColor * (exp2(-q2) * (1.0 - along / len) * env);
+    }
+    return c + sum * (p_meteor.x * p_meteor.y * kMeteorGain * smoothstep(0.0, 0.25, d.y));
+}
 )"
 
 constexpr const char* kSkyFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_VOLUME R"(
@@ -1829,6 +1998,18 @@ vec3 apply_aurora(vec3 c, vec3 d) {  // aurora_layer with the sky pass's pixel f
     float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
     return aurora_layer(c, d, pix);
 }
+vec3 apply_rainbow(vec3 c, vec3 d) {  // rainbow_layer with the sky pass's pixel footprint, as apply_aurora
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return rainbow_layer(c, d, pix);
+}
+vec3 apply_meteor(vec3 c, vec3 d) {  // meteor_layer with the sky pass's pixel footprint, as apply_aurora
+    if (d.y <= 0.0) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return meteor_layer(c, d, pix);
+}
 void main() {
     vec4 w = u_inv_view_proj * vec4(v_ndc, 1.0, 1.0);
     vec3 d = normalize(w.xyz / w.w - u_camera_pos.xyz);
@@ -1839,6 +2020,8 @@ void main() {
     c += p_light_color.rgb * p_sun.y * smoothstep(p_sun.x - edge * 0.25, p_sun.x + edge * 0.25, cs);
     if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night(c, d);  // under the clouds and the fog, as the sun is
     if (p_aurora.x > 0.0) c = apply_aurora(c, d);  // in front of the stars, under the clouds and the fog (M-AURORA 16c)
+    if (p_rainbow.x > 0.0) c = apply_rainbow(c, d);  // after the aurora, under the clouds and the fog (M-RAINBOW 17c)
+    if (p_meteor.x > 0.0) c = apply_meteor(c, d);  // after the stars, the aurora and the rainbow (M-METEOR 18c)
     if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
@@ -1903,6 +2086,8 @@ vec3 water_sky(vec3 r, float pix, float lod) {
     vec3 sun = -p_light_dir.xyz;
     if (p_night.y > 0.0 || p_night2.x > 0.0) c = apply_night_at(c, r, pix);
     if (p_aurora.x > 0.0) c = aurora_layer(c, r, pix);  // the curtains on the reflected ray (M-AURORA 16c)
+    if (p_rainbow.x > 0.0) c = rainbow_layer(c, r, pix);  // the bows on the reflected ray (M-RAINBOW 17c)
+    if (p_meteor.x > 0.0) c = meteor_layer(c, r, pix);  // the streaks on the reflected ray (M-METEOR 18c)
     if (p_cloud.x > 0.0) c = apply_clouds(c, r, sun, dot(r, sun));
     if (p_vol.x <= 0.5 && p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, r.y));
     return c;

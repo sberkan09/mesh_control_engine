@@ -260,6 +260,8 @@ struct Environment3D {
     f32 exposure_compensation = 0.0f;        // EV added to the auto target
     f32 auto_exposure_speed_up = 3.0f;       // adaptation per second (EV) when the frame brightens
     f32 auto_exposure_speed_down = 1.0f;     // ... and when it darkens
+    f32 auto_exposure_min = 0.03f;           // clamps of the auto factor (times `exposure`): a night scene
+    f32 auto_exposure_max = 32.0f;           // stays dark with a small max (1.5 lifts it half a stop at most)
     f32 color_grade_strength = 1.0f;
     u32 depth_of_field = 0;
     f32 dof_focus_distance = 8.0f;           // meters to the sharpest plane
@@ -326,7 +328,10 @@ MCE_COMPONENT(Environment3D, (sky_texture, Help{"equirect sky map; empty = gradi
               volumetric_albedo, (volumetric_distance, Range{4, 500}),
               (auto_exposure, Help{"1: the exposure follows the frame's brightness (histogram)"}),
               (exposure_compensation, Range{-8, 8}), (auto_exposure_speed_up, Range{0, 20}),
-              (auto_exposure_speed_down, Range{0, 20}), (color_grade_strength, Range{0, 1}),
+              (auto_exposure_speed_down, Range{0, 20}),
+              (auto_exposure_min, Range{0.001f, 64}, Help{"smallest auto exposure factor (darkens a bright frame at most this far)"}),
+              (auto_exposure_max, Range{0.001f, 64}, Help{"largest auto exposure factor (keeps a night frame dark)"}),
+              (color_grade_strength, Range{0, 1}),
               (depth_of_field, Help{"1: blur away from dof_focus_distance"}), (dof_focus_distance, Range{0.1f, 1000}),
               (dof_focus_range, Range{0, 100}), (dof_blur_range, Range{0.1f, 1000}), (dof_max_radius, Range{0, 0.05f}),
               (motion_blur, Help{"1: smear moving objects (and the camera's motion) along their velocity"}),

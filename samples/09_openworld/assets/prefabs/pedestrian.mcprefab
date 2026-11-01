@@ -20,6 +20,21 @@
      "team": 3,
      "destroy_on_death": 1,
      "linger": 0.2
+    },
+    "LootDrop": {
+     "catalog": "guid:e97a4643-08b9-544e-903e-5f68ba9c1348",
+     "table": "pedestrian",
+     "radius": 1.5,
+     "scatter": 0.5,
+     "lift": -0.7,
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.3,
+      1.0,
+      0.4,
+      1
+     ],
+     "mesh_scale": 0.35
     }
    }
   },

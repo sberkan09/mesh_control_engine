@@ -27,6 +27,16 @@
 #include "mce/kit/moon.h"
 #include "mce/kit/water.h"
 #include "mce/kit/aurora.h"
+#include "mce/kit/rainbow.h"
+#include "mce/kit/meteor.h"
+#include "mce/kit/season.h"
+#include "mce/kit/water_ice.h"
+#include "mce/kit/leaf_fall.h"
+#include "mce/kit/firefly.h"
+#include "mce/kit/pollen.h"
+#include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -98,6 +108,16 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Moon>("Moon", sizeof(Moon::pad_));  // moon.h (M-NIGHTSKY 14a)
     expect_pad<Water>("Water", sizeof(Water::pad_));  // water.h (M-WATER 15a)
     expect_pad<Aurora>("Aurora", sizeof(Aurora::pad_));  // aurora.h (M-AURORA 16a)
+    expect_pad<Rainbow>("Rainbow", sizeof(Rainbow::pad_));  // rainbow.h (M-RAINBOW 17a)
+    expect_pad<Meteor>("Meteor", sizeof(Meteor::pad_));  // meteor.h (M-METEOR 18a)
+    expect_pad<Season>("Season", sizeof(Season::pad_));  // season.h (M-SEASONS 19a)
+    expect_pad<WaterIce>("WaterIce", sizeof(WaterIce::pad_));  // water_ice.h (M-FREEZE 20a)
+    expect_pad<LeafFall>("LeafFall", sizeof(LeafFall::pad_));  // leaf_fall.h (M-LEAFFALL 21a)
+    expect_pad<Firefly>("Firefly", sizeof(Firefly::pad_));  // firefly.h (M-FIREFLIES 23a)
+    expect_pad<Pollen>("Pollen", sizeof(Pollen::pad_));  // pollen.h (M-POLLEN 24a)
+    expect_pad<Dust>("Dust", sizeof(Dust::pad_));  // dust.h (M-DUSTWIND 25a)
+    expect_pad<Flock>("Flock", sizeof(Flock::pad_));  // flock.h (M-BIRDFLOCK 26a)
+    expect_pad<Butterfly>("Butterfly", sizeof(Butterfly::pad_));  // butterfly.h (M-BUTTERFLY 27a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

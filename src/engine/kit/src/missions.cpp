@@ -85,8 +85,15 @@ bool evaluate(World& w, const Mission& m, Objective& o, const Inputs& in, f32 dt
         }
         case ObjectiveKind::Kill: {
             const bool any = o.target.is_null() && o.tag.empty();
-            for (const Died3D& d : in.died)
+            if (o.ticks == 1 && !any && !o.target.is_null() && dead(w, o.target)) return true;  // dead or gone before the step began: nothing left to kill
+            for (const Died3D& d : in.died) {
+                if (o.team != 0) {
+                    const Health3D* h = w.try_get<Health3D>(d.entity);
+                    if (!h || h->team != o.team) continue;
+                }
+                if (o.by_actor && d.killer != m.actor) continue;
                 if (any || (!o.target.is_null() && d.entity == o.target)) ++o.progress;
+            }
             return o.progress >= o.count;
         }
         case ObjectiveKind::Collect: {

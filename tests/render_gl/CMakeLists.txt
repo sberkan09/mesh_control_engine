@@ -2,7 +2,7 @@
 # run again on mce_rhi_sdlgpu (Vulkan, lavapipe) as test_render_sdlgpu.
 # Always builds; registers only with MCE_GPU_TESTS.
 find_package(Threads REQUIRED)
-add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_views_gl.cpp test_render3d_scale_gl.cpp test_render3d_terrain_gl.cpp test_render3d_instancing_gl.cpp test_render3d_merge_gl.cpp test_render3d_wet_gl.cpp test_render3d_snow_gl.cpp test_render3d_ripple_gl.cpp test_render3d_snow_wind_gl.cpp test_render3d_cloud_gl.cpp test_render3d_night_sky_gl.cpp test_render3d_water_gl.cpp test_render3d_aurora_gl.cpp test_render_bc_gl.cpp)
+add_executable(test_render_gl test_render_gl.cpp test_render3d_gl.cpp test_render3d_views_gl.cpp test_render3d_scale_gl.cpp test_render3d_terrain_gl.cpp test_render3d_instancing_gl.cpp test_render3d_merge_gl.cpp test_render3d_wet_gl.cpp test_render3d_snow_gl.cpp test_render3d_ripple_gl.cpp test_render3d_snow_wind_gl.cpp test_render3d_cloud_gl.cpp test_render3d_night_sky_gl.cpp test_render3d_water_gl.cpp test_render3d_aurora_gl.cpp test_render3d_rainbow_gl.cpp test_render3d_meteor_gl.cpp test_render_bc_gl.cpp)
 # M-WATER 15c: the water probes compare the drawn normals with the kit's wave helpers (mce/kit/water.h).
 target_link_libraries(test_render_gl PRIVATE mce::mce_render mce::mce_rhi_default mce::mce_gameplay_kit mce::doctest_main Threads::Threads)
 mce_apply_compile_policy(test_render_gl)

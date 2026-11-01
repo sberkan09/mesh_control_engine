@@ -110,3 +110,21 @@ TEST_CASE("SourceDoc: an asset that left the project reports it") {
     REQUIRE(f.doc.problems().size() == 1);
     CHECK_FALSE(f.doc.save(f.project, err));
 }
+
+TEST_CASE("source_editable: JSON asset kinds are editable as text, binary sources are not") {
+    ProjectAsset tilemap;
+    tilemap.path = cook::String("maps/level.mctilemap");
+    CHECK(source_editable(tilemap));
+    ProjectAsset scene;  // scenes have their own editor, not a text kind
+    scene.path = cook::String("scenes/level.mcscene");
+    CHECK_FALSE(source_editable(scene));
+    ProjectAsset defaults;
+    defaults.path = cook::String("settings/defaults.mcdefaults");
+    CHECK(source_editable(defaults));
+    ProjectAsset png;
+    png.path = cook::String("textures/crate.png");
+    CHECK_FALSE(source_editable(png));
+    ProjectAsset bare;
+    bare.path = cook::String("noextension");
+    CHECK_FALSE(source_editable(bare));
+}

@@ -5,6 +5,7 @@
 
 #include <doctest/doctest.h>
 
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -49,6 +50,34 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     const std::string in = drive_input();
     auto seated = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(","inspect":{"component":"Rider3D","show":["Rider3D"]}})");
     CHECK(comps(seated, 0).get("Rider3D").get("seated").as_number() == 1);
+    // Horn and headlights (M-OWHORN): the player's car has both; G honks once while seated, L turns the headlights on.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleHorn3D","show":["VehicleHorn3D"]}})")) >= 1);
+    {
+        auto honked = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + in + R"(\n250 Horn\n260 Lights","inspect":{"component":"VehicleHorn3D","show":["VehicleHorn3D","VehicleLights3D"]}})");
+        double honks = 0;
+        u32 on = 0;
+        for (u32 i = 0; i < count(honked); ++i) {
+            honks += comps(honked, i).get("VehicleHorn3D").get("honks").as_number();
+            on += str(comps(honked, i).get("VehicleLights3D").get("mode")) == "On" ? 1u : 0u;
+        }
+        CHECK(honks == 1);
+        CHECK(on == 1);
+    }
+    // The car radio (M-OWRADIO): one script, two Music-bus sources; Q cycles stations only while seated.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ScriptSystem","show":["ScriptSystem"]}})")) == 1);
+    {
+        const auto radio_gain = [&](const std::string& input, const char* name) {
+            auto r = c.ok("run_headless", R"({"ticks":300,"log_lines":0,"input":")" + input +
+                                              R"(","inspect":{"entities":[")" + name + R"("],"show":["AudioSource"]}})");
+            CHECK(r.v().get("log").get("errors").as_number() == 0);
+            return comps(r, 0).get("AudioSource").get("gain_db").as_number();
+        };
+        const std::string drive = "1-100 Move=0,1\\n110 Interact";
+        CHECK(radio_gain(drive + "\\n150 Radio", "Radio 1") == doctest::Approx(-8.0));
+        CHECK(radio_gain(drive + "\\n150 Radio", "Radio 2") == doctest::Approx(-60.0));
+        CHECK(radio_gain(drive + "\\n150 Radio\\n160 Radio\\n170 Radio", "Radio 1") == doctest::Approx(-60.0));
+        CHECK(radio_gain("150 Radio", "Radio 1") == doctest::Approx(-60.0));  // on foot Q does nothing
+    }
     const std::string run_args = R"({"ticks":600,"log_lines":0,"input":")" + in +
                                  R"(","inspect":{"component":"Rider3D","show":["Rider3D","LocalTransform"]}})";
     auto drove = c.ok("run_headless", run_args);
@@ -114,6 +143,16 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     }
     CHECK(foot == 3);  // the officer that was shot is gone
     CHECK(hunting >= 2);
+    // Sparks where a shot lands (M-IMPACTFX).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ImpactFx3D","show":["ImpactFx3D"]}})")) >= 1);
+    // A safety net under the world (M-FALLDEATH).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
+    // Speed and gear on the HUD (M-DRIVEHUD).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"DriveReadout3D","show":["DriveReadout3D"]}})")) >= 1);
+    // The player model faces where it walks (M-FACEMOVE).
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FaceVelocity3D","show":["FaceVelocity3D"]}})")) >= 1);
+    // Hit marker (M-HITMARKER): the Player carries HitMarker3D; the HUD has the two panels bound to it.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HitMarker3D","show":["HitMarker3D"]}})")) >= 1);
     auto wanted = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Wanted3D","show":["Wanted3D"]}})");
     CHECK(comps(wanted, 0).get("Wanted3D").get("crimes").as_number() >= 1);
     CHECK(comps(wanted, 0).get("Wanted3D").get("level").as_number() >= 1);
@@ -167,4 +206,76 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(pc.get("Health3D").get("current").as_number() > 50.0);
     CHECK(pc.get("Wanted3D").get("level").as_number() == 0);
     CHECK(pc.get("Wallet3D").get("cash").as_number() == 300);  // each run starts from the saved scene: 500 - 200
+
+    // M-OPENWORLD E7/E8: missions, money to find and shops, all data on existing kit components.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})")) == 6);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"CashPickup3D","show":["CashPickup3D"]}})")) == 12);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ChopShop3D","show":["ChopShop3D"]}})")) == 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"HealShop3D","show":["HealShop3D"]}})")) == 1);
+    // Loot: the player carries a bag with the use hotkey, every spawned walker may drop an item when killed.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ItemHotkey3D","show":["ItemHotkey3D","Inventory"]}})")) == 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":300,"log_lines":0,"inspect":{"component":"LootDrop","show":["LootDrop"]}})")) >= 20);
+    // Cars: crashes wear them down (every car), and the cars the player can take also run people over.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"VehicleRam3D","show":["VehicleRam3D"]}})")) >= 3);
+    CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ImpactDamage3D","show":["ImpactDamage3D"]}})")) >= 5);
+    CHECK(count(c.ok("run_headless", R"({"ticks":120,"log_lines":0,"inspect":{"component":"ParticleBurst","show":["ParticleBurst"]}})")) >= 3);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"RepairShop3D","show":["RepairShop3D"]}})")) == 2);
+    // The pause menu (Esc): two hidden screens, one rule set (SAVE, LOAD); Pause shows the menu and holds the player, Resume walks again.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlow","show":["UiFlow"]}})")) == 2);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"UiFlowRules","show":["UiFlowRules"]}})")) == 1);
+    {
+        const auto player_z = [&](const char* input) {
+            auto r = c.ok("run_headless", std::string(R"({"ticks":120,"log_lines":0,"input":")") + input +
+                                              R"(","inspect":{"component":"CharacterController3D","show":["LocalTransform"]}})");
+            CHECK(r.v().get("log").get("errors").as_number() == 0);
+            return comps(r, 0).get("LocalTransform").get("position").at(2).as_number();
+        };
+        const double start = player_z("");
+        const double paused = player_z("5 Pause\\n10-110 Move=0,1");
+        const double resumed = player_z("5 Pause\\n10 Resume\\n20-110 Move=0,1");
+        CHECK(std::abs(paused - start) < 0.01);
+        CHECK(std::abs(resumed - start) > 1.0);
+    }
+    // Kill and interact objectives (Hit, Cop killer, Pickup): the objectives exist with the right kinds; the logic is tested in test_missions.
+    {
+        auto obj = c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Objective","show":["Objective"]}})");
+        u32 kills = 0, interacts = 0;
+        for (u32 i = 0; i < count(obj); ++i) {
+            const std::string kind = str(comps(obj, i).get("Objective").get("kind"));
+            kills += kind == "Kill" ? 1u : 0u;
+            interacts += kind == "Interact" ? 1u : 0u;
+        }
+        CHECK(kills == 2);
+        CHECK(interacts == 1);
+        CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Health3D","show":["Health3D"]}})")) >= 1);
+    }
+    // Standing on the Errand marker starts the mission.
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-45,0.95,-9]})");
+    c.ok("component_set", R"({"entity":"Player","component":"Wanted3D","path":"heat","value":0})");
+    c.ok("scene_save");
+    const auto errand_state = [&](const char* ticks) {
+        auto r = c.ok("run_headless", std::string(R"({"ticks":)") + ticks +
+                                          R"(,"log_lines":0,"inspect":{"component":"Mission","show":["Mission"]}})");
+        CHECK(r.v().get("log").get("errors").as_number() == 0);
+        for (u32 i = 0; i < count(r); ++i) {
+            const cook::JsonValue m = comps(r, i).get("Mission");
+            if (str(m.get("id")) == "errand") return str(m.get("state"));
+        }
+        return std::string("missing");
+    };
+    CHECK(errand_state("30") == "Active");
+    // Standing at the Errand's destination with the mission started completes it: 500 + 250.
+    c.ok("component_set", R"({"entity":"Mission Errand","component":"Mission","path":"start","value":1})");
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[95,0.95,-9]})");
+    c.ok("scene_save");
+    CHECK(errand_state("60") == "Complete");
+    auto rich = c.ok("run_headless", R"({"ticks":60,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
+    REQUIRE(count(rich) == 1);
+    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 750);
+    // Standing on a cash pad picks it up (the pad pays 40 to 100).
+    c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-170,0.95,9]})");
+    c.ok("scene_save");
+    auto found = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
+    REQUIRE(count(found) == 1);
+    CHECK(comps(found, 0).get("Wallet3D").get("cash").as_number() > 500.0);
 }

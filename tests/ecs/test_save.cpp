@@ -220,3 +220,16 @@ TEST_CASE("replay: the recorded input stream reproduces the live run's state has
     save::ReplayInfo ignored;
     CHECK(save::read_replay(bad.span(), ignored).error().code == Errc::CrcMismatch);
 }
+
+TEST_CASE("save: default_root puts the game's saves under the per-user MCE folder") {
+    const FixedString<512> r = save::default_root("Tetris");
+    const std::string s(r.view().data(), r.view().size());
+    CHECK_FALSE(r.truncated());
+    CHECK(s.find("/MCE/Tetris/saves") != std::string::npos);
+    CHECK(s.size() >= std::string("/MCE/Tetris/saves").size());
+    CHECK(s.substr(s.size() - std::string("/MCE/Tetris/saves").size()) == "/MCE/Tetris/saves");
+
+    // Games do not share a folder.
+    const FixedString<512> other = save::default_root("Chess");
+    CHECK(StringView(other.view()) != StringView(r.view()));
+}

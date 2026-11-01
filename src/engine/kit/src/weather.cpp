@@ -19,6 +19,16 @@
 #include "mce/kit/moon.h"
 #include "mce/kit/water.h"
 #include "mce/kit/aurora.h"
+#include "mce/kit/rainbow.h"
+#include "mce/kit/meteor.h"
+#include "mce/kit/season.h"
+#include "mce/kit/leaf_fall.h"
+#include "mce/kit/firefly.h"
+#include "mce/kit/pollen.h"
+#include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
+#include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -280,6 +290,16 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<Moon>();        // M-NIGHTSKY 14a: read by Kit3DExtract (14b, 14e); no system
     world.register_components<Water>();       // M-WATER 15a: read by Kit3DExtract (15b) and the water helpers; no system
     world.register_components<Aurora>();      // M-AURORA 16a: read by Kit3DExtract (16b) and the aurora helpers; no system
+    world.register_components<Rainbow>();     // M-RAINBOW 17a: read by Kit3DExtract (17b) and the rainbow helpers; no system
+    world.register_components<Meteor>();      // M-METEOR 18a: read by Kit3DExtract (18b) and the meteor helpers; no system
+    world.register_components<WaterIce>();    // M-FREEZE 20a: read by Kit3DExtract (20b) and the ice helpers; no system
+    world.register_components<LeafFall>();    // M-LEAFFALL 21a: read by Kit3DExtract (21b) and the leaf helpers; no system
+    world.register_components<Firefly>();     // M-FIREFLIES 23a: read by Kit3DExtract (23b) and the firefly helpers; no system
+    world.register_components<Pollen>();      // M-POLLEN 24a: read by Kit3DExtract (24b) and the pollen helpers; no system
+    world.register_components<Dust>();        // M-DUSTWIND 25a: read by Kit3DExtract (25b) and the dust helpers; no system
+    world.register_components<Flock>();       // M-BIRDFLOCK 26a: read by Kit3DExtract (26b) and the flock helpers; no system
+    world.register_components<Butterfly>();   // M-BUTTERFLY 27a: read by Kit3DExtract (27b) and the butterfly helpers; no system
+    world.register_components<Season>();      // M-SEASONS 19a: read by Kit3DExtract (19b) and the season helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db

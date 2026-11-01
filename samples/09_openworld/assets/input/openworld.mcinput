@@ -128,10 +128,10 @@
      "name": "NextWeapon",
      "bindings": [
       {
-       "key": "Q"
+       "key": "Tab"
       },
       {
-       "gamepad_button": "RightShoulder"
+       "gamepad_button": "DpadUp"
       }
      ]
     },
@@ -139,7 +139,10 @@
      "name": "PrevWeapon",
      "bindings": [
       {
-       "key": "Tab"
+       "key": "Z"
+      },
+      {
+       "gamepad_button": "DpadDown"
       }
      ]
     },
@@ -148,6 +151,9 @@
      "bindings": [
       {
        "key": "Num1"
+      },
+      {
+       "gamepad_button": "Back"
       }
      ]
     },
@@ -156,6 +162,9 @@
      "bindings": [
       {
        "key": "Num2"
+      },
+      {
+       "gamepad_button": "RightStick"
       }
      ]
     },
@@ -170,6 +179,17 @@
       },
       {
        "gamepad_button": "East"
+      }
+     ]
+    },
+    {
+     "name": "UseItem",
+     "bindings": [
+      {
+       "key": "H"
+      },
+      {
+       "gamepad_button": "RightShoulder"
       }
      ]
     },
@@ -192,6 +212,39 @@
       },
       {
        "gamepad_axis": "LeftTrigger"
+      }
+     ]
+    },
+    {
+     "name": "Radio",
+     "bindings": [
+      {
+       "key": "Q"
+      },
+      {
+       "gamepad_button": "DpadLeft"
+      }
+     ]
+    },
+    {
+     "name": "Horn",
+     "bindings": [
+      {
+       "key": "G"
+      },
+      {
+       "gamepad_button": "LeftStick"
+      }
+     ]
+    },
+    {
+     "name": "Lights",
+     "bindings": [
+      {
+       "key": "L"
+      },
+      {
+       "gamepad_button": "DpadRight"
       }
      ]
     },
@@ -247,6 +300,38 @@
        "key": "S",
        "axis": "y",
        "scale": -1
+      },
+      {
+       "gamepad_button": "DpadRight"
+      },
+      {
+       "gamepad_button": "DpadLeft",
+       "scale": -1
+      },
+      {
+       "gamepad_button": "DpadUp",
+       "axis": "y"
+      },
+      {
+       "gamepad_button": "DpadDown",
+       "axis": "y",
+       "scale": -1
+      },
+      {
+       "gamepad_axis": "LeftX",
+       "deadzone": [
+        0.4,
+        1
+       ]
+      },
+      {
+       "gamepad_axis": "LeftY",
+       "axis": "y",
+       "deadzone": [
+        0.4,
+        1
+       ],
+       "scale": -1
       }
      ]
     },
@@ -272,6 +357,17 @@
       },
       {
        "gamepad_button": "East"
+      }
+     ]
+    },
+    {
+     "name": "Resume",
+     "bindings": [
+      {
+       "key": "Escape"
+      },
+      {
+       "gamepad_button": "Start"
       }
      ]
     }

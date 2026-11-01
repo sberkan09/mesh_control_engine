@@ -10,6 +10,7 @@ mce_add_test(test_editor UMBRELLA
         test_quick_open.cpp
         test_selection_history.cpp
         test_selection_sets.cpp
+        test_field_masks.cpp
         test_hierarchy_filter.cpp
         test_batch_rename.cpp
         test_select_related.cpp
@@ -50,6 +51,7 @@ mce_add_test(test_editor UMBRELLA
         test_play_session.cpp
         test_prefab_overrides.cpp
         test_prefab_preview.cpp
+        test_project_settings.cpp
         test_scene_editing.cpp
         test_skeleton2d_editor.cpp
         test_stub_world.cpp

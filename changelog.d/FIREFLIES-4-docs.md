@@ -1,0 +1,1 @@
+- M-FIREFLIES done: the user guide gets "Fireflies glow." in `08-3d.md` (the opt-in `Firefly` component, drawn as one camera-following additive particle emitter on warm summer nights, with the Luau `weather.set_firefly` API from 9.19u); the milestone record is closed with follow-ups.

@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, and the "aurora:" lines, the Aurora's latitude, gate and level).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines and the "butterfly:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -64,5 +64,46 @@ function update()
         weather.set_aurora{latitude = 45 + t / 45}
         mce.log(string.format("aurora: latitude %.2f gate %.3f level %.3f at tick %d",
             weather.aurora_latitude(), weather.aurora_gate(), weather.aurora_level(), t))
+        -- M-RAINBOW: the Rainbow on the Weather entity. rainbow_level is the kit helper on the sun elevation of the hour, the
+        -- ground wetness, the rain intensity and the cloud cover: 0 by night (the clock starts at 5:00, sunrise at about
+        -- 6:00 = tick 1500), 0 while it rains or storms, and it rises once the rain is gone and the sun is up while the
+        -- ground is still wet (the snow gives way to clear at tick 2100); the bow follows the drying of the ground.
+        mce.log(string.format("rainbow: level %.3f wetness %.3f at tick %d",
+            weather.rainbow_level(), weather.wetness(), t))
+        -- M-METEOR: the Meteor on the Weather entity. meteor_level is the kit helper on the night fade of the hour, the cloud
+        -- cover and the rain intensity: non-zero through the dark hours (the clock starts at 5:00, sunrise at about tick 1500), damped by the
+        -- cloud cover and the rain and the storm, and exactly 0 by day (night_only is on); read only, the script writes nothing.
+        mce.log(string.format("meteor: level %.3f at tick %d", weather.meteor_level(), t))
+        -- M-SEASONS: the Season on the Weather entity. The WorldClock day is 600 s (36000 ticks), so the sample sets a one-day
+        -- year (year_days 1, the shortest) to move the phase visibly: it starts at start_phase 0.1 plus the 5:00 start
+        -- (5 / 24 of a year) and climbs by 1 / 36000 per tick, from late spring to the centre of summer (0.375) at tick 2400; the tint logged is the authored
+        -- spring multiplier. Read only, the script writes nothing.
+        local sr, sg, sb = weather.season_spring_tint()
+        mce.log(string.format("season: phase %.3f spring tint %.2f %.2f %.2f at tick %d", weather.season_phase(), sr, sg, sb, t))
+        -- M-LEAFFALL: the LeafFall on the Weather entity. The Season never reaches autumn in this run (the phase climbs from 0.308
+        -- to 0.375), so the scene sets manual 0.6, the floor of the amount: leaf_falling is 0.600 on every line and the camera-
+        -- following leaf emitter is drawn all run. Read only, the script writes nothing.
+        mce.log(string.format("leaves: %.3f at tick %d", weather.leaf_falling(), t))
+        -- M-FIREFLIES: the Firefly on the Weather entity (manual 0.5, the floor of the amount). fireflies_glowing is the kit amount:
+        -- max(manual, summer window) times the night gate (the Environment3D hour, from the 5:00 start to the dawn at about tick
+        -- 1500) times the dryness (1 - rain intensity): the glow thins with the dawn and in the rain and is exactly 0 by day.
+        -- Read only, the script writes nothing.
+        mce.log(string.format("fireflies: %.3f at tick %d", weather.fireflies_glowing(), t))
+        -- M-POLLEN: the Pollen on the Weather entity (manual 0.4, the floor of the amount). pollen_drifting is the kit amount:
+        -- max(manual, spring window) times the day gate (the Environment3D hour; none before the dawn lifts the daylight over
+        -- min_daylight) times the dryness (1 - rain intensity). Read only, the script writes nothing.
+        mce.log(string.format("pollen: %.3f at tick %d", weather.pollen_drifting(), t))
+        -- M-DUSTWIND: the Dust on the Weather entity (manual 0.4, the floor of the amount). dust_blowing is the kit amount:
+        -- max(manual, smoothstep(wind_start, wind_full, gusted wind)) times the dryness (1 - rain intensity). Read only, the
+        -- script writes nothing.
+        mce.log(string.format("dust: %.3f at tick %d", weather.dust_blowing(), t))
+        -- M-BIRDFLOCK: the Flock on the Weather entity (manual 0.4, the floor of the amount). flock_flying is the kit amount:
+        -- max(manual, migration) times the twilight gate (1 at the horizon sun, 0 by day and night) times the dryness
+        -- (1 - rain intensity). Read only, the script writes nothing.
+        mce.log(string.format("flock: %.3f at tick %d", weather.flock_flying(), t))
+        -- M-BUTTERFLY: the Butterfly on the Weather entity (manual 0.4, the floor of the amount). butterfly_flying is the kit
+        -- amount: max(manual, summer window) times the day gate (the Environment3D hour) times the calm gate (the wind) times
+        -- the dryness (1 - rain intensity). Read only, the script writes nothing.
+        mce.log(string.format("butterfly: %.3f at tick %d", weather.butterfly_flying(), t))
     end
 end

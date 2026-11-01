@@ -1,0 +1,1 @@
+- Tests: `EditorSession::autosave_path_for` now has a case for a project path, an absolute path under assets/, an untitled scene, and no project.

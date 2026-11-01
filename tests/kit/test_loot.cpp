@@ -7,10 +7,13 @@
 #include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
+#include "mce/input/actions.h"
+#include "mce/input/ecs.h"
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/inventory.h"
 #include "mce/kit/loot.h"
+#include "mce/string_id.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -223,6 +226,81 @@ TEST_CASE("loot: a LootDrop spawns one pickup per result when its owner dies, on
     r.w.query<const ItemPickup3D>().each([&](Entity, const ItemPickup3D&) { ++again; });
     CHECK(again == pickups);  // rolled once
     CHECK(r.w.try_get<LootDrop>(mob)->dropped == 1);
+}
+
+TEST_CASE("loot: a LootDrop with a mesh draws each pickup, lifted and scaled (M-LOOTVIS)") {
+    Rig r;
+    Health3D h;
+    h.max = h.current = 10;
+    LootDrop d;
+    d.catalog.guid = kCat;
+    d.table = "chest";
+    d.seed = 99;
+    d.mesh.guid = asset::Guid{7, 8};
+    d.mesh_scale = 0.5f;
+    d.lift = -0.9f;
+    const Entity mob = r.w.spawn_with(h, d, LocalTransform{{5, 1, 5}, math::quat::identity(), {1, 1, 1}});
+    r.tick(2);
+    DamageInfo di;
+    di.amount = 50;
+    REQUIRE(apply_damage(r.w, mob, di));
+    r.tick(3);
+    u32 drawn = 0, pickups = 0;
+    r.w.query<const ItemPickup3D, const LocalTransform>().each([&](Entity e, const ItemPickup3D&, const LocalTransform& t) {
+        ++pickups;
+        const MeshRef* m = r.w.try_get<MeshRef>(e);
+        if (m && m->mesh.guid == asset::Guid{7, 8}) ++drawn;
+        CHECK(t.scale.x == doctest::Approx(0.5f));
+        CHECK(t.position.y == doctest::Approx(0.1f));
+    });
+    CHECK(pickups > 0);
+    CHECK(drawn == pickups);
+}
+
+TEST_CASE("loot: the UseItem action uses the first consumable of a hotkey owner (M-LOOTVIS)") {
+    Rig r;
+    asset::ItemCatalog c;
+    asset::ItemDef coin;
+    coin.id = coin.name = "coin";
+    coin.stack_max = 100;
+    REQUIRE(c.add_item(coin));
+    asset::ItemDef kit;
+    kit.id = kit.name = "medkit";
+    kit.stack_max = 5;
+    const FixedString<32> tag("consumable");
+    asset::ItemStat heal;
+    heal.key = "heal";
+    heal.value = 30.0f;
+    REQUIRE(c.add_item(kit, Span<const asset::ItemStat>(&heal, 1), Span<const FixedString<32>>(&tag, 1)));
+    r.w.resource<ItemRegistry>().define(kCat, c);
+    Inventory inv;
+    inv.catalog.guid = kCat;
+    inv.item[0] = 1;  // coin
+    inv.qty[0] = 10;
+    inv.item[1] = 2;  // medkit
+    inv.qty[1] = 3;
+    Health3D h;
+    h.max = 100;
+    h.current = 40;
+    const Entity hero = r.w.spawn_with(inv, h, ItemHotkey3D{});
+    auto press = [&](bool down) {
+        input::InputState in;
+        in.tick = r.t;
+        in.action_names[0] = StringId("UseItem");
+        in.actions[0].held = in.actions[0].pressed = down;
+        in.action_count = 1;
+        input::publish(r.w, in);
+        r.tick(1);
+        in.actions[0].held = in.actions[0].pressed = false;
+        input::publish(r.w, in);
+        r.tick(2);
+    };
+    press(false);
+    CHECK(r.w.try_get<Inventory>(hero)->qty[1] == 3);
+    press(true);
+    CHECK(r.w.try_get<Inventory>(hero)->qty[1] == 2);
+    CHECK(r.w.try_get<Inventory>(hero)->qty[0] == 10);
+    CHECK(r.w.try_get<Health3D>(hero)->current == doctest::Approx(70.0f));
 }
 
 TEST_CASE("container: the first open rolls into the chest, the opener takes what fits, a later open takes more") {

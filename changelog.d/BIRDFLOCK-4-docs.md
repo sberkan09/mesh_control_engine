@@ -1,0 +1,1 @@
+- M-BIRDFLOCK done: the user guide gets "Flock crosses." in `08-3d.md` (the opt-in `Flock` component, drawn as one camera-following alpha-blended particle emitter in the migration seasons at dawn and dusk, with the Luau `weather.set_flock` API from 9.19x); the milestone record is closed with follow-ups.

@@ -12,6 +12,7 @@
 #include "mce/kit/ai.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/impact_damage.h"
 #include "mce/kit/loadout3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
@@ -23,7 +24,7 @@
 namespace mce::kit {
 
 // Padding-free: World::state_hash hashes component bytes.
-static_assert(sizeof(Wanted3D) == 68);
+static_assert(sizeof(Wanted3D) == 72);
 static_assert(sizeof(Police3D) == 76);
 static_assert(sizeof(RespawnPoint3D) == 4);
 static_assert(sizeof(Respawn3D) == 16);
@@ -34,6 +35,7 @@ static_assert(sizeof(AmmoShop3D) == 12);
 static_assert(sizeof(HealShop3D) == 8);
 static_assert(sizeof(CashPickup3D) == 16);
 static_assert(sizeof(ChopShop3D) == 12);
+static_assert(sizeof(RepairShop3D) == 24);
 static_assert(sizeof(Confiscate3D) == 4);
 static_assert(sizeof(MissionReward3D) == 8);
 static_assert(sizeof(CarOwner3D) == 8);
@@ -232,7 +234,8 @@ void kit3d_wanted(Frame& f) {
         const Entity off = wanted_holder(w, d.killer);
         const Entity vic = health_holder(w, d.entity);
         if (off.is_null() || vic.is_null() || off == vic) continue;
-        const Wanted3D* wd = w.try_get<Wanted3D>(off);
+        Wanted3D* wd = w.try_get_mut<Wanted3D>(off);
+        ++wd->kills;
         const u8 team = w.try_get<Health3D>(vic)->team;
         if (team == 0) continue;
         const math::vec3 at = position_of(w, vic);
@@ -599,6 +602,38 @@ void kit3d_chopshop(Frame& f) {
     });
 }
 
+void kit3d_repairshop(Frame& f) {
+    World& w = f.world();
+    f.query<RepairShop3D, LocalTransform>().each([&](Entity se, RepairShop3D& sh, LocalTransform&) {
+        if (!sh.enabled) return;
+        const math::vec3 sp = position_of(w, se);
+        if (!sh.served.is_null() && (!w.alive(sh.served) || math::length(position_of(w, sh.served) - sp) > sh.radius)) sh.served = Entity{};
+        f.query<Health3D, VehicleSeat3D, LocalTransform>().each([&](Entity ce, Health3D& hp, VehicleSeat3D& seat, LocalTransform&) {
+            if (ce == sh.served || seat.driver.is_null() || !w.alive(seat.driver) || math::length(position_of(w, ce) - sp) > sh.radius) return;
+            Wallet3D* wl = w.try_get_mut<Wallet3D>(seat.driver);
+            const Vehicle3D* v = w.try_get<Vehicle3D>(ce);
+            if (!wl || (v && std::fabs(v->speed) > sh.max_speed)) return;
+            const bool hurt = hp.dead || hp.current < hp.max;
+            Wanted3D* wd = w.try_get_mut<Wanted3D>(seat.driver);
+            const u32 level = wd ? wd->level : 0u;
+            const u32 drop = level == 0 || (sh.need_unseen && wd->seen_by > 0) ? 0u : (sh.wanted_drop == 0 ? level : math::min<u32>(sh.wanted_drop, level));
+            const i32 cost = (hurt ? static_cast<i32>(sh.price) : 0) + static_cast<i32>(drop) * static_cast<i32>(sh.price_per_level);
+            if ((!hurt && drop == 0) || wl->cash < cost) return;
+            const i32 paid = take_cash(w, seat.driver, cost);
+            if (hurt) repair_vehicle(w, ce);
+            if (drop > 0) {
+                if (drop >= level) clear_wanted(w, seat.driver);
+                else {
+                    wd->heat = static_cast<f32>(level - drop) * wd->heat_per_level;
+                    settle(w, seat.driver, *wd);
+                }
+            }
+            sh.served = ce;
+            EventAccess(w).push(Repaired3D{seat.driver, se, ce, paid, level});
+        });
+    });
+}
+
 void kit3d_cashpickup(Frame& f) {
     World& w = f.world();
     f.query<CashPickup3D, LocalTransform>().each([&](Entity pe, CashPickup3D& cp, LocalTransform&) {
@@ -680,12 +715,13 @@ void install_wanted3d(World& world) {
     install_loadout3d(world);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
-    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D, CashPickup3D, ChopShop3D, Confiscate3D>();
+    world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D, CashPickup3D, ChopShop3D, RepairShop3D, Confiscate3D>();
     world.register_event<Sprayed3D>(Phase::FixedUpdate_Pre);
     world.register_event<AmmoBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<HealBought3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashPickedUp3D>(Phase::FixedUpdate_Pre);
     world.register_event<CarSold3D>(Phase::FixedUpdate_Pre);
+    world.register_event<Repaired3D>(Phase::FixedUpdate_Pre);
     world.register_event<CashChanged3D>(Phase::FixedUpdate_Pre);
     world.register_event<Respawned3D>(Phase::FixedUpdate_Pre);
     world.register_event<Crime3D>(Phase::FixedUpdate_Pre);
@@ -699,6 +735,7 @@ void install_wanted3d(World& world) {
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_healshop", &kit3d_healshop, "kit3d_ammoshop");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_cashpickup", &kit3d_cashpickup, "kit3d_healshop");
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_chopshop", &kit3d_chopshop, "kit3d_cashpickup");
+    world.add_system(Phase::FixedUpdate_Pre, "kit3d_repairshop", &kit3d_repairshop, "kit3d_chopshop");
 }
 
 }  // namespace mce::kit

@@ -115,3 +115,58 @@ TEST_CASE("AssetOps: delete removes the file and its sidecar; references are lis
     CHECK(f.project.find(csv) == nullptr);
     CHECK_FALSE(delete_asset(f.project, csv, err));
 }
+
+TEST_CASE("AssetOps: asset_path_valid takes plain relative paths with an extension and nothing else") {
+    CHECK(asset_path_valid("effects/dust.mcpart"));
+    CHECK(asset_path_valid("a.b"));
+    CHECK(asset_path_valid("deep/er/still/x.png"));
+    CHECK_FALSE(asset_path_valid(""));
+    CHECK_FALSE(asset_path_valid("/abs/x.png"));
+    CHECK_FALSE(asset_path_valid("..\\x.png"));
+    CHECK_FALSE(asset_path_valid("c:/x.png"));
+    CHECK_FALSE(asset_path_valid("a/../x.png"));
+    CHECK_FALSE(asset_path_valid("./x.png"));
+    CHECK_FALSE(asset_path_valid("a//x.png"));
+    CHECK_FALSE(asset_path_valid("a/"));
+    CHECK_FALSE(asset_path_valid("noextension"));
+    CHECK_FALSE(asset_path_valid("a/.hidden"));  // a leading dot is a name, not an extension
+    CHECK_FALSE(asset_path_valid("trailing."));
+    CHECK_FALSE(asset_path_valid(std::string(400, 'a').append(".png").c_str()));  // too long
+}
+
+TEST_CASE("EditorProject: relative_asset_path only answers for paths inside assets/") {
+    Fixture f("asset_ops_relpath");
+    cook::String rel;
+    const cook::String inside = f.project.asset_path("effects/dust.mcpart");
+    CHECK(f.project.relative_asset_path(inside.view(), rel));
+    CHECK(rel.view() == "effects/dust.mcpart");
+    CHECK_FALSE(f.project.relative_asset_path(f.project.asset_path("").view(), rel));  // assets/ itself
+    CHECK_FALSE(f.project.relative_asset_path("/elsewhere/effects/dust.mcpart", rel));
+    CHECK_FALSE(f.project.relative_asset_path(f.root, rel));
+}
+
+TEST_CASE("EditorProject: move_asset keeps the GUID and the extension, and refuses paths that leave assets/") {
+    Fixture f("asset_ops_move");
+    asset::Guid g;
+    cook::String err;
+    REQUIRE(create_asset(f.project, "effects/dust.mcpart", g, err));
+    REQUIRE(f.has("effects/dust.mcpart"));
+
+    REQUIRE(f.project.move_asset(g, "fx/deeper/smoke.mcpart"));
+    CHECK_FALSE(f.has("effects/dust.mcpart"));
+    CHECK(f.has("fx/deeper/smoke.mcpart"));
+    const ProjectAsset* moved = f.project.find(g);
+    REQUIRE(moved != nullptr);  // the same GUID resolves to the new path
+    CHECK(moved->path.view() == "fx/deeper/smoke.mcpart");
+
+    // An asset keeps its extension (the importer), and a path cannot climb out of assets/.
+    CHECK_FALSE(f.project.move_asset(g, "fx/smoke.png"));
+    CHECK_FALSE(f.project.move_asset(g, "../outside.mcpart"));
+    CHECK_FALSE(f.project.move_asset(g, "/abs.mcpart"));
+    CHECK_FALSE(f.project.move_asset(g, ""));
+    CHECK(f.has("fx/deeper/smoke.mcpart"));  // nothing moved
+
+    // A GUID the project does not have.
+    asset::Guid other;
+    CHECK(f.project.move_asset(other, "x.mcpart").error().code == Errc::NotFound);
+}

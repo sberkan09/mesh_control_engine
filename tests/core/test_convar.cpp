@@ -357,3 +357,13 @@ TEST_CASE("project defaults: text from a pack applies like the file, line by lin
     cv_test_pack_flag.reset();
     cv_test_pack_int.reset();
 }
+
+TEST_CASE("convar: mark_command_line is sticky and leaves other convars alone") {
+    const bool other_before = cv_test_bool.from_command_line();
+    CHECK_FALSE(cv_test_float.from_command_line());
+    cv_test_float.mark_command_line();
+    CHECK(cv_test_float.from_command_line());
+    CHECK(cv_test_bool.from_command_line() == other_before);
+    cv_test_float.mark_command_line();  // marking again changes nothing
+    CHECK(cv_test_float.from_command_line());
+}

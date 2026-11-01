@@ -15,6 +15,16 @@
 
 ## Sounds (CC0, OpenGameArt)
 
-Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy, impacts by rubberduck, rain by kresiek-the-furry, wind by bashar3a, crickets by wolfgang and the crowd bed by
+Engine loop by qubodup, gunshots by LarkPay, siren by looneybits, footsteps by GboxMikeFozzy, impacts and thunder by rubberduck, rain by kresiek-the-furry, wind by bashar3a, crickets by wolfgang and the crowd bed by
 [StarNinjas](https://opengameart.org/users/starninjas), all CC0-1.0. Files, sources and the changes made (trim, loop, mono):
 `assets/audio/SOURCES.md`; rebuilt by `tools/fetch_audio.py`.
+
+## Textures and models made for the sample
+
+The ground textures (`assets/textures/`, `tools/gen_textures.py`), the building meshes and facade textures (`assets/models/buildings/`, `tools/gen_buildings.py`), the leaf and bark textures (`tools/gen_prop_textures.py`) and the Blender props (`assets/models/props/`, `blender/gen_models.py`) are original to this
+repository (CC0-1.0).
+
+The car horn (`assets/audio/horn.wav`) is synthesized by `gen_assets.py` (two softened square tones at 400 and 500 Hz); it has no source file and no licence.
+
+The two radio stations (`assets/audio/radio_1.wav`, `radio_2.wav`) are synthesized by `gen_assets.py` (`music_wav`, fixed seed); they have no source file and no licence.
+The hit tick and kill ding (`assets/audio/hit_tick.wav`, `kill_ding.wav`) are synthesized by `gen_assets.py` (decaying sine partials); no source file and no licence.

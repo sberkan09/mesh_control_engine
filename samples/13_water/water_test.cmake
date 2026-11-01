@@ -5,7 +5,11 @@
 #      the largest the four default waves can sum to (0.4 m * (1 + 0.6 + 0.4 + 0.27) = 0.908 m), the surface normal is
 #      near +y, a point 0.3 m under the surface is submerged and one 0.3 m over it is not;
 #   3. the surface moves: the lines show many different heights;
-#   4. 2700 ticks: the same bounds on all 18 lines.
+#   4. 2700 ticks: the same bounds on all 18 lines;
+#   5. (M-FREEZE 20c) the `ice:` lines: weather.water_frozen() of the WaterIce on the Water entity, over its Season (a 30-day
+#      year, start phase 0.6) and WorldClock (a 2 s day, so a 60 s year; drive_environment 0, the fixed sun does not move):
+#      the sea is open at tick 0, freezes (0.544 at tick 450, 1.000 at 750 to 900), thaws by tick 1200 and stays open; the
+#      clock does not move the sun, so the `water:` lines above are the ones the sample had before the ice.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -111,6 +115,16 @@ if(NOT n600 EQUAL 4 OR d600 LESS 4)
     message(FATAL_ERROR "expected 4 water lines with a moving surface, got ${n600} lines and ${d600} different heights")
 endif()
 
+# The ice lines: the amount in 0..1 on every tick, 4 lines in the first 600 ticks.
+expect("${first}" "script: ice: frozen 0.000 phase 0.617 at tick 0\n" "the sea did not start open")
+expect("${first}" "script: ice: frozen 0.045 phase 0.700 at tick 300\n" "the ice did not start to form")
+expect("${first}" "script: ice: frozen 0.544 phase 0.742 at tick 450\n" "the ice did not follow the season")
+string(REGEX MATCHALL "script: ice: frozen [0-9.]+ phase [0-9.]+ at tick [0-9]+" ice600 "${first}")
+list(LENGTH ice600 n_ice600)
+if(NOT n_ice600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 ice lines in 600 ticks, got ${n_ice600}")
+endif()
+
 # 2. A longer run.
 play(longer -ticks 2700 -input "${INPUT}")
 expect_not("${longer}" "\\[error\\]|\\[warn\\]" "the long run logged a problem")
@@ -119,5 +133,16 @@ check_water_lines("${longer}" n2700 d2700)
 if(NOT n2700 EQUAL 18 OR d2700 LESS 15)
     message(FATAL_ERROR "expected 18 water lines with a moving surface, got ${n2700} lines and ${d2700} different heights")
 endif()
+
+expect("${longer}" "script: ice: frozen 1.000 phase 0.825 at tick 750\n" "the sea did not freeze over")
+expect("${longer}" "script: ice: frozen 0.901 phase 0.909 at tick 1050\n" "the ice did not start to thaw")
+expect("${longer}" "script: ice: frozen 0.000 phase 0.950 at tick 1200\n" "the sea did not thaw")
+expect("${longer}" "script: ice: frozen 0.000 phase 0.325 at tick 2550\n" "the sea did not stay open")
+string(REGEX MATCHALL "script: ice: frozen [0-9.]+ phase [0-9.]+ at tick [0-9]+" ice2700 "${longer}")
+list(LENGTH ice2700 n_ice2700)
+if(NOT n_ice2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 ice lines in 2700 ticks, got ${n_ice2700}")
+endif()
+expect_not("${longer}" "ice: frozen (1\\.[0-9]*[1-9]|[2-9]|-)" "the freeze amount left 0..1")
 
 message(STATUS "13_water holds: the crate rides 0.1 m over the surface within 0.908 m on ${n2700} lines, state_hash ${hash_a} at 600 ticks (twice), ${hash_c} at 2700")

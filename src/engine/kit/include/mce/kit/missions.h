@@ -90,7 +90,8 @@ MCE_COMPONENT(Mission, (id, Save, Help{"the mission's name"}), (objective, Save,
 struct Objective {
     ObjectiveKind kind = ObjectiveKind::ReachZone;
     ObjectiveState state = ObjectiveState::Pending;  // engine-written
-    u16 pad_ = 0;
+    u8 team = 0;                    // kill: 0 counts any death; else only a dead Health3D with this team
+    u8 by_actor = 0;                // kill: 1 counts only deaths whose killer is the mission's actor
     Entity target;                  // what to reach, kill, collect or use; or null and `tag`
     FixedString<32> tag;            // the entity name to look for when `target` is null
     FixedString<32> signal;         // signal: the MissionSignal name
@@ -101,7 +102,9 @@ struct Objective {
     u32 ticks = 0;                  // engine-written: ticks since it went active
     Entity next;                    // the objective that follows; null: the mission ends with this one
 };
-MCE_COMPONENT(Objective, (kind, Save), (state, Save, ReadOnly), (target, Save, Help{"what to reach, kill, collect or use"}),
+static_assert(sizeof(Objective) == 120, "Objective must have no implicit padding: state_hash hashes the raw bytes");
+MCE_COMPONENT(Objective, (kind, Save), (state, Save, ReadOnly), (team, Save, Help{"kill: 0 any; else only deaths of Health3D.team this"}),
+              (by_actor, Save, Help{"kill: 1 counts only the actor's kills"}), (target, Save, Help{"what to reach, kill, collect or use"}),
               (tag, Save, Help{"the entity name to look for when target is empty"}),
               (signal, Save, Help{"signal: the MissionSignal name that counts"}), (count, Save, Range{1, 100000}, Help{"kill, collect, signal: how many"}),
               (progress, Save, ReadOnly), (radius, Save, Range{0.1f, 10000}, Help{"reach_zone, interact: metres"}),
