@@ -1,0 +1,1 @@
+- M-PARTICLEQ planned: a real `particle_scale` knob in `QualitySettings` replacing the recognised-Low guess in `Kit3DExtract`, steps 28a to 28c; the milestone record and the ROADMAP row.
