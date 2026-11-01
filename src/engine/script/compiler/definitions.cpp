@@ -623,6 +623,38 @@ declare weather: {
     -- lifetime_s 1..40, speed 0..40, heading_deg 0..360, max_particles 8..1024, seed 0..4294967295; enabled: any non-zero
     -- number is 1); an unknown key or a non-number raises and nothing is written
     set_flock: (settings: { enabled: number?, migration_full: number?, migration_end: number?, manual: number?, twilight_width: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, heading_deg: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Butterfly (M-BUTTERFLY), the first Butterfly in the scene; every butterfly function raises when there is none
+    -- (set_butterfly never adds one). The getters are butterfly_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. butterfly_flying (0..1) is the butterfly amount now, the same one the renderer
+    -- draws: max(manual, summer window) times the day gate times the calm gate times the dryness (1 - rain) times strength,
+    -- with the season phase of the first Season at the first WorldClock, the night fade of the Environment3D hour, the wind
+    -- (with the gust sway) and the rain the first Weather's intensity while it rains or storms; 0 when enabled or strength
+    -- is 0. Read-only.
+    butterfly_enabled: () -> number,
+    butterfly_window_full: () -> number,
+    butterfly_window_end: () -> number,
+    butterfly_manual: () -> number,
+    butterfly_min_daylight: () -> number,
+    butterfly_wind_calm: () -> number,
+    butterfly_wind_still: () -> number,
+    butterfly_rate: () -> number,
+    butterfly_box_xz_m: () -> number,
+    butterfly_height_m: () -> number,
+    butterfly_size_m: () -> number,
+    butterfly_lifetime_s: () -> number,
+    butterfly_speed: () -> number,
+    butterfly_lift: () -> number,
+    butterfly_max_particles: () -> number,
+    butterfly_seed: () -> number,
+    butterfly_strength: () -> number,
+    butterfly_color: () -> (number, number, number),
+    butterfly_flying: () -> number,
+    -- every key optional, each value clamped to the field's range (window_full, window_end 0..0.5, manual, min_daylight,
+    -- wind_calm, wind_still, strength and each colour channel 0..1, rate 0..60, box_xz_m 1..100, height_m 1..20, size_m
+    -- 0.02..1, lifetime_s 1..30, speed 0..4, lift 0..2, max_particles 8..512, seed 0..4294967295; enabled: any non-zero
+    -- number is 1); an unknown key or a non-number raises and nothing is written
+    set_butterfly: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, min_daylight: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, lift: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {

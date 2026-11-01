@@ -390,6 +390,29 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Butterfly (M-BUTTERFLY step 27c) lives in the same table: the authoring over the first kit::Butterfly
+// (mce/kit/butterfly.h) and the read-only butterfly_flying(). Named errors as above ("weather.set_butterfly: the scene has
+// no Butterfly entity"); the setter never adds the component. The getters are named weather.butterfly_<key>; the colour
+// returns r, g, b. butterfly_flying() is kit::butterfly_amount with the inputs the extract's butterfly block uses: the first
+// Season at the first WorldClock's day and hour (no Season is the manual floor), the night fade of the Environment3D hour (0
+// with no clock), the effective wind with the gust sway of the first WindGust (calm with no Weather) and the first
+// Weather's rain intensity while it rains or storms. 0 when `enabled` or `strength` is 0. The getters read the authoring
+// even when `enabled` is 0.
+//
+//   weather.butterfly_enabled() / butterfly_window_full() / butterfly_window_end() / butterfly_manual() /
+//   weather.butterfly_min_daylight() / butterfly_wind_calm() / butterfly_wind_still() / butterfly_rate() /
+//   weather.butterfly_box_xz_m() / butterfly_height_m() / butterfly_size_m() / butterfly_lifetime_s() / butterfly_speed() /
+//   weather.butterfly_lift() / butterfly_max_particles() / butterfly_seed() / butterfly_strength() -> number
+//   weather.butterfly_color() -> r, g, b
+//   weather.butterfly_flying() -> number          0..1, the butterfly amount now
+//   weather.set_butterfly{enabled=, window_full=, window_end=, manual=, min_daylight=, wind_calm=, wind_still=, rate=,
+//                         box_xz_m=, height_m=, size_m=, lifetime_s=, speed=, lift=, color={r,g,b}, max_particles=, seed=,
+//                         strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/butterfly.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -440,6 +463,7 @@
 #include "mce/kit/pollen.h"
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -2205,6 +2229,114 @@ int l_weather_set_flock(lua_State* L) {
     return 0;
 }
 
+// ---- Butterfly (M-BUTTERFLY step 27c) ----
+
+kit::Butterfly& check_butterfly(lua_State* L, const char* fn) { return check_first<kit::Butterfly>(L, fn, "Butterfly"); }
+
+#define MCE_WEATHER_GETTER_BUTTERFLY(luaname, field)                                                    \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_butterfly(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_enabled, enabled)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_window_full, window_full)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_window_end, window_end)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_manual, manual)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_min_daylight, min_daylight)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_wind_calm, wind_calm)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_wind_still, wind_still)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_rate, rate)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_height_m, height_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_size_m, size_m)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_speed, speed)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_lift, lift)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_max_particles, max_particles)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_seed, seed)
+MCE_WEATHER_GETTER_BUTTERFLY(butterfly_strength, strength)
+#undef MCE_WEATHER_GETTER_BUTTERFLY
+
+int l_weather_butterfly_color(lua_State* L) { return push_season_tint(L, check_butterfly(L, "weather.butterfly_color").color); }
+
+// weather.butterfly_flying(): kit::butterfly_amount with the inputs the extract's butterfly block uses: the first Season at
+// the first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock), the effective wind with the gust sway of the first WindGust (calm with no Weather)
+// and the first Weather's rain intensity while it rains or storms.
+int l_weather_butterfly_flying(lua_State* L) {
+    const kit::Butterfly& bf = check_butterfly(L, "weather.butterfly_flying");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const kit::WindGust* gust = nullptr;
+    const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+    if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+            if (!gust) gust = &c;
+        });
+    }
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+    f32 amount = kit::butterfly_amount(bf, season, phase, aurora_night_fade(w), wind, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_butterfly{...}: validated before anything is written.
+int l_weather_set_butterfly(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled", "window_full", "window_end", "manual", "min_daylight", "wind_calm", "wind_still", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "lift", "color", "max_particles", "seed", "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_butterfly", kKeys, 18, "enabled, window_full, window_end, manual, min_daylight, wind_calm, wind_still, rate, box_xz_m, height_m, size_m, lifetime_s, speed, lift, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::Butterfly& bf = check_butterfly(L, "weather.set_butterfly");
+    if (given[0]) bf.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) bf.window_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) bf.window_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) bf.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) bf.min_daylight = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) bf.wind_calm = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) bf.wind_still = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) bf.rate = static_cast<f32>(clamp_range(value[7], 0.0, 60.0));
+    if (given[8]) bf.box_xz_m = static_cast<f32>(clamp_range(value[8], 1.0, 100.0));
+    if (given[9]) bf.height_m = static_cast<f32>(clamp_range(value[9], 1.0, 20.0));
+    if (given[10]) bf.size_m = static_cast<f32>(clamp_range(value[10], 0.02, 1.0));
+    if (given[11]) bf.lifetime_s = static_cast<f32>(clamp_range(value[11], 1.0, 30.0));
+    if (given[12]) bf.speed = static_cast<f32>(clamp_range(value[12], 0.0, 4.0));
+    if (given[13]) bf.lift = static_cast<f32>(clamp_range(value[13], 0.0, 2.0));
+    if (given[14]) {
+        bf.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        bf.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        bf.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) bf.max_particles = static_cast<u32>(clamp_range(value[15], 8.0, 512.0));
+    if (given[16]) bf.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) bf.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2646,6 +2778,26 @@ const luaL_Reg kWeatherLib[] = {
     {"flock_color", l_weather_flock_color},
     {"flock_flying", l_weather_flock_flying},
     {"set_flock", l_weather_set_flock},
+    {"butterfly_enabled", l_weather_butterfly_enabled},
+    {"butterfly_window_full", l_weather_butterfly_window_full},
+    {"butterfly_window_end", l_weather_butterfly_window_end},
+    {"butterfly_manual", l_weather_butterfly_manual},
+    {"butterfly_min_daylight", l_weather_butterfly_min_daylight},
+    {"butterfly_wind_calm", l_weather_butterfly_wind_calm},
+    {"butterfly_wind_still", l_weather_butterfly_wind_still},
+    {"butterfly_rate", l_weather_butterfly_rate},
+    {"butterfly_box_xz_m", l_weather_butterfly_box_xz_m},
+    {"butterfly_height_m", l_weather_butterfly_height_m},
+    {"butterfly_size_m", l_weather_butterfly_size_m},
+    {"butterfly_lifetime_s", l_weather_butterfly_lifetime_s},
+    {"butterfly_speed", l_weather_butterfly_speed},
+    {"butterfly_lift", l_weather_butterfly_lift},
+    {"butterfly_max_particles", l_weather_butterfly_max_particles},
+    {"butterfly_seed", l_weather_butterfly_seed},
+    {"butterfly_strength", l_weather_butterfly_strength},
+    {"butterfly_color", l_weather_butterfly_color},
+    {"butterfly_flying", l_weather_butterfly_flying},
+    {"set_butterfly", l_weather_set_butterfly},
     {nullptr, nullptr},
 };
 

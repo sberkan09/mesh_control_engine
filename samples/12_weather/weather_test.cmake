@@ -72,6 +72,11 @@
 #      script writes nothing). The amount is max(manual 0.4, migration) times the twilight gate (1 - smoothstep of |sun y|
 #      over 0.25) times (1 - rain): 0.012 at tick 0, 0.046 at 300, 0.169 at 900, 0.328 at 1200, 0.159 at 1500 (the
 #      storm), 0.328 at 1800 and 0.280 at 2100 as the sun climbs out of the twilight. The entity count stays 14.
+#  22. (M-BUTTERFLY 27c) the "butterfly:" lines: weather.butterfly_flying() of the Butterfly on the Weather entity (read
+#      only, the script writes nothing). The amount is max(manual 0.4, summer window) times the day gate (smoothstep of the
+#      daylight over 0.6..1) times the calm gate (the wind) times (1 - rain): 0.000 until the dawn at about tick 1500 (the
+#      clock starts at 5:00, so the night and the storm close it), then 0.035 at tick 1650, 0.508 at 1800, 0.923 at 1950,
+#      0.999 at 2100 and 1.000 from 2250 as the day gate opens. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -157,10 +162,16 @@ if(NOT n_dust600 EQUAL 4)
 endif()
 expect("${first}" "script: flock: 0.012 at tick 0\n" "the flock is not at the dark-sky level at the start")
 expect("${first}" "script: flock: 0.046 at tick 300\n" "the rain and the twilight did not shape the flock")
+expect("${first}" "script: butterfly: 0.000 at tick 300\n" "the night did not close the butterflies")
 string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock600 "${first}")
 list(LENGTH flock600 n_flock600)
 if(NOT n_flock600 EQUAL 4)
     message(FATAL_ERROR "expected 4 flock lines in 600 ticks, got ${n_flock600}")
+endif()
+string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly600 "${first}")
+list(LENGTH butterfly600 n_butterfly600)
+if(NOT n_butterfly600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 butterfly lines in 600 ticks, got ${n_butterfly600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -271,6 +282,17 @@ string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock2700 "${forec
 list(LENGTH flock2700 n_flock2700)
 if(NOT n_flock2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 flock lines in 2700 ticks, got ${n_flock2700}")
+endif()
+expect("${forecast}" "script: butterfly: 0.000 at tick 1500\n" "the butterflies are not closed before the dawn")
+expect("${forecast}" "script: butterfly: 0.035 at tick 1650\n" "the butterflies did not start with the dawn")
+expect("${forecast}" "script: butterfly: 0.508 at tick 1800\n" "the day gate is wrong for the butterflies at tick 1800")
+expect("${forecast}" "script: butterfly: 0.923 at tick 1950\n" "the butterflies did not open with the daylight")
+expect("${forecast}" "script: butterfly: 0.999 at tick 2100\n" "the butterflies are wrong at tick 2100")
+expect("${forecast}" "script: butterfly: 1.000 at tick 2250\n" "the butterflies did not reach full strength by day")
+string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly2700 "${forecast}")
+list(LENGTH butterfly2700 n_butterfly2700)
+if(NOT n_butterfly2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 butterfly lines in 2700 ticks, got ${n_butterfly2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
