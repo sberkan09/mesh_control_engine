@@ -68,6 +68,10 @@
 #      clear, thinned by the rain (0.240 at tick 300, 0.040 at 600 at the rain's 0.9) and back to 0.240 at 900 and 0.359 at
 #      1200 as the rain fades, 0.359 / 0.398 / 0.359 in the gusty storm and snow wind (1200, 1500, 1800) and the full floor
 #      0.400 from tick 1950 on. The entity count stays 14.
+#  21. (M-BIRDFLOCK 26c) the "flock:" lines: weather.flock_flying() of the Flock on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.4, migration) times the twilight gate (1 - smoothstep of |sun y|
+#      over 0.25) times (1 - rain): 0.012 at tick 0, 0.046 at 300, 0.169 at 900, 0.328 at 1200, 0.159 at 1500 (the
+#      storm), 0.328 at 1800 and 0.280 at 2100 as the sun climbs out of the twilight. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -150,6 +154,13 @@ string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust600 "${first}")
 list(LENGTH dust600 n_dust600)
 if(NOT n_dust600 EQUAL 4)
     message(FATAL_ERROR "expected 4 dust lines in 600 ticks, got ${n_dust600}")
+endif()
+expect("${first}" "script: flock: 0.012 at tick 0\n" "the flock is not at the dark-sky level at the start")
+expect("${first}" "script: flock: 0.046 at tick 300\n" "the rain and the twilight did not shape the flock")
+string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock600 "${first}")
+list(LENGTH flock600 n_flock600)
+if(NOT n_flock600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 flock lines in 600 ticks, got ${n_flock600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -250,6 +261,16 @@ string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust2700 "${forecas
 list(LENGTH dust2700 n_dust2700)
 if(NOT n_dust2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 dust lines in 2700 ticks, got ${n_dust2700}")
+endif()
+expect("${forecast}" "script: flock: 0.169 at tick 900\n" "the flock did not open as the sky brightened")
+expect("${forecast}" "script: flock: 0.328 at tick 1200\n" "the flock is wrong at tick 1200")
+expect("${forecast}" "script: flock: 0.159 at tick 1500\n" "the storm rain is wrong for the flock")
+expect("${forecast}" "script: flock: 0.328 at tick 1800\n" "the flock is wrong at tick 1800")
+expect("${forecast}" "script: flock: 0.280 at tick 2100\n" "the flock did not close as the sun climbed")
+string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock2700 "${forecast}")
+list(LENGTH flock2700 n_flock2700)
+if(NOT n_flock2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 flock lines in 2700 ticks, got ${n_flock2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 

@@ -594,6 +594,35 @@ declare weather: {
     -- wind_follow 0..2, max_particles 16..4096, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a
     -- non-number raises and nothing is written
     set_dust: (settings: { enabled: number?, wind_start: number?, wind_full: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, wind_follow: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Flock (M-BIRDFLOCK), the first Flock in the scene; every flock function raises when there is none (set_flock never
+    -- adds one). The getters are flock_ plus the set key; the colour returns r, g, b. They read the authoring even when
+    -- enabled is 0. flock_flying (0..1) is the flock amount now, the same one the renderer draws: max(manual, migration)
+    -- times the twilight gate times the dryness (1 - rain) times strength, with the season phase of the first Season at the
+    -- first WorldClock, the sun height of the Environment3D (day clock, else the fixed sun_direction) and the rain the first
+    -- Weather's intensity while it rains or storms; 0 when enabled or strength is 0. Read-only.
+    flock_enabled: () -> number,
+    flock_migration_full: () -> number,
+    flock_migration_end: () -> number,
+    flock_manual: () -> number,
+    flock_twilight_width: () -> number,
+    flock_rate: () -> number,
+    flock_box_xz_m: () -> number,
+    flock_height_m: () -> number,
+    flock_size_m: () -> number,
+    flock_lifetime_s: () -> number,
+    flock_speed: () -> number,
+    flock_heading_deg: () -> number,
+    flock_max_particles: () -> number,
+    flock_seed: () -> number,
+    flock_strength: () -> number,
+    flock_color: () -> (number, number, number),
+    flock_flying: () -> number,
+    -- every key optional, each value clamped to the field's range (migration_full, migration_end 0..0.5, manual, strength and
+    -- each colour channel 0..1, twilight_width 0.01..1, rate 0..60, box_xz_m 1..200, height_m 1..120, size_m 0.05..2,
+    -- lifetime_s 1..40, speed 0..40, heading_deg 0..360, max_particles 8..1024, seed 0..4294967295; enabled: any non-zero
+    -- number is 1); an unknown key or a non-number raises and nothing is written
+    set_flock: (settings: { enabled: number?, migration_full: number?, migration_end: number?, manual: number?, twilight_width: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, heading_deg: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {

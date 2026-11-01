@@ -370,6 +370,26 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Flock (M-BIRDFLOCK step 26c) lives in the same table: the authoring over the first kit::Flock (mce/kit/flock.h) and the
+// read-only flock_flying(). Named errors as above ("weather.set_flock: the scene has no Flock entity"); the setter never
+// adds the component. The getters are named weather.flock_<key>; the colour returns r, g, b. flock_flying() is
+// kit::flock_amount with the inputs the extract's flock block uses: the first Season at the first WorldClock's day and hour
+// (no Season is the manual floor), the sun height (sun_direction_at(time_of_day).y, or the unit Environment3D sun_direction's
+// y when time_of_day is negative) and the first Weather's rain intensity while it rains or storms. 0 when `enabled` or
+// `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.flock_enabled() / flock_migration_full() / flock_migration_end() / flock_manual() / flock_twilight_width() /
+//   weather.flock_rate() / flock_box_xz_m() / flock_height_m() / flock_size_m() / flock_lifetime_s() / flock_speed() /
+//   weather.flock_heading_deg() / flock_max_particles() / flock_seed() / flock_strength() -> number
+//   weather.flock_color() -> r, g, b
+//   weather.flock_flying() -> number              0..1, the flock amount now
+//   weather.set_flock{enabled=, migration_full=, migration_end=, manual=, twilight_width=, rate=, box_xz_m=, height_m=,
+//                     size_m=, lifetime_s=, speed=, heading_deg=, color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/flock.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -419,6 +439,7 @@
 #include "mce/kit/firefly.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -2069,6 +2090,121 @@ int l_weather_set_dust(lua_State* L) {
     return 0;
 }
 
+// ---- Flock (M-BIRDFLOCK step 26c) ----
+
+kit::Flock& check_flock(lua_State* L, const char* fn) { return check_first<kit::Flock>(L, fn, "Flock"); }
+
+#define MCE_WEATHER_GETTER_FLOCK(luaname, field)                                                        \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_flock(L, "weather." #luaname).field));                \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_FLOCK(flock_enabled, enabled)
+MCE_WEATHER_GETTER_FLOCK(flock_migration_full, migration_full)
+MCE_WEATHER_GETTER_FLOCK(flock_migration_end, migration_end)
+MCE_WEATHER_GETTER_FLOCK(flock_manual, manual)
+MCE_WEATHER_GETTER_FLOCK(flock_twilight_width, twilight_width)
+MCE_WEATHER_GETTER_FLOCK(flock_rate, rate)
+MCE_WEATHER_GETTER_FLOCK(flock_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_FLOCK(flock_height_m, height_m)
+MCE_WEATHER_GETTER_FLOCK(flock_size_m, size_m)
+MCE_WEATHER_GETTER_FLOCK(flock_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_FLOCK(flock_speed, speed)
+MCE_WEATHER_GETTER_FLOCK(flock_heading_deg, heading_deg)
+MCE_WEATHER_GETTER_FLOCK(flock_max_particles, max_particles)
+MCE_WEATHER_GETTER_FLOCK(flock_seed, seed)
+MCE_WEATHER_GETTER_FLOCK(flock_strength, strength)
+#undef MCE_WEATHER_GETTER_FLOCK
+
+int l_weather_flock_color(lua_State* L) { return push_season_tint(L, check_flock(L, "weather.flock_color").color); }
+
+// weather.flock_flying(): kit::flock_amount with the inputs the extract's flock block uses: the first Season at the first
+// WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the sun height as the extract
+// resolves it (the day-night sun at Environment3D.time_of_day, or the y of the unit sun_direction when time_of_day is
+// negative; high noon when neither is usable) and the first Weather's rain intensity while it rains or storms.
+int l_weather_flock_flying(lua_State* L) {
+    const kit::Flock& fl = check_flock(L, "weather.flock_flying");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    kit::Environment3D env;
+    if (const kit::Environment3D* res = w.try_resource<kit::Environment3D>()) {
+        env = *res;
+    } else {
+        bool found = false;
+        w.query<const kit::Environment3D&>().each([&](const kit::Environment3D& c) {
+            if (found) return;
+            found = true;
+            env = c;
+        });
+    }
+    f32 sun_y = 1.0f;
+    if (env.time_of_day >= 0.0f) {
+        sun_y = render::sun_direction_at(env.time_of_day).y;
+    } else {
+        const f32 len = std::sqrt(env.sun_direction.x * env.sun_direction.x + env.sun_direction.y * env.sun_direction.y +
+                                  env.sun_direction.z * env.sun_direction.z);
+        if (len > 0.0f) sun_y = env.sun_direction.y / len;
+    }
+    const kit::Weather* wx = first_weather(w);
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    f32 amount = kit::flock_amount(fl, season, phase, sun_y, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_flock{...}: validated before anything is written.
+int l_weather_set_flock(lua_State* L) {
+    static const char* const kKeys[16] = {"enabled", "migration_full", "migration_end", "manual", "twilight_width", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "heading_deg", "color", "max_particles", "seed", "strength"};
+    f64 value[16] = {};
+    bool given[16] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_flock", kKeys, 16, "enabled, migration_full, migration_end, manual, twilight_width, rate, box_xz_m, height_m, size_m, lifetime_s, speed, heading_deg, color, max_particles, seed, strength",
+                  value, given, 12, color);
+    kit::Flock& fl = check_flock(L, "weather.set_flock");
+    if (given[0]) fl.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) fl.migration_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) fl.migration_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) fl.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) fl.twilight_width = static_cast<f32>(clamp_range(value[4], 0.01, 1.0));
+    if (given[5]) fl.rate = static_cast<f32>(clamp_range(value[5], 0.0, 60.0));
+    if (given[6]) fl.box_xz_m = static_cast<f32>(clamp_range(value[6], 1.0, 200.0));
+    if (given[7]) fl.height_m = static_cast<f32>(clamp_range(value[7], 1.0, 120.0));
+    if (given[8]) fl.size_m = static_cast<f32>(clamp_range(value[8], 0.05, 2.0));
+    if (given[9]) fl.lifetime_s = static_cast<f32>(clamp_range(value[9], 1.0, 40.0));
+    if (given[10]) fl.speed = static_cast<f32>(clamp_range(value[10], 0.0, 40.0));
+    if (given[11]) fl.heading_deg = static_cast<f32>(clamp_range(value[11], 0.0, 360.0));
+    if (given[12]) {
+        fl.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        fl.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        fl.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[13]) fl.max_particles = static_cast<u32>(clamp_range(value[13], 8.0, 1024.0));
+    if (given[14]) fl.seed = static_cast<u32>(clamp_range(value[14], 0.0, 4294967295.0));
+    if (given[15]) fl.strength = static_cast<f32>(clamp_range(value[15], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2492,6 +2628,24 @@ const luaL_Reg kWeatherLib[] = {
     {"dust_color", l_weather_dust_color},
     {"dust_blowing", l_weather_dust_blowing},
     {"set_dust", l_weather_set_dust},
+    {"flock_enabled", l_weather_flock_enabled},
+    {"flock_migration_full", l_weather_flock_migration_full},
+    {"flock_migration_end", l_weather_flock_migration_end},
+    {"flock_manual", l_weather_flock_manual},
+    {"flock_twilight_width", l_weather_flock_twilight_width},
+    {"flock_rate", l_weather_flock_rate},
+    {"flock_box_xz_m", l_weather_flock_box_xz_m},
+    {"flock_height_m", l_weather_flock_height_m},
+    {"flock_size_m", l_weather_flock_size_m},
+    {"flock_lifetime_s", l_weather_flock_lifetime_s},
+    {"flock_speed", l_weather_flock_speed},
+    {"flock_heading_deg", l_weather_flock_heading_deg},
+    {"flock_max_particles", l_weather_flock_max_particles},
+    {"flock_seed", l_weather_flock_seed},
+    {"flock_strength", l_weather_flock_strength},
+    {"flock_color", l_weather_flock_color},
+    {"flock_flying", l_weather_flock_flying},
+    {"set_flock", l_weather_set_flock},
     {nullptr, nullptr},
 };
 

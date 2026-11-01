@@ -32,5 +32,5 @@ No step needs Opus: nothing writes a shader. If 26b finds that a dark alpha-blen
 |---|---|---|---|
 | 26a | done | 979 | `Flock` and the pure `flock_amount`, `flock_look` in `mce/kit/flock.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19x. |
 | 26b | done | 980 | Extract feed: one local alpha-blended emitter (id `0xFFFF0005`) from `flock_look`, Low tier halving; `tests/kit/test_flock_extract.cpp`. Guide 9.19x. |
-| 26c | planned | | |
+| 26c | done | 981 | `weather.set_flock`, the `weather.flock_<key>()` getters and read-only `weather.flock_flying()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_flock.cpp`. `12_weather` logs `flock:` every 150 ticks. |
 | 26d | planned | | |
