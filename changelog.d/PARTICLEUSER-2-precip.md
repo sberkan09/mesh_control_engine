@@ -1,0 +1,1 @@
+- M-PARTICLEUSER 29b: the weather rain and snow emitter (a ParticleEmitter3D with Precipitation3D) keeps `particle_scale` of its rate and budget in `Kit3DExtract`, render-side only; Low now halves rain and snow too.
