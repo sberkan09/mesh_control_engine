@@ -27,7 +27,7 @@ No step needs Opus: nothing writes a shader.
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 29a | done | 997 | `r.particles` (saved, 0..1) multiplies the tier's `particle_scale` in `quality_settings`. |
-| 29b | done | 998 | Applied in `Kit3DExtract`, not in `precipitation.cpp` (the system writes hashed state). |
+| 29b | done | 999 | Applied in `Kit3DExtract`, not in `precipitation.cpp` (the system writes hashed state). |
 | 29c | planned | | |
 
 ## Follow-ups
