@@ -294,3 +294,29 @@ TEST_CASE("FR-INP-040: bad and stale binding files") {
     in.push_event(key_event(Key::K, true, in_tick(1)));  // code 14 = K
     CHECK(in.sample_for_tick(1).jump_pressed);
 }
+
+TEST_CASE("FR-INP-040: cancel_rebind ends a waiting capture and leaves a finished one alone") {
+    InputSystem in;
+    test::setup_default(in);
+    in.sample_for_tick(1);
+    CHECK(in.rebind_state() == RebindState::Idle);
+    in.cancel_rebind();  // nothing to cancel
+    CHECK(in.rebind_state() == RebindState::Idle);
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.cancel_rebind();
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+    // The next press acts normally: nothing is swallowed and nothing is recorded.
+    in.push_event(key_event(Key::K, true, in_tick(2)));
+    in.sample_for_tick(2);
+    CHECK(in.binding_overrides().empty());
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    in.push_event(key_event(Key::K, false, in_tick(3)));
+    in.push_event(key_event(Key::L, true, in_tick(3)));
+    in.sample_for_tick(3);
+    REQUIRE(in.rebind_state() == RebindState::Captured);
+    in.cancel_rebind();  // a captured result is not a waiting capture
+    CHECK(in.rebind_state() == RebindState::Captured);
+}

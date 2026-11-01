@@ -169,3 +169,20 @@ TEST_CASE("M-ACCESS: one-hand presets move the keyboard to one side and persist 
     in.apply_hand_preset(Hand::Both);
     CHECK(in.binding_overrides().empty());
 }
+
+TEST_CASE("toggle: clear_toggles turns every toggle action back into a plain hold") {
+    InputSystem in;
+    test::setup_default(in);
+    in.set_toggle(MCE_SID("Jump"), true);
+    in.set_toggle(MCE_SID("Fire"), true);
+    CHECK(in.is_toggle(MCE_SID("Jump")));
+    CHECK(in.is_toggle(MCE_SID("Fire")));
+    in.clear_toggles();
+    CHECK_FALSE(in.is_toggle(MCE_SID("Jump")));
+    CHECK_FALSE(in.is_toggle(MCE_SID("Fire")));
+
+    in.push_event(key_event(Key::Space, true, at_tick(1)));
+    CHECK(in.sample_for_tick(1).jump_held);
+    in.push_event(key_event(Key::Space, false, at_tick(2)));
+    CHECK_FALSE(in.sample_for_tick(2).jump_held);  // let go: no longer held
+}
