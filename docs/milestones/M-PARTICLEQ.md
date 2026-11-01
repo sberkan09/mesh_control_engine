@@ -33,6 +33,6 @@ No step needs Opus: nothing writes a shader.
 ## Follow-ups
 
 None blocks the milestone.
-- A user-facing `r.particles` console variable (a phone could trade particles for frame time without changing the tier); the knob is `QualitySettings::particle_scale`, so it is one `MCE_CVAR` and one multiply in `quality_settings`.
+- Done by M-PARTICLEUSER 29a: a user-facing `r.particles` console variable (a phone could trade particles for frame time without changing the tier); the knob is `QualitySettings::particle_scale`, so it is one `MCE_CVAR` and one multiply in `quality_settings`.
 - A non-zero Medium value (for example 0.75 on a phone-class Medium) once a real device measurement says the weather particles cost frame time.
-- The weather rain and snow particles are drawn by the precipitation path, not the six opt-in emitters, and still use their own budget; routing them through `particle_scale` is open.
+- The weather rain and snow particles are drawn by the precipitation path, not the six opt-in emitters, and still use their own budget; routing them through `particle_scale` is done by M-PARTICLEUSER 29b (in the extract, not the system).

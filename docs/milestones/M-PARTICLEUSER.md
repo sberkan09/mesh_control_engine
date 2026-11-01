@@ -1,6 +1,6 @@
 # M-PARTICLEUSER — A user-facing particle knob: `r.particles` scales every weather particle, rain and snow included (milestone record)
 
-**Status:** in progress (2026-11-01), steps 29a to 29c; 29a, 29b done. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of [M-PARTICLEQ](M-PARTICLEQ.md), whose Follow-ups list a user-facing `r.particles` console variable and routing the rain and snow precipitation through `particle_scale`. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 29a to 29c (PRs 996, 997, 999, 1000). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of [M-PARTICLEQ](M-PARTICLEQ.md), whose Follow-ups list a user-facing `r.particles` console variable and routing the rain and snow precipitation through `particle_scale`. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** A player (or a phone profile) can trade particles for frame time without changing the whole tier: one saved console variable `r.particles` (0..1, default 1) multiplies `QualitySettings::particle_scale`. The weather rain and snow emitters (`precipitation.cpp`) read the same scale, so Low also lightens a storm, which the six opt-in emitters already do.
 
@@ -28,7 +28,7 @@ No step needs Opus: nothing writes a shader.
 |---|---|---|---|
 | 29a | done | 997 | `r.particles` (saved, 0..1) multiplies the tier's `particle_scale` in `quality_settings`. |
 | 29b | done | 999 | Applied in `Kit3DExtract`, not in `precipitation.cpp` (the system writes hashed state). |
-| 29c | planned | | |
+| 29c | done | 1000 | User guide paragraph (`r.particles`, rain and snow); the M-PARTICLEQ follow-ups closed. |
 
 ## Follow-ups
 
