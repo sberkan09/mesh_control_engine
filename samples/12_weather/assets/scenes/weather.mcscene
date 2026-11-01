@@ -101,6 +101,9 @@
     "Flock": {
      "manual": 0.4
     },
+    "Butterfly": {
+     "manual": 0.4
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

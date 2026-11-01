@@ -30,7 +30,7 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 27a | planned | | |
+| 27a | done | 985 | `Butterfly` and the pure `butterfly_amount`, `butterfly_look` in `mce/kit/butterfly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19y. |
 | 27b | planned | | |
 | 27c | planned | | |
 | 27d | planned | | |
