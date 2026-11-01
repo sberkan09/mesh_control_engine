@@ -30,7 +30,7 @@ No step needs Opus: nothing writes a shader. If 26b finds that a dark alpha-blen
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 26a | planned | | |
+| 26a | done | 978 | `Flock` and the pure `flock_amount`, `flock_look` in `mce/kit/flock.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19x. |
 | 26b | planned | | |
 | 26c | planned | | |
 | 26d | planned | | |

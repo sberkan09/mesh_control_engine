@@ -98,6 +98,9 @@
     "Dust": {
      "manual": 0.4
     },
+    "Flock": {
+     "manual": 0.4
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
