@@ -132,11 +132,18 @@ constexpr u32 kFlockEmitterId = 0xFFFF0005u;
 // Summer butterflies (M-BUTTERFLY 27b): the id of the sixth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
 
-// QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
-// step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
-bool is_low_quality(const render::QualitySettings& q) {
-    const render::QualitySettings low = render::quality_settings(render::QualityTier::Low);
-    return q.msaa == low.msaa && q.gi_updates == low.gi_updates && q.volumetrics == low.volumetrics;
+// M-PARTICLEQ 28b: the share of rate and budget a render-side weather emitter keeps (QualitySettings::particle_scale),
+// clamped to [0, 1]; NaN reads as 1.
+f32 particle_scale_of(const render::QualitySettings& q) {
+    const f32 s = q.particle_scale;
+    if (!(s == s)) return 1.0f;
+    return std::clamp(s, 0.0f, 1.0f);
+}
+
+// The emitter budget under a particle scale: unchanged at 1, else floor(budget * scale) and at least 1 (0.5 halves).
+u32 scaled_budget(u32 budget, f32 scale) {
+    if (scale >= 1.0f) return budget;
+    return std::max(static_cast<u32>(static_cast<f32>(budget) * scale), 1u);
 }
 
 // Water ice (M-FREEZE 20b): the first WaterIce at the first Season's phase (day 0, hour 0 with no WorldClock; no Season is
@@ -2132,18 +2139,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 const f32 wind = leaf_weather ? effective_wind(*leaf_weather, leaf_gust, kGustSway) : 0.0f;
                 const math::vec2 wdir = leaf_weather && leaf_wd ? wind_direction_vector(*leaf_wd) : math::vec2{1.0f, 0.0f};
                 const LeafFallLook look = leaf_fall_look(*leaf, amount, wind, wdir, season_foliage_tint(leaf_season, phase));
-                if (look.active) {
-                    const bool low = is_low_quality(quality_);  // no particle hook in QualitySettings: Low halves rate and budget
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
                     render::ParticleEmitter em;
                     em.id = kLeafFallEmitterId;
                     em.max_particles = std::clamp(leaf->max_particles, 64u, 8192u);
-                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = leaf->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
-                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.rate = look.rate * pscale;
                     em.burst = 0;
                     em.emitting = true;
                     em.speed_min = look.speed_min;
@@ -2202,18 +2209,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             const f32 cloud = scene.clouds().coverage;  // post-apply_quality, as the meteor block reads it
             const f32 amount = firefly_amount(*ff, ff_season, phase, night_fade, cloud, rain);
             const FireflyLook look = firefly_look(*ff, amount);
-            if (look.active) {
-                const bool low = is_low_quality(quality_);
+            const f32 pscale = particle_scale_of(quality_);
+            if (look.active && pscale > 0.0f) {
                 render::ParticleEmitter em;
                 em.id = kFireflyEmitterId;
                 em.max_particles = std::clamp(ff->max_particles, 16u, 4096u);
-                if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                em.max_particles = scaled_budget(em.max_particles, pscale);
                 em.seed = ff->seed;
                 em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                 em.box = math::vec3{look.box, 0.0f, look.box};
                 em.direction = look.direction;
                 em.spread = look.spread;
-                em.rate = low ? look.rate * 0.5f : look.rate;
+                em.rate = look.rate * pscale;
                 em.burst = 0;
                 em.emitting = true;
                 em.speed_min = look.speed_min;
@@ -2282,18 +2289,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 const f32 wind = po_weather ? effective_wind(*po_weather, po_gust, kGustSway) : 0.0f;
                 const math::vec2 wdir = po_weather && po_wd ? wind_direction_vector(*po_wd) : math::vec2{1.0f, 0.0f};
                 const PollenLook look = pollen_look(*po, amount, wind, wdir);
-                if (look.active) {
-                    const bool low = is_low_quality(quality_);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
                     render::ParticleEmitter em;
                     em.id = kPollenEmitterId;
                     em.max_particles = std::clamp(po->max_particles, 16u, 4096u);
-                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = po->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
-                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.rate = look.rate * pscale;
                     em.burst = 0;
                     em.emitting = true;
                     em.speed_min = look.speed_min;
@@ -2341,18 +2348,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 });
                 const math::vec2 wdir = du_weather && du_wd ? wind_direction_vector(*du_wd) : math::vec2{1.0f, 0.0f};
                 const DustLook look = dust_look(*du, amount, wind, wdir);
-                if (look.active) {
-                    const bool low = is_low_quality(quality_);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
                     render::ParticleEmitter em;
                     em.id = kDustEmitterId;
                     em.max_particles = std::clamp(du->max_particles, 16u, 4096u);
-                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = du->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
-                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.rate = look.rate * pscale;
                     em.burst = 0;
                     em.emitting = true;
                     em.speed_min = look.speed_min;
@@ -2412,18 +2419,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             const f32 amount = flock_amount(*fl, fl_season, phase, sun_y, rain);
             if (amount > 0.0f) {
                 const FlockLook look = flock_look(*fl, amount);
-                if (look.active) {
-                    const bool low = is_low_quality(quality_);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
                     render::ParticleEmitter em;
                     em.id = kFlockEmitterId;
                     em.max_particles = std::clamp(fl->max_particles, 16u, 1024u);
-                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = fl->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
-                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.rate = look.rate * pscale;
                     em.burst = 0;
                     em.emitting = true;
                     em.speed_min = look.speed_min;
@@ -2488,18 +2495,18 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             const f32 amount = butterfly_amount(*bf, bf_season, phase, night_fade, wind, rain);
             if (amount > 0.0f) {
                 const ButterflyLook look = butterfly_look(*bf, amount);
-                if (look.active) {
-                    const bool low = is_low_quality(quality_);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
                     render::ParticleEmitter em;
                     em.id = kButterflyEmitterId;
                     em.max_particles = std::clamp(bf->max_particles, 8u, 512u);
-                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = bf->seed;
                     em.position = scene.view().position;
                     em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
-                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.rate = look.rate * pscale;
                     em.burst = 0;
                     em.emitting = true;
                     em.speed_min = look.speed_min;

@@ -318,3 +318,23 @@ TEST_CASE("butterfly extract: the Low tier halves the rate and the budget") {
     CHECK(butterfly_of(low)->max_particles == butterfly_of(high)->max_particles / 2u);
     CHECK(low.stat == 1);
 }
+
+TEST_CASE("butterfly extract: a hand-set particle_scale on a Medium tier scales the rate and the budget, 0 adds none") {
+    Rig r;
+    r.add_butterfly();
+    summer_day(r);
+    render::QualitySettings q = render::quality_settings(render::QualityTier::Medium);
+    r.extract.set_quality(q);
+    const Shot full = r.frame();
+    REQUIRE(butterfly_of(full) != nullptr);
+    q.particle_scale = 0.25f;
+    r.extract.set_quality(q);
+    const Shot quarter = r.frame();
+    REQUIRE(butterfly_of(quarter) != nullptr);
+    CHECK(butterfly_of(quarter)->rate == doctest::Approx(0.25f * butterfly_of(full)->rate));
+    CHECK(butterfly_of(quarter)->max_particles == butterfly_of(full)->max_particles / 4u);
+    q.particle_scale = 0.0f;
+    r.extract.set_quality(q);
+    const Shot none = r.frame();
+    CHECK(butterfly_of(none) == nullptr);
+}
