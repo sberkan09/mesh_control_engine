@@ -61,6 +61,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.aurora = false;
             q.rainbow = false;
             q.meteor = false;
+            q.particle_scale = 0.5f;
             break;
         case QualityTier::Medium:
             q = QualitySettings{2, 1024, 2, true, false, 0.85f};

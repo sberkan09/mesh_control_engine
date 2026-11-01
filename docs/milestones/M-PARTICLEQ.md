@@ -26,6 +26,6 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 28a | planned | | |
+| 28a | done | 992 | |
 | 28b | planned | | |
 | 28c | planned | | |
