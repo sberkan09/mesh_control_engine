@@ -14,6 +14,7 @@
 #include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/dust.h"
+#include "mce/kit/flock.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
@@ -125,6 +126,8 @@ constexpr u32 kPollenEmitterId = 0xFFFF0003u;
 
 // Wind-blown dust (M-DUSTWIND 25b): the id of the fourth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kDustEmitterId = 0xFFFF0004u;
+// Bird flocks (M-BIRDFLOCK 26b): the id of the fifth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kFlockEmitterId = 0xFFFF0005u;
 
 // QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
 // step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
@@ -2342,6 +2345,77 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = std::clamp(du->max_particles, 16u, 4096u);
                     if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
                     em.seed = du->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // flock (M-BIRDFLOCK 26b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Flock* fl = nullptr;
+        world.query<const Flock&>().each([&](const Flock& c) {
+            if (!fl) fl = &c;
+        });
+        if (fl && fl->enabled != 0 && fl->strength > 0.0f) {
+            const Season* fl_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!fl_season) fl_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = fl_season ? season_phase(*fl_season, day, hour) : 0.0f;
+            const Weather* fl_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!fl_weather) fl_weather = &c;
+            });
+            const bool raining =
+                fl_weather && (fl_weather->current == WeatherKind::Rain || fl_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? fl_weather->intensity : 0.0f;
+            // The sun height as the sun block resolves it: the day clock when time_of_day >= 0, else the environment's fixed
+            // sun_direction (its y, normalised). The twilight gate uses |y|, so the sign convention does not matter.
+            const Environment3D fl_env = resolve_environment(world);
+            f32 sun_y = 1.0f;
+            if (fl_env.time_of_day >= 0.0f) {
+                sun_y = render::sun_direction_at(fl_env.time_of_day).y;
+            } else if (length(fl_env.sun_direction) > 0.0f) {
+                sun_y = normalize(fl_env.sun_direction).y;
+            }
+            const f32 amount = flock_amount(*fl, fl_season, phase, sun_y, rain);
+            if (amount > 0.0f) {
+                const FlockLook look = flock_look(*fl, amount);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kFlockEmitterId;
+                    em.max_particles = std::clamp(fl->max_particles, 16u, 1024u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = fl->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
                     em.direction = look.direction;
