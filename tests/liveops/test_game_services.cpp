@@ -392,3 +392,13 @@ TEST_CASE("game services: replays hold with no provider and no file writes") {
         CHECK_FALSE(save::exists("game_services"));
     }
 }
+
+TEST_CASE("game services: game_services_event_name names every event kind") {
+    using K = GameServicesEventKind;
+    const std::pair<K, const char*> all[] = {
+        {K::SignedIn, "SignedIn"},         {K::SignedOut, "SignedOut"},         {K::AchievementSent, "AchievementSent"},
+        {K::ScoreSent, "ScoreSent"},       {K::CloudSaved, "CloudSaved"},       {K::CloudLoaded, "CloudLoaded"},
+        {K::CloudCurrent, "CloudCurrent"}, {K::CloudConflict, "CloudConflict"}, {K::Failed, "Failed"},
+    };
+    for (const auto& [kind, name] : all) CHECK(StringView(game_services_event_name(kind)) == StringView(name));
+}
