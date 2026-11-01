@@ -1,6 +1,6 @@
 # M-BUTTERFLY — Summer butterflies: bright specks fluttering low over the ground by day in warm, calm, dry weather, with no shader (milestone record)
 
-**Status:** planned (2026-11-01), steps 27a to 27d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-POLLEN, M-FIREFLIES and M-BIRDFLOCK (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state) and M-SEASONS (`Season`, `season_phase`, summer centre 0.375). Spring has pollen, autumn has leaves and dusk has birds, but the middle of summer has nothing alive near the ground. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 27a to 27d (PRs 984, 985, 986, 987, 988). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-POLLEN, M-FIREFLIES and M-BIRDFLOCK (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state) and M-SEASONS (`Season`, `season_phase`, summer centre 0.375). Spring has pollen, autumn has leaves and dusk has birds, but the middle of summer has nothing alive near the ground. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Butterfly` turns the summer window (a circular trapezoid around the summer centre 0.375), daylight, calm wind and dry weather into a strength 0..1, with a manual floor for a scene that wants butterflies all year. Pure helpers turn the strength into an emitter look: a few small bright specks that drift slowly and erratically (wide spread, low speed, a little lift) in a low box around the camera. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** with the reserved id `0xFFFF0006u`, the same path rain, snow, leaves, fireflies, pollen, dust and the flock use. No new shader, pass, render field or system state; no component is written. A scene without `Butterfly` is bit-identical.
 
@@ -33,4 +33,12 @@ No step needs Opus: nothing writes a shader.
 | 27a | done | 985 | `Butterfly` and the pure `butterfly_amount`, `butterfly_look` in `mce/kit/butterfly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19y. |
 | 27b | done | 986 | Extract feed: one local alpha-blended emitter (id `0xFFFF0006`) from `butterfly_look`, Low tier halving; `tests/kit/test_butterfly_extract.cpp`. Guide 9.19y. |
 | 27c | done | 987 | `weather.set_butterfly`, the `weather.butterfly_<key>()` getters and read-only `weather.butterfly_flying()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_butterfly.cpp`. `12_weather` logs `butterfly:` every 150 ticks. Guide 9.19y. |
-| 27d | planned | | |
+| 27d | done | 988 | The `08-3d` "Butterflies flutter." paragraph; the milestone record closed with follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- The emitter box is centred on the camera (a half extent), so part of it lies below the camera; a box strictly above the ground (a ground-height query) is open.
+- A real GPU/windowed look at the bright alpha-blended specks against grass and sky (size, alpha; whether they read as butterflies) and wing flapping (needs per-particle animation or a render field).
+- Butterflies that land on flowers or react to the camera, and per-species colours.
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies, pollen, dust and the flock).
