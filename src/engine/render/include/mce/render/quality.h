@@ -11,7 +11,8 @@
 //   Low, height blend on Medium, height blend and triplanar on High
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
-//   screen-space reflections)
+//   screen-space reflections; M-PARTICLEQ 28a: particle_scale, the share of a weather emitter's rate and
+//   max_particles kept, is 0.5 on Low and 1 on Medium and High)
 //
 // Render scale shrinks the 3D targets (HDR, depth, bloom chain); the tonemap/FXAA pass upsamples
 // into the full-size output, so 2D and UI drawn afterwards stay sharp.
@@ -64,6 +65,9 @@ struct QualitySettings {
     bool rainbow = true;
     // M-METEOR 18b: meteors are honored (off: level 0, the frame without them). Low turns them off.
     bool meteor = true;
+    // M-PARTICLEQ 28a: the share of rate and max_particles a render-side weather emitter keeps (0..1); Low 0.5,
+    // Medium and High 1. No CVar. The weather particles read it in a later step (28b).
+    f32 particle_scale = 1.0f;
     // M-TERRAIN: the screen error, in pixels, a terrain LOD node may show before a finer one replaces
     // it (TerrainSelectParams::pixel_error; a Terrain3D's own pixel_error wins when set).
     f32 terrain_pixel_error = 1.0f;
