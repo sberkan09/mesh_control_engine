@@ -133,3 +133,17 @@ TEST_CASE("input script: Touch puts a finger down and lifts it, Mouse moves the 
     CHECK(s.evaluate(6).touch_points().size() == 0);
     CHECK(!s.state().pressed(MCE_SID("Point")));
 }
+
+TEST_CASE("input script: clear_segments drops the segments and the script takes new ones") {
+    InputScript s;
+    REQUIRE(s.add("Jump", 1, 5));
+    REQUIRE(s.add("Fire", 2, 3));
+    CHECK_FALSE(s.empty());
+    CHECK(s.segments().size() == 2);
+    s.clear_segments();
+    CHECK(s.empty());
+    CHECK(s.segments().size() == 0);
+    REQUIRE(s.add("Jump", 9, 9));
+    CHECK(s.segments().size() == 1);
+    CHECK(s.segments()[0].from == 9);
+}
