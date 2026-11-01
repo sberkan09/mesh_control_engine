@@ -1,6 +1,6 @@
 # M-DUSTWIND — Wind-blown dust: tan specks streaming sideways past the camera in a strong dry wind, with no shader (milestone record)
 
-**Status:** planned (2026-11-01), steps 25a to 25d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-POLLEN and M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-WINDDIR and M-WINDGUST (`effective_wind`, `wind_direction_vector`) and M-WEATHER (`Weather` wind and rain). A strong wind bends the trees and the rain today, but on a dry day nothing in the air shows it. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 25a to 25d (PRs 970, 971, 973, 975, 976). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-POLLEN and M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-WINDDIR and M-WINDGUST (`effective_wind`, `wind_direction_vector`) and M-WEATHER (`Weather` wind and rain). A strong wind bends the trees and the rain today, but on a dry day nothing in the air shows it. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Dust` turns the scene wind strength (0..1) and dry weather into a strength 0..1: none below `wind_start`, full at `wind_full`, none in rain, with a manual floor for a desert scene. Pure helpers turn the strength into an emitter look: a fast sideways stream along the wind direction, a short lifetime and a small alpha-blended tan speck. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** with the reserved id `0xFFFF0004u`, in a wide low box around the camera, the same path rain, snow, leaves, fireflies and pollen use. No new shader, pass, render field or system state; no component is written. A scene without `Dust` is bit-identical.
 
@@ -33,4 +33,12 @@ No step needs Opus: nothing writes a shader.
 | 25a | done | 971 | `Dust` and the pure `dust_amount`, `dust_look` in `mce/kit/dust.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19w. |
 | 25b | done | 973 | Extract feed: one local alpha-blended emitter (id `0xFFFF0004`) from `dust_look`, Low tier halving; `tests/kit/test_dust_extract.cpp`. Guide 9.19w. |
 | 25c | done | 975 | `weather.set_dust`, the `weather.dust_<key>()` getters and read-only `weather.dust_blowing()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_dust.cpp`. `12_weather` logs `dust:` every 150 ticks. |
-| 25d | planned | | |
+| 25d | done | 976 | The `08-3d` "Dust blows." paragraph; the milestone record closed with follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- The 25a thresholds were first written in m/s while `Weather.wind` is 0..1; 25b moved them to the 0..1 scale (0.3 and 0.8). A wind speed in m/s (if the engine ever exposes one) would need its own conversion.
+- A real GPU/windowed look at the alpha-blended specks (size, alpha against the bright sky) and per-speck tumbling (needs a render field).
+- Dust that lifts from specific ground patches (desert, dry fields) instead of one box around the camera, and a sand-storm visibility or fog change.
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies and pollen).
