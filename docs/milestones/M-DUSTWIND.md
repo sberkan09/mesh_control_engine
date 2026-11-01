@@ -31,6 +31,6 @@ No step needs Opus: nothing writes a shader.
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 25a | done | 971 | `Dust` and the pure `dust_amount`, `dust_look` in `mce/kit/dust.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19w. |
-| 25b | done | 972 | Extract feed: one local alpha-blended emitter (id `0xFFFF0004`) from `dust_look`, Low tier halving; `tests/kit/test_dust_extract.cpp`. Guide 9.19w. |
+| 25b | done | 973 | Extract feed: one local alpha-blended emitter (id `0xFFFF0004`) from `dust_look`, Low tier halving; `tests/kit/test_dust_extract.cpp`. Guide 9.19w. |
 | 25c | planned | | |
 | 25d | planned | | |
