@@ -351,6 +351,25 @@
 //                                         is 1); an unknown key or a non-number raises an error that names the call and
 //                                         nothing is written
 //
+// Dust (M-DUSTWIND step 25c) lives in the same table: the authoring over the first kit::Dust (mce/kit/dust.h) and the
+// read-only dust_blowing(). Named errors as above ("weather.set_dust: the scene has no Dust entity"); the setter never adds
+// the component. The getters are named weather.dust_<key>; the colour returns r, g, b. dust_blowing() is kit::dust_amount
+// with the inputs the extract uses: the effective wind of the first Weather with the gust sway of the first WindGust (0
+// with no Weather) and the first Weather's rain intensity while it rains or storms. 0 when `enabled` or `strength` is 0.
+// The getters read the authoring even when `enabled` is 0.
+//
+//   weather.dust_enabled() / dust_wind_start() / dust_wind_full() / dust_manual() / dust_rate() / dust_box_xz_m() /
+//   weather.dust_height_m() / dust_size_m() / dust_lifetime_s() / dust_speed() / dust_wind_follow() /
+//   weather.dust_max_particles() / dust_seed() / dust_strength() -> number
+//   weather.dust_color() -> r, g, b
+//   weather.dust_blowing() -> number              0..1, the dust amount now
+//   weather.set_dust{enabled=, wind_start=, wind_full=, manual=, rate=, box_xz_m=, height_m=, size_m=, lifetime_s=,
+//                    speed=, wind_follow=, color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/dust.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -399,6 +418,7 @@
 #include "mce/kit/meteor.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/pollen.h"
+#include "mce/kit/dust.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -1968,6 +1988,87 @@ int l_weather_set_pollen(lua_State* L) {
     return 0;
 }
 
+// ---- Dust (M-DUSTWIND step 25c) ----
+
+kit::Dust& check_dust(lua_State* L, const char* fn) { return check_first<kit::Dust>(L, fn, "Dust"); }
+
+#define MCE_WEATHER_GETTER_DUST(luaname, field)                                                         \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_dust(L, "weather." #luaname).field));                 \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_DUST(dust_enabled, enabled)
+MCE_WEATHER_GETTER_DUST(dust_wind_start, wind_start)
+MCE_WEATHER_GETTER_DUST(dust_wind_full, wind_full)
+MCE_WEATHER_GETTER_DUST(dust_manual, manual)
+MCE_WEATHER_GETTER_DUST(dust_rate, rate)
+MCE_WEATHER_GETTER_DUST(dust_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_DUST(dust_height_m, height_m)
+MCE_WEATHER_GETTER_DUST(dust_size_m, size_m)
+MCE_WEATHER_GETTER_DUST(dust_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_DUST(dust_speed, speed)
+MCE_WEATHER_GETTER_DUST(dust_wind_follow, wind_follow)
+MCE_WEATHER_GETTER_DUST(dust_max_particles, max_particles)
+MCE_WEATHER_GETTER_DUST(dust_seed, seed)
+MCE_WEATHER_GETTER_DUST(dust_strength, strength)
+#undef MCE_WEATHER_GETTER_DUST
+
+int l_weather_dust_color(lua_State* L) { return push_season_tint(L, check_dust(L, "weather.dust_color").color); }
+
+// weather.dust_blowing(): kit::dust_amount with the inputs the extract's dust block uses: the first Weather's rain
+// intensity while it rains or storms and its effective wind with the gust sway of the first WindGust (calm, rain 0 with no
+// Weather).
+int l_weather_dust_blowing(lua_State* L) {
+    const kit::Dust& du = check_dust(L, "weather.dust_blowing");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    const kit::WindGust* gust = nullptr;
+    const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+    if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+            if (!gust) gust = &c;
+        });
+    }
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+    f32 amount = kit::dust_amount(du, wind, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_dust{...}: validated before anything is written.
+int l_weather_set_dust(lua_State* L) {
+    static const char* const kKeys[15] = {"enabled", "wind_start", "wind_full", "manual", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "wind_follow", "color", "max_particles", "seed", "strength"};
+    f64 value[15] = {};
+    bool given[15] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_dust", kKeys, 15, "enabled, wind_start, wind_full, manual, rate, box_xz_m, height_m, size_m, lifetime_s, speed, wind_follow, color, max_particles, seed, strength",
+                  value, given, 11, color);
+    kit::Dust& du = check_dust(L, "weather.set_dust");
+    if (given[0]) du.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) du.wind_start = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) du.wind_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) du.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) du.rate = static_cast<f32>(clamp_range(value[4], 0.0, 400.0));
+    if (given[5]) du.box_xz_m = static_cast<f32>(clamp_range(value[5], 1.0, 100.0));
+    if (given[6]) du.height_m = static_cast<f32>(clamp_range(value[6], 1.0, 20.0));
+    if (given[7]) du.size_m = static_cast<f32>(clamp_range(value[7], 0.01, 0.5));
+    if (given[8]) du.lifetime_s = static_cast<f32>(clamp_range(value[8], 0.5, 10.0));
+    if (given[9]) du.speed = static_cast<f32>(clamp_range(value[9], 0.0, 30.0));
+    if (given[10]) du.wind_follow = static_cast<f32>(clamp_range(value[10], 0.0, 2.0));
+    if (given[11]) {
+        du.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        du.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        du.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[12]) du.max_particles = static_cast<u32>(clamp_range(value[12], 16.0, 4096.0));
+    if (given[13]) du.seed = static_cast<u32>(clamp_range(value[13], 0.0, 4294967295.0));
+    if (given[14]) du.strength = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2374,6 +2475,23 @@ const luaL_Reg kWeatherLib[] = {
     {"pollen_color", l_weather_pollen_color},
     {"pollen_drifting", l_weather_pollen_drifting},
     {"set_pollen", l_weather_set_pollen},
+    {"dust_enabled", l_weather_dust_enabled},
+    {"dust_wind_start", l_weather_dust_wind_start},
+    {"dust_wind_full", l_weather_dust_wind_full},
+    {"dust_manual", l_weather_dust_manual},
+    {"dust_rate", l_weather_dust_rate},
+    {"dust_box_xz_m", l_weather_dust_box_xz_m},
+    {"dust_height_m", l_weather_dust_height_m},
+    {"dust_size_m", l_weather_dust_size_m},
+    {"dust_lifetime_s", l_weather_dust_lifetime_s},
+    {"dust_speed", l_weather_dust_speed},
+    {"dust_wind_follow", l_weather_dust_wind_follow},
+    {"dust_max_particles", l_weather_dust_max_particles},
+    {"dust_seed", l_weather_dust_seed},
+    {"dust_strength", l_weather_dust_strength},
+    {"dust_color", l_weather_dust_color},
+    {"dust_blowing", l_weather_dust_blowing},
+    {"set_dust", l_weather_set_dust},
     {nullptr, nullptr},
 };
 

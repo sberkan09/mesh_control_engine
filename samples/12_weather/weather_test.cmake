@@ -63,6 +63,11 @@
 #      in the dark (0.000 at tick 0 and through the rain and the storm up to the dawn at about 1500), opens with the sun
 #      (0.068 at 1650 in the storm, 0.251 at 1800, 0.380 at 1950) and the amount is the full floor 0.400 from tick 2100
 #      (the snow does not close it). The entity count stays 14.
+#  20. (M-DUSTWIND 25c) the "dust:" lines: weather.dust_blowing() of the Dust on the Weather entity (read only, the script
+#      writes nothing). The amount is max(manual 0.4, smoothstep of the gusted wind) times (1 - rain): the floor 0.400 in the
+#      clear, thinned by the rain (0.240 at tick 300, 0.040 at 600 at the rain's 0.9) and back to 0.240 at 900 and 0.359 at
+#      1200 as the rain fades, 0.359 / 0.398 / 0.359 in the gusty storm and snow wind (1200, 1500, 1800) and the full floor
+#      0.400 from tick 1950 on. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -138,6 +143,13 @@ string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen600 "${firs
 list(LENGTH pollen600 n_pollen600)
 if(NOT n_pollen600 EQUAL 4)
     message(FATAL_ERROR "expected 4 pollen lines in 600 ticks, got ${n_pollen600}")
+endif()
+expect("${first}" "script: dust: 0.400 at tick 0\n" "the dust is not at the manual floor in the clear")
+expect("${first}" "script: dust: 0.240 at tick 300\n" "the rain did not thin the dust")
+string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust600 "${first}")
+list(LENGTH dust600 n_dust600)
+if(NOT n_dust600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 dust lines in 600 ticks, got ${n_dust600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -227,6 +239,17 @@ string(REGEX MATCHALL "script: pollen: [0-9.]+ at tick [0-9]+" pollen2700 "${for
 list(LENGTH pollen2700 n_pollen2700)
 if(NOT n_pollen2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 pollen lines in 2700 ticks, got ${n_pollen2700}")
+endif()
+expect("${forecast}" "script: dust: 0.040 at tick 600\n" "the rain is not closing the dust at tick 600")
+expect("${forecast}" "script: dust: 0.240 at tick 900\n" "the dust did not recover as the rain faded")
+expect("${forecast}" "script: dust: 0.359 at tick 1200\n" "the gusty wind did not lift the dust")
+expect("${forecast}" "script: dust: 0.398 at tick 1500\n" "the storm wind and rain are wrong for the dust")
+expect("${forecast}" "script: dust: 0.359 at tick 1800\n" "the snow wind is wrong for the dust")
+expect("${forecast}" "script: dust: 0.400 at tick 2100\n" "the dust is not at the manual floor after the storm")
+string(REGEX MATCHALL "script: dust: [0-9.]+ at tick [0-9]+" dust2700 "${forecast}")
+list(LENGTH dust2700 n_dust2700)
+if(NOT n_dust2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 dust lines in 2700 ticks, got ${n_dust2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
