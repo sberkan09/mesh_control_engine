@@ -1,6 +1,6 @@
 # M-BIRDFLOCK — Bird flocks at dawn and dusk: dark specks crossing the high sky in spring and autumn, with no shader (milestone record)
 
-**Status:** planned (2026-11-01), steps 26a to 26d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DUSTWIND, M-POLLEN and M-FIREFLIES (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, spring centre 0.125 and autumn centre 0.625) and the day-night sun (`sun_direction_at`). The sky has a sun, a moon, stars, clouds, an aurora and meteors today, but nothing alive crosses it. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 26a to 26d (PRs 977, 979, 980, 981, 982). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DUSTWIND, M-POLLEN and M-FIREFLIES (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, spring centre 0.125 and autumn centre 0.625) and the day-night sun (`sun_direction_at`). The sky has a sun, a moon, stars, clouds, an aurora and meteors today, but nothing alive crosses it. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Flock` turns the migration seasons (a trapezoid around each of the two season centres), the twilight (the sun near the horizon, dawn or dusk) and dry weather into a strength 0..1, with a manual floor for a scene that wants birds all year. Pure helpers turn the strength into an emitter look: a few small dark specks that cross a wide, high box around the camera in a fixed authored heading, fast and straight, with a long lifetime. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** with the reserved id `0xFFFF0005u`, the same path rain, snow, leaves, fireflies, pollen and dust use. No new shader, pass, render field or system state; no component is written. A scene without `Flock` is bit-identical.
 
@@ -33,4 +33,11 @@ No step needs Opus: nothing writes a shader. If 26b finds that a dark alpha-blen
 | 26a | done | 979 | `Flock` and the pure `flock_amount`, `flock_look` in `mce/kit/flock.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19x. |
 | 26b | done | 980 | Extract feed: one local alpha-blended emitter (id `0xFFFF0005`) from `flock_look`, Low tier halving; `tests/kit/test_flock_extract.cpp`. Guide 9.19x. |
 | 26c | done | 981 | `weather.set_flock`, the `weather.flock_<key>()` getters and read-only `weather.flock_flying()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_flock.cpp`. `12_weather` logs `flock:` every 150 ticks. |
-| 26d | planned | | |
+| 26d | done | 982 | The `08-3d` "Flock crosses." paragraph; the milestone record closed with follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- A real GPU/windowed look at the dark alpha-blended specks against the dawn and dusk sky (size, alpha; whether they read as birds) and wing flapping or a V formation (needs per-particle motion or a render field).
+- Flocks that start from specific places (a lake, a roost) or turn with the camera, and bird calls (sound).
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies, pollen and dust).
