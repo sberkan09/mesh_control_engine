@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines and the "flock:" lines).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines and the "butterfly:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -101,5 +101,9 @@ function update()
         -- max(manual, migration) times the twilight gate (1 at the horizon sun, 0 by day and night) times the dryness
         -- (1 - rain intensity). Read only, the script writes nothing.
         mce.log(string.format("flock: %.3f at tick %d", weather.flock_flying(), t))
+        -- M-BUTTERFLY: the Butterfly on the Weather entity (manual 0.4, the floor of the amount). butterfly_flying is the kit
+        -- amount: max(manual, summer window) times the day gate (the Environment3D hour) times the calm gate (the wind) times
+        -- the dryness (1 - rain intensity). Read only, the script writes nothing.
+        mce.log(string.format("butterfly: %.3f at tick %d", weather.butterfly_flying(), t))
     end
 end

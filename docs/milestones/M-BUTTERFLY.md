@@ -32,5 +32,5 @@ No step needs Opus: nothing writes a shader.
 |---|---|---|---|
 | 27a | done | 985 | `Butterfly` and the pure `butterfly_amount`, `butterfly_look` in `mce/kit/butterfly.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19y. |
 | 27b | done | 986 | Extract feed: one local alpha-blended emitter (id `0xFFFF0006`) from `butterfly_look`, Low tier halving; `tests/kit/test_butterfly_extract.cpp`. Guide 9.19y. |
-| 27c | planned | | |
+| 27c | done | 987 | `weather.set_butterfly`, the `weather.butterfly_<key>()` getters and read-only `weather.butterfly_flying()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_butterfly.cpp`. `12_weather` logs `butterfly:` every 150 ticks. Guide 9.19y. |
 | 27d | planned | | |
