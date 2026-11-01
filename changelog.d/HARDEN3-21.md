@@ -1,0 +1,1 @@
+- Tests: the kit's `Rng::next_u32`, `WfcRules::allow_mask` and `camera_blend_weight` have tests of their own (the high half of `next_u64`, the mask against `allows`, the smoothstep and its two edge cases).

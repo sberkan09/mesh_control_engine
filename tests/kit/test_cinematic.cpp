@@ -342,3 +342,28 @@ TEST_CASE("cinematic: a ShakeTrigger shakes a 3D camera; reduced motion is the v
     for (u32 i = 0; i < 120; ++i) tick(w, t);
     CHECK(w.try_get<kit::CameraShake3D>(cam)->trauma == 0.0f);  // decayed
 }
+
+TEST_CASE("cinematic: camera_blend_weight is a smoothstep, 1 without a source or a duration") {
+    World w;
+    kit::CameraBlend3D b;
+    CHECK(kit::camera_blend_weight(b) == 1.0f);  // no `from`
+    b.from = w.spawn();
+    b.duration = 0.0f;
+    CHECK(kit::camera_blend_weight(b) == 1.0f);  // no duration
+    b.duration = 2.0f;
+    b.elapsed = 0.0f;
+    CHECK(kit::camera_blend_weight(b) == 0.0f);
+    b.elapsed = 1.0f;
+    CHECK(kit::camera_blend_weight(b) == doctest::Approx(0.5f));
+    b.elapsed = 2.0f;
+    CHECK(kit::camera_blend_weight(b) == 1.0f);
+    b.elapsed = 5.0f;
+    CHECK(kit::camera_blend_weight(b) == 1.0f);  // past the end stays at 1
+    b.elapsed = 0.5f;
+    const f32 early = kit::camera_blend_weight(b);
+    b.elapsed = 1.5f;
+    const f32 late = kit::camera_blend_weight(b);
+    CHECK(early < 0.25f);
+    CHECK(late > 0.75f);
+    CHECK(early + late == doctest::Approx(1.0f));  // symmetric
+}
