@@ -15,6 +15,7 @@
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
@@ -128,6 +129,8 @@ constexpr u32 kPollenEmitterId = 0xFFFF0003u;
 constexpr u32 kDustEmitterId = 0xFFFF0004u;
 // Bird flocks (M-BIRDFLOCK 26b): the id of the fifth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kFlockEmitterId = 0xFFFF0005u;
+// Summer butterflies (M-BUTTERFLY 27b): the id of the sixth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
 
 // QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
 // step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
@@ -2418,6 +2421,82 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.seed = fl->seed;
                     em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
                     em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // butterflies (M-BUTTERFLY 27b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Butterfly* bf = nullptr;
+        world.query<const Butterfly&>().each([&](const Butterfly& c) {
+            if (!bf) bf = &c;
+        });
+        if (bf && bf->enabled != 0 && bf->strength > 0.0f) {
+            const Season* bf_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!bf_season) bf_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = bf_season ? season_phase(*bf_season, day, hour) : 0.0f;
+            const Weather* bf_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!bf_weather) bf_weather = &c;
+            });
+            const bool raining =
+                bf_weather && (bf_weather->current == WeatherKind::Rain || bf_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? bf_weather->intensity : 0.0f;
+            // the night fade as the pollen block derives it; no clock (time_of_day < 0): 0
+            const Environment3D bf_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (bf_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(bf_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const WindGust* bf_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!bf_gust) bf_gust = &c;
+            });
+            // As the dust block: no Weather is calm, the gust sway bit.
+            const f32 wind = bf_weather ? effective_wind(*bf_weather, bf_gust, kGustSway) : 0.0f;
+            const f32 amount = butterfly_amount(*bf, bf_season, phase, night_fade, wind, rain);
+            if (amount > 0.0f) {
+                const ButterflyLook look = butterfly_look(*bf, amount);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kButterflyEmitterId;
+                    em.max_particles = std::clamp(bf->max_particles, 8u, 512u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = bf->seed;
+                    em.position = scene.view().position;
+                    em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
                     em.rate = low ? look.rate * 0.5f : look.rate;
