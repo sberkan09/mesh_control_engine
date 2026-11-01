@@ -83,6 +83,7 @@ mce_add_test(test_kit UMBRELLA
         test_leaf_fall.cpp
         test_firefly.cpp
         test_pollen.cpp
+        test_dust.cpp
         test_firefly_extract.cpp
         test_pollen_extract.cpp
         test_leaf_fall_extract.cpp

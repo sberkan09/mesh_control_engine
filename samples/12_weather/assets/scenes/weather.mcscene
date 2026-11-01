@@ -95,6 +95,9 @@
     "Pollen": {
      "manual": 0.4
     },
+    "Dust": {
+     "manual": 0.4
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,

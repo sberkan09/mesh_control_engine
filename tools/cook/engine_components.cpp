@@ -81,6 +81,7 @@
 #include "mce/kit/leaf_fall.h"            // LeafFall (M-LEAFFALL 21a)
 #include "mce/kit/firefly.h"              // Firefly (M-FIREFLIES 23a)
 #include "mce/kit/pollen.h"               // Pollen (M-POLLEN 24a)
+#include "mce/kit/dust.h"                 // Dust (M-DUSTWIND 25a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
