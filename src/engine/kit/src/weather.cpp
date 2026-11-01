@@ -25,6 +25,7 @@
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/pollen.h"
+#include "mce/kit/dust.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
@@ -293,6 +294,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<LeafFall>();    // M-LEAFFALL 21a: read by Kit3DExtract (21b) and the leaf helpers; no system
     world.register_components<Firefly>();     // M-FIREFLIES 23a: read by Kit3DExtract (23b) and the firefly helpers; no system
     world.register_components<Pollen>();      // M-POLLEN 24a: read by Kit3DExtract (24b) and the pollen helpers; no system
+    world.register_components<Dust>();        // M-DUSTWIND 25a: read by Kit3DExtract (25b) and the dust helpers; no system
     world.register_components<Season>();      // M-SEASONS 19a: read by Kit3DExtract (19b) and the season helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
