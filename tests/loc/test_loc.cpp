@@ -296,3 +296,45 @@ TEST_CASE("loc: the player's choice survives a relaunch") {
         CHECK(l.locale() == "en");
     }
 }
+
+TEST_CASE("loc: plural_form_name names every form and parse_plural_form reads it back") {
+    for (u8 i = 0; i <= static_cast<u8>(PluralForm::Other); ++i) {
+        const PluralForm f = static_cast<PluralForm>(i);
+        PluralForm back = f == PluralForm::Other ? PluralForm::Zero : PluralForm::Other;
+        REQUIRE(parse_plural_form(StringView(plural_form_name(f)), back));
+        CHECK(back == f);
+    }
+    CHECK(StringView(plural_form_name(PluralForm::One)) == StringView("one"));
+    CHECK(StringView(plural_form_name(PluralForm::Other)) == StringView("other"));
+    CHECK(StringView(plural_form_name(static_cast<PluralForm>(9))) == StringView("?"));
+    PluralForm f = PluralForm::Few;
+    CHECK_FALSE(parse_plural_form("lots", f));
+    CHECK(f == PluralForm::Few);  // a refused name leaves the output alone
+}
+
+TEST_CASE("loc: valid_key takes letters, digits, '_', '-' and '.', and nothing else") {
+    CHECK(valid_key("menu.start"));
+    CHECK(valid_key("A-b_c.9"));
+    CHECK_FALSE(valid_key(""));
+    CHECK_FALSE(valid_key("has space"));
+    CHECK_FALSE(valid_key("a#one"));  // '#' belongs to the plural suffix of a CSV row
+    CHECK_FALSE(valid_key("caf\xC3\xA9"));
+}
+
+TEST_CASE("loc: valid_utf8 refuses overlongs, surrogates, truncation and code points past U+10FFFF") {
+    CHECK(valid_utf8(""));
+    CHECK(valid_utf8("plain ascii"));
+    CHECK(valid_utf8("\xC3\xA7ok g\xC3\xBCzel"));  // two-byte letters
+    CHECK(valid_utf8("\xE2\x82\xAC"));             // U+20AC, three bytes
+    CHECK(valid_utf8("\xF0\x9F\x98\x80"));         // U+1F600, four bytes
+    CHECK(valid_utf8("\xF4\x8F\xBF\xBF"));         // U+10FFFF, the last one
+    CHECK_FALSE(valid_utf8("\xC0\x80"));           // overlong NUL
+    CHECK_FALSE(valid_utf8("\xE0\x80\x80"));       // overlong three-byte
+    CHECK_FALSE(valid_utf8("\xED\xA0\x80"));       // a surrogate (U+D800)
+    CHECK_FALSE(valid_utf8("\xF4\x90\x80\x80"));   // U+110000
+    CHECK_FALSE(valid_utf8("\xC3"));               // cut short
+    CHECK_FALSE(valid_utf8("\xE2\x82"));           // cut short
+    CHECK_FALSE(valid_utf8("\x80"));               // a continuation byte alone
+    CHECK_FALSE(valid_utf8("\xC3\x28"));           // a bad continuation
+    CHECK_FALSE(valid_utf8("\xFF"));
+}

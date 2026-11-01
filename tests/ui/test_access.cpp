@@ -137,3 +137,12 @@ TEST_CASE("M-ACCESS: a control in a labelled row says the row's label first (the
     access_line(access_node(doc, back), line);
     CHECK(line.view() == "Back, button");
 }
+
+TEST_CASE("access: access_role_name is what a reader says for every role") {
+    const std::pair<AccessRole, const char*> all[] = {
+        {AccessRole::Group, "group"},   {AccessRole::Text, "text"},     {AccessRole::Image, "image"},
+        {AccessRole::Button, "button"}, {AccessRole::Switch, "switch"}, {AccessRole::Slider, "slider"},
+        {AccessRole::Tab, "tab"},       {AccessRole::List, "list"},     {AccessRole::TextInput, "text field"},
+    };
+    for (const auto& [role, name] : all) CHECK(StringView(access_role_name(role)) == StringView(name));
+}
