@@ -17,6 +17,7 @@ threads fix what a round finds and write down here what the next round must chec
 | r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #498 (below) |
 | r5 (2026-10-17) | 70113c9 | BC vs RGBA re-measured on 04_diorama / 06_showcase (same numbers as r4) | analysis below, no code change |
 | parallel (2026-10-17) | d221a48, 0ad5735 | r4 checks pass (`parallax_cobble` 0 blocks, BC equal on both backends, sdlgpu `gpu_ms` 539/540); `ibl_roughness` NVIDIA-specific; sdlgpu 2D `gpu_ms` p50 about 0.001 ms; `editor_play_smoke` 0 ticks on the 4090; `player_capture_no_display`; BC `auto` misses most real normal maps | #506, #512, #521 (below) |
+| r6 (2026-11-01) | e57210d (master) | `ctest -L gpu` on both backends, goldens x3 on both backends, visual milestones (14_seasons, fireflies/pollen/dust/flock/butterfly in 12_weather, 13_water, 11_daynight, 09_openworld dusk and sky IBL) against llvmpipe: nothing engine-side failed. `06_showcase` 1080p budget measured. Two harness findings: GL needs `SDL_VIDEODRIVER=offscreen` for NVIDIA (Xvfb's GLX is Mesa), Vulkan needs a display (the NVIDIA ICD has no `VK_EXT_headless_surface`) | no code change; `scripts/ci/gpu_compare.py`, `scripts/ci/runpod_agent.sh` (below) |
 
 ## r4 findings
 
@@ -89,6 +90,35 @@ pick BC5 (pass fractions 0.56–1.00, most 0.89–0.99), while non-grey colour m
 90% would still miss `clay_block_wall` (0.8905), so the threshold is 85%: 13 of 14 (`forrest_ground_03`, 0.56, stays
 BC7). The grey rule runs first, so roughness and AO maps (up to 0.80) never reach it. The size gate (0.27 of RGBA8)
 counts the six textures of `05_ashen_court` only; the report's 0.381 is the whole pack and is not the gate's number.
+
+## r6 (2026-11-01): RTX 3070, master e57210d
+
+One community-cloud RTX 3070 (8 GB, driver 595.99.02, $0.13/h), about 55 minutes, terminated afterwards (`list-pods` empty). Started from a thread at Sami's request (the "coordinator starts pods" rule above was lifted for this round). Release (RelWithDebInfo) build with `MCE_GPU_TESTS=ON`: 2151 steps in 8 minutes on the pod's cores.
+
+**How to get the real GPU (the part nobody wrote down).** The pod image only needs `NVIDIA_DRIVER_CAPABILITIES=all`; then `libGLX_nvidia`, `libEGL_nvidia` and the Vulkan ICD (`/etc/vulkan/icd.d/nvidia_icd.json`) are mounted.
+- **GL:** `SDL_VIDEODRIVER=offscreen`. Under `xvfb-run` the GLX is Mesa and the run is llvmpipe again (`glxinfo` says so); the offscreen driver goes through NVIDIA's EGL (NVIDIA's GLSL compiler messages, `error C0000`, show it).
+- **sdlgpu (Vulkan):** `xvfb-run` plus `VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json` (else Mesa's lavapipe is also enumerated). `SDL_VIDEODRIVER=offscreen` does not work here: the NVIDIA ICD has no `VK_EXT_headless_surface`, so `SDL_ClaimWindowForGPUDevice` fails (`test_rhi_sdlgpu`, `test_render_sdlgpu`, `terrain_player_sdlgpu` fail under offscreen and pass under Xvfb).
+- Set `XDG_RUNTIME_DIR` (a writable dir), or Vulkan prints an error per call.
+
+**Results.**
+- `ctest -L gpu` (87 tests): GL offscreen 84 pass, the 3 failures are the sdlgpu tests above (config, not engine). sdlgpu under Xvfb with `MCE_RHI=sdlgpu` for the whole label: 84 pass; the 3 failures are `player_capture_no_display` (expects no display, the Xvfb run has one), `test_rhi_gl` (Xvfb GLX is Mesa) and `test_mcp_agent_gpu` (see open item). The r5 asks "`editor_play_smoke` and `player_capture_no_display` must pass" hold on GL offscreen.
+- `test_golden_gl` (47 cases, 739 assertions): 3 of 3 runs pass on GL and 3 of 3 on sdlgpu, 0 flakes.
+- Visual milestones, real GPU against llvmpipe, same pinned tick, 1280x720 (share of pixels differing by more than 12/255): `14_seasons` autumn 0.00%, winter 0.00%; `13_water` 0.00%; `11_daynight` 0.02%; `12_weather` (carries `Firefly`, `Pollen`, `Dust`, `Flock` and `Butterfly`) 0.05% at tick 120 and 600; `09_openworld` (dusk, sky IBL, auto exposure, #954) 0.07% at tick 600 and 0.01% at tick 1500. Every run exited 0 and drew a non-blank frame; GL error count 0. This says the real driver draws what the reference rasterizer draws; whether the specks read as birds or butterflies still needs a human look at a windowed run (the milestone records say so).
+- `06_showcase -sheet -sheet.w 1920 -sheet.h 1080` (1080p cells, means over the settled frames, GPU time):
+
+| 3D frame total (ms) | current | highbase | high | medium | low |
+|---|---|---|---|---|---|
+| GL (NVIDIA) | 1.01 | 3.53 | 3.71 | 2.79 | 0.88 |
+| sdlgpu (NVIDIA Vulkan) | 0.91 | 3.22 | 3.27 | 2.31 | 0.81 |
+
+  The biggest stages at High on GL: GI volume update 1.18, main pass 1.24, shadows 0.31, velocity + TAA 0.20, SSAO 0.16 (llvmpipe's order was shadows, main pass, GI, SSAO). High at 1080p is far under the 16.7 ms frame on a mid-range desktop GPU. The mobile tiers (Low and Medium on a phone) are still a device measurement.
+
+**Open items.**
+- `09_openworld` `-frames 180` capture (`openworld_sample_player_gpu`) is not renderer-independent: two runs on the same renderer repeat to the digit, but the GPU frame (mean RGB 54/63/36) and the llvmpipe frame (41/87/10) differ because the simulation tick reached at frame 180 depends on wall-clock catch-up. Pinned ticks agree (above). A test that wants a comparable frame should use `-capture_tick`. At tick 120 the two renderers differ by 6% of pixels (mean abs 2.2), not at 600 or 1500; probably auto-exposure adapting on wall-clock time, not checked further.
+- `test_mcp_agent_gpu` under `MCE_RHI=sdlgpu` on NVIDIA: `render_frame {software:true}` creates an offscreen window, which the NVIDIA Vulkan ICD cannot present to (no `VK_EXT_headless_surface`). The player reports a clean device-creation error, the test then stops on a failed `REQUIRE`. Not hit in the default GL route; a software render fallback for sdlgpu would need a different path (not planned).
+- Not done: Lantern Keep (364 MB zip, not on the pod), Metal, phones (cannot run on a Linux pod), 2D budgets FR-R2D-090/100 and the split-screen cost numbers (`kit3d_tour_split_views` passes, its `gpu_ms` was not measured).
+
+**Tools added.** `scripts/ci/gpu_compare.py <build> <ctest name>[@tick]...` runs a windowed capture test on the real GPU and on llvmpipe and prints mean colour, deviation and the differing-pixel share. `scripts/ci/runpod_agent.sh` is the pod entry used here: it installs the deps, prints a driver report and then runs `.runpod-jobs/<n>.sh` files it finds on its git branch in order (output in the pod log), and deletes the pod itself after `MCE_POD_MAX_HOURS` (4) if a thread forgot.
 
 ## Next round: what to check
 
