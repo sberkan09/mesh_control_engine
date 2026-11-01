@@ -62,9 +62,9 @@ Open items and risks (E1):
   minimap (M-MISSION). `FloatingOrigin3D` is not set: 1 km² never reaches its 1024 m threshold.
 - The whole city is one scene (buildings are not streamed in chunks yet); the navmesh covers only the middle blocks (police stay
   there). Police are on foot; no police cars, roadblocks or arrests (C3 open items).
-- Traffic-light visuals do not follow the light state; a dead pedestrian vanishes after 0.2 s (`Pedestrian3D` ignores `Health3D`):
-  a small kit PR (stop and ragdoll) is the fix.
-- The player does not face its movement (the engine has no facing component for `use_input` characters); the camera carries the gun.
+- Traffic-light visuals do not follow the light state. ~~A dead pedestrian vanishes after 0.2 s~~ done: a pedestrian with a dead
+  `Health3D` stops where it fell and is removed after `kPedestrianCorpseSeconds` (10 s, `crowd.h`).
+- ~~The player does not face its movement~~ done: `FaceVelocity3D` turns the model towards the velocity ([M-FACEMOVE](M-FACEMOVE.md)); the camera carries the gun.
 - Budget counters in `local_ci.sh` are not added: the sample has entity and cars/walkers counts in the MCP test only.
 
 ## Gates
