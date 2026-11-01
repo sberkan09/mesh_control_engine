@@ -36,6 +36,7 @@
 #include "mce/kit/pollen.h"
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
+#include "mce/kit/butterfly.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -116,6 +117,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Pollen>("Pollen", sizeof(Pollen::pad_));  // pollen.h (M-POLLEN 24a)
     expect_pad<Dust>("Dust", sizeof(Dust::pad_));  // dust.h (M-DUSTWIND 25a)
     expect_pad<Flock>("Flock", sizeof(Flock::pad_));  // flock.h (M-BIRDFLOCK 26a)
+    expect_pad<Butterfly>("Butterfly", sizeof(Butterfly::pad_));  // butterfly.h (M-BUTTERFLY 27a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

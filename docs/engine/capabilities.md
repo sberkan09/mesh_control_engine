@@ -42,6 +42,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/08_movement/assets/scenes/course.mcscene |
+| `Butterfly` | `mce/kit/butterfly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ChunkLod3D` | `mce/kit/chunk_lod3d.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 | `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
