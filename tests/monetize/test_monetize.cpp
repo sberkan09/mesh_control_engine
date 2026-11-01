@@ -413,3 +413,36 @@ TEST_CASE("replay: store and ad events replay to the same state hash with no pro
         CHECK_FALSE(save::exists("entitlements"));  // and nothing was persisted
     }
 }
+
+TEST_CASE("monetize: product types, ad formats and event kinds have stable names, and the names parse back") {
+    for (ProductType t : {ProductType::Consumable, ProductType::NonConsumable}) {
+        ProductType back = t == ProductType::Consumable ? ProductType::NonConsumable : ProductType::Consumable;
+        REQUIRE(parse_product_type(StringView(product_type_name(t)), back));
+        CHECK(back == t);
+    }
+    for (AdFormat f : {AdFormat::Rewarded, AdFormat::Interstitial, AdFormat::Banner}) {
+        AdFormat back = f == AdFormat::Banner ? AdFormat::Rewarded : AdFormat::Banner;
+        REQUIRE(parse_ad_format(StringView(ad_format_name(f)), back));
+        CHECK(back == f);
+    }
+    // A bad name is refused and leaves the output alone.
+    ProductType pt = ProductType::NonConsumable;
+    CHECK_FALSE(parse_product_type("Consumable", pt));  // case matters
+    CHECK_FALSE(parse_product_type("", pt));
+    CHECK(pt == ProductType::NonConsumable);
+    AdFormat af = AdFormat::Banner;
+    CHECK_FALSE(parse_ad_format("video", af));
+    CHECK(af == AdFormat::Banner);
+
+    CHECK(StringView(store_event_name(StoreEventKind::Purchased)) == StringView("Purchased"));
+    CHECK(StringView(store_event_name(StoreEventKind::RestoreFinished)) == StringView("RestoreFinished"));
+    CHECK(StringView(ad_event_name(AdEventKind::Rewarded)) == StringView("Rewarded"));
+    CHECK(StringView(ad_event_name(AdEventKind::NoFill)) == StringView("NoFill"));
+}
+
+TEST_CASE("monetize: the null providers report themselves unavailable") {
+    CHECK(StringView(null_store().name()) == StringView("none"));
+    CHECK(StringView(null_ads().name()) == StringView("none"));
+    CHECK_FALSE(null_store().available());
+    CHECK_FALSE(null_ads().available());
+}

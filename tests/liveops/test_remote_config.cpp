@@ -311,3 +311,16 @@ TEST_CASE("remote config: a recorded run replays to the same hash with no fetche
     }
     set_consent(Consent::Unknown);
 }
+
+TEST_CASE("remote config: config_type_name names every type") {
+    CHECK(StringView(config_type_name(ConfigType::Int)) == StringView("int"));
+    CHECK(StringView(config_type_name(ConfigType::Float)) == StringView("float"));
+    CHECK(StringView(config_type_name(ConfigType::Bool)) == StringView("bool"));
+    CHECK(StringView(config_type_name(ConfigType::String)) == StringView("string"));
+}
+
+TEST_CASE("liveops: consent_name names every consent state") {
+    CHECK(StringView(consent_name(Consent::Unknown)) == StringView("unknown"));
+    CHECK(StringView(consent_name(Consent::Granted)) == StringView("granted"));
+    CHECK(StringView(consent_name(Consent::Denied)) == StringView("denied"));
+}
