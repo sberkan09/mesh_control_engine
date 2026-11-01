@@ -13,6 +13,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
+#include "mce/kit/pollen.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/meteor.h"
@@ -117,6 +118,9 @@ constexpr u32 kLeafFallEmitterId = 0xFFFF0001u;
 
 // Fireflies (M-FIREFLIES 23b): the id of the second render-side emitter (same collision argument as the leaf id).
 constexpr u32 kFireflyEmitterId = 0xFFFF0002u;
+
+// Pollen (M-POLLEN 24b): the id of the third render-side emitter (same collision argument as the leaf id).
+constexpr u32 kPollenEmitterId = 0xFFFF0003u;
 
 // QualitySettings has no particle field (and there is no r.particles switch), and quality.h may not change in this
 // step, so the Low tier is recognised by the settings it alone sets (single sample, no GI updates, no volumetrics).
@@ -2216,6 +2220,87 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                 em.additive = true;
                 scene.add_particle_emitter(em);
                 ++stats_.particle_emitters;
+            }
+        }
+    }
+    {  // pollen (M-POLLEN 24b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Pollen* po = nullptr;
+        world.query<const Pollen&>().each([&](const Pollen& c) {
+            if (!po) po = &c;
+        });
+        if (po) {
+            const Season* po_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!po_season) po_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = po_season ? season_phase(*po_season, day, hour) : 0.0f;
+            const Weather* po_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!po_weather) po_weather = &c;
+            });
+            const bool raining =
+                po_weather && (po_weather->current == WeatherKind::Rain || po_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? po_weather->intensity : 0.0f;
+            // the night fade as the firefly block derives it; no clock (time_of_day < 0): 0
+            const Environment3D po_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (po_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(po_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const f32 amount = pollen_amount(*po, po_season, phase, night_fade, rain);
+            if (amount > 0.0f) {
+                const WindGust* po_gust = nullptr;
+                world.query<const WindGust&>().each([&](const WindGust& c) {
+                    if (!po_gust) po_gust = &c;
+                });
+                const WindDirection* po_wd = nullptr;
+                world.query<const WindDirection&>().each([&](const WindDirection& c) {
+                    if (!po_wd) po_wd = &c;
+                });
+                // As the leaf block: no Weather is calm, the gust sway bit, no WindDirection (or no Weather) is +x.
+                const f32 wind = po_weather ? effective_wind(*po_weather, po_gust, kGustSway) : 0.0f;
+                const math::vec2 wdir = po_weather && po_wd ? wind_direction_vector(*po_wd) : math::vec2{1.0f, 0.0f};
+                const PollenLook look = pollen_look(*po, amount, wind, wdir);
+                if (look.active) {
+                    const bool low = is_low_quality(quality_);
+                    render::ParticleEmitter em;
+                    em.id = kPollenEmitterId;
+                    em.max_particles = std::clamp(po->max_particles, 16u, 4096u);
+                    if (low) em.max_particles = std::max(em.max_particles / 2u, 1u);
+                    em.seed = po->seed;
+                    em.position = scene.view().position + math::vec3{0.0f, look.height, 0.0f};
+                    em.box = math::vec3{look.box, 0.0f, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = low ? look.rate * 0.5f : look.rate;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
             }
         }
     }
