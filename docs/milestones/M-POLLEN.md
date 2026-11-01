@@ -1,6 +1,6 @@
 # M-POLLEN — Spring pollen and dandelion seeds: pale specks drifting on the wind around the camera by day, from the season, with no shader (milestone record)
 
-**Status:** planned (2026-11-01), steps 24a to 24d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-FIREFLIES and M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, spring centre 0.125, `kSeasonSpringCentre`), M-WINDDIR and M-WINDGUST (`effective_wind`, `wind_direction_vector`) and M-WEATHER (`Weather` rain). Spring is a foliage tint today and nothing floats in the air. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-01), steps 24a to 24d (PRs 965, 967, 968, 969). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-FIREFLIES and M-LEAFFALL (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, `season_phase`, spring centre 0.125, `kSeasonSpringCentre`), M-WINDDIR and M-WINDGUST (`effective_wind`, `wind_direction_vector`) and M-WEATHER (`Weather` rain). Spring is a foliage tint today and nothing floats in the air. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `Pollen` turns the `Season` spring weight (a trapezoid around the phase 0.125 that wraps the year start), daylight and dry weather into a strength 0..1, with a manual floor for a scene that wants pollen all year. Pure helpers turn the strength into an emitter look: a very slow fall plus a sideways drift from the scene wind, a long lifetime and a tiny alpha-blended pale yellow-white sprite. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** with the reserved id `0xFFFF0003u`, in a wide low box around the camera, the same path rain, snow, leaves and fireflies use. No new shader, pass, render field or system state; no component is written. A scene without `Pollen` is bit-identical.
 
@@ -33,4 +33,11 @@ No step needs Opus: nothing writes a shader. If 24b finds that an alpha-blended 
 | 24a | done | 965 | `Pollen` and the pure `pollen_amount`, `pollen_look` in `mce/kit/pollen.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19v. |
 | 24b | done | 967 | `Kit3DExtract` adds the local alpha-blended pollen emitter (id `0xFFFF0003`, camera-following box, Low tier halves rate and budget); night fade as the firefly block, wind as the leaf block. |
 | 24c | done | 968 | `weather.set_pollen`, the `weather.pollen_<key>()` getters and read-only `weather.pollen_drifting()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_pollen.cpp`. `12_weather` logs `pollen:` every 150 ticks (0.000 in the dark and the storm up to sunrise, 0.068 at 1650, 0.251 at 1800, 0.400 from 2100). |
-| 24d | planned | | |
+| 24d | done | 969 | The `08-3d` "Pollen drifts." paragraph; the milestone record closed with follow-ups. |
+
+## Follow-ups
+
+None blocks the milestone.
+- A real GPU/windowed look at the alpha-blended specks (size, alpha against the bright sky) and a per-speck spin or shimmer (needs a render field).
+- Pollen that spawns from specific trees or flowers instead of one box around the camera.
+- A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves and fireflies).
