@@ -17,6 +17,7 @@
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
 #include "mce/kit/pollen.h"
+#include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cinematic.h"
 #include "mce/kit/meteor.h"
@@ -2083,6 +2084,19 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         em.rate = p.rate;
         em.burst = burst ? p.burst : 0u;
         em.emitting = p.emitting != 0;
+        // M-PARTICLEUSER 29b: the weather rain and snow emitter (an entity that also carries Precipitation3D) keeps
+        // particle_scale of its rate and budget, render-side only; every other ParticleEmitter3D is untouched, and
+        // at scale 1 the emitter is bit-identical. Scale 0 switches it off.
+        if (world.has<Precipitation3D>(e)) {
+            const f32 pscale = particle_scale_of(quality_);
+            if (pscale <= 0.0f) {
+                em.emitting = false;
+                em.rate = 0.0f;
+            } else {
+                em.rate = p.rate * pscale;
+                em.max_particles = scaled_budget(p.max_particles, pscale);
+            }
+        }
         em.speed_min = p.speed_min;
         em.speed_max = p.speed_max;
         em.lifetime_min = p.lifetime_min;
