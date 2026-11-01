@@ -1,0 +1,1 @@
+- M-BIRDFLOCK planned: an opt-in kit `Flock` component (migration-season, twilight and dry-weather strength) drawn as one camera-following alpha-blended particle emitter, steps 26a to 26d; the milestone record and the ROADMAP row.
