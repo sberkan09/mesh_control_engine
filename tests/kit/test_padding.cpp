@@ -39,6 +39,7 @@
 #include "mce/kit/butterfly.h"
 #include "mce/kit/dusk_bat.h"
 #include "mce/kit/snow_sparkle.h"
+#include "mce/kit/midge.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -122,6 +123,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Butterfly>("Butterfly", sizeof(Butterfly::pad_));  // butterfly.h (M-BUTTERFLY 27a)
     expect_pad<DuskBat>("DuskBat", sizeof(DuskBat::pad_));  // bat.h (M-BAT 30a)
     expect_pad<SnowSparkle>("SnowSparkle", sizeof(SnowSparkle::pad_));  // snow_sparkle.h (M-SNOWSPARKLE 31a)
+    expect_pad<Midge>("Midge", sizeof(Midge::pad_));  // midge.h (M-MIDGES 33a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 

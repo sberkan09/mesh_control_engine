@@ -86,6 +86,7 @@
 #include "mce/kit/butterfly.h"            // Butterfly (M-BUTTERFLY 27a)
 #include "mce/kit/dusk_bat.h"                  // DuskBat (M-BAT 30a)
 #include "mce/kit/snow_sparkle.h"          // SnowSparkle (M-SNOWSPARKLE 31a)
+#include "mce/kit/midge.h"                  // Midge (M-MIDGES 33a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
