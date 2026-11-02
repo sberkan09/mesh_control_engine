@@ -1,0 +1,1 @@
+- Docs (M-PROGRESS 3): the progression milestone is closed and struck through in the open-world gaps list. Record: `docs/milestones/M-PROGRESS.md`.

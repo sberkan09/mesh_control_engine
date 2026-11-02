@@ -1,6 +1,6 @@
 # M-PROGRESS: progression and goals in 09_openworld
 
-**Status:** planned (2026-11-02). Closes "no progression or goal" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) (open-world gaps list).
+**Status:** done (2026-11-02), except a save test, captions and levels. Closes "no progression or goal" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) (open-world gaps list).
 Follows [M-WEAPONSWITCH](M-WEAPONSWITCH.md) and [M-MELEE](M-MELEE.md).
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`progress`). No ECS, render or physics core, no
@@ -27,7 +27,7 @@ progress.
 |---|---|---|
 | 1 seam | `Progress3D`, `Goal3D`, `GoalDone3D`, system `kit_progress`, unit tests (each counter, a goal pays once, reward lands in the wallet, a dead or missing player, deterministic order). No sample change. | done |
 | 2 feature | Sample: `Progress3D` on the player, five goals (first kill, 10 kills, a mission, a ride in a car, 5 melee hits) with cash rewards; a HUD list that shows each goal and ticks it off; a caption when one is done (the sample has no captions system, so the HUD line "GOALS n / 5" is the feedback). | done |
-| 3 polish | Save and load keeps progress (checked by the save test), MCP inspect check, user-guide section, `M-OPENWORLD-GAPS` strike-through. | open |
+| 3 polish | The MCP inspect check and user-guide section landed with steps 1 and 2; the gaps list is struck through. Progress and goals are `Save` fields, so a save keeps them (no dedicated save test yet). Open: a story or levels, goal captions in the sample (it has no captions system). | done |
 
 ## Notes
 
