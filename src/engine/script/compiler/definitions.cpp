@@ -655,6 +655,38 @@ declare weather: {
     -- 0.02..1, lifetime_s 1..30, speed 0..4, lift 0..2, max_particles 8..512, seed 0..4294967295; enabled: any non-zero
     -- number is 1); an unknown key or a non-number raises and nothing is written
     set_butterfly: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, min_daylight: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, lift: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- DuskBat (M-BAT), the first DuskBat in the scene; every dusk bat function raises when there is none
+    -- (set_dusk_bat never adds one). The getters are dusk_bat_ plus the set key; the colour returns r, g, b. They read the
+    -- authoring even when enabled is 0. dusk_bat_flying (0..1) is the dusk bat amount now, the same one the renderer
+    -- draws: max(manual, warm window) times the dusk gate times the calm gate times the dryness (1 - rain) times strength,
+    -- with the season phase of the first Season at the first WorldClock, the night fade of the Environment3D hour, the wind
+    -- (with the gust sway) and the rain the first Weather's intensity while it rains or storms; 0 when enabled or strength
+    -- is 0. Read-only.
+    dusk_bat_enabled: () -> number,
+    dusk_bat_window_full: () -> number,
+    dusk_bat_window_end: () -> number,
+    dusk_bat_manual: () -> number,
+    dusk_bat_dusk_low: () -> number,
+    dusk_bat_dusk_high: () -> number,
+    dusk_bat_wind_calm: () -> number,
+    dusk_bat_wind_still: () -> number,
+    dusk_bat_rate: () -> number,
+    dusk_bat_box_xz_m: () -> number,
+    dusk_bat_height_m: () -> number,
+    dusk_bat_size_m: () -> number,
+    dusk_bat_lifetime_s: () -> number,
+    dusk_bat_speed: () -> number,
+    dusk_bat_max_particles: () -> number,
+    dusk_bat_seed: () -> number,
+    dusk_bat_strength: () -> number,
+    dusk_bat_color: () -> (number, number, number),
+    dusk_bat_flying: () -> number,
+    -- every key optional, each value clamped to the field's range (window_full, window_end 0..0.5, manual, dusk_low,
+    -- dusk_high, wind_calm, wind_still, strength and each colour channel 0..1, rate 0..60, box_xz_m 1..100, height_m 1..20,
+    -- size_m 0.02..1, lifetime_s 1..30, speed 0..8, max_particles 8..512, seed 0..4294967295; enabled: any non-zero
+    -- number is 1); an unknown key or a non-number raises and nothing is written
+    set_dusk_bat: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, dusk_low: number?, dusk_high: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
