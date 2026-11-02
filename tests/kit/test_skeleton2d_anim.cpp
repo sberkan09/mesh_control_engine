@@ -528,3 +528,68 @@ TEST_CASE("skeleton2d anim: the animators run before the skeletons in FixedUpdat
     CHECK(r > 0.0f);
     CHECK(s.hero().world[kArm].b == doctest::Approx(std::sin(r)));
 }
+
+TEST_CASE("skeleton2d anim: skeleton2d_slot_interval finds the keys around t and the eased fraction") {
+    auto key = [](f32 t, asset::Skeleton2DCurve curve) {
+        asset::Skeleton2DSlotKey k{};
+        k.t = t;
+        k.curve = curve;
+        return k;
+    };
+    using asset::Skeleton2DCurve;
+    const asset::Skeleton2DSlotKey keys[] = {key(1.0f, Skeleton2DCurve::Linear), key(2.0f, Skeleton2DCurve::Stepped),
+                                             key(4.0f, Skeleton2DCurve::Linear)};
+    u32 a = 9, b = 9;
+    f32 f = 9.0f;
+    asset::skeleton2d_slot_interval({}, 1.0f, a, b, f);  // no keys
+    CHECK((a == 0 && b == 0 && f == 0.0f));
+    asset::skeleton2d_slot_interval(keys, 0.5f, a, b, f);  // before the first key
+    CHECK((a == 0 && b == 0 && f == 0.0f));
+    asset::skeleton2d_slot_interval(keys, 1.0f, a, b, f);  // exactly on the first key
+    CHECK((a == 0 && b == 0 && f == 0.0f));
+    asset::skeleton2d_slot_interval(keys, 1.5f, a, b, f);  // linear: halfway through [1, 2)
+    CHECK(a == 0);
+    CHECK(b == 1);
+    CHECK(f == doctest::Approx(0.5f));
+    asset::skeleton2d_slot_interval(keys, 3.0f, a, b, f);  // a stepped key holds until the next one
+    CHECK(a == 1);
+    CHECK(b == 2);
+    CHECK(f == 0.0f);
+    asset::skeleton2d_slot_interval(keys, 4.0f, a, b, f);  // on the last key
+    CHECK((a == 2 && b == 2));
+    asset::skeleton2d_slot_interval(keys, 99.0f, a, b, f);  // after it
+    CHECK((a == 2 && b == 2 && f == 0.0f));
+}
+
+TEST_CASE("skeleton2d anim: bone2d_local composes translate, rotate and scale; bone2d_inverse undoes it") {
+    using kit::Bone2DPose;
+    using kit::Bone2DTransform;
+    const f32 half_pi = 1.5707963f;
+    Bone2DPose p;
+    p.x = 3.0f;
+    p.y = -1.0f;
+    p.rotation = half_pi;
+    p.scale_x = 2.0f;
+    p.scale_y = 0.5f;
+    const Bone2DTransform m = kit::bone2d_local(p);
+    // (1, 0) scales to (2, 0), turns a quarter to (0, 2), then moves by (3, -1).
+    const math::vec2 o = m.apply({1.0f, 0.0f});
+    CHECK(o.x == doctest::Approx(3.0f).epsilon(1e-5));
+    CHECK(o.y == doctest::Approx(1.0f).epsilon(1e-5));
+    // The identity pose is the identity transform.
+    const Bone2DTransform id = kit::bone2d_local(Bone2DPose{});
+    CHECK(id.apply({4.0f, 5.0f}).x == doctest::Approx(4.0f));
+    CHECK(id.apply({4.0f, 5.0f}).y == doctest::Approx(5.0f));
+
+    const Bone2DTransform inv = kit::bone2d_inverse(m);
+    const math::vec2 back = inv.apply(m.apply({0.7f, -2.5f}));
+    CHECK(back.x == doctest::Approx(0.7f).epsilon(1e-4));
+    CHECK(back.y == doctest::Approx(-2.5f).epsilon(1e-4));
+
+    // A singular transform (a zero scale) has no inverse: the identity comes back.
+    Bone2DPose flat;
+    flat.scale_x = 0.0f;
+    const Bone2DTransform none = kit::bone2d_inverse(kit::bone2d_local(flat));
+    CHECK(none.apply({2.0f, 3.0f}).x == doctest::Approx(2.0f));
+    CHECK(none.apply({2.0f, 3.0f}).y == doctest::Approx(3.0f));
+}
