@@ -27,8 +27,8 @@ the player sits in a car (`Rider3D`).
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | `Loadout3D`, system `kit_loadout`, `WeaponSwitched3D`, unit tests (save and restore of ammo, reload cancelled, draw time, car seat ignored). No sample change. | open |
-| 2 feature | Sample: pistol (today's gun), SMG, shotgun (8 pellets); the keys, the wheel and the pad bindings; per-weapon shot sound; the HUD shows the weapon name. | open |
+| 1 seam | `Loadout3D`, system `kit_loadout`, `WeaponSwitched3D`, unit tests (save and restore of ammo, reload cancelled, draw time, car seat ignored). No sample change. | done |
+| 2 feature | Sample: pistol (today's gun), SMG, shotgun (8 pellets); keys 1 to 3, X / Z and D-pad up / down; the HUD shows the weapon name. (No mouse wheel: the input JSON has no wheel binding yet; no per-weapon shot sound yet, all three use the shots sound set.) | done |
 | 3 polish | `AmmoShop3D` refills every slot, `Confiscate3D` halves every slot, save and load keeps the loadout, MCP inspect check, user-guide section, `M-OPENWORLD-GAPS` strike-through. | open |
 
 ## Notes

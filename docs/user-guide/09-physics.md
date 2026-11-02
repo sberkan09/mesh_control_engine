@@ -437,6 +437,7 @@ entities (`slot0..2`, each with damage, range, rate, spread, pellets, magazine, 
 ammo readout, `WeaponAudio`, `Confiscate3D` and `AmmoShop3D` keep working. Set `select` to 1 + slot, or with `use_input` use
 the actions `Slot1`..`Slot3` and `WeaponNext` / `WeaponPrev`. A seated rider and a dead wielder do not switch. A
 `WeaponSwitched3D` event reports each switch.
+`samples/09_openworld` has a pistol, an SMG and a shotgun on keys 1 to 3 (X / Z or D-pad up / down cycle).
 
 ## 9.10 Configuration
 

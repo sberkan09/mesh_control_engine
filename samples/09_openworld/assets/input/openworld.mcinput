@@ -183,6 +183,52 @@
      ]
     },
     {
+     "name": "Slot1",
+     "bindings": [
+      {
+       "key": "1"
+      }
+     ]
+    },
+    {
+     "name": "Slot2",
+     "bindings": [
+      {
+       "key": "2"
+      }
+     ]
+    },
+    {
+     "name": "Slot3",
+     "bindings": [
+      {
+       "key": "3"
+      }
+     ]
+    },
+    {
+     "name": "WeaponNext",
+     "bindings": [
+      {
+       "key": "X"
+      },
+      {
+       "gamepad_button": "DpadUp"
+      }
+     ]
+    },
+    {
+     "name": "WeaponPrev",
+     "bindings": [
+      {
+       "key": "Z"
+      },
+      {
+       "gamepad_button": "DpadDown"
+      }
+     ]
+    },
+    {
      "name": "Horn",
      "bindings": [
       {
