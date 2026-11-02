@@ -190,3 +190,27 @@ TEST_CASE("world3d: a height field collides with its triangles, leaves holes ope
     bad.type = BodyType3D::Dynamic;
     CHECK_FALSE(w.create_body(ent(2), bad));
 }
+
+TEST_CASE("world3d: shift_origin moves every body and character by -delta and keeps velocities") {
+    World3D w;
+    REQUIRE(add_box(w, ent(1), BodyType3D::Static, {10, 0, 0}, {1, 1, 1}));
+    REQUIRE(add_box(w, ent(2), BodyType3D::Dynamic, {20, 50, 0}, {0.5f, 0.5f, 0.5f}));
+    w.set_linear_velocity(ent(2), {3, 0, 0});
+    REQUIRE(w.create_character(ent(3), {-5, 60, 2}));
+    BodyState3D before;
+    REQUIRE(w.body_state(ent(2), before));
+    w.shift_origin({4, 0, -2});
+    CHECK(position_of(w, ent(1)).x == doctest::Approx(6.0f));
+    CHECK(position_of(w, ent(1)).z == doctest::Approx(2.0f));
+    BodyState3D after;
+    REQUIRE(w.body_state(ent(2), after));
+    CHECK(after.position.x == doctest::Approx(before.position.x - 4.0f));
+    CHECK(after.position.y == doctest::Approx(before.position.y));
+    CHECK(after.position.z == doctest::Approx(before.position.z + 2.0f));
+    CHECK(after.linear_velocity.x == doctest::Approx(before.linear_velocity.x));
+    CHECK(position_of(w, ent(3)).x == doctest::Approx(-9.0f));
+    CHECK(position_of(w, ent(3)).z == doctest::Approx(4.0f));
+    w.shift_origin({-4, 0, 2});  // the opposite shift puts everything back
+    CHECK(position_of(w, ent(1)).x == doctest::Approx(10.0f));
+    CHECK(position_of(w, ent(3)).x == doctest::Approx(-5.0f));
+}
