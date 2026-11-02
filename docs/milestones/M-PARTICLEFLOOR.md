@@ -29,7 +29,7 @@ No step needs Opus: no shader or draw path changes.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 32a | planned | | |
+| 32a | done | 1019 | `mce/kit/particle_floor.h` (`kDefaultEyeM`, `particle_floor_center_y`) and `tests/kit/test_particle_floor.cpp` (6 cases). Nothing calls it yet. |
 | 32b | planned | | |
 | 32c | planned | | |
 
