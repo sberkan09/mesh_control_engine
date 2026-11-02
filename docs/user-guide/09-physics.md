@@ -450,6 +450,13 @@ ammo. A swing starts when `trigger` is set to 1, or, with `use_input`, when the 
 `apply_damage` (a same-team target is spared). `MeleeSwung3D` reports each swing and how many it hit.
 `samples/09_openworld` gives the player a `Melee3D`: V (pad: right-stick click) swings.
 
+### Progression and goals
+
+`mce/kit/progress3d.h`: a `Progress3D` on the player counts `kills`, completed `missions`, `rides` in cars and `melee_hits`
+from the events of each tick. A `Goal3D` entity names a `stat`, a `target`, a cash `reward` and the `owner` (the entity with
+the `Progress3D` and the `Wallet3D`); when the counter reaches the target the goal is marked `done`, pays once, shows the
+caption "Goal: <name>" when captions are installed and pushes `GoalDone3D`.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

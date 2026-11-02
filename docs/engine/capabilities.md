@@ -150,6 +150,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ProcLevel` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scenes/caves.mcscene |
 | `ProcLevelOwned` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | allowed: state the engine writes and games read; nothing to author |
 | `ProcMarker` | `mce/kit/proclevel.h` | yes | yes | yes | docs/user-guide/28-procedural-levels.md | projects/Dungeon/assets/scripts/dungeon.luau |
+| `Progress3D` | `mce/kit/progress3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PROGRESS step 1: tested in tests/kit/test_progress3d.cpp; step 2 puts it on the 09_openworld player (remove this line then) |
+| `Goal3D` | `mce/kit/progress3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-PROGRESS step 1: tested in tests/kit/test_progress3d.cpp; step 2 puts five goals in 09_openworld (remove this line then) |
 | `Ragdoll3D` | `mce/kit/ragdolls3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `RainRipples` | `mce/kit/rain_ripples.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `RainSplash` | `mce/kit/rain_splash.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
