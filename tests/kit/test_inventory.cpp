@@ -3,6 +3,8 @@
 
 #include <doctest/doctest.h>
 
+#include <string>
+
 #include "mce/containers/array.h"
 #include "mce/ecs/save.h"
 #include "mce/ecs/world.h"
@@ -882,4 +884,13 @@ TEST_CASE("inventory: a Health3D replaced at run time gets the equipment bonus a
     r.tick(6);
     CHECK(health().armor == doctest::Approx(0.125f));  // exactly the base after a respawn
     CHECK(health().max == doctest::Approx(100.0f));
+}
+
+TEST_CASE("inventory: equip_slot_tag names every equipment slot and refuses a slot past the end") {
+    CHECK(std::string(equip_slot_tag(0)) == "equip.head");
+    CHECK(std::string(equip_slot_tag(4)) == "equip.weapon");
+    CHECK(std::string(equip_slot_tag(kEquipSlots - 1)) == "equip.accessory2");
+    for (u32 i = 0; i < kEquipSlots; ++i) CHECK(std::string(equip_slot_tag(i)).rfind("equip.", 0) == 0);
+    CHECK(equip_slot_tag(kEquipSlots) == nullptr);
+    CHECK(equip_slot_tag(0xFFFFFFFFu) == nullptr);
 }
