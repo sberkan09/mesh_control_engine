@@ -19,6 +19,7 @@
 #include "mce/kit/dusk_bat.h"
 #include "mce/kit/particle_floor.h"
 #include "mce/kit/snow_sparkle.h"
+#include "mce/kit/midge.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
@@ -139,6 +140,8 @@ constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
 constexpr u32 kDuskBatEmitterId = 0xFFFF0007u;
 // Snow sparkle (M-SNOWSPARKLE 31b): the id of the eighth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kSnowSparkleEmitterId = 0xFFFF0008u;
+// Midges (M-MIDGES 33b): the id of the ninth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kMidgeEmitterId = 0xFFFF0009u;
 
 // M-PARTICLEQ 28b: the share of rate and budget a render-side weather emitter keeps (QualitySettings::particle_scale),
 // clamped to [0, 1]; NaN reads as 1.
@@ -2690,6 +2693,80 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.color_start = look.color_start;
                     em.color_end = look.color_end;
                     em.additive = look.additive;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // midges (M-MIDGES 33b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const Midge* mg = nullptr;
+        world.query<const Midge&>().each([&](const Midge& c) {
+            if (!mg) mg = &c;
+        });
+        if (mg && mg->enabled != 0 && mg->strength > 0.0f) {
+            const Season* mg_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!mg_season) mg_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = mg_season ? season_phase(*mg_season, day, hour) : 0.0f;
+            // the sun elevation (the sine of the angle) as the snow sparkle block derives it, but kept signed -1..1: the twilight
+            // gate needs the dip below the horizon (clamping at 0 would leave the gate open all night); no clock: 0
+            const Environment3D mg_env = resolve_environment(world);
+            f32 sun_elev = 0.0f;
+            if (mg_env.time_of_day >= 0.0f) sun_elev = clamp(-render::sun_direction_at(mg_env.time_of_day).y, -1.0f, 1.0f);
+            const Weather* mg_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!mg_weather) mg_weather = &c;
+            });
+            const bool raining =
+                mg_weather && (mg_weather->current == WeatherKind::Rain || mg_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? mg_weather->intensity : 0.0f;
+            const WindGust* mg_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!mg_gust) mg_gust = &c;
+            });
+            // As the dust block: no Weather is calm, the gust sway bit.
+            const f32 wind = mg_weather ? effective_wind(*mg_weather, mg_gust, kGustSway) : 0.0f;
+            const f32 amount = midge_amount(*mg, mg_season, phase, sun_elev, wind, rain);
+            if (amount > 0.0f) {
+                const MidgeLook look = midge_look(*mg, amount);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
+                    render::ParticleEmitter em;
+                    em.id = kMidgeEmitterId;
+                    em.max_particles = std::clamp(mg->max_particles, 8u, 512u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
+                    em.seed = mg->seed;
+                    em.position = scene.view().position;
+                    em.position.y = particle_floor_center_y(em.position.y, look.height, kDefaultEyeM);  // box floor at the ground
+                    em.box = math::vec3{look.box, look.height, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = look.rate * pscale;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
                     scene.add_particle_emitter(em);
                     ++stats_.particle_emitters;
                 }
