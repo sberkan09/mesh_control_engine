@@ -269,14 +269,14 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         return std::string("missing");
     };
     CHECK(errand_state("30") == "Active");
-    // Standing at the Errand's destination with the mission started completes it: 500 + 250.
+    // Standing at the Errand's destination with the mission started completes it: 500 + 250, and the "Odd job" goal pays 200 (M-PROGRESS).
     c.ok("component_set", R"({"entity":"Mission Errand","component":"Mission","path":"start","value":1})");
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[95,0.95,-9]})");
     c.ok("scene_save");
     CHECK(errand_state("60") == "Complete");
     auto rich = c.ok("run_headless", R"({"ticks":60,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
     REQUIRE(count(rich) == 1);
-    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 750);
+    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 950);
     // Standing on a cash pad picks it up (the pad pays 40 to 100).
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-170,0.95,9]})");
     c.ok("scene_save");
