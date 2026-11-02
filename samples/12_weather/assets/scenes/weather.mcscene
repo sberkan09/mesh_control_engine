@@ -110,6 +110,9 @@
     "SnowSparkle": {
      "manual": 0.3
     },
+    "Midge": {
+     "manual": 0.3
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
