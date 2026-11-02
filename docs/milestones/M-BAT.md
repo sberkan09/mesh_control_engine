@@ -33,7 +33,7 @@ No step needs Opus: nothing writes a shader.
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 30a | done | 1003 | `DuskBat` and the pure `dusk_bat_amount`, `dusk_bat_look` in `mce/kit/dusk_bat.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19z. |
-| 30b | done | 1004 | Extract feed: one local alpha-blended emitter (id `0xFFFF0007`) from `dusk_bat_look`, Low tier and `particle_scale`; `tests/kit/test_dusk_bat_extract.cpp`. |
+| 30b | done | 1005 | Extract feed: one local alpha-blended emitter (id `0xFFFF0007`) from `dusk_bat_look`, Low tier and `particle_scale`; `tests/kit/test_dusk_bat_extract.cpp`. |
 | 30c | planned | | |
 | 30d | planned | | |
 
