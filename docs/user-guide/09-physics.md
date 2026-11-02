@@ -439,6 +439,8 @@ the actions `Slot1`..`Slot3` and `WeaponNext` / `WeaponPrev`. A seated rider and
 `WeaponSwitched3D` event reports each switch.
 `samples/09_openworld` has a pistol, an SMG and a shotgun on keys 1 to 3 (X / Z or D-pad up / down cycle).
 
+An `AmmoShop3D` also restocks the weapons in the backpack (each up to `stock_to`, from the same wallet) and a `Confiscate3D` arrest keeps the same share of their reserve.
+
 ### Melee attack
 
 `mce/kit/melee3d.h`: a `Melee3D` on a character swings at what is in front of it, independent of any `Weapon3D` and without

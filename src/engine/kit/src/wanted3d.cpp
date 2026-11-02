@@ -13,6 +13,7 @@
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/impact_damage.h"
+#include "mce/kit/loadout3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/procgen.h"
@@ -36,6 +37,19 @@ static_assert(sizeof(CashPickup3D) == 16);
 static_assert(sizeof(ChopShop3D) == 12);
 static_assert(sizeof(RepairShop3D) == 24);
 static_assert(sizeof(Confiscate3D) == 4);
+
+// M-WEAPONSWITCH: the preset entities of a wielder's Loadout3D that are not in hand (their reserve is stored there).
+template <class F>
+static void for_stored_presets(World& w, Entity e, F&& fn) {
+    const Loadout3D* lo = w.try_get<Loadout3D>(e);
+    if (!lo) return;
+    const Entity slots[3] = {lo->slot0, lo->slot1, lo->slot2};
+    for (u32 i = 0; i < 3; ++i) {
+        if (i == lo->current || slots[i].is_null() || !w.alive(slots[i])) continue;
+        if (WeaponPreset3D* pr = w.try_get_mut<WeaponPreset3D>(slots[i])) fn(*pr);
+    }
+}
+
 static_assert(sizeof(MissionReward3D) == 8);
 static_assert(sizeof(CarOwner3D) == 8);
 
@@ -493,7 +507,9 @@ void kit3d_respawn(Frame& f) {
         if (r.reason == 1) {
             const Confiscate3D* cf = w.try_get<Confiscate3D>(e);
             Weapon3D* wp = cf ? w.try_get_mut<Weapon3D>(e) : nullptr;
-            if (wp) wp->reserve = static_cast<u32>(static_cast<f32>(wp->reserve) * math::clamp(cf->ammo_kept, 0.0f, 1.0f));
+            const f32 kept = cf ? math::clamp(cf->ammo_kept, 0.0f, 1.0f) : 1.0f;
+            if (wp) wp->reserve = static_cast<u32>(static_cast<f32>(wp->reserve) * kept);
+            if (cf) for_stored_presets(w, e, [&](WeaponPreset3D& pr) { pr.reserve = static_cast<u32>(static_cast<f32>(pr.reserve) * kept); });
         }
         const i32 fine = take_cash(w, e, r.reason == 1 ? r.fine_busted : r.fine_wasted);
         if (fine > 0 && r.caption && w.try_resource<Captions>()) {
@@ -556,6 +572,19 @@ void kit3d_ammoshop(Frame& f) {
             const i32 paid = take_cash(w, be, static_cast<i32>(rounds * sh.price_per_round));
             wp.reserve += rounds;
             EventAccess(w).push(AmmoBought3D{be, se, rounds, paid});
+        });
+        // the weapons in the backpack are restocked too, with what the wielded one left of the wallet
+        f.query<Loadout3D, Wallet3D, LocalTransform>().each([&](Entity be, Loadout3D&, Wallet3D& wl, LocalTransform&) {
+            if (math::length(position_of(w, be) - sp) > sh.radius) return;
+            for_stored_presets(w, be, [&](WeaponPreset3D& pr) {
+                if (pr.magazine == 0 || pr.reserve >= sh.stock_to) return;
+                const u32 afford = wl.cash > 0 ? static_cast<u32>(wl.cash) / sh.price_per_round : 0u;
+                const u32 rounds = math::min(sh.stock_to - pr.reserve, afford);
+                if (rounds == 0) return;
+                const i32 paid = take_cash(w, be, static_cast<i32>(rounds * sh.price_per_round));
+                pr.reserve += rounds;
+                EventAccess(w).push(AmmoBought3D{be, se, rounds, paid});
+            });
         });
     });
 }

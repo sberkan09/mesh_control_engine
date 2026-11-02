@@ -17,6 +17,7 @@
 #include "mce/kit/combat3d.h"
 #include "mce/kit/impact_damage.h"
 #include "mce/kit/kit3d.h"
+#include "mce/kit/loadout3d.h"
 #include "mce/kit/missions.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/roads.h"
@@ -1001,6 +1002,48 @@ TEST_CASE("wanted3d: a shop tops up the reserve for a price (M-AMMOSHOP)") {
             s.run(30);
             CHECK(s.ammo_sales == 0);
             CHECK(s.w.try_get<Weapon3D>(p)->reserve == 20);
+        }
+    }
+}
+
+TEST_CASE("wanted3d: the shop restocks and an arrest halves the weapons in the backpack (M-WEAPONSWITCH 3)") {
+    for (u32 k = 0; k < 2; ++k) {  // k 0: shop; k 1: arrest with Confiscate3D
+        Scene s;
+        install_loadout3d(s.w);
+        WeaponPreset3D a;
+        a.magazine = 10;
+        a.reserve = 20;
+        WeaponPreset3D b = a;
+        b.reserve = 40;
+        const Entity pa = s.w.spawn_with(at(0.0f, 0.0f, 0.0f), a);
+        const Entity pb = s.w.spawn_with(at(0.0f, 0.0f, 0.0f), b);
+        Wanted3D wd;
+        wd.heat = 5.0f;
+        wd.crimes = 1;
+        const Entity p = s.player(wd, 1.0f, 0.0f);
+        Loadout3D lo;
+        lo.slot0 = pa;
+        lo.slot1 = pb;
+        s.w.add(p, lo);
+        s.w.add(p, Weapon3D{});
+        s.w.add(p, Wallet3D{1000});
+        if (k == 0) {
+            AmmoShop3D sh;
+            sh.price_per_round = 2;
+            sh.stock_to = 100;
+            s.w.spawn_with(at(0.0f, 1.0f, 0.0f), sh);
+            s.run(4);
+            CHECK(s.w.try_get<WeaponPreset3D>(pb)->reserve == 100);  // slot 1 is in the backpack
+        } else {
+            Respawn3D r;
+            r.delay = 1.0f;
+            s.w.add(p, r);
+            s.w.add(p, Confiscate3D{0.5f});
+            s.cop(2.0f, 0.0f);
+            s.run(60 * 6);
+            CHECK(s.respawns == 1);
+            CHECK(s.w.try_get<WeaponPreset3D>(pb)->reserve == 20);
+            CHECK(s.w.try_get<WeaponPreset3D>(pa)->reserve == 20);  // the wielded slot lives on the Weapon3D
         }
     }
 }
