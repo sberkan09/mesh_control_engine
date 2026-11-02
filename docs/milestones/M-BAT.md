@@ -30,7 +30,7 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 30a | planned | | |
+| 30a | done | 1003 | `Bat` and the pure `bat_amount`, `bat_look` in `mce/kit/bat.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19z. |
 | 30b | planned | | |
 | 30c | planned | | |
 | 30d | planned | | |
