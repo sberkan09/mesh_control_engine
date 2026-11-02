@@ -80,7 +80,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
   roadblocks; wanted level has no on-screen indicator (A1) and no flashing sirens.
 - **Driving**: one car type for the player, ~~no radio, no gears display, no lights toggle, no horn~~ (radio, horn and lights done; speed and gear on the HUD: [M-DRIVEHUD](M-DRIVEHUD.md)), no damage model on the
   drive path in the sample.
-- **No progression or goal**: nothing to do after the 3 car and police interactions; no economy, no story.
+- ~~**No progression or goal**~~ five goals with cash rewards and a HUD count done ([M-PROGRESS](M-PROGRESS.md)); still no story or levels.
 - **No gamepad or touch walk-through** of the openworld input map was tried on a real pad. Done on paper ([M-GAMEPAD](M-GAMEPAD.md)): every action now has a pad binding (Radio on D-pad left, the menus on the D-pad and the left stick) and the generator fails if a new action has none; touch is still open.
 
 ## D. Verification and tooling gaps
