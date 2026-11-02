@@ -244,7 +244,7 @@ TEST_CASE("prediction: seq_after is serial-number order and survives a wrap") {
     CHECK(seq_after(2, 1));
     CHECK_FALSE(seq_after(1, 2));
     CHECK_FALSE(seq_after(5, 5));
-    CHECK(seq_after(0, 0xFFFFFFFFu));         // 0 follows the last sequence number
+    CHECK(seq_after(0, 0xFFFFFFFFu));  // 0 follows the last sequence number
     CHECK_FALSE(seq_after(0xFFFFFFFFu, 0));
     CHECK(seq_after(3, 0xFFFFFFF0u));
     CHECK_FALSE(seq_after(0x80000000u, 0));  // exactly half the range apart is not "after"
