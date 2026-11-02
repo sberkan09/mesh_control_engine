@@ -26,7 +26,7 @@ progress.
 | Step | What | Status |
 |---|---|---|
 | 1 seam | `Progress3D`, `Goal3D`, `GoalDone3D`, system `kit_progress`, unit tests (each counter, a goal pays once, reward lands in the wallet, a dead or missing player, deterministic order). No sample change. | done |
-| 2 feature | Sample: `Progress3D` on the player, five goals (first kill, 10 kills, a mission, a ride in a car, 5 melee hits) with cash rewards; a HUD list that shows each goal and ticks it off; a caption when one is done. | open |
+| 2 feature | Sample: `Progress3D` on the player, five goals (first kill, 10 kills, a mission, a ride in a car, 5 melee hits) with cash rewards; a HUD list that shows each goal and ticks it off; a caption when one is done (the sample has no captions system, so the HUD line "GOALS n / 5" is the feedback). | done |
 | 3 polish | Save and load keeps progress (checked by the save test), MCP inspect check, user-guide section, `M-OPENWORLD-GAPS` strike-through. | open |
 
 ## Notes
