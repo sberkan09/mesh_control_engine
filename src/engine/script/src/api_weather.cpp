@@ -413,6 +413,28 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// DuskBat (M-BAT step 30c) lives in the same table: the authoring over the first kit::DuskBat (mce/kit/dusk_bat.h) and the
+// read-only dusk_bat_flying(). Named errors as above ("weather.set_dusk_bat: the scene has no DuskBat entity"); the setter
+// never adds the component. The getters are named weather.dusk_bat_<key>; the colour returns r, g, b. dusk_bat_flying() is
+// kit::dusk_bat_amount with the inputs the extract's dusk bat block uses: the first Season at the first WorldClock's day and
+// hour (no Season is the manual floor), the night fade of the Environment3D hour (0 with no clock), the effective wind with
+// the gust sway of the first WindGust (calm with no Weather) and the first Weather's rain intensity while it rains or
+// storms. 0 when `enabled` or `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.dusk_bat_enabled() / dusk_bat_window_full() / dusk_bat_window_end() / dusk_bat_manual() /
+//   weather.dusk_bat_dusk_low() / dusk_bat_dusk_high() / dusk_bat_wind_calm() / dusk_bat_wind_still() / dusk_bat_rate() /
+//   weather.dusk_bat_box_xz_m() / dusk_bat_height_m() / dusk_bat_size_m() / dusk_bat_lifetime_s() / dusk_bat_speed() /
+//   weather.dusk_bat_max_particles() / dusk_bat_seed() / dusk_bat_strength() -> number
+//   weather.dusk_bat_color() -> r, g, b
+//   weather.dusk_bat_flying() -> number          0..1, the dusk bat amount now
+//   weather.set_dusk_bat{enabled=, window_full=, window_end=, manual=, dusk_low=, dusk_high=, wind_calm=, wind_still=,
+//                        rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, speed=, color={r,g,b}, max_particles=, seed=,
+//                        strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/dusk_bat.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -464,6 +486,7 @@
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
+#include "mce/kit/dusk_bat.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
@@ -2337,6 +2360,114 @@ int l_weather_set_butterfly(lua_State* L) {
     return 0;
 }
 
+// ---- DuskBat (M-BAT step 30c) ----
+
+kit::DuskBat& check_dusk_bat(lua_State* L, const char* fn) { return check_first<kit::DuskBat>(L, fn, "DuskBat"); }
+
+#define MCE_WEATHER_GETTER_DUSK_BAT(luaname, field)                                                    \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_dusk_bat(L, "weather." #luaname).field));            \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_enabled, enabled)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_window_full, window_full)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_window_end, window_end)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_manual, manual)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_dusk_low, dusk_low)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_dusk_high, dusk_high)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_wind_calm, wind_calm)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_wind_still, wind_still)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_rate, rate)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_height_m, height_m)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_size_m, size_m)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_speed, speed)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_max_particles, max_particles)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_seed, seed)
+MCE_WEATHER_GETTER_DUSK_BAT(dusk_bat_strength, strength)
+#undef MCE_WEATHER_GETTER_DUSK_BAT
+
+int l_weather_dusk_bat_color(lua_State* L) { return push_season_tint(L, check_dusk_bat(L, "weather.dusk_bat_color").color); }
+
+// weather.dusk_bat_flying(): kit::dusk_bat_amount with the inputs the extract's dusk bat block uses: the first Season at
+// the first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is the manual floor), the night fade of the
+// Environment3D hour (0 with no clock), the effective wind with the gust sway of the first WindGust (calm with no Weather)
+// and the first Weather's rain intensity while it rains or storms.
+int l_weather_dusk_bat_flying(lua_State* L) {
+    const kit::DuskBat& bat = check_dusk_bat(L, "weather.dusk_bat_flying");
+    World& w = world_of(L);
+    const kit::Season* season = nullptr;
+    const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+    if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::Season&>().each([&](const kit::Season& c) {
+            if (!season) season = &c;
+        });
+    }
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+    if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+            if (found) return;
+            found = true;
+            day = c.day;
+            hour = c.hour;
+        });
+    }
+    const f32 phase = season ? kit::season_phase(*season, day, hour) : 0.0f;
+    const kit::Weather* wx = first_weather(w);
+    const kit::WindGust* gust = nullptr;
+    const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+    if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+        w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+            if (!gust) gust = &c;
+        });
+    }
+    const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+    const f32 rain = raining ? wx->intensity : 0.0f;
+    const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+    f32 amount = kit::dusk_bat_amount(bat, season, phase, aurora_night_fade(w), wind, rain);
+    if (!std::isfinite(amount)) amount = 0.0f;
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_dusk_bat{...}: validated before anything is written.
+int l_weather_set_dusk_bat(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled", "window_full", "window_end", "manual", "dusk_low", "dusk_high", "wind_calm", "wind_still", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "color", "max_particles", "seed", "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_dusk_bat", kKeys, 18, "enabled, window_full, window_end, manual, dusk_low, dusk_high, wind_calm, wind_still, rate, box_xz_m, height_m, size_m, lifetime_s, speed, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::DuskBat& bat = check_dusk_bat(L, "weather.set_dusk_bat");
+    if (given[0]) bat.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) bat.window_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) bat.window_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) bat.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) bat.dusk_low = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) bat.dusk_high = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) bat.wind_calm = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) bat.wind_still = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) bat.rate = static_cast<f32>(clamp_range(value[8], 0.0, 60.0));
+    if (given[9]) bat.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) bat.height_m = static_cast<f32>(clamp_range(value[10], 1.0, 20.0));
+    if (given[11]) bat.size_m = static_cast<f32>(clamp_range(value[11], 0.02, 1.0));
+    if (given[12]) bat.lifetime_s = static_cast<f32>(clamp_range(value[12], 1.0, 30.0));
+    if (given[13]) bat.speed = static_cast<f32>(clamp_range(value[13], 0.0, 8.0));
+    if (given[14]) {
+        bat.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        bat.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        bat.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) bat.max_particles = static_cast<u32>(clamp_range(value[15], 8.0, 512.0));
+    if (given[16]) bat.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) bat.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2798,6 +2929,26 @@ const luaL_Reg kWeatherLib[] = {
     {"butterfly_color", l_weather_butterfly_color},
     {"butterfly_flying", l_weather_butterfly_flying},
     {"set_butterfly", l_weather_set_butterfly},
+    {"dusk_bat_enabled", l_weather_dusk_bat_enabled},
+    {"dusk_bat_window_full", l_weather_dusk_bat_window_full},
+    {"dusk_bat_window_end", l_weather_dusk_bat_window_end},
+    {"dusk_bat_manual", l_weather_dusk_bat_manual},
+    {"dusk_bat_dusk_low", l_weather_dusk_bat_dusk_low},
+    {"dusk_bat_dusk_high", l_weather_dusk_bat_dusk_high},
+    {"dusk_bat_wind_calm", l_weather_dusk_bat_wind_calm},
+    {"dusk_bat_wind_still", l_weather_dusk_bat_wind_still},
+    {"dusk_bat_rate", l_weather_dusk_bat_rate},
+    {"dusk_bat_box_xz_m", l_weather_dusk_bat_box_xz_m},
+    {"dusk_bat_height_m", l_weather_dusk_bat_height_m},
+    {"dusk_bat_size_m", l_weather_dusk_bat_size_m},
+    {"dusk_bat_lifetime_s", l_weather_dusk_bat_lifetime_s},
+    {"dusk_bat_speed", l_weather_dusk_bat_speed},
+    {"dusk_bat_max_particles", l_weather_dusk_bat_max_particles},
+    {"dusk_bat_seed", l_weather_dusk_bat_seed},
+    {"dusk_bat_strength", l_weather_dusk_bat_strength},
+    {"dusk_bat_color", l_weather_dusk_bat_color},
+    {"dusk_bat_flying", l_weather_dusk_bat_flying},
+    {"set_dusk_bat", l_weather_set_dusk_bat},
     {nullptr, nullptr},
 };
 

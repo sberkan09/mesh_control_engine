@@ -77,6 +77,12 @@
 #      daylight over 0.6..1) times the calm gate (the wind) times (1 - rain): 0.000 until the dawn at about tick 1500 (the
 #      clock starts at 5:00, so the night and the storm close it), then 0.035 at tick 1650, 0.508 at 1800, 0.923 at 1950,
 #      0.999 at 2100 and 1.000 from 2250 as the day gate opens. The entity count stays 14.
+#  23. (M-BAT 30c) the "dusk_bat:" lines: weather.dusk_bat_flying() of the DuskBat on the Weather entity (read only, the
+#      script writes nothing). The amount is max(manual 0.4, warm window) times the dusk gate (the night fade of the hour
+#      inside the 0.25..0.85 band, smoothed 0.1 at each edge) times the calm gate (the wind) times (1 - rain): 0.000 while
+#      the sky is dark (the night fade is above the band) and from 1800 once the sun is up (it is below the band), and it
+#      shows only in the two twilights: 0.244 at tick 1200 and 0.540 at 1350 as the night fade falls into the band at the
+#      dawn (the storm closes it again at 1500, 0.000), then 0.493 at 1650 as the sky clears. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -163,6 +169,7 @@ endif()
 expect("${first}" "script: flock: 0.012 at tick 0\n" "the flock is not at the dark-sky level at the start")
 expect("${first}" "script: flock: 0.046 at tick 300\n" "the rain and the twilight did not shape the flock")
 expect("${first}" "script: butterfly: 0.000 at tick 300\n" "the night did not close the butterflies")
+expect("${first}" "script: dusk_bat: 0.000 at tick 300\n" "the dark did not close the dusk bats")
 string(REGEX MATCHALL "script: flock: [0-9.]+ at tick [0-9]+" flock600 "${first}")
 list(LENGTH flock600 n_flock600)
 if(NOT n_flock600 EQUAL 4)
@@ -172,6 +179,11 @@ string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly600 "
 list(LENGTH butterfly600 n_butterfly600)
 if(NOT n_butterfly600 EQUAL 4)
     message(FATAL_ERROR "expected 4 butterfly lines in 600 ticks, got ${n_butterfly600}")
+endif()
+string(REGEX MATCHALL "script: dusk_bat: [0-9.]+ at tick [0-9]+" dusk_bat600 "${first}")
+list(LENGTH dusk_bat600 n_dusk_bat600)
+if(NOT n_dusk_bat600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 dusk_bat lines in 600 ticks, got ${n_dusk_bat600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -293,6 +305,16 @@ string(REGEX MATCHALL "script: butterfly: [0-9.]+ at tick [0-9]+" butterfly2700 
 list(LENGTH butterfly2700 n_butterfly2700)
 if(NOT n_butterfly2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 butterfly lines in 2700 ticks, got ${n_butterfly2700}")
+endif()
+expect("${forecast}" "script: dusk_bat: 0.244 at tick 1200\n" "the dusk bats did not start with the dawn twilight")
+expect("${forecast}" "script: dusk_bat: 0.540 at tick 1350\n" "the dusk gate is wrong for the dusk bats at tick 1350")
+expect("${forecast}" "script: dusk_bat: 0.000 at tick 1500\n" "the storm did not close the dusk bats")
+expect("${forecast}" "script: dusk_bat: 0.493 at tick 1650\n" "the dusk bats did not return in the clearing sky")
+expect("${forecast}" "script: dusk_bat: 0.000 at tick 1800\n" "the dusk bats are not closed by the daylight")
+string(REGEX MATCHALL "script: dusk_bat: [0-9.]+ at tick [0-9]+" dusk_bat2700 "${forecast}")
+list(LENGTH dusk_bat2700 n_dusk_bat2700)
+if(NOT n_dusk_bat2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 dusk_bat lines in 2700 ticks, got ${n_dusk_bat2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
