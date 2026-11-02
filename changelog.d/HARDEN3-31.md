@@ -1,0 +1,1 @@
+- Tests: physics3d `NavGeometry3D::add_mesh`, `NavMesh3D::set_origin_offset` and `set_agent_params`.
