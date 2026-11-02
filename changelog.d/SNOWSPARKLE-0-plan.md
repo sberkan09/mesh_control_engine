@@ -1,0 +1,1 @@
+- M-SNOWSPARKLE plan: an opt-in `SnowSparkle` kit component that adds glints over settled snow as one render-side emitter (steps 31a to 31d).
