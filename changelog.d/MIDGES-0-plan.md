@@ -1,0 +1,1 @@
+- M-MIDGES plan: an opt-in `Midge` component for dusk and dawn gnat swarms as one render-side emitter (steps 33a to 33d); nothing is built yet.
