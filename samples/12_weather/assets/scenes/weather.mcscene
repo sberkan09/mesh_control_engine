@@ -107,6 +107,9 @@
     "DuskBat": {
      "manual": 0.4
     },
+    "SnowSparkle": {
+     "manual": 0.3
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
