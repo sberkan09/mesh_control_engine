@@ -38,7 +38,7 @@ No step needs Opus: nothing writes a shader.
 ## Follow-ups
 
 None blocks the milestone.
-- The emitter box is centred on the camera (a half extent), so part of it lies below the camera; a box strictly above the ground (a ground-height query) is open.
+- ~~The emitter box is centred on the camera (a half extent), so part of it lies below the camera; a box strictly above the ground (a ground-height query) is open.~~ Done by M-PARTICLEFLOOR.
 - A real GPU/windowed look at the bright alpha-blended specks against grass and sky (size, alpha; whether they read as butterflies) and wing flapping (needs per-particle animation or a render field).
 - Butterflies that land on flowers or react to the camera, and per-species colours.
 - A real particle quality switch in `quality.h` (the Low tier is recognised by its settings, as for the leaves, fireflies, pollen, dust and the flock). Done by M-PARTICLEQ (`QualitySettings::particle_scale`).
