@@ -1,0 +1,1 @@
+- Tests: scene `SceneStreaming::unload_all` and `update_floating_origin`.

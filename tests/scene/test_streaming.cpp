@@ -383,3 +383,51 @@ TEST_CASE("streaming: floating origin runs are deterministic") {
     }
     CHECK(hashes[0] == hashes[1]);
 }
+
+TEST_CASE("streaming: unload_all destroys every streamed entity, pinned chunks included, and a pump brings them back") {
+    Fixture f("stream_unload_all", false);
+    const Entity A = f.base[1], C = f.base[3];
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    REQUIRE(f.state(A) == scene::ChunkState::Loaded);
+    REQUIRE(f.state(C) == scene::ChunkState::Loaded);
+    const Entity rock = f.streaming().entities(A)[0];
+    REQUIRE(f.world.entity_count() == 4 + 2 + 1);
+
+    const u64 unloads = f.streaming().stats().total_unloads;
+    f.streaming().unload_all(f.world);
+    CHECK_FALSE(f.world.alive(rock));
+    CHECK(f.world.entity_count() == 4);  // the focus and the three chunk entities stay
+    CHECK(f.streaming().entities(A).empty());
+    CHECK(f.streaming().entities(C).empty());
+    CHECK(f.streaming().stats().total_unloads == unloads + 2);  // A and the pinned C
+
+    f.streaming().unload_all(f.world);  // nothing left: a no-op
+    CHECK(f.world.entity_count() == 4);
+    CHECK(f.streaming().stats().total_unloads == unloads + 2);
+
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    CHECK(f.state(A) == scene::ChunkState::Loaded);
+    CHECK(f.state(C) == scene::ChunkState::Loaded);
+    CHECK(f.world.entity_count() == 4 + 2 + 1);
+}
+
+TEST_CASE("streaming: update_floating_origin rebases once when asked and is a no-op in a world without an origin") {
+    {
+        Fixture plain("stream_no_origin", false, kNoChunks);
+        CHECK_FALSE(scene::update_floating_origin(plain.world));
+    }
+    Fixture f("stream_update_origin", false, kOrigin);
+    scene::pump_streaming(f.world, scene::PumpMode::Settle);
+    REQUIRE(world_origin(f.world));
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // the focus is at the origin
+    f.move_focus(15.0f);
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // inside the 16 m threshold
+    CHECK(world_origin(f.world)->serial == 0);
+    f.move_focus(17.0f);
+    CHECK(scene::update_floating_origin(f.world));  // round(17 / 8) = 2 cells = 16 m
+    CHECK(world_origin(f.world)->cell[0] == 2);
+    CHECK(world_origin(f.world)->serial == 1);
+    CHECK(f.world.try_get<LocalTransform>(f.base[0])->position.x == 1.0f);
+    CHECK_FALSE(scene::update_floating_origin(f.world));  // already rebased
+    CHECK(world_origin(f.world)->serial == 1);
+}
