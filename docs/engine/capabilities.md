@@ -121,6 +121,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WeaponPreset3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WEAPONSWITCH step 1: tested in tests/kit/test_loadout3d.cpp; step 2 puts three presets in 09_openworld (remove this line then) |
+| `Loadout3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: M-WEAPONSWITCH step 1: tested in tests/kit/test_loadout3d.cpp; step 2 puts it on the 09_openworld player (remove this line then) |
 | `LootDrop` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/prefabs/pedestrian.mcprefab |
 | `ItemHotkey3D` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Container` | `mce/kit/loot.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/12_loot/assets/scenes/loot.mcscene |
@@ -210,7 +212,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `WindGust` | `mce/kit/wind_gust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WindSway` | `mce/kit/wind_sway.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `EngineAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
-| `WeaponAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `WeaponAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ImpactAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `FootstepAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `SirenAudio` | `mce/kit/world_audio.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/09_openworld/assets/scenes/city.mcscene |

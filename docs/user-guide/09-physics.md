@@ -428,6 +428,16 @@ takes lethal damage through `apply_damage`, so `Damage3D` and `Died3D` fire and 
 nearest hospital. A hole in the ground or a launch off the map ends in WASTED instead of an endless fall; an
 invulnerable entity keeps falling. `samples/09_openworld` gives the player `min_y` -40.
 
+### Weapon switching
+
+`mce/kit/loadout3d.h`: the wielder keeps its one `Weapon3D`; a `Loadout3D` beside it names up to three `WeaponPreset3D`
+entities (`slot0..2`, each with damage, range, rate, spread, pellets, magazine, reload time, `automatic`, `shot` clip and its own
+`ammo` / `reserve`). A switch saves the leaving weapon's rounds, cancels a reload, copies the entering preset onto the
+`Weapon3D` (an equipment damage bonus stays on top), restores its rounds and holds the next shot for `draw_time`, so the HUD
+ammo readout, `WeaponAudio`, `Confiscate3D` and `AmmoShop3D` keep working. Set `select` to 1 + slot, or with `use_input` use
+the actions `Slot1`..`Slot3` and `WeaponNext` / `WeaponPrev`. A seated rider and a dead wielder do not switch. A
+`WeaponSwitched3D` event reports each switch.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

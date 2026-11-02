@@ -34,6 +34,7 @@ mce_add_library(mce_gameplay_kit
         src/hit_marker.cpp
         src/impact_fx.cpp
         src/fall_death.cpp
+        src/loadout3d.cpp
         src/vehicle_extras.cpp
         src/weather.cpp
         src/weather_audio.cpp
