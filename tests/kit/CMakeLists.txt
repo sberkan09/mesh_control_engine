@@ -94,6 +94,7 @@ mce_add_test(test_kit UMBRELLA
         test_flock_extract.cpp
         test_butterfly_extract.cpp
         test_dusk_bat_extract.cpp
+        test_snow_sparkle_extract.cpp
         test_precipitation_extract.cpp
         test_leaf_fall_extract.cpp
         test_season_extract.cpp

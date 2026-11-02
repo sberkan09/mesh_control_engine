@@ -17,6 +17,7 @@
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
 #include "mce/kit/dusk_bat.h"
+#include "mce/kit/snow_sparkle.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
@@ -135,6 +136,8 @@ constexpr u32 kFlockEmitterId = 0xFFFF0005u;
 constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
 // Dusk bats (M-BAT 30b): the id of the seventh render-side emitter (same collision argument as the leaf id).
 constexpr u32 kDuskBatEmitterId = 0xFFFF0007u;
+// Snow sparkle (M-SNOWSPARKLE 31b): the id of the eighth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kSnowSparkleEmitterId = 0xFFFF0008u;
 
 // M-PARTICLEQ 28b: the share of rate and budget a render-side weather emitter keeps (QualitySettings::particle_scale),
 // clamped to [0, 1]; NaN reads as 1.
@@ -2614,6 +2617,75 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.color_start = look.color_start;
                     em.color_end = look.color_end;
                     em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // snow sparkle (M-SNOWSPARKLE 31b): one additive render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const SnowSparkle* sp = nullptr;
+        world.query<const SnowSparkle&>().each([&](const SnowSparkle& c) {
+            if (!sp) sp = &c;
+        });
+        if (sp && sp->enabled != 0 && sp->strength > 0.0f) {
+            const SnowCover* sp_cover = nullptr;
+            world.query<const SnowCover&>().each([&](const SnowCover& c) {
+                if (!sp_cover) sp_cover = &c;
+            });
+            // no SnowCover: cover 0, only `manual` can make an amount
+            const f32 cover = sp_cover ? clamp(sp_cover->cover * sp_cover->strength, 0.0f, 1.0f) : 0.0f;
+            // the sun elevation 0..1 (sine of the elevation; 0 at the horizon and below, 1 at the zenith) as the bat block derives
+            // the sun height; no clock (time_of_day < 0): 0
+            const Environment3D sp_env = resolve_environment(world);
+            f32 sun_elev = 0.0f;
+            if (sp_env.time_of_day >= 0.0f) sun_elev = clamp(-render::sun_direction_at(sp_env.time_of_day).y, 0.0f, 1.0f);
+            const Weather* sp_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!sp_weather) sp_weather = &c;
+            });
+            const bool raining =
+                sp_weather && (sp_weather->current == WeatherKind::Rain || sp_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? sp_weather->intensity : 0.0f;
+            // Weather has no cloud field: the cloud cover is the kind factor of the cloud layer block (Clear 0, Overcast / Rain /
+            // Storm 1, Snow 0.9) times the intensity; no Weather is a clear sky
+            f32 cloud = 0.0f;
+            if (sp_weather) {
+                const f32 kind = sp_weather->current == WeatherKind::Clear  ? 0.0f
+                                 : sp_weather->current == WeatherKind::Snow ? 0.9f
+                                                                            : 1.0f;
+                const f32 inten = sp_weather->intensity;  // NaN falls to 0, the rest clamps to 0..1
+                cloud = kind * (inten > 0.0f ? (inten < 1.0f ? inten : 1.0f) : 0.0f);
+            }
+            const f32 amount = snow_sparkle_amount(*sp, cover, sun_elev, cloud, rain);
+            if (amount > 0.0f) {
+                const SnowSparkleLook look = snow_sparkle_look(*sp, amount);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
+                    render::ParticleEmitter em;
+                    em.id = kSnowSparkleEmitterId;
+                    em.max_particles = std::clamp(sp->max_particles, 8u, 512u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
+                    em.seed = sp->seed;
+                    em.position = scene.view().position;
+                    em.box = math::vec3{look.box, look.height, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = look.rate * pscale;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = look.additive;
                     scene.add_particle_emitter(em);
                     ++stats_.particle_emitters;
                 }
