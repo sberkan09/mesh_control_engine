@@ -13,7 +13,7 @@
 - **Opt-in component, no system, no state.** `SnowSparkle` (`mce/kit/snow_sparkle.h`, one per scene, the first in ECS order is read, registered by `install_weather`). Authoring (all `Save`, with a `Range`): `enabled` 1; `cover_low` 0.2 and `cover_full` 0.8 (smoothed cover gate); `sun_low` 0.05 and `sun_high` 0.6 (sun elevation band, trapezoid, strongest in the lower part); `manual` 0 (floor, ignores the cover and sun gates but not rain); `rate` 24 per second at full strength; `box_xz_m` 14, `height_m` 1.2; `size_m` 0.03; `lifetime_s` 0.6; `color` (1, 1, 1); `max_particles` 96; `seed`; `strength` 1.
 - **Strength (kit, 31a).** `snow_sparkle_amount(const SnowSparkle&, f32 cover, f32 sun_elev, f32 cloud, f32 rain)` is `max(manual, cover_gate * sun_gate) * (1 - cloud) * (1 - rain)` times `strength`. NaN and inverted ranges fall back to the defaults; polynomial only, fixed evaluation order, no `rand`.
 - **Emitter look (kit, 31a).** `snow_sparkle_look(const SnowSparkle&, f32 amount) -> SnowSparkleLook`; `active = amount > 0`; additive, almost no speed or gravity.
-- **Extract (kit, 31b).** After the dusk bat block in `kit3d_extract.cpp`: reads the first `SnowSparkle`, the first `SnowCover` (`cover * strength`), the sun elevation, cloud and rain from `Weather`; local emitter via `scene.add_particle_emitter`, rate and budget scaled by `particle_scale_of(quality_)` / `scaled_budget`. Nothing is written or hashed.
+- **Extract (kit, 31b).** After the dusk bat block in `kit3d_extract.cpp`: reads the first `SnowSparkle`, the first `SnowCover` (`cover * strength`), the sun elevation, cloud and rain from `Weather`; `Weather` has no cloud field, so the cloud term is the cloud-layer kind factor (Clear 0, Snow 0.9, others 1) times the intensity, and no `Weather` is a clear sky; local emitter via `scene.add_particle_emitter`, rate and budget scaled by `particle_scale_of(quality_)` / `scaled_budget`. Nothing is written or hashed.
 - **Determinism.** The amount depends only on authoring, the cover and the weather state; a scene without `SnowSparkle` is byte-identical.
 - **Luau (31c).** `weather.set_snow_sparkle{...}`, getters `weather.snow_sparkle_<key>()` (colour returns `r, g, b`), read-only `weather.snow_sparkle_active()`; clamped, named errors, nothing written on error, raises when the component is missing.
 
@@ -33,7 +33,7 @@ No step needs Opus: nothing writes a shader.
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 31a | done | 1010 | `SnowSparkle` and the pure `snow_sparkle_amount`, `snow_sparkle_look` in `mce/kit/snow_sparkle.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19za. |
-| 31b | planned | | |
+| 31b | done | 1012 | Extract feed: one local additive emitter (id `0xFFFF0008`) from `snow_sparkle_look`, Low tier and `particle_scale`; cloud is the cloud-layer kind factor times intensity (Weather has no cloud field); `tests/kit/test_snow_sparkle_extract.cpp`. |
 | 31c | planned | | |
 | 31d | planned | | |
 
