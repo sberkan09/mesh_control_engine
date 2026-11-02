@@ -238,3 +238,91 @@ TEST_CASE("net prediction: the replication client leaves a predicted entity to t
     }
     CHECK(world.try_get<LocalTransform>(rc.find(1))->position.x == 20.0f);
 }
+
+TEST_CASE("prediction: seq_after is serial-number order and survives a wrap") {
+    using net::detail::seq_after;
+    CHECK(seq_after(2, 1));
+    CHECK_FALSE(seq_after(1, 2));
+    CHECK_FALSE(seq_after(5, 5));
+    CHECK(seq_after(0, 0xFFFFFFFFu));         // 0 follows the last sequence number
+    CHECK_FALSE(seq_after(0xFFFFFFFFu, 0));
+    CHECK(seq_after(3, 0xFFFFFFF0u));
+    CHECK_FALSE(seq_after(0x80000000u, 0));  // exactly half the range apart is not "after"
+}
+
+TEST_CASE("prediction: same_transform compares every float bit") {
+    LocalTransform a;
+    LocalTransform b = a;
+    CHECK(net::detail::same_transform(a, b));
+    b.position.y = 1e-7f;
+    CHECK_FALSE(net::detail::same_transform(a, b));
+    b = a;
+    b.scale.z = 2.0f;
+    CHECK_FALSE(net::detail::same_transform(a, b));
+    b = a;
+    b.rotation.w = -a.rotation.w;
+    CHECK_FALSE(net::detail::same_transform(a, b));
+    // Bitwise: -0 differs from +0, and a NaN equals itself.
+    a.position.x = 0.0f;
+    b = a;
+    b.position.x = -0.0f;
+    CHECK_FALSE(net::detail::same_transform(a, b));
+    a.position.x = std::bit_cast<f32>(0x7FC00000u);
+    b = a;
+    CHECK(net::detail::same_transform(a, b));
+}
+
+TEST_CASE("prediction: the input packet header round-trips and refuses a wrong packet") {
+    auto packet = [](u32 input_size, u32 newest, u32 count, usize payload) {
+        ByteWriter w;
+        net::detail::write_input_header(w, input_size, newest, count);
+        for (usize i = 0; i < payload; ++i) w.write_u8(0);
+        return w;
+    };
+    u32 newest = 0, count = 0;
+    {
+        const ByteWriter w = packet(4, 0xFFFFFFFEu, 3, 12);
+        ByteReader r(w.data());
+        REQUIRE(net::detail::read_input_header(r, 4, newest, count));
+        CHECK(newest == 0xFFFFFFFEu);
+        CHECK(count == 3);
+    }
+    {
+        const ByteWriter w = packet(4, 1, 3, 12);  // the reader expects another input size
+        ByteReader r(w.data());
+        CHECK_FALSE(net::detail::read_input_header(r, 8, newest, count));
+    }
+    {
+        const ByteWriter w = packet(4, 1, 3, 8);  // short payload
+        ByteReader r(w.data());
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+    {
+        const ByteWriter w = packet(4, 1, 3, 16);  // trailing bytes
+        ByteReader r(w.data());
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+    {
+        const ByteWriter w = packet(4, 1, 0, 0);  // no inputs
+        ByteReader r(w.data());
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+    {
+        const ByteWriter w = packet(4, 1, kMaxInputsPerPacket + 1, (kMaxInputsPerPacket + 1) * 4);
+        ByteReader r(w.data());
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+    {
+        ByteWriter w = packet(4, 1, 1, 4);
+        Array<u8> bad;
+        for (u8 b : w.data()) bad.push_back(b);
+        bad[0] ^= 0xFF;  // wrong magic
+        ByteReader r(bad.span());
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+    {
+        const u8 tiny[2] = {1, 2};
+        ByteReader r{Span<const u8>(tiny, 2)};
+        CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
+    }
+}
