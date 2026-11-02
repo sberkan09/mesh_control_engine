@@ -1,6 +1,6 @@
 # M-MELEE: melee attack in 09_openworld
 
-**Status:** planned (2026-11-02). Closes "melee" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
+**Status:** done (2026-11-02), except a swing sound and hit feedback. Closes "melee" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md); progression and goals come after it. Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`melee3d`). No ECS, render or physics core, no
@@ -29,7 +29,7 @@ Size: a padding-free struct with a `static_assert(sizeof)` (state_hash hashes ra
 |---|---|---|
 | 1 seam | `Melee3D`, system `kit_melee`, swing event, unit tests (cone and reach, windup, rate, dead and seated attacker ignored, deterministic order). No sample change. | done |
 | 2 feature | Sample: the player gets `Melee3D`; action `Melee` on V / gamepad right stick click; the pedestrians and police take damage (a HUD hint is left out). | done |
-| 3 polish | Swing sound and hit marker reuse, user-guide section, MCP inspect check, `M-OPENWORLD-GAPS` strike-through. | open |
+| 3 polish | The user-guide section, the MCP inspect check and the `M-OPENWORLD-GAPS` strike-through landed with steps 1 and 2. Damage, death, crimes and cash drops work as for a bullet; the hit marker and impact effects listen to `WeaponHit3D`, so a swing shows none yet, and a swing sound needs a new clip (both left open). | done |
 
 ## Notes
 
