@@ -40,4 +40,4 @@ No step needs Opus: nothing writes a shader.
 ## Follow-ups
 
 - Bats that roost or react to the camera; wing beats (needs per-particle animation or a render field).
-- A box strictly above the ground (the same open item as the butterflies).
+- ~~A box strictly above the ground (the same open item as the butterflies).~~ Done by M-PARTICLEFLOOR.

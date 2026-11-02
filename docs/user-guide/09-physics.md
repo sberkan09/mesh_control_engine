@@ -441,6 +441,14 @@ the actions `Slot1`..`Slot3` and `WeaponNext` / `WeaponPrev`. A seated rider and
 
 An `AmmoShop3D` also restocks the weapons in the backpack (each up to `stock_to`, from the same wallet) and a `Confiscate3D` arrest keeps the same share of their reserve.
 
+### Melee attack
+
+`mce/kit/melee3d.h`: a `Melee3D` on a character swings at what is in front of it, independent of any `Weapon3D` and without
+ammo. A swing starts when `trigger` is set to 1, or, with `use_input`, when the action `Melee` is pressed; only when the
+`cooldown` is over (`rate` swings/s), the attacker is alive and not a seated `Rider3D`. After `windup` s it damages every other
+`Health3D` within `reach` m and `arc_deg` / 2 of the attacker's forward (-Z) on the ground plane, in entity order, through
+`apply_damage` (a same-team target is spared). `MeleeSwung3D` reports each swing and how many it hit.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
