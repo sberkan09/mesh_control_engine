@@ -1,0 +1,1 @@
+- Tests: asset `submesh_lod_count` and `submesh_lod_first` read the first two reserved words of a submesh.

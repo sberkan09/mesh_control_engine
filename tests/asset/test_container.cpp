@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "mce/asset/container.h"
+#include "mce/asset/formats.h"
 #include "mce/asset/guid.h"
 #include "mce/asset/xxhash.h"
 
@@ -268,4 +269,17 @@ TEST_CASE("container: chunk_version packs a major in the high byte and a minor i
     CHECK(chunk_version_major(chunk_version(0, 9)) == 0);
     // A newer minor keeps the major a reader matches on.
     CHECK(chunk_version_major(chunk_version(2, 1)) == chunk_version_major(chunk_version(2, 200)));
+}
+
+TEST_CASE("formats: submesh_lod_count and submesh_lod_first read the first two reserved words") {
+    MeshSubmesh s{};
+    CHECK(submesh_lod_count(s) == 0);
+    CHECK(submesh_lod_first(s) == 0);
+    s.reserved[0] = 3;
+    s.reserved[1] = 11;
+    CHECK(submesh_lod_count(s) == 3);
+    CHECK(submesh_lod_first(s) == 11);
+    s.reserved[2] = 99;  // the third word is not a LOD field
+    CHECK(submesh_lod_count(s) == 3);
+    CHECK(submesh_lod_first(s) == 11);
 }
