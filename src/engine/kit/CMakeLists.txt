@@ -35,6 +35,7 @@ mce_add_library(mce_gameplay_kit
         src/impact_fx.cpp
         src/fall_death.cpp
         src/loadout3d.cpp
+        src/melee3d.cpp
         src/vehicle_extras.cpp
         src/weather.cpp
         src/weather_audio.cpp
