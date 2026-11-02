@@ -2,7 +2,7 @@
 
 **Naming:** the component is `DuskBat` (header `dusk_bat.h`, helpers `dusk_bat_amount` / `dusk_bat_look`), not `Bat`: the Glowmoth game already registers its own `Bat` type, and the reflection registry asserts on two types with one name and different layouts (found by the 30a CI).
 
-**Status:** planned (2026-11-02), steps 30a to 30d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-BUTTERFLY, M-FIREFLIES and M-BIRDFLOCK (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEQ and M-PARTICLEUSER (the emitter reads `QualitySettings::particle_scale`, so `r.particles` and the Low tier already apply) and M-SEASONS (`Season`). Butterflies fly by day and fireflies glow at night, but the twilight between them has nothing alive in the air. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-02), steps 30a to 30d (PRs 1002, 1003, 1005, 1006, 1007). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-BUTTERFLY, M-FIREFLIES and M-BIRDFLOCK (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEQ and M-PARTICLEUSER (the emitter reads `QualitySettings::particle_scale`, so `r.particles` and the Low tier already apply) and M-SEASONS (`Season`). Butterflies fly by day and fireflies glow at night, but the twilight between them has nothing alive in the air. No Linear issues (free issue limit); this record is the tracker.
 
 **Goal.** An opt-in kit component `DuskBat` turns twilight (the night fade inside a dusk band, dark enough to read and light enough to see), the warm part of the year (a circular trapezoid around the summer centre 0.375 that is wider than the butterfly's), calm wind and dry weather into a strength 0..1, with a manual floor. Pure helpers turn the strength into an emitter look: a few small dark specks that dart quickly (high speed, wide spread, almost no gravity) in a box around the camera. `Kit3DExtract` adds one **render-side `render::ParticleEmitter`** with the reserved id `0xFFFF0007u`, the same path as the other six. No shader, pass, render field or system state; no component is written. A scene with no `DuskBat` (or `enabled` 0, `strength` 0 or an amount of 0) is bit-identical.
 
@@ -35,7 +35,7 @@ No step needs Opus: nothing writes a shader.
 | 30a | done | 1003 | `DuskBat` and the pure `dusk_bat_amount`, `dusk_bat_look` in `mce/kit/dusk_bat.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.4). Guide 9.19z. |
 | 30b | done | 1005 | Extract feed: one local alpha-blended emitter (id `0xFFFF0007`) from `dusk_bat_look`, Low tier and `particle_scale`; `tests/kit/test_dusk_bat_extract.cpp`. |
 | 30c | done | 1006 | `weather.set_dusk_bat`, the `weather.dusk_bat_<key>()` getters and read-only `weather.dusk_bat_flying()` in `api_weather.cpp`, typed in `definitions.cpp`; `test_script_dusk_bat.cpp`. `12_weather` logs `dusk_bat:` every 150 ticks. Guide 9.19z. |
-| 30d | planned | | |
+| 30d | done | 1007 | The `08-3d` "Bats flit at dusk" paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
