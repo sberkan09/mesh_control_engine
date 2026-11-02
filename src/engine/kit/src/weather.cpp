@@ -28,6 +28,7 @@
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
+#include "mce/kit/dusk_bat.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
@@ -299,6 +300,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<Dust>();        // M-DUSTWIND 25a: read by Kit3DExtract (25b) and the dust helpers; no system
     world.register_components<Flock>();       // M-BIRDFLOCK 26a: read by Kit3DExtract (26b) and the flock helpers; no system
     world.register_components<Butterfly>();   // M-BUTTERFLY 27a: read by Kit3DExtract (27b) and the butterfly helpers; no system
+    world.register_components<DuskBat>();         // M-BAT 30a: read by Kit3DExtract (30b) and the bat helpers; no system
     world.register_components<Season>();      // M-SEASONS 19a: read by Kit3DExtract (19b) and the season helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
