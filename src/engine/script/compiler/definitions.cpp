@@ -716,6 +716,37 @@ declare weather: {
     -- max_particles 8..512, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a non-number raises
     -- and nothing is written
     set_snow_sparkle: (settings: { enabled: number?, cover_low: number?, cover_full: number?, sun_low: number?, sun_high: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- Midge (M-MIDGES), the first Midge in the scene; every midge function raises when there is none (set_midge never adds
+    -- one). The getters are midge_ plus the set key; the colour returns r, g, b. They read the authoring even when enabled is
+    -- 0. midge_active (0..1) is the midge amount now, the same one the renderer draws: max(manual, summer window times
+    -- twilight gate) times the calm gate (the wind) times the dryness (1 - rain) times strength, with the first Season at the
+    -- WorldClock's day and hour, the signed sun elevation of the Environment3D hour (-1..1), the effective wind and the rain
+    -- (the first Weather's intensity while it rains or storms); 0 when enabled or strength is 0. Read-only.
+    midge_enabled: () -> number,
+    midge_window_full: () -> number,
+    midge_window_end: () -> number,
+    midge_manual: () -> number,
+    midge_twilight_low: () -> number,
+    midge_twilight_high: () -> number,
+    midge_wind_calm: () -> number,
+    midge_wind_still: () -> number,
+    midge_rate: () -> number,
+    midge_box_xz_m: () -> number,
+    midge_height_m: () -> number,
+    midge_size_m: () -> number,
+    midge_lifetime_s: () -> number,
+    midge_speed: () -> number,
+    midge_max_particles: () -> number,
+    midge_seed: () -> number,
+    midge_strength: () -> number,
+    midge_color: () -> (number, number, number),
+    midge_active: () -> number,
+    -- every key optional, each value clamped to the field's range (window_full and window_end 0..0.5, manual, twilight_high,
+    -- wind_calm, wind_still, strength and each colour channel 0..1, twilight_low -1..0, rate 0..200, box_xz_m 1..100, height_m
+    -- 0.3..20, size_m 0.005..0.5, lifetime_s 0.5..20, speed 0..4, max_particles 8..512, seed 0..4294967295; enabled: any
+    -- non-zero number is 1); an unknown key or a non-number raises and nothing is written
+    set_midge: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, twilight_low: number?, twilight_high: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {

@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines and the "snow_sparkle:" lines).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines, the "snow_sparkle:" lines and the "midge:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -114,5 +114,9 @@ function update()
         -- kit amount: max(manual, cover gate times sun gate) times the clear sky (1 - cloud) times the dryness (1 - rain
         -- intensity). Read only, the script writes nothing.
         mce.log(string.format("snow_sparkle: %.3f at tick %d", weather.snow_sparkle_active(), t))
+        -- M-MIDGES: the Midge on the Weather entity (manual 0.3, the floor of the amount). midge_active is the kit amount:
+        -- max(manual, warm window times twilight gate) times the calm gate (the wind) times the dryness (1 - rain
+        -- intensity). Read only, the script writes nothing.
+        mce.log(string.format("midge: %.3f at tick %d", weather.midge_active(), t))
     end
 end

@@ -22,6 +22,7 @@ mce_add_test(test_script UMBRELLA
         test_script_butterfly.cpp
         test_script_dusk_bat.cpp
         test_script_snow_sparkle.cpp
+        test_script_midge.cpp
         test_script_rainbow.cpp
         test_daynight_demo.cpp
         test_weather_demo.cpp

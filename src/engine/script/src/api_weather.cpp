@@ -457,6 +457,30 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Midge (M-MIDGES step 33c) lives in the same table: the authoring over the first kit::Midge (mce/kit/midge.h) and the
+// read-only midge_active(). Named errors as above ("weather.set_midge: the scene has no Midge entity"); the setter never
+// adds the component. The getters are named weather.midge_<key>; the colour returns r, g, b. midge_active() is
+// kit::midge_amount with the inputs the extract's midge block uses: the first Season at the first WorldClock's day and hour
+// (day 0, hour 0 with no clock; no Season is the manual floor), the SIGNED sun elevation (-sun_direction_at(hour).y clamped
+// to -1..1, 0 with no clock; the twilight gate needs the dip below the horizon), the effective wind with the gust sway of the
+// first WindGust (calm with no Weather) and the rain (the intensity while it rains or storms). 0 when `enabled` or
+// `strength` is 0. The getters read the authoring even when `enabled` is 0. Known difference: the extract's hour comes from
+// the environment with the r.env_override cvar applied; the script reads the Environment3D without it.
+//
+//   weather.midge_enabled() / midge_window_full() / midge_window_end() / midge_manual() / midge_twilight_low() /
+//   weather.midge_twilight_high() / midge_wind_calm() / midge_wind_still() / midge_rate() / midge_box_xz_m() /
+//   weather.midge_height_m() / midge_size_m() / midge_lifetime_s() / midge_speed() / midge_max_particles() /
+//   weather.midge_seed() / midge_strength() -> number
+//   weather.midge_color() -> r, g, b
+//   weather.midge_active() -> number              0..1, the midge amount now
+//   weather.set_midge{enabled=, window_full=, window_end=, manual=, twilight_low=, twilight_high=, wind_calm=, wind_still=,
+//                     rate=, box_xz_m=, height_m=, size_m=, lifetime_s=, speed=, color={r,g,b}, max_particles=, seed=,
+//                     strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/midge.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -491,6 +515,7 @@
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/midge.h"
 #include "mce/kit/snow_sparkle.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/wind_direction.h"
@@ -2590,6 +2615,121 @@ int l_weather_set_snow_sparkle(lua_State* L) {
     return 0;
 }
 
+// ---- Midge (M-MIDGES step 33c) ----
+
+kit::Midge& check_midge(lua_State* L, const char* fn) { return check_first<kit::Midge>(L, fn, "Midge"); }
+
+#define MCE_WEATHER_GETTER_MIDGE(luaname, field)                                                         \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_midge(L, "weather." #luaname).field));               \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_MIDGE(midge_enabled, enabled)
+MCE_WEATHER_GETTER_MIDGE(midge_window_full, window_full)
+MCE_WEATHER_GETTER_MIDGE(midge_window_end, window_end)
+MCE_WEATHER_GETTER_MIDGE(midge_manual, manual)
+MCE_WEATHER_GETTER_MIDGE(midge_twilight_low, twilight_low)
+MCE_WEATHER_GETTER_MIDGE(midge_twilight_high, twilight_high)
+MCE_WEATHER_GETTER_MIDGE(midge_wind_calm, wind_calm)
+MCE_WEATHER_GETTER_MIDGE(midge_wind_still, wind_still)
+MCE_WEATHER_GETTER_MIDGE(midge_rate, rate)
+MCE_WEATHER_GETTER_MIDGE(midge_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_MIDGE(midge_height_m, height_m)
+MCE_WEATHER_GETTER_MIDGE(midge_size_m, size_m)
+MCE_WEATHER_GETTER_MIDGE(midge_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_MIDGE(midge_speed, speed)
+MCE_WEATHER_GETTER_MIDGE(midge_max_particles, max_particles)
+MCE_WEATHER_GETTER_MIDGE(midge_seed, seed)
+MCE_WEATHER_GETTER_MIDGE(midge_strength, strength)
+#undef MCE_WEATHER_GETTER_MIDGE
+
+int l_weather_midge_color(lua_State* L) { return push_season_tint(L, check_midge(L, "weather.midge_color").color); }
+
+// weather.midge_active(): kit::midge_amount with the inputs of the extract's midge block (kit3d_extract.cpp, "midges
+// (M-MIDGES 33b)"; keep the two in step): the first Season at the first WorldClock's day and hour (day 0, hour 0 with no
+// clock; no Season is the manual floor), the signed sun elevation (-sun_direction_at(hour).y clamped to -1..1, 0 with no
+// clock), the effective wind with the gust sway (calm with no Weather) and the rain (the intensity while it rains or storms).
+// The extract applies the r.env_override cvar to the environment first; this does not. 0 when enabled or strength is 0.
+int l_weather_midge_active(lua_State* L) {
+    const kit::Midge& mg = check_midge(L, "weather.midge_active");
+    World& w = world_of(L);
+    f32 amount = 0.0f;
+    if (mg.enabled != 0 && mg.strength > 0.0f) {
+        const kit::Season* season = nullptr;
+        const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+        if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::Season&>().each([&](const kit::Season& c) {
+                if (!season) season = &c;
+            });
+        }
+        u32 day = 0;
+        f32 clock_hour = 0.0f;
+        const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+        if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+            bool found = false;
+            w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+                if (found) return;
+                found = true;
+                day = c.day;
+                clock_hour = c.hour;
+            });
+        }
+        const f32 phase = season ? kit::season_phase(*season, day, clock_hour) : 0.0f;
+        const f32 hour = current_hour(w);
+        f32 sun_elev = 0.0f;
+        if (hour >= 0.0f) sun_elev = std::clamp(-render::sun_direction_at(hour).y, -1.0f, 1.0f);
+        const kit::Weather* wx = first_weather(w);
+        const kit::WindGust* gust = nullptr;
+        const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+        if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+                if (!gust) gust = &c;
+            });
+        }
+        const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+        amount = kit::midge_amount(mg, season, phase, sun_elev, wind, rain);
+        if (!std::isfinite(amount)) amount = 0.0f;
+    }
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_midge{...}: validated before anything is written.
+int l_weather_set_midge(lua_State* L) {
+    static const char* const kKeys[18] = {"enabled", "window_full", "window_end", "manual", "twilight_low", "twilight_high", "wind_calm", "wind_still", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "speed", "color", "max_particles", "seed", "strength"};
+    f64 value[18] = {};
+    bool given[18] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_midge", kKeys, 18, "enabled, window_full, window_end, manual, twilight_low, twilight_high, wind_calm, wind_still, rate, box_xz_m, height_m, size_m, lifetime_s, speed, color, max_particles, seed, strength",
+                  value, given, 14, color);
+    kit::Midge& mg = check_midge(L, "weather.set_midge");
+    if (given[0]) mg.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) mg.window_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) mg.window_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) mg.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) mg.twilight_low = static_cast<f32>(clamp_range(value[4], -1.0, 0.0));
+    if (given[5]) mg.twilight_high = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) mg.wind_calm = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) mg.wind_still = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) mg.rate = static_cast<f32>(clamp_range(value[8], 0.0, 200.0));
+    if (given[9]) mg.box_xz_m = static_cast<f32>(clamp_range(value[9], 1.0, 100.0));
+    if (given[10]) mg.height_m = static_cast<f32>(clamp_range(value[10], 0.3, 20.0));
+    if (given[11]) mg.size_m = static_cast<f32>(clamp_range(value[11], 0.005, 0.5));
+    if (given[12]) mg.lifetime_s = static_cast<f32>(clamp_range(value[12], 0.5, 20.0));
+    if (given[13]) mg.speed = static_cast<f32>(clamp_range(value[13], 0.0, 4.0));
+    if (given[14]) {
+        mg.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        mg.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        mg.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[15]) mg.max_particles = static_cast<u32>(clamp_range(value[15], 8.0, 512.0));
+    if (given[16]) mg.seed = static_cast<u32>(clamp_range(value[16], 0.0, 4294967295.0));
+    if (given[17]) mg.strength = static_cast<f32>(clamp_range(value[17], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -3088,6 +3228,26 @@ const luaL_Reg kWeatherLib[] = {
     {"snow_sparkle_color", l_weather_snow_sparkle_color},
     {"snow_sparkle_active", l_weather_snow_sparkle_active},
     {"set_snow_sparkle", l_weather_set_snow_sparkle},
+    {"midge_enabled", l_weather_midge_enabled},
+    {"midge_window_full", l_weather_midge_window_full},
+    {"midge_window_end", l_weather_midge_window_end},
+    {"midge_manual", l_weather_midge_manual},
+    {"midge_twilight_low", l_weather_midge_twilight_low},
+    {"midge_twilight_high", l_weather_midge_twilight_high},
+    {"midge_wind_calm", l_weather_midge_wind_calm},
+    {"midge_wind_still", l_weather_midge_wind_still},
+    {"midge_rate", l_weather_midge_rate},
+    {"midge_box_xz_m", l_weather_midge_box_xz_m},
+    {"midge_height_m", l_weather_midge_height_m},
+    {"midge_size_m", l_weather_midge_size_m},
+    {"midge_lifetime_s", l_weather_midge_lifetime_s},
+    {"midge_speed", l_weather_midge_speed},
+    {"midge_max_particles", l_weather_midge_max_particles},
+    {"midge_seed", l_weather_midge_seed},
+    {"midge_strength", l_weather_midge_strength},
+    {"midge_color", l_weather_midge_color},
+    {"midge_active", l_weather_midge_active},
+    {"set_midge", l_weather_set_midge},
     {nullptr, nullptr},
 };
 
