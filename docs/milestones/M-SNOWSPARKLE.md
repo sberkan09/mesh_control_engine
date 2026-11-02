@@ -32,7 +32,7 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 31a | planned | | |
+| 31a | done | 1010 | `SnowSparkle` and the pure `snow_sparkle_amount`, `snow_sparkle_look` in `mce/kit/snow_sparkle.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19za. |
 | 31b | planned | | |
 | 31c | planned | | |
 | 31d | planned | | |
