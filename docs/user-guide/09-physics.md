@@ -456,6 +456,7 @@ ammo. A swing starts when `trigger` is set to 1, or, with `use_input`, when the 
 from the events of each tick. A `Goal3D` entity names a `stat`, a `target`, a cash `reward` and the `owner` (the entity with
 the `Progress3D` and the `Wallet3D`); when the counter reaches the target the goal is marked `done`, pays once, shows the
 caption "Goal: <name>" when captions are installed and pushes `GoalDone3D`.
+`samples/09_openworld` has five goals (first kill, ten kills, a mission, a car ride, five melee hits) and a "GOALS n / 5" HUD line.
 
 ## 9.10 Configuration
 

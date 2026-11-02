@@ -1229,6 +1229,7 @@ def scene():
         "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
         "Loadout3D": {"slot0": s.ref(pistol), "slot1": s.ref(smg), "slot2": s.ref(shotgun), "use_input": 1, "draw_time": 0.4},
         # A swing at whatever is in front of the player, with or without a gun in hand (M-MELEE).
+        "Progress3D": {},  # counts kills, missions, rides and melee hits for the goals below (M-PROGRESS)
         "Melee3D": {"use_input": 1, "damage": 35, "reach": 2.2, "arc_deg": 100, "rate": 2.5, "windup": 0.15},
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
@@ -1237,6 +1238,10 @@ def scene():
     s.add("Player model", {"ChildOf": {"parent": s.ref(player)}, "LocalTransform": tf((0, -0.9, 0), (CHAR_SCALE,) * 3, math.pi),
                            "MeshRef": model_mesh("character-a"),
                            "FaceVelocity3D": {"source": s.ref(player), "turn_rate_deg": 540, "yaw_offset": math.pi}})
+    # Five goals (M-PROGRESS): each pays cash once when its counter on the player's Progress3D reaches the target.
+    for gname, stat, target, reward in [("First blood", "Kills", 1, 50), ("Street fighter", "Kills", 10, 250), ("Odd job", "Missions", 1, 200),
+                                        ("Joyride", "Rides", 1, 100), ("Knuckle sandwich", "MeleeHits", 5, 150)]:
+        s.add("Goal: " + gname, {"Goal3D": {"name": gname, "stat": stat, "target": target, "reward": reward, "owner": s.ref(player)}})
     # Sparks where a shot lands (M-IMPACTFX): one pooled emitter that moves to each WeaponHit3D point and bursts.
     s.add("Impact sparks", {"LocalTransform": tf((0, -50, 0)),
                             "ParticleEmitter3D": {"color_start": [5.0, 3.0, 0.8, 1.0], "color_end": [1.2, 0.3, 0.05, 0], "offset": [0, 0, 0],
@@ -1492,6 +1497,7 @@ def hud():
         {**hud_text("gear", "GEAR 1", 22, hud_box(-300, -246, -24, -216, 1, 1), "DriveReadout3D/gear", "GEAR %.0f", [0.8, 0.9, 1.0, 1], "Right"),
          "visible": False, "range": [-1.5, 20, 0], "value": 0},
         hud_text("kills", "KILLS 0", 22, hud_box(24, -96, 280, -68, 0, 1), "Wanted3D/kills", "KILLS %.0f", [1.0, 0.6, 0.45, 1]),
+        hud_text("goals", "GOALS 0 / 5", 22, hud_box(24, -126, 280, -98, 0, 1), "Progress3D/goals_done", "GOALS %.0f / 5", [1.0, 0.9, 0.5, 1]),
         hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),
         hud_text("cash", "$ 0", 30, hud_box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),

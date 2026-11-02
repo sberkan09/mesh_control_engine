@@ -323,6 +323,48 @@
    "format": "KILLS %.0f"
   },
   {
+   "name": "goals",
+   "kind": "Text",
+   "text": "GOALS 0 / 5",
+   "style": {
+    "text_size": 22,
+    "text_outline": 2,
+    "text_outline_color": [
+     0,
+     0,
+     0,
+     1
+    ],
+    "text_color": [
+     1.0,
+     0.9,
+     0.5,
+     1
+    ]
+   },
+   "text_align": "Left",
+   "anchors": {
+    "min": [
+     0,
+     1
+    ],
+    "max": [
+     0,
+     1
+    ],
+    "offset_min": [
+     24,
+     -126
+    ],
+    "offset_max": [
+     280,
+     -98
+    ]
+   },
+   "bind": "Progress3D/goals_done",
+   "format": "GOALS %.0f / 5"
+  },
+  {
    "name": "wanted",
    "kind": "Text",
    "text": "WANTED",

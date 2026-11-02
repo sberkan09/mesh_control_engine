@@ -138,12 +138,18 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     }
     CHECK(foot == 3);  // the officer that was shot is gone
     CHECK(hunting >= 2);
+    // M-PROGRESS: the officer's death counts as the player's kill and pays the "First blood" goal.
+    auto progress = c.ok("run_headless", R"({"ticks":500,"log_lines":0,"input":"20-80 Fire","inspect":{"component":"Progress3D","show":["Progress3D"]}})");
+    REQUIRE(count(progress) == 1);
+    CHECK(comps(progress, 0).get("Progress3D").get("kills").as_number() >= 1);
+    CHECK(comps(progress, 0).get("Progress3D").get("goals_done").as_number() >= 1);
     // Sparks where a shot lands (M-IMPACTFX).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"ImpactFx3D","show":["ImpactFx3D"]}})")) >= 1);
     // Weapon switching (M-WEAPONSWITCH): the loadout and its three presets.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Loadout3D","show":["Loadout3D"]}})")) >= 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"WeaponPreset3D","show":["WeaponPreset3D"]}})")) >= 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Melee3D","show":["Melee3D"]}})")) >= 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Goal3D","show":["Goal3D"]}})")) == 5);
     // A safety net under the world (M-FALLDEATH).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).
@@ -263,14 +269,14 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         return std::string("missing");
     };
     CHECK(errand_state("30") == "Active");
-    // Standing at the Errand's destination with the mission started completes it: 500 + 250.
+    // Standing at the Errand's destination with the mission started completes it: 500 + 250, and the "Odd job" goal pays 200 (M-PROGRESS).
     c.ok("component_set", R"({"entity":"Mission Errand","component":"Mission","path":"start","value":1})");
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[95,0.95,-9]})");
     c.ok("scene_save");
     CHECK(errand_state("60") == "Complete");
     auto rich = c.ok("run_headless", R"({"ticks":60,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Wallet3D"]}})");
     REQUIRE(count(rich) == 1);
-    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 750);
+    CHECK(comps(rich, 0).get("Wallet3D").get("cash").as_number() == 950);
     // Standing on a cash pad picks it up (the pad pays 40 to 100).
     c.ok("component_set", R"({"entity":"Player","component":"LocalTransform","path":"position","value":[-170,0.95,9]})");
     c.ok("scene_save");

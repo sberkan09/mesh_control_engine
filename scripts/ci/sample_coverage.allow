@@ -15,5 +15,3 @@ LaunchVelocity2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a 
 Impulse2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a game puts it on a thrown or pushed body
 RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand
-Progress3D | M-PROGRESS step 1: tested in tests/kit/test_progress3d.cpp; step 2 puts it on the 09_openworld player (remove this line then)
-Goal3D | M-PROGRESS step 1: tested in tests/kit/test_progress3d.cpp; step 2 puts five goals in 09_openworld (remove this line then)
