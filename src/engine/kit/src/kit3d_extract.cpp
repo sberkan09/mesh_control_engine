@@ -16,6 +16,7 @@
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
+#include "mce/kit/dusk_bat.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
@@ -132,6 +133,8 @@ constexpr u32 kDustEmitterId = 0xFFFF0004u;
 constexpr u32 kFlockEmitterId = 0xFFFF0005u;
 // Summer butterflies (M-BUTTERFLY 27b): the id of the sixth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kButterflyEmitterId = 0xFFFF0006u;
+// Dusk bats (M-BAT 30b): the id of the seventh render-side emitter (same collision argument as the leaf id).
+constexpr u32 kDuskBatEmitterId = 0xFFFF0007u;
 
 // M-PARTICLEQ 28b: the share of rate and budget a render-side weather emitter keeps (QualitySettings::particle_scale),
 // clamped to [0, 1]; NaN reads as 1.
@@ -2516,6 +2519,82 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = std::clamp(bf->max_particles, 8u, 512u);
                     em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = bf->seed;
+                    em.position = scene.view().position;
+                    em.box = math::vec3{look.box, look.height, look.box};
+                    em.direction = look.direction;
+                    em.spread = look.spread;
+                    em.rate = look.rate * pscale;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = look.gravity;
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size;
+                    em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // dusk bats (M-BAT 30b): one alpha-blended render-side emitter around the camera; nothing is written, nothing added at amount 0
+        const DuskBat* bat = nullptr;
+        world.query<const DuskBat&>().each([&](const DuskBat& c) {
+            if (!bat) bat = &c;
+        });
+        if (bat && bat->enabled != 0 && bat->strength > 0.0f) {
+            const Season* bat_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!bat_season) bat_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = bat_season ? season_phase(*bat_season, day, hour) : 0.0f;
+            const Weather* bat_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!bat_weather) bat_weather = &c;
+            });
+            const bool raining =
+                bat_weather && (bat_weather->current == WeatherKind::Rain || bat_weather->current == WeatherKind::Storm);
+            const f32 rain = raining ? bat_weather->intensity : 0.0f;
+            // the night fade as the pollen block derives it; no clock (time_of_day < 0): 0
+            const Environment3D bat_env = resolve_environment(world);
+            f32 night_fade = 0.0f;
+            if (bat_env.time_of_day >= 0.0f) {
+                const f32 elev = -render::sun_direction_at(bat_env.time_of_day).y;
+                const f32 t = clamp((elev + 0.1f) / 0.2f, 0.0f, 1.0f);
+                night_fade = 1.0f - t * t * (3.0f - 2.0f * t);
+            }
+            const WindGust* bat_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!bat_gust) bat_gust = &c;
+            });
+            // As the dust block: no Weather is calm, the gust sway bit.
+            const f32 wind = bat_weather ? effective_wind(*bat_weather, bat_gust, kGustSway) : 0.0f;
+            const f32 amount = dusk_bat_amount(*bat, bat_season, phase, night_fade, wind, rain);
+            if (amount > 0.0f) {
+                const DuskBatLook look = dusk_bat_look(*bat, amount);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
+                    render::ParticleEmitter em;
+                    em.id = kDuskBatEmitterId;
+                    em.max_particles = std::clamp(bat->max_particles, 8u, 512u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
+                    em.seed = bat->seed;
                     em.position = scene.view().position;
                     em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
