@@ -1,1 +1,1 @@
-M-BAT 30d: the user guide has a "Bats flit at dusk" paragraph and the milestone and ROADMAP row are closed.
+- M-BAT step 30d: the user guide has a "Bats flit at dusk" paragraph and the milestone and the ROADMAP row are closed.
