@@ -259,3 +259,13 @@ TEST_CASE("container: a writer with thousands of chunks keeps every payload and 
         CHECK(p[p.size() - 1] == static_cast<byte>(i));
     }
 }
+
+TEST_CASE("container: chunk_version packs a major in the high byte and a minor in the low byte") {
+    const u16 v = chunk_version(3, 7);
+    CHECK(v == 0x0307);
+    CHECK(chunk_version_major(v) == 3);
+    CHECK(chunk_version_major(chunk_version(255, 255)) == 255);
+    CHECK(chunk_version_major(chunk_version(0, 9)) == 0);
+    // A newer minor keeps the major a reader matches on.
+    CHECK(chunk_version_major(chunk_version(2, 1)) == chunk_version_major(chunk_version(2, 200)));
+}
