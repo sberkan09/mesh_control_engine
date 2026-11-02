@@ -184,6 +184,12 @@ def input_map():
         {"name": "Sprint", "bindings": [key("LShift"), {"gamepad_button": "LeftShoulder"}]},
         {"name": "TriggerL", "bindings": [key("LCtrl"), {"gamepad_axis": "LeftTrigger"}]},
         {"name": "Radio", "bindings": [key("Q"), {"gamepad_button": "DpadLeft"}]},
+        # Weapon switching (M-WEAPONSWITCH): 1 to 3 pick a slot, X / Z (pad: D-pad up / down) cycle through them.
+        {"name": "Slot1", "bindings": [key("1")]},
+        {"name": "Slot2", "bindings": [key("2")]},
+        {"name": "Slot3", "bindings": [key("3")]},
+        {"name": "WeaponNext", "bindings": [key("X"), {"gamepad_button": "DpadUp"}]},
+        {"name": "WeaponPrev", "bindings": [key("Z"), {"gamepad_button": "DpadDown"}]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -200,7 +206,10 @@ def input_map():
         {"name": "Resume", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},  # also what the pause menu's button emits
     ]
     # Every action can be played on a gamepad (a new action without a pad binding fails the generator, not a player).
+    keyboard_only = {"Slot1", "Slot2", "Slot3"}  # the pad cycles with WeaponNext / WeaponPrev
     for action in gameplay + ui:
+        if action["name"] in keyboard_only:
+            continue
         assert any("gamepad_button" in b or "gamepad_axis" in b for b in action["bindings"]), "no gamepad binding: " + action["name"]
     write("input/openworld.mcinput", {"format": "mce-input", "version": 1, "guid": G_INPUT, "maps": [
         {"name": "Gameplay", "actions": gameplay}, {"name": "UI", "blocks_below": True, "actions": ui}]})
@@ -1179,6 +1188,14 @@ def scene():
     street_furniture(s, rng, node_half)
     n_buildings = buildings(s, rng)
 
+    # Three weapons the player switches between (M-WEAPONSWITCH): the player keeps one Weapon3D and Loadout3D copies a preset
+    # onto it. The pistol is the gun the player always had.
+    pistol = s.add("Weapon: pistol", {"WeaponPreset3D": {"damage": 22, "range": 120, "rate": 6, "automatic": 1, "magazine": 15, "reserve": 150,
+                                                         "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "pellets": 1}})
+    smg = s.add("Weapon: SMG", {"WeaponPreset3D": {"damage": 11, "range": 90, "rate": 14, "automatic": 1, "magazine": 30, "reserve": 120,
+                                                   "reload_time": 1.8, "spread_deg": 2.5, "impulse": 20, "pellets": 1}})
+    shotgun = s.add("Weapon: shotgun", {"WeaponPreset3D": {"damage": 10, "range": 40, "rate": 1.1, "automatic": 0, "magazine": 6, "reserve": 24,
+                                                           "reload_time": 2.4, "spread_deg": 6, "impulse": 30, "pellets": 8}})
     # The player, on the sidewalk of the middle avenue, with the car to take two steps away.
     player_start = (-60.0, 0.95, -10.0)
     player = s.add("Player", {
@@ -1208,6 +1225,7 @@ def scene():
                      "magazine": 15, "reserve": 150, "reload_time": 1.4, "spread_deg": 0.4, "impulse": 40, "muzzle": [0, 0, -6.0],
                      "mask": 0xFFFF},
         "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
+        "Loadout3D": {"slot0": s.ref(pistol), "slot1": s.ref(smg), "slot2": s.ref(shotgun), "use_input": 1, "draw_time": 0.4},
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })
@@ -1344,7 +1362,9 @@ def hud_text(name, label, size, anchors, bind=None, fmt=None, color=None, align=
     if color:
         w["style"]["text_color"] = color
     if bind:
-        w["bind"], w["format"] = bind, fmt
+        w["bind"] = bind
+        if fmt:
+            w["format"] = fmt
     return w
 
 
@@ -1476,6 +1496,10 @@ def hud():
         hud_text("slot_2", "", 22, hud_box(-280, 392, -16, 418, 1, 0), None, None, [0.7, 1.0, 0.8, 1], "Right"),
         hud_text("slot_3", "", 22, hud_box(-280, 420, -16, 446, 1, 0), None, None, [0.7, 1.0, 0.8, 1], "Right"),
         hud_text("objective", "Walk onto a yellow pad to start a mission", 24, hud_box(24, 16, 560, 52), None, None, [1, 1, 1, 1]),
+        # The wielded weapon's name, above the ammo: one Text per slot, shown while Loadout3D/current is its number.
+        *[{**hud_text("weapon_" + str(i), name, 26, hud_box(-300, -152, -24, -116, 1, 1), "Loadout3D/current", None, [1.0, 0.9, 0.5, 1], "Right"),
+           "visible": False, "range": [i, i, 0], "value": i}
+          for i, name in enumerate(["PISTOL", "SMG", "SHOTGUN"])],
         hud_text("ammo", "AMMO 15", 30, hud_box(-300, -112, -24, -72, 1, 1), "Weapon3D/ammo", "AMMO %.0f", [1, 1, 1, 1], "Right"),
         hud_text("reserve", "/ 150", 24, hud_box(-300, -66, -24, -30, 1, 1), "Weapon3D/reserve", "RESERVE %.0f", [0.8, 0.8, 0.8, 1], "Right"),
         {"name": "mini", "kind": "Minimap", "anchors": hud_box(-216, 16, -16, 216, 1, 0),
