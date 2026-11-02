@@ -142,6 +142,7 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     // Weapon switching (M-WEAPONSWITCH): the loadout and its three presets.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Loadout3D","show":["Loadout3D"]}})")) >= 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"WeaponPreset3D","show":["WeaponPreset3D"]}})")) >= 1);
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Melee3D","show":["Melee3D"]}})")) >= 1);
     // A safety net under the world (M-FALLDEATH).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).

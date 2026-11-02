@@ -28,7 +28,7 @@ Size: a padding-free struct with a `static_assert(sizeof)` (state_hash hashes ra
 | Step | What | Status |
 |---|---|---|
 | 1 seam | `Melee3D`, system `kit_melee`, swing event, unit tests (cone and reach, windup, rate, dead and seated attacker ignored, deterministic order). No sample change. | done |
-| 2 feature | Sample: the player gets `Melee3D`; action `Melee` on V / gamepad right stick click; a short HUD hint; the pedestrians and police take damage. | open |
+| 2 feature | Sample: the player gets `Melee3D`; action `Melee` on V / gamepad right stick click; the pedestrians and police take damage (a HUD hint is left out). | done |
 | 3 polish | Swing sound and hit marker reuse, user-guide section, MCP inspect check, `M-OPENWORLD-GAPS` strike-through. | open |
 
 ## Notes

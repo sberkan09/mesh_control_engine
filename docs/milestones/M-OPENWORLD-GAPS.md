@@ -117,7 +117,7 @@ Step 2 closes "no cover, melee, grenades or weapon switching" and moves the gun 
 |---|---|---|
 | 2a | `Weapon3D::aim_from` (an Entity): the shot leaves from that entity's pose (plus `muzzle`) and points along its forward; null or a gone entity falls back to the weapon's own pose. The 09_openworld gun moved from the camera to the player (`aim_from` = the camera, `WeaponAudio` and the ammo readout in `hud.mcui` with it), so `Confiscate3D` (an arrest keeps half the spare rounds) and an `AmmoShop3D` on the avenue (2 cash a round, up to 150) now work. `Weapon3D` 168 to 176 bytes. | done |
 | 2b | `Loadout3D` weapon switching ([M-WEAPONSWITCH](M-WEAPONSWITCH.md): pistol, SMG and shotgun on keys 1 to 3, X / Z and the D-pad; ammo kept per slot) | done |
-| 2c | `Melee3D` | open |
+| 2c | `Melee3D` ([M-MELEE](M-MELEE.md): V or a right-stick click swings at what is in front of the player) | done |
 | 2d | `Cover3D` / take cover (ray from the shooter to the target against the cover) | open |
 
 ## G. Mission objectives: kill and interact in 09_openworld

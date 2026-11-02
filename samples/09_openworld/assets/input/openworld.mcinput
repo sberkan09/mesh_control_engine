@@ -229,6 +229,17 @@
      ]
     },
     {
+     "name": "Melee",
+     "bindings": [
+      {
+       "key": "V"
+      },
+      {
+       "gamepad_button": "RightStick"
+      }
+     ]
+    },
+    {
      "name": "Horn",
      "bindings": [
       {
