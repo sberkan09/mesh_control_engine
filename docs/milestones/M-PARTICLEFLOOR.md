@@ -1,6 +1,6 @@
 # M-PARTICLEFLOOR — Keep the camera-centred weather emitters above the ground (milestone record)
 
-**Status:** planned (2026-11-02), steps 32a to 32c. **Owner: routine 2 thread (the M-VISUAL line).** Closes the open follow-up "a box strictly above the ground" recorded in M-BUTTERFLY and M-BAT (and true for M-SNOWSPARKLE). No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-02), steps 32a to 32c (PRs 1018, 1019, 1020, 1022). **Owner: routine 2 thread (the M-VISUAL line).** Closes the open follow-up "a box strictly above the ground" recorded in M-BUTTERFLY and M-BAT (and true for M-SNOWSPARKLE). No Linear issues (free issue limit); this record is the tracker.
 
 **Problem.** The butterfly (`0xFFFF0006`), dusk bat (`0xFFFF0007`) and snow sparkle (`0xFFFF0008`) emitters are placed at `scene.view().position` with `box.y = look.height`, a half extent. The spawn volume therefore spans `camera.y - height .. camera.y + height`. With a camera at eye height (about 1.6 m) and heights of 3 m (butterflies), 6 m (bats) or 1.2 m (sparkle), part of the volume lies under the ground and those specks spawn inside the terrain. (The leaf, firefly, pollen, dust and flock emitters already add `+ height` to the position and are not touched.)
 
@@ -31,7 +31,7 @@ No step needs Opus: no shader or draw path changes.
 |---|---|---|---|
 | 32a | done | 1019 | `mce/kit/particle_floor.h` (`kDefaultEyeM`, `particle_floor_center_y`) and `tests/kit/test_particle_floor.cpp` (6 cases). Nothing calls it yet. |
 | 32b | done | 1020 | The butterfly, dusk bat and snow sparkle emitters use `particle_floor_center_y(camera.y, look.height, kDefaultEyeM)` for their height; the three extract tests assert the box floor at camera - 1.6. |
-| 32c | planned | | |
+| 32c | done | 1022 | The `08-3d` sentence, the M-BUTTERFLY and M-BAT follow-ups marked done, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
