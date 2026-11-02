@@ -34,7 +34,7 @@ No step needs Opus: nothing writes a shader.
 |---|---|---|---|
 | 31a | done | 1010 | `SnowSparkle` and the pure `snow_sparkle_amount`, `snow_sparkle_look` in `mce/kit/snow_sparkle.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19za. |
 | 31b | done | 1012 | Extract feed: one local additive emitter (id `0xFFFF0008`) from `snow_sparkle_look`, Low tier and `particle_scale`; cloud is the cloud-layer kind factor times intensity (Weather has no cloud field); `tests/kit/test_snow_sparkle_extract.cpp`. |
-| 31c | planned | | |
+| 31c | done | 1013 | `weather.set_snow_sparkle{...}`, the getters `weather.snow_sparkle_<key>()` and the read-only `weather.snow_sparkle_active()` (the extract's amount: cover, sun elevation, cloud kind factor, rain); typed in `definitions.cpp`; `12_weather` logs `snow_sparkle:`; `tests/script/test_script_snow_sparkle.cpp`. |
 | 31d | planned | | |
 
 ## Follow-ups

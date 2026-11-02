@@ -435,6 +435,28 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// SnowSparkle (M-SNOWSPARKLE step 31c) lives in the same table: the authoring over the first kit::SnowSparkle
+// (mce/kit/snow_sparkle.h) and the read-only snow_sparkle_active(). Named errors as above ("weather.set_snow_sparkle: the
+// scene has no SnowSparkle entity"); the setter never adds the component. The getters are named weather.snow_sparkle_<key>;
+// the colour returns r, g, b. snow_sparkle_active() is kit::snow_sparkle_amount with the inputs the extract's snow sparkle
+// block uses: the first SnowCover's cover times its strength (0 with none), the sun elevation (sine of the elevation of the
+// Environment3D hour, 0 with no clock), the cloud cover (the Weather kind factor Clear 0, Snow 0.9, others 1 times the
+// intensity; no Weather is a clear sky) and the rain (the intensity while it rains or storms). 0 when `enabled` or
+// `strength` is 0. The getters read the authoring even when `enabled` is 0.
+//
+//   weather.snow_sparkle_enabled() / snow_sparkle_cover_low() / snow_sparkle_cover_full() / snow_sparkle_sun_low() /
+//   weather.snow_sparkle_sun_high() / snow_sparkle_manual() / snow_sparkle_rate() / snow_sparkle_box_xz_m() /
+//   weather.snow_sparkle_height_m() / snow_sparkle_size_m() / snow_sparkle_lifetime_s() / snow_sparkle_max_particles() /
+//   weather.snow_sparkle_seed() / snow_sparkle_strength() -> number
+//   weather.snow_sparkle_color() -> r, g, b
+//   weather.snow_sparkle_active() -> number       0..1, the snow sparkle amount now
+//   weather.set_snow_sparkle{enabled=, cover_low=, cover_full=, sun_low=, sun_high=, manual=, rate=, box_xz_m=, height_m=,
+//                            size_m=, lifetime_s=, color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/snow_sparkle.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -469,6 +491,7 @@
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/snow_sparkle.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/weather.h"
@@ -2468,6 +2491,105 @@ int l_weather_set_dusk_bat(lua_State* L) {
     return 0;
 }
 
+// ---- SnowSparkle (M-SNOWSPARKLE step 31c) ----
+
+kit::SnowSparkle& check_snow_sparkle(lua_State* L, const char* fn) { return check_first<kit::SnowSparkle>(L, fn, "SnowSparkle"); }
+
+#define MCE_WEATHER_GETTER_SNOW_SPARKLE(luaname, field)                                                  \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_snow_sparkle(L, "weather." #luaname).field));        \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_enabled, enabled)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_cover_low, cover_low)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_cover_full, cover_full)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_sun_low, sun_low)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_sun_high, sun_high)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_manual, manual)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_rate, rate)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_box_xz_m, box_xz_m)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_height_m, height_m)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_size_m, size_m)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_max_particles, max_particles)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_seed, seed)
+MCE_WEATHER_GETTER_SNOW_SPARKLE(snow_sparkle_strength, strength)
+#undef MCE_WEATHER_GETTER_SNOW_SPARKLE
+
+int l_weather_snow_sparkle_color(lua_State* L) {
+    return push_season_tint(L, check_snow_sparkle(L, "weather.snow_sparkle_color").color);
+}
+
+// weather.snow_sparkle_active(): kit::snow_sparkle_amount with the inputs of the extract's snow sparkle block
+// (kit3d_extract.cpp, "snow sparkle (M-SNOWSPARKLE 31b)"; keep the two in step): the first SnowCover's cover * strength
+// (cover 0 with none), the sun elevation (-sun_direction_at(hour).y clamped to 0..1, 0 with no clock), the cloud (the Weather
+// kind factor Clear 0, Snow 0.9, others 1 times the intensity, NaN as 0; no Weather is a clear sky) and the rain (the
+// intensity while it rains or storms). 0 when enabled or strength is 0.
+int l_weather_snow_sparkle_active(lua_State* L) {
+    const kit::SnowSparkle& sp = check_snow_sparkle(L, "weather.snow_sparkle_active");
+    World& w = world_of(L);
+    f32 amount = 0.0f;
+    if (sp.enabled != 0 && sp.strength > 0.0f) {
+        const kit::SnowCover* sc = nullptr;
+        const refl::TypeRecord* sc_type = refl::find_type(StringId("SnowCover"));
+        if (sc_type && w.find_component(sc_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::SnowCover&>().each([&](const kit::SnowCover& c) {
+                if (!sc) sc = &c;
+            });
+        }
+        const f32 cover = sc ? std::clamp(sc->cover * sc->strength, 0.0f, 1.0f) : 0.0f;
+        const f32 hour = current_hour(w);
+        f32 sun_elev = 0.0f;
+        if (hour >= 0.0f) sun_elev = std::clamp(-render::sun_direction_at(hour).y, 0.0f, 1.0f);
+        const kit::Weather* wx = first_weather(w);
+        const bool raining = wx && (wx->current == kit::WeatherKind::Rain || wx->current == kit::WeatherKind::Storm);
+        const f32 rain = raining ? wx->intensity : 0.0f;
+        f32 cloud = 0.0f;
+        if (wx) {
+            const f32 kind = wx->current == kit::WeatherKind::Clear  ? 0.0f
+                             : wx->current == kit::WeatherKind::Snow ? 0.9f
+                                                                     : 1.0f;
+            const f32 inten = wx->intensity;
+            cloud = kind * (inten > 0.0f ? (inten < 1.0f ? inten : 1.0f) : 0.0f);
+        }
+        amount = kit::snow_sparkle_amount(sp, cover, sun_elev, cloud, rain);
+        if (!std::isfinite(amount)) amount = 0.0f;
+    }
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_snow_sparkle{...}: validated before anything is written.
+int l_weather_set_snow_sparkle(lua_State* L) {
+    static const char* const kKeys[15] = {"enabled", "cover_low", "cover_full", "sun_low", "sun_high", "manual", "rate", "box_xz_m", "height_m", "size_m", "lifetime_s", "color", "max_particles", "seed", "strength"};
+    f64 value[15] = {};
+    bool given[15] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_snow_sparkle", kKeys, 15, "enabled, cover_low, cover_full, sun_low, sun_high, manual, rate, box_xz_m, height_m, size_m, lifetime_s, color, max_particles, seed, strength",
+                  value, given, 11, color);
+    kit::SnowSparkle& sp = check_snow_sparkle(L, "weather.set_snow_sparkle");
+    if (given[0]) sp.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) sp.cover_low = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) sp.cover_full = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) sp.sun_low = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) sp.sun_high = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) sp.manual = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) sp.rate = static_cast<f32>(clamp_range(value[6], 0.0, 200.0));
+    if (given[7]) sp.box_xz_m = static_cast<f32>(clamp_range(value[7], 1.0, 100.0));
+    if (given[8]) sp.height_m = static_cast<f32>(clamp_range(value[8], 0.2, 10.0));
+    if (given[9]) sp.size_m = static_cast<f32>(clamp_range(value[9], 0.005, 0.5));
+    if (given[10]) sp.lifetime_s = static_cast<f32>(clamp_range(value[10], 0.1, 5.0));
+    if (given[11]) {
+        sp.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        sp.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        sp.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[12]) sp.max_particles = static_cast<u32>(clamp_range(value[12], 8.0, 512.0));
+    if (given[13]) sp.seed = static_cast<u32>(clamp_range(value[13], 0.0, 4294967295.0));
+    if (given[14]) sp.strength = static_cast<f32>(clamp_range(value[14], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -2949,6 +3071,23 @@ const luaL_Reg kWeatherLib[] = {
     {"dusk_bat_color", l_weather_dusk_bat_color},
     {"dusk_bat_flying", l_weather_dusk_bat_flying},
     {"set_dusk_bat", l_weather_set_dusk_bat},
+    {"snow_sparkle_enabled", l_weather_snow_sparkle_enabled},
+    {"snow_sparkle_cover_low", l_weather_snow_sparkle_cover_low},
+    {"snow_sparkle_cover_full", l_weather_snow_sparkle_cover_full},
+    {"snow_sparkle_sun_low", l_weather_snow_sparkle_sun_low},
+    {"snow_sparkle_sun_high", l_weather_snow_sparkle_sun_high},
+    {"snow_sparkle_manual", l_weather_snow_sparkle_manual},
+    {"snow_sparkle_rate", l_weather_snow_sparkle_rate},
+    {"snow_sparkle_box_xz_m", l_weather_snow_sparkle_box_xz_m},
+    {"snow_sparkle_height_m", l_weather_snow_sparkle_height_m},
+    {"snow_sparkle_size_m", l_weather_snow_sparkle_size_m},
+    {"snow_sparkle_lifetime_s", l_weather_snow_sparkle_lifetime_s},
+    {"snow_sparkle_max_particles", l_weather_snow_sparkle_max_particles},
+    {"snow_sparkle_seed", l_weather_snow_sparkle_seed},
+    {"snow_sparkle_strength", l_weather_snow_sparkle_strength},
+    {"snow_sparkle_color", l_weather_snow_sparkle_color},
+    {"snow_sparkle_active", l_weather_snow_sparkle_active},
+    {"set_snow_sparkle", l_weather_set_snow_sparkle},
     {nullptr, nullptr},
 };
 

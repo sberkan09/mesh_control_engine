@@ -687,6 +687,35 @@ declare weather: {
     -- size_m 0.02..1, lifetime_s 1..30, speed 0..8, max_particles 8..512, seed 0..4294967295; enabled: any non-zero
     -- number is 1); an unknown key or a non-number raises and nothing is written
     set_dusk_bat: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, dusk_low: number?, dusk_high: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+
+    -- SnowSparkle (M-SNOWSPARKLE), the first SnowSparkle in the scene; every snow sparkle function raises when there is none
+    -- (set_snow_sparkle never adds one). The getters are snow_sparkle_ plus the set key; the colour returns r, g, b. They
+    -- read the authoring even when enabled is 0. snow_sparkle_active (0..1) is the snow sparkle amount now, the same one the
+    -- renderer draws: max(manual, cover gate times sun gate) times the clear sky (1 - cloud) times the dryness (1 - rain)
+    -- times strength, with the first SnowCover's cover times its strength, the sun elevation of the Environment3D hour, the
+    -- cloud (the first Weather's kind factor, Clear 0, Snow 0.9, others 1, times its intensity) and the rain (its intensity
+    -- while it rains or storms); 0 when enabled or strength is 0. Read-only.
+    snow_sparkle_enabled: () -> number,
+    snow_sparkle_cover_low: () -> number,
+    snow_sparkle_cover_full: () -> number,
+    snow_sparkle_sun_low: () -> number,
+    snow_sparkle_sun_high: () -> number,
+    snow_sparkle_manual: () -> number,
+    snow_sparkle_rate: () -> number,
+    snow_sparkle_box_xz_m: () -> number,
+    snow_sparkle_height_m: () -> number,
+    snow_sparkle_size_m: () -> number,
+    snow_sparkle_lifetime_s: () -> number,
+    snow_sparkle_max_particles: () -> number,
+    snow_sparkle_seed: () -> number,
+    snow_sparkle_strength: () -> number,
+    snow_sparkle_color: () -> (number, number, number),
+    snow_sparkle_active: () -> number,
+    -- every key optional, each value clamped to the field's range (cover_low, cover_full, sun_low, sun_high, manual, strength
+    -- and each colour channel 0..1, rate 0..200, box_xz_m 1..100, height_m 0.2..10, size_m 0.005..0.5, lifetime_s 0.1..5,
+    -- max_particles 8..512, seed 0..4294967295; enabled: any non-zero number is 1); an unknown key or a non-number raises
+    -- and nothing is written
+    set_snow_sparkle: (settings: { enabled: number?, cover_low: number?, cover_full: number?, sun_low: number?, sun_high: number?, manual: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
