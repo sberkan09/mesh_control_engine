@@ -1,0 +1,1 @@
+- Tests: `utf8_points` and `utf8_prefix` (kit_novel) have tests of their own.

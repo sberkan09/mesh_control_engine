@@ -636,3 +636,23 @@ TEST_CASE("pointer (M-MOBILE 11f): NPC dialogue: the box finishes the typewriter
     CHECK(!g.d().active);
     CHECK(platform::haptics::stats().played == played + 1);
 }
+
+TEST_CASE("novel: utf8_points counts code points and utf8_prefix cuts on a code point boundary") {
+    CHECK(nv::utf8_points("") == 0);
+    CHECK(nv::utf8_points("abc") == 3);
+    CHECK(nv::utf8_points("\xC3\xA7ok g\xC3\xBCzel") == 8);  // two-byte letters count once
+    CHECK(nv::utf8_points("\xE2\x82\xAC") == 1);             // a three-byte euro sign
+    CHECK(nv::utf8_points("a\xF0\x9F\x98\x80z") == 3);       // a four-byte emoji
+
+    const StringView s("\xC3\xA7ok");  // "çok", 4 bytes, 3 points
+    CHECK(nv::utf8_prefix(s, 0).empty());
+    CHECK(nv::utf8_prefix(s, 1) == StringView("\xC3\xA7"));  // never half of the two-byte letter
+    CHECK(nv::utf8_prefix(s, 2) == StringView("\xC3\xA7o"));
+    CHECK(nv::utf8_prefix(s, 3) == s);
+    CHECK(nv::utf8_prefix(s, 99) == s);  // more points than there are: all of it
+    CHECK(nv::utf8_prefix("", 5).empty());
+    const StringView e("a\xF0\x9F\x98\x80z");
+    CHECK(nv::utf8_prefix(e, 2) == StringView("a\xF0\x9F\x98\x80"));
+    // The prefix points back into the same bytes.
+    CHECK(nv::utf8_prefix(e, 1).data() == e.data());
+}
