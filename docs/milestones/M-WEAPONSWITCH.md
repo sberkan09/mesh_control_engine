@@ -1,6 +1,6 @@
 # M-WEAPONSWITCH: weapon switching in 09_openworld
 
-**Status:** planned (2026-11-02). Closes "no weapon switching" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2b.
+**Status:** done (2026-11-02), except per-weapon shot sounds and the mouse wheel. Closes "no weapon switching" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2b.
 Next in the same series, one milestone each: melee (2c), then progression and goals. Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`loadout3d`). No ECS, render or physics core, no
@@ -29,7 +29,7 @@ the player sits in a car (`Rider3D`).
 |---|---|---|
 | 1 seam | `Loadout3D`, system `kit_loadout`, `WeaponSwitched3D`, unit tests (save and restore of ammo, reload cancelled, draw time, car seat ignored). No sample change. | done |
 | 2 feature | Sample: pistol (today's gun), SMG, shotgun (8 pellets); keys 1 to 3, X / Z and D-pad up / down; the HUD shows the weapon name. (No mouse wheel: the input JSON has no wheel binding yet; no per-weapon shot sound yet, all three use the shots sound set.) | done |
-| 3 polish | `AmmoShop3D` refills every slot, `Confiscate3D` halves every slot, save and load keeps the loadout, MCP inspect check, user-guide section, `M-OPENWORLD-GAPS` strike-through. | open |
+| 3 polish | `AmmoShop3D` refills every slot, `Confiscate3D` halves every slot, save and load keeps the loadout (preset `ammo` / `reserve` and `current` are `Save` fields: no code needed), MCP inspect check (step 2), user-guide section. Per-weapon shot sounds and a mouse wheel stay open (need assets / an input binding). | done |
 
 ## Notes
 
