@@ -1,8 +1,8 @@
 #pragma once
-// Dusk bats as data (M-BAT step 30a). One optional Bat per scene (the first in ECS order is read). install_weather
+// Dusk bats as data (M-BAT step 30a). One optional DuskBat per scene (the first in ECS order is read). install_weather
 // registers the component; there is no system and nothing is stored between ticks.
 //
-//   Bat        Authoring (all Save, clamped to the Range when read and never rewritten): `enabled` (1); `window_full`
+//   DuskBat        Authoring (all Save, clamped to the Range when read and never rewritten): `enabled` (1); `window_full`
 //              (0.16, 0..0.5) and `window_end` (0.26, 0..0.5) the half-widths, in season phase, of the warm-season trapezoid
 //              around the summer centre 0.375 (full strength inside window_full, nothing beyond window_end, a smoothstep
 //              between; an inverted or empty pair falls back to the defaults); `manual` (0, 0..1) a floor for the window, so
@@ -34,7 +34,7 @@
 
 namespace mce::kit {
 
-struct Bat {
+struct DuskBat {
     f32 window_full = 0.16f;
     f32 window_end = 0.26f;
     f32 manual = 0.0f;
@@ -55,7 +55,7 @@ struct Bat {
     u8 enabled = 1;
     u8 pad_[3] = {};  // explicit pad (state_hash hashes whole columns); always zero
 };
-MCE_COMPONENT(Bat, (enabled, Save, Range{0, 1}, Help{"0: the bats are off"}),
+MCE_COMPONENT(DuskBat, (enabled, Save, Range{0, 1}, Help{"0: the bats are off"}),
               (window_full, Save, Range{0, 0.5f}, Help{"half-width in season phase of full strength around the summer centre"}),
               (window_end, Save, Range{0, 0.5f}, Help{"half-width in season phase beyond which there are no bats"}),
               (manual, Save, Range{0, 1}, Help{"floor for the window; shows bats all year"}),
@@ -78,7 +78,7 @@ MCE_COMPONENT(Bat, (enabled, Save, Range{0, 1}, Help{"0: the bats are off"}),
 // false` and every other field zero. The extract copies the fields into a render::ParticleEmitter: `direction` is up
 // (0, 1, 0) with a wide `spread`, so the specks dart in every direction, `gravity` is almost none, `color_start` fades
 // out to `color_end` (same rgb, alpha 0).
-struct BatLook {
+struct DuskBatLook {
     bool active = false;
     f32 rate = 0.0f;
     f32 speed_min = 0.0f;
@@ -98,16 +98,16 @@ struct BatLook {
 
 namespace detail {
 
-inline f32 bat_unit(f32 v, f32 def) { return season_clamp(v, def, 0.0f, 1.0f); }
+inline f32 dusk_bat_unit(f32 v, f32 def) { return season_clamp(v, def, 0.0f, 1.0f); }
 
 // The unsigned circular distance of a year phase (0..1) from the summer centre, in [0, 0.5].
-inline f32 bat_dist(f32 phase) {
+inline f32 dusk_bat_dist(f32 phase) {
     const f32 d = phase - kSeasonSummerCentre;
     return std::fabs(d - std::floor(d + 0.5f));
 }
 
 // A rising pair of thresholds clamped to lo..hi; an inverted or empty pair falls back to the defaults.
-inline void bat_pair(f32 a, f32 b, f32 def_a, f32 def_b, f32 lo, f32 hi, f32& out_a, f32& out_b) {
+inline void dusk_bat_pair(f32 a, f32 b, f32 def_a, f32 def_b, f32 lo, f32 hi, f32& out_a, f32& out_b) {
     out_a = season_clamp(a, def_a, lo, hi);
     out_b = season_clamp(b, def_b, lo, hi);
     if (!(out_a < out_b)) {
@@ -117,45 +117,45 @@ inline void bat_pair(f32 a, f32 b, f32 def_a, f32 def_b, f32 lo, f32 hi, f32& ou
 }
 
 // Width of the smoothing ramp at each edge of the dusk band, in night-fade units.
-inline constexpr f32 kBatDuskRamp = 0.1f;
+inline constexpr f32 kDuskBatDuskRamp = 0.1f;
 
 // Drag of the quick darts, 1/s.
-inline constexpr f32 kBatDrag = 0.3f;
+inline constexpr f32 kDuskBatDrag = 0.3f;
 
 }  // namespace detail
 
 // The bat amount 0..1. `phase` is the year phase, `night_fade` the 0..1 night fade, `wind` the 0..1 wind, `rain` the 0..1
 // rain intensity. A null or disabled Season has no window, so the amount is the manual floor (still gated). Exactly 0 for
 // `enabled` 0 and `strength` 0.
-inline f32 bat_amount(const Bat& b, const Season* season, f32 phase, f32 night_fade, f32 wind, f32 rain) {
+inline f32 dusk_bat_amount(const DuskBat& b, const Season* season, f32 phase, f32 night_fade, f32 wind, f32 rain) {
     if (b.enabled == 0) return 0.0f;
-    const f32 st = detail::bat_unit(b.strength, 1.0f);
+    const f32 st = detail::dusk_bat_unit(b.strength, 1.0f);
     if (!(st > 0.0f)) return 0.0f;
     f32 w = 0.0f;
     if (season != nullptr && season->enabled != 0) {
         f32 full, end;
-        detail::bat_pair(b.window_full, b.window_end, 0.16f, 0.26f, 0.0f, 0.5f, full, end);
-        w = (1.0f - detail::season_smooth(full, end, detail::bat_dist(detail::season_wrap(phase)))) * detail::season_strength(*season);
+        detail::dusk_bat_pair(b.window_full, b.window_end, 0.16f, 0.26f, 0.0f, 0.5f, full, end);
+        w = (1.0f - detail::season_smooth(full, end, detail::dusk_bat_dist(detail::season_wrap(phase)))) * detail::season_strength(*season);
     }
-    const f32 manual = detail::bat_unit(b.manual, 0.0f);
+    const f32 manual = detail::dusk_bat_unit(b.manual, 0.0f);
     const f32 base = std::max(manual, w);
     f32 low, high;
-    detail::bat_pair(b.dusk_low, b.dusk_high, 0.25f, 0.85f, 0.0f, 1.0f, low, high);
-    const f32 nf = detail::bat_unit(night_fade, 0.0f);
-    const f32 dusk = detail::season_smooth(low, low + detail::kBatDuskRamp, nf) *
-                     (1.0f - detail::season_smooth(high - detail::kBatDuskRamp, high, nf));
+    detail::dusk_bat_pair(b.dusk_low, b.dusk_high, 0.25f, 0.85f, 0.0f, 1.0f, low, high);
+    const f32 nf = detail::dusk_bat_unit(night_fade, 0.0f);
+    const f32 dusk = detail::season_smooth(low, low + detail::kDuskBatDuskRamp, nf) *
+                     (1.0f - detail::season_smooth(high - detail::kDuskBatDuskRamp, high, nf));
     f32 calm, still;
-    detail::bat_pair(b.wind_calm, b.wind_still, 0.3f, 0.75f, 0.0f, 1.0f, calm, still);
-    const f32 calm_gate = 1.0f - detail::season_smooth(calm, still, detail::bat_unit(wind, 0.0f));
-    const f32 dry = 1.0f - detail::bat_unit(rain, 0.0f);
+    detail::dusk_bat_pair(b.wind_calm, b.wind_still, 0.3f, 0.75f, 0.0f, 1.0f, calm, still);
+    const f32 calm_gate = 1.0f - detail::season_smooth(calm, still, detail::dusk_bat_unit(wind, 0.0f));
+    const f32 dry = 1.0f - detail::dusk_bat_unit(rain, 0.0f);
     return std::clamp(base * dusk * calm_gate * dry * st, 0.0f, 1.0f);
 }
 
 // The emitter look at an amount (clamped to 0..1, NaN is 0).
-inline BatLook bat_look(const Bat& b, f32 amount) {
-    BatLook out;
-    if (b.enabled == 0 || !(detail::bat_unit(b.strength, 1.0f) > 0.0f)) return out;
-    const f32 a = detail::bat_unit(amount, 0.0f);
+inline DuskBatLook dusk_bat_look(const DuskBat& b, f32 amount) {
+    DuskBatLook out;
+    if (b.enabled == 0 || !(detail::dusk_bat_unit(b.strength, 1.0f) > 0.0f)) return out;
+    const f32 a = detail::dusk_bat_unit(amount, 0.0f);
     if (!(a > 0.0f)) return out;
     out.active = true;
     out.rate = detail::season_clamp(b.rate, 4.0f, 0.0f, 60.0f) * a;
@@ -165,7 +165,7 @@ inline BatLook bat_look(const Bat& b, f32 amount) {
     out.direction = math::vec3{0.0f, 1.0f, 0.0f};
     out.spread = 1.0f;
     out.gravity = math::vec3{0.0f, -0.2f, 0.0f};
-    out.drag = detail::kBatDrag;
+    out.drag = detail::kDuskBatDrag;
     out.size = detail::season_clamp(b.size_m, 0.1f, 0.02f, 1.0f);
     const f32 life = detail::season_clamp(b.lifetime_s, 5.0f, 1.0f, 30.0f);
     out.lifetime_min = 0.7f * life;
@@ -180,9 +180,9 @@ inline BatLook bat_look(const Bat& b, f32 amount) {
 }
 
 // The same helpers for a component that may be missing: a null pointer is amount 0 and the inactive look.
-inline f32 bat_amount(const Bat* b, const Season* season, f32 phase, f32 night_fade, f32 wind, f32 rain) {
-    return b ? bat_amount(*b, season, phase, night_fade, wind, rain) : 0.0f;
+inline f32 dusk_bat_amount(const DuskBat* b, const Season* season, f32 phase, f32 night_fade, f32 wind, f32 rain) {
+    return b ? dusk_bat_amount(*b, season, phase, night_fade, wind, rain) : 0.0f;
 }
-inline BatLook bat_look(const Bat* b, f32 amount) { return b ? bat_look(*b, amount) : BatLook{}; }
+inline DuskBatLook dusk_bat_look(const DuskBat* b, f32 amount) { return b ? dusk_bat_look(*b, amount) : DuskBatLook{}; }
 
 }  // namespace mce::kit
