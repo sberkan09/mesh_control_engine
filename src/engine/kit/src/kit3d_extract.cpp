@@ -17,6 +17,7 @@
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
 #include "mce/kit/dusk_bat.h"
+#include "mce/kit/particle_floor.h"
 #include "mce/kit/snow_sparkle.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
@@ -2523,6 +2524,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = bf->seed;
                     em.position = scene.view().position;
+                    em.position.y = particle_floor_center_y(em.position.y, look.height, kDefaultEyeM);  // M-PARTICLEFLOOR 32b: box floor at the ground
                     em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
@@ -2599,6 +2601,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = bat->seed;
                     em.position = scene.view().position;
+                    em.position.y = particle_floor_center_y(em.position.y, look.height, kDefaultEyeM);  // M-PARTICLEFLOOR 32b: box floor at the ground
                     em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;
@@ -2668,6 +2671,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.max_particles = scaled_budget(em.max_particles, pscale);
                     em.seed = sp->seed;
                     em.position = scene.view().position;
+                    em.position.y = particle_floor_center_y(em.position.y, look.height, kDefaultEyeM);  // M-PARTICLEFLOOR 32b: box floor at the ground
                     em.box = math::vec3{look.box, look.height, look.box};
                     em.direction = look.direction;
                     em.spread = look.spread;

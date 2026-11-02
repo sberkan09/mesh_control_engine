@@ -171,6 +171,8 @@ TEST_CASE("butterfly extract: a calm summer day adds exactly one alpha-blended e
     CHECK(e.box.z == doctest::Approx(18.0f));
     CHECK(e.position.x == doctest::Approx(r.cam.position.x));
     CHECK(e.position.z == doctest::Approx(r.cam.position.z));
+    // M-PARTICLEFLOOR 32b: the box floor (centre - half height) sits at the assumed ground, camera - eye
+    CHECK(e.position.y - e.box.y == doctest::Approx(r.cam.position.y - 1.6f));
     CHECK(e.max_particles == 48u);
     CHECK(e.seed == 1u);
     CHECK_FALSE(e.additive);
@@ -196,6 +198,7 @@ TEST_CASE("butterfly extract: a calm summer day adds exactly one alpha-blended e
     REQUIRE(e1 != nullptr);
     CHECK(e1->position.x == doctest::Approx(30.0f));
     CHECK(e1->position.z == doctest::Approx(-12.0f));
+    CHECK(e1->position.y - e1->box.y == doctest::Approx(4.0f - 1.6f));
 
     Rig manual;  // the manual floor works without a Season, a clock or a Weather
     manual.add_butterfly();

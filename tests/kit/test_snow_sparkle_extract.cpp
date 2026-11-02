@@ -158,6 +158,8 @@ TEST_CASE("snow sparkle extract: snow cover, a low sun and a clear sky add exact
     CHECK(e.box.z == doctest::Approx(14.0f));
     CHECK(e.position.x == doctest::Approx(r.cam.position.x));
     CHECK(e.position.z == doctest::Approx(r.cam.position.z));
+    // M-PARTICLEFLOOR 32b: the box floor (centre - half height) sits at the assumed ground, camera - eye
+    CHECK(e.position.y - e.box.y == doctest::Approx(r.cam.position.y - 1.6f));
     CHECK(e.max_particles == 96u);
     CHECK(e.seed == 1u);
     CHECK(e.additive);
@@ -190,6 +192,7 @@ TEST_CASE("snow sparkle extract: snow cover, a low sun and a clear sky add exact
     REQUIRE(e1 != nullptr);
     CHECK(e1->position.x == doctest::Approx(30.0f));
     CHECK(e1->position.z == doctest::Approx(-12.0f));
+    CHECK(e1->position.y - e1->box.y == doctest::Approx(4.0f - 1.6f));
 }
 
 TEST_CASE("snow sparkle extract: no SnowCover only the manual floor makes an amount, and a high sun or no clock none") {
