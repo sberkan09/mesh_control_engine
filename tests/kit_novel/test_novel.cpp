@@ -640,7 +640,7 @@ TEST_CASE("pointer (M-MOBILE 11f): NPC dialogue: the box finishes the typewriter
 TEST_CASE("novel: utf8_points counts code points and utf8_prefix cuts on a code point boundary") {
     CHECK(nv::utf8_points("") == 0);
     CHECK(nv::utf8_points("abc") == 3);
-    CHECK(nv::utf8_points("\xC3\xA7ok g\xC3\xBCzel") == 8);  // two-byte letters count once
+    CHECK(nv::utf8_points("\xC3\xA7ok g\xC3\xBCzel") == 9);  // two-byte letters count once
     CHECK(nv::utf8_points("\xE2\x82\xAC") == 1);             // a three-byte euro sign
     CHECK(nv::utf8_points("a\xF0\x9F\x98\x80z") == 3);       // a four-byte emoji
 
