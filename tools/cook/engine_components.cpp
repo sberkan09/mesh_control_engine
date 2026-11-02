@@ -56,6 +56,7 @@
 #include "mce/kit/hit_marker.h"         // HitMarker3D (M-HITMARKER)
 #include "mce/kit/impact_fx.h"         // ImpactFx3D (M-IMPACTFX)
 #include "mce/kit/fall_death.h"        // FallDeath3D (M-FALLDEATH)
+#include "mce/kit/loadout3d.h"          // WeaponPreset3D, Loadout3D (M-WEAPONSWITCH)
 #include "mce/kit/face_velocity.h"     // FaceVelocity3D (M-FACEMOVE)
 #include "mce/kit/drive_readout.h"      // DriveReadout3D (M-DRIVEHUD)
 #include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)
