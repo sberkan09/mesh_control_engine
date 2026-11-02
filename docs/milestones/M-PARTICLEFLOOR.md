@@ -30,7 +30,7 @@ No step needs Opus: no shader or draw path changes.
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 32a | done | 1019 | `mce/kit/particle_floor.h` (`kDefaultEyeM`, `particle_floor_center_y`) and `tests/kit/test_particle_floor.cpp` (6 cases). Nothing calls it yet. |
-| 32b | planned | | |
+| 32b | done | 1020 | The butterfly, dusk bat and snow sparkle emitters use `particle_floor_center_y(camera.y, look.height, kDefaultEyeM)` for their height; the three extract tests assert the box floor at camera - 1.6. |
 | 32c | planned | | |
 
 ## Follow-ups

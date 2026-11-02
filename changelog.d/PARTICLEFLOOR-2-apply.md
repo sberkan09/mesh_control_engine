@@ -1,0 +1,1 @@
+- M-PARTICLEFLOOR step 32b: the butterfly, dusk bat and snow sparkle emitters no longer spawn below the ground: their box floor sits 1.6 m under the camera (draw only; no state or saved data changes).
