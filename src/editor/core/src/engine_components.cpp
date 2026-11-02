@@ -55,6 +55,7 @@
 #include "mce/kit/fall_death.h"        // FallDeath3D (M-FALLDEATH)
 #include "mce/kit/loadout3d.h"          // WeaponPreset3D, Loadout3D (M-WEAPONSWITCH)
 #include "mce/kit/melee3d.h"            // Melee3D (M-MELEE)
+#include "mce/kit/progress3d.h"          // Progress3D, Goal3D (M-PROGRESS)
 #include "mce/kit/face_velocity.h"     // FaceVelocity3D (M-FACEMOVE)
 #include "mce/kit/drive_readout.h"      // DriveReadout3D (M-DRIVEHUD)
 #include "mce/kit/precipitation.h"      // Precipitation3D, Lightning (M-WEATHER 3)

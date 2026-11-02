@@ -9,8 +9,8 @@ HLOD or floating origin. Missions (`missions.h`) stay as they are; goals count w
 ## Design
 
 `Progress3D` on the player holds counters the engine fills in: `kills` (a `Died3D` whose `killer` is the player and whose
-victim is not the player), `missions` (a `MissionCompleted` for a mission whose `actor` is the player), `cars` (the player
-sits in a car, counted once per seat entry) and `swings` (a `MeleeSwung3D` that hit something). Counters are `u32` and
+victim is not the player), `missions` (a `MissionCompleted` for a mission whose `actor` is the player), `rides` (the player
+sits in a car, counted once per seat entry) and `melee_hits` (the hits of its `MeleeSwung3D`). Counters are `u32` and
 padding-free (`state_hash` hashes raw bytes). Cash earned is left out: the wallet has no income event to count.
 
 `Goal3D` on its own entity: `stat` (a `MCE_ENUM` of the counters), `target`, `reward` (cash), `done`, and a `name` for the HUD.
@@ -25,7 +25,7 @@ progress.
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | `Progress3D`, `Goal3D`, `GoalDone3D`, system `kit_progress`, unit tests (each counter, a goal pays once, reward lands in the wallet, a dead or missing player, deterministic order). No sample change. | open |
+| 1 seam | `Progress3D`, `Goal3D`, `GoalDone3D`, system `kit_progress`, unit tests (each counter, a goal pays once, reward lands in the wallet, a dead or missing player, deterministic order). No sample change. | done |
 | 2 feature | Sample: `Progress3D` on the player, five goals (first kill, 10 kills, a mission, a ride in a car, 5 melee hits) with cash rewards; a HUD list that shows each goal and ticks it off; a caption when one is done. | open |
 | 3 polish | Save and load keeps progress (checked by the save test), MCP inspect check, user-guide section, `M-OPENWORLD-GAPS` strike-through. | open |
 
