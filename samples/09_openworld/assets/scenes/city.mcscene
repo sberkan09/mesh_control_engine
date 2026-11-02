@@ -38749,6 +38749,14 @@
      "use_input": 1,
      "draw_time": 0.4
     },
+    "Melee3D": {
+     "use_input": 1,
+     "damage": 35,
+     "reach": 2.2,
+     "arc_deg": 100,
+     "rate": 2.5,
+     "windup": 0.15
+    },
     "UiScreen": {
      "document": "guid:ecad21b6-7694-5060-85fb-dd1becae38f0"
     }

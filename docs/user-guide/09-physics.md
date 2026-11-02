@@ -448,6 +448,7 @@ ammo. A swing starts when `trigger` is set to 1, or, with `use_input`, when the 
 `cooldown` is over (`rate` swings/s), the attacker is alive and not a seated `Rider3D`. After `windup` s it damages every other
 `Health3D` within `reach` m and `arc_deg` / 2 of the attacker's forward (-Z) on the ground plane, in entity order, through
 `apply_damage` (a same-team target is spared). `MeleeSwung3D` reports each swing and how many it hit.
+`samples/09_openworld` gives the player a `Melee3D`: V (pad: right-stick click) swings.
 
 ## 9.10 Configuration
 

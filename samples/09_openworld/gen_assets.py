@@ -190,6 +190,8 @@ def input_map():
         {"name": "Slot3", "bindings": [key("3")]},
         {"name": "WeaponNext", "bindings": [key("X"), {"gamepad_button": "DpadUp"}]},
         {"name": "WeaponPrev", "bindings": [key("Z"), {"gamepad_button": "DpadDown"}]},
+        # Melee attack (M-MELEE): V, or a click of the right stick.
+        {"name": "Melee", "bindings": [key("V"), {"gamepad_button": "RightStick"}]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -1226,6 +1228,8 @@ def scene():
                      "mask": 0xFFFF},
         "WeaponAudio": {"shot": "guid:" + G_SHOTS, "hit": "guid:" + G_HITS, "gain_db": -2, "hit_gain_db": -4},
         "Loadout3D": {"slot0": s.ref(pistol), "slot1": s.ref(smg), "slot2": s.ref(shotgun), "use_input": 1, "draw_time": 0.4},
+        # A swing at whatever is in front of the player, with or without a gun in hand (M-MELEE).
+        "Melee3D": {"use_input": 1, "damage": 35, "reach": 2.2, "arc_deg": 100, "rate": 2.5, "windup": 0.15},
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
     })

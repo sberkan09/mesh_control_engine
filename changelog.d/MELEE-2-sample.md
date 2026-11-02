@@ -1,0 +1,1 @@
+- Sample (M-MELEE 2): the 09_openworld player has a `Melee3D`: V or a right-stick click swings at what is in front. Record: `docs/milestones/M-MELEE.md`.
