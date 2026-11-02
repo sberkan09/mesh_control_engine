@@ -103,7 +103,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
         auto bought = c.ok("run_headless", R"({"ticks":30,"log_lines":0,"inspect":{"component":"Respawn3D","show":["Weapon3D","Wallet3D"]}})");
         CHECK(bought.v().get("log").get("errors").as_number() == 0);
         CHECK(comps(bought, 0).get("Weapon3D").get("reserve").as_number() == 150);
-        CHECK(comps(bought, 0).get("Wallet3D").get("cash").as_number() == 220);  // 140 rounds at 2
+        // 140 rounds at 2 for the pistol (280), then the SMG in the backpack (60), then the shotgun gets what is left of the 500 cash (M-WEAPONSWITCH 3)
+        CHECK(comps(bought, 0).get("Wallet3D").get("cash").as_number() == 0);
         c.ok("component_set", R"({"entity":"Player","component":"Weapon3D","path":"reserve","value":150})");
     }
 
