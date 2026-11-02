@@ -1,6 +1,6 @@
 # M-SNOWSPARKLE — Snow sparkle: tiny bright glints over settled snow in low sun on clear days, with no shader (milestone record)
 
-**Status:** planned (2026-11-02), steps 31a to 31d. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SNOWCOVER (the settled `SnowCover.cover`), M-BAT / M-BUTTERFLY / M-POLLEN (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEQ and M-PARTICLEUSER (`particle_scale`, `r.particles`). Snow covers the ground but stays flat and dull in sunshine; real snow glitters. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-02), steps 31a to 31d (PRs 1009, 1010, 1012, 1013, 1014). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-SNOWCOVER (the settled `SnowCover.cover`), M-BAT / M-BUTTERFLY / M-POLLEN (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEQ and M-PARTICLEUSER (`particle_scale`, `r.particles`). Snow covers the ground but stays flat and dull in sunshine; real snow glitters. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** the component is `SnowSparkle` (header `snow_sparkle.h`); `projects/` has no type of that name (checked 2026-11-02; the M-BAT 30a CI showed a clash is only found late).
 
@@ -35,7 +35,7 @@ No step needs Opus: nothing writes a shader.
 | 31a | done | 1010 | `SnowSparkle` and the pure `snow_sparkle_amount`, `snow_sparkle_look` in `mce/kit/snow_sparkle.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19za. |
 | 31b | done | 1012 | Extract feed: one local additive emitter (id `0xFFFF0008`) from `snow_sparkle_look`, Low tier and `particle_scale`; cloud is the cloud-layer kind factor times intensity (Weather has no cloud field); `tests/kit/test_snow_sparkle_extract.cpp`. |
 | 31c | done | 1013 | `weather.set_snow_sparkle{...}`, the getters `weather.snow_sparkle_<key>()` and the read-only `weather.snow_sparkle_active()` (the extract's amount: cover, sun elevation, cloud kind factor, rain); typed in `definitions.cpp`; `12_weather` logs `snow_sparkle:`; `tests/script/test_script_snow_sparkle.cpp`. |
-| 31d | planned | | |
+| 31d | done | 1014 | The `08-3d` "Snow sparkles" paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
