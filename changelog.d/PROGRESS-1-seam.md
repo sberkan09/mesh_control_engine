@@ -1,0 +1,1 @@
+- Kit (M-PROGRESS 1): `Progress3D` counts kills, missions, rides and melee hits; `Goal3D` pays a cash reward once when a counter reaches its target and pushes `GoalDone3D`. Record: `docs/milestones/M-PROGRESS.md`.

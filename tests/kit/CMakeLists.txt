@@ -56,6 +56,7 @@ mce_add_test(test_kit UMBRELLA
         test_fall_death.cpp
         test_loadout3d.cpp
         test_melee3d.cpp
+        test_progress3d.cpp
         test_vehicle_extras.cpp
         test_weather.cpp
         test_weather_env.cpp

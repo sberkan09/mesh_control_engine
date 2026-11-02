@@ -39,6 +39,7 @@
 #include "mce/kit/fall_death.h"
 #include "mce/kit/loadout3d.h"
 #include "mce/kit/melee3d.h"
+#include "mce/kit/progress3d.h"
 #include "mce/kit/vehicle_extras.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/weather.h"
@@ -180,6 +181,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_fall_death(world);
     install_loadout3d(world);
     install_melee3d(world);
+    install_progress3d(world);
     install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick
