@@ -13,6 +13,7 @@
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
 #include "mce/kit/impact_damage.h"
+#include "mce/kit/loadout3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/kit/perception.h"
 #include "mce/kit/procgen.h"
@@ -492,8 +493,10 @@ void kit3d_respawn(Frame& f) {
         clear_wanted(w, e);
         if (r.reason == 1) {
             const Confiscate3D* cf = w.try_get<Confiscate3D>(e);
-            Weapon3D* wp = cf ? w.try_get_mut<Weapon3D>(e) : nullptr;
-            if (wp) wp->reserve = static_cast<u32>(static_cast<f32>(wp->reserve) * math::clamp(cf->ammo_kept, 0.0f, 1.0f));
+            Weapon3D* guns[8];
+            const usize n = cf ? weapons_of(w, e, guns, 8) : 0;
+            for (usize i = 0; i < n; ++i)
+                guns[i]->reserve = static_cast<u32>(static_cast<f32>(guns[i]->reserve) * math::clamp(cf->ammo_kept, 0.0f, 1.0f));
         }
         const i32 fine = take_cash(w, e, r.reason == 1 ? r.fine_busted : r.fine_wasted);
         if (fine > 0 && r.caption && w.try_resource<Captions>()) {
@@ -548,7 +551,10 @@ void kit3d_ammoshop(Frame& f) {
     f.query<AmmoShop3D, LocalTransform>().each([&](Entity se, AmmoShop3D& sh, LocalTransform&) {
         if (!sh.enabled || sh.price_per_round == 0) return;
         const math::vec3 sp = position_of(w, se);
-        f.query<Weapon3D, Wallet3D, LocalTransform>().each([&](Entity be, Weapon3D& wp, Wallet3D& wl, LocalTransform&) {
+        f.query<Wallet3D, LocalTransform>().each([&](Entity be, Wallet3D& wl, LocalTransform&) {
+            Weapon3D* held = held_weapon(w, be);  // the weapon in hand: a Loadout3D's, else the buyer's own
+            if (!held) return;
+            Weapon3D& wp = *held;
             if (wp.magazine == 0 || wp.infinite_ammo || wp.reserve >= sh.stock_to || math::length(position_of(w, be) - sp) > sh.radius) return;
             const u32 afford = wl.cash > 0 ? static_cast<u32>(wl.cash) / sh.price_per_round : 0u;
             const u32 rounds = math::min(sh.stock_to - wp.reserve, afford);
@@ -706,6 +712,7 @@ void clear_wanted(World& w, Entity offender) {
 
 void install_wanted3d(World& world) {
     install_combat3d(world, nullptr);
+    install_loadout3d(world);
     if (world.try_resource<Wanted3DState>()) return;
     world.set_resource(Wanted3DState{});
     world.register_components<Wanted3D, Police3D, Respawn3D, RespawnPoint3D, Wallet3D, CashDrop3D, PaySpray3D, MissionReward3D, CarOwner3D, AmmoShop3D, HealShop3D, CashPickup3D, ChopShop3D, RepairShop3D, Confiscate3D>();

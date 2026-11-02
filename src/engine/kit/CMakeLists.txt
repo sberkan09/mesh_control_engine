@@ -20,6 +20,7 @@ mce_add_library(mce_gameplay_kit
         src/vehicles3d.cpp
         src/seats3d.cpp
         src/combat3d.cpp
+        src/loadout3d.cpp
         src/map_markers.cpp
         src/missions.cpp
         src/inventory.cpp

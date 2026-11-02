@@ -125,6 +125,50 @@
      ]
     },
     {
+     "name": "NextWeapon",
+     "bindings": [
+      {
+       "key": "Tab"
+      },
+      {
+       "gamepad_button": "DpadUp"
+      }
+     ]
+    },
+    {
+     "name": "PrevWeapon",
+     "bindings": [
+      {
+       "key": "Z"
+      },
+      {
+       "gamepad_button": "DpadDown"
+      }
+     ]
+    },
+    {
+     "name": "Weapon1",
+     "bindings": [
+      {
+       "key": "Num1"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    },
+    {
+     "name": "Weapon2",
+     "bindings": [
+      {
+       "key": "Num2"
+      },
+      {
+       "gamepad_button": "RightStick"
+      }
+     ]
+    },
+    {
      "name": "Interact",
      "bindings": [
       {
