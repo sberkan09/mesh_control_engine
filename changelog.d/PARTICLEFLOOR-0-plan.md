@@ -1,0 +1,1 @@
+- M-PARTICLEFLOOR plan: keep the butterfly, dusk bat and snow sparkle emitters above the ground with a pure floor helper (steps 32a to 32c).
