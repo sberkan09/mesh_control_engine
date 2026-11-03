@@ -1,0 +1,1 @@
+- Light flicker in the tour, M-FLICKER step 36c: `kit3d_tour` gets a "Campfire light" (a `PointLight3D` with a fire-style `LightFlicker3D`) at the 3D fire, so the sample places the component and the temporary sample-coverage allow-line is gone. The tour's entity pin goes from 22 to 23.

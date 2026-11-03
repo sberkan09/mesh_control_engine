@@ -124,7 +124,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
-| `LightFlicker3D` | `mce/kit/light_flicker.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-FLICKER 36a: tested in tests/kit/test_light_flicker.cpp; the kit3d_tour sample gets one in 36c (remove this line then) |
+| `LightFlicker3D` | `mce/kit/light_flicker.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WeaponPreset3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Loadout3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
