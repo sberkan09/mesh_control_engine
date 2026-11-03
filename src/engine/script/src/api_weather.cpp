@@ -481,6 +481,31 @@
 //                                         unknown key or a non-number raises an error that names the call and nothing
 //                                         is written
 //
+// Cold breath (M-COLDBREATH step 34c) lives in the same table: the authoring over the first kit::ColdBreath
+// (mce/kit/cold_breath.h) and the read-only cold_breath_active(). Named errors as above ("weather.set_cold_breath: the
+// scene has no ColdBreath entity"); the setter never adds the component. The getters are named weather.cold_breath_<key>; the
+// colour returns r, g, b. cold_breath_active() is kit::cold_breath_amount with the inputs the extract's cold breath block
+// uses: the first Season at the first WorldClock's day and hour (day 0, hour 0 with no clock; no Season is no window, the
+// phase is then 0), the first SnowCover's cover * strength clamped to 0..1 (0 with none) and the effective wind with the gust
+// sway of the first WindGust (calm with no Weather). 0 when `enabled` or `strength` is 0. The getters read the authoring even
+// when `enabled` is 0. Unlike the midge there is no known difference with the extract: the breath does not use the sun, so
+// the environment (and the r.env_override cvar the extract applies to it) is not read; the clock is read the same way.
+//
+//   weather.cold_breath_enabled() / cold_breath_window_full() / cold_breath_window_end() / cold_breath_manual() /
+//   weather.cold_breath_cover_low() / cold_breath_cover_full() / cold_breath_wind_calm() / cold_breath_wind_still() /
+//   weather.cold_breath_rate() / cold_breath_mouth_forward_m() / cold_breath_mouth_down_m() / cold_breath_size_m() /
+//   weather.cold_breath_grow() / cold_breath_lifetime_s() / cold_breath_speed() / cold_breath_lift() /
+//   weather.cold_breath_max_particles() / cold_breath_seed() / cold_breath_strength() -> number
+//   weather.cold_breath_color() -> r, g, b
+//   weather.cold_breath_active() -> number        0..1, the breath amount now
+//   weather.set_cold_breath{enabled=, window_full=, window_end=, manual=, cover_low=, cover_full=, wind_calm=, wind_still=,
+//                           rate=, mouth_forward_m=, mouth_down_m=, size_m=, grow=, lifetime_s=, speed=, lift=,
+//                           color={r,g,b}, max_particles=, seed=, strength=}
+//                                         a table, every key optional, each value clamped to the field's Range (see
+//                                         mce/kit/cold_breath.h; colour lanes 0..1; enabled: any non-zero number is 1); an
+//                                         unknown key or a non-number raises an error that names the call and nothing
+//                                         is written
+//
 // Water (M-WATER step 15d) is the `water` table over the first kit::Water (mce/kit/water.h). Named errors as above
 // ("water.set: the scene has no Water entity"); the setter never adds the component. height_at / normal_at / submerged
 // evaluate the kit helpers (the drawn surface) at the scene time tick * dt (seconds, wrapped to the 64 s period in f64)
@@ -516,6 +541,7 @@
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/midge.h"
+#include "mce/kit/cold_breath.h"
 #include "mce/kit/snow_sparkle.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/wind_direction.h"
@@ -2730,6 +2756,129 @@ int l_weather_set_midge(lua_State* L) {
     return 0;
 }
 
+// ---- Cold breath (M-COLDBREATH step 34c) ----
+
+kit::ColdBreath& check_cold_breath(lua_State* L, const char* fn) { return check_first<kit::ColdBreath>(L, fn, "ColdBreath"); }
+
+#define MCE_WEATHER_GETTER_COLD_BREATH(luaname, field)                                                   \
+    int l_weather_##luaname(lua_State* L) {                                                              \
+        lua_pushnumber(L, static_cast<double>(check_cold_breath(L, "weather." #luaname).field));         \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_enabled, enabled)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_window_full, window_full)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_window_end, window_end)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_manual, manual)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_cover_low, cover_low)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_cover_full, cover_full)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_wind_calm, wind_calm)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_wind_still, wind_still)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_rate, rate)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_mouth_forward_m, mouth_forward_m)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_mouth_down_m, mouth_down_m)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_size_m, size_m)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_grow, grow)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_lifetime_s, lifetime_s)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_speed, speed)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_lift, lift)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_max_particles, max_particles)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_seed, seed)
+MCE_WEATHER_GETTER_COLD_BREATH(cold_breath_strength, strength)
+#undef MCE_WEATHER_GETTER_COLD_BREATH
+
+int l_weather_cold_breath_color(lua_State* L) { return push_season_tint(L, check_cold_breath(L, "weather.cold_breath_color").color); }
+
+// weather.cold_breath_active(): kit::cold_breath_amount with the inputs of the extract's cold breath block (kit3d_extract.cpp,
+// "cold breath (M-COLDBREATH 34b)"; keep the two in step): the first Season at the first WorldClock's day and hour (day 0,
+// hour 0 with no clock; no Season: no window and phase 0), the first SnowCover's cover * strength clamped to 0..1 (0 with
+// none) and the effective wind with the gust sway (calm with no Weather). The breath does not use the sun, so the
+// r.env_override cvar the extract applies to the environment does not matter and nothing differs. 0 when enabled or strength
+// is 0.
+int l_weather_cold_breath_active(lua_State* L) {
+    const kit::ColdBreath& cb = check_cold_breath(L, "weather.cold_breath_active");
+    World& w = world_of(L);
+    f32 amount = 0.0f;
+    if (cb.enabled != 0 && cb.strength > 0.0f) {
+        const kit::Season* season = nullptr;
+        const refl::TypeRecord* season_type = refl::find_type(StringId("Season"));
+        if (season_type && w.find_component(season_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::Season&>().each([&](const kit::Season& c) {
+                if (!season) season = &c;
+            });
+        }
+        u32 day = 0;
+        f32 clock_hour = 0.0f;
+        const refl::TypeRecord* clock_type = refl::find_type(StringId("WorldClock"));
+        if (clock_type && w.find_component(clock_type->type_hash) != ecs::kInvalidComponent) {
+            bool found = false;
+            w.query<const kit::WorldClock&>().each([&](const kit::WorldClock& c) {
+                if (found) return;
+                found = true;
+                day = c.day;
+                clock_hour = c.hour;
+            });
+        }
+        const f32 phase = season ? kit::season_phase(*season, day, clock_hour) : 0.0f;
+        const kit::SnowCover* sc = nullptr;
+        const refl::TypeRecord* sc_type = refl::find_type(StringId("SnowCover"));
+        if (sc_type && w.find_component(sc_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::SnowCover&>().each([&](const kit::SnowCover& c) {
+                if (!sc) sc = &c;
+            });
+        }
+        const f32 cover = sc ? std::clamp(sc->cover * sc->strength, 0.0f, 1.0f) : 0.0f;
+        const kit::Weather* wx = first_weather(w);
+        const kit::WindGust* gust = nullptr;
+        const refl::TypeRecord* gust_type = refl::find_type(StringId("WindGust"));
+        if (gust_type && w.find_component(gust_type->type_hash) != ecs::kInvalidComponent) {
+            w.query<const kit::WindGust&>().each([&](const kit::WindGust& c) {
+                if (!gust) gust = &c;
+            });
+        }
+        const f32 wind = wx ? kit::effective_wind(*wx, gust, kit::kGustSway) : 0.0f;
+        amount = kit::cold_breath_amount(cb, season, phase, cover, wind);
+        if (!std::isfinite(amount)) amount = 0.0f;
+    }
+    lua_pushnumber(L, static_cast<double>(amount));
+    return 1;
+}
+
+// weather.set_cold_breath{...}: validated before anything is written.
+int l_weather_set_cold_breath(lua_State* L) {
+    static const char* const kKeys[20] = {"enabled", "window_full", "window_end", "manual", "cover_low", "cover_full", "wind_calm", "wind_still", "rate", "mouth_forward_m", "mouth_down_m", "size_m", "grow", "lifetime_s", "speed", "lift", "color", "max_particles", "seed", "strength"};
+    f64 value[20] = {};
+    bool given[20] = {};
+    f64 color[3] = {};
+    read_settings(L, "weather.set_cold_breath", kKeys, 20, "enabled, window_full, window_end, manual, cover_low, cover_full, wind_calm, wind_still, rate, mouth_forward_m, mouth_down_m, size_m, grow, lifetime_s, speed, lift, color, max_particles, seed, strength",
+                  value, given, 16, color);
+    kit::ColdBreath& cb = check_cold_breath(L, "weather.set_cold_breath");
+    if (given[0]) cb.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) cb.window_full = static_cast<f32>(clamp_range(value[1], 0.0, 0.5));
+    if (given[2]) cb.window_end = static_cast<f32>(clamp_range(value[2], 0.0, 0.5));
+    if (given[3]) cb.manual = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) cb.cover_low = static_cast<f32>(clamp_range(value[4], 0.0, 1.0));
+    if (given[5]) cb.cover_full = static_cast<f32>(clamp_range(value[5], 0.0, 1.0));
+    if (given[6]) cb.wind_calm = static_cast<f32>(clamp_range(value[6], 0.0, 1.0));
+    if (given[7]) cb.wind_still = static_cast<f32>(clamp_range(value[7], 0.0, 1.0));
+    if (given[8]) cb.rate = static_cast<f32>(clamp_range(value[8], 0.0, 10.0));
+    if (given[9]) cb.mouth_forward_m = static_cast<f32>(clamp_range(value[9], 0.0, 2.0));
+    if (given[10]) cb.mouth_down_m = static_cast<f32>(clamp_range(value[10], 0.0, 2.0));
+    if (given[11]) cb.size_m = static_cast<f32>(clamp_range(value[11], 0.01, 1.0));
+    if (given[12]) cb.grow = static_cast<f32>(clamp_range(value[12], 1.0, 8.0));
+    if (given[13]) cb.lifetime_s = static_cast<f32>(clamp_range(value[13], 0.3, 5.0));
+    if (given[14]) cb.speed = static_cast<f32>(clamp_range(value[14], 0.0, 3.0));
+    if (given[15]) cb.lift = static_cast<f32>(clamp_range(value[15], 0.0, 2.0));
+    if (given[16]) {
+        cb.color.x = static_cast<f32>(clamp_range(color[0], 0.0, 1.0));
+        cb.color.y = static_cast<f32>(clamp_range(color[1], 0.0, 1.0));
+        cb.color.z = static_cast<f32>(clamp_range(color[2], 0.0, 1.0));
+    }
+    if (given[17]) cb.max_particles = static_cast<u32>(clamp_range(value[17], 4.0, 128.0));
+    if (given[18]) cb.seed = static_cast<u32>(clamp_range(value[18], 0.0, 4294967295.0));
+    if (given[19]) cb.strength = static_cast<f32>(clamp_range(value[19], 0.0, 1.0));
+    return 0;
+}
+
 // ---- Water (M-WATER step 15d) ----
 
 kit::Water& check_water(lua_State* L, const char* fn) { return check_first<kit::Water>(L, fn, "Water"); }
@@ -3248,6 +3397,28 @@ const luaL_Reg kWeatherLib[] = {
     {"midge_color", l_weather_midge_color},
     {"midge_active", l_weather_midge_active},
     {"set_midge", l_weather_set_midge},
+    {"cold_breath_enabled", l_weather_cold_breath_enabled},
+    {"cold_breath_window_full", l_weather_cold_breath_window_full},
+    {"cold_breath_window_end", l_weather_cold_breath_window_end},
+    {"cold_breath_manual", l_weather_cold_breath_manual},
+    {"cold_breath_cover_low", l_weather_cold_breath_cover_low},
+    {"cold_breath_cover_full", l_weather_cold_breath_cover_full},
+    {"cold_breath_wind_calm", l_weather_cold_breath_wind_calm},
+    {"cold_breath_wind_still", l_weather_cold_breath_wind_still},
+    {"cold_breath_rate", l_weather_cold_breath_rate},
+    {"cold_breath_mouth_forward_m", l_weather_cold_breath_mouth_forward_m},
+    {"cold_breath_mouth_down_m", l_weather_cold_breath_mouth_down_m},
+    {"cold_breath_size_m", l_weather_cold_breath_size_m},
+    {"cold_breath_grow", l_weather_cold_breath_grow},
+    {"cold_breath_lifetime_s", l_weather_cold_breath_lifetime_s},
+    {"cold_breath_speed", l_weather_cold_breath_speed},
+    {"cold_breath_lift", l_weather_cold_breath_lift},
+    {"cold_breath_max_particles", l_weather_cold_breath_max_particles},
+    {"cold_breath_seed", l_weather_cold_breath_seed},
+    {"cold_breath_strength", l_weather_cold_breath_strength},
+    {"cold_breath_color", l_weather_cold_breath_color},
+    {"cold_breath_active", l_weather_cold_breath_active},
+    {"set_cold_breath", l_weather_set_cold_breath},
     {nullptr, nullptr},
 };
 
