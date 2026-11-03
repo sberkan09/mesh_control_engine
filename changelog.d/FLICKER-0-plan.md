@@ -1,0 +1,1 @@
+- M-FLICKER plan: an opt-in `LightFlicker3D` component making point and spot lights waver, render-side only (steps 36a to 36d); nothing is built yet.
