@@ -240,6 +240,17 @@
      ]
     },
     {
+     "name": "Throw",
+     "bindings": [
+      {
+       "key": "B"
+      },
+      {
+       "gamepad_button": "Back"
+      }
+     ]
+    },
+    {
      "name": "Horn",
      "bindings": [
       {

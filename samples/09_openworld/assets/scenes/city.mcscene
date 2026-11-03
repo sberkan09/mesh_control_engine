@@ -38750,6 +38750,16 @@
      "draw_time": 0.4
     },
     "Progress3D": {},
+    "Grenade3D": {
+     "use_input": 1,
+     "count": 3,
+     "max_count": 5,
+     "damage": 120,
+     "radius": 6,
+     "fuse": 2.5,
+     "throw_speed": 14,
+     "lift": 4
+    },
     "Melee3D": {
      "use_input": 1,
      "damage": 35,

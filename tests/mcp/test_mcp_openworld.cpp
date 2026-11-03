@@ -150,6 +150,12 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"WeaponPreset3D","show":["WeaponPreset3D"]}})")) >= 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Melee3D","show":["Melee3D"]}})")) >= 1);
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Goal3D","show":["Goal3D"]}})")) == 5);
+    // Grenades (M-GRENADE): three in the stack; B throws one and the stack drops by one.
+    {
+        auto thrown = c.ok("run_headless", R"({"ticks":60,"log_lines":0,"input":"5 Throw","inspect":{"component":"Grenade3D","show":["Grenade3D"]}})");
+        CHECK(comps(thrown, 0).get("Grenade3D").get("thrown").as_number() == 1);
+        CHECK(comps(thrown, 0).get("Grenade3D").get("count").as_number() == 2);
+    }
     // A safety net under the world (M-FALLDEATH).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).
