@@ -1,0 +1,1 @@
+- M-GRENADE plan: thrown grenades for 09_openworld (`docs/milestones/M-GRENADE.md`), steps seam, feature, polish.
