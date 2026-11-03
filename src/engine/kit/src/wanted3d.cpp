@@ -12,6 +12,7 @@
 #include "mce/kit/ai.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/grenade3d.h"
 #include "mce/kit/impact_damage.h"
 #include "mce/kit/loadout3d.h"
 #include "mce/kit/nav3d.h"
@@ -510,6 +511,8 @@ void kit3d_respawn(Frame& f) {
             const f32 kept = cf ? math::clamp(cf->ammo_kept, 0.0f, 1.0f) : 1.0f;
             if (wp) wp->reserve = static_cast<u32>(static_cast<f32>(wp->reserve) * kept);
             if (cf) for_stored_presets(w, e, [&](WeaponPreset3D& pr) { pr.reserve = static_cast<u32>(static_cast<f32>(pr.reserve) * kept); });
+            if (cf)
+                if (Grenade3D* gr = w.try_get_mut<Grenade3D>(e)) gr->count = static_cast<u16>(static_cast<f32>(gr->count) * kept);
         }
         const i32 fine = take_cash(w, e, r.reason == 1 ? r.fine_busted : r.fine_wasted);
         if (fine > 0 && r.caption && w.try_resource<Captions>()) {
@@ -559,6 +562,8 @@ void kit3d_payspray(Frame& f) {
     });
 }
 
+constexpr u32 kGrenadeRounds = 10;  // a grenade costs this many rounds at an AmmoShop3D
+
 void kit3d_ammoshop(Frame& f) {
     World& w = f.world();
     f.query<AmmoShop3D, LocalTransform>().each([&](Entity se, AmmoShop3D& sh, LocalTransform&) {
@@ -585,6 +590,16 @@ void kit3d_ammoshop(Frame& f) {
                 pr.reserve += rounds;
                 EventAccess(w).push(AmmoBought3D{be, se, rounds, paid});
             });
+        });
+        // grenades too: each costs kGrenadeRounds rounds' worth, up to the stack's max_count (M-GRENADE)
+        f.query<Grenade3D, Wallet3D, LocalTransform>().each([&](Entity be, Grenade3D& gr, Wallet3D& wl, LocalTransform&) {
+            if (gr.count >= gr.max_count || math::length(position_of(w, be) - sp) > sh.radius) return;
+            const u32 price = sh.price_per_round * kGrenadeRounds;
+            const u32 afford = wl.cash > 0 ? static_cast<u32>(wl.cash) / price : 0u;
+            const u32 n = math::min<u32>(static_cast<u32>(gr.max_count - gr.count), afford);
+            if (n == 0) return;
+            take_cash(w, be, static_cast<i32>(n * price));
+            gr.count = static_cast<u16>(gr.count + n);
         });
     });
 }

@@ -1,0 +1,1 @@
+- Grenades in `samples/09_openworld` (M-GRENADE 2): the player carries three, B (pad: Back) throws one, the HUD shows the count, the ammo shop sells more and an arrest keeps the `ammo_kept` share. `AmmoShop3D` now also restocks `Grenade3D`.

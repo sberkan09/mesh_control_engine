@@ -15,6 +15,7 @@
 #include "mce/kit/bodies3d.h"
 #include "mce/kit/captions.h"
 #include "mce/kit/combat3d.h"
+#include "mce/kit/grenade3d.h"
 #include "mce/kit/impact_damage.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/loadout3d.h"
@@ -1044,6 +1045,42 @@ TEST_CASE("wanted3d: the shop restocks and an arrest halves the weapons in the b
             CHECK(s.respawns == 1);
             CHECK(s.w.try_get<WeaponPreset3D>(pb)->reserve == 20);
             CHECK(s.w.try_get<WeaponPreset3D>(pa)->reserve == 20);  // the wielded slot lives on the Weapon3D
+        }
+    }
+}
+
+TEST_CASE("wanted3d: the shop sells grenades and an arrest keeps a share of them (M-GRENADE 2)") {
+    for (u32 k = 0; k < 2; ++k) {  // k 0: shop; k 1: arrest with Confiscate3D
+        Scene s;
+        install_grenade3d(s.w);
+        Wanted3D wd;
+        wd.heat = 5.0f;
+        wd.crimes = 1;
+        const Entity p = s.player(wd, 1.0f, 0.0f);
+        Grenade3D g;
+        g.count = 1;
+        g.max_count = 5;
+        s.w.add(p, g);
+        s.w.add(p, Weapon3D{});
+        s.w.add(p, Wallet3D{1000});
+        if (k == 0) {
+            AmmoShop3D sh;
+            sh.price_per_round = 2;  // a grenade costs 10 rounds: 20
+            sh.stock_to = 100;
+            s.w.spawn_with(at(0.0f, 1.0f, 0.0f), sh);
+            s.run(4);
+            CHECK(s.w.try_get<Grenade3D>(p)->count == 5);
+            CHECK(s.w.try_get<Wallet3D>(p)->cash == 1000 - 4 * 20);
+        } else {
+            s.w.try_get_mut<Grenade3D>(p)->count = 5;
+            Respawn3D r;
+            r.delay = 1.0f;
+            s.w.add(p, r);
+            s.w.add(p, Confiscate3D{0.5f});
+            s.cop(2.0f, 0.0f);
+            s.run(60 * 6);
+            CHECK(s.respawns == 1);
+            CHECK(s.w.try_get<Grenade3D>(p)->count == 2);  // 5 * 0.5 rounded down
         }
     }
 }

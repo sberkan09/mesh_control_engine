@@ -467,7 +467,9 @@ leaves along the thrower's forward at `throw_speed` plus `lift` m/s up, falls an
 finds, and after `fuse` s explodes: every `Health3D` within `radius` m takes `damage`, falling off linearly to 0 at the edge, in
 entity order, through `apply_damage` with the thrower credited. The blast hurts the thrower too and is not blocked by walls.
 Each grenade (`GrenadeLive3D`, spawned by the engine) keeps the numbers it was thrown with. `GrenadeThrown3D` and
-`GrenadeBlast3D` report the throw and the blast. No sample uses it yet (M-GRENADE step 2).
+`GrenadeBlast3D` report the throw and the blast.
+An `AmmoShop3D` also sells grenades (10 rounds' price each, up to `max_count`) and a `Confiscate3D` arrest keeps the same share of the stack.
+`samples/09_openworld` gives the player three grenades: B (pad: Back) throws one, and the HUD shows "GRENADES n".
 
 ## 9.10 Configuration
 

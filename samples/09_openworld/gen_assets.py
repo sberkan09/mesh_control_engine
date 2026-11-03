@@ -192,6 +192,8 @@ def input_map():
         {"name": "WeaponPrev", "bindings": [key("Z"), {"gamepad_button": "DpadDown"}]},
         # Melee attack (M-MELEE): V, or a click of the right stick.
         {"name": "Melee", "bindings": [key("V"), {"gamepad_button": "RightStick"}]},
+        # Grenades (M-GRENADE): B, or the pad's Back button, throws one.
+        {"name": "Throw", "bindings": [key("B"), {"gamepad_button": "Back"}]},
         {"name": "Horn", "bindings": [key("G"), {"gamepad_button": "LeftStick"}]},
         {"name": "Lights", "bindings": [key("L"), {"gamepad_button": "DpadRight"}]},
         {"name": "Pause", "bindings": [key("Escape"), {"gamepad_button": "Start"}]},
@@ -1230,6 +1232,8 @@ def scene():
         "Loadout3D": {"slot0": s.ref(pistol), "slot1": s.ref(smg), "slot2": s.ref(shotgun), "use_input": 1, "draw_time": 0.4},
         # A swing at whatever is in front of the player, with or without a gun in hand (M-MELEE).
         "Progress3D": {},  # counts kills, missions, rides and melee hits for the goals below (M-PROGRESS)
+        # Three grenades, thrown with B; the ammo shop restocks them (M-GRENADE).
+        "Grenade3D": {"use_input": 1, "count": 3, "max_count": 5, "damage": 120, "radius": 6, "fuse": 2.5, "throw_speed": 14, "lift": 4},
         "Melee3D": {"use_input": 1, "damage": 35, "reach": 2.2, "arc_deg": 100, "rate": 2.5, "windup": 0.15},
         # The HUD document (health, wanted level, cash, ammo, minimap); bound fields are read from this entity.
         "UiScreen": {"document": "guid:" + G_HUD},
@@ -1498,6 +1502,7 @@ def hud():
          "visible": False, "range": [-1.5, 20, 0], "value": 0},
         hud_text("kills", "KILLS 0", 22, hud_box(24, -96, 280, -68, 0, 1), "Wanted3D/kills", "KILLS %.0f", [1.0, 0.6, 0.45, 1]),
         hud_text("goals", "GOALS 0 / 5", 22, hud_box(24, -126, 280, -98, 0, 1), "Progress3D/goals_done", "GOALS %.0f / 5", [1.0, 0.9, 0.5, 1]),
+        hud_text("grenades", "GRENADES 3", 22, hud_box(24, -156, 280, -128, 0, 1), "Grenade3D/count", "GRENADES %.0f", [0.8, 1.0, 0.6, 1]),
         hud_text("wanted", "WANTED", 22, hud_box(-280, 224, -16, 248, 1, 0), None, None, [1.0, 0.85, 0.25, 1], "Right"),
         *wanted_stars(),
         hud_text("cash", "$ 0", 30, hud_box(-280, 292, -16, 332, 1, 0), "Wallet3D/cash", "$ %.0f", [0.6, 1.0, 0.6, 1], "Right"),
