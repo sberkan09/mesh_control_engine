@@ -90,6 +90,7 @@
 #include "mce/kit/midge.h"                  // Midge (M-MIDGES 33a)
 #include "mce/kit/cold_breath.h"          // ColdBreath (M-COLDBREATH 34a)
 #include "mce/kit/decal_scatter.h"          // DecalScatter3D (M-DECALSCATTER 35a)
+#include "mce/kit/light_flicker.h"          // LightFlicker3D (M-FLICKER 36a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
