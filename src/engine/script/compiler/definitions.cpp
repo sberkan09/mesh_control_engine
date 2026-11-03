@@ -747,6 +747,38 @@ declare weather: {
     -- 0.3..20, size_m 0.005..0.5, lifetime_s 0.5..20, speed 0..4, max_particles 8..512, seed 0..4294967295; enabled: any
     -- non-zero number is 1); an unknown key or a non-number raises and nothing is written
     set_midge: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, twilight_low: number?, twilight_high: number?, wind_calm: number?, wind_still: number?, rate: number?, box_xz_m: number?, height_m: number?, size_m: number?, lifetime_s: number?, speed: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
+    -- ColdBreath (M-COLDBREATH), the first ColdBreath in the scene; every cold breath function raises when there is none
+    -- (set_cold_breath never adds one). The getters are cold_breath_ plus the set key; the colour returns r, g, b. They read
+    -- the authoring even when enabled is 0. cold_breath_active (0..1) is the breath amount now, the same one the renderer
+    -- draws: max(manual, winter window times the season strength, smoothed settled snow cover) times the calm gate (the wind)
+    -- times strength, with the first Season at the WorldClock's day and hour, the first SnowCover's cover times strength and
+    -- the effective wind; 0 when enabled or strength is 0. Read-only.
+    cold_breath_enabled: () -> number,
+    cold_breath_window_full: () -> number,
+    cold_breath_window_end: () -> number,
+    cold_breath_manual: () -> number,
+    cold_breath_cover_low: () -> number,
+    cold_breath_cover_full: () -> number,
+    cold_breath_wind_calm: () -> number,
+    cold_breath_wind_still: () -> number,
+    cold_breath_rate: () -> number,
+    cold_breath_mouth_forward_m: () -> number,
+    cold_breath_mouth_down_m: () -> number,
+    cold_breath_size_m: () -> number,
+    cold_breath_grow: () -> number,
+    cold_breath_lifetime_s: () -> number,
+    cold_breath_speed: () -> number,
+    cold_breath_lift: () -> number,
+    cold_breath_max_particles: () -> number,
+    cold_breath_seed: () -> number,
+    cold_breath_strength: () -> number,
+    cold_breath_color: () -> (number, number, number),
+    cold_breath_active: () -> number,
+    -- every key optional, each value clamped to the field's range (window_full and window_end 0..0.5, manual, cover_low,
+    -- cover_full, wind_calm, wind_still, strength and each colour channel 0..1, rate 0..10, mouth_forward_m, mouth_down_m and
+    -- lift 0..2, size_m 0.01..1, grow 1..8, lifetime_s 0.3..5, speed 0..3, max_particles 4..128, seed 0..4294967295; enabled:
+    -- any non-zero number is 1); an unknown key or a non-number raises and nothing is written
+    set_cold_breath: (settings: { enabled: number?, window_full: number?, window_end: number?, manual: number?, cover_low: number?, cover_full: number?, wind_calm: number?, wind_still: number?, rate: number?, mouth_forward_m: number?, mouth_down_m: number?, size_m: number?, grow: number?, lifetime_s: number?, speed: number?, lift: number?, color: { number }?, max_particles: number?, seed: number?, strength: number? }) -> (),
 }
 
 declare water: {
