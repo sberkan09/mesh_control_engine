@@ -1,0 +1,1 @@
+- Decal scatter extract feed (M-DECALSCATTER 35b): Kit3DExtract turns each `DecalScatter3D` into local decals after the `Decal3D` loop, nearest to the camera first, with the distance fade, the particle-scale budget (Low tier halves it) and the patch skipped beyond `fade_distance_m`.
