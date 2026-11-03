@@ -1,6 +1,6 @@
 # M-GRENADE: thrown grenades in 09_openworld
 
-**Status:** steps 1 and 2 done (2026-11-03), step 3 open. Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
+**Status:** done (2026-11-03), except a throw sound, a blast effect and a shove on physics bodies. Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md), [M-MELEE](M-MELEE.md) and [M-PROGRESS](M-PROGRESS.md). Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`grenade3d`). No ECS, render or physics core, no
@@ -45,7 +45,7 @@ grenade count too (small additions in `wanted3d.cpp`, as #1024 did for stored pr
 |---|---|---|
 | 1 seam | `Grenade3D`, `GrenadeLive3D`, system `kit_grenade`, events, unit tests (throw uses a grenade and respects cooldown and an empty stack, fuse timing, falloff at centre and edge, order, owner credit, dead or seated thrower ignored). No sample change. | open |
 | 2 feature | Sample: the player gets `Grenade3D` (3 grenades); action `Throw` on B / gamepad Back (G is the horn, the shoulders are taken); HUD count; the shop sells them at 10 rounds' price; an arrest keeps the `ammo_kept` share; `test_mcp_openworld` inspect check. | done |
-| 3 polish | User-guide section "Grenades", closing doc and the `M-OPENWORLD-GAPS` strike-through; a throw and blast sound if a clip exists, and a progression stat (`Grenades` kills) if wanted. | open |
+| 3 polish | The user-guide section, the capability row and the `M-OPENWORLD-GAPS` strike-through landed with steps 1 and 2 and this closing doc. A throw sound and a blast effect need a clip and an effect hooked to `GrenadeBlast3D` (the impact FX listen to `WeaponHit3D`), and a shove on dynamic bodies and a progression stat (grenade kills) are left open. | done |
 
 ## Decisions taken (change them in the plan PR if wrong)
 
