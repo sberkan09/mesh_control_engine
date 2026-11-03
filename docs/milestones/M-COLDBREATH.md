@@ -1,6 +1,6 @@
 # M-COLDBREATH — Cold breath: small pale vapour puffs in front of the camera in winter cold and over settled snow, with no shader (milestone record)
 
-**Status:** planned (2026-11-03), steps 34a to 34d. PRs: this plan. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-MIDGES, M-SNOWSPARKLE and M-BUTTERFLY (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, winter centre 0.875), M-SNOWCOVER (`SnowCover.cover`) and M-FREEZE, which listed "steam or breath particles" as not in scope. Winter now has snow, frozen water and glints but nothing that says the air is cold; real cold air shows the breath. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-03), steps 34a to 34d (PRs 1042, 1044, 1046, 1047). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-MIDGES, M-SNOWSPARKLE and M-BUTTERFLY (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-SEASONS (`Season`, winter centre 0.875), M-SNOWCOVER (`SnowCover.cover`) and M-FREEZE, which listed "steam or breath particles" as not in scope. Winter now has snow, frozen water and glints but nothing that says the air is cold; real cold air shows the breath. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** the component is `ColdBreath` (header `cold_breath.h`); `projects/`, `src/` and `docs/` have no type of that name (checked 2026-11-03).
 
@@ -32,10 +32,10 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 34a | planned | | |
-| 34b | planned | | |
-| 34c | planned | | |
-| 34d | planned | | |
+| 34a | done | 1042 | `ColdBreath` and the pure `cold_breath_amount`, `cold_breath_look` in `mce/kit/cold_breath.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19zc. |
+| 34b | done | 1044 | Extract feed: one local alpha-blended point emitter (id `0xFFFF000A`) at the mouth point in front of the camera, Low tier and `particle_scale`; `tests/kit/test_cold_breath_extract.cpp`. |
+| 34c | done | 1046 | `weather.set_cold_breath{...}` (20 keys), the `weather.cold_breath_<key>()` getters and the read-only `weather.cold_breath_active()`; typed in `definitions.cpp`; `12_weather` logs `cold_breath:`; `tests/script/test_script_cold_breath.cpp`. |
+| 34d | done | 1047 | The `08-3d` "Cold breath" paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
