@@ -824,3 +824,55 @@ TEST_CASE("M-ACCESS: the high-contrast theme keeps text at 7:1 or more and leave
     REQUIRE(plain > 0);
     CHECK(glyph_quads(true) == plain * 9);
 }
+
+TEST_CASE("ui: find_child, first_child and next_sibling walk the tree in document order") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    Builder col = b.stack("menu");
+    const WidgetId a = col.button("a", "A").id();
+    const WidgetId bb = col.button("b", "B").id();
+    Builder inner = col.stack("inner");
+    const WidgetId deep = inner.button("deep", "D").id();
+    const WidgetId c = col.button("c", "C").id();
+
+    CHECK(d.first_child(col.id()) == a);
+    CHECK(d.next_sibling(a) == bb);
+    CHECK(d.next_sibling(bb) == inner.id());
+    CHECK(d.next_sibling(inner.id()) == c);
+    CHECK(d.next_sibling(c).is_null());          // the last child has no next
+    CHECK(d.first_child(a).is_null());            // a button has no children
+    CHECK(d.first_child(inner.id()) == deep);
+
+    CHECK(d.find_child(col.id(), "b") == bb);
+    CHECK(d.find_child(col.id(), "inner") == inner.id());
+    CHECK(d.find_child(col.id(), "deep").is_null());   // direct children only; find() takes a path
+    CHECK(d.find(StringView("menu/inner/deep")) == deep);
+    CHECK(d.find_child(col.id(), "missing").is_null());
+    CHECK(d.find_child(WidgetId{}, "a").is_null());    // a null parent finds nothing
+}
+
+TEST_CASE("ui: set_font_role and set_blocks_pointer are read back, and a null widget is ignored") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId t = b.text("t", "hello").id();
+    CHECK(d.font_role(t) == FontRole::Auto);
+    d.set_font_role(t, FontRole::Title);
+    CHECK(d.font_role(t) == FontRole::Title);
+    d.set_font_role(t, FontRole::Auto);
+    CHECK(d.font_role(t) == FontRole::Auto);
+
+    CHECK_FALSE(d.blocks_pointer(t));
+    d.set_blocks_pointer(t, true);
+    CHECK(d.blocks_pointer(t));
+    d.set_blocks_pointer(t, false);
+    CHECK_FALSE(d.blocks_pointer(t));
+
+    d.set_font_role(WidgetId{}, FontRole::Title);   // no crash, no change
+    d.set_blocks_pointer(WidgetId{}, true);
+    CHECK_FALSE(d.blocks_pointer(WidgetId{}));
+    CHECK(d.font_role(WidgetId{}) == FontRole::Auto);
+}
