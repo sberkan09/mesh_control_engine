@@ -95,6 +95,7 @@ mce_add_test(test_kit UMBRELLA
         test_midge.cpp
         test_cold_breath.cpp
         test_decal_scatter.cpp
+        test_decal_scatter_extract.cpp
         test_particle_floor.cpp
         test_firefly_extract.cpp
         test_pollen_extract.cpp
