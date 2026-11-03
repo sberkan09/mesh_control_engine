@@ -474,3 +474,34 @@ TEST_CASE("audio_bridge: AudioListenerMix makes every AudioListener an ear") {
     CHECK(dev->listeners().size() == 1);
     CHECK(dev->listener_mix() == ListenerMix::First);
 }
+
+TEST_CASE(
+    "M-VIEWS 4: set_listeners keeps up to kMaxListeners, ignores an empty list, and set_listener goes back to one "
+    "ear") {
+    auto dev = test::offline_device();
+    CHECK(dev->listeners().size() == 1);
+    CHECK(dev->listener_mix() == ListenerMix::First);
+    Listener many[kMaxListeners + 2];
+    for (u32 i = 0; i < kMaxListeners + 2; ++i) many[i].position = {static_cast<f32>(i), 0.f, 0.f};
+    dev->set_listeners(Span<const Listener>(many, kMaxListeners + 2), ListenerMix::Nearest);
+    REQUIRE(dev->listeners().size() == kMaxListeners);  // the extra two are ignored
+    CHECK(dev->listener_mix() == ListenerMix::Nearest);
+    CHECK(dev->listeners()[kMaxListeners - 1].position.x == doctest::Approx(static_cast<f32>(kMaxListeners - 1)));
+    dev->set_listeners(Span<const Listener>{}, ListenerMix::Mixed);  // none: the current ones stay
+    CHECK(dev->listeners().size() == kMaxListeners);
+    Listener solo;
+    solo.position = {9.f, 0.f, 0.f};
+    dev->set_listener(solo);
+    REQUIRE(dev->listeners().size() == 1);
+    CHECK(dev->listener_mix() == ListenerMix::First);
+    CHECK(dev->listener().position.x == doctest::Approx(9.f));
+}
+
+TEST_CASE("audio.reverb: reverb_allowed starts true and follows set_reverb_allowed") {
+    auto dev = test::offline_device();
+    CHECK(dev->reverb_allowed());
+    dev->set_reverb_allowed(false);
+    CHECK_FALSE(dev->reverb_allowed());
+    dev->set_reverb_allowed(true);
+    CHECK(dev->reverb_allowed());
+}
