@@ -265,3 +265,49 @@ TEST_CASE("focus loss lifts every touch") {
     in.sample_for_tick(3);
     CHECK(in.state().touch_count == 0);
 }
+
+TEST_CASE("touch_held and touch_pos follow a finger, and refuse a slot past kMaxTouches") {
+    InputSystem in;
+    setup(in);
+    CHECK_FALSE(in.touch_held(0));
+    in.push_event(test::touch_event(EventType::TouchDown, 1, 0.25f, 0.75f, at(1)));
+    in.sample_for_tick(1);
+    CHECK(in.touch_held(1));
+    CHECK_FALSE(in.touch_held(0));
+    CHECK(in.touch_pos(1).x == doctest::Approx(0.25f));
+    CHECK(in.touch_pos(1).y == doctest::Approx(0.75f));
+    in.push_event(test::touch_event(EventType::TouchMove, 1, 0.5f, 0.5f, at(2)));
+    in.sample_for_tick(2);
+    CHECK(in.touch_pos(1).x == doctest::Approx(0.5f));
+    CHECK(in.touch_pos(1).y == doctest::Approx(0.5f));
+    CHECK_FALSE(in.touch_held(platform::kMaxTouches));
+    CHECK(in.touch_pos(platform::kMaxTouches).x == 0.f);
+    CHECK(in.touch_pos(platform::kMaxTouches).y == 0.f);
+    CHECK(in.touch_pos(0xFFFFFFFFu).x == 0.f);
+}
+
+TEST_CASE("mouse_held follows the button events and ignores an unknown button") {
+    InputSystem in;
+    setup(in);
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Left));
+    in.push_event(test::simple_event(EventType::MouseButtonDown, at(1), static_cast<u32>(platform::MouseButton::Left)));
+    in.sample_for_tick(1);
+    CHECK(in.mouse_held(platform::MouseButton::Left));
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Right));
+    in.push_event(test::simple_event(EventType::MouseButtonUp, at(2), static_cast<u32>(platform::MouseButton::Left)));
+    in.sample_for_tick(2);
+    CHECK_FALSE(in.mouse_held(platform::MouseButton::Left));
+    CHECK_FALSE(in.mouse_held(static_cast<platform::MouseButton>(99)));
+}
+
+TEST_CASE("set_tick_origin_us is read back and moves the tick grid") {
+    InputSystem in;
+    setup(in);
+    CHECK(in.tick_origin_us() == 0);
+    in.set_tick_origin_us(1'000'000);
+    CHECK(in.tick_origin_us() == 1'000'000);
+    // Tick 1's window is now [1.000 s, 1.0167 s): a press 8 ms in lands in tick 1.
+    in.push_event(test::key_event(platform::Key::Space, true, 1'008'000));
+    const InputState s = in.sample_for_tick(1);
+    CHECK(s.jump_held);
+}
