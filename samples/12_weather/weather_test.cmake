@@ -94,6 +94,14 @@
 #      0.300 at tick 0, 0.169 at tick 300 in the rain, 0.612 at 1200 as the dawn twilight opens the gate over the floor,
 #      0.258 at 1350, exactly 0.000 in the storm at 1500 (the wind is past wind_still), then 0.820 at 1800 and 0.436 at 2400
 #      once the sun has climbed out of the twilight band. The entity count stays 14.
+#  26. (M-COLDBREATH 34c) the "cold_breath:" lines: weather.cold_breath_active() of the ColdBreath on the Weather entity (read
+#      only, the script writes nothing). The scene has manual 0.3 and a one-day Season whose phase only climbs from 0.1 to
+#      about 0.4 in the 2700 ticks, so the winter window (around 0.875) never opens: the amount is max(0.3, smoothed snow
+#      cover) times the calm gate (1 - smoothstep(0.5, 0.95, wind)). It is the 0.3 floor wherever the wind is below 0.5 and
+#      the cover below the smoothed range: 0.300 at tick 0 and at tick 300 (the rain's wind is calm enough), 0.300 through
+#      the clearing, then 0.052 in the storm at 1500 (the floor times the gate, the wind is past wind_calm), 0.300 at 2100
+#      (cover 0.201 is still under the floor), 0.491 at 2250 as the settled cover 0.372 lifts over the floor and 0.300 at 2400
+#      (cover 0.298 under the floor again). The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -209,6 +217,13 @@ string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge600 "${first}
 list(LENGTH midge600 n_midge600)
 if(NOT n_midge600 EQUAL 4)
     message(FATAL_ERROR "expected 4 midge lines in 600 ticks, got ${n_midge600}")
+endif()
+expect("${first}" "script: cold_breath: 0.300 at tick 0\n" "the cold breath amount is not the manual floor at tick 0")
+expect("${first}" "script: cold_breath: 0.300 at tick 300\n" "the rain's wind thinned the cold breath")
+string(REGEX MATCHALL "script: cold_breath: [0-9.]+ at tick [0-9]+" cold_breath600 "${first}")
+list(LENGTH cold_breath600 n_cold_breath600)
+if(NOT n_cold_breath600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 cold_breath lines in 600 ticks, got ${n_cold_breath600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -361,6 +376,15 @@ string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge2700 "${forec
 list(LENGTH midge2700 n_midge2700)
 if(NOT n_midge2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 midge lines in 2700 ticks, got ${n_midge2700}")
+endif()
+expect("${forecast}" "script: cold_breath: 0.052 at tick 1500\n" "the storm wind did not scatter the cold breath")
+expect("${forecast}" "script: cold_breath: 0.300 at tick 2100\n" "the cold breath is not the floor at tick 2100")
+expect("${forecast}" "script: cold_breath: 0.491 at tick 2250\n" "the settled snow cover did not lift the cold breath over its floor")
+expect("${forecast}" "script: cold_breath: 0.300 at tick 2400\n" "the cold breath is wrong once the cover has thinned")
+string(REGEX MATCHALL "script: cold_breath: [0-9.]+ at tick [0-9]+" cold_breath2700 "${forecast}")
+list(LENGTH cold_breath2700 n_cold_breath2700)
+if(NOT n_cold_breath2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 cold_breath lines in 2700 ticks, got ${n_cold_breath2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
