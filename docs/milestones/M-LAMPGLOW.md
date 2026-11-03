@@ -1,6 +1,6 @@
 # M-LAMPGLOW — Lamp glow: the bulb or flame mesh dims with its flickering light, render-side only, no shader (milestone record)
 
-**Status:** planned (2026-11-03), steps 37a to 37c. PRs: this plan. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-FLICKER (the light now wavers, but the lamp mesh that carries it stays at full emissive, so a failing bulb's pool of light dims while the bulb itself shines on) and of the 3D visual assessment (lights and emissives should read as one object). No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
+**Status:** done (2026-11-03), steps 37a to 37c (PRs 1066, 1067, 1068). Steps 37a and 37b shipped together in one PR (one small kit change). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-FLICKER (the light now wavers, but the lamp mesh that carries it stays at full emissive, so a failing bulb's pool of light dims while the bulb itself shines on) and of the 3D visual assessment (lights and emissives should read as one object). No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
 
 **Naming:** no type, file or milestone called `LampGlow` exists (`projects/`, `src/`, `docs/`, `tests/` checked 2026-11-03). The work extends `LightFlicker3D` with one field instead of adding a component.
 
@@ -30,9 +30,9 @@ No step needs Opus: nothing writes a shader; the emissive tint is a number the r
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 37a | planned | | |
-| 37b | planned | | |
-| 37c | planned | | |
+| 37a | done | 1067 | `emissive_follow` (0..1, default 0, before `enabled`; the struct is 32 bytes) and `light_flicker_emissive_scale` in `mce/kit/light_flicker.h`; helper cases in `tests/kit/test_light_flicker.cpp`. |
+| 37b | done | 1067 | The `MeshRef` instance loop multiplies `emissive_tint` by the helper at the render clock (now computed once before that loop and shared with the light loops); `tests/kit/test_light_flicker_extract.cpp` (`LampRig`). The tour sample was not changed: no ready-made lamp mesh fits, the tests are the proof. A `StaticMerge3D`-merged mesh does not flicker (merged meshes skip the instance loop). |
+| 37c | done | 1068 | The `08-3d` sentence, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
