@@ -430,3 +430,81 @@ TEST_CASE("block solver: a box landing flat on two points stops in one solve wit
     CHECK(state(w, ent(2)).angular_velocity == 0.0f);
     CHECK(state(w, ent(2)).angle == 0.0f);
 }
+
+TEST_CASE("sleeping: set_awake(false) sleeps the whole island at once and set_awake(true) wakes it") {
+    World2D w = world_gravity(true);
+    const Entity ground = ent(1), low = ent(2), high = ent(3);
+    REQUIRE(add_box(w, ground, BodyType::Static, {0, -0.5f}, {10, 0.5f}));
+    REQUIRE(add_box(w, low, BodyType::Dynamic, {0, 0.5f}, {0.5f, 0.5f}));
+    REQUIRE(add_box(w, high, BodyType::Dynamic, {0, 1.5f}, {0.5f, 0.5f}));
+    for (u32 i = 0; i < 5; ++i) w.step(kDt);  // far short of time_to_sleep
+    REQUIRE(w.is_awake(low));
+    REQUIRE(w.is_awake(high));
+    w.set_awake(low, false);
+    CHECK_FALSE(w.is_awake(low));
+    CHECK_FALSE(w.is_awake(high));  // the stacked box shares the island
+    CHECK(w.stats().sleeping == 2);
+    w.set_awake(high, true);
+    CHECK(w.is_awake(high));
+    w.step(kDt);
+    CHECK(w.is_awake(low));       // an awake body in contact wakes what it rests on
+    w.set_awake(ent(99), false);  // no such body: ignored
+    w.set_awake(ground, false);   // a static body never sleeps
+    CHECK(w.is_awake(low));
+    CHECK(w.is_awake(high));
+}
+
+TEST_CASE("world: each_body visits the live bodies in slot order and skips destroyed ones") {
+    World2D w = world_no_gravity();
+    REQUIRE(add_box(w, ent(1), BodyType::Static, {0, 0}, {1, 1}));
+    REQUIRE(add_box(w, ent(2), BodyType::Dynamic, {5, 0}, {1, 1}));
+    REQUIRE(add_box(w, ent(3), BodyType::Dynamic, {10, 0}, {1, 1}));
+    Array<Entity> seen;
+    w.each_body([&](const BodyState& s) { seen.push_back(s.entity); });
+    REQUIRE(seen.size() == 3);
+    CHECK(seen[0] == ent(1));
+    CHECK(seen[1] == ent(2));
+    CHECK(seen[2] == ent(3));
+    w.destroy_body(ent(2));
+    seen.clear();
+    w.each_body([&](const BodyState& s) { seen.push_back(s.entity); });
+    REQUIRE(seen.size() == 2);
+    CHECK(seen[0] == ent(1));
+    CHECK(seen[1] == ent(3));
+}
+
+TEST_CASE("joint: set_motor_speed retargets a revolute motor in place and ignores other joints") {
+    World2D w = world_no_gravity();
+    const Entity post = ent(1), wheel = ent(2), peer = ent(3);
+    REQUIRE(add_box(w, post, BodyType::Static, {0, 0}, {0.1f, 0.1f}));
+    REQUIRE(add_box(w, wheel, BodyType::Dynamic, {1, 0}, {1.0f, 0.1f}));
+    REQUIRE(add_box(w, peer, BodyType::Dynamic, {5, 0}, {0.5f, 0.5f}));
+    RevoluteJointDesc d;
+    d.a = post;
+    d.b = wheel;
+    d.world_anchor = {0, 0};
+    d.enable_motor = true;
+    d.motor_speed = 0.0f;
+    d.max_motor_torque = 100000.0f;
+    const JointId j = w.create_revolute_joint(d);
+    REQUIRE(w.joint_alive(j));
+    for (u32 i = 0; i < 30; ++i) w.step(kDt);
+    CHECK(std::fabs(state(w, wheel).angular_velocity) < 0.05f);  // a motor at 0 holds the hinge
+    w.set_motor_speed(j, 2.0f);
+    for (u32 i = 0; i < 30; ++i) w.step(kDt);
+    CHECK(state(w, wheel).angular_velocity == doctest::Approx(2.0f).epsilon(0.1));
+    w.set_motor_speed(j, -2.0f);
+    for (u32 i = 0; i < 30; ++i) w.step(kDt);
+    CHECK(state(w, wheel).angular_velocity == doctest::Approx(-2.0f).epsilon(0.1));
+    // A distance joint has no motor: the call changes nothing.
+    DistanceJointDesc dd;
+    dd.a = wheel;
+    dd.b = peer;
+    dd.local_anchor_a = {1, 0};
+    dd.local_anchor_b = {0, 0};
+    const JointId dj = w.create_distance_joint(dd);
+    REQUIRE(w.joint_alive(dj));
+    const f32 length = w.joint_length(dj);
+    w.set_motor_speed(dj, 50.0f);
+    CHECK(w.joint_length(dj) == length);
+}
