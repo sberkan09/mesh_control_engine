@@ -38,6 +38,7 @@ TEST_CASE("light flicker: defaults") {
     CHECK(f.radius_depth == 0.05f);
     CHECK(f.seed == 1);
     CHECK(f.phase == 0.0f);
+    CHECK(f.emissive_follow == 0.0f);
     CHECK(f.pad_[0] == 0);
     CHECK(f.pad_[1] == 0);
     CHECK(f.pad_[2] == 0);
@@ -210,4 +211,51 @@ TEST_CASE("light flicker: the pulse is a sine at a tenth of rate_hz") {
     f.phase = 0.5f;  // half a cycle later
     CHECK(light_flicker_scale(f, 0.0, 0) == doctest::Approx(0.0f).epsilon(1e-5));
     CHECK(light_flicker_scale(f, 0.5, 0) == doctest::Approx(1.0f).epsilon(1e-5));
+}
+
+TEST_CASE("light flicker: emissive_follow 0 gives exactly 1, 1 equals the light scale, 0.5 is midway (M-LAMPGLOW 37a)") {
+    for (u32 style = 0; style < 3; ++style) {
+        LightFlicker3D none = make(style, 0.8f);
+        LightFlicker3D full = make(style, 0.8f);
+        full.emissive_follow = 1.0f;
+        LightFlicker3D half = make(style, 0.8f);
+        half.emissive_follow = 0.5f;
+        for (int i = 0; i < 100; ++i) {
+            const f64 t = 0.37 * i;
+            const f32 s = light_flicker_scale(full, t, 5);
+            CHECK(light_flicker_emissive_scale(none, t, 5) == 1.0f);
+            CHECK(same_bits(light_flicker_emissive_scale(full, t, 5), s));
+            CHECK(light_flicker_emissive_scale(half, t, 5) == doctest::Approx(1.0f + 0.5f * (s - 1.0f)).epsilon(1e-6));
+        }
+    }
+}
+
+TEST_CASE("light flicker: the emissive scale is exactly 1 when disabled or depth 0, and always finite in range") {
+    for (u32 style = 0; style < 3; ++style) {
+        LightFlicker3D dis = make(style, 0.8f);
+        dis.emissive_follow = 1.0f;
+        dis.enabled = 0;
+        LightFlicker3D flat = make(style, 0.0f);
+        flat.emissive_follow = 1.0f;
+        LightFlicker3D wild = make(style, 0.6f);
+        wild.emissive_follow = 7.0f;  // clamps to 1
+        LightFlicker3D nan = make(style, 0.6f);
+        nan.emissive_follow = kNaN;  // counts as 0
+        LightFlicker3D neg = make(style, 0.6f);
+        neg.emissive_follow = -2.0f;  // clamps to 0
+        for (int i = 0; i < 100; ++i) {
+            const f64 t = 0.41 * i;
+            CHECK(light_flicker_emissive_scale(dis, t, 3) == 1.0f);
+            CHECK(light_flicker_emissive_scale(flat, t, 3) == 1.0f);
+            CHECK(light_flicker_emissive_scale(nan, t, 3) == 1.0f);
+            CHECK(light_flicker_emissive_scale(neg, t, 3) == 1.0f);
+            const f32 w = light_flicker_emissive_scale(wild, t, 3);
+            CHECK(std::isfinite(w));
+            CHECK(w >= 0.4f - 1e-6f);
+            CHECK(w <= 1.0f);
+            CHECK(same_bits(w, light_flicker_scale(wild, t, 3)));
+        }
+        CHECK(std::isfinite(light_flicker_emissive_scale(wild, kInf, 3)));
+        CHECK(std::isfinite(light_flicker_emissive_scale(wild, 1.0e15, 3)));
+    }
 }

@@ -13,6 +13,7 @@
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/light_flicker.h"
 #include "mce/render/scene3d.h"
+#include "mesh_fixture.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -208,4 +209,87 @@ TEST_CASE("light flicker extract: culling uses the authored radius") {
     const Array<render::PointLight> without = plain.frame();
     CHECK(with.size() == without.size());
     for (const render::PointLight& pl : with) CHECK(pl.radius <= 3.2f);
+}
+
+// M-LAMPGLOW 37b: a MeshRef on the flickering entity has its instance emissive_tint scaled by light_flicker_emissive_scale.
+namespace {
+
+const asset::Guid kLampMesh{0x3d00000000000042ull, 0x8000000000000042ull};
+
+struct LampRig : Rig {
+    LampRig() {
+        mesh_fixture::Builder box;
+        box.add_node(-1);
+        mesh_fixture::Box b;
+        b.half = {0.5f, 0.5f, 0.5f};
+        box.add_box(b);
+        const Array<byte> blob = box.build();
+        REQUIRE(store.upload(1, 1, blob.span()).has_value());
+        extract.bind_mesh(kLampMesh, 1);
+    }
+    Entity lamp(math::vec3 emissive) {
+        MeshRef m;
+        m.mesh.guid = kLampMesh;
+        m.emissive_tint = emissive;
+        return world.spawn_with(LocalTransform{{0, 0, -5}, math::quat::identity(), {1, 1, 1}}, m);
+    }
+    math::vec3 tint() {
+        scene.begin(cam, {320, 180});
+        extract.extract(world, scene, 1.0f);
+        REQUIRE(scene.instances().size() == 1);
+        return scene.instances()[0].emissive_tint;
+    }
+};
+
+bool same_vec(math::vec3 a, math::vec3 b) { return same_bits(a.x, b.x) && same_bits(a.y, b.y) && same_bits(a.z, b.z); }
+
+}  // namespace
+
+TEST_CASE("light flicker extract: emissive_follow 1 scales the mesh emissive_tint by the helper at the frame clock") {
+    LampRig r;
+    const math::vec3 authored{2.0f, 1.5f, 0.5f};
+    const Entity e = r.lamp(authored);
+    LightFlicker3D f = fire();
+    f.emissive_follow = 1.0f;
+    r.world.add(e, f);
+    bool varied = false;
+    math::vec3 first{};
+    for (int i = 0; i < 12; ++i) {
+        const f64 t = r.next_clock();
+        const f32 k = light_flicker_emissive_scale(f, t, e.index);
+        const math::vec3 got = r.tint();
+        CHECK(same_bits(got.x, authored.x * k));
+        CHECK(same_bits(got.y, authored.y * k));
+        CHECK(same_bits(got.z, authored.z * k));
+        CHECK(k <= 1.0f);
+        if (i == 0) first = got;
+        else if (!same_vec(got, first)) varied = true;
+    }
+    CHECK(varied);
+    // Nothing is written back.
+    const MeshRef* m = r.world.try_get<MeshRef>(e);
+    REQUIRE(m != nullptr);
+    CHECK(same_vec(m->emissive_tint, authored));
+    const LightFlicker3D* fl = r.world.try_get<LightFlicker3D>(e);
+    REQUIRE(fl != nullptr);
+    CHECK(same_bits(fl->emissive_follow, 1.0f));
+}
+
+TEST_CASE("light flicker extract: emissive_follow 0, disabled and no component leave the emissive_tint bit-identical") {
+    const math::vec3 authored{2.0f, 1.5f, 0.5f};
+    LampRig plain;
+    plain.lamp(authored);
+    LampRig steady;
+    LightFlicker3D f = fire();
+    steady.world.add(steady.lamp(authored), f);  // emissive_follow defaults to 0
+    LampRig off;
+    LightFlicker3D d = fire();
+    d.emissive_follow = 1.0f;
+    d.enabled = 0;
+    off.world.add(off.lamp(authored), d);
+    for (int i = 0; i < 6; ++i) {
+        CHECK(same_vec(plain.tint(), authored));
+        CHECK(same_vec(steady.tint(), authored));
+        CHECK(same_vec(off.tint(), authored));
+    }
 }

@@ -1589,6 +1589,9 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     const Ragdoll3DPoses* ragdolls = world.try_resource<Ragdoll3DPoses>();
     // Why a scene with MeshRefs draws none (a hand-written scene that renders empty): counted per reason, said once.
     u32 refs = 0, hidden = 0, no_mesh = 0, no_pose = 0, culled = 0, merged = 0, not_loaded = 0;
+    // The render clock of this frame (the value set_time() gets below): the flicker of the lights (M-FLICKER 36b) and of the
+    // emissive of a lamp mesh (M-LAMPGLOW 37b) read it.
+    const f64 flicker_clock = static_cast<f64>(!bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_);
     world.query<const MeshRef&>().each([&](Entity e, const MeshRef& m) {
         ++refs;
         if (!m.visible) {
@@ -1632,6 +1635,9 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         }
         inst.tint = m.tint;
         inst.emissive_tint = m.emissive_tint;
+        // M-LAMPGLOW 37b: the bulb dims with its light; render-side only (the MeshRef is not written).
+        if (const LightFlicker3D* lamp = world.try_get<LightFlicker3D>(e); lamp && lamp->enabled != 0u && lamp->emissive_follow > 0.0f)
+            inst.emissive_tint *= light_flicker_emissive_scale(*lamp, flicker_clock, e.index);
         inst.cast_shadows = m.cast_shadows != 0;
         inst.skinning = m.skinning != 0;
         inst.material = material(m.material.guid);
@@ -1758,9 +1764,8 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     extract_terrains(world, scene);
     extract_lightning_bolt(world, scene);
 
-    // Light flicker (M-FLICKER 36b): the render clock of this frame (the value set_time() gets below), once for both loops. The
+    // Light flicker (M-FLICKER 36b): `flicker_clock`, defined before the MeshRef loop, is the render clock of this frame. The
     // scale only changes the numbers handed to the scene (culling above keeps the authored radius); nothing is written back.
-    const f64 flicker_clock = static_cast<f64>(!bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_);
     auto flicker_apply = [&](Entity e, render::PointLight& pl) {
         const LightFlicker3D* f = world.try_get<LightFlicker3D>(e);
         if (!f || f->enabled == 0u) return;
