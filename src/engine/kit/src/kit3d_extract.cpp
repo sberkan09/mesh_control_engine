@@ -21,6 +21,7 @@
 #include "mce/kit/snow_sparkle.h"
 #include "mce/kit/midge.h"
 #include "mce/kit/cold_breath.h"
+#include "mce/kit/decal_scatter.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
@@ -2068,6 +2069,66 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         rd.edge_fade = d.edge_fade;
         scene.add_decal(rd);
         ++stats_.decals;
+    });
+    // DecalScatter3D (M-DECALSCATTER 35b): local decals from the pure helpers, nearest to the camera first so the frame's
+    // decal cap drops the far ones. Nothing is stored or written.
+    world.query<const DecalScatter3D&>().each([&](Entity e, const DecalScatter3D& s) {
+        if (!s.enabled || s.count == 0 || !(s.strength > 0.0f)) return;
+        vec3 pos, scale;
+        quat rot;
+        if (!pose_of(world, e, pos, rot, scale)) return;
+        const bool finite = std::isfinite(pos.x) && std::isfinite(pos.y) && std::isfinite(pos.z) &&
+                            std::isfinite(scale.x) && std::isfinite(scale.y) && std::isfinite(scale.z) &&
+                            std::isfinite(rot.x) && std::isfinite(rot.y) && std::isfinite(rot.z) && std::isfinite(rot.w);
+        if (!finite) return;
+        const f32 depth = detail::decal_scatter_clamp(s.depth_m, 1.0f, 0.05f, 20.0f);
+        const f32 hx = std::isnan(s.area.x) || s.area.x < 0.0f ? 4.0f : std::min(s.area.x, 10000.0f);
+        const f32 hz = std::isnan(s.area.y) || s.area.y < 0.0f ? 4.0f : std::min(s.area.y, 10000.0f);
+        const f32 fade_m = std::isnan(s.fade_distance_m) ? 0.0f : std::clamp(s.fade_distance_m, 0.0f, 2000.0f);
+        // The patch as a box in its own space (the camera is brought into it), scaled by the entity scale.
+        const vec3 local_cam = rotate(conjugate(rot), view.position - pos);
+        const vec3 half{hx * std::abs(scale.x), 0.5f * depth * std::abs(scale.y), hz * std::abs(scale.z)};
+        const f32 patch_dist = scene::distance_to_box(local_cam, vec3{0.0f, 0.0f, 0.0f}, half);
+        if (fade_m > 0.0f && patch_dist >= fade_m) return;
+        const u32 n = std::min(scaled_budget(std::min(s.count, 256u), particle_scale_of(quality_)), 256u);
+        struct Cand {
+            f32 dist;
+            u32 index;
+            vec3 world_pos;
+        };
+        Cand cands[256];
+        for (u32 i = 0; i < n; ++i) {
+            const ScatterDecal it = decal_scatter_item(s, i);
+            const vec3 wp = pos + rotate(rot, vec3{it.x * scale.x, 0.0f, it.z * scale.z});
+            cands[i] = {length(wp - view.position), i, wp};
+        }
+        std::sort(cands, cands + n, [](const Cand& a, const Cand& b) { return a.dist < b.dist || (a.dist == b.dist && a.index < b.index); });
+        const u32 cols = detail::decal_scatter_cells(s.atlas_cols);
+        const u32 rows = detail::decal_scatter_cells(s.atlas_rows);
+        const f32 opacity = (std::isnan(s.color.w) ? 1.0f : s.color.w) * std::clamp(s.strength, 0.0f, 1.0f);
+        const mat4 entity = trs(pos, rot, scale);
+        for (u32 k = 0; k < n; ++k) {
+            const ScatterDecal it = decal_scatter_item(s, cands[k].index);
+            const f32 item_alpha = opacity * decal_scatter_fade(cands[k].dist, fade_m);
+            if (!(item_alpha > 0.0f)) continue;
+            render::Decal rd;
+            rd.world = entity * translation(vec3{it.x, 0.0f, it.z}) *
+                       rotation(quat_from_axis_angle({0.0f, 1.0f, 0.0f}, it.yaw)) *
+                       scaling(vec3{it.size, depth, it.size});
+            rd.texture = texture_key(s.texture.guid);
+            rd.uv_rect = vec4{static_cast<f32>(it.cell_x) / static_cast<f32>(cols),
+                              static_cast<f32>(it.cell_y) / static_cast<f32>(rows), 1.0f / static_cast<f32>(cols),
+                              1.0f / static_cast<f32>(rows)};
+            rd.color = vec4{s.color.x * it.tint.x, s.color.y * it.tint.y, s.color.z * it.tint.z, item_alpha};
+            rd.roughness = s.roughness;
+            rd.metallic = s.metallic;
+            rd.material_weight = s.material_weight;
+            rd.emissive = 0.0f;
+            rd.angle_fade = s.angle_fade;
+            rd.edge_fade = s.edge_fade;
+            scene.add_decal(rd);
+            ++stats_.decals;
+        }
     });
     world.query<const ParticleEmitter3D&>().each([&](Entity e, const ParticleEmitter3D& p) {
         vec3 pos, scale;
