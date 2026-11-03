@@ -88,6 +88,12 @@
 #      the 0.3 floor times the clear sky (1 - cloud) times (1 - rain): 0.300 at tick 0 under the clear sky, 0.108 at tick
 #      300 in the rain, 0.242 at 1200 and 0.126 at 1350 as the sky clears, 0.048 in the storm at 1500, then 0.260 at 1950, 0.192
 #      at 2100 in the snow (cloud 0.9 times the intensity) and 0.300 at 2400 once it is clear again. The entity count stays 14.
+#  25. (M-MIDGES 33c) the "midge:" lines: weather.midge_active() of the Midge on the Weather entity (read only, the script
+#      writes nothing). The scene has manual 0.3, a Season in the summer window and the signed sun elevation of the clock
+#      (5:00 start), so the amount is max(0.3, window times the twilight gate) times the calm gate (the wind) times (1 - rain):
+#      0.300 at tick 0, 0.169 at tick 300 in the rain, 0.612 at 1200 as the dawn twilight opens the gate over the floor,
+#      0.258 at 1350, exactly 0.000 in the storm at 1500 (the wind is past wind_still), then 0.820 at 1800 and 0.436 at 2400
+#      once the sun has climbed out of the twilight band. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -196,6 +202,13 @@ string(REGEX MATCHALL "script: snow_sparkle: [0-9.]+ at tick [0-9]+" snow_sparkl
 list(LENGTH snow_sparkle600 n_snow_sparkle600)
 if(NOT n_snow_sparkle600 EQUAL 4)
     message(FATAL_ERROR "expected 4 snow_sparkle lines in 600 ticks, got ${n_snow_sparkle600}")
+endif()
+expect("${first}" "script: midge: 0.300 at tick 0\n" "the midge amount is not the manual floor at tick 0")
+expect("${first}" "script: midge: 0.169 at tick 300\n" "the rain and the wind did not thin the midges")
+string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge600 "${first}")
+list(LENGTH midge600 n_midge600)
+if(NOT n_midge600 EQUAL 4)
+    message(FATAL_ERROR "expected 4 midge lines in 600 ticks, got ${n_midge600}")
 endif()
 string(REGEX MATCHALL "script: leaves: 0.600 at tick [0-9]+" leaves600 "${first}")
 list(LENGTH leaves600 n_leaves600)
@@ -338,6 +351,16 @@ string(REGEX MATCHALL "script: snow_sparkle: [0-9.]+ at tick [0-9]+" snow_sparkl
 list(LENGTH snow_sparkle2700 n_snow_sparkle2700)
 if(NOT n_snow_sparkle2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 snow_sparkle lines in 2700 ticks, got ${n_snow_sparkle2700}")
+endif()
+expect("${forecast}" "script: midge: 0.612 at tick 1200\n" "the dawn twilight did not open the midges over their floor")
+expect("${forecast}" "script: midge: 0.258 at tick 1350\n" "the twilight gate is wrong for the midges at tick 1350")
+expect("${forecast}" "script: midge: 0.000 at tick 1500\n" "the storm wind did not ground the midges")
+expect("${forecast}" "script: midge: 0.820 at tick 1800\n" "the midges are wrong in the clearing morning")
+expect("${forecast}" "script: midge: 0.436 at tick 2400\n" "the midges are wrong once the sky is clear")
+string(REGEX MATCHALL "script: midge: [0-9.]+ at tick [0-9]+" midge2700 "${forecast}")
+list(LENGTH midge2700 n_midge2700)
+if(NOT n_midge2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 midge lines in 2700 ticks, got ${n_midge2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
