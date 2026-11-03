@@ -17,4 +17,3 @@ ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a g
 RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand
 Grenade3D | shown in samples/09_openworld by M-GRENADE step 2 (remove this line then)
 GrenadeLive3D | spawned by the engine at a throw; nothing to author
-DecalScatter3D | M-DECALSCATTER 35a: tested in tests/kit/test_decal_scatter.cpp; a sample scene gets one in 35c (remove this line then)
