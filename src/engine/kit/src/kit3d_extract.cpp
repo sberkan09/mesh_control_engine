@@ -20,6 +20,7 @@
 #include "mce/kit/particle_floor.h"
 #include "mce/kit/snow_sparkle.h"
 #include "mce/kit/midge.h"
+#include "mce/kit/cold_breath.h"
 #include "mce/kit/pollen.h"
 #include "mce/kit/precipitation.h"
 #include "mce/kit/aurora.h"
@@ -142,6 +143,8 @@ constexpr u32 kDuskBatEmitterId = 0xFFFF0007u;
 constexpr u32 kSnowSparkleEmitterId = 0xFFFF0008u;
 // Midges (M-MIDGES 33b): the id of the ninth render-side emitter (same collision argument as the leaf id).
 constexpr u32 kMidgeEmitterId = 0xFFFF0009u;
+// Cold breath (M-COLDBREATH 34b): the id of the tenth render-side emitter (same collision argument as the leaf id).
+constexpr u32 kColdBreathEmitterId = 0xFFFF000Au;
 
 // M-PARTICLEQ 28b: the share of rate and budget a render-side weather emitter keeps (QualitySettings::particle_scale),
 // clamped to [0, 1]; NaN reads as 1.
@@ -2764,6 +2767,82 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
                     em.collide = false;
                     em.size_start = look.size;
                     em.size_end = look.size;
+                    em.color_start = look.color_start;
+                    em.color_end = look.color_end;
+                    em.additive = false;
+                    scene.add_particle_emitter(em);
+                    ++stats_.particle_emitters;
+                }
+            }
+        }
+    }
+    {  // cold breath (M-COLDBREATH 34b): one alpha-blended render-side point emitter at the mouth; nothing is written, nothing added at amount 0
+        const ColdBreath* cb = nullptr;
+        world.query<const ColdBreath&>().each([&](const ColdBreath& c) {
+            if (!cb) cb = &c;
+        });
+        if (cb && cb->enabled != 0 && cb->strength > 0.0f) {
+            const Season* cb_season = nullptr;
+            world.query<const Season&>().each([&](const Season& c) {
+                if (!cb_season) cb_season = &c;
+            });
+            u32 day = 0;
+            f32 hour = 0.0f;
+            bool have_clock = false;
+            world.query<const WorldClock&>().each([&](const WorldClock& c) {
+                if (have_clock) return;
+                have_clock = true;
+                day = c.day;
+                hour = c.hour;
+            });
+            const f32 phase = cb_season ? season_phase(*cb_season, day, hour) : 0.0f;
+            // the settled cover as the snow sparkle block reads it; no SnowCover: 0
+            const SnowCover* cb_cover = nullptr;
+            world.query<const SnowCover&>().each([&](const SnowCover& c) {
+                if (!cb_cover) cb_cover = &c;
+            });
+            const f32 cover = cb_cover ? clamp(cb_cover->cover * cb_cover->strength, 0.0f, 1.0f) : 0.0f;
+            const Weather* cb_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!cb_weather) cb_weather = &c;
+            });
+            const WindGust* cb_gust = nullptr;
+            world.query<const WindGust&>().each([&](const WindGust& c) {
+                if (!cb_gust) cb_gust = &c;
+            });
+            // As the midge block: no Weather is calm, the gust sway bit.
+            const f32 wind = cb_weather ? effective_wind(*cb_weather, cb_gust, kGustSway) : 0.0f;
+            const f32 amount = cold_breath_amount(*cb, cb_season, phase, cover, wind);
+            if (amount > 0.0f) {
+                const ColdBreathLook look = cold_breath_look(*cb, amount);
+                const f32 pscale = particle_scale_of(quality_);
+                if (look.active && pscale > 0.0f) {
+                    const math::vec3 view_fwd = scene.view().forward;
+                    math::vec3 fwd{0.0f, 0.0f, 1.0f};  // degenerate forward (zero or non-finite): +Z
+                    const f32 flen = std::sqrt(view_fwd.x * view_fwd.x + view_fwd.y * view_fwd.y + view_fwd.z * view_fwd.z);
+                    if (std::isfinite(flen) && flen > 1e-6f) fwd = math::vec3{view_fwd.x / flen, view_fwd.y / flen, view_fwd.z / flen};
+                    render::ParticleEmitter em;
+                    em.id = kColdBreathEmitterId;
+                    em.max_particles = std::clamp(cb->max_particles, 4u, 128u);
+                    em.max_particles = scaled_budget(em.max_particles, pscale);
+                    em.seed = cb->seed;
+                    // the point follows the camera on purpose (no particle_floor_center_y): in front of and below the view
+                    em.position = scene.view().position + fwd * look.mouth_forward - math::vec3{0.0f, 1.0f, 0.0f} * look.mouth_down;
+                    em.box = math::vec3{0.02f, 0.02f, 0.02f};
+                    em.direction = math::vec3{fwd.x, fwd.y + look.lift, fwd.z};
+                    em.spread = 0.15f;
+                    em.rate = look.rate * pscale;
+                    em.burst = 0;
+                    em.emitting = true;
+                    em.speed_min = look.speed_min;
+                    em.speed_max = look.speed_max;
+                    em.lifetime_min = look.lifetime_min;
+                    em.lifetime_max = look.lifetime_max;
+                    em.gravity = math::vec3{0.0f, look.lift, 0.0f};  // the upward drift (m/s^2, against drag 1/s: ends near lift m/s)
+                    em.drag = look.drag;
+                    em.collide = false;
+                    em.size_start = look.size_start;
+                    em.size_end = look.size_end;
                     em.color_start = look.color_start;
                     em.color_end = look.color_end;
                     em.additive = false;
