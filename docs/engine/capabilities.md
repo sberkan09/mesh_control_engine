@@ -35,6 +35,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Blackboard` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | allowed: state the engine writes and games read; nothing to author |
 | `AiBrain` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/ai_demo/assets/scenes/yard.mcscene |
 | `AiTokenPool` | `mce/kit/ai.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/ai_demo/assets/scenes/yard_squad.mcscene |
+| `AmmoPickup3D` | `mce/kit/ammopickup3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: shown in samples/09_openworld by M-AMMOPICKUP step 2 (remove this line then) |
 | `AttachToBone` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `IKTarget3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Locomotion3D` | `mce/kit/anim3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |

@@ -17,3 +17,4 @@ ConstantForce2D | M-PHYSDRIVE2D: tested in tests/physics2d/test_force2d.cpp; a g
 RoadblockPiece3D | M-OPENWORLD-POLICE: written by Roadblock3D onto the pieces it spawns (tested in tests/kit/test_roadblock.cpp); not placed by hand
 GrenadeLive3D | spawned by the engine at a throw; nothing to author
 LightFlicker3D | M-FLICKER 36a: tested in tests/kit/test_light_flicker.cpp; the kit3d_tour sample gets one in 36c (remove this line then)
+AmmoPickup3D | shown in samples/09_openworld by M-AMMOPICKUP step 2 (remove this line then)
