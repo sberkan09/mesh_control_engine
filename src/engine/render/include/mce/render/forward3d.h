@@ -130,6 +130,8 @@ struct Forward3DStats {
     bool color_vision = false;       // the color-vision correction ran this frame (M-ACCESS)
     bool dof = false;                // depth of field blurred this frame
     bool motion_blur = false;        // motion blur smeared this frame
+    bool lens_flare = false;         // the sun lens flare pass drew this frame (M-LENSFLARE)
+    f32 lens_flare_strength = 0.0f;  // its overall strength after the horizon, edge and occlusion fades (0 = not drawn)
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
     bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
     bool occlusion = false;          // ... and tested against the depth pyramid
@@ -343,6 +345,7 @@ private:
     void record_velocity(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
+    void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
     rhi::TextureHandle post_fx_target(rhi::Extent2D size);
     void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
     u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
@@ -494,6 +497,10 @@ private:
     rhi::Extent2D fin_up_size_{};
     rhi::PipelineHandle upscale_pipe_;
     rhi::PipelineHandle sharpen_pipe_;
+    // M-LENSFLARE: the sun flare's occlusion sample and draw pipelines, and its 1x1 occlusion target. Not per-view state:
+    // the target is written and read within one record.
+    rhi::PipelineHandle flare_occ_pipe_, flare_pipe_;
+    rhi::TextureHandle flare_occ_;
     rhi::TextureHandle bloom_[kMaxBloomLevels];
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;

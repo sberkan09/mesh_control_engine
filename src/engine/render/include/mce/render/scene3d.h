@@ -107,6 +107,25 @@ enum class Upscaler : u8 { Bilinear, Spatial };
 // The curve from scene-linear light to display (M-VISUAL3 3): AcesFit is the engine's long-standing one.
 enum class Tonemapper : u8 { AcesFit, AgX, PbrNeutral };
 
+// M-LENSFLARE 38a. Sun lens flare setting (halo, ghosts, starburst), read by the flare pass; off by default, so a frame is unchanged.
+// kLensFlareMaxGhosts is the one definition: the CPU helpers in mce/render/lens_flare.h use this constant, they do not redefine it.
+inline constexpr u32 kLensFlareMaxGhosts = 6;
+struct LensFlare {
+    bool enabled = false;            // off draws the frame without the pass
+    f32 intensity = 1.0f;            // overall gain on the sun's light (0..4)
+    f32 visibility = 1.0f;           // the caller's dimming, e.g. cloud cover and rain (0..1)
+    f32 halo = 1.0f;                 // strength of the soft glare around the sun (0..4)
+    f32 halo_radius = 0.25f;         // halo falloff radius, fraction of the view height (0.02..0.6)
+    u32 ghost_count = 4;             // ghosts drawn (0..kLensFlareMaxGhosts)
+    f32 ghost_intensity = 1.0f;      // gain on the ghost table (0..4)
+    f32 ghost_spacing = 1.0f;        // scales each ghost's position along the axis (0.25..2)
+    f32 ghost_chroma = 0.5f;         // 0 = white ghosts, 1 = the full tint table (0..1)
+    f32 starburst = 0.0f;            // ray strength; 0 = no starburst (0..4)
+    u32 starburst_rays = 6;          // rays, symmetric spokes (2..16)
+    f32 occlusion_radius = 0.015f;   // radius of the depth sample disk around the sun, fraction of the view height (0.002..0.1)
+    f32 edge_fade = 0.1f;            // the flare fades to 0 over this fraction of the screen at a border (0.01..0.5)
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -136,6 +155,7 @@ struct PostFx {
         u32 dirt_key = 0;
         f32 dirt_intensity = 0.0f;
     } lens;
+    LensFlare flare;  // M-LENSFLARE 38a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 
     // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest
