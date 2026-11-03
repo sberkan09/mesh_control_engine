@@ -42,6 +42,7 @@
 #include "mce/kit/midge.h"
 #include "mce/kit/cold_breath.h"
 #include "mce/kit/decal_scatter.h"
+#include "mce/kit/light_flicker.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
 #include "mce/kit/wind_sway.h"
@@ -127,6 +128,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<SnowSparkle>("SnowSparkle", sizeof(SnowSparkle::pad_));  // snow_sparkle.h (M-SNOWSPARKLE 31a)
     expect_pad<Midge>("Midge", sizeof(Midge::pad_));  // midge.h (M-MIDGES 33a)
     expect_pad<ColdBreath>("ColdBreath", sizeof(ColdBreath::pad_));  // cold_breath.h (M-COLDBREATH 34a)
+    expect_pad<LightFlicker3D>("LightFlicker3D", sizeof(LightFlicker3D::pad_));  // light_flicker.h (M-FLICKER 36a)
     expect_pad<DecalScatter3D>("DecalScatter3D", sizeof(DecalScatter3D::pad_));  // decal_scatter.h (M-DECALSCATTER 35a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
