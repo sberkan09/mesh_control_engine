@@ -437,6 +437,36 @@
      ]
     }
    }
+  },
+  {
+   "id": 22,
+   "name": "Grime",
+   "components": {
+    "DecalScatter3D": {
+     "area": [
+      4,
+      4
+     ],
+     "count": 12,
+     "size_min": 0.6,
+     "size_max": 1.6,
+     "seed": 7,
+     "color": [
+      0.12,
+      0.1,
+      0.08,
+      0.5
+     ],
+     "fade_distance_m": 40
+    },
+    "LocalTransform": {
+     "position": [
+      6,
+      0.5,
+      -4
+     ]
+    }
+   }
   }
  ]
 }

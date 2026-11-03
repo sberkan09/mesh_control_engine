@@ -1,0 +1,1 @@
+- M-DECALSCATTER step 35c: the `kit3d_tour` sample places a `DecalScatter3D` patch (12 seeded grime decals) and the capability coverage allow-line is removed.
