@@ -1,0 +1,1 @@
+- Tests: game services catalog `find_achievement`, `find_leaderboard` and `find_cloud_save` (hit, miss, empty).
