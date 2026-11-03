@@ -1,0 +1,1 @@
+- Grenades (M-GRENADE 1): `Grenade3D` (a stack, fuse, throw speed, radius damage) and the engine-spawned `GrenadeLive3D`, system `kit_grenade`, events `GrenadeThrown3D` and `GrenadeBlast3D`. Action `Throw`. Docs: `docs/user-guide/09-physics.md`.

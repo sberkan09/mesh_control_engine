@@ -458,6 +458,17 @@ the `Progress3D` and the `Wallet3D`); when the counter reaches the target the go
 caption "Goal: <name>" when captions are installed and pushes `GoalDone3D`.
 `samples/09_openworld` has five goals (first kill, ten kills, a mission, a car ride, five melee hits) and a "GOALS n / 5" HUD line.
 
+### Grenades
+
+`mce/kit/grenade3d.h`: a `Grenade3D` on a character holds a stack of `count` grenades (up to `max_count`), independent of any
+`Weapon3D`. A throw starts when `trigger` is set to 1, or, with `use_input`, when the action `Throw` is pressed; only when
+`count` is above 0, the `cooldown` is over (`rate` throws/s) and the thrower is alive and not a seated `Rider3D`. The grenade
+leaves along the thrower's forward at `throw_speed` plus `lift` m/s up, falls and bounces (`bounce`) off what the physics world's ray
+finds, and after `fuse` s explodes: every `Health3D` within `radius` m takes `damage`, falling off linearly to 0 at the edge, in
+entity order, through `apply_damage` with the thrower credited. The blast hurts the thrower too and is not blocked by walls.
+Each grenade (`GrenadeLive3D`, spawned by the engine) keeps the numbers it was thrown with. `GrenadeThrown3D` and
+`GrenadeBlast3D` report the throw and the blast. No sample uses it yet (M-GRENADE step 2).
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

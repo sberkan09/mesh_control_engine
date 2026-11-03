@@ -96,6 +96,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `FallDeath3D` | `mce/kit/fall_death.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Firefly` | `mce/kit/firefly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Flock` | `mce/kit/flock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
+| `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: shown in samples/09_openworld by M-GRENADE step 2 (remove this line then) |
+| `GrenadeLive3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: spawned by the engine at a throw; nothing to author |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `HitMarker3D` | `mce/kit/hit_marker.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |

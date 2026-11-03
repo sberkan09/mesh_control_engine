@@ -1,6 +1,6 @@
 # M-GRENADE: thrown grenades in 09_openworld
 
-**Status:** plan (2026-11-03). Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
+**Status:** step 1 in progress (2026-11-03). Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md), [M-MELEE](M-MELEE.md) and [M-PROGRESS](M-PROGRESS.md). Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`grenade3d`). No ECS, render or physics core, no
@@ -30,7 +30,7 @@ System `kit_grenade` (FixedUpdate_Pre, after `kit_progress`):
 2. each live grenade counts its `timer` down; at 0 it explodes: every `Health3D` entity within `radius` takes
    `damage * (1 - d / radius)` through `apply_damage` in entity order (deterministic), crediting the owner (so `Died3D`,
    `Wanted3D` crimes, cash drops and the progress counters work as for a bullet), the thrower included (friendly fire on
-   the owner is on, so a grenade at the feet hurts), dynamic bodies in range get an impulse, the grenade entity is destroyed
+   the owner is on, so a grenade at the feet hurts), the grenade entity is destroyed
    and `GrenadeBlast3D { entity, owner, point, hits }` is pushed;
 3. the blast reuses the splash effect that `Weapon3D` projectiles already show (listening to the event, not drawing its own).
 
@@ -52,6 +52,8 @@ Ammo shop and respawn: `kit3d_ammoshop` restocks `count` up to `max_count` from 
 - The blast hurts the thrower: realism over comfort, and it needs no team rule.
 - Walls do not block the blast in step 1 (no line of sight check); add it later if it looks wrong.
 - Fuse is time only, no impact trigger.
+- A shove on physics bodies in range is left out of step 1 (the blast only calls `apply_damage`); add it in polish if wanted.
+- The grenade flies by its own simple integration (gravity from `Physics3D`, a ray per tick, `bounce`), not as a physics body, so it needs no collider and replays stay cheap; without `Physics3D` it just falls.
 - One grenade type. Molotov and smoke are later.
 
 ## Notes
