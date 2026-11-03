@@ -13,6 +13,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/leaf_fall.h"
+#include "mce/kit/light_flicker.h"
 #include "mce/kit/dust.h"
 #include "mce/kit/flock.h"
 #include "mce/kit/butterfly.h"
@@ -1757,6 +1758,16 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
     extract_terrains(world, scene);
     extract_lightning_bolt(world, scene);
 
+    // Light flicker (M-FLICKER 36b): the render clock of this frame (the value set_time() gets below), once for both loops. The
+    // scale only changes the numbers handed to the scene (culling above keeps the authored radius); nothing is written back.
+    const f64 flicker_clock = static_cast<f64>(!bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_);
+    auto flicker_apply = [&](Entity e, render::PointLight& pl) {
+        const LightFlicker3D* f = world.try_get<LightFlicker3D>(e);
+        if (!f || f->enabled == 0u) return;
+        pl.intensity *= light_flicker_scale(*f, flicker_clock, e.index);
+        pl.radius *= light_flicker_radius_scale(*f, flicker_clock, e.index);
+    };
+
     world.query<const PointLight3D&>().each([&](Entity e, const PointLight3D& l) {
         if (!l.enabled || l.intensity <= 0.0f) return;
         vec3 pos, scale;
@@ -1769,6 +1780,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pl.intensity = l.intensity;
         pl.radius = l.radius;
         pl.cast_shadows = l.cast_shadows != 0;
+        flicker_apply(e, pl);
         scene.add_point_light(pl);
         ++stats_.point_lights;
     });
@@ -1788,6 +1800,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pl.spot_outer = radians(clamp(l.outer_deg, 0.5f, 89.0f));
         pl.spot_inner = radians(clamp(l.inner_deg, 0.0f, l.outer_deg));
         pl.cast_shadows = l.cast_shadows != 0;
+        flicker_apply(e, pl);
         scene.add_point_light(pl);
         ++stats_.spot_lights;
     });
