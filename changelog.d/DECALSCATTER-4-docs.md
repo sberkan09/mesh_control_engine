@@ -1,0 +1,1 @@
+- M-DECALSCATTER step 35d: the user guide describes the drawn decal scatter and the milestone and the ROADMAP row are closed.
