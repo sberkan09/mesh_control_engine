@@ -338,3 +338,28 @@ TEST_CASE("loc: valid_utf8 refuses overlongs, surrogates, truncation and code po
     CHECK_FALSE(valid_utf8("\xC3\x28"));           // a bad continuation
     CHECK_FALSE(valid_utf8("\xFF"));
 }
+
+TEST_CASE("loc: try_text reports a hit, and set_default_locale changes the last fallback") {
+    Localization l = en_tr();
+    CHECK(l.default_locale() == "en");
+
+    const LocaleTag device[] = {"tr-TR"};
+    l.set_preferred(device);
+    StringView out;
+    CHECK(l.try_text("menu.play", out));
+    CHECK(out == "Oyna");
+    CHECK(l.try_text("menu.quit", out));  // only the base table has it
+    CHECK(out == "Quit");
+    out = "untouched";
+    CHECK_FALSE(l.try_text("menu.missing", out));
+    CHECK(out == "untouched");  // a miss leaves the output alone
+
+    // With Turkish as the base, a player who prefers German ends up on Turkish, not English.
+    Localization d = en_tr();
+    d.set_default_locale("tr");
+    CHECK(d.default_locale() == "tr");
+    const LocaleTag german[] = {"de-DE"};
+    d.set_preferred(german);
+    CHECK(d.locale() == "tr");
+    CHECK(d.text("menu.play") == "Oyna");
+}
