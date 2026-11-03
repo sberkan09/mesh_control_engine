@@ -113,6 +113,9 @@
     "Midge": {
      "manual": 0.3
     },
+    "ColdBreath": {
+     "manual": 0.3
+    },
     "WetSurfaces": {
      "strength": 4,
      "darken": 0.5,
