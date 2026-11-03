@@ -1,0 +1,1 @@
+- M-AMMOPICKUP plan: ammo crates for 09_openworld (`docs/milestones/M-AMMOPICKUP.md`), steps seam, feature, polish.
