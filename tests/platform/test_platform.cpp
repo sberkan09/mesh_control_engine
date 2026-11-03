@@ -5,6 +5,7 @@
 #include <string>
 
 #include "mce/platform/platform.h"
+#include "mce/platform/process.h"
 #include "mce/platform/window.h"
 
 using namespace mce;
@@ -261,4 +262,38 @@ TEST_CASE("platform: list_files names the regular files of a folder, sorted; a m
     const std::string missing = (dir / "nope").generic_string();
     mce::platform::list_files(StringView(missing.data(), missing.size()), names);
     CHECK(names.empty());
+}
+
+#ifndef _WIN32
+TEST_CASE("platform: Process::read_some hands over the child's output in pieces, then 0 once it closed") {
+    const StringView args[] = {StringView("/bin/sh"), StringView("-c"), StringView("printf abcdefghij")};
+    mce::platform::Process p;
+    REQUIRE(p.start(Span<const StringView>(args, 3), true));
+    std::string got;
+    char buf[3];  // smaller than the output: it arrives in several reads, never past `cap`
+    for (;;) {
+        const usize n = p.read_some(buf, sizeof(buf));
+        if (n == 0) break;
+        CHECK(n <= sizeof(buf));
+        got.append(buf, n);
+    }
+    CHECK(got == "abcdefghij");
+    CHECK(p.wait() == 0);
+    CHECK(p.exit_code() == 0);
+}
+#endif
+
+TEST_CASE("platform: base_path ends with a separator and preferred_locales lists well-formed tags") {
+    const StringView base(mce::platform::base_path());
+    if (!base.empty()) {
+        const char last = base.data()[base.size() - 1];
+        CHECK((last == '/' || last == '\\'));
+    }
+    Array<FixedString<16>> tags;
+    mce::platform::preferred_locales(tags);
+    for (const FixedString<16>& t : tags) {
+        const StringView v = t.view();
+        CHECK_FALSE(v.empty());
+        CHECK(v.size() >= 2);
+    }
 }
