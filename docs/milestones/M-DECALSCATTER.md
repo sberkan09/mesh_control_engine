@@ -1,6 +1,6 @@
 # M-DECALSCATTER — Decal scatter: stains, cracks and litter spread over a ground patch from one component, so a large surface stops looking like one flat colour (milestone record)
 
-**Status:** planned (2026-11-03), steps 35a to 35d. PRs: this plan. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-VISUAL 9 (`Decal3D`, `render::Decal`, the projected decal pass) and of the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md` gap 9, and the GTA quality note "grass is one flat colour, use decals for stains and road edges"). Today one decal is one entity, so dressing a plaza with forty stains or cracks means forty hand-placed entities and a scene that hides the pattern nowhere. No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
+**Status:** done (2026-11-03), steps 35a to 35d (PRs 1050, 1051, 1053, 1054, 1055). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-VISUAL 9 (`Decal3D`, `render::Decal`, the projected decal pass) and of the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md` gap 9, and the GTA quality note "grass is one flat colour, use decals for stains and road edges"). Today one decal is one entity, so dressing a plaza with forty stains or cracks means forty hand-placed entities and a scene that hides the pattern nowhere. No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
 
 **Naming:** the component is `DecalScatter3D` (header `decal_scatter.h`); `projects/`, `src/`, `docs/` and `tests/` have no type or word of that name (checked 2026-11-03).
 
@@ -31,13 +31,14 @@ No step needs Opus: nothing writes a shader; the decal pass already exists.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 35a | planned | | |
-| 35b | planned | | |
-| 35c | planned | | |
-| 35d | planned | | |
+| 35a | done | 1051 | `DecalScatter3D`, `ScatterDecal`, `decal_scatter_item`, `decal_scatter_fade` in `mce/kit/decal_scatter.h`, registered in `install_kit3d` next to `Decal3D`; the fade is 1 up to half of `fade_distance_m`, then a smoothstep to 0. |
+| 35b | done | 1053 | Extract feed after the `Decal3D` loop: nearest-first, per-item fade, whole-patch skip beyond the fade distance, Low tier budget; `tests/kit/test_decal_scatter_extract.cpp`. A gcc `-Wshadow` error (`alpha`) was fixed in the same PR. |
+| 35c | done | 1054 | `samples/kit3d_tour` places "Grime" (12 seeded plain-colour decals); the tour's entity pin is 22; the coverage allow-line is gone. No Luau API: the component has no runtime state. |
+| 35d | done | 1055 | The `08-3d` paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
 - Terrain-height aware placement once M-TERRAIN exposes a height query.
 - A road-edge preset once M-OPENWORLD's road network settles.
 - A real GPU/windowed look at stain density and the fade distance.
+- The nearest-first order draws far decals over near ones where they overlap; sort the emitted list back to front once the cap is the only reason for the order.
