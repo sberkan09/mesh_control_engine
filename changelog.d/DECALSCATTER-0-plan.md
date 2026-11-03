@@ -1,0 +1,1 @@
+- M-DECALSCATTER plan: an opt-in `DecalScatter3D` component spreading seeded decals over a ground patch as local `render::Decal`s (steps 35a to 35d); nothing is built yet.
