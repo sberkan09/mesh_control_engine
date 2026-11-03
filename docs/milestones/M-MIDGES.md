@@ -1,6 +1,6 @@
 # M-MIDGES — Midge swarms: tiny dark specks that dance low over the ground at dawn and dusk in warm, calm, dry weather, with no shader (milestone record)
 
-**Status:** planned (2026-11-02), steps 33a to 33d. PRs: this plan. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-BUTTERFLY, M-FIREFLIES and M-BAT (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEFLOOR (`particle_floor_center_y`, so the box floor sits at the ground) and M-SEASONS (`Season`, `season_phase`). Butterflies fly by day, fireflies and bats at night, but the twilight hour of a warm evening has nothing alive near the ground: the thin, dancing cloud of gnats that real summer dusks have. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-03), steps 33a to 33d (PRs 1031, 1033, 1036, 1038, 1040). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-BUTTERFLY, M-FIREFLIES and M-BAT (the pattern: a pure-helper header and one render-side `render::ParticleEmitter` that follows the camera, no shader, no state), M-PARTICLEFLOOR (`particle_floor_center_y`, so the box floor sits at the ground) and M-SEASONS (`Season`, `season_phase`). Butterflies fly by day, fireflies and bats at night, but the twilight hour of a warm evening has nothing alive near the ground: the thin, dancing cloud of gnats that real summer dusks have. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** the component is `Midge` (header `midge.h`); `projects/`, `src/` and `docs/` have no type of that name (checked 2026-11-02; the M-BAT 30a CI showed a clash is only found late).
 
@@ -32,11 +32,12 @@ No step needs Opus: nothing writes a shader.
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 33a | planned | | |
-| 33b | planned | | |
-| 33c | planned | | |
-| 33d | planned | | |
+| 33a | done | 1033 | `Midge` and the pure `midge_amount`, `midge_look` in `mce/kit/midge.h`, registered in `install_weather`; the `12_weather` scene carries one (manual 0.3). Guide 9.19zb. |
+| 33b | done | 1036 | Extract feed: one local alpha-blended emitter (id `0xFFFF0009`) from `midge_look`, box floor via `particle_floor_center_y`, Low tier and `particle_scale`; the sun elevation stays signed (-1..1) because the twilight gate needs the dip below the horizon; `tests/kit/test_midge_extract.cpp`. |
+| 33c | done | 1038 | `weather.set_midge{...}` (18 keys), the `weather.midge_<key>()` getters and the read-only `weather.midge_active()` (the extract's amount; the script reads the clock, the extract also applies `r.env` overrides); typed in `definitions.cpp`; `12_weather` logs `midge:`; `tests/script/test_script_midge.cpp`. |
+| 33d | done | 1040 | The `08-3d` "Midges" paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 
 - A swarm anchored to a world position (a pond, a lamp) instead of the camera.
+- A real GPU/windowed look at the dark specks against sky and grass (size, alpha).
