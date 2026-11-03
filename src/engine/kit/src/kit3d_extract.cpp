@@ -2109,8 +2109,8 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         const mat4 entity = trs(pos, rot, scale);
         for (u32 k = 0; k < n; ++k) {
             const ScatterDecal it = decal_scatter_item(s, cands[k].index);
-            const f32 alpha = opacity * decal_scatter_fade(cands[k].dist, fade_m);
-            if (!(alpha > 0.0f)) continue;
+            const f32 item_alpha = opacity * decal_scatter_fade(cands[k].dist, fade_m);
+            if (!(item_alpha > 0.0f)) continue;
             render::Decal rd;
             rd.world = entity * translation(vec3{it.x, 0.0f, it.z}) *
                        rotation(quat_from_axis_angle({0.0f, 1.0f, 0.0f}, it.yaw)) *
@@ -2119,7 +2119,7 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
             rd.uv_rect = vec4{static_cast<f32>(it.cell_x) / static_cast<f32>(cols),
                               static_cast<f32>(it.cell_y) / static_cast<f32>(rows), 1.0f / static_cast<f32>(cols),
                               1.0f / static_cast<f32>(rows)};
-            rd.color = vec4{s.color.x * it.tint.x, s.color.y * it.tint.y, s.color.z * it.tint.z, alpha};
+            rd.color = vec4{s.color.x * it.tint.x, s.color.y * it.tint.y, s.color.z * it.tint.z, item_alpha};
             rd.roughness = s.roughness;
             rd.metallic = s.metallic;
             rd.material_weight = s.material_weight;
