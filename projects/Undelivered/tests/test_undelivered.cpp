@@ -4,6 +4,7 @@
 // (undelivered_content), so it tests the scene as the editor MCP server saved it.
 #include <doctest/doctest.h>
 
+#include <bit>
 #include <cstdio>
 #include <cstring>
 
@@ -105,7 +106,7 @@ TEST_CASE("undelivered: the compiled script's tables are consistent") {
             case st::OpKind::Choice:
                 ++choices;
                 REQUIRE(op.a + op.b <= st::kOptionCount);
-                for (u32 o = op.a; o < op.a + op.b; ++o) {
+                for (u32 o = op.a; o < static_cast<u32>(op.a + op.b); ++o) {
                     CHECK(st::kOptions[o].target < st::kOpCount);
                     CHECK(st::kOptions[o].text < st::kTextCount);
                     CHECK(std::strlen(st::kText[st::kOptions[o].text]) <= 63);
@@ -225,7 +226,7 @@ TEST_CASE("undelivered: the five bot policies play whole runs to their endings")
         if (r.tag == st::Tag::Leave) CHECK(n.ending == static_cast<u8>(st::Ending::OpenWater));
         if (r.tag == st::Tag::Stay) CHECK(n.ending == static_cast<u8>(st::Ending::LampKeeper));
     }
-    CHECK(__builtin_popcount(reached) >= 4);
+    CHECK(std::popcount(static_cast<unsigned>(reached)) >= 4);
 }
 
 TEST_CASE("undelivered: a save written at a journal reloads and finishes the same run") {
