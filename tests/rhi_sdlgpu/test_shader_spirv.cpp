@@ -7,6 +7,7 @@
 
 #include "mce/core.h"
 #include "shader_spirv.h"
+#include "shaders3d.h"  // render's 3D shaders (M-LENSFLARE 38c case)
 
 using namespace mce;
 using namespace mce::rhi::sdlgpu;
@@ -209,4 +210,34 @@ TEST_CASE("shader_spirv: storage images outside compute are compile errors") {
     REQUIRE_FALSE(r.has_value());
     if (r) return;
     CHECK(r.error().code == Errc::ShaderCompile);
+}
+
+// M-LENSFLARE 38c: the flare's two fragment stages (render's shaders3d.h, the real sources) compile for SDL GPU with
+// their resources where Forward3D::record_flare binds them: FlareU at bank kPass (1), the prepass depth at sampler 7
+// (occlusion), the source at 6 and the 1x1 occlusion at 8 (composite); no storage buffers.
+TEST_CASE("shader_spirv: the lens flare's occlusion and composite stages") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto occ = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareOccFS, "lens_flare_occ.frag", spv, res, log);
+    if (!occ) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(occ.has_value());
+    if (!occ) return;
+    REQUIRE(res.sampler_count == 1);
+    CHECK(res.sampler_slot[0] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+
+    Array<u32> spv2;
+    StageResources res2;
+    auto comp = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareFS, "lens_flare.frag", spv2, res2, log);
+    if (!comp) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(comp.has_value());
+    if (!comp) return;
+    REQUIRE(res2.sampler_count == 2);
+    CHECK(res2.sampler_slot[0] == 6);
+    CHECK(res2.sampler_slot[1] == 8);
+    CHECK(res2.storage_count == 0);
+    CHECK(res2.uniform_count == 2);
 }

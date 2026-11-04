@@ -7,6 +7,8 @@
 
 #include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/render/lens_flare.h"
+#include "mce/render/quality.h"
 #include "shaders3d.h"
 #include "unit_clamp.h"
 
@@ -327,6 +329,20 @@ struct MbU {
     vec4 texel;
     vec4 params;  // intensity, max length, taps
 };
+
+// M-LENSFLARE 38c: kFlareOccFS / kFlareFS's FlareU (shaders3d.h MCE_GLSL_FLARE_U), bank kPass. Filled from
+// lens_flare_frame only (record_flare).
+struct FlareU {
+    vec4 sun;    // xy sun uv, z aspect (width / height), w occlusion disk radius (fraction of the view height)
+    vec4 color;  // rgb the sun's light times the strength, w halo strength
+    vec4 shape;  // x halo radius, y starburst strength, z rays, w ghost count
+    vec4 ghost[2 * shaders3d::kFlareMaxGhosts];  // per ghost: centre xy, radius, intensity; then tint rgb, 0
+};
+static_assert(shaders3d::kFlareMaxGhosts == i32(kLensFlareMaxGhosts), "FlareU: f_ghost holds kLensFlareMaxGhosts ghosts");
+static_assert(sizeof(FlareU) == shaders3d::kFlareUBytes, "FlareU: 15 vec4, as MCE_GLSL_FLARE_U");
+static_assert(offsetof(FlareU, sun) == 0 && offsetof(FlareU, color) == 16 && offsetof(FlareU, shape) == 32 &&
+                  offsetof(FlareU, ghost) == 48,
+              "FlareU: f_sun / f_color / f_shape / f_ghost[12] as in MCE_GLSL_FLARE_U");
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -916,6 +932,24 @@ ResultV Forward3D::create_pipelines() {
         fs.debug_name = "ssao.blur";
         MCE_TRY_ASSIGN(ao_blur_, device_->create_pipeline(fs));
     }
+    if (!ao_prepass_.is_null()) {
+        // M-LENSFLARE 38c: the sun flare's occlusion sample (it reads the prepass's view depth, so it needs the prepass)
+        // and its composite. A driver that refuses either keeps the frame without the flare rather than failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kFlareOccFS, "lens_flare_occ.frag"};
+        fs.debug_name = "lens_flare.occlusion";
+        if (auto p = device_->create_pipeline(fs)) flare_occ_pipe_ = p.value();
+        fs.fragment_shader = {kFlareFS, "lens_flare.frag"};
+        fs.debug_name = "lens_flare";
+        if (auto p = device_->create_pipeline(fs)) flare_pipe_ = p.value();
+        if (flare_occ_pipe_.is_null() || flare_pipe_.is_null()) {
+            MCE_LOG_WARN("render3d: the lens flare shaders failed, drawing frames without the flare");
+            for (rhi::PipelineHandle* p : {&flare_occ_pipe_, &flare_pipe_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
     const bool taa = desc_.taa && cv_taa.get_bool(), post_fx = desc_.post_fx && cv_post_fx.get_bool();
     if (taa || post_fx) {  // the velocity prepass: TAA, motion blur and depth of field
         rhi::GraphicsPipelineDesc vp = sp;  // the shadow vertex streams, depth-tested, both faces
@@ -1063,7 +1097,7 @@ ResultV Forward3D::create_pipelines() {
 void Forward3D::destroy_targets() {
     if (!device_) return;
     for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_, &fin_src_, &fin_up_, &trans_src_,
-                                  &velocity_, &velocity_depth_, &history_[0], &history_[1], &flare_occ_})
+                                  &velocity_, &velocity_depth_, &history_[0], &history_[1]})
         destroy(*device_, *t);
     ssr_prev_valid_ = false;  // the new HDR target holds no frame yet
     history_size_ = {};
@@ -1138,7 +1172,7 @@ void Forward3D::shutdown() {
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
                                   &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
-                                  &fx_[0], &fx_[1]})
+                                  &fx_[0], &fx_[1], &flare_occ_})
         destroy(*device_, *t);
     atmo_key_ = 0;
     water_failed_ = false;
@@ -1349,6 +1383,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsTaa);
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
+    record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
     record_post(cmd, scene, target);
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
@@ -2795,7 +2830,7 @@ void Forward3D::reserve_instancing(const Scene3D& scene) {
     const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
     const WaterSurface& water = scene.water();  // the water's depth read runs the prepass too (record_main)
     const bool prepass = scene.ambient_occlusion().enabled || scene.reflections().enabled ||
-                         scene.contact_shadows().enabled ||
+                         scene.contact_shadows().enabled || scene.post().flare.enabled ||  // the flare's depth (38c)
                          (water_on(water) && (water.amplitude > 0.0f || water.foam_amount > 0.0f));
     const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
                                    ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
@@ -3200,6 +3235,79 @@ void Forward3D::record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     } else {
         exposure_reset_ = true;  // the next auto-exposure frame snaps
     }
+}
+
+// ---- M-LENSFLARE 38c: the sun lens flare, after the post effects and the exposure histogram (the flare does not pump
+// the exposure), before bloom (bloom, lens dirt and the tonemapper act on it like on any bright light). A 1x1 pass
+// measures how much of a disk around the sun sees sky in the half-resolution opaque prepass; the composite adds halo,
+// ghosts and starburst times that share into the post-fx ping-pong target. Never into post_source_ in place: with TAA
+// it is the history the next frame reprojects. strength 0 (off, below the horizon, behind the camera, off screen)
+// records nothing, so the frame is the one without the pass bit for bit.
+void Forward3D::record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const LensFlare& setting = scene.post().flare;
+    if (!setting.enabled || flare_pipe_.is_null() || flare_occ_pipe_.is_null() || ao_prepass_.is_null()) return;
+    // The direction the sky pass draws its disk with (kSkyFS: -p_light_dir, the light's direction whether or not the
+    // atmosphere is on; Atmosphere::sky_sun_direction moves the baked sky's glow, not the disk), so the flare sits on it.
+    const DirectionalLight& light = scene.light();
+    vec3 dir = normalize(light.direction);
+    if (!(length_sq(dir) > 0.0f)) dir = {0, -1, 0};
+    const View3D& view = scene.view();
+    const rhi::Extent2D out = post_size_;
+    const f32 aspect = f32(out.width) / f32(out.height);
+    // The jittered projection: the one the prepass drew the depth the occlusion pass reads with.
+    const LensFlareFrame fr = lens_flare_frame(setting, jitter_ * view.view_proj, -dir, aspect,
+                                               quality_settings(quality_tier()).lens_flare_starburst);
+    if (!(fr.strength > 0.0f)) return;
+    const vec3 sun = light.color * (max(light.intensity, 0.0f) * fr.strength);
+    if (!(sun.x + sun.y + sun.z > 0.0f) || !std::isfinite(sun.x + sun.y + sun.z)) return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR, contact shadows or the water drew it already
+    if (flare_occ_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = {1, 1};
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.debug_name = "mce.3d.lens_flare_occ";
+        flare_occ_ = device_->create_texture(d);
+    }
+    FlareU fu{};
+    fu.sun = {fr.sun_uv.x, fr.sun_uv.y, fr.aspect, fr.occlusion_radius};
+    fu.color = vec4(sun, fr.halo);
+    fu.shape = {fr.halo_radius, fr.starburst, f32(fr.rays), f32(fr.ghost_count)};
+    for (u32 k = 0; k < fr.ghost_count && k < kLensFlareMaxGhosts; ++k) {
+        const LensFlareGhost& g = fr.ghosts[k];
+        fu.ghost[2 * k] = {g.center.x, g.center.y, g.radius, g.intensity};
+        fu.ghost[2 * k + 1] = vec4(g.tint, 0.0f);
+    }
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment o;
+        o.texture = dst;
+        o.load = rhi::LoadOp::DontCare;
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&o, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    cmd.push_debug_scope("lens_flare");
+    fullscreen(flare_occ_, "lens_flare.occlusion");
+    cmd.bind_pipeline(flare_occ_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(fu));
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);  // nearest: a tap sees sky (0) or not
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    fullscreen(dst, "lens_flare");
+    cmd.bind_pipeline(flare_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(fu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);
+    cmd.bind_texture(rhi::bank::kOrm, flare_occ_, point_sampler_);
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.lens_flare = true;
+    stats_.lens_flare_strength = fr.strength;
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {

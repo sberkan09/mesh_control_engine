@@ -4,8 +4,9 @@
 find_package(Threads REQUIRED)
 
 mce_add_test(test_shader_spirv SOURCES test_shader_spirv.cpp DEPS mce::mce_rhi_sdlgpu)
-# The translator's header is internal to the backend.
-target_include_directories(test_shader_spirv PRIVATE "${PROJECT_SOURCE_DIR}/src/engine/rhi_sdlgpu/src")
+# The translator's header is internal to the backend; render's shaders3d.h (header-only GLSL strings) is compiled too.
+target_include_directories(test_shader_spirv PRIVATE "${PROJECT_SOURCE_DIR}/src/engine/rhi_sdlgpu/src"
+                                                     "${PROJECT_SOURCE_DIR}/src/engine/render/src")
 
 add_executable(test_rhi_sdlgpu test_rhi_sdlgpu.cpp)
 target_link_libraries(test_rhi_sdlgpu PRIVATE mce::mce_rhi_sdlgpu mce::doctest_main Threads::Threads)

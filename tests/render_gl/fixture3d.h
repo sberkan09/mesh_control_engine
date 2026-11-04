@@ -862,4 +862,62 @@ inline void meteor_water_scene(Scene3D& s, const MeteorSky& meteor, const WaterS
     s.set_water(w);
 }
 
+// ---- M-LENSFLARE 38c: the sun lens flare ---------------------------------------------------------------------------
+
+// The flare sky: the cloud sky's camera (cloud_sky_camera: raised, looking 15 degrees up), the sun placed where the
+// view ray through the frame's uv (u, v) points (fullscreen-pass convention: v = 0 is the bottom row, so (0.3, 0.7)
+// is the upper left; asymmetric on purpose, a flipped v moves the ghosts). The unit direction toward the sun.
+inline vec3 lens_flare_toward(const View3D& view, f32 u, f32 v) {
+    const math::vec4 w = math::inverse(view.view_proj) * math::vec4(u * 2.0f - 1.0f, v * 2.0f - 1.0f, 1.0f, 1.0f);
+    return math::normalize(vec3{w.x / w.w, w.y / w.w, w.z / w.w} - view.position);
+}
+
+inline constexpr f32 kFlareSunU = 0.3f, kFlareSunV = 0.7f;
+
+// The flare the cases draw: a tight halo (cut to 0 at 3 radii, 0.24 of the view height), four ghosts at twice the
+// table's gain, a wide occlusion disk (0.05 of the view height: three texels of the 60-texel half-resolution depth),
+// no starburst.
+inline LensFlare lens_flare_setting() {
+    LensFlare fl;
+    fl.enabled = true;
+    fl.halo_radius = 0.08f;
+    fl.ghost_intensity = 2.0f;
+    fl.occlusion_radius = 0.05f;
+    return fl;
+}
+
+// The sun toward `toward_sun`, `flare` (null: the default, disabled), bloom as asked; FXAA off (its edge search would
+// carry a changed pixel to its neighbours).
+inline void lens_flare_scene(Scene3D& s, vec3 toward_sun, const LensFlare* flare, bool bloom = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    s.set_light(sun);
+    PostFx post = s.post();
+    post.bloom = bloom;
+    post.bloom_intensity = 0.3f;
+    post.fxaa = false;
+    post.flare = flare ? *flare : LensFlare{};
+    s.set_post(post);
+}
+
+// A 1 m box 3 m out along the sun's ray, turned to face the camera along it. `shift` moves it sideways in units of
+// its width: 0 covers the sun's whole occlusion disk; -0.5 puts its right edge (the plane through the ray) on the sun,
+// covering half of the disk.
+inline void lens_flare_occluder(Scene3D& s, vec3 toward_sun, f32 shift) {
+    const vec3 z = -toward_sun;  // the box's +z faces back toward the camera
+    const vec3 x = math::normalize(math::cross(vec3{0.0f, 1.0f, 0.0f}, z));
+    const vec3 y = math::cross(z, x);
+    const vec3 p = s.view().position + toward_sun * 3.0f;
+    const vec3 t = p + x * shift - y * 0.5f;  // the mesh's box spans local y 0..1
+    MeshInstance box;
+    box.mesh = 1;
+    const vec3 cols[4] = {x, y, z, t};
+    for (u32 c = 0; c < 4; ++c) {
+        box.world.c[c][0] = cols[c].x;
+        box.world.c[c][1] = cols[c].y;
+        box.world.c[c][2] = cols[c].z;
+    }
+    s.add(box);
+}
+
 }  // namespace mce::render_test

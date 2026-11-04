@@ -783,6 +783,35 @@ TEST_CASE("golden: meteor_water: a meteor streak and its reflection on a calm ni
     check_golden("meteor_water", f);
 }
 
+// ---- M-LENSFLARE 38c: the sun lens flare --------------------------------------------------------------------------
+
+// The flare sky (lens_flare_scene): the sun on the upper left, its halo, four ghosts toward the lower right and a
+// six-ray starburst, with bloom.
+TEST_CASE("golden: lens_flare_sun: the sun's halo, ghosts and starburst over the sky, with bloom") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    LensFlare fl = lens_flare_setting();
+    fl.starburst = 1.0f;
+    f.render(0.0f, true, [&](Scene3D& s) { lens_flare_scene(s, lens_flare_toward(s.view(), kFlareSunU, kFlareSunV), &fl, true); });
+    CHECK(f.renderer.forward_3d().last_stats().lens_flare);
+    check_golden("lens_flare_sun", f);
+}
+
+// The same sun half behind a box facing the camera (its edge through the sun): the flare at about half strength.
+TEST_CASE("golden: lens_flare_occluded: a box over half the sun dims the flare") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    LensFlare fl = lens_flare_setting();
+    fl.starburst = 1.0f;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        const vec3 d = lens_flare_toward(s.view(), kFlareSunU, kFlareSunV);
+        lens_flare_scene(s, d, &fl, true);
+        lens_flare_occluder(s, d, -0.5f);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().lens_flare);
+    check_golden("lens_flare_occluded", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

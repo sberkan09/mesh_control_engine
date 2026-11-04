@@ -3499,4 +3499,79 @@ void main() {
 }
 )";
 
+// ---- M-LENSFLARE 38c: the sun lens flare, after the post effects and before bloom. FlareU rides bank kPass for both
+// passes; its C++ mirror is FlareU in forward3d.cpp (static_asserts on kFlareUBytes and the member offsets). Everything
+// in it comes from lens_flare_frame (mce/render/lens_flare.h): the GPU holds no flare table of its own. Radii and
+// distances are fractions of the view height (uv scaled by f_sun.z = width / height along u). uv is the fullscreen
+// pass's (row 0 is v = 0), as lens_flare_project returns it. Portable on purpose: one block, combined samplers at the
+// post banks, explicit textureLod / texelFetch, constant loop bounds, no derivatives.
+inline constexpr int kFlareUBytes = 240;  // 15 vec4: sun, color, shape, ghost[12]
+inline constexpr int kFlareMaxGhosts = 6;  // = kLensFlareMaxGhosts (scene3d.h); f_ghost holds two vec4 per ghost
+#define MCE_GLSL_FLARE_U R"(
+layout(std140, binding = 1) uniform FlareU {
+    vec4 f_sun;        // xy: the sun's uv, z: aspect (width / height), w: occlusion disk radius (of the view height)
+    vec4 f_color;      // rgb: the sun's light times the strength, w: halo strength
+    vec4 f_shape;      // x: halo radius (of the view height), y: starburst strength (0 = none), z: rays, w: ghost count
+    vec4 f_ghost[12];  // ghost k: [2k] xy centre (uv), z radius, w intensity; [2k + 1] rgb tint, w 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+
+// The 1x1 occlusion pass: 32 taps on a fixed Vogel disk of f_sun.w around the sun in the half-resolution opaque
+// prepass (a = view depth, 0 where nothing was drawn: sky). r = the share of the taps inside the frame that see sky;
+// no tap inside the frame reads 0 (the sun is not visible).
+constexpr const char* kFlareOccFS = "#version 450 core\n" MCE_GLSL_FLARE_U R"(
+layout(binding = 7) uniform sampler2D u_depth;
+void main() {
+    float visible = 0.0, taps = 0.0;
+    for (int i = 0; i < 32; ++i) {
+        float r = sqrt((float(i) + 0.5) / 32.0) * f_sun.w;
+        float a = float(i) * 2.39996323;
+        vec2 uv = f_sun.xy + vec2(cos(a) * r / f_sun.z, sin(a) * r);
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+        taps += 1.0;
+        if (textureLod(u_depth, uv, 0.0).a <= 0.0) visible += 1.0;
+    }
+    o_color = vec4(taps > 0.0 ? visible / taps : 0.0, 0.0, 0.0, 1.0);
+}
+)";
+
+// The composite: the source frame plus the sun's light times the occlusion times halo + ghosts + starburst. The halo
+// is a Gaussian cut to 0 between 2 and 3 radii (so the frame beyond it is untouched), a ghost a soft disc a little
+// brighter toward its rim, the starburst f_shape.z symmetric spokes fading with the distance.
+constexpr const char* kFlareFS = "#version 450 core\n" MCE_GLSL_FLARE_U R"(
+layout(binding = 6) uniform sampler2D u_src;
+layout(binding = 8) uniform sampler2D u_occ;
+void main() {
+    vec3 c = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;
+    float occ = texelFetch(u_occ, ivec2(0, 0), 0).r;
+    vec2 d = (v_uv - f_sun.xy) * vec2(f_sun.z, 1.0);
+    float r = length(d);
+    float hr = max(f_shape.x, 1e-4);
+    float k = f_color.w * exp(-(r * r) / (hr * hr)) * (1.0 - smoothstep(2.0 * hr, 3.0 * hr, r));
+    if (f_shape.y > 0.0 && r > 1e-6) {
+        float s = abs(cos(f_shape.z * 0.5 * atan(d.y, d.x)));
+        s *= s;  // s^32 by squaring: no pow() of a value that may be 0
+        s *= s;
+        s *= s;
+        s *= s;
+        s *= s;
+        k += f_shape.y * s * exp(-r * 6.0);
+    }
+    vec3 ghosts = vec3(0.0);
+    for (int i = 0; i < 6; ++i) {
+        if (float(i) >= f_shape.w) continue;
+        vec4 g = f_ghost[2 * i];
+        vec4 t = f_ghost[2 * i + 1];
+        float gd = length((v_uv - g.xy) * vec2(f_sun.z, 1.0));
+        float gr = max(g.z, 1e-4);
+        float disc = 1.0 - smoothstep(gr * 0.7, gr, gd);
+        ghosts += t.rgb * (g.w * disc * (0.7 + 0.3 * smoothstep(0.0, gr, gd)));
+    }
+    o_color = vec4(c + f_color.rgb * occ * (vec3(k) + ghosts), 1.0);
+}
+)";
+#undef MCE_GLSL_FLARE_U
+
 }  // namespace mce::render::shaders3d
