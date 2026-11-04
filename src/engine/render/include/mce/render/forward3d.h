@@ -77,6 +77,9 @@ struct Forward3DDesc {
     // Automatic instancing (M-VISUAL3 5a): the instanced twins of the mesh, SSAO prepass, shadow and velocity
     // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
     bool instancing = true;
+    // Light cookie bake pipeline and atlas (M-LIGHTCOOKIE 40a), created lazily when a scene has a cookie. False (or -r.light_cookies 0)
+    // draws every light without one.
+    bool light_cookies = true;
     // Edge outline pipelines (M-OUTLINE 39a), and with them the prepass pipelines the outline reads; a scene turns it on with
     // PostFx::outline. False (or -r.edge_outline 0) draws every scene without it.
     bool edge_outline = true;
@@ -137,6 +140,9 @@ struct Forward3DStats {
     f32 lens_flare_strength = 0.0f;  // its overall strength after the horizon, edge and occlusion fades (0 = not drawn)
     bool edge_outline = false;       // the edge outline pass drew this frame (M-OUTLINE)
     u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
+    u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
+    u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
+    bool sun_cookie = false;         // the sun's cookie shaped this frame
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
     bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
     bool occlusion = false;          // ... and tested against the depth pyramid
@@ -352,6 +358,8 @@ private:
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
+    void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
+    u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     rhi::TextureHandle post_fx_target(rhi::Extent2D size);
     void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
     u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
@@ -510,6 +518,11 @@ private:
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
     rhi::TextureHandle outline_dst_;
+    // M-LIGHTCOOKIE: the cookie atlas bake pipeline, the atlas (one array layer per distinct cookie texture) and the cache of what it holds.
+    rhi::PipelineHandle cookie_pipe_;
+    rhi::TextureHandle cookie_atlas_;
+    u32 cookie_keys_[16] = {};     // TextureStore key baked into each layer
+    u32 cookie_records_ = 0;       // records uploaded for this frame
     rhi::TextureHandle bloom_[kMaxBloomLevels];
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;

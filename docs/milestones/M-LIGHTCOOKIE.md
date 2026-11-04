@@ -146,7 +146,7 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 40a | planned | | Seam: `PointLight::cookie*`, `render::SunCookie`, `Forward3DDesc::light_cookies`, stats and members, the three fan-out numbers |
+| 40a | done (2026-11-04) | | Seam: `PointLight::cookie*`, `render::SunCookie`, `Forward3DDesc::light_cookies`, `Forward3DStats::cookie_lights` / `cookie_layers` / `sun_cookie`, the cookie pipeline, atlas, key and record members and the two declarations in `forward3d.h`; `bank::kLightCookies` = 2 in `rhi/types.h`. Storage bank check: no shader binds a std430 storage at 0, 1 or 2 (4 to 15 are taken; 3 shares its number with the `ObjectU` uniform block), and storage banks sit in their own space on every backend (GL; SDL GPU `storage_binding[]` indexes, 16 tracked numbers and at most 8 storage buffers per stage; Metal `[[buffer(8 + b)]]`, 16; WebGPU bind group 2, 16 numbers, `maxStorageBuffersPerShaderStage` 10), so 2 is free. The lit fragment stage then holds 6 storage buffers (clusters, light pool, light indices, local shadows, decals, cookies), under the SDL GPU 8 and WebGPU 10 limits. Fan-out numbers: see the PR description. Tests: `tests/render/test_light_cookie_defaults.cpp` |
 | 40b | planned | | Pure helpers, `QualitySettings`, `r.light_cookies` |
 | 40c | planned | | Atlas bake and bank 2 sharing; re-verify the 16-bank and render-to-mip claims first |
 | 40d | planned | | Spot cookie in the local-light loop (mesh and terrain) |
