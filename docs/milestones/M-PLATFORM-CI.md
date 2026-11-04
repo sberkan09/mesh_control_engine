@@ -30,3 +30,14 @@ called so. None is skipped.
 ## Linear (to open when it is reachable)
 
 One issue per step 1-6 under project mesh_control_engine, step 1-3 Done when #1088 merges.
+
+## Windows test failures, grouped (first full run, 2026-11-04; 17 of 201, plus two hangs)
+
+Groups are by module so concurrent threads can take them without overlap. The evidence is from the run's log.
+
+1. **Luau compiler crashes (script).** `test_fuzz_script` and `test_script` ("a syntax error fails the cook at file:line:col") die with SIGSEGV; `player_scripts` gets an access violation from `mce_cook --pack` when a script has an error. One cause is likely: the compiler's error path.
+2. **Paths with backslashes (asset, mcp, tests).** `import_demo_reimport` reports every asset path as changed (`assets\levels\cave.mcscene`); `cli_test` (Python driver) and `mcp_transcript` ("cannot write cooked ...") fail on paths; `test_editor` and `ai_demo_editor_bt` probably too.
+3. **FBX import (asset).** `test_cook` "fbx: a 3-bone skin with a rotation clip": the sampled quaternion differs from the analytic one (`0.707` against `0`).
+4. **Needs a display or audio device (platform).** `test_core` fails `PlatformInit` and then aborts with 0xc0000409; check whether the test should skip without a device or the runner needs one. `sample_steam_demo` expects the Linux depot in its log line.
+5. **Perf gates (kit).** `Dungeon_perf_counters(_seeded)` and `marble_garden_mctests` never print `gate: pass`; the hosted runner may simply be too slow, measure before changing a budget.
+6. **Hangs.** Two tests had not finished when the first run hit the 4 h limit (`test_mcp_openworld` took 48 s; the stuck ones started after `test_mcp_team`). ctest now has `--timeout 600`, so the next run names them.
