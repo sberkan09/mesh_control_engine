@@ -50,3 +50,18 @@ mce_add_library(mce_script_compiler UMBRELLA
         Luau.Ast)
 # Luau's analysis throws on internal limits; typecheck.cpp (alone in the engine) catches them.
 set_source_files_properties(compiler/typecheck.cpp PROPERTIES COMPILE_OPTIONS "$<IF:$<CXX_COMPILER_ID:MSVC>,/EHsc,-fexceptions>")
+# MSVC: these TUs include Luau's C++ headers, whose ParseError/ParseErrors derive from std::exception. The engine
+# policy's _HAS_EXCEPTIONS=0 swaps the STL's std::exception for a smaller class, so this target and Luau (built with
+# exceptions) disagree on the layout of every Luau error object; the inline destructors each side emits are COMDATs
+# the linker picks one of, and any syntax error then crashed the cook (SIGSEGV in test_script, test_fuzz_script,
+# player_scripts). The compiler never ships in the player (the compiler wall), so it builds like Luau does.
+# libstdc++/libc++ keep one std::exception layout under -fno-exceptions, so GCC and Clang need nothing here.
+if(MSVC)
+    get_target_property(_mce_sc_defs mce_script_compiler COMPILE_DEFINITIONS)
+    list(REMOVE_ITEM _mce_sc_defs _HAS_EXCEPTIONS=0)
+    set_property(TARGET mce_script_compiler PROPERTY COMPILE_DEFINITIONS ${_mce_sc_defs})
+    get_target_property(_mce_sc_opts mce_script_compiler COMPILE_OPTIONS)
+    list(REMOVE_ITEM _mce_sc_opts /EHs-c-)
+    set_property(TARGET mce_script_compiler PROPERTY COMPILE_OPTIONS ${_mce_sc_opts})
+    target_compile_options(mce_script_compiler PRIVATE /EHsc)
+endif()
