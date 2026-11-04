@@ -1,6 +1,6 @@
 # M-LENSFLARE — Lens flare: a soft glare halo, ghosts along the sun-to-centre axis and an optional starburst, occluded by scene depth (milestone record)
 
-**Status:** planned (2026-11-03), steps 38a to 38f. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of the 3D visual assessment (a bright sun reads as a flat disk: the frame has bloom, lens dirt and light shafts but nothing that says "a camera looked at the sun") and of M-VISUAL3 3 (the camera look in the tonemap pass: vignette, grain, chromatic aberration, lens dirt). Today the renderer draws a sky sun disk (`Sky::sun_size`, `Sky::sun_intensity`), bloom (`PostFx::bloom*`), lens dirt (`PostFx::Lens::dirt_key` / `dirt_intensity`, lit by bloom) and volumetric light shafts (`Volumetrics`), and has no flare. No Linear issues (free issue limit, Linear unreachable); this record is the tracker. The pass step (38c) is Opus-written and merged after an independent Opus review plus a green `--task`, as M-CLOUDS 9b, M-AURORA 16c and M-METEOR 18c were.
+**Status:** done (2026-11-04), steps 38a to 38f (the GPU-only checks below remain on the GPU list, row A11 of `/mnt/project-files/assessments/gpu-gereken-isler.md`). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of the 3D visual assessment (a bright sun reads as a flat disk: the frame has bloom, lens dirt and light shafts but nothing that says "a camera looked at the sun") and of M-VISUAL3 3 (the camera look in the tonemap pass: vignette, grain, chromatic aberration, lens dirt). Today the renderer draws a sky sun disk (`Sky::sun_size`, `Sky::sun_intensity`), bloom (`PostFx::bloom*`), lens dirt (`PostFx::Lens::dirt_key` / `dirt_intensity`, lit by bloom) and volumetric light shafts (`Volumetrics`), and has no flare. No Linear issues (free issue limit, Linear unreachable); this record is the tracker. The pass step (38c) is Opus-written and merged after an independent Opus review plus a green `--task`, as M-CLOUDS 9b, M-AURORA 16c and M-METEOR 18c were.
 
 **Naming:** no type, file or milestone called `LensFlare`, `LensFlare3D`, `SunGlare` or `lens_flare` exists (`projects/`, `src/`, `docs/`, `tests/`, `samples/` checked 2026-11-03; the only "flare" hits are the mirror flares of the `solstice-reach` game design, which are point lights, not a post effect). The render setting is `render::LensFlare` (in `PostFx::flare`), the pure helpers live in `mce/render/lens_flare.h`, the kit component is `LensFlare3D` (`mce/kit/lens_flare.h`).
 
@@ -101,12 +101,12 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 38a | planned | | |
-| 38b | planned | | |
+| 38a | done | | Seam: `render::LensFlare`, `PostFx::flare`, stats and members |
+| 38b | done | | Pure helpers in `mce/render/lens_flare.h`, tiers, `r.lens_flare`, clamps |
 | 38c | done (2026-11-04, awaiting the independent Opus review and `--task`) | | See "38c notes" below |
 | 38d | done (2026-11-04) | | `LensFlare3D` in `mce/kit/lens_flare.h`, `lens_flare_visibility`, the extract feed (rain = the first Weather's Rain or Storm intensity, cloud cover = the post-`apply_quality` value), `tests/kit/test_lens_flare.cpp` and `test_lens_flare_extract.cpp`; temporary `sample_coverage.allow` line until 38e |
-| 38e | planned | | |
-| 38f | planned | | |
+| 38e | done (2026-11-04) | | `samples/11_daynight` rejected (checked): its camera (0,8,34), 55 deg fov, pitched 12 deg down looks along -z; `sun_direction_at` (noon elevation 60) puts the sun on the +x horizon at 06:00 (capture tick 150, the only capture) and on the -x horizon at 18:00, so a low sun is never in view (it is in the frame only for hours 7.8 to 10.2 at about 50 to 60 degrees elevation, above the view top at about +15 degrees); no occluder test applies. `samples/kit3d_tour`: default `LensFlare3D` on the World entity beside `Environment3D` (no new entity, `-DENTITIES` stays 23); the default sun (-0.4,-1,-0.3), about 65 degrees high, is not in view of the tour camera either and the tour has no capture tick, so the flare is inert there (no sun, no occluder in view); `capabilities.md` row and `18-samples.md` updated, allow-line removed |
+| 38f | done (2026-11-04) | | The `08-3d` lens flare paragraph (replaces the 38d stopgap bullet) and the `PostFx` API row, milestone status, follow-ups, ROADMAP row, changelog |
 
 ## 38c notes
 
@@ -118,6 +118,10 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 - **Halo extent.** The Gaussian halo is cut to 0 between 2 and 3 radii (`1 - smoothstep(2r, 3r, d)`) so the frame beyond it is untouched; the starburst has no cut (it only draws when `starburst > 0`).
 - **Backends.** GL and SDL GPU (Vulkan) are run by `tests/render_gl/test_render3d_flare_gl.cpp`; the SPIR-V compile and binding table by a `test_shader_spirv` case (Linux, no GPU); Metal's `translate_glsl` by a `test_shader_cross` case (macOS only, not built in the container). WebGPU (`shader_wgsl.cpp`) is not configured in the container: a follow-up.
 
+## Remaining GPU-only checks
+
+None blocks the milestone. They are the "What must be looked at on a real GPU" list above, tracked as row A11 of `/mnt/project-files/assessments/gpu-gereken-isler.md`: the `lens_flare_sun` / `lens_flare_occluded` goldens on `linux-gl-nvidia` and `linux-sdlgpu-nvidia` (three runs), the windowed live look (flare appearing, fading smoothly behind occluders, edge and sunset fade, no TAA shimmer), the same frame per backend (ghosts on the same side of the centre; Metal on the Mac), the default look, and the 1080p High `perf_run` with and without SSAO.
+
 ## Follow-ups
 
 - Flares for bright point and spot lights (a per-light opt-in field and a light list in `FlareU`).
@@ -128,3 +132,7 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 - A Luau setter and the MCP `render_frame` override for one-off shots.
 - 38c: check the two flare shaders through `rhi_webgpu` `shader_wgsl.cpp` (Tint) in a build with WebGPU on.
 - 38c: the flare without SSAO, SSR and contact shadows at init (create the prepass pipelines for it without changing the water's depth read).
+- 38c: WebGPU `shader_wgsl.cpp` has not translated the two flare shaders (WebGPU is not configured in the container).
+- `Forward3DStats::lens_flare_strength` is the CPU strength and excludes the GPU occlusion, so a fully occluded sun still reports a nonzero value; the comment on it in `forward3d.h` ("after the horizon, edge and occlusion fades") is inaccurate and should say the occlusion is not included.
+- The Medium-tier gate test pins only the CPU side (starburst 0 in the frame data); no pixel test proves Medium has no starburst pixels.
+- `samples/kit3d_tour` flare is inert: the default sun is above the view and the tour has no occluder, so no sample shows the flare (`11_daynight` was rejected in 38e too).

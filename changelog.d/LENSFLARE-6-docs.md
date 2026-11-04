@@ -1,0 +1,1 @@
+- M-LENSFLARE step 38f: the user guide describes the sun lens flare (halo, ghosts, starburst, depth occlusion, quality tiers, `r.lens_flare`, `LensFlare3D`, cloud and rain dimming), the milestone and the ROADMAP row are closed.
