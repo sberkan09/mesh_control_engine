@@ -1,0 +1,1 @@
+- CI: `.github/workflows/platforms.yml` builds and tests the `msvc-release` (Windows) and `macos-release` presets on hosted runners nightly and on demand; GPU and slow tests are excluded. Windows build fixes found by its first runs (MSVC warnings, UMBRELLA header deps, `net_arena` and `Undelivered` portability). See `docs/milestones/M-PLATFORM-CI.md`.

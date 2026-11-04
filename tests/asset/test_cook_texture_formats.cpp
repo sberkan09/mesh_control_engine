@@ -181,14 +181,14 @@ TEST_CASE("a 32-bit TGA keeps its alpha") {
 
 TEST_CASE("a header that claims more than the cook accepts is refused before the pixels are allocated") {
     std::string tga = make_tga(pixels(false), 24, false, false);
-    tga[12] = char(0xFF), tga[13] = char(0xFF);  // width 65535
-    tga[14] = char(0xFF), tga[15] = char(0xFF);  // height 65535: ~12 GiB if allocated
+    tga[12] = char(-1), tga[13] = char(-1);  // width 65535
+    tga[14] = char(-1), tga[15] = char(-1);  // height 65535: ~12 GiB if allocated
     const Cooked c = cook_one("fmt_huge_tga", "t.tga", tga);
     CHECK_FALSE(c.ok);
     CHECK(c.diags.find("t.tga") != std::string::npos);
 
     std::string bmp = make_bmp(pixels(false));
-    bmp[18] = char(0xFF), bmp[19] = char(0xFF), bmp[20] = char(0xFF), bmp[21] = char(0x7F);  // width 2^31 - 1
+    bmp[18] = char(-1), bmp[19] = char(-1), bmp[20] = char(-1), bmp[21] = char(0x7F);  // width 2^31 - 1
     const Cooked b = cook_one("fmt_huge_bmp", "t.bmp", bmp);
     CHECK_FALSE(b.ok);
 }

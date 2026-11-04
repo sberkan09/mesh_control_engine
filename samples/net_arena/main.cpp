@@ -11,6 +11,7 @@
 //                                             against three bots over a simulated 150 ms link
 //   -frames N -capture out.ppm                run N frames, write the last one as an image
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>

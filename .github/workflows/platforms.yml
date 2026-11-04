@@ -1,0 +1,98 @@
+# Windows (MSVC) and macOS (AppleClang) build + ctest on standard GitHub-hosted runners (free for a public
+# repository). These platforms had no CI after the hosted Linux-only setup: the msvc-* presets never ran again and
+# the macos-* presets ran only on a developer Mac (scripts/ci/local_ci_macos.sh). Not a PR gate: it runs nightly,
+# on demand, and on a PR that edits this file. GPU tests (label `gpu`) and `slow` tests are excluded: hosted
+# runners have no usable GPU. Failures here are fixed forward by the thread of the change that broke them.
+name: Platforms
+
+on:
+  schedule:
+    - cron: "43 3 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch to test"
+        default: master
+  pull_request:
+    branches: [master]
+    paths: [".github/workflows/platforms.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PLATFORMS_REF: ${{ github.event.inputs.ref || github.ref }}
+
+jobs:
+  windows:
+    name: windows-msvc-release
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PLATFORMS_REF }}
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install Ninja and ccache
+        shell: bash
+        run: choco install ninja ccache --no-progress -y
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/ccache
+          key: ccache-win-${{ github.sha }}
+          restore-keys: ccache-win-
+      - name: Configure
+        shell: bash
+        run: cmake --preset msvc-release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        shell: bash
+        run: cmake --build --preset msvc-release -- -k 0
+      - name: Test (no gpu, no slow)
+        shell: bash
+        run: ctest --preset msvc-release -j 4 -LE "gpu|slow" --timeout 600
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-logs
+          path: build/msvc-release/Testing
+          retention-days: 7
+
+  macos:
+    name: macos-release
+    runs-on: macos-26
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PLATFORMS_REF }}
+      - name: Install Ninja and ccache
+        run: brew install ninja ccache
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-mac-${{ github.sha }}
+          restore-keys: ccache-mac-
+      - name: Configure
+        run: >
+          cmake --preset macos-release
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build --preset macos-release -- -k 0
+      - name: Test (no gpu, no slow)
+        run: ctest --preset macos-release -j 3 -LE "gpu|slow" --timeout 600
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-logs
+          path: build/macos-release/Testing
+          retention-days: 7
