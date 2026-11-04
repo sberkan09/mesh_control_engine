@@ -283,8 +283,12 @@ TEST_CASE("terrain editor: strokes save, re-bake and round-trip through the cook
     REQUIRE(ed.end_stroke(session));
 
     // The source now carries the data explicitly and keeps everything else as written.
-    std::ifstream f(root + "/assets/terrain/valley.mcterrain");
-    const std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    // The stream closes before the undo below rewrites the file: Windows cannot rename over an open file.
+    std::string text;
+    {
+        std::ifstream f(root + "/assets/terrain/valley.mcterrain");
+        text.assign((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    }
     CHECK(text.find("\"heights\"") != std::string::npos);
     CHECK(text.find("\"splat\"") != std::string::npos);
     CHECK(text.find("\"holes\"") != std::string::npos);
