@@ -67,7 +67,7 @@ jobs:
 
   macos:
     name: macos-release
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
@@ -84,10 +84,9 @@ jobs:
       - name: Configure
         run: >
           cmake --preset macos-release
-          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
-        run: cmake --build --preset macos-release
+        run: cmake --build --preset macos-release -- -k 0
       - name: Test (no gpu, no slow)
         run: ctest --preset macos-release -j 3 -LE "gpu|slow"
       - name: Upload logs
