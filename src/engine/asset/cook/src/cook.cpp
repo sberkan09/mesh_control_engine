@@ -632,7 +632,9 @@ CookReport CookService::run(StringView project_root, const CookOptions& opt) {
         if (node.status == AssetStatus::Cooked) {
             const String out_path = path_join(cooked_root, output_rel_path(rec.guid, node.output_hash));
             if (!fs::exists(out_path)) {
-                if (auto w = fs::write_file_atomic(out_path, node.output.span()); !w) {
+                // The name holds the content hash: if another process wrote the same file meanwhile (two editor
+                // servers on one project; on Windows the rename over it fails) the output is there and identical.
+                if (auto w = fs::write_file_atomic(out_path, node.output.span()); !w && !fs::exists(out_path)) {
                     report.diags.error(w.error().code, out_path, 0, 0, kStageWrite, "cannot write cooked output");
                     node.status = ar.status = AssetStatus::Failed;
                 }
