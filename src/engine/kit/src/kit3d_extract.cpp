@@ -1483,6 +1483,12 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             fl.starburst_rays = lens_flare->starburst_rays;
             fl.occlusion_radius = lens_flare->occlusion_radius;
             fl.edge_fade = lens_flare->edge_fade;
+            // The 38b quality step on a throwaway PostFx (tier, r.lens_flare and the Range clamps); only the flare returns.
+            render::PostFx flare_post;
+            flare_post.flare = fl;
+            render::ShadowSettings flare_shadows;
+            render::apply_quality(quality_, flare_shadows, flare_post);
+            post.flare = flare_post.flare;
         }
     }
     // The primary camera's own focus wins over the environment's.

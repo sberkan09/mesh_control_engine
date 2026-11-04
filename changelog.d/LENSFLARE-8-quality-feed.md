@@ -1,0 +1,1 @@
+- M-LENSFLARE follow-up (38h): `Kit3DExtract` now runs the sun lens flare through `render::apply_quality`, so the Low tier, the Medium starburst drop, `r.lens_flare 0` and the `Range` clamps reach the frame (the raw feed ignored them).
