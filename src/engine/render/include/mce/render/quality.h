@@ -11,6 +11,8 @@
 //   Low, height blend on Medium, height blend and triplanar on High
 //   (M-LENSFLARE 38b: the sun lens flare is off on Low, without starburst on Medium, complete on High)
 //   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
+//   (M-LIGHTCOOKIE 40b: light cookies are on in every tier; the tier bounds the cost: 128 / 256 / 512 texel layers, 4 / 8 / 16
+//   layers and 4 / 8 / 16 cookied lights on Low / Medium / High)
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
 //   screen-space reflections; M-PARTICLEQ 28a: particle_scale, the share of a weather emitter's rate and
@@ -75,6 +77,12 @@ struct QualitySettings {
     // its wide kernel (8 taps; Low uses the 4-tap cross).
     bool edge_outline = true;
     bool edge_outline_wide = true;
+    // M-LIGHTCOOKIE 40b: light cookies are honored (off: every cookie reads as none) in every tier; the tier bounds the
+    // cost: the atlas layer size in texels, the layers (distinct cookie textures) and the cookied lights per frame.
+    bool light_cookies = true;
+    u32 light_cookie_size = 512;
+    u32 light_cookie_layers = 16;
+    u32 light_cookie_lights = 16;
     // M-PARTICLEQ 28a: the share of rate and max_particles a render-side weather emitter keeps (0..1); Low 0.5,
     // Medium and High 1. No CVar. The weather particles read it in a later step (28b).
     f32 particle_scale = 1.0f;
@@ -109,6 +117,13 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
 // normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
+// Light cookies (M-LIGHTCOOKIE 40b): a spot light's cookie fields. `cookie` becomes ~0u (no cookie) when the tier
+// (light_cookies false) or `r.light_cookies 0` says off; cookie_strength is clamped to 0..1 (NaN 1), cookie_edge to 0..1
+// (NaN 0) and cookie_roll wrapped to [-pi, pi] (NaN or infinite 0). Nothing else of the light changes.
+void apply_quality(const QualitySettings& q, PointLight& light);
+// The sun's cookie: `texture` becomes ~0u under the same two switches; strength 0..1 (NaN 1), size 0.5..1000 (NaN 20),
+// offset components any finite value (NaN or infinite 0) and roll wrapped to [-pi, pi] (NaN or infinite 0).
+void apply_quality(const QualitySettings& q, SunCookie& cookie);
 // The irradiance volume's runtime updates (a scene that turned them off keeps them off).
 void apply_quality(const QualitySettings& q, GiVolume& gi);
 // Volumetric fog: off on Low; the froxel grid no finer than the tier's (a scene's coarser grid stays).
