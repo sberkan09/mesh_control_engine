@@ -53,7 +53,7 @@ jobs:
         run: cmake --preset msvc-release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
         shell: bash
-        run: cmake --build --preset msvc-release
+        run: cmake --build --preset msvc-release -- -k 0
       - name: Test (no gpu, no slow)
         shell: bash
         run: ctest --preset msvc-release -j 4 -LE "gpu|slow"

@@ -29,6 +29,11 @@ mce_add_library(mce_script UMBRELLA
     PRIVATE_DEPS
         Luau.VM)
 target_compile_definitions(mce_script INTERFACE MCE_HAS_SCRIPT=1)
+# MSVC 14.51 sees luaL_error as [[noreturn]], so the `return 0;` after it is C4702 (unreachable code) under /WX;
+# GCC and Clang do not warn. The returns stay for the compilers that need them.
+if(MSVC)
+    target_compile_options(mce_script PRIVATE /wd4702)
+endif()
 
 mce_add_library(mce_script_compiler UMBRELLA
     SOURCES
