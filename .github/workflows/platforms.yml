@@ -31,7 +31,7 @@ jobs:
   windows:
     name: windows-msvc-release
     runs-on: windows-2025
-    timeout-minutes: 240
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,7 +56,7 @@ jobs:
         run: cmake --build --preset msvc-release -- -k 0
       - name: Test (no gpu, no slow)
         shell: bash
-        run: ctest --preset msvc-release -j 4 -LE "gpu|slow"
+        run: ctest --preset msvc-release -j 4 -LE "gpu|slow" --timeout 600
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -68,7 +68,7 @@ jobs:
   macos:
     name: macos-release
     runs-on: macos-26
-    timeout-minutes: 240
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,7 +88,7 @@ jobs:
       - name: Build
         run: cmake --build --preset macos-release -- -k 0
       - name: Test (no gpu, no slow)
-        run: ctest --preset macos-release -j 3 -LE "gpu|slow"
+        run: ctest --preset macos-release -j 3 -LE "gpu|slow" --timeout 600
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4

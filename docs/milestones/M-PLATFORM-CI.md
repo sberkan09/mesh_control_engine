@@ -12,7 +12,7 @@ tests are excluded: hosted runners have no usable GPU. Linux stays the gate (`ci
 | 1. Workflow, Windows and macOS jobs | PR #1088 |
 | 2. First-run build fixes, Windows (C4702 after `luaL_error`, module host headers for UMBRELLA targets without the umbrella, `net_arena` deps and `<algorithm>`, C4310 `char` casts, `_putenv_s`, `std::popcount`) | PR #1088 |
 | 3. macOS: `macos-26` runner (Xcode 16.4's libc++ has no floating-point `from_chars`) | PR #1088, builds green |
-| 4. Windows `ctest` | open until the build is green |
+| 4. Windows `ctest`: the build is green; 17 of 201 tests fail and two hung the first full run until the 4 h job limit (ctest now has `--timeout 600`, jobs 150 min) | open: `import_demo_reimport`, `sample_steam_demo`, `ai_demo_editor_bt`, `Dungeon_perf_counters`(+`_seeded`), `marble_garden_mctests`, `test_core` (0xc0000409), `test_cook`, `test_fuzz_script`, `test_fuzz_importers`, `cli_test`, `test_script`, `player_scripts`, `test_editor`, `mcp_transcript`, `test_mcp_playtest`, `test_mcp_agent`; each needs a look |
 | 5. macOS test failures below | open |
 | 6. Android APK build, web build, release artifacts, Pages | not started |
 
