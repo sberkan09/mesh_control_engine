@@ -3,8 +3,9 @@
 find_package(Threads REQUIRED)
 
 mce_add_test(test_shader_cross SOURCES test_shader_cross.cpp DEPS mce::mce_rhi_metal)
-# The translator's header is internal to the backend.
-target_include_directories(test_shader_cross PRIVATE "${PROJECT_SOURCE_DIR}/src/engine/rhi_metal/src")
+# The translator's header is internal to the backend; render's shaders3d.h (header-only GLSL strings) is compiled too.
+target_include_directories(test_shader_cross PRIVATE "${PROJECT_SOURCE_DIR}/src/engine/rhi_metal/src"
+                                                     "${PROJECT_SOURCE_DIR}/src/engine/render/src")
 
 add_executable(test_rhi_metal test_rhi_metal.cpp)
 target_link_libraries(test_rhi_metal PRIVATE mce::mce_rhi_metal mce::doctest_main Threads::Threads)

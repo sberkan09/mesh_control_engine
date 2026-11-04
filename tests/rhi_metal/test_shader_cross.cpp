@@ -5,6 +5,7 @@
 
 #include "mce/core.h"
 #include "shader_cross.h"
+#include "shaders3d.h"  // render's 3D shaders (M-LENSFLARE 38c case)
 
 using namespace mce;
 using namespace mce::rhi::metal;
@@ -124,4 +125,24 @@ void main() {
     CHECK(contains(msl, "u_in [[texture(19)]]"));
     CHECK(contains(msl, "atomic_fetch_add_explicit"));
     CHECK_FALSE(contains(msl, "mce_flip_y"));
+}
+
+// M-LENSFLARE 38c: the flare's two fragment stages (render's shaders3d.h, the real sources) translate, with FlareU at
+// [[buffer(1)]] and their samplers at the GL binding numbers Forward3D::record_flare binds.
+TEST_CASE("shader_cross: the lens flare's occlusion and composite stages") {
+    FixedString<1024> log;
+    auto occ = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareOccFS, "lens_flare_occ.frag", log);
+    REQUIRE_MESSAGE(occ.has_value(), log.c_str());
+    if (!occ) return;
+    CHECK(contains(occ.value(), "[[buffer(1)]]"));
+    CHECK(contains(occ.value(), "u_depth [[texture(7)]]"));
+    CHECK(contains(occ.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(occ.value(), "mce_flip_y"));
+    auto comp = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kFlareFS, "lens_flare.frag", log);
+    REQUIRE_MESSAGE(comp.has_value(), log.c_str());
+    if (!comp) return;
+    CHECK(contains(comp.value(), "[[buffer(1)]]"));
+    CHECK(contains(comp.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(comp.value(), "u_occ [[texture(8)]]"));
+    CHECK(contains(comp.value(), "[[sampler(8)]]"));
 }

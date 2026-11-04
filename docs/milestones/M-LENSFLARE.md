@@ -103,10 +103,20 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 |---|---|---|---|
 | 38a | planned | | |
 | 38b | planned | | |
-| 38c | planned | | |
+| 38c | done (2026-11-04, awaiting the independent Opus review and `--task`) | | See "38c notes" below |
 | 38d | planned | | |
 | 38e | planned | | |
 | 38f | planned | | |
+
+## 38c notes
+
+- **Sun direction (checked).** The sky pass draws its disk with `-p_light_dir`, i.e. `-normalize(DirectionalLight::direction)` (fallback `-y`), with or without the atmosphere (`kSkyFS`, set in `bind_main_state`). `Scene3D::atmosphere_sun()` (line ~1406 of `forward3d.cpp`, `update_atmosphere`) is the quantized direction the baked atmosphere sky and its glow are computed from, and with `Atmosphere::sky_sun_direction` set it is a different direction altogether; the disk never uses it. `record_flare` therefore uses the light's direction, the same expression and fallback as the disk, so the flare sits on the disk.
+- **Starburst gate.** `Forward3D` holds no `QualitySettings`; `record_flare` passes `quality_settings(quality_tier()).lens_flare_starburst` (the `r.quality` tier) to `lens_flare_frame`, on top of `apply_quality`, which already zeroes `starburst` for a tier without it.
+- **Prepass dependency.** The occlusion reads `ao_gbuf_`, whose pipelines exist only when `Forward3DDesc` (and the `r.*` restart cvars) keeps SSAO, SSR or contact shadows; with all three off at init the flare pipelines are not created and the flare is skipped (no pass, `stats().lens_flare` false). A shader the driver refuses also keeps the frame without the flare instead of failing init. `reserve_instancing` counts the flare as a prepass user so the prepass keeps its instancing budget.
+- **Stats.** `lens_flare_strength` is the CPU strength (`intensity * visibility * horizon * edge`); the GPU occlusion share is not read back, so a fully occluded sun still reports the pass as drawn.
+- **Off-check and occluded.** strength 0 returns before `record_prepass` and before any pass. An opaque box over the whole occlusion disk gives the frame without the flare **exactly** (occ = 0 adds 0, and the R11G11B10F values copy exactly into the RGBA16F ping-pong target) on llvmpipe and lavapipe; the tests check equality, not 1 LSB.
+- **Halo extent.** The Gaussian halo is cut to 0 between 2 and 3 radii (`1 - smoothstep(2r, 3r, d)`) so the frame beyond it is untouched; the starburst has no cut (it only draws when `starburst > 0`).
+- **Backends.** GL and SDL GPU (Vulkan) are run by `tests/render_gl/test_render3d_flare_gl.cpp`; the SPIR-V compile and binding table by a `test_shader_spirv` case (Linux, no GPU); Metal's `translate_glsl` by a `test_shader_cross` case (macOS only, not built in the container). WebGPU (`shader_wgsl.cpp`) is not configured in the container: a follow-up.
 
 ## Follow-ups
 
@@ -116,3 +126,5 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 - A faint flare with the sun just outside the frame.
 - Authored ghost textures and anamorphic streaks.
 - A Luau setter and the MCP `render_frame` override for one-off shots.
+- 38c: check the two flare shaders through `rhi_webgpu` `shader_wgsl.cpp` (Tint) in a build with WebGPU on.
+- 38c: the flare without SSAO, SSR and contact shadows at init (create the prepass pipelines for it without changing the water's depth read).
