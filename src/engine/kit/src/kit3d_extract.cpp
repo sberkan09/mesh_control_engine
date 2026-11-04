@@ -35,6 +35,7 @@
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/lens_flare.h"
+#include "mce/kit/light_cookie.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/world_clock.h"
@@ -992,6 +993,38 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             }
         }
     }
+    // The cookie texture's key (M-LIGHTCOOKIE 40g): ~0u (no cookie, the plain light) for an empty reference or a texture that is not
+    // in the mounted content (one warning the first time the GUID is seen; a texture that fails to load warns in texture_key).
+    auto cookie_texture_key = [&](asset::Guid guid) -> u32 {
+        if (guid == asset::Guid{}) return ~0u;
+        bool known = false;
+        for (const TextureEntry& t : texture_entries_) known = known || t.guid == guid;
+        const u32 key = texture_key(guid);
+        if (key == ~0u && !known && assets_ && assets_->find(guid) == asset::kInvalidAssetKey)
+            MCE_LOG_WARN("kit3d: light cookie texture {} is not in the mounted content: the light draws plain", asset::to_string(guid).view());
+        return key;
+    };
+    {  // sun cookie (M-LIGHTCOOKIE 40g): the first SunCookie3D; without one or when disabled the sun keeps SunCookie{} (no
+       // cookie), written every frame so a stale one never survives. scroll and roll_deg advance from the render clock in
+       // f64 and the offset is wrapped by the (clamped) size, which leaves the tiling unchanged; nothing is written back.
+        const SunCookie3D* sun_cookie = nullptr;
+        world.query<const SunCookie3D&>().each([&](const SunCookie3D& c) {
+            if (!sun_cookie) sun_cookie = &c;
+        });
+        if (sun_cookie && sun_cookie->enabled != 0u) {
+            const f64 clock = static_cast<f64>(!bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_);
+            const f64 size = sun_cookie->size == sun_cookie->size ? static_cast<f64>(clamp(sun_cookie->size, 0.5f, 1000.0f)) : 20.0;
+            render::SunCookie ck;
+            ck.texture = cookie_texture_key(sun_cookie->texture.guid);
+            ck.strength = sun_cookie->strength;
+            ck.size = static_cast<f32>(size);
+            ck.offset = {static_cast<f32>(std::fmod(static_cast<f64>(sun_cookie->offset.x) + static_cast<f64>(sun_cookie->scroll.x) * clock, size)),
+                         static_cast<f32>(std::fmod(static_cast<f64>(sun_cookie->offset.y) + static_cast<f64>(sun_cookie->scroll.y) * clock, size))};
+            ck.roll = static_cast<f32>(std::fmod(static_cast<f64>(sun_cookie->roll_deg), 360.0) * (3.14159265358979323846 / 180.0));
+            render::apply_quality(quality_, ck);  // tier, r.light_cookies and the Range clamps (a throwaway: only the cookie)
+            sun.cookie = ck;
+        }
+    }
     scene.set_light(sun);
     render::Sky sky;
     sky.zenith = env.sky_zenith;
@@ -1857,6 +1890,17 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         scene.add_point_light(pl);
         ++stats_.point_lights;
     });
+    // The cookie texture's key (M-LIGHTCOOKIE 40g): ~0u (no cookie, the plain light) for an empty reference or a texture that is not
+    // in the mounted content (one warning the first time the GUID is seen; a texture that fails to load warns in texture_key).
+    auto cookie_texture_key = [&](asset::Guid guid) -> u32 {
+        if (guid == asset::Guid{}) return ~0u;
+        bool known = false;
+        for (const TextureEntry& t : texture_entries_) known = known || t.guid == guid;
+        const u32 key = texture_key(guid);
+        if (key == ~0u && !known && assets_ && assets_->find(guid) == asset::kInvalidAssetKey)
+            MCE_LOG_WARN("kit3d: light cookie texture {} is not in the mounted content: the light draws plain", asset::to_string(guid).view());
+        return key;
+    };
     world.query<const SpotLight3D&>().each([&](Entity e, const SpotLight3D& l) {
         if (!l.enabled || l.intensity <= 0.0f) return;
         vec3 pos, scale;
@@ -1874,6 +1918,22 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         pl.spot_inner = radians(clamp(l.inner_deg, 0.0f, l.outer_deg));
         pl.cast_shadows = l.cast_shadows != 0;
         flicker_apply(e, pl);
+        // Light cookie (M-LIGHTCOOKIE 40g): a LightCookie3D on the same entity. roll_deg advances by roll_speed_deg on the render
+        // clock in f64 (the stored fields stay the authored base). Without one the light keeps cookie = ~0u.
+        if (const LightCookie3D* ck = world.try_get<LightCookie3D>(e); ck && ck->enabled != 0u) {
+            render::PointLight cookie;  // the 40b quality step on a throwaway light; only its cookie fields return
+            cookie.cookie = cookie_texture_key(ck->texture.guid);
+            cookie.cookie_strength = ck->strength;
+            cookie.cookie_edge = ck->edge;
+            cookie.cookie_roll = static_cast<f32>(
+                std::fmod(static_cast<f64>(ck->roll_deg) + static_cast<f64>(ck->roll_speed_deg) * flicker_clock, 360.0) *
+                (3.14159265358979323846 / 180.0));
+            render::apply_quality(quality_, cookie);
+            pl.cookie = cookie.cookie;
+            pl.cookie_strength = cookie.cookie_strength;
+            pl.cookie_roll = cookie.cookie_roll;
+            pl.cookie_edge = cookie.cookie_edge;
+        }
         scene.add_point_light(pl);
         ++stats_.spot_lights;
     });

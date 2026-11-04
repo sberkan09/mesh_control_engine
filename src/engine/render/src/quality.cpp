@@ -1,5 +1,7 @@
 #include "mce/render/quality.h"
 
+#include <cmath>
+
 #include "mce/convar.h"
 #include "unit_clamp.h"
 
@@ -38,6 +40,8 @@ MCE_CVAR(cv_lens_flare, "r.lens_flare", true,
          "Sun lens flare (PostFx::flare; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
+MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
+         "Light cookies (a texture projected by spot lights and the sun; off = plain lights)", CVarFlags::Saved);
 MCE_CVAR(cv_particles, "r.particles", 1.0f,
          "Share (0..1) of the weather particles kept, on top of the tier's particle_scale (0 = none)", CVarFlags::Saved);
 
@@ -70,6 +74,9 @@ QualitySettings quality_settings(QualityTier tier) {
             q.lens_flare = false;
             q.lens_flare_starburst = false;
             q.edge_outline_wide = false;
+            q.light_cookie_size = 128;
+            q.light_cookie_layers = 4;
+            q.light_cookie_lights = 4;
             q.particle_scale = 0.5f;
             break;
         case QualityTier::Medium:
@@ -81,6 +88,9 @@ QualitySettings quality_settings(QualityTier tier) {
             q.parallax_distance = 15.0f;
             q.parallax_max_steps = 16;
             q.lens_flare_starburst = false;
+            q.light_cookie_size = 256;
+            q.light_cookie_layers = 8;
+            q.light_cookie_lights = 8;
             break;
         case QualityTier::High:
             q.fxaa = false;
@@ -158,6 +168,39 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     eo.fade_start = detail::ranged(eo.fade_start, 0.0f, 10000.0f, 30.0f);
     eo.fade_end = detail::ranged(eo.fade_end, 0.0f, 10000.0f, 80.0f);
     if (eo.fade_end < eo.fade_start) eo.fade_end = eo.fade_start;
+}
+
+namespace {
+
+constexpr f32 kPi = 3.14159265359f;
+
+// Wraps an angle to [-pi, pi]; NaN or infinite -> 0.
+f32 wrap_angle(f32 a) {
+    if (!std::isfinite(a)) return 0.0f;
+    f32 r = std::fmod(a, 2.0f * kPi);
+    if (r > kPi) r -= 2.0f * kPi;
+    if (r < -kPi) r += 2.0f * kPi;
+    return r;
+}
+
+f32 finite_or_zero(f32 x) { return std::isfinite(x) ? x : 0.0f; }
+
+}  // namespace
+
+void apply_quality(const QualitySettings& q, PointLight& light) {
+    if (!q.light_cookies || !cv_light_cookies.get_bool()) light.cookie = ~0u;
+    light.cookie_strength = detail::ranged(light.cookie_strength, 0.0f, 1.0f, 1.0f);
+    light.cookie_edge = detail::ranged(light.cookie_edge, 0.0f, 1.0f, 0.0f);
+    light.cookie_roll = wrap_angle(light.cookie_roll);
+}
+
+void apply_quality(const QualitySettings& q, SunCookie& cookie) {
+    if (!q.light_cookies || !cv_light_cookies.get_bool()) cookie.texture = ~0u;
+    cookie.strength = detail::ranged(cookie.strength, 0.0f, 1.0f, 1.0f);
+    cookie.size = detail::ranged(cookie.size, 0.5f, 1000.0f, 20.0f);
+    cookie.offset.x = finite_or_zero(cookie.offset.x);
+    cookie.offset.y = finite_or_zero(cookie.offset.y);
+    cookie.roll = wrap_angle(cookie.roll);
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
