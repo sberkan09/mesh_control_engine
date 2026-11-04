@@ -836,6 +836,77 @@ TEST_CASE("golden: edge_outline_taa: the outline under TAA after 8 frames") {
     check_golden("edge_outline_taa", f);
 }
 
+// ---- M-LIGHTCOOKIE 40d: light cookies -------------------------------------------------------------------------------
+
+// A warm spot at night shining through a window-grid cookie (3 x 3 panes, 6-texel mullions, a 64-texel image with its
+// box mips) past the box onto the ground, with the box's local shadow, rolled 10 degrees; the mullions and the frame
+// are dark, the panes the plain light, the cookie's border fades (cookie_edge 0.2).
+TEST_CASE("golden: cookie_spot_window: a spot light through a window-grid cookie, with its shadow") {
+    Fixture3D f;
+    f.pitch_deg = 40.0f;
+    constexpr u32 kN = 64;
+    Array<Array<u8>> levels;
+    Array<u8> l0;
+    for (u32 y = 0; y < kN; ++y)
+        for (u32 x = 0; x < kN; ++x) {
+            const bool bar = x % 21 < 6 || y % 21 < 6 || x >= 63 - 6 || y >= 63 - 6;
+            for (u32 c = 0; c < 3; ++c) l0.push_back(bar ? 0 : 255);
+            l0.push_back(255);
+        }
+    levels.push_back(std::move(l0));
+    for (u32 w = kN / 2; w >= 1; w /= 2) {
+        const Array<u8>& p = levels.back();
+        Array<u8> n;
+        for (u32 y = 0; y < w; ++y)
+            for (u32 x = 0; x < w; ++x)
+                for (u32 c = 0; c < 4; ++c) {
+                    const u32 pw = w * 2;
+                    const u32 sum = p[((2 * y) * pw + 2 * x) * 4 + c] + p[((2 * y) * pw + 2 * x + 1) * 4 + c] +
+                                    p[((2 * y + 1) * pw + 2 * x) * 4 + c] + p[((2 * y + 1) * pw + 2 * x + 1) * 4 + c];
+                    n.push_back(static_cast<u8>((sum + 2) / 4));
+                }
+        levels.push_back(std::move(n));
+    }
+    Array<TextureMipUpload> mips;
+    for (u32 i = 0, w = kN; i < levels.size(); ++i, w /= 2) mips.push_back(TextureMipUpload{w, w, std::as_bytes(levels[i].span())});
+    TextureUpload up;
+    up.mips = mips.span();
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.05f};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        LocalShadowSettings ls;
+        ls.tile = 256;
+        s.set_local_shadows(ls);
+        PointLight spot;
+        spot.position = {-2.0f, 3.4f, -1.8f};
+        spot.direction = {0.75f, -1.0f, 0.6f};
+        spot.radius = 12.0f;
+        spot.intensity = 40.0f;
+        spot.color = {1.0f, 0.8f, 0.55f};
+        spot.spot_inner = math::radians(30.0f);
+        spot.spot_outer = math::radians(36.0f);
+        spot.cast_shadows = true;
+        spot.cookie = key;
+        spot.cookie_roll = math::radians(10.0f);
+        spot.cookie_edge = 0.2f;
+        s.add_point_light(spot);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cookie_lights == 1);
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 1);
+    check_golden("cookie_spot_window", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
