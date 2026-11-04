@@ -104,7 +104,7 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 | 38a | planned | | |
 | 38b | planned | | |
 | 38c | done (2026-11-04, awaiting the independent Opus review and `--task`) | | See "38c notes" below |
-| 38d | planned | | |
+| 38d | done (2026-11-04) | | `LensFlare3D` in `mce/kit/lens_flare.h`, `lens_flare_visibility`, the extract feed (rain = the first Weather's Rain or Storm intensity, cloud cover = the post-`apply_quality` value), `tests/kit/test_lens_flare.cpp` and `test_lens_flare_extract.cpp`; temporary `sample_coverage.allow` line until 38e |
 | 38e | planned | | |
 | 38f | planned | | |
 
