@@ -1,3 +1,4 @@
+# verification run for PRs 1100 and 1101 (draft, not for merge)
 # Windows (MSVC) and macOS (AppleClang) build + ctest on standard GitHub-hosted runners (free for a public
 # repository). These platforms had no CI after the hosted Linux-only setup: the msvc-* presets never ran again and
 # the macos-* presets ran only on a developer Mac (scripts/ci/local_ci_macos.sh). Not a PR gate: it runs nightly,
