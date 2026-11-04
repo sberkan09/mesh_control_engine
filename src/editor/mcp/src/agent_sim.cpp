@@ -526,15 +526,22 @@ bool eval_world(Condition& c, const World& world, Span<const Entity> spawned) {
             world.event_registry(events);
             // The C++ name (game::GemCollected), or the name without its namespace when that is unique.
             const StringView want = c.text.view();
-            auto unqualified = [&](StringView name) {
+            // MSVC's type names carry a "struct "/"class " prefix; the check names the C++ type without it.
+            auto bare = [](StringView name) {
+                for (StringView kw : {StringView("struct "), StringView("class ")})
+                    if (name.size() > kw.size() && name.substr(0, kw.size()) == kw) return name.substr(kw.size());
+                return name;
+            };
+            auto unqualified = [&](StringView full) {
+                const StringView name = bare(full);
                 return name.size() > want.size() + 2 && name.substr(name.size() - want.size()) == want &&
                        name.substr(name.size() - want.size() - 2, 2) == "::";
             };
             u64 pushed = 0;
             u32 exact = 0, suffix = 0;
-            for (const EventInfo& e : events) exact += e.name == want ? 1u : 0u;
+            for (const EventInfo& e : events) exact += bare(e.name) == want ? 1u : 0u;
             for (const EventInfo& e : events) {
-                const bool match = exact ? e.name == want : unqualified(e.name);
+                const bool match = exact ? bare(e.name) == want : unqualified(e.name);
                 if (!match) continue;
                 pushed += e.total_pushed;
                 ++suffix;
