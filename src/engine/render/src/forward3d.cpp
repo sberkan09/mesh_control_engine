@@ -1097,7 +1097,7 @@ ResultV Forward3D::create_pipelines() {
 void Forward3D::destroy_targets() {
     if (!device_) return;
     for (rhi::TextureHandle* t : {&hdr_msaa_, &depth_, &hdr_, &ldr_, &ao_gbuf_, &ao_depth_, &ao_a_, &ao_b_, &ssr_, &fin_src_, &fin_up_, &trans_src_,
-                                  &velocity_, &velocity_depth_, &history_[0], &history_[1], &outline_dst_})
+                                  &velocity_, &velocity_depth_, &history_[0], &history_[1]})
         destroy(*device_, *t);
     ssr_prev_valid_ = false;  // the new HDR target holds no frame yet
     history_size_ = {};
@@ -1172,7 +1172,7 @@ void Forward3D::shutdown() {
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
                                   &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
-                                  &fx_[0], &fx_[1], &flare_occ_})
+                                  &fx_[0], &fx_[1], &flare_occ_, &outline_dst_})
         destroy(*device_, *t);
     atmo_key_ = 0;
     water_failed_ = false;
