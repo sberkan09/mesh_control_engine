@@ -171,3 +171,32 @@ TEST_CASE("net websocket: a message over the limit closes the connection; nobody
         CHECK(l.connected == kInvalidPeer);
     }
 }
+
+TEST_CASE("net websocket: pending_bytes counts what a send queued until flush hands it to the socket") {
+    WebSocketHost idle;
+    CHECK(idle.pending_bytes(0) == 0);  // not open: nothing is pending
+
+    WebSocketHost server;
+    REQUIRE(server.listen(loopback()));
+    WebSocketHost client;
+    WebSocketDesc cd = WebSocketHost::client_desc();
+    cd.channels = 3;
+    REQUIRE(client.open_client(cd));
+    const PeerId to_server = client.connect("127.0.0.1", server.bound_port());
+    REQUIRE(to_server != kInvalidPeer);
+    Seen s, c;
+    REQUIRE(pump(server, s, client, c, [&] { return s.connected != kInvalidPeer && c.connected == to_server; }));
+
+    CHECK(client.pending_bytes(to_server) == 0);
+    CHECK(client.pending_bytes(1000) == 0);  // no such peer slot
+
+    const Array<u8> msg = pattern(200);
+    REQUIRE(client.send(to_server, 1, Span<const u8>(msg.data(), msg.size()), Delivery::Reliable));
+    CHECK(client.pending_bytes(to_server) >= msg.size());  // framed, so a little more than the payload
+    const usize one = client.pending_bytes(to_server);
+    REQUIRE(client.send(to_server, 1, Span<const u8>(msg.data(), msg.size()), Delivery::Reliable));
+    CHECK(client.pending_bytes(to_server) == 2 * one);
+
+    REQUIRE(pump(server, s, client, c, [&] { return s.received == 2; }));
+    CHECK(client.pending_bytes(to_server) == 0);  // all of it reached the socket
+}
