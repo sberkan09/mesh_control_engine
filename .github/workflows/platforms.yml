@@ -3,7 +3,6 @@
 # the macos-* presets ran only on a developer Mac (scripts/ci/local_ci_macos.sh). Not a PR gate: it runs nightly,
 # on demand, and on a PR that edits this file. GPU tests (label `gpu`) and `slow` tests are excluded: hosted
 # runners have no usable GPU. Failures here are fixed forward by the thread of the change that broke them.
-# (temporary line: triggers this workflow on the Luau MSVC fix PR; removed before merge)
 name: Platforms
 
 on:
