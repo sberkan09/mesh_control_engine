@@ -30,6 +30,11 @@ if(MCE_BUILD_TESTS)
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack}
                      -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/input.txt -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/headless
                      -P ${CMAKE_CURRENT_SOURCE_DIR}/daynight_test.cmake)
+    # The low-sun scene (M-LENSFLARE 38g): scenes/sunrise.mcscene, a paused 06:36 clock (DayCycle dawn, the sun about 8 degrees
+    # up on the +x side), a camera facing it, a LensFlare3D and a building edge over half the sun.
+    add_test(NAME sample_daynight_sunrise_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/sunrise.mcscene
+                     -DTICKS=60 -DENTITIES=7 -DTOUR=11_daynight_sunrise -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
     if(MCE_GPU_TESTS)
         # Windowed smoke: one frame at 06:00 (tick 150 at the 05:00 start, 2.5 s of real time). The simulation runs in real
         # time, and longer captures (12:00, 19:00, 23:00) stalled under a loaded --task and --premerge run, so the
@@ -40,6 +45,14 @@ if(MCE_BUILD_TESTS)
                          -capture "${CMAKE_CURRENT_BINARY_DIR}/daynight_150.ppm" -platform.error_box 0 -r.vsync 0
                          -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
         set_tests_properties(sample_daynight_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+        # The second capture: the sunrise scene at tick 30, the only sample frame where the lens flare is active (halo and
+        # ghosts toward the sun, half of it behind the building edge). Written for a look (build/.../daynight_sunrise.ppm).
+        add_test(NAME sample_daynight_sunrise_gpu
+                 COMMAND mce_player -pack "${pack}" -scene scenes/sunrise.mcscene -capture_tick 30
+                         -capture "${CMAKE_CURRENT_BINARY_DIR}/daynight_sunrise.ppm" -platform.error_box 0 -r.vsync 0
+                         -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+        set_tests_properties(sample_daynight_sunrise_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+        mce_mark_slow(sample_daynight_sunrise_gpu)
         # Stalled past its timeout in other threads' loaded --task runs although it takes 4 s alone (cause not found,
         # see M-GPU-VERIFY.md): it runs in the integration run only (`slow`); --task has the headless gates.
         mce_mark_slow(sample_daynight_gpu)

@@ -13,6 +13,8 @@
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/lens_flare.h"
 #include "mce/kit/weather.h"
+#include "mce/convar.h"
+#include "mce/render/quality.h"
 #include "mce/render/scene3d.h"
 #include "mesh_fixture.h"
 
@@ -50,6 +52,16 @@ struct Rig {
         w.intensity = intensity;
         world.spawn_with(w);
     }
+};
+
+ConVar& flare_cvar() {
+    ConVar* cv = ConVar::find(StringId("r.lens_flare"));
+    REQUIRE(cv != nullptr);
+    return *cv;
+}
+
+struct ResetFlareCvar {
+    ~ResetFlareCvar() { flare_cvar().reset(); }
 };
 
 bool is_default(const render::LensFlare& f) {
@@ -180,4 +192,60 @@ TEST_CASE("lens flare extract: nothing is written back to the world") {
         CHECK(same_bits(f.cloud_dim, 1.0f));
         CHECK(f.enabled == 1u);
     });
+}
+
+TEST_CASE("lens flare extract: the Low tier disables the flare") {
+    Rig r;
+    r.world.spawn_with(LensFlare3D{});
+    r.extract.set_quality(render::quality_settings(render::QualityTier::Low));
+    CHECK_FALSE(r.frame().enabled);
+}
+
+TEST_CASE("lens flare extract: the Medium tier drops the starburst and keeps halo and ghosts") {
+    Rig r;
+    LensFlare3D c;
+    c.starburst = 1.5f;
+    c.halo = 1.25f;
+    c.ghost_count = 4;
+    r.world.spawn_with(c);
+    r.extract.set_quality(render::quality_settings(render::QualityTier::Medium));
+    const render::LensFlare f = r.frame();
+    CHECK(f.enabled);
+    CHECK(same_bits(f.starburst, 0.0f));
+    CHECK(same_bits(f.halo, 1.25f));
+    CHECK(f.ghost_count == 4u);
+}
+
+TEST_CASE("lens flare extract: the High tier keeps the starburst") {
+    Rig r;
+    LensFlare3D c;
+    c.starburst = 1.5f;
+    r.world.spawn_with(c);
+    r.extract.set_quality(render::quality_settings(render::QualityTier::High));
+    const render::LensFlare f = r.frame();
+    CHECK(f.enabled);
+    CHECK(same_bits(f.starburst, 1.5f));
+}
+
+TEST_CASE("lens flare extract: r.lens_flare 0 disables the flare") {
+    ResetFlareCvar reset;
+    Rig r;
+    r.world.spawn_with(LensFlare3D{});
+    CHECK(r.frame().enabled);
+    flare_cvar().set_string("0");
+    CHECK_FALSE(r.frame().enabled);
+    flare_cvar().set_string("1");
+    CHECK(r.frame().enabled);
+}
+
+TEST_CASE("lens flare extract: out-of-range component values arrive clamped") {
+    Rig r;
+    LensFlare3D c;
+    c.ghost_count = 99;
+    c.intensity = 100.0f;
+    r.world.spawn_with(c);
+    const render::LensFlare f = r.frame();
+    CHECK(f.enabled);
+    CHECK(f.ghost_count == render::kLensFlareMaxGhosts);
+    CHECK(same_bits(f.intensity, 4.0f));
 }
