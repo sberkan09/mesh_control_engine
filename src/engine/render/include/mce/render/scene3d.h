@@ -126,6 +126,23 @@ struct LensFlare {
     f32 edge_fade = 0.1f;            // the flare fades to 0 over this fraction of the screen at a border (0.01..0.5)
 };
 
+// M-OUTLINE 39a. Edge outline setting (ink lines on silhouettes and creases from the opaque prepass), read by the outline pass;
+// off by default, so a frame is unchanged. The ranges are the clamps apply_quality applies (M-OUTLINE 39b).
+struct EdgeOutline {
+    bool enabled = false;                         // off draws the frame without the pass
+    math::vec3 color{0.02f, 0.02f, 0.025f};       // line colour, linear HDR (0..16 per channel)
+    f32 opacity = 1.0f;                           // how far a full edge replaces the pixel with color (0..1)
+    f32 thickness = 1.0f;                         // tap distance in output pixels (0.5..4)
+    f32 depth_threshold = 0.05f;                  // relative view-depth jump that starts a silhouette edge (0.001..1)
+    f32 normal_threshold = 0.4f;                  // 1 - dot(n_c, n_n) that starts a crease edge (0.01..2)
+    f32 depth_weight = 1.0f;                      // strength of silhouette edges, 0 = none (0..1)
+    f32 normal_weight = 1.0f;                     // strength of crease edges, 0 = none (0..1)
+    f32 fade_start = 30.0f;                       // view depth (m) where lines start to fade (0..10000)
+    f32 fade_end = 80.0f;                         // view depth (m) where lines are gone (fade_start..10000)
+    bool sky_silhouette = true;                   // geometry against the sky gets a silhouette line
+    bool fog_follow = true;                       // lines fade in the exp² Fog; ignored while Volumetrics is on
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -156,6 +173,7 @@ struct PostFx {
         f32 dirt_intensity = 0.0f;
     } lens;
     LensFlare flare;  // M-LENSFLARE 38a
+    EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 
     // M-VISUAL 8. Auto exposure: a log-luminance histogram of the frame (compute) drops the darkest

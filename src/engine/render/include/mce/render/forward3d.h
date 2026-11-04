@@ -77,6 +77,9 @@ struct Forward3DDesc {
     // Automatic instancing (M-VISUAL3 5a): the instanced twins of the mesh, SSAO prepass, shadow and velocity
     // pipelines that draw Scene3D's runs. False (or -r.instancing 0) draws every run as single draws.
     bool instancing = true;
+    // Edge outline pipelines (M-OUTLINE 39a), and with them the prepass pipelines the outline reads; a scene turns it on with
+    // PostFx::outline. False (or -r.edge_outline 0) draws every scene without it.
+    bool edge_outline = true;
     // Bytes of per-copy instancing data a frame may upload over all its views (128 per main / prepass copy, 64
     // per shadow or velocity copy, through set_storage_data); a run past it draws the copies that still fit
     // instanced and the rest singly (Forward3DStats::instancing_overflow). The frame's budget is the smaller of this and a quarter of
@@ -132,6 +135,8 @@ struct Forward3DStats {
     bool motion_blur = false;        // motion blur smeared this frame
     bool lens_flare = false;         // the sun lens flare pass drew this frame (M-LENSFLARE)
     f32 lens_flare_strength = 0.0f;  // its overall strength after the horizon, edge and occlusion fades (0 = not drawn)
+    bool edge_outline = false;       // the edge outline pass drew this frame (M-OUTLINE)
+    u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
     bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
     bool occlusion = false;          // ... and tested against the depth pyramid
@@ -346,6 +351,7 @@ private:
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
+    void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     rhi::TextureHandle post_fx_target(rhi::Extent2D size);
     void record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene);
     u32 gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight);
@@ -501,6 +507,9 @@ private:
     // the target is written and read within one record.
     rhi::PipelineHandle flare_occ_pipe_, flare_pipe_;
     rhi::TextureHandle flare_occ_;
+    // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
+    rhi::PipelineHandle outline_pipe_;
+    rhi::TextureHandle outline_dst_;
     rhi::TextureHandle bloom_[kMaxBloomLevels];
     rhi::Extent2D bloom_size_[kMaxBloomLevels];
     u32 bloom_levels_ = 0;
