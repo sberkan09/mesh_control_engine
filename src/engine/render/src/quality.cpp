@@ -34,6 +34,8 @@ MCE_CVAR(cv_rainbow, "r.rainbow", true,
          "Rainbow in the sunlit sky (RainbowSky; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_meteor, "r.meteor", true,
          "Meteors in the night sky (MeteorSky; off = the frame without them)", CVarFlags::Saved);
+MCE_CVAR(cv_lens_flare, "r.lens_flare", true,
+         "Sun lens flare (PostFx::flare; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_particles, "r.particles", 1.0f,
          "Share (0..1) of the weather particles kept, on top of the tier's particle_scale (0 = none)", CVarFlags::Saved);
 
@@ -63,6 +65,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.aurora = false;
             q.rainbow = false;
             q.meteor = false;
+            q.lens_flare = false;
+            q.lens_flare_starburst = false;
             q.particle_scale = 0.5f;
             break;
         case QualityTier::Medium:
@@ -73,6 +77,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.terrain_triplanar = false;
             q.parallax_distance = 15.0f;
             q.parallax_max_steps = 16;
+            q.lens_flare_starburst = false;
             break;
         case QualityTier::High:
             q.fxaa = false;
@@ -120,6 +125,21 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     post.taa = q.taa;
     post.dof.enabled = post.dof.enabled && q.dof_motion_blur;
     post.motion_blur.enabled = post.motion_blur.enabled && q.dof_motion_blur;
+    // M-LENSFLARE 38b: the sun lens flare. Off for the tier or r.lens_flare 0; the starburst follows the tier.
+    LensFlare& fl = post.flare;
+    fl.enabled = fl.enabled && q.lens_flare && cv_lens_flare.get_bool();
+    fl.intensity = detail::ranged(fl.intensity, 0.0f, 4.0f, 1.0f);
+    fl.visibility = detail::ranged(fl.visibility, 0.0f, 1.0f, 1.0f);
+    fl.halo = detail::ranged(fl.halo, 0.0f, 4.0f, 1.0f);
+    fl.halo_radius = detail::ranged(fl.halo_radius, 0.02f, 0.6f, 0.25f);
+    fl.ghost_count = fl.ghost_count < kLensFlareMaxGhosts ? fl.ghost_count : kLensFlareMaxGhosts;
+    fl.ghost_intensity = detail::ranged(fl.ghost_intensity, 0.0f, 4.0f, 1.0f);
+    fl.ghost_spacing = detail::ranged(fl.ghost_spacing, 0.25f, 2.0f, 1.0f);
+    fl.ghost_chroma = detail::ranged(fl.ghost_chroma, 0.0f, 1.0f, 0.5f);
+    fl.starburst = q.lens_flare_starburst ? detail::ranged(fl.starburst, 0.0f, 4.0f, 0.0f) : 0.0f;
+    fl.starburst_rays = fl.starburst_rays < 2u ? 2u : (fl.starburst_rays > 16u ? 16u : fl.starburst_rays);
+    fl.occlusion_radius = detail::ranged(fl.occlusion_radius, 0.002f, 0.1f, 0.015f);
+    fl.edge_fade = detail::ranged(fl.edge_fade, 0.01f, 0.5f, 0.1f);
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
