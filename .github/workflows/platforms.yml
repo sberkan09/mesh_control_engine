@@ -56,7 +56,7 @@ jobs:
         run: cmake --build --preset msvc-release -- -k 0
       - name: Test (no gpu, no slow)
         shell: bash
-        run: ctest --preset msvc-release -j 4 -LE "gpu|slow" --timeout 600
+        run: ctest --preset msvc-release -j 4 -LE "gpu|slow" --timeout 600 --output-on-failure
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
