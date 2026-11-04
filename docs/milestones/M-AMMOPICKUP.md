@@ -26,7 +26,7 @@ transcript golden count and `capabilities.md` move with step 1.
 | Step | What | Status |
 |---|---|---|
 | 1 seam | `AmmoPickup3D`, system `kit3d_ammopickup`, event, unit tests (top-up of the wielded weapon and of stored presets, the cap, a full buyer leaves the crate, respawn timer, grenades, infinite-ammo and unarmed holders ignored). No sample change. | done |
-| 2 feature | Sample: a few crates on the avenue and by the park (60 s respawn, 30 rounds, one with 1 grenade), a map marker, `test_mcp_openworld` inspect check. | open |
+| 2 feature | Sample: a few crates on the avenue and by the park (60 s respawn, 30 rounds, one with 1 grenade), a map marker, `test_mcp_openworld` inspect check. | done |
 | 3 polish | User-guide section, closing doc, `M-OPENWORLD-GAPS` strike-through; a pickup sound and a visible crate mesh if a model exists. | open |
 
 ## Decisions taken (change them in the plan PR if wrong)

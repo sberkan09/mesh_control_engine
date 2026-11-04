@@ -45893,6 +45893,231 @@
   },
   {
    "id": 1808,
+   "name": "Ammo crate 1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -125,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "AmmoPickup3D": {
+     "rounds": 30,
+     "grenades": 0,
+     "max_reserve": 150,
+     "radius": 1.6,
+     "respawn": 60
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1809,
+   "name": "Ammo crate 2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      -60,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "AmmoPickup3D": {
+     "rounds": 30,
+     "grenades": 0,
+     "max_reserve": 150,
+     "radius": 1.6,
+     "respawn": 60
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1810,
+   "name": "Ammo crate 3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      30,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "AmmoPickup3D": {
+     "rounds": 30,
+     "grenades": 1,
+     "max_reserve": 150,
+     "radius": 1.6,
+     "respawn": 60
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1811,
+   "name": "Ammo crate 4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      95,
+      0.22,
+      -9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "AmmoPickup3D": {
+     "rounds": 30,
+     "grenades": 0,
+     "max_reserve": 150,
+     "radius": 1.6,
+     "respawn": 60
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1812,
+   "name": "Ammo crate 5",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      155,
+      0.22,
+      9
+     ],
+     "scale": [
+      1.2,
+      0.04,
+      1.2
+     ]
+    },
+    "MeshRef": {
+     "mesh": "guid:b62362c5-6b57-5c1b-8cec-9f7d53e5ee78",
+     "tint": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "cast_shadows": 0
+    },
+    "AmmoPickup3D": {
+     "rounds": 30,
+     "grenades": 0,
+     "max_reserve": 150,
+     "radius": 1.6,
+     "respawn": 60
+    },
+    "MapMarker": {
+     "icon": 0,
+     "color": [
+      0.9,
+      0.55,
+      0.15,
+      1
+     ],
+     "label": "Ammo"
+    }
+   }
+  },
+  {
+   "id": 1813,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -45935,7 +46160,7 @@
    }
   },
   {
-   "id": 1809,
+   "id": 1814,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {
@@ -45978,7 +46203,7 @@
    }
   },
   {
-   "id": 1810,
+   "id": 1815,
    "name": "Repair shop 1",
    "components": {
     "LocalTransform": {
@@ -46023,7 +46248,7 @@
    }
   },
   {
-   "id": 1811,
+   "id": 1816,
    "name": "Repair shop 2",
    "components": {
     "LocalTransform": {
@@ -46068,7 +46293,7 @@
    }
   },
   {
-   "id": 1812,
+   "id": 1817,
    "name": "Pause menu",
    "components": {
     "UiScreen": {
@@ -46110,7 +46335,7 @@
    }
   },
   {
-   "id": 1813,
+   "id": 1818,
    "name": "Options menu",
    "components": {
     "UiScreen": {
@@ -46127,7 +46352,7 @@
    }
   },
   {
-   "id": 1814,
+   "id": 1819,
    "name": "Radio 1",
    "components": {
     "AudioSource": {
@@ -46141,7 +46366,7 @@
    }
   },
   {
-   "id": 1815,
+   "id": 1820,
    "name": "Radio 2",
    "components": {
     "AudioSource": {
@@ -46155,7 +46380,7 @@
    }
   },
   {
-   "id": 1816,
+   "id": 1821,
    "name": "Script: radio",
    "components": {
     "ScriptSystem": {

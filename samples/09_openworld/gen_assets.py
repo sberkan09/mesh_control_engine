@@ -1160,6 +1160,12 @@ def economy_and_missions(s, player):
             {"CashPickup3D": {"cash": cash, "radius": 1.6, "respawn": 120},
              "MapMarker": {"icon": 0, "color": [0.35, 0.9, 0.3, 1], "label": "$"}})
 
+    # Ammo crates (M-AMMOPICKUP): a pad each, back after a minute; fills every weapon in the backpack. One also holds a grenade.
+    for n, (x, z, gren) in enumerate(((-125, 9, 0), (-60, -9, 0), (30, 9, 1), (95, -9, 0), (155, 9, 0)), 1):
+        pad(s, "Ammo crate %d" % n, x, z, 1.2, (0.9, 0.55, 0.15),
+            {"AmmoPickup3D": {"rounds": 30, "grenades": gren, "max_reserve": 150, "radius": 1.6, "respawn": 60},
+             "MapMarker": {"icon": 0, "color": [0.9, 0.55, 0.15, 1], "label": "Ammo"}})
+
     # Shops. Medic: a hurt player pays 1 per hit point. Scrapyard: a stolen car (cars 2 and 3) driven here pays 400.
     pad(s, "Medic", -100.0, -9.0, 4.0, (0.95, 0.95, 0.95),
         {"HealShop3D": {"radius": 3.0, "price_per_hp": 1}, "MapMarker": {"icon": 0, "color": [1, 0.3, 0.3, 1], "label": "Medic", "always_visible": 1}})
