@@ -1,0 +1,1 @@
+- Ammo crates (M-AMMOPICKUP 1): `AmmoPickup3D` (rounds, grenades, a cap, a respawn timer), system `kit3d_ammopickup`, event `AmmoPickedUp3D`. Docs: `docs/user-guide/09-physics.md`.

@@ -471,6 +471,14 @@ Each grenade (`GrenadeLive3D`, spawned by the engine) keeps the numbers it was t
 An `AmmoShop3D` also sells grenades (10 rounds' price each, up to `max_count`) and a `Confiscate3D` arrest keeps the same share of the stack.
 `samples/09_openworld` gives the player three grenades: B (pad: Back) throws one, and the HUD shows "GRENADES n".
 
+### Ammo crates
+
+`mce/kit/ammopickup3d.h`: an `AmmoPickup3D` on a placed entity (a crate), modelled on `CashPickup3D`. The first entity with a
+`Weapon3D` (a `magazine` above 0, not `infinite_ammo`) that comes within `radius` gets `rounds` more spare rounds, never past
+`max_reserve`; with a `Loadout3D` every weapon in the backpack is topped up the same way, and `grenades` are added to a
+`Grenade3D` up to its `max_count`. A holder that is already full leaves the crate where it is. Otherwise `AmmoPickedUp3D` is
+pushed and the crate is destroyed (`respawn` 0) or becomes available again after `respawn` s.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

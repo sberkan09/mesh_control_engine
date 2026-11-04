@@ -54,6 +54,7 @@
 #include "mce/kit/impact_fx.h"         // ImpactFx3D (M-IMPACTFX)
 #include "mce/kit/fall_death.h"        // FallDeath3D (M-FALLDEATH)
 #include "mce/kit/loadout3d.h"          // WeaponPreset3D, Loadout3D (M-WEAPONSWITCH)
+#include "mce/kit/ammopickup3d.h"        // AmmoPickup3D (M-AMMOPICKUP)
 #include "mce/kit/grenade3d.h"          // Grenade3D (M-GRENADE)
 #include "mce/kit/melee3d.h"            // Melee3D (M-MELEE)
 #include "mce/kit/progress3d.h"          // Progress3D, Goal3D (M-PROGRESS)
