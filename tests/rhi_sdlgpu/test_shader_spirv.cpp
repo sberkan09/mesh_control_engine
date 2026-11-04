@@ -241,3 +241,23 @@ TEST_CASE("shader_spirv: the lens flare's occlusion and composite stages") {
     CHECK(res2.storage_count == 0);
     CHECK(res2.uniform_count == 2);
 }
+
+// M-OUTLINE 39c: the edge outline's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_outline binds them: OutlineU at bank kPass (1), the HDR frame at sampler 6 and the
+// half-resolution prepass at 7; no storage buffers.
+TEST_CASE("shader_spirv: the edge outline stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kOutlineFS, "edge_outline.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}

@@ -920,4 +920,46 @@ inline void lens_flare_occluder(Scene3D& s, vec3 toward_sun, f32 shift) {
     s.add(box);
 }
 
+// ---- M-OUTLINE 39c: edge outlines --------------------------------------------------------------------------------
+
+// Mesh 30: a 0.6 m box, placed by outline_scene at kOutlineBoxAt, in the upper left of the fixture's frame (asymmetric
+// on purpose: a flipped v in the outline pass would put its lines on the lower left, over the open ground slab).
+inline constexpr u32 kOutlineBoxMesh = 30;
+inline const vec3 kOutlineBoxAt{-3.5f, 0.0f, -4.0f};
+
+inline void upload_outline_box(Fixture3D& f) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    mesh_fixture::Box box;
+    box.center = {0.0f, 0.3f, 0.0f};
+    box.half = {0.3f, 0.3f, 0.3f};
+    box.color[0] = 0.3f;
+    box.color[1] = 0.5f;
+    box.color[2] = 0.8f;
+    b.add_box(box);
+    REQUIRE(f.renderer.meshes().upload(kOutlineBoxMesh, 1, b.build().span()).has_value());
+}
+
+// The outline the cases draw: the defaults (dark lines, 1 px, the default thresholds and fade), enabled.
+inline EdgeOutline outline_setting() {
+    EdgeOutline o;
+    o.enabled = true;
+    return o;
+}
+
+// The fixture's box and slab plus the small box (upload_outline_box first), `outline` (null: the default, disabled);
+// bloom and FXAA off (both would carry a changed pixel to its neighbours), TAA as asked.
+inline void outline_scene(Scene3D& s, const EdgeOutline* outline, bool taa = false) {
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.taa = taa;
+    post.outline = outline ? *outline : EdgeOutline{};
+    s.set_post(post);
+    MeshInstance b;
+    b.mesh = kOutlineBoxMesh;
+    b.world = math::translation(kOutlineBoxAt);
+    s.add(b);
+}
+
 }  // namespace mce::render_test

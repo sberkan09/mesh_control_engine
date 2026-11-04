@@ -146,3 +146,17 @@ TEST_CASE("shader_cross: the lens flare's occlusion and composite stages") {
     CHECK(contains(comp.value(), "u_occ [[texture(8)]]"));
     CHECK(contains(comp.value(), "[[sampler(8)]]"));
 }
+
+// M-OUTLINE 39c: the edge outline's fragment stage (render's shaders3d.h, the real source) translates, with OutlineU at
+// [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_outline binds.
+TEST_CASE("shader_cross: the edge outline stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kOutlineFS, "edge_outline.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
