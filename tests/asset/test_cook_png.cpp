@@ -27,7 +27,7 @@ Array<u8> pixels(u32 w, u32 h) {
 }  // namespace
 
 TEST_CASE("png: encode_png then decode_png gives the same pixels, at several sizes") {
-    for (const auto [w, h] : {std::pair<u32, u32>{1, 1}, {7, 3}, {3, 7}, {64, 64}, {129, 2}}) {
+    for (const auto& [w, h] : {std::pair<u32, u32>{1, 1}, {7, 3}, {3, 7}, {64, 64}, {129, 2}}) {
         const Array<u8> rgba = pixels(w, h);
         Array<byte> png;
         REQUIRE(cook::encode_png(w, h, rgba.span(), png).has_value());
