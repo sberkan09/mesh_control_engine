@@ -48,6 +48,7 @@ mce_add_test(test_cook UMBRELLA
         test_cook_services.cpp
         test_cook_strings.cpp
         test_cook_ui.cpp
+        test_cook_png.cpp
     DEPS
         mce::mce_asset_cook
         mce_meshopt  # test_cook_gltf_ext.cpp encodes its meshopt fixtures (the "meshopt wall" allows that file)
