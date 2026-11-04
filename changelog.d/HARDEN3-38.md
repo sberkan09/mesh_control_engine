@@ -1,0 +1,1 @@
+- Tests: loc `try_text` (hit and miss) and `set_default_locale` as the last fallback.

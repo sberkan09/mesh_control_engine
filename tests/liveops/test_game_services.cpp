@@ -402,3 +402,21 @@ TEST_CASE("game services: game_services_event_name names every event kind") {
     };
     for (const auto& [kind, name] : all) CHECK(StringView(game_services_event_name(kind)) == StringView(name));
 }
+
+TEST_CASE("game services: the catalog finds items by id, in order, and reports kNoService when absent") {
+    const ServicesCatalog c = catalog();
+    CHECK(c.find_achievement("first_win") == 0);
+    CHECK(c.find_achievement("win_10") == 1);
+    CHECK(c.find_achievement("nope") == kNoService);
+    CHECK(c.find_achievement("") == kNoService);
+    CHECK(c.find_leaderboard("best_time") == 0);
+    CHECK(c.find_leaderboard("score") == 1);
+    CHECK(c.find_leaderboard("first_win") == kNoService);  // an achievement id is not a board
+    CHECK(c.find_cloud_save("progress") == 0);
+    CHECK(c.find_cloud_save("other") == kNoService);
+
+    const ServicesCatalog empty;
+    CHECK(empty.find_achievement("first_win") == kNoService);
+    CHECK(empty.find_leaderboard("score") == kNoService);
+    CHECK(empty.find_cloud_save("progress") == kNoService);
+}

@@ -467,6 +467,33 @@
      ]
     }
    }
+  },
+  {
+   "id": 23,
+   "name": "Campfire light",
+   "components": {
+    "PointLight3D": {
+     "offset": [
+      0,
+      0.6,
+      0
+     ],
+     "intensity": 4,
+     "radius": 8
+    },
+    "LightFlicker3D": {
+     "depth": 0.4,
+     "rate_hz": 9,
+     "seed": 3
+    },
+    "LocalTransform": {
+     "position": [
+      -5,
+      0.2,
+      2
+     ]
+    }
+   }
   }
  ]
 }

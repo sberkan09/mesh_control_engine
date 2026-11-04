@@ -7,7 +7,8 @@
 //                   1 failing lamp, 2 pulse; anything else counts as fire); `depth` (0.35, 0..1) how far the intensity may
 //                   drop, 0 = off; `rate_hz` (8, 0.1..30) the main noise rate; `radius_depth` (0.05, 0..0.5) how far the
 //                   radius may shrink with the intensity, 0 = steady; `seed` (1); `phase` (0, 0..1) the start of the pulse
-//                   cycle (the pulse style only).
+//                   cycle (the pulse style only); `emissive_follow` (0, 0..1) how far the entity's own MeshRef `emissive_tint`
+//                   follows the flicker (M-LAMPGLOW 37a), 0 = steady; Kit3DExtract scales the instance, nothing is written.
 //
 // light_flicker_scale(f, time_s, entity_salt) = 1 - depth * x and light_flicker_radius_scale(...) = 1 - radius_depth * x with
 // the same x in 0..1, so the pool of light breathes with the intensity. x per style:
@@ -23,6 +24,9 @@
 // 65536 cells of its octave (2.3 hours at 8 Hz), seamless at the wrap. NaN or infinite time counts as 0; NaN authoring falls
 // back to the defaults above and out-of-range values clamp. `enabled` 0 or `depth` 0 (radius_depth 0 for the radius) return
 // exactly 1.0f. The result is always finite and in [1 - depth, 1] ([1 - radius_depth, 1]).
+// light_flicker_emissive_scale(f, ...) = 1 + emissive_follow * (light_flicker_scale(...) - 1), the factor for the entity's own
+// emissive_tint: exactly 1.0f when disabled, `emissive_follow` 0 or `depth` 0; NaN `emissive_follow` counts as 0, out of range
+// clamps; finite and in [1 - depth, 1].
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +43,7 @@ struct LightFlicker3D {
     f32 radius_depth = 0.05f;
     u32 seed = 1;
     f32 phase = 0.0f;
+    f32 emissive_follow = 0.0f;  // M-LAMPGLOW 37a: how far the entity's own MeshRef emissive_tint follows the flicker
     u8 enabled = 1;
     u8 pad_[3] = {};  // explicit pad (state_hash hashes whole columns); always zero
 };
@@ -48,7 +53,9 @@ MCE_COMPONENT(LightFlicker3D, (enabled, Save, Range{0, 1}, Help{"0: the flicker 
               (rate_hz, Save, Range{0.1f, 30}, Help{"main noise rate, Hz (pulse: a tenth of it)"}),
               (radius_depth, Save, Range{0, 0.5f}, Help{"how far the radius may shrink with the intensity"}),
               (seed, Save, Help{"hash seed of the noise"}),
-              (phase, Save, Range{0, 1}, Help{"start of the pulse cycle (pulse style)"}))
+              (phase, Save, Range{0, 1}, Help{"start of the pulse cycle (pulse style)"}),
+              (emissive_follow, Save, Range{0, 1},
+               Help{"how far the entity's own MeshRef emissive_tint follows the flicker; 0 = steady"}))
 
 namespace detail {
 
@@ -164,6 +171,16 @@ inline f32 light_flicker_radius_scale(const LightFlicker3D& f, f64 time_s, u32 e
     if (rd == 0.0f) return 1.0f;
     const f32 x = detail::flicker_x(f, time_s, entity_salt);
     return std::clamp(1.0f - rd * x, 1.0f - rd, 1.0f);
+}
+
+// The emissive_tint multiplier of the entity's own mesh: lerp(1, light_flicker_scale, emissive_follow), same x as the light.
+inline f32 light_flicker_emissive_scale(const LightFlicker3D& f, f64 time_s, u32 entity_salt) {
+    if (f.enabled == 0u) return 1.0f;
+    const f32 follow = detail::flicker_clamp(f.emissive_follow, 0.0f, 0.0f, 1.0f);
+    if (follow == 0.0f) return 1.0f;
+    const f32 s = light_flicker_scale(f, time_s, entity_salt);
+    const f32 depth = detail::flicker_clamp(f.depth, 0.35f, 0.0f, 1.0f);
+    return std::clamp(1.0f + follow * (s - 1.0f), 1.0f - depth, 1.0f);
 }
 
 }  // namespace mce::kit

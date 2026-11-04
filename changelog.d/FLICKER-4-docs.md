@@ -1,0 +1,1 @@
+- M-FLICKER step 36d: the user guide describes the drawn light flicker and the milestone and the ROADMAP row are closed.

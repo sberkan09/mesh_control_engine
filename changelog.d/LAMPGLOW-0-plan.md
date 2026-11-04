@@ -1,0 +1,1 @@
+- M-LAMPGLOW plan: an `emissive_follow` field on `LightFlicker3D` so a lamp mesh dims with its flickering light, render-side only (steps 37a to 37c); nothing is built yet.

@@ -1,6 +1,6 @@
 # M-FLICKER — Light flicker: fire, candle, torch and failing-lamp lights that waver in brightness, render-side only, with no shader (milestone record)
 
-**Status:** planned (2026-11-03), steps 36a to 36d. PRs: this plan. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DAYNIGHT (`TimedLight3D`: lamps fade on at dusk, but a lit lamp is perfectly steady), the 3D visual assessment (gap: "lights are flat and clean, nothing says fire or a bad bulb") and the `kit3d_tour` fire emitter, whose light would be a steady point light today. No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
+**Status:** done (2026-11-03), steps 36a to 36d (PRs 1059, 1060, 1063, 1064, 1065). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-DAYNIGHT (`TimedLight3D`: lamps fade on at dusk, but a lit lamp is perfectly steady), the 3D visual assessment (gap: "lights are flat and clean, nothing says fire or a bad bulb") and the `kit3d_tour` fire emitter, whose light would be a steady point light today. No Linear issues (free issue limit, Linear unreachable); this record is the tracker.
 
 **Naming:** the component is `LightFlicker3D` (header `light_flicker.h`); `projects/`, `src/`, `docs/` and `tests/` have no type of that name (checked 2026-11-03).
 
@@ -31,10 +31,10 @@ No step needs Opus: nothing writes a shader; the light only changes numbers the 
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 36a | planned | | |
-| 36b | planned | | |
-| 36c | planned | | |
-| 36d | planned | | |
+| 36a | done | 1060 | `LightFlicker3D` and the pure `light_flicker_scale` / `light_flicker_radius_scale` in `mce/kit/light_flicker.h`, registered in `install_kit3d` next to `PointLight3D`; zeroed pad, the three `engine_components.cpp` includes, capabilities row and golden `components` bump. |
+| 36b | done | 1063 | The point and spot light loops of `Kit3DExtract::extract` multiply `intensity` and `radius` by the helpers at the render clock (entity index as salt); culling keeps the authored radius; `tests/kit/test_light_flicker_extract.cpp`. |
+| 36c | done | 1064 | `samples/kit3d_tour` places "Campfire light" (a `PointLight3D` with a fire-style `LightFlicker3D`) at the Fire emitter; the tour pin is 23; the coverage allow-line is gone. No Luau API: the component has no runtime state. |
+| 36d | done | 1065 | The `08-3d` paragraph, milestone closed, ROADMAP row done. |
 
 ## Follow-ups
 

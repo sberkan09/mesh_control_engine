@@ -1,0 +1,1 @@
+- M-LENSFLARE step 38a: the render-side data seam for the sun lens flare (`render::LensFlare` and `PostFx::flare` in `scene3d.h`, `Forward3DStats::lens_flare` / `lens_flare_strength` and the private flare pipeline and target members in `forward3d.h`, released in the destroy paths), nothing reads it yet, every frame is unchanged.

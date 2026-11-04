@@ -1,0 +1,1 @@
+- Lamp glow, M-LAMPGLOW steps 37a and 37b: `LightFlicker3D` gets `emissive_follow` (0..1, default 0) and the pure `light_flicker_emissive_scale`; `Kit3DExtract` multiplies the `emissive_tint` of the entity's own mesh instance by it at the frame's render clock, so a bulb dims with its light; nothing is written or hashed, and 0 is bit-identical.
