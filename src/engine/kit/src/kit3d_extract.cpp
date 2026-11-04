@@ -33,6 +33,7 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/day_cycle.h"
+#include "mce/kit/lens_flare.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
 #include "mce/kit/world_clock.h"
@@ -1453,6 +1454,37 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
     post.lens.dirt_key = dirt == ~0u ? 0u : dirt;
     post.tonemapper = env.tonemapper == 1 ? render::Tonemapper::AgX
                     : env.tonemapper == 2 ? render::Tonemapper::PbrNeutral : render::Tonemapper::AcesFit;
+    {  // sun lens flare (M-LENSFLARE 38d): the first LensFlare3D; without one or when disabled post.flare keeps the disabled
+       // default, written every frame so a stale one never survives. Visibility folds in the post-apply_quality cloud cover
+       // and the first Weather's rain (Rain or Storm intensity).
+        const LensFlare3D* lens_flare = nullptr;
+        world.query<const LensFlare3D&>().each([&](const LensFlare3D& c) {
+            if (!lens_flare) lens_flare = &c;
+        });
+        if (lens_flare && lens_flare->enabled != 0u) {
+            const Weather* flare_weather = nullptr;
+            world.query<const Weather&>().each([&](const Weather& c) {
+                if (!flare_weather) flare_weather = &c;
+            });
+            const bool flare_raining =
+                flare_weather && (flare_weather->current == WeatherKind::Rain || flare_weather->current == WeatherKind::Storm);
+            const f32 flare_rain = flare_raining ? flare_weather->intensity : 0.0f;
+            render::LensFlare& fl = post.flare;
+            fl.enabled = true;
+            fl.intensity = lens_flare->intensity;
+            fl.visibility = lens_flare_visibility(*lens_flare, cloud_cover, flare_rain);
+            fl.halo = lens_flare->halo;
+            fl.halo_radius = lens_flare->halo_radius;
+            fl.ghost_count = lens_flare->ghost_count;
+            fl.ghost_intensity = lens_flare->ghost_intensity;
+            fl.ghost_spacing = lens_flare->ghost_spacing;
+            fl.ghost_chroma = lens_flare->ghost_chroma;
+            fl.starburst = lens_flare->starburst;
+            fl.starburst_rays = lens_flare->starburst_rays;
+            fl.occlusion_radius = lens_flare->occlusion_radius;
+            fl.edge_fade = lens_flare->edge_fade;
+        }
+    }
     // The primary camera's own focus wins over the environment's.
     bool focused = false;
     world.query<const Camera3DComponent&>().each([&](const Camera3DComponent& c) {

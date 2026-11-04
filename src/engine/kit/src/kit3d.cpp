@@ -11,6 +11,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/decal_scatter.h"
+#include "mce/kit/lens_flare.h"
 #include "mce/kit/light_flicker.h"
 #include "mce/kit/static_merge3d.h"
 #include "mce/log.h"
@@ -276,6 +277,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
                               TerrainCollider3D, TerrainFoliage3D, StaticMerge3D, ChunkLod3D>();
+    world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
     world.register_components<LightFlicker3D>();  // M-FLICKER 36a: read by Kit3DExtract (36b); no system
     world.register_components<DecalScatter3D>();  // M-DECALSCATTER 35a: read by Kit3DExtract (35b); no system
     world.set_resource(Environment3D{});
