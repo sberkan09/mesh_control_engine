@@ -14,8 +14,10 @@ tests are excluded: hosted runners have no usable GPU. Linux stays the gate (`ci
 | 3. macOS: `macos-26` runner (Xcode 16.4's libc++ has no floating-point `from_chars`) | PR #1088, builds green |
 | 4. Windows `ctest`: the build is green; 17 of 201 tests fail and two hung the first full run until the 4 h job limit (ctest now has `--timeout 600`, jobs 150 min) | open: `import_demo_reimport`, `sample_steam_demo`, `ai_demo_editor_bt`, `Dungeon_perf_counters`(+`_seeded`), `marble_garden_mctests`, `test_core` (0xc0000409), `test_cook`, `test_fuzz_script`, `test_fuzz_importers`, `cli_test`, `test_script`, `player_scripts`, `test_editor`, `mcp_transcript`, `test_mcp_playtest`, `test_mcp_agent`; each needs a look |
 | 5. macOS test failures below | open |
-| 6a. Android APK build (`android.yml`: host `mce_cook`, NDK r28, Gradle, debug-signed APK as an artifact) | PR open; first run decides |
-| 6b. Web build, release artifacts, Pages | not started |
+| 6a. Android APK build (`android.yml`: host `mce_cook`, NDK r28, Gradle, debug-signed APK as an artifact) | done, PR #1097 (green on the first run, 19 min) |
+| 6b. Web build | already in the integration run (`tidy-web` group runs the `web` stage) |
+| 6c. Release packages (`release.yml`: Ember Step zip for Linux, Windows and macOS; on a `v*` tag attached to a GitHub release) | PR open; first run decides |
+| 6d. GitHub Pages for the docs | not started; needs Pages switched on in the repository settings |
 
 ## Known macOS failures on the hosted runner (204 of 208 pass)
 
