@@ -59,7 +59,9 @@ endfunction()
 # interface carries the engine libraries compile-only, so headers resolve as before.
 function(mce_engine_deps out)
     if(NOT MCE_GAME_MODULES_SUPPORTED)
-        set(${out} ${ARGN} PARENT_SCOPE)
+        # No umbrella here (Windows): the static libraries stay, and the module host's headers, which the
+        # umbrella carries for every UMBRELLA target elsewhere, are added by hand.
+        set(${out} ${ARGN} mce::mce_module_host PARENT_SCOPE)
         return()
     endif()
     set(result)

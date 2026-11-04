@@ -55,7 +55,11 @@ struct Fixture {
     // A display or Vulkan driver that is missing (or an Xvfb that reset between test cases) fails the
     // test case instead of crashing it: every test returns early when `ok` is false.
     Fixture() {
+#ifdef _WIN32
+        _putenv_s("MCE_RHI", "sdlgpu");  // the window surface follows platform::gpu_api()
+#else
         setenv("MCE_RHI", "sdlgpu", 1);  // the window surface follows platform::gpu_api()
+#endif
         MCE_REQUIRE_OR_RETURN(platform::init().has_value());
         MCE_REQUIRE_OR_RETURN(platform::gpu_api() == platform::GpuApi::SdlGpu);
         platform::WindowDesc wd;

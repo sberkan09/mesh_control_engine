@@ -183,7 +183,7 @@ u16 crc16(const std::string& s) {
 std::string tiny_flac(u32 rate, u32 channels, u32 blocks) {
     constexpr u32 kBlock = 65535;
     std::string s = "fLaC";
-    s.push_back(char(0x80));  // last metadata block, STREAMINFO
+    s.push_back(char(-128));  // last metadata block, STREAMINFO
     s.push_back(0), s.push_back(0), s.push_back(34);
     s.push_back(char(kBlock >> 8)), s.push_back(char(kBlock & 255));  // min block
     s.push_back(char(kBlock >> 8)), s.push_back(char(kBlock & 255));  // max block
@@ -194,7 +194,7 @@ std::string tiny_flac(u32 rate, u32 channels, u32 blocks) {
     for (int i = 0; i < 16; ++i) s.push_back(0);  // MD5 unknown
     for (u32 n = 0; n < blocks; ++n) {
         std::string f;
-        f.push_back(char(0xFF)), f.push_back(char(0xF8));  // sync, fixed block size
+        f.push_back(char(-1)), f.push_back(char(-8));  // sync, fixed block size
         f.push_back(char(0x70));                           // block size: 16-bit value follows; rate from STREAMINFO
         f.push_back(0);                                    // mono, size from STREAMINFO
         if (n < 128) f.push_back(char(n));
