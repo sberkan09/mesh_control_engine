@@ -97,6 +97,8 @@ mce_add_test(test_kit UMBRELLA
         test_cold_breath.cpp
         test_decal_scatter.cpp
         test_decal_scatter_extract.cpp
+        test_edge_outline.cpp
+        test_edge_outline_extract.cpp
         test_lens_flare.cpp
         test_lens_flare_extract.cpp
         test_light_flicker.cpp

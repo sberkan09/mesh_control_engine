@@ -36,6 +36,8 @@ MCE_CVAR(cv_meteor, "r.meteor", true,
          "Meteors in the night sky (MeteorSky; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_lens_flare, "r.lens_flare", true,
          "Sun lens flare (PostFx::flare; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
+         "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_particles, "r.particles", 1.0f,
          "Share (0..1) of the weather particles kept, on top of the tier's particle_scale (0 = none)", CVarFlags::Saved);
 
@@ -67,6 +69,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.meteor = false;
             q.lens_flare = false;
             q.lens_flare_starburst = false;
+            q.edge_outline_wide = false;
             q.particle_scale = 0.5f;
             break;
         case QualityTier::Medium:
@@ -140,6 +143,21 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     fl.starburst_rays = fl.starburst_rays < 2u ? 2u : (fl.starburst_rays > 16u ? 16u : fl.starburst_rays);
     fl.occlusion_radius = detail::ranged(fl.occlusion_radius, 0.002f, 0.1f, 0.015f);
     fl.edge_fade = detail::ranged(fl.edge_fade, 0.01f, 0.5f, 0.1f);
+    // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
+    EdgeOutline& eo = post.outline;
+    eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();
+    eo.color.x = detail::ranged(eo.color.x, 0.0f, 16.0f, 0.02f);
+    eo.color.y = detail::ranged(eo.color.y, 0.0f, 16.0f, 0.02f);
+    eo.color.z = detail::ranged(eo.color.z, 0.0f, 16.0f, 0.025f);
+    eo.opacity = detail::ranged(eo.opacity, 0.0f, 1.0f, 1.0f);
+    eo.thickness = detail::ranged(eo.thickness, 0.5f, 4.0f, 1.0f);
+    eo.depth_threshold = detail::ranged(eo.depth_threshold, 0.001f, 1.0f, 0.05f);
+    eo.normal_threshold = detail::ranged(eo.normal_threshold, 0.01f, 2.0f, 0.4f);
+    eo.depth_weight = detail::ranged(eo.depth_weight, 0.0f, 1.0f, 1.0f);
+    eo.normal_weight = detail::ranged(eo.normal_weight, 0.0f, 1.0f, 1.0f);
+    eo.fade_start = detail::ranged(eo.fade_start, 0.0f, 10000.0f, 30.0f);
+    eo.fade_end = detail::ranged(eo.fade_end, 0.0f, 10000.0f, 80.0f);
+    if (eo.fade_end < eo.fade_start) eo.fade_end = eo.fade_start;
 }
 
 void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }

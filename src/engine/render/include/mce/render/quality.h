@@ -10,6 +10,7 @@
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
 //   (M-LENSFLARE 38b: the sun lens flare is off on Low, without starburst on Medium, complete on High)
+//   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
 //   screen-space reflections; M-PARTICLEQ 28a: particle_scale, the share of a weather emitter's rate and
@@ -70,6 +71,10 @@ struct QualitySettings {
     // and, separately, its starburst (the per-pixel angular term). Low turns the flare off; Medium drops the starburst.
     bool lens_flare = true;
     bool lens_flare_starburst = true;
+    // M-OUTLINE 39b: the edge outline is honored (off: PostFx::outline.enabled false) in every tier, and, separately,
+    // its wide kernel (8 taps; Low uses the 4-tap cross).
+    bool edge_outline = true;
+    bool edge_outline_wide = true;
     // M-PARTICLEQ 28a: the share of rate and max_particles a render-side weather emitter keeps (0..1); Low 0.5,
     // Medium and High 1. No CVar. The weather particles read it in a later step (28b).
     f32 particle_scale = 1.0f;
@@ -99,7 +104,10 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // the ranges are clamped (NaN -> the default): intensity 0..4 (NaN 1), visibility 0..1 (NaN 1), halo 0..4 (NaN 1),
 // halo_radius 0.02..0.6 (NaN 0.25), ghost_count 0..6, ghost_intensity 0..4 (NaN 1), ghost_spacing 0.25..2 (NaN 1),
 // ghost_chroma 0..1 (NaN 0.5), starburst 0..4 (NaN 0), starburst_rays 2..16, occlusion_radius 0.002..0.1 (NaN
-// 0.015), edge_fade 0.01..0.5 (NaN 0.1).
+// 0.015), edge_fade 0.01..0.5 (NaN 0.1). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
+// (edge_outline false) and `r.edge_outline 0`; colour 0..16 per channel (NaN: 0.02, 0.02, 0.025), opacity 0..1 (NaN 1),
+// thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
+// normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post);
 // The irradiance volume's runtime updates (a scene that turned them off keeps them off).
 void apply_quality(const QualitySettings& q, GiVolume& gi);
