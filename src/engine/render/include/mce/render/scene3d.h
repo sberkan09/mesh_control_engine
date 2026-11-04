@@ -39,6 +39,16 @@ struct Camera3D {
 // horizon (positive looks down), `distance` meters away.
 Camera3D orbit_camera(math::vec3 target, f32 yaw, f32 pitch, f32 distance, f32 fov_y = math::radians(45.0f));
 
+// M-LIGHTCOOKIE 40a. A texture the sun projects as a tiling pattern on the plane across its direction (dappled light under foliage,
+// a window grid); none by default, so a frame is unchanged. Nothing reads it until 40c to 40f.
+struct SunCookie {
+    u32 texture = ~0u;                // TextureStore key; ~0u = none
+    f32 strength = 1.0f;              // 0..1: 0 = the plain sun, 1 = fully shaped
+    f32 size = 20.0f;                 // world metres one repeat of the texture covers (0.5..1000)
+    math::vec2 offset{0.0f, 0.0f};    // world metres the pattern is shifted along the plane's two axes
+    f32 roll = 0.0f;                  // radians: rotation of the pattern in the plane
+};
+
 struct DirectionalLight {
     math::vec3 direction{-0.4f, -1.0f, -0.3f};  // the way the light travels (normalized on use)
     math::vec3 color{1.0f, 0.96f, 0.9f};        // linear
@@ -48,6 +58,7 @@ struct DirectionalLight {
     bool shadows = true;
     bool contact_shadows = true;  // with ContactShadows::enabled, a short screen-space ray adds the
                                   // small contact shadows the cascades are too coarse to draw (M-VISUAL2 3)
+    SunCookie cookie;             // M-LIGHTCOOKIE 40a
 };
 
 struct Fog {
