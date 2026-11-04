@@ -86,3 +86,43 @@ TEST_CASE("net bytes: hostile lengths and varints are rejected") {
         CHECK_FALSE(r.ok());
     }
 }
+
+TEST_CASE("net bytes: append and read_raw carry unprefixed bytes, and position and remaining track the cursor") {
+    ByteWriter w;
+    const u8 blob[4] = {1, 2, 3, 4};
+    w.write_u8(9);
+    w.append(Span<const u8>(blob, 4));
+    w.append(Span<const u8>());  // an empty append changes nothing
+    CHECK(w.size() == 5);        // no length prefix
+
+    ByteReader r(w.data());
+    CHECK(r.position() == 0);
+    CHECK(r.remaining() == 5);
+    CHECK(r.read_u8() == 9);
+    CHECK(r.position() == 1);
+    CHECK(r.remaining() == 4);
+    const Span<const u8> raw = r.read_raw(4);
+    REQUIRE(raw.size() == 4);
+    CHECK(raw[0] == 1);
+    CHECK(raw[3] == 4);
+    CHECK(r.at_end());
+    CHECK(r.ok());
+    CHECK(r.read_raw(0).empty());  // nothing left, nothing asked: still fine
+    CHECK(r.ok());
+
+    w.clear();
+    CHECK(w.size() == 0);
+    CHECK(w.data().empty());
+}
+
+TEST_CASE("net bytes: read_raw past the end fails once and moves the cursor to the end") {
+    const u8 bytes[3] = {7, 8, 9};
+    ByteReader r{Span<const u8>(bytes, 3)};
+    CHECK(r.read_raw(2).size() == 2);
+    CHECK(r.read_raw(2).empty());  // only one byte left
+    CHECK_FALSE(r.ok());
+    CHECK(r.at_end());
+    CHECK(r.remaining() == 0);
+    CHECK(r.read_raw(1).empty());  // stays failed
+    CHECK(r.read_u8() == 0);
+}
