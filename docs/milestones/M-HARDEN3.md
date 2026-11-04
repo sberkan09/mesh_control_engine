@@ -1,6 +1,6 @@
 # M-HARDEN3 — Error paths and encode/decode pairs the tests never exercise (milestone record)
 
-**Status:** step 1 open. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-11-04 on the coordinator's instruction to start a new hardening milestone when the name-based survey of M-HARDEN2 step 4 runs dry. No Linear issues (the Backlog holds only the device-bound SBA-112 and SBA-58); this record is the tracker.
+**Status:** step 1 done, step 2 in progress. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-11-04 on the coordinator's instruction to start a new hardening milestone when the name-based survey of M-HARDEN2 step 4 runs dry. No Linear issues (the Backlog holds only the device-bound SBA-112 and SBA-58); this record is the tracker.
 
 **Why.** M-HARDEN2 step 4 closed every public function whose name no test mentions, outside the modules that other threads own (weather, GTA gameplay, openworld, render, rhi). A name in a test only proves the function runs once on a happy path. Two kinds of code can still hide bugs behind it: the failing branch of a `Result`-returning function that no test provokes, and the half of an `encode_*` / `decode_*` pair that a test calls only in one direction.
 
@@ -10,8 +10,8 @@
 
 | # | Step | State |
 |---|---|---|
-| 1 | Survey: for each `encode_X` / `decode_X` (and `write_X` / `read_X`) pair in the public headers, whether one test calls both on the same value and checks equality; list the pairs where it does not | open |
-| 2 | Round-trip tests for the pairs step 1 lists, one cluster per PR, with a damaged-input case (a cut buffer, a flipped length) that must return an error and not read past the end | open |
+| 1 | Survey: for each `encode_X` / `decode_X` (and `write_X` / `read_X`) pair in the public headers, whether one test calls both on the same value and checks equality; list the pairs where it does not | done 2026-11-04: of the `encode`/`decode`, `write`/`read`, `serialize`/`parse` and `save`/`load` pairs in the public headers (outside the owned modules) seven have no test that calls both halves: `write_bytes`/`read_bytes` (the byte writer and reader methods, covered by `test_bytes`), `write_hashes`/`read_hashes` (rollback), `save_mcperf`/`load_mcperf`, `encode_png`/`decode_png`, `save_scene`/`load_scene`, `save_state`/`load_state` and `encode_ui_theme`/`decode_ui_theme` |
+| 2 | Round-trip tests for the pairs step 1 lists, one cluster per PR, with a damaged-input case (a cut buffer, a flipped length) that must return an error and not read past the end | in progress: `encode_png`/`decode_png` (with `image_size`, `decode_png_grey16` and the refusals) done in `test_cook_png.cpp`; `encode_ui_theme`/`decode_ui_theme`, `save_mcperf`/`load_mcperf`, `save_scene`/`load_scene`, `save_state`/`load_state` and `write_hashes`/`read_hashes` left |
 | 3 | Survey: `Result<T>` / `bool`-returning public functions whose error branch no test reaches (a branch the code documents, such as "false when the id is empty or already used") | open |
 | 4 | Error-path tests for what step 3 lists, one cluster per PR | open |
 
