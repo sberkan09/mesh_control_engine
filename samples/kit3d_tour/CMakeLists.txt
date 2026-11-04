@@ -22,6 +22,12 @@ if(MCE_BUILD_TESTS)
     add_test(NAME kit3d_tour_player
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DTICKS=600 -DENTITIES=23
                      -DTOUR=kit3d_tour -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The ink scene (M-OUTLINE 39e): scenes/tour_ink.mcscene, the tour with an EdgeOutline3D on the world entity. It is named so that
+    # it sorts after scenes/tour.mcscene (the player's default scene is the first by source path, so the default run and its hash
+    # stay as they were); the render-side outline changes no state, so the 23 entities are the tour's.
+    add_test(NAME sample_kit3d_tour_ink_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_ink.mcscene
+                     -DTICKS=60 -DENTITIES=23 -DTOUR=kit3d_tour_ink -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -29,4 +35,12 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     add_test(NAME kit3d_tour_split_views
              COMMAND mce_player -pack ${pack} -frames 5 -split_views 4 -platform.error_box 0 -r.vsync 0)
     set_tests_properties(kit3d_tour_split_views PROPERTIES LABELS gpu PASS_REGULAR_EXPRESSION "drawn 4 times")
+    # The ink capture: the ink scene at tick 30, written for a look (build/.../kit3d_tour_ink.ppm; samples keep no goldens). Lines
+    # show on the slabs, the platform and the hero; `-r.edge_outline 0` on the same command draws the frame without them.
+    add_test(NAME sample_kit3d_tour_ink_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_ink.mcscene -capture_tick 30
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_ink.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_ink_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_ink_gpu)
 endif()
