@@ -5,6 +5,10 @@
 #include <doctest/doctest.h>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
 
 #include "mce/editor/perf_compare.h"
 #include "mce/editor/perf_file.h"
@@ -188,4 +192,46 @@ TEST_CASE("perf compare: a capture written and read back compares equal to itsel
     frame_parts(b, b.frames[5], parts);
     REQUIRE(parts.size() == 1);
     CHECK(parts[0].ms == doctest::Approx(0.25f));
+}
+
+TEST_CASE("perf compare: save_mcperf then load_mcperf round-trips through a file, and a bad path is refused") {
+    perf::Capture a = capture(9.0f, 5);
+    a.frames[2].counters.draws_instanced = 12;
+
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "mce_perf_file_roundtrip";
+    std::filesystem::create_directories(dir);
+    const std::string file = (dir / "run.mcperf").string();
+
+    REQUIRE(perf::save_mcperf(a, file.c_str()));
+    perf::Capture b;
+    cook::String err;
+    REQUIRE_MESSAGE(load_mcperf(StringView(file.data(), file.size()), b, err), err.c_str());
+    CHECK(b.frames.size() == a.frames.size());
+    CHECK(b.frames[2].counters.draws_instanced == 12);
+    CHECK(b.frames[0].counters.draws == 5);
+    CHECK(b.systems.size() == 1);
+    CHECK(b.systems[0].name.view() == StringView("movement"));
+    CHECK(b.scene.view() == StringView("main"));
+    CHECK(b.phases.size() == a.phases.size());
+
+    // A directory that does not exist cannot be written, and the failure is an error value.
+    const std::string nowhere = (dir / "no_such_dir" / "x.mcperf").string();
+    CHECK_FALSE(perf::save_mcperf(a, nowhere.c_str()));
+
+    // A file cut in half is not a capture: load_mcperf refuses it and names the path.
+    std::string text;
+    {
+        std::ifstream in(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    const std::string cut = (dir / "cut.mcperf").string();
+    {
+        std::ofstream out(cut, std::ios::binary);
+        out.write(text.data(), static_cast<std::streamsize>(text.size() / 2));
+    }
+    perf::Capture c;
+    err.clear();
+    CHECK_FALSE(load_mcperf(StringView(cut.data(), cut.size()), c, err));
+    CHECK(err.view().find(StringView(cut.data(), cut.size())) != StringView::npos);
+    std::filesystem::remove_all(dir);
 }
