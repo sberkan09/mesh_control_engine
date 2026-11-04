@@ -44,6 +44,7 @@
 #include "mce/kit/decal_scatter.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/lens_flare.h"
+#include "mce/kit/light_cookie.h"
 #include "mce/kit/light_flicker.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -133,6 +134,8 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LightFlicker3D>("LightFlicker3D", sizeof(LightFlicker3D::pad_));  // light_flicker.h (M-FLICKER 36a)
     expect_pad<LensFlare3D>("LensFlare3D", sizeof(LensFlare3D::pad_));  // lens_flare.h (M-LENSFLARE 38d)
     expect_pad<EdgeOutline3D>("EdgeOutline3D", sizeof(EdgeOutline3D::pad_));  // edge_outline.h (M-OUTLINE 39d)
+    expect_pad<LightCookie3D>("LightCookie3D", sizeof(LightCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
+    expect_pad<SunCookie3D>("SunCookie3D", sizeof(SunCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<DecalScatter3D>("DecalScatter3D", sizeof(DecalScatter3D::pad_));  // decal_scatter.h (M-DECALSCATTER 35a)
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
