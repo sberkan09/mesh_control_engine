@@ -1,0 +1,1 @@
+- CI: `.github/workflows/platforms.yml` builds and tests the `msvc-release` (Windows) and `macos-release` presets on hosted runners nightly and on demand; GPU and slow tests are excluded.
