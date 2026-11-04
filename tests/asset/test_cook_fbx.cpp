@@ -118,6 +118,13 @@ std::string ints(const std::vector<long>& v) {
     return s;
 }
 
+// FBX key times exceed 32 bits (one second is 46186158000 ticks) and `long` is 32-bit on Windows: use long long.
+std::string ints(const std::vector<long long>& v) {
+    std::string s;
+    for (size_t i = 0; i < v.size(); ++i) s += (i ? "," : "") + std::to_string(v[i]);
+    return s;
+}
+
 constexpr double kTicks = 46186158000.0;  // FBX time units per second
 
 struct FbxDoc {
@@ -277,10 +284,10 @@ struct FbxDoc {
         objects += "\tAnimationCurveNode: " + std::to_string(cn) + ", \"AnimCurveNode::" + label + "\", \"\" {\n\t\tProperties70:  {\n";
         for (const char* c : {"d|X", "d|Y", "d|Z"}) objects += std::string("\t\t\tP: \"") + c + "\", \"Number\", \"\", \"A\"," + num(def) + "\n";
         objects += "\t\t}\n\t}\n";
-        std::vector<long> times;
+        std::vector<long long> times;
         std::vector<double> values;
         for (const auto& k : keys) {
-            times.push_back(static_cast<long>(std::llround(k.first * kTicks)));
+            times.push_back(static_cast<long long>(std::llround(k.first * kTicks)));
             values.push_back(k.second);
         }
         objects += "\tAnimationCurve: " + std::to_string(cv) + ", \"AnimCurve::\", \"\" {\n\t\tDefault: 0\n\t\tKeyVer: 4009\n";
