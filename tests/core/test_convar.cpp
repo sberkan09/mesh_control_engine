@@ -1,12 +1,18 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <cstdlib>
 #include <string>
 
 #include "mce/convar.h"
 
 using namespace mce;
+
+namespace {
+// The platform temp directory ("/tmp" does not exist on Windows; the failed fopen aborted test_core there).
+std::string test_tmp_dir() { return std::filesystem::temp_directory_path().generic_string(); }
+}  // namespace
 
 namespace {
 MCE_CVAR(cv_test_int, "test.int", 3, "test int", CVarFlags::None);
@@ -212,7 +218,7 @@ TEST_CASE("M-ACCESS: a Saved convar change moves the settings generation") {
 }
 
 TEST_CASE("saved convars round-trip through the settings file") {
-    const std::string path = std::string(std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp") + "/mce_test_settings.cfg";
+    const std::string path = test_tmp_dir() + "/mce_test_settings.cfg";
     std::remove(path.c_str());
     {  // a file from an earlier run: a module's convar not registered here, and the three saved ones
         std::FILE* f = std::fopen(path.c_str(), "wb");
@@ -252,7 +258,7 @@ TEST_CASE("a missing settings file is no error") {
 }
 
 TEST_CASE("project defaults: a defaults file moves the default, a settings value and the command line still win (M-WORKFLOW 7)") {
-    const std::string dir = std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp";
+    const std::string dir = test_tmp_dir();
     const std::string defaults = dir + "/mce_test_defaults.cfg";
     const std::string settings = dir + "/mce_test_defaults_settings.cfg";
     cv_test_saved_db.reset();  // earlier cases may leave a value
@@ -309,7 +315,7 @@ TEST_CASE("project defaults: a defaults file moves the default, a settings value
 }
 
 TEST_CASE("project defaults: a command-line value equal to the old or new default still wins; cheats stay locked; spacing is forgiven") {
-    const std::string dir = std::getenv("TMPDIR") ? std::getenv("TMPDIR") : "/tmp";
+    const std::string dir = test_tmp_dir();
     const std::string defaults = dir + "/mce_test_defaults2.cfg";
     const std::string settings = dir + "/mce_test_defaults2_settings.cfg";
     std::remove(settings.c_str());
