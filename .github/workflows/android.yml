@@ -1,0 +1,67 @@
+# Android APK build on a standard hosted Ubuntu runner (free for a public repository): the host build's mce_cook
+# cooks the pack, the android-arm64-release preset builds the game library with the NDK, Gradle packs a debug-signed
+# APK (scripts/ship.py --target android, cmake/mobile/android_app.py). Nightly, on demand, and on a PR that edits
+# this file; not a PR gate. The emulator smoke run (local_ci_macos.sh android) stays on a developer Mac.
+name: Android
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch to build"
+        default: master
+  pull_request:
+    branches: [master]
+    paths: [".github/workflows/android.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: ember-step-apk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CCACHE_MAXSIZE: 2G
+      NDK_VERSION: "28.2.13676358"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Free disk space (the Android SDK stays)
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Install dependencies
+        run: scripts/ci/setup_env.sh
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install the NDK and platform
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "ndk;${NDK_VERSION}" "platforms;android-36"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-android-${{ github.sha }}
+          restore-keys: ccache-android-
+      - name: Build the Ember Step APK
+        run: python3 scripts/ship.py platformer --target android
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-step-apk
+          path: dist/*.apk
+          retention-days: 7
+          if-no-files-found: error

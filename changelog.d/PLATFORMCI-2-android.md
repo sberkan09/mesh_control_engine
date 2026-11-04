@@ -1,0 +1,1 @@
+- CI: `.github/workflows/android.yml` builds the Ember Step APK (host cook, NDK r28, Gradle) on a hosted Ubuntu runner nightly and on demand and uploads it as an artifact. See `docs/milestones/M-PLATFORM-CI.md`.
