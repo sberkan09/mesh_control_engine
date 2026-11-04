@@ -3574,4 +3574,76 @@ void main() {
 )";
 #undef MCE_GLSL_FLARE_U
 
+// ---- M-OUTLINE 39c: edge outlines, on the HDR frame after the MSAA resolve and before TAA. OutlineU rides bank kPass;
+// its C++ mirror is OutlineU in forward3d.cpp (static_asserts on kOutlineUBytes and the member offsets). Everything in
+// it comes from edge_outline_frame (mce/render/edge_outline.h). The three term functions mirror
+// edge_outline_depth_term, edge_outline_normal_term and edge_outline_fade (src/edge_outline.cpp) literally, one
+// expression each in the same order, and kOutlineTaps is kEdgeOutlineTaps; the CPU's NaN guards are left out (the
+// prepass writes finite values). The edges come from the half-resolution opaque prepass (rgb the unit view-space
+// vertex normal, a the linear view depth, 0 for sky), point sampled at the pixel's uv (the fullscreen pass's v_uv, as
+// every post pass reads it) and at the taps around it; taps past the border clamp to the edge texel (the sampler).
+// Portable on purpose: one block, combined samplers at the post banks, explicit textureLod / texelFetch, a constant
+// loop bound, no derivatives.
+inline constexpr int kOutlineUBytes = 80;  // 5 vec4: color, tap, edge, fade, misc
+inline constexpr int kOutlineMaxTaps = 8;  // = kEdgeOutlineMaxTaps (edge_outline.h)
+constexpr const char* kOutlineFS = R"(#version 450 core
+layout(std140, binding = 1) uniform OutlineU {
+    vec4 o_line;   // rgb: the line colour (linear HDR), w: opacity
+    vec4 o_tap;    // xy: the tap distance in uv (thickness / size), zw: the source's texel size
+    vec4 o_edge;   // x: depth threshold, y: normal threshold, z: depth weight, w: normal weight
+    vec4 o_fade;   // x: fade start, y: fade end (view depth, m), z: exp^2 fog density, w: taps (4 or 8)
+    vec4 o_misc;   // x: sky silhouette (1 or 0), y: strength, zw: 0
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, render size
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+const vec2 kOutlineTaps[8] = vec2[8](vec2(1.0, 0.0), vec2(-1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, -1.0),
+                                     vec2(0.70710678, 0.70710678), vec2(-0.70710678, 0.70710678),
+                                     vec2(0.70710678, -0.70710678), vec2(-0.70710678, -0.70710678));
+// smooth_step of edge_outline.cpp. b > a in every call but the fade's fade_start == fade_end, where the CPU's
+// (x - a) / 0 is -inf, +inf or NaN and ranges to 0, 1 or 0: the same values without the division.
+float smooth_step(float a, float b, float x) {
+    float t = b > a ? clamp((x - a) / (b - a), 0.0, 1.0) : (x > a ? 1.0 : 0.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float depth_term(float d_center, float d_tap, float threshold, float n_dot_v, bool sky_silhouette) {
+    if (!(d_center > 0.0)) return 0.0;
+    if (!(d_tap > 0.0)) return sky_silhouette ? 1.0 : 0.0;
+    if (!(d_tap > d_center)) return 0.0;
+    float grazing = n_dot_v > 0.2 ? n_dot_v : 0.2;
+    return smooth_step(threshold, 2.0 * threshold, (d_tap - d_center) / d_center * grazing);
+}
+float normal_term(vec3 n_center, vec3 n_tap, float threshold) {
+    float len2_center = n_center.x * n_center.x + n_center.y * n_center.y + n_center.z * n_center.z;
+    float len2_tap = n_tap.x * n_tap.x + n_tap.y * n_tap.y + n_tap.z * n_tap.z;
+    if (!(len2_center >= 0.25) || !(len2_tap >= 0.25)) return 0.0;
+    float d = n_center.x * n_tap.x + n_center.y * n_tap.y + n_center.z * n_tap.z;
+    return smooth_step(threshold, 1.5 * threshold, 1.0 - d);
+}
+float fade(float view_depth, float fade_start, float fade_end, float fog_density) {
+    float fog = fog_density * view_depth;
+    return (1.0 - smooth_step(fade_start, fade_end, view_depth)) * exp(-(fog * fog));
+}
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    vec4 c = textureLod(u_gbuf, v_uv, 0.0);
+    float e = 0.0;
+    if (c.a > 0.0) {  // a sky center draws nothing
+        // n_dot_v: the cosine between the centre's normal and the view axis (+z toward the camera in view space).
+        float n_dot_v = c.z;
+        bool sky = o_misc.x > 0.5;
+        for (int k = 0; k < 8; ++k) {
+            if (float(k) >= o_fade.w) continue;
+            vec4 t = textureLod(u_gbuf, v_uv + kOutlineTaps[k] * o_tap.xy, 0.0);
+            e = max(e, max(o_edge.z * depth_term(c.a, t.a, o_edge.x, n_dot_v, sky),
+                           o_edge.w * normal_term(c.rgb, t.rgb, o_edge.y)));
+        }
+    }
+    float a = o_misc.y * e * fade(c.a, o_fade.x, o_fade.y, o_fade.z);
+    // A pixel without a line is the source exactly (no mix rounding).
+    o_color = a > 0.0 ? vec4(mix(src.rgb, o_line.rgb, a), src.a) : src;
+}
+)";
+
 }  // namespace mce::render::shaders3d

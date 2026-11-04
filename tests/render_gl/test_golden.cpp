@@ -812,6 +812,30 @@ TEST_CASE("golden: lens_flare_occluded: a box over half the sun dims the flare")
     check_golden("lens_flare_occluded", f);
 }
 
+// ---- M-OUTLINE 39c: edge outlines -------------------------------------------------------------------------------
+
+// The outline scene (outline_scene): the fixture's box on its slab and the small box in the upper left, the default
+// dark 1 px lines on their silhouettes and creases and on the slab's far edge against the sky.
+TEST_CASE("golden: edge_outline_boxes: ink lines on the boxes' silhouettes and creases") {
+    Fixture3D f;
+    upload_outline_box(f);
+    const EdgeOutline o = outline_setting();
+    f.render(0.0f, true, [&](Scene3D& s) { outline_scene(s, &o); });
+    CHECK(f.renderer.forward_3d().last_stats().edge_outline);
+    check_golden("edge_outline_boxes", f);
+}
+
+// The same lines under TAA, the eighth frame (the history settled): TAA resolves the half-resolution lines.
+TEST_CASE("golden: edge_outline_taa: the outline under TAA after 8 frames") {
+    Fixture3D f;
+    upload_outline_box(f);
+    const EdgeOutline o = outline_setting();
+    for (u32 i = 0; i < 8; ++i) f.render(0.0f, true, [&](Scene3D& s) { outline_scene(s, &o, true); });
+    CHECK(f.renderer.forward_3d().last_stats().edge_outline);
+    CHECK(f.renderer.forward_3d().last_stats().taa_history);
+    check_golden("edge_outline_taa", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

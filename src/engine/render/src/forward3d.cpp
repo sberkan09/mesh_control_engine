@@ -7,6 +7,7 @@
 
 #include "mce/convar.h"
 #include "mce/log.h"
+#include "mce/render/edge_outline.h"
 #include "mce/render/lens_flare.h"
 #include "mce/render/quality.h"
 #include "shaders3d.h"
@@ -343,6 +344,44 @@ static_assert(sizeof(FlareU) == shaders3d::kFlareUBytes, "FlareU: 15 vec4, as MC
 static_assert(offsetof(FlareU, sun) == 0 && offsetof(FlareU, color) == 16 && offsetof(FlareU, shape) == 32 &&
                   offsetof(FlareU, ghost) == 48,
               "FlareU: f_sun / f_color / f_shape / f_ghost[12] as in MCE_GLSL_FLARE_U");
+
+// M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
+struct OutlineU {
+    vec4 line;  // rgb the line colour, w opacity
+    vec4 tap;   // xy the tap distance in uv, zw the source's texel size
+    vec4 edge;  // x depth threshold, y normal threshold, z depth weight, w normal weight
+    vec4 fade;  // x fade start, y fade end, z fog density, w taps
+    vec4 misc;  // x sky silhouette (1 or 0), y strength, zw 0
+};
+static_assert(shaders3d::kOutlineMaxTaps == i32(kEdgeOutlineMaxTaps), "kOutlineTaps holds kEdgeOutlineTaps");
+static_assert(sizeof(OutlineU) == shaders3d::kOutlineUBytes, "OutlineU: 5 vec4, as kOutlineFS");
+static_assert(offsetof(OutlineU, line) == 0 && offsetof(OutlineU, tap) == 16 && offsetof(OutlineU, edge) == 32 &&
+                  offsetof(OutlineU, fade) == 48 && offsetof(OutlineU, misc) == 64,
+              "OutlineU: o_line / o_tap / o_edge / o_fade / o_misc as in kOutlineFS");
+
+namespace {
+
+// Whether init created the prepass for SSAO, SSR or contact shadows: each creates its own pipeline exactly then
+// (failing init otherwise). The water's depth read follows this, not "the prepass exists": since M-OUTLINE 39c the
+// prepass is also created for the edge outline alone, and a renderer that has it only for the outline keeps drawing
+// its water as before.
+bool screen_space_prepass(rhi::PipelineHandle ao, rhi::PipelineHandle ssr, rhi::PipelineHandle contact) {
+    return !ao.is_null() || !ssr.is_null() || !contact.is_null();
+}
+
+// The edge outline's frame for this view (M-OUTLINE 39c), shared by record_outline and reserve_instancing so both take
+// the same strength-0 decision. `volumetric_fog`: the view records the volumetric fog (stats_.volumetrics, which
+// replaces the exp^2 Fog in the main pass), so the lines fade only with fade_start / fade_end; otherwise, with
+// fog_follow, they fade in the exp^2 Fog the main pass draws. tap_uv = thickness / the output size: the thickness is in
+// output pixels, also when the frame is drawn smaller.
+EdgeOutlineFrame outline_frame(const Scene3D& scene, bool volumetric_fog) {
+    const EdgeOutline& setting = scene.post().outline;
+    const f32 fog = setting.fog_follow && !volumetric_fog ? scene.fog().density : 0.0f;
+    const rhi::Extent2D out = scene.view().viewport;
+    return edge_outline_frame(setting, out.width, out.height, fog, quality_settings(quality_tier()).edge_outline_wide);
+}
+
+}  // namespace
 
 struct VelPassU {  // kVelocityVS
     mat4 jittered;
@@ -894,7 +933,13 @@ ResultV Forward3D::create_pipelines() {
     }
     const bool ssao = desc_.ssao && cv_ssao.get_bool(), ssr = desc_.ssr && cv_ssr.get_bool();
     const bool contact = desc_.contact_shadows && cv_contact_shadows.get_bool();
-    if (ssao || ssr || contact) {  // the half-resolution prepass both read
+    // M-OUTLINE 39c: the edge outline reads the prepass too, so it is created for it as well (which also gives the lens
+    // flare its depth on a renderer without SSAO, SSR and contact shadows). The water's depth read keeps following
+    // the first three only (screen_space_prepass in record_main), so its frames do not change. -r.edge_outline 0 at
+    // startup creates none of it (the convar lives in quality.cpp, which also applies it to PostFx::outline).
+    const ConVar* cv_edge_outline = ConVar::find(MCE_SID("r.edge_outline"));
+    const bool outline = desc_.edge_outline && (!cv_edge_outline || cv_edge_outline->get_bool());
+    if (ssao || ssr || contact || outline) {  // the half-resolution prepass they read
         rhi::GraphicsPipelineDesc ap = pd;  // the mesh vertex stage, depth-tested, both faces
         ap.fragment_shader = {kAoPrepassFS, "ssao_prepass.frag"};
         ap.state = {};
@@ -949,6 +994,14 @@ ResultV Forward3D::create_pipelines() {
                 *p = {};
             }
         }
+    }
+    if (outline && !ao_prepass_.is_null()) {
+        // M-OUTLINE 39c: the edge outline's composite. A driver that refuses it keeps the frame without the outline.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kOutlineFS, "edge_outline.frag"};
+        fs.debug_name = "edge_outline";
+        if (auto p = device_->create_pipeline(fs)) outline_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the edge outline shader failed, drawing frames without the outline");
     }
     const bool taa = desc_.taa && cv_taa.get_bool(), post_fx = desc_.post_fx && cv_post_fx.get_bool();
     if (taa || post_fx) {  // the velocity prepass: TAA, motion blur and depth of field
@@ -1379,6 +1432,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
     if (velocity_on_) record_velocity(cmd, scene);
     else velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
+    record_outline(cmd, scene);  // M-OUTLINE 39c: post_source_ = the frame with lines; its time falls in the taa bucket
     if (taa_on_) record_taa(cmd, scene);
     timestamp(cmd, kTsTaa);
     record_post_fx(cmd, scene);
@@ -2224,7 +2278,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     }
     water_drawn = water_drawn && !water_.is_null();
     water_depth_ = false;
-    if (water_drawn && !ao_prepass_.is_null() && (water.amplitude > 0.0f || water.foam_amount > 0.0f)) {
+    if (water_drawn && !ao_prepass_.is_null() && screen_space_prepass(ao_pipe_, ssr_pipe_, contact_pipe_) &&
+        (water.amplitude > 0.0f || water.foam_amount > 0.0f)) {
         record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR or contact shadows drew it already
         water_depth_ = true;
     }
@@ -2829,9 +2884,15 @@ void Forward3D::reserve_instancing(const Scene3D& scene) {
     const u32 lit = ring_bytes(copies * 2u * u32(sizeof(mat4)), align);
     const u32 vel = ring_bytes(copies * u32(sizeof(mat4)), align);
     const WaterSurface& water = scene.water();  // the water's depth read runs the prepass too (record_main)
+    // The outline's decision as record_outline takes it (record_volumetrics records exactly on this condition).
+    const bool outline_prepass =
+        scene.post().outline.enabled && !outline_pipe_.is_null() && !ao_prepass_.is_null() &&
+        outline_frame(scene, scene.volumetrics().enabled && !vol_inject_.is_null()).strength > 0.0f;
     const bool prepass = scene.ambient_occlusion().enabled || scene.reflections().enabled ||
                          scene.contact_shadows().enabled || scene.post().flare.enabled ||  // the flare's depth (38c)
-                         (water_on(water) && (water.amplitude > 0.0f || water.foam_amount > 0.0f));
+                         outline_prepass ||                                                // the outline's (39c)
+                         (water_on(water) && (water.amplitude > 0.0f || water.foam_amount > 0.0f) &&
+                          screen_space_prepass(ao_pipe_, ssr_pipe_, contact_pipe_));
     const u32 want[kInstShadow] = {mesh_cull_inst_.is_null() ? 0u : lit,
                                    ao_prepass_inst_.is_null() || !prepass ? 0u : lit,
                                    velocity_inst_.is_null() || !scene.post().needs_velocity() ? 0u : vel};
@@ -3124,7 +3185,8 @@ void Forward3D::record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     tu.out = {1.0f / f32(out.width), 1.0f / f32(out.height), f32(out.width), f32(out.height)};
     tu.jitter = {jitter_uv_.x, jitter_uv_.y, history_valid_ ? 1.0f : 0.0f, clamp(scene.post().taa_blend, 0.01f, 1.0f)};
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(tu));
-    cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);
+    // The current frame: post_source_ is hdr_ itself unless the edge outline drew (M-OUTLINE 39c, its own target).
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);
     cmd.bind_texture(rhi::bank::kNormal, history_[history_index_], linear_clamp_);
     cmd.bind_texture(rhi::bank::kOrm, velocity_, point_sampler_);
     cmd.draw_non_indexed(3);
@@ -3308,6 +3370,77 @@ void Forward3D::record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     post_source_ = dst;
     stats_.lens_flare = true;
     stats_.lens_flare_strength = fr.strength;
+}
+
+// ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves
+// the lines under its jitter, and depth of field, motion blur, the exposure, the flare, bloom, the tonemapper and the
+// grade act on them like on any scene pixel). One fullscreen pass reads the HDR frame and the half-resolution opaque
+// prepass (view normal and view depth) and writes the frame with lines into its own render-size target, which
+// becomes post_source_: never in place into hdr_ (the next frame's SSR reads hdr_, the frame without lines) and never
+// into the TAA history. strength 0 (edge_outline_frame: disabled, opacity 0, both weights 0, NaN, ...), no pipeline
+// (Forward3DDesc::edge_outline false, a refused shader) or no prepass pipeline records nothing, so the frame and
+// post_source_ (hdr_) are the ones without the pass bit for bit.
+//
+// The target. outline_dst_ is shared by the views (not per-view state) and has hdr_'s description (R11G11B10F, the
+// frame's own format, so a pixel without a line is copied exactly) at the render size. A size change never frees a
+// handle that commands recorded earlier in the same frame still reference: outline_dst_ is recreated only on the
+// frame's first view (ViewOutput::first; earlier frames' command buffers are submitted by then, as for every other
+// target this renderer recreates on a resize). A later view of another size the same frame writes its own per-view
+// render-size target of the same description instead, trans_src_ (the opaque frame transmissive draws refract, read
+// only inside record_main, which writes it before every read, so it is free from the resolve on), and leaves
+// outline_dst_ to the views that recorded it. Views of two sizes in one command buffer therefore recreate nothing
+// frame after frame, whatever their order stays.
+void Forward3D::record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const EdgeOutline& setting = scene.post().outline;
+    if (!setting.enabled || outline_pipe_.is_null() || ao_prepass_.is_null()) return;
+    // record_volumetrics ran earlier in this view: stats_.volumetrics says whether the volume replaced the exp^2 Fog.
+    const EdgeOutlineFrame fr = outline_frame(scene, stats_.volumetrics);
+    if (!(fr.strength > 0.0f)) return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR, contact shadows or the water drew it already
+    if (ao_gbuf_.is_null()) return;
+    rhi::TextureHandle dst = outline_dst_;
+    if (dst.is_null() || !(device_->texture_size(dst) == size_)) {
+        rhi::TextureDesc d = device_->texture_desc(hdr_);
+        if (out_.first || dst.is_null()) {
+            destroy(*device_, outline_dst_);
+            d.debug_name = "mce.3d.edge_outline";
+            outline_dst_ = device_->create_texture(d);
+            dst = outline_dst_;
+        } else {
+            if (trans_src_.is_null()) {
+                d.debug_name = "mce.3d.transmission_src";  // as record_main names it: it may reuse this one
+                trans_src_ = device_->create_texture(d);
+            }
+            dst = trans_src_;
+        }
+        if (dst.is_null()) return;
+    }
+
+    OutlineU u{};
+    u.line = fr.color_opacity;
+    u.tap = {fr.tap_uv.x, fr.tap_uv.y, 1.0f / f32(size_.width), 1.0f / f32(size_.height)};
+    u.edge = {fr.depth_threshold, fr.normal_threshold, fr.depth_weight, fr.normal_weight};
+    u.fade = {fr.fade_start, fr.fade_end, fr.fog_density, f32(fr.taps)};
+    u.misc = {fr.sky_silhouette ? 1.0f : 0.0f, fr.strength, 0.0f, 0.0f};
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "edge_outline";
+    cmd.push_debug_scope("edge_outline");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(outline_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // hdr_: nothing before TAA changes it
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: a tap reads one prepass texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.edge_outline = true;
+    stats_.edge_outline_taps = fr.taps;
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {
