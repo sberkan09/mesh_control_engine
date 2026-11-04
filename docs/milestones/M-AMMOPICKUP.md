@@ -1,6 +1,6 @@
 # M-AMMOPICKUP: ammo crates in 09_openworld
 
-**Status:** step 1 done (2026-11-03). Closes "no ammo pickups" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) section C. Follows
+**Status:** done (2026-11-04), except a pickup sound and a crate mesh. Closes "no ammo pickups" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) section C. Follows
 [M-GRENADE](M-GRENADE.md) and [M-AMMOSHOP](M-AMMOSHOP.md) (the shop sells rounds for cash; a crate gives them away, once in a
 while, where you find it). Cover (2d) stays with the police thread.
 
@@ -27,7 +27,7 @@ transcript golden count and `capabilities.md` move with step 1.
 |---|---|---|
 | 1 seam | `AmmoPickup3D`, system `kit3d_ammopickup`, event, unit tests (top-up of the wielded weapon and of stored presets, the cap, a full buyer leaves the crate, respawn timer, grenades, infinite-ammo and unarmed holders ignored). No sample change. | done |
 | 2 feature | Sample: a few crates on the avenue and by the park (60 s respawn, 30 rounds, one with 1 grenade), a map marker, `test_mcp_openworld` inspect check. | done |
-| 3 polish | User-guide section, closing doc, `M-OPENWORLD-GAPS` strike-through; a pickup sound and a visible crate mesh if a model exists. | open |
+| 3 polish | User-guide section, closing doc, `M-OPENWORLD-GAPS` strike-through; a pickup sound and a visible crate mesh if a model exists. | done |
 
 ## Decisions taken (change them in the plan PR if wrong)
 
