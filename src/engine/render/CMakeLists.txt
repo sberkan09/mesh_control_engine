@@ -10,6 +10,7 @@ mce_add_library(mce_render
         src/atmosphere.cpp
         src/camera2d.cpp
         src/clusters.cpp
+        src/edge_outline.cpp
         src/forward3d.cpp
         src/forward3d_scale.cpp
         src/lens_flare.cpp

@@ -33,6 +33,7 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/day_cycle.h"
+#include "mce/kit/edge_outline.h"
 #include "mce/kit/lens_flare.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
@@ -1489,6 +1490,35 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings flare_shadows;
             render::apply_quality(quality_, flare_shadows, flare_post);
             post.flare = flare_post.flare;
+        }
+    }
+    {  // edge outline (M-OUTLINE 39d): the first EdgeOutline3D; without one or when disabled post.outline keeps the disabled
+       // default, written every frame so a stale one never survives. A field copy: the fog density and the Volumetrics
+       // check are the renderer's.
+        const EdgeOutline3D* edge_outline = nullptr;
+        world.query<const EdgeOutline3D&>().each([&](const EdgeOutline3D& c) {
+            if (!edge_outline) edge_outline = &c;
+        });
+        if (edge_outline && edge_outline->enabled != 0u) {
+            render::EdgeOutline& eo = post.outline;
+            eo.enabled = true;
+            eo.color = math::vec3{edge_outline->color_r, edge_outline->color_g, edge_outline->color_b};
+            eo.opacity = edge_outline->opacity;
+            eo.thickness = edge_outline->thickness;
+            eo.depth_threshold = edge_outline->depth_threshold;
+            eo.normal_threshold = edge_outline->normal_threshold;
+            eo.depth_weight = edge_outline->depth_weight;
+            eo.normal_weight = edge_outline->normal_weight;
+            eo.fade_start = edge_outline->fade_start;
+            eo.fade_end = edge_outline->fade_end;
+            eo.sky_silhouette = edge_outline->sky_silhouette != 0u;
+            eo.fog_follow = edge_outline->fog_follow != 0u;
+            // The 39b quality step on a throwaway PostFx (tier, r.edge_outline and the Range clamps); only the outline returns.
+            render::PostFx outline_post;
+            outline_post.outline = eo;
+            render::ShadowSettings outline_shadows;
+            render::apply_quality(quality_, outline_shadows, outline_post);
+            post.outline = outline_post.outline;
         }
     }
     // The primary camera's own focus wins over the environment's.
