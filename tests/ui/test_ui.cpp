@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 
 #include <cmath>
+#include <cstring>
 
 #include "mce/convar.h"
 #include "mce/core.h"
@@ -875,4 +876,48 @@ TEST_CASE("ui: set_font_role and set_blocks_pointer are read back, and a null wi
     d.set_blocks_pointer(WidgetId{}, true);
     CHECK_FALSE(d.blocks_pointer(WidgetId{}));
     CHECK(d.font_role(WidgetId{}) == FontRole::Auto);
+}
+
+TEST_CASE("ui theme: encode_ui_theme then decode_ui_theme round-trips every field") {
+    ThemeData t = high_contrast_theme();
+    t.fonts[0] = asset::Guid{1, 2};
+    t.fonts[2] = asset::Guid{3, 4};
+    t.sprites = asset::Guid{5, 6};
+    t.white_region = 9;
+    t.palette.accent = {0.1f, 0.2f, 0.3f, 0.4f};
+    t.palette.console_text = {0.9f, 0.8f, 0.7f, 0.6f};
+
+    Array<byte> bytes;
+    encode_ui_theme(t, bytes);
+    ThemeData back;
+    REQUIRE(decode_ui_theme(bytes.span(), back));
+    CHECK(back.fonts[0] == t.fonts[0]);
+    CHECK(back.fonts[1].is_null());
+    CHECK(back.fonts[2] == t.fonts[2]);
+    CHECK(back.sprites == t.sprites);
+    CHECK(back.white_region == 9u);
+    CHECK(back.palette.accent.r == 0.1f);
+    CHECK(back.palette.console_text.a == 0.6f);
+
+    // Every style survives: encoding the decoded theme gives the same bytes.
+    Array<byte> again;
+    encode_ui_theme(back, again);
+    REQUIRE(again.size() == bytes.size());
+    CHECK(std::memcmp(again.data(), bytes.data(), bytes.size()) == 0);
+}
+
+TEST_CASE("ui theme: decode_ui_theme refuses short or damaged payloads and resets the output") {
+    Array<byte> bytes;
+    encode_ui_theme(default_theme(), bytes);
+
+    ThemeData out;
+    out.white_region = 77;
+    CHECK_FALSE(decode_ui_theme(Span<const byte>{}, out));
+    CHECK(out.white_region == 0u);  // out starts from the default theme
+    CHECK_FALSE(decode_ui_theme(bytes.span().subspan(0, 10), out));
+    CHECK_FALSE(decode_ui_theme(bytes.span().subspan(0, bytes.size() - 1), out));
+
+    Array<byte> bad = bytes;
+    bad[76] = byte{1};  // the reserved pad word of the 80-byte header
+    CHECK_FALSE(decode_ui_theme(bad.span(), out));
 }
