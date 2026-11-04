@@ -1,0 +1,1 @@
+- Tests: `SimNetwork` `endpoint_count`, `now_ms`, `in_flight`, `conditions` and `SimEndpoint` `index`, `channel_count`.
