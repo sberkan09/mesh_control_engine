@@ -77,6 +77,33 @@ TEST_CASE("MaterialForm: text to form and back keeps unknown members in order an
     CHECK_FALSE(material_form_from_text(R"({"format": "mce-scene"})", f, bad));
 }
 
+TEST_CASE("MaterialForm: translucency and wrap round trip through the text, defaults are not added") {
+    MaterialForm f;
+    cook::String err;
+    REQUIRE(material_form_from_text(kGold, f, err));
+    CHECK(f.translucency == 0.0f);
+    CHECK(f.wrap == 0.0f);
+    cook::String plain;
+    REQUIRE(material_form_to_text(kGold, f, plain, err));
+    CHECK(plain.view().find("translucency") == StringView::npos);
+    CHECK(plain.view().find("wrap") == StringView::npos);
+
+    f.translucency = 0.5f;
+    f.wrap = 0.25f;
+    cook::String out;
+    REQUIRE(material_form_to_text(kGold, f, out, err));
+    cook::JsonDoc doc;
+    cook::JsonError je;
+    REQUIRE(doc.parse(out.view(), je));
+    CHECK(doc.root().get("translucency").as_number() == doctest::Approx(0.5));
+    CHECK(doc.root().get("wrap").as_number() == doctest::Approx(0.25));
+    CHECK(doc.root().get("sheen_color").size() == 3);  // kept
+    MaterialForm again;
+    REQUIRE(material_form_from_text(out.view(), again, err));
+    CHECK(again.translucency == doctest::Approx(0.5f));
+    CHECK(again.wrap == doctest::Approx(0.25f));
+}
+
 TEST_CASE("save_material_form: the cook checks the text first; a refused save leaves the file alone") {
     const std::string root = cook_test::fresh_dir("asset_form");
     std::filesystem::create_directories(root + "/assets/mat");
@@ -109,6 +136,19 @@ TEST_CASE("save_material_form: the cook checks the text first; a refused save le
     cook::String after;
     REQUIRE(cook::fs::read_text(project.asset_path(asset.path.view()).view(), after));
     CHECK(before.view() == after.view());
+
+    // M-TRANSLUCENT 41f: translucency and wrap are keys of the file; the cook accepts them and the next load reads them back.
+    form.texture[0] = cook::String();
+    form.translucency = 0.6f;
+    form.wrap = 0.35f;
+    REQUIRE(save_material_form(project, asset, form, err));
+    MaterialForm thin;
+    REQUIRE(load_material_form(project, asset, thin, err));
+    CHECK(thin.translucency == doctest::Approx(0.6f));
+    CHECK(thin.wrap == doctest::Approx(0.35f));
+    CHECK(thin.roughness == doctest::Approx(0.75f));
+    form.translucency = 0;
+    form.wrap = 0;
 
     // The swatch of the form is the scalar look.
     CHECK(form.swatch().metallic == 1.0f);

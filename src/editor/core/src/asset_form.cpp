@@ -66,6 +66,8 @@ void owned_members(const MaterialForm& f, Array<Owned>& out) {
     num("clearcoat_roughness", f.clearcoat_roughness, d.clearcoat_roughness);
     num("transmission", f.transmission, d.transmission);
     num("ior", f.ior, d.ior);
+    num("translucency", f.translucency, d.translucency);
+    num("wrap", f.wrap, d.wrap);
     num("height_scale", f.height_scale, d.height_scale);
     cook::String tex("{");
     bool any = false;
@@ -136,6 +138,8 @@ bool material_form_from_text(StringView text, MaterialForm& out, cook::String& e
     number("clearcoat_roughness", f.clearcoat_roughness);
     number("transmission", f.transmission);
     number("ior", f.ior);
+    number("translucency", f.translucency);
+    number("wrap", f.wrap);
     number("height_scale", f.height_scale);
     if (const cook::JsonValue m = root.get("alpha_mode"); m.valid() && m.is_string())
         for (int i = 0; i < 3; ++i)
