@@ -12,8 +12,10 @@
 // direction, so the cone's circle is inscribed. The lookup is uv = clip.xy / clip.w * 0.5 + 0.5, a pixel is inside when
 // clip.w > 0 and both coordinates are in [0, 1], and uv.y grows toward the light's up (+Y, or +Z within about one degree of
 // vertical). A positive `roll` turns the projected pattern counter-clockwise as seen from the light looking along its
-// direction. The sun pattern lives in the plane across the sun's direction: right = normalize(cross(up_hint, d)), up =
-// cross(d, right); a positive roll turns the pattern counter-clockwise in (right, up).
+// direction. The sun pattern lives on the ground plane (y = 0): a point is carried along the sun's direction d down (or up)
+// to y = 0, g = (x - y d.x / d.y, z - y d.z / d.y), so the pattern on flat ground never swims or snaps as the sun moves,
+// and a grazing sun (|d.y| below kSunCookieMinDy) stretches it no further than that floor; a positive roll turns the
+// pattern counter-clockwise in (x, z) seen from above (from +x toward +z).
 
 #include "mce/math/math.h"
 #include "mce/types.h"
@@ -38,11 +40,21 @@ math::mat4 spot_cookie_matrix(math::vec3 position, math::vec3 direction, f32 spo
 // clamped to 0..1. 0 at and beyond the border, and for a non-finite uv.
 f32 spot_cookie_edge(math::vec2 uv, f32 edge);
 
-// The texture coordinate of a world point for the sun's pattern: with p = (dot(world, right), dot(world, up)) in the plane
-// across `sun_dir` (the way the light travels; a non-finite or zero one counts as straight down),
-// uv = rotate(p, roll) / size + offset / size, size clamped to 0.5..1000 (NaN: 20), roll a non-finite -> 0. The repeat is
-// the sampler's. Because the offset is added after the roll, shifting it by `size` leaves every uv on the same texel.
+// The floor of |d.y| in sun_cookie_uv: a sun lower than about 2.9 degrees projects as if it were at that height.
+inline constexpr f32 kSunCookieMinDy = 0.05f;
+
+// The texture coordinate of a world point for the sun's pattern: with d = `sun_dir` (the way the light travels; a
+// non-finite or zero one counts as straight down), dy = d.y floored to -kSunCookieMinDy (or +kSunCookieMinDy for a sun
+// travelling upward) and p = (x - y d.x / dy, z - y d.z / dy) the ground point (y = 0) the light reaches it from,
+// uv = (c p.x + s p.y, -s p.x + c p.y) / size + offset / size with c, s the cosine and sine of `roll`, size clamped to
+// 0.5..1000 (NaN: 20), roll a non-finite -> 0. Because the offset is added after the roll, shifting it by `size` leaves
+// every uv on the same texel; p is linear in the world point, so an offset of the world adds its own p.
 math::vec2 sun_cookie_uv(math::vec3 world, math::vec3 sun_dir, const SunCookie& cookie);
+// sun_cookie_uv's dy for a unit direction's y.
+inline f32 sun_cookie_dy(f32 dir_y) {
+    if (dir_y <= 0.0f) return dir_y < -kSunCookieMinDy ? dir_y : -kSunCookieMinDy;
+    return dir_y > kSunCookieMinDy ? dir_y : kSunCookieMinDy;
+}
 
 // The mip for a spot sample: log2(max(footprint / (2 * distance * tan(outer) / size), 1)), clamped to the chain
 // (0..log2(size)). A non-finite or non-positive input, or size 0, gives 0.

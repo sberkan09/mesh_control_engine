@@ -74,10 +74,9 @@ f32 spot_cookie_edge(math::vec2 uv, f32 edge) {
 
 math::vec2 sun_cookie_uv(math::vec3 world, math::vec3 sun_dir, const SunCookie& cookie) {
     const math::vec3 d = unit_or_down(sun_dir);
-    const math::vec3 right = math::normalize(math::cross(up_hint(d), d));
-    const math::vec3 up = math::cross(d, right);
-    const f32 px = math::dot(world, right);
-    const f32 py = math::dot(world, up);
+    const f32 dy = sun_cookie_dy(d.y);
+    const f32 px = world.x - world.y * d.x / dy;
+    const f32 py = world.z - world.y * d.z / dy;
     const f32 r = finite_or_zero(cookie.roll);
     const f32 c = std::cos(r), s = std::sin(r);
     const f32 size = detail::ranged(cookie.size, 0.5f, 1000.0f, 20.0f);

@@ -80,7 +80,7 @@ struct Forward3DPassU {
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
     vec4 ao;           // x: SSAO on, y: contact shadows on (bank kAo's g)
-    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d)
+    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d: a spot's or the sun's)
     vec4 gi;           // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 gi_min;
     vec4 gi_max;
@@ -118,7 +118,9 @@ struct Forward3DPassU {
     vec4 rainbow2;    // xyz the anti-solar direction (unit), w 0
     vec4 meteor;      // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
     vec4 meteor2;     // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
-    vec4 free_[8];    // the rest of the 1536-byte block, unused (always 0)
+    vec4 sun_cookie;  // M-LIGHTCOOKIE 40e: x atlas layer, y strength, z size (m), w 1 = the sun has a cookie
+    vec4 sun_cookie2; // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
+    vec4 free_[6];    // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -147,19 +149,22 @@ static_assert(
         offsetof(Forward3DPassU, rainbow2) == offsetof(Forward3DPassU, rainbow) + 16 &&
         offsetof(Forward3DPassU, meteor) == offsetof(Forward3DPassU, rainbow2) + 16 &&
         offsetof(Forward3DPassU, meteor2) == offsetof(Forward3DPassU, meteor) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, meteor2) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 8 * 16,
+        offsetof(Forward3DPassU, sun_cookie) == offsetof(Forward3DPassU, meteor2) + 16 &&
+        offsetof(Forward3DPassU, sun_cookie2) == offsetof(Forward3DPassU, sun_cookie) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 6 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
     "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
-    "p_meteor2 / p_free[8] follow p_sky_rot as in MCE_GLSL_PASS_U");
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_free[6] follow p_sky_rot as in MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
 // the main pass, at most 6 * kGiMaxBatchProbes = 192 more on a GI fill frame: 48 KiB of the 1 MiB ring); the block
 // is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding). M-RAINBOW
 // 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
-// (p_meteor, p_meteor2): 8 free, the size unchanged.
-static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 8 vec4 free)");
+// (p_meteor, p_meteor2): 8 free, the size unchanged. M-LIGHTCOOKIE 40e took two more (p_sun_cookie, p_sun_cookie2): 6
+// free, the size unchanged.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 6 vec4 free)");
 
 namespace {
 
@@ -403,7 +408,10 @@ bool cookies_allowed() {
 // current frame has baked or bound the atlas already: record_view keeps the bit across a frame's later views and clears
 // it on the first. Until it is set the atlas may be recreated (forward3d.h is frozen for this milestone: no new member).
 constexpr u32 kCookieAtlasInUse = 1u << 31;
-u32 cookie_count(u32 records) { return records & ~kCookieAtlasInUse; }
+// M-LIGHTCOOKIE 40e: and in this one whether the view's sun has its cookie (atlas layer 0, plan_cookies puts the sun
+// first). Any bit below 31 set means the view reads the atlas (bank 2 is then the atlas, forward3d_scale.cpp bind_decals).
+constexpr u32 kCookieSunOn = 1u << 30;
+u32 cookie_count(u32 records) { return records & ~(kCookieAtlasInUse | kCookieSunOn); }
 
 // The tier's atlas: S (a power of two, 16..2048) and its layer count (1..kMaxCookieLayers).
 u32 cookie_atlas_size(const QualitySettings& q) {
@@ -425,10 +433,43 @@ u32 cookie_tag(const TextureStore& textures, u32 key) {
     return x | 1u;
 }
 
-// The spot cookies of this frame (the sun's cookie is 40e's: a sun without one here keeps it out of the plan).
-CookiePlan spot_cookie_plan(const Scene3D& scene, const QualitySettings& q, Span<u32> light_record) {
-    static const DirectionalLight kNoSunCookie{};
-    return plan_cookies(scene.point_lights(), kNoSunCookie, cookie_atlas_layers(q), q.light_cookie_lights, light_record);
+// The cookies of this view: the sun's (layer 0 when it has one, 40e) and the spots'. Without a sun cookie the spots keep
+// the layers they had in 40d.
+CookiePlan view_cookie_plan(const Scene3D& scene, const QualitySettings& q, Span<u32> light_record) {
+    return plan_cookies(scene.point_lights(), scene.light(), cookie_atlas_layers(q), q.light_cookie_lights, light_record);
+}
+
+// What layer `layer` of the plan must hold: cookie_tag, told apart for the sun's layer, which is baked with the source's
+// repeat (record_cookie_bake), so a key that moves between the sun and a spot re-bakes.
+u32 layer_tag(const TextureStore& textures, const CookiePlan& plan, u32 layer) {
+    const u32 t = cookie_tag(textures, plan.key[layer]);
+    return layer == plan.sun_layer ? ((t ^ 0x9E3779B9u) * 16777619u) | 1u : t;
+}
+
+// PassU's sun cookie (M-LIGHTCOOKIE 40e; shaders3d.h sun_cookie_uv): layer, strength, size and the roll as
+// sun_cookie_uv clamps them, and the offset with the camera's absolute position folded in (the floating origin plus the
+// view's position: the shader projects the point relative to the camera, so its fract stays precise far from the
+// origin, and the pattern stays on the world after a rebase). sun_cookie_uv's ground point is linear in the world
+// point, so the camera's own ground point, rotated by the roll, adds to the offset; in f64, wrapped by the size (a whole
+// repeat is the same texel), so the f32 stays small.
+void sun_cookie_params(const DirectionalLight& sun, u32 layer, const f64 origin[3], vec3 camera, PassU& pu) {
+    const SunCookie& c = sun.cookie;
+    vec3 d = normalize(sun.direction);
+    if (!(length_sq(d) > 0.0f)) d = {0, -1, 0};  // as bind_main_state's p_light_dir
+    const f64 dy = f64(sun_cookie_dy(d.y));
+    const f64 cx = origin[0] + f64(camera.x), cy = origin[1] + f64(camera.y), cz = origin[2] + f64(camera.z);
+    const f64 px = cx - cy * f64(d.x) / dy, py = cz - cy * f64(d.z) / dy;
+    const f32 roll = std::isfinite(c.roll) ? c.roll : 0.0f;
+    const f64 cr = std::cos(f64(roll)), sr = std::sin(f64(roll));
+    const f32 size = detail::ranged(c.size, 0.5f, 1000.0f, 20.0f);
+    auto wrapped = [size](f64 v) {
+        const f32 w = f32(v - f64(size) * std::floor(v / f64(size)));
+        return w < size ? w : 0.0f;  // v just below a whole repeat can round up to size
+    };
+    const f64 ox = (std::isfinite(c.offset.x) ? f64(c.offset.x) : 0.0) + cr * px + sr * py;
+    const f64 oy = (std::isfinite(c.offset.y) ? f64(c.offset.y) : 0.0) - sr * px + cr * py;
+    pu.sun_cookie = {f32(layer), detail::ranged(c.strength, 0.0f, 1.0f, 1.0f), size, 1.0f};
+    pu.sun_cookie2 = {wrapped(ox), wrapped(oy), std::cos(roll), std::sin(roll)};
 }
 
 }  // namespace
@@ -2262,19 +2303,15 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     }
     cmd.bind_texture(rhi::bank::kSsr, stats_.ssr ? ssr_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);
-    // Light cookies (M-LIGHTCOOKIE 40d): the records and the light pool with Light.shadow.z, when this view has any;
-    // bank 2 then holds the atlas in the main pass (bind_decals).
-    // The volumetric injection (apply_fog false) keeps the dummy record and the plain pool: kVolInjectFS has no cookie
-    // code yet (40f), and its bank 2 is the white stand-in.
-    if (apply_fog) {
-        pu.local.z = upload_cookie_records(cmd, scene) > 0 ? 1.0f : 0.0f;
-    } else {
-        cookie_records_ &= kCookieAtlasInUse;
-        pu.local.z = 0.0f;
-    }
+    // Light cookies (M-LIGHTCOOKIE 40d to 40f): the records and the light pool with Light.shadow.z, and the sun's
+    // cookie, when this view has any; bank 2 then holds the atlas, in the main pass (bind_decals) and in the volumetric
+    // injection (apply_fog false: kVolInjectFS reads the same MCE_GLSL_COOKIE, and its bank 2 is free of decals).
+    pu.local.z = upload_cookie_records(cmd, scene) > 0 ? 1.0f : 0.0f;
+    if ((cookie_records_ & kCookieSunOn) != 0) sun_cookie_params(scene.light(), 0, origin_, view.position, pu);
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
+    if (!apply_fog && pu.local.z > 0.0f) cmd.bind_texture(rhi::bank::kDecalTexture0 + 2, cookie_atlas_, linear_clamp_);
     // Wet surfaces, snow and rain ripples: the main pass (and the fog injection, which does not read them). Probe
     // and volume captures stay dry, snowless and still: they are cached across frames while the weather changes.
     wet_params(scene.wet_surfaces(), origin_, pu);
@@ -3692,7 +3729,7 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
 void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     if (!desc_.light_cookies || !cookies_allowed()) return;
     const QualitySettings q = quality_settings(quality_tier());
-    const CookiePlan plan = spot_cookie_plan(scene, q, {});
+    const CookiePlan plan = view_cookie_plan(scene, q, {});
     if (plan.count == 0) return;
     if (cookie_pipe_.is_null()) {
         rhi::GraphicsPipelineDesc fs;
@@ -3734,8 +3771,9 @@ void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene
     bool scoped = false;
     for (u32 layer = 0; layer < n; ++layer) {
         const u32 key = plan.key[layer];
-        const u32 tag = cookie_tag(*textures_, key);
+        const u32 tag = layer_tag(*textures_, plan, layer);
         if (cookie_keys_[layer] == tag) continue;
+        const bool tiled = layer == plan.sun_layer;  // M-LIGHTCOOKIE 40e: the sun's layer repeats
         if (!scoped) {
             cmd.push_debug_scope("light_cookies");
             scoped = true;
@@ -3776,6 +3814,9 @@ void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene
             const u32 read = min(static_cast<u32>(std::ceil(max(u.tap.x, 0.0f))), src_mips - 1);
             const f32 rw = f32(max(sd.size.width >> read, 1u)), rh = f32(max(sd.size.height >> read, 1u));
             u.clamp = {0.5f / rw, 0.5f / rh, 1.0f - 0.5f / rw, 1.0f - 0.5f / rh};
+            // The sun's layer tiles, so its levels are baked with the sampler's repeat and no clamp: a level's border
+            // texels then blend the opposite edge as the tiling does (a seamless source stays seamless at every level).
+            if (tiled) u.clamp = {-1.0e6f, -1.0e6f, 1.0e6f, 1.0e6f};
             cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
             cmd.draw_non_indexed(3);
             cmd.end_pass();
@@ -3785,9 +3826,11 @@ void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene
     if (scoped) cmd.pop_debug_scope();
 }
 
-// ---- M-LIGHTCOOKIE 40d: this view's cookie records (bank kLightCookies) and the light pool with each cookied spot's
-// Light.shadow.z = record + 1, when the atlas holds every layer of the view's plan; 0 (and nothing uploaded: the
-// stand-in of bind_local_shadows stays) otherwise. cookie_records_ is then what bind_decals and bind_main_state read.
+// ---- M-LIGHTCOOKIE 40d / 40e: this view's cookie records (bank kLightCookies) and the light pool with each cookied
+// spot's Light.shadow.z = record + 1, when the atlas holds every layer of the view's plan; 0 (and nothing uploaded: the
+// stand-in of bind_local_shadows stays) otherwise. The result is the record count, with kCookieSunOn when the sun's
+// cookie is in the atlas too (a sun cookie alone uploads no record). cookie_records_ is then what bind_decals and
+// bind_main_state read. Called by both passes that read the cookies: the volumetric injection and the main pass.
 u32 Forward3D::upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cookie_records_ &= kCookieAtlasInUse;
     if (!desc_.light_cookies || cookie_atlas_.is_null() || cookie_pipe_.is_null() || !cookies_allowed()) return 0;
@@ -3795,32 +3838,36 @@ u32 Forward3D::upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& sce
     const QualitySettings q = quality_settings(quality_tier());
     Array<u32> record_of(mem::heap());
     record_of.resize(lights.size());
-    const CookiePlan plan = spot_cookie_plan(scene, q, record_of.span());
-    if (plan.lights == 0) return 0;
+    const CookiePlan plan = view_cookie_plan(scene, q, record_of.span());
+    const bool sun = plan.sun_layer != ~0u;  // layer 0 (plan_cookies takes the sun's first)
+    if (plan.lights == 0 && !sun) return 0;
     if (plan.count > device_->texture_desc(cookie_atlas_).array_layers) return 0;
     for (u32 layer = 0; layer < plan.count; ++layer)
-        if (cookie_keys_[layer] != cookie_tag(*textures_, plan.key[layer])) return 0;  // not baked for this view
-    const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
-    const Span<const GpuPointLight> pool = cl.lights();
-    Array<GpuPointLight> linked(mem::heap());
-    linked.resize(pool.size());
-    for (u32 i = 0; i < pool.size(); ++i) linked[i] = pool[i];
-    GpuCookieRecord records[kMaxCookieLights] = {};
-    for (u32 i = 0; i < lights.size() && i < linked.size(); ++i) {
-        const u32 r = record_of[i];
-        if (r == ~0u) continue;
-        records[r] = cookie_record(lights[i], plan.layer_of[r]);
-        // params.w: the frustum's width per metre along the axis (2 tan of spot_cookie_matrix's clamped half-angle), the
-        // term cookie_lod takes as 2 * distance * tan(outer).
-        records[r].params.w = 2.0f * std::tan(detail::ranged(lights[i].spot_outer, 0.01f, 1.45f, 0.5f));
-        linked[i].shadow.z = f32(r + 1);
+        if (cookie_keys_[layer] != layer_tag(*textures_, plan, layer)) return 0;  // not baked for this view
+    if (plan.lights > 0) {  // else the stand-in record and the plain pool (bind_main_state) stay: a sun cookie only
+        const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
+        const Span<const GpuPointLight> pool = cl.lights();
+        Array<GpuPointLight> linked(mem::heap());
+        linked.resize(pool.size());
+        for (u32 i = 0; i < pool.size(); ++i) linked[i] = pool[i];
+        GpuCookieRecord records[kMaxCookieLights] = {};
+        for (u32 i = 0; i < lights.size() && i < linked.size(); ++i) {
+            const u32 r = record_of[i];
+            if (r == ~0u) continue;
+            records[r] = cookie_record(lights[i], plan.layer_of[r]);
+            // params.w: the frustum's width per metre along the axis (2 tan of spot_cookie_matrix's clamped half-angle),
+            // the term cookie_lod takes as 2 * distance * tan(outer).
+            records[r].params.w = 2.0f * std::tan(detail::ranged(lights[i].spot_outer, 0.01f, 1.45f, 0.5f));
+            linked[i].shadow.z = f32(r + 1);
+        }
+        cmd.set_storage_data(rhi::bank::kLightCookies, std::as_bytes(Span<const GpuCookieRecord>(records, plan.lights)));
+        cmd.set_storage_data(rhi::bank::kLightPool, std::as_bytes(linked.span()));
     }
-    cmd.set_storage_data(rhi::bank::kLightCookies, std::as_bytes(Span<const GpuCookieRecord>(records, plan.lights)));
-    cmd.set_storage_data(rhi::bank::kLightPool, std::as_bytes(linked.span()));
     stats_.cookie_lights = plan.lights;
     stats_.cookie_layers = plan.count;
-    cookie_records_ = plan.lights | kCookieAtlasInUse;
-    return plan.lights;
+    stats_.sun_cookie = sun;
+    cookie_records_ = plan.lights | (sun ? kCookieSunOn : 0u) | kCookieAtlasInUse;
+    return plan.lights | (sun ? kCookieSunOn : 0u);
 }
 
 }  // namespace mce::render

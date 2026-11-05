@@ -14,7 +14,8 @@
 //   SunCookie3D    The sun's cookie, one per scene (the first in ECS order is read, like LensFlare3D): `texture`, `strength`
 //                  (1, 0..1), `size` (20, 0.5..1000 metres one repeat covers), `offset` (0 0, metres the pattern
 //                  is shifted along the plane's two axes), `scroll` (0 0, metres per second), `roll_deg` (0, -180..180), `enabled`
-//                  (1). The texture tiles over the plane across the sun's direction and multiplies the direct sun only.
+//                  (1). The texture tiles over the ground plane (each point carried there along the sun's direction) and
+//                  multiplies the direct sun only.
 //
 // A texture that is missing, not loaded or not a texture asset gives no cookie (the plain light) and one warning.
 

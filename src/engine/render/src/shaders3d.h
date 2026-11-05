@@ -47,7 +47,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
     vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3), y: contact shadows on (u_ao.g, M-VISUAL2 3)
-    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d)
+    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d: a spot's or the sun's)
     vec4 p_gi;             // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 p_gi_min;         // xyz: volume box
     vec4 p_gi_max;
@@ -85,7 +85,9 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_rainbow2;       // xyz the anti-solar direction (unit), w 0
     vec4 p_meteor;         // M-METEOR 18c: x level (0 = off), y brightness (0..4), z length (0.5..2), w speed (0.5..2)
     vec4 p_meteor2;        // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
-    vec4 p_free[8];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_sun_cookie;     // M-LIGHTCOOKIE 40e: x atlas layer, y strength (0..1), z size (m per repeat), w 1 = the sun has a cookie
+    vec4 p_sun_cookie2;    // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
+    vec4 p_free[6];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -405,7 +407,7 @@ float cookie_lod(float footprint, float distance, float width, float size) {
     return clamp(log2(max(footprint / texel, 1.0)), 0.0, log2(size));
 }
 vec3 cookie_level(vec2 uv, float layer, float k, float size) {
-    float s = size * exp2(-k);
+    float s = float(max(int(size) >> int(k), 1));  // exact level sizes (S a power of two)
     vec2 o = k < 0.5 ? vec2(0.0) : vec2(size, size - 2.0 * s);
     vec2 t = o + clamp(uv * s, vec2(0.5), vec2(s - 0.5));
     return textureLod(u_slot2, vec3(t / vec2(1.5 * size, size), layer), 0.0).rgb;
@@ -415,8 +417,62 @@ vec3 cookie_sample(vec2 uv, float layer, float lod, float size) {
     float k0 = floor(lod);
     float f = lod - k0;
     vec3 c = cookie_level(uv, layer, k0, size);
-    if (f > 0.0) c += (cookie_level(uv, layer, min(k0 + 1.0, log2(size)), size) - c) * f;  // equal levels: c exactly
+    if (f > 0.0) c += (cookie_level(uv, layer, min(k0 + 1.0, float(findMSB(int(size)))), size) - c) * f;  // equal levels: c exactly
     return c;
+}
+// ---- the sun's cookie (M-LIGHTCOOKIE 40e): the texture tiled over the ground plane, each point carried there along the
+// sun's direction. PassU p_sun_cookie = {layer, strength, size, on}, p_sun_cookie2 = {offset (the camera's absolute
+// position folded in, light_cookie.h's "an offset of the world adds its own p"), cos, sin of the roll}; the caller
+// passes the point relative to the camera, so the fract below keeps its precision far from the origin. sun_cookie_uv
+// and cookie_lod_sun mirror light_cookie.cpp literally (p_light_dir is unit: bind_main_state; kSunCookieMinDy 0.05).
+vec2 sun_cookie_uv(vec3 rel) {
+    vec3 d = p_light_dir.xyz;
+    float dy = d.y <= 0.0 ? (d.y < -0.05 ? d.y : -0.05) : (d.y > 0.05 ? d.y : 0.05);
+    float px = rel.x - rel.y * d.x / dy, py = rel.z - rel.y * d.z / dy;
+    float c = p_sun_cookie2.z, s = p_sun_cookie2.w, size = p_sun_cookie.z;
+    return vec2((c * px + s * py) / size + p_sun_cookie2.x / size, (-s * px + c * py) / size + p_sun_cookie2.y / size);
+}
+// log2(max(footprint / texel, 1)) clamped to 0..log2(texels), texel = size_m / texels (texels: S, a power of two).
+float cookie_lod_sun(float footprint, float size_m, float texels) {
+    float texel = size_m / texels;
+    if (!(footprint > 0.0) || !(texel > 0.0)) return 0.0;
+    return clamp(log2(max(footprint / texel, 1.0)), 0.0, float(findMSB(int(texels))));
+}
+// The tiling needs the repeat inside one packed level, which the sampler cannot give (its REPEAT wraps the whole
+// 1.5 S x S layer): where the bilinear's 2x2 lies inside the level one hardware fetch reads it, and only in the one-texel
+// band along the level's border a bilinear of four texelFetch whose indices wrap inside the level does (the record's
+// decision 40e (b)); seam-free for a seamless texture, and the packing and the spot path stay as they are.
+vec3 cookie_level_wrap(vec2 uv, float layer, float k, float size) {
+    int si = max(int(size) >> int(k), 1);
+    float s = float(si);
+    vec2 o = k < 0.5 ? vec2(0.0) : vec2(size, size - 2.0 * s);
+    vec2 w = fract(uv) * s;  // texels into the level
+    vec2 t = w - 0.5;
+    vec2 b = floor(t);  // -1 .. s - 1
+    if (all(greaterThanEqual(b, vec2(0.0))) && all(lessThan(b + 1.0, vec2(s))))
+        return textureLod(u_slot2, vec3((o + w) / vec2(1.5 * size, size), layer), 0.0).rgb;
+    vec2 f = t - b;
+    ivec2 n = ivec2(si);
+    ivec2 i0 = ivec2(b) + ivec2(lessThan(b, vec2(0.0))) * n;
+    ivec2 i1 = ivec2(b) + 1 - ivec2(greaterThanEqual(b + 1.0, vec2(s))) * n;
+    ivec2 base = ivec2(o);
+    int l = int(layer);
+    vec3 c00 = texelFetch(u_slot2, ivec3(base + ivec2(i0.x, i0.y), l), 0).rgb;
+    vec3 c10 = texelFetch(u_slot2, ivec3(base + ivec2(i1.x, i0.y), l), 0).rgb;
+    vec3 c01 = texelFetch(u_slot2, ivec3(base + ivec2(i0.x, i1.y), l), 0).rgb;
+    vec3 c11 = texelFetch(u_slot2, ivec3(base + ivec2(i1.x, i1.y), l), 0).rgb;
+    vec3 c0 = c00 + (c10 - c00) * f.x, c1 = c01 + (c11 - c01) * f.x;  // equal texels: exactly that texel
+    return c0 + (c1 - c0) * f.y;
+}
+// The sun's light multiplier at `rel` (the point minus the camera): mix(1, the trilinear wrapped sample, strength).
+// size: the atlas's S.
+vec3 sun_cookie(vec3 rel, float lod, float size) {
+    vec2 uv = sun_cookie_uv(rel);
+    float k0 = floor(lod);
+    float f = lod - k0;
+    vec3 c = cookie_level_wrap(uv, p_sun_cookie.x, k0, size);
+    if (f > 0.0) c += (cookie_level_wrap(uv, p_sun_cookie.x, min(k0 + 1.0, float(findMSB(int(size)))), size) - c) * f;
+    return 1.0 + (c - 1.0) * p_sun_cookie.y;  // exactly 1 for a white texel
 }
 )"
 
@@ -1052,13 +1108,23 @@ void main() {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
         }
-        color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
-
-        // Forward+ point and spot lights of this fragment's cluster.
-        // M-LIGHTCOOKIE 40d: the pixel's world footprint for the cookie's mip, taken here in uniform control flow (the
-        // loop's branches diverge, and derivatives there are undefined); the cookie itself is sampled with textureLod.
+        // M-LIGHTCOOKIE 40d / 40e: the pixel's world footprint for the cookies' mips (the sun's and the spots'), taken
+        // here in uniform control flow (the loop's branches diverge, and derivatives there are undefined); the cookies
+        // themselves are read with an explicit lod.
         float cookie_px = 0.0;
         if (p_local.z > 0.5) cookie_px = max(length(dFdx(v_world)), length(dFdy(v_world)));
+        if (p_sun_cookie.w > 0.5) {  // the sun's cookie multiplies its direct term only (after the shadows; sh stays for the ambient)
+            vec3 sc = vec3(0.0);
+            if (sh > 0.0) {
+                float size = float(textureSize(u_slot2, 0).y);
+                sc = sun_cookie(v_world - u_camera_pos.xyz, cookie_lod_sun(cookie_px, p_sun_cookie.z, size), size);
+            }
+            color = max(sc.r, max(sc.g, sc.b)) > 0.0 ? shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh * sc : vec3(0.0);
+        } else {
+            color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
+        }
+
+        // Forward+ point and spot lights of this fragment's cluster.
         uvec2 range = c_ranges[cluster_of(depth)];
         for (uint i = 0u; i < range.y; ++i) {
             Light L = l_lights[l_indices[range.x + i]];
@@ -2846,7 +2912,13 @@ void main() {
 // rows per depth slice); FrameU and PassU are the main pass's.
 // Injection: each froxel's medium at its center, rgb = the light it scatters toward the camera per
 // meter (σs · in-scattered radiance), a = its extinction σt per meter.
-constexpr const char* kVolInjectFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_LIGHTS MCE_GLSL_VOLUME R"(
+// M-LIGHTCOOKIE 40f: the cookies shape the froxels' light as they shape the surfaces' (a window grid draws a lattice of
+// shafts): MCE_GLSL_COOKIE at the same bindings (bank 2 is free here: the pass has no decals). A froxel is a point
+// sample of a cell tile pixels wide and a slice deep, so the cookie is read at the one level nearest the cell's larger
+// extent (finer would alias,
+// the lattice crawling as the camera moves; the integration and the lit pass's bilinear read blur it again, so a second
+// level buys nothing): a bilinear for a spot, four texelFetch for the sun.
+constexpr const char* kVolInjectFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE R"(
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 float hg(float g, float c) { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5)); }
@@ -2871,7 +2943,23 @@ void main() {
     // The sun through its cascades (shafts where something casts a shadow). The engine's light
     // scale I is irradiance / π, so the scattered radiance is σs · π · I · phase.
     vec3 l = -p_light_dir.xyz;
-    vec3 lin = p_light_color.rgb * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w);
+    // The cookies' footprint: the froxel's size, the larger of its width at this depth (the next column's ray at the same
+    // view depth) and its slice's depth (a conservative bound: a long cell must not alias the pattern either).
+    float cookie_cell = 0.0, cookie_size = 1.0;
+    if (p_local.z > 0.5) {
+        vec4 w2 = u_inv_view_proj * vec4((uv + vec2(1.0 / p_vol_grid.x, 0.0)) * 2.0 - 1.0, 1.0, 1.0);
+        vec3 ray2 = w2.xyz / w2.w - u_camera_pos.xyz;
+        cookie_cell = length(ray2 * (depth / dot(ray2, fwd)) - ray * (depth / dot(ray, fwd)));
+        cookie_cell = max(cookie_cell, vol_depth_of(float(slice + 1)) - vol_depth_of(float(slice)));  // or its depth, if longer
+        cookie_size = float(textureSize(u_slot2, 0).y);
+    }
+    vec3 lin;
+    if (p_sun_cookie.w > 0.5) {  // the sun's cookie (a black texel skips the cascade taps)
+        vec3 sc = sun_cookie(p - u_camera_pos.xyz, floor(cookie_lod_sun(cookie_cell, p_sun_cookie.z, cookie_size) + 0.5), cookie_size);
+        lin = max(sc.r, max(sc.g, sc.b)) > 0.0 ? p_light_color.rgb * sc * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w) : vec3(0.0);
+    } else {
+        lin = p_light_color.rgb * (PI * hg(g, dot(l, rd)) * shadow_term(p, l, l, depth) * p_vol_albedo.w);
+    }
     // Point and spot lights of the froxel's cluster, with their shadows.
     uvec3 grid = uvec3(u_cluster.xyz);
     uint tx = min(uint(uv.x * u_cluster.x), grid.x - 1u), ty = min(uint(uv.y * u_cluster.y), grid.y - 1u);
@@ -2888,8 +2976,23 @@ void main() {
         float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);
         att *= cone * cone;
         if (att <= 0.0) continue;
+        // The spot's cookie, as in the lit pass (before the shadow: a black texel skips its taps), at the cell's level.
+        bool cookied = p_local.z > 0.5 && L.shadow.z > 0.0;
+        vec3 lc = vec3(1.0);
+        if (cookied) {
+            CookieRec c = l_cookies[int(L.shadow.z) - 1];
+            vec4 q = c.vp * vec4(p, 1.0);
+            vec3 tint = vec3(0.0);
+            if (q.w > 0.0) {
+                vec2 cuv = q.xy / q.w * 0.5 + 0.5;
+                if (all(greaterThanEqual(cuv, vec2(0.0))) && all(lessThanEqual(cuv, vec2(1.0))))
+                    tint = cookie_sample(cuv, c.params.x, floor(cookie_lod(cookie_cell, q.w, c.params.w, cookie_size) + 0.5), cookie_size) * cookie_edge(cuv, c.params.z);
+            }
+            lc = 1.0 + (tint - 1.0) * c.params.y;
+            if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
+        }
         if (L.shadow.x >= 0.0 && p_local.x > 0.5) att *= local_shadow(L.shadow, L.pos_radius.xyz, p, ld, ld);
-        lin += L.color.rgb * (PI * att * hg(g, dot(ld, rd)) * p_vol_scale.x);
+        lin += (cookied ? L.color.rgb * lc : L.color.rgb) * (PI * att * hg(g, dot(ld, rd)) * p_vol_scale.x);
     }
     // The ambient, isotropic: the sphere's mean radiance, between the sky's and the ground's.
     lin += (p_amb_sky.rgb + p_amb_ground.rgb) * (0.5 * p_vol_scale.y);

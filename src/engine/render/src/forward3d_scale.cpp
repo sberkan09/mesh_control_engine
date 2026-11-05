@@ -572,7 +572,8 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
     // M-LIGHTCOOKIE 40c: a view with light cookies (upload_cookie_records ran just before) puts the cookie atlas at bank 2,
     // decal texture slot 2's bank (the lit shader has no free bank; shaders3d.h MCE_GLSL_COOKIE): its decals that need
     // the third texture are skipped, as Scene3D::build skips one past the third. Without cookies bank 2 is as before.
-    // (cookie_records_'s bit 31 says whether a view of the frame used the atlas, forward3d.cpp kCookieAtlasInUse.)
+    // (cookie_records_'s bit 31 says whether a view of the frame used the atlas, forward3d.cpp kCookieAtlasInUse; the
+    // rest is this view's spot records and, in bit 30, its sun cookie (M-LIGHTCOOKIE 40e): either puts the atlas here.)
     const bool cookies = on && (cookie_records_ & ~(1u << 31)) > 0 && !cookie_atlas_.is_null();
     u32 cookie_dropped = 0;
     if (on) {

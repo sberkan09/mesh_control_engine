@@ -4,6 +4,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cmath>
+#include <functional>
+
 #include "../asset/hdr_fixtures.h"
 #include "fixture3d.h"
 #include "golden.h"
@@ -905,6 +909,126 @@ TEST_CASE("golden: cookie_spot_window: a spot light through a window-grid cookie
     CHECK(f.renderer.forward_3d().last_stats().cookie_lights == 1);
     CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 1);
     check_golden("cookie_spot_window", f);
+}
+
+namespace {
+
+// An n x n RGBA8 cookie from `texel` (0..255 grey per texel, row 0 at v = 0) with its box mips down to 1 x 1, under a
+// fresh key (cookie_spot_window's construction).
+u32 upload_grey_cookie(Fixture3D& f, u32 n, const std::function<u8(u32, u32)>& texel) {
+    Array<Array<u8>> levels;
+    Array<u8> l0;
+    for (u32 y = 0; y < n; ++y)
+        for (u32 x = 0; x < n; ++x) {
+            const u8 g = texel(x, y);
+            for (u32 c = 0; c < 3; ++c) l0.push_back(g);
+            l0.push_back(255);
+        }
+    levels.push_back(std::move(l0));
+    for (u32 w = n / 2; w >= 1; w /= 2) {
+        const Array<u8>& p = levels.back();
+        Array<u8> m;
+        for (u32 y = 0; y < w; ++y)
+            for (u32 x = 0; x < w; ++x)
+                for (u32 c = 0; c < 4; ++c) {
+                    const u32 pw = w * 2;
+                    const u32 sum = p[((2 * y) * pw + 2 * x) * 4 + c] + p[((2 * y) * pw + 2 * x + 1) * 4 + c] +
+                                    p[((2 * y + 1) * pw + 2 * x) * 4 + c] + p[((2 * y + 1) * pw + 2 * x + 1) * 4 + c];
+                    m.push_back(static_cast<u8>((sum + 2) / 4));
+                }
+        levels.push_back(std::move(m));
+    }
+    Array<TextureMipUpload> mips;
+    for (u32 i = 0, w = n; i < levels.size(); ++i, w /= 2) mips.push_back(TextureMipUpload{w, w, std::as_bytes(levels[i].span())});
+    TextureUpload up;
+    up.mips = mips.span();
+    const u32 key = f.renderer.textures().allocate_key();
+    REQUIRE(f.renderer.textures().upload(key, 1, up).has_value());
+    return key;
+}
+
+}  // namespace
+
+// M-LIGHTCOOKIE 40e: leaf dapples. A seamless 64-texel pattern of soft bright blobs over leaf shade (a sum of cosines
+// whose periods divide the image), tiled every 3 m over the plane across a low sun, rolled 20 degrees and shifted, at
+// strength 0.9; the box keeps its cascade shadow (dark under the dapples too) and the ambient is untouched.
+TEST_CASE("golden: cookie_sun_dapple: the sun through a tiled leaf-dapple cookie, with the box's shadow") {
+    Fixture3D f;
+    f.pitch_deg = 40.0f;
+    const u32 key = upload_grey_cookie(f, 64, [](u32 x, u32 y) {
+        const f32 a = 6.2831853f * f32(x) / 64.0f, b = 6.2831853f * f32(y) / 64.0f;
+        const f32 g = std::cos(2.0f * a + b) * std::cos(a - 3.0f * b) + 0.5f * std::cos(5.0f * a + 2.0f * b);
+        const f32 t = std::clamp((g - 0.1f) * 2.5f, 0.0f, 1.0f);
+        return static_cast<u8>(std::lround((0.12f + 0.88f * t * t * (3.0f - 2.0f * t)) * 255.0f));
+    });
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight sun;
+        sun.direction = math::normalize(vec3{-0.5f, -1.0f, -0.3f});
+        sun.intensity = 2.0f;
+        sun.shadows = true;
+        sun.cookie.texture = key;
+        sun.cookie.strength = 0.9f;
+        sun.cookie.size = 3.0f;
+        sun.cookie.offset = {0.4f, 1.1f};
+        sun.cookie.roll = math::radians(20.0f);
+        s.set_light(sun);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().sun_cookie);
+    CHECK(f.renderer.forward_3d().last_stats().cookie_layers == 1);
+    check_golden("cookie_sun_dapple", f);
+}
+
+// M-LIGHTCOOKIE 40f: light shafts through a window grid. cookie_spot_window's 3 x 3 window-grid image on a warm spot
+// straight down past the box at night, through a uniform volumetric fog (4-pixel froxel columns) against a dark sky: the
+// panes draw bright shafts and patches, the mullions dark lanes between them, the box its local shadow in the fog and on
+// the ground.
+TEST_CASE("golden: cookie_shafts: a window-grid spot light drawing light shafts in the volumetric fog") {
+    Fixture3D f;
+    f.pitch_deg = 15.0f;
+    const u32 key = upload_grey_cookie(f, 64, [](u32 x, u32 y) {
+        const bool bar = x % 21 < 6 || y % 21 < 6 || x >= 63 - 6 || y >= 63 - 6;
+        return static_cast<u8>(bar ? 0 : 255);
+    });
+    f.render(0.0f, false, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.02f, 0.02f, 0.03f};
+        s.set_light(sun);
+        Sky sky;  // a dark sky without a sun disk: the shafts read against it (a cleared background gets no fog)
+        sky.zenith = sky.horizon = sky.ground = {0.01f, 0.01f, 0.02f};
+        sky.sun_intensity = 0.0f;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        LocalShadowSettings ls;
+        ls.tile = 256;
+        s.set_local_shadows(ls);
+        PointLight spot;
+        spot.position = {0.9f, 3.6f, 0.2f};
+        spot.direction = {-0.15f, -1.0f, 0.05f};
+        spot.radius = 9.0f;
+        spot.intensity = 45.0f;
+        spot.color = {1.0f, 0.85f, 0.6f};
+        spot.spot_inner = math::radians(30.0f);
+        spot.spot_outer = math::radians(33.0f);
+        spot.cast_shadows = true;
+        spot.cookie = key;
+        s.add_point_light(spot);
+        Volumetrics v;
+        v.enabled = true;
+        v.density = 0.1f;
+        v.height_falloff = 0.0f;
+        v.anisotropy = 0.2f;
+        v.max_distance = 16.0f;
+        v.tile = 4;
+        v.slices = 48;
+        s.set_volumetrics(v);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cookie_lights == 1);
+    CHECK(f.renderer.forward_3d().last_stats().volumetrics);
+    check_golden("cookie_shafts", f);
 }
 
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
