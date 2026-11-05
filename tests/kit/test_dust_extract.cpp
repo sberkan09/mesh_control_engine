@@ -252,7 +252,8 @@ TEST_CASE("dust extract: the id never collides and the emitter follows the camer
 
     r.cam.position = {30.0f, 4.0f, -12.0f};
     r.dust().height_m = 8.0f;
-    const render::ParticleEmitter* e1 = dust_of(r.frame());
+    const Shot e1_shot = r.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* e1 = dust_of(e1_shot);
     REQUIRE(e1 != nullptr);
     CHECK(e1->position.x == doctest::Approx(30.0f));
     CHECK(e1->position.y == doctest::Approx(12.0f));
@@ -263,7 +264,8 @@ TEST_CASE("dust extract: the wind direction turns the stream") {
     Rig windy;  // no WindDirection: +x
     windy.add_dust();
     windy.add_wind(0.8f);
-    const render::ParticleEmitter* w = dust_of(windy.frame());
+    const Shot w_shot = windy.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* w = dust_of(w_shot);
     REQUIRE(w != nullptr);
     CHECK(w->direction.x > 0.9f);
     CHECK(w->direction.z == doctest::Approx(0.0f).epsilon(1e-6));
@@ -272,7 +274,8 @@ TEST_CASE("dust extract: the wind direction turns the stream") {
     turned.add_dust();
     turned.add_wind(0.8f);
     turned.add_wind_direction(90.0f);
-    const render::ParticleEmitter* t = dust_of(turned.frame());
+    const Shot t_shot = turned.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* t = dust_of(t_shot);
     REQUIRE(t != nullptr);
     const math::vec2 v = wind_direction_vector(*turned.world.try_get<WindDirection>(turned.wd_e));
     const Weather& wx = *turned.world.try_get<Weather>(turned.weather_e);
@@ -286,7 +289,8 @@ TEST_CASE("dust extract: the wind direction turns the stream") {
     no_weather.add_dust();
     no_weather.dust().manual = 1.0f;
     no_weather.add_wind_direction(90.0f);
-    const render::ParticleEmitter* n = dust_of(no_weather.frame());
+    const Shot n_shot = no_weather.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* n = dust_of(n_shot);
     REQUIRE(n != nullptr);
     CHECK(n->direction.x > 0.9f);
 }

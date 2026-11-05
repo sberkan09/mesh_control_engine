@@ -296,7 +296,8 @@ TEST_CASE("flock extract: the id never collides and the emitter follows the came
 
     r.cam.position = {30.0f, 4.0f, -12.0f};
     r.flock().height_m = 20.0f;
-    const render::ParticleEmitter* e1 = flock_of(r.frame());
+    const Shot e1_shot = r.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* e1 = flock_of(e1_shot);
     REQUIRE(e1 != nullptr);
     CHECK(e1->position.x == doctest::Approx(30.0f));
     CHECK(e1->position.y == doctest::Approx(24.0f));
@@ -308,7 +309,8 @@ TEST_CASE("flock extract: the heading turns the stream on the ground plane") {
     east.add_flock();
     east.flock().heading_deg = 90.0f;
     spring_dawn(east);
-    const render::ParticleEmitter* e = flock_of(east.frame());
+    const Shot e_shot = east.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* e = flock_of(e_shot);
     REQUIRE(e != nullptr);
     CHECK(e->direction.x > 0.99f);
     CHECK(std::abs(e->direction.z) < 0.01f);
@@ -318,7 +320,8 @@ TEST_CASE("flock extract: the heading turns the stream on the ground plane") {
     north.add_flock();
     north.flock().heading_deg = 0.0f;
     spring_dawn(north);
-    const render::ParticleEmitter* n = flock_of(north.frame());
+    const Shot n_shot = north.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* n = flock_of(n_shot);
     REQUIRE(n != nullptr);
     CHECK(n->direction.z > 0.99f);
     CHECK(std::abs(n->direction.x) < 0.01f);
