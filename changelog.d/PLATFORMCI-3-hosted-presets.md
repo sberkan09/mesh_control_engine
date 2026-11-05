@@ -1,2 +1,2 @@
 - CI: the Windows and macOS hosted-runner jobs use `msvc-release-hosted` / `macos-release-hosted` test presets that exclude `gpu` and `slow`; a command-line `-LE` did not override the preset's own `slow` filter, so GPU tests ran on runners without OpenGL 4.5.
-- Tests: the four-way split-screen case of `test_mcp_agent` needs a window, so it moves into the `gpu` doctest suite (it crashed on hosted runners with "Could not load EGL library").
+- Tests: `test_mcp_agent` skips the four-way split-screen case on Windows and macOS (it opens a window and crashed with "Could not load EGL library" on hosted runners); Linux still runs it.
