@@ -487,3 +487,64 @@ TEST_CASE("game services: sign_in asks the provider interactively, and the platf
     d.gs().show_leaderboard("no_such_board");  // unknown id: the provider is not asked
     CHECK(provider.shown_leaderboards.size() == 1);
 }
+
+namespace {
+
+// Counts start / stop and keeps the sign-in silent-success; everything else is a no-op.
+struct StopCountingProvider final : IGameServicesProvider {
+    u32 starts = 0;
+    u32 stops = 0;
+    u32 uploads = 0;
+    GameServicesSink* sink = nullptr;
+    const char* name() const override { return "stop-counting"; }
+    void start(const ServicesCatalog&, GameServicesSink& s) override {
+        ++starts;
+        sink = &s;
+    }
+    void stop() override { ++stops; }
+    void sign_in(bool) override { sink->signed_in(true); }
+    void report_achievement(u16, u32) override {}
+    void submit_score(u16, i64) override {}
+    void cloud_save(u16, u64, Span<const byte>) override { ++uploads; }
+    void cloud_load(u16) override {}
+};
+
+}  // namespace
+
+TEST_CASE("game services: an upload with no local save fails and never reaches the provider") {
+    const fs::path root = fresh("gs_no_local_save");
+    use_device(root / "device");
+    StopCountingProvider provider;
+    Device d;
+    d.start(&provider);
+    d.step(3);
+    REQUIRE(d.gs().signed_in());
+    CHECK_FALSE(save::exists("progress"));
+    d.gs().cloud_save("progress");
+    d.step(3);
+    CHECK(provider.uploads == 0);
+    CHECK(d.seen().failed == 1);
+    CHECK(d.seen().saved == 0);
+
+    write_save("progress", "level 1");  // the save appears: the next ask goes through
+    d.gs().cloud_save("progress");
+    d.step(3);
+    CHECK(provider.uploads == 1);
+}
+
+TEST_CASE("game services: shutdown stops the provider once, and a second shutdown does nothing") {
+    const fs::path root = fresh("gs_shutdown");
+    use_device(root / "device");
+    StopCountingProvider provider;
+    {
+        Device d;
+        d.start(&provider);
+        d.step(2);
+        CHECK(provider.starts == 1);
+        d.service.shutdown();
+        CHECK(provider.stops == 1);
+        d.service.shutdown();  // not started any more
+        CHECK(provider.stops == 1);
+    }
+    CHECK(provider.stops == 1);  // the destructor does not stop it again
+}
