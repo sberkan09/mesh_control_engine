@@ -921,3 +921,181 @@ TEST_CASE("ui theme: decode_ui_theme refuses short or damaged payloads and reset
     bad[76] = byte{1};  // the reserved pad word of the 80-byte header
     CHECK_FALSE(decode_ui_theme(bad.span(), out));
 }
+
+namespace {
+
+MCE_CVAR(cv_test_ui_name, "test_ui.name", "alpha", "ui test convar", CVarFlags::None);
+MCE_CVAR(cv_test_ui_count, "test_ui.count", 4, "ui test convar", CVarFlags::None);
+
+struct UiWide {
+    bool on = true;
+    i8 a = -5;
+    i16 b = -300;
+    i64 c = -70000;
+    u8 d = 200;
+    u16 e = 60000;
+    u32 f = 4000000;
+    u64 g = 5000000;
+    f64 h = 2.5;
+};
+MCE_COMPONENT(UiWide, on, a, b, c, d, e, f, g, h)
+
+}  // namespace
+
+TEST_CASE("ui: a property binding reads every integer width, bool and f64") {
+    Fixture f;
+    World world;
+    const Entity e = world.spawn();
+    world.set(e, UiWide{});
+    Document d;
+    d.set_skin(f.skin);
+    d.set_modal(false);
+    Builder b(d, d.root());
+    const char* const fields[] = {"on", "a", "b", "c", "d", "e", "f", "g", "h"};
+    const f32 expect[] = {1.0f, -5.0f, -300.0f, -70000.0f, 200.0f, 60000.0f, 4000000.0f, 5000000.0f, 2.5f};
+    WidgetId w[9];
+    for (u32 i = 0; i < 9; ++i) {
+        FixedString<32> path("UiWide/");
+        path.append(fields[i]);
+        w[i] = b.slider(fields[i], -1.0e7f, 1.0e7f, 0.0f).id();
+        CHECK(d.bind_property(w[i], world, e, path.view()));
+    }
+    d.update(frame());
+    for (u32 i = 0; i < 9; ++i) CHECK(d.value(w[i]) == doctest::Approx(expect[i]));
+
+    world.try_get_mut<UiWide>(e)->on = false;
+    d.update(frame());
+    CHECK(d.value(w[0]) == 0.0f);
+}
+
+TEST_CASE("ui: an int convar drives a slider and a string convar drives a text") {
+    Fixture f;
+    cv_test_ui_name.reset();
+    cv_test_ui_count.reset();
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId count = b.slider("count", 0.0f, 10.0f, 1.0f).bind_convar("test_ui.count").id();
+    const WidgetId name = b.text("name", "").bind_convar("test_ui.name").id();
+    d.update(frame());
+    CHECK(d.value(count) == 4.0f);
+    CHECK(d.text(name) == "alpha");
+    CHECK(d.convar(count) == "test_ui.count");
+    CHECK(d.convar(WidgetId{}).empty());
+
+    console::execute("test_ui.name beta");
+    console::execute("test_ui.count 7");
+    d.update(frame());
+    CHECK(d.text(name) == "beta");
+    CHECK(d.value(count) == 7.0f);
+    cv_test_ui_name.reset();
+    cv_test_ui_count.reset();
+}
+
+TEST_CASE("ui: a pointer drag sets a slider by position, and a click flips a toggle") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId s = b.slider("s", 0.0f, 100.0f, 0.0f).at({0.5f, 0.3f}, {200, 20}).id();
+    const WidgetId t = b.toggle("t", "T").at({0.5f, 0.7f}, {0, 0}).id();
+    d.update(frame());
+    const Rect r = d.rect(s);
+    UpdateContext c = frame();
+    c.pointer = vec2(r.min.x + r.size().x * 0.25f, r.center().y);
+    c.pointer_pressed = c.pointer_down = true;
+    d.update(c);
+    CHECK(d.value(s) == doctest::Approx(25.0f).epsilon(0.05));
+    c.pointer_pressed = false;
+    c.pointer = vec2(r.max.x + 500.0f, r.center().y);  // dragged far past the end: clamped
+    d.update(c);
+    CHECK(d.value(s) == 100.0f);
+    c.pointer = vec2(r.min.x - 500.0f, r.center().y);  // and past the start
+    d.update(c);
+    CHECK(d.value(s) == 0.0f);
+    c.pointer_down = false;
+    c.pointer_released = true;
+    d.update(c);
+
+    CHECK(d.value(t) == 0.0f);
+    for (int round = 0; round < 2; ++round) {
+        UpdateContext k = frame();
+        k.pointer = d.rect(t).center();
+        d.update(k);
+        k.pointer_pressed = k.pointer_down = true;
+        d.update(k);
+        k.pointer_pressed = k.pointer_down = false;
+        k.pointer_released = true;
+        d.update(k);
+        CHECK(d.value(t) == (round == 0 ? 1.0f : 0.0f));
+    }
+}
+
+TEST_CASE("ui: builders refuse an invalid parent and a tab outside tabs, and keep going") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder orphan(d, WidgetId{});
+    CHECK(orphan.button("lost", "X").id().is_null());
+    Builder b(d, d.root());
+    Builder stray = b.tab("page", "PAGE");  // b is a root, not a tabs widget
+    CHECK(stray.id().is_null());
+    CHECK(d.find(StringView("lost")).is_null());
+    CHECK(d.find(StringView("page")).is_null());
+    d.update(frame());  // the document still lays out
+}
+
+TEST_CASE("ui: Builder style, text_size and nav reach the widget") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    const WidgetId other = b.button("other", "O").id();
+    Style st = d.style(other, WidgetState::Normal);
+    st.text_size = 31.0f;
+    Builder btn = b.button("btn", "B");
+    btn.style(WidgetState::Hover, st);
+    CHECK(d.style(btn.id(), WidgetState::Hover).text_size == 31.0f);
+    btn.style(st);
+    for (u32 i = 0; i < static_cast<u32>(WidgetState::Count); ++i)
+        CHECK(d.style(btn.id(), static_cast<WidgetState>(i)).text_size == 31.0f);
+    btn.text_size(18.0f);
+    for (u32 i = 0; i < static_cast<u32>(WidgetState::Count); ++i)
+        CHECK(d.style(btn.id(), static_cast<WidgetState>(i)).text_size == 18.0f);
+    NavEdges e;
+    e.up = other;
+    btn.nav(e);
+    CHECK(d.nav(btn.id()).up == other);
+    CHECK(d.nav(WidgetId{}).up.is_null());
+    CHECK(d.preferred_size(btn.id()).x > 0.0f);
+    CHECK(d.preferred_size(WidgetId{}).x == 0.0f);
+}
+
+TEST_CASE("ui: set_scroll before the first layout is kept, and re-opening an open modal changes nothing") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    Builder b(d, d.root());
+    Builder sv = b.scroll("list").at({0.5f, 0.5f}, {200, 100});
+    for (u32 i = 0; i < 6; ++i) {
+        char name[8] = {'i', static_cast<char>('0' + i), 0};
+        Anchors a;
+        a.offset_max = vec2(0, 50);
+        sv.button(name, name).anchors(a);
+    }
+    d.set_scroll(sv.id(), -30.0f);  // layout still dirty: the offset waits for it, never below 0
+    CHECK(d.scroll(sv.id()) == 0.0f);
+    d.set_scroll(sv.id(), 40.0f);
+    d.update(frame());
+    CHECK(d.scroll(sv.id()) <= d.scroll_max(sv.id()));
+    CHECK(d.scroll(WidgetId{}) == 0.0f);
+    CHECK(d.scroll_max(WidgetId{}) == 0.0f);
+
+    Builder m = b.modal("dlg");
+    d.open_modal(m.id());
+    d.open_modal(m.id());  // already open
+    d.update(frame());
+    CHECK(d.top_modal() == m.id());
+    d.close_modal(m.id());
+    CHECK(d.top_modal().is_null());
+}
