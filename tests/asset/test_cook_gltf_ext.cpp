@@ -20,6 +20,7 @@
 #include "cook_test_util.h"
 #include "mce/asset/container.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_translucency.h"
 #include "mce/cook/importer.h"
 #include "mce/math/math.h"
 #include "meshoptimizer.h"
@@ -330,12 +331,134 @@ TEST_CASE("gltf ext: the material extensions, quantization and meshopt are suppo
     const Dense r = dense_cube();
     const std::string ext =
         "[\"KHR_materials_clearcoat\",\"KHR_materials_sheen\",\"KHR_materials_anisotropy\",\"KHR_materials_transmission\","
-        "\"KHR_materials_ior\",\"KHR_mesh_quantization\",\"EXT_meshopt_compression\"]";
+        "\"KHR_materials_ior\",\"KHR_materials_diffuse_transmission\",\"KHR_materials_volume\",\"KHR_mesh_quantization\","
+        "\"EXT_meshopt_compression\"]";
     const Cooked res =
         cook_glb(r.d.glb(cube_rest(r.ap, r.an, r.au, r.ai, "", ",\"extensionsUsed\":" + ext + ",\"extensionsRequired\":" + ext)));
     INFO(res.text());
     CHECK(res.ok);
     CHECK(res.warning_count("ignored") == 0);
+}
+
+// ---- M-TRANSLUCENT 41c: KHR_materials_diffuse_transmission, KHR_materials_volume and the material extras ------------------
+// (field names from memory of the ratified extension texts: diffuseTransmissionFactor, diffuseTransmissionTexture,
+// diffuseTransmissionColorFactor, diffuseTransmissionColorTexture; thicknessFactor.)
+
+namespace {
+
+// One cube primitive with material 0 given by `material_json` (the material object); returns the cooked result.
+Cooked cook_with_material(const std::string& material_json) {
+    const Dense r = dense_cube();
+    const std::string root = ",\"materials\":[" + material_json + "]";
+    return cook_glb(r.d.glb(cube_rest(r.ap, r.an, r.au, r.ai, "", root, "", ",\"material\":0")));
+}
+
+f32 submesh_translucency(const Cooked& c) { return material_translucency(c.view().submeshes[0].material); }
+f32 submesh_wrap(const Cooked& c) { return material_wrap(c.view().submeshes[0].material); }
+
+}  // namespace
+
+TEST_CASE("gltf ext: diffuseTransmissionFactor cooks the translucency; a material without it reads 0, 0") {
+    const Cooked plain = cook_with_material("{\"doubleSided\":true}");
+    REQUIRE(plain.ok);
+    CHECK(translucency_bits(plain.view().submeshes[0].material.flags) == 0u);
+    CHECK(submesh_translucency(plain) == 0.0f);
+    CHECK(submesh_wrap(plain) == 0.0f);
+
+    const Cooked res = cook_with_material(
+        "{\"doubleSided\":true,\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.5}}}");
+    INFO(res.text());
+    REQUIRE(res.ok);
+    CHECK(submesh_translucency(res) == doctest::Approx(0.5f).epsilon(0.005));
+    CHECK(submesh_wrap(res) == 0.0f);
+    CHECK((res.view().submeshes[0].material.flags & MaterialFlags::DoubleSided) != 0u);  // other bits untouched
+    CHECK(res.warnings.empty());
+
+    // The extension's presence without a factor is the default 0; a factor of 1 is full; out of range is clamped with a warning.
+    const Cooked none = cook_with_material("{\"extensions\":{\"KHR_materials_diffuse_transmission\":{}}}");
+    REQUIRE(none.ok);
+    CHECK(submesh_translucency(none) == 0.0f);
+    const Cooked full = cook_with_material(
+        "{\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":1}}}");
+    CHECK(submesh_translucency(full) == 1.0f);
+    const Cooked big = cook_with_material(
+        "{\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":3}}}");
+    REQUIRE(big.ok);
+    CHECK(submesh_translucency(big) == 1.0f);
+    CHECK(big.warning_count("outside [0, 1]") == 1);
+}
+
+TEST_CASE("gltf ext: a non-white diffuseTransmissionColorFactor or a texture warns once; a white one does not") {
+    const Cooked pink = cook_with_material(
+        "{\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.4,"
+        "\"diffuseTransmissionColorFactor\":[1,0.5,0.5]}}}");
+    INFO(pink.text());
+    REQUIRE(pink.ok);
+    CHECK(submesh_translucency(pink) == doctest::Approx(0.4f).epsilon(0.005));
+    CHECK(pink.warning_count("the transmitted light takes the base colour") == 1);
+
+    const Cooked tex = cook_with_material(
+        "{\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.4,"
+        "\"diffuseTransmissionTexture\":{\"index\":0}}}}");
+    REQUIRE(tex.ok);
+    CHECK(tex.warning_count("the transmitted light takes the base colour") == 1);
+
+    const Cooked white = cook_with_material(
+        "{\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.4,"
+        "\"diffuseTransmissionColorFactor\":[1,1,1]}}}");
+    REQUIRE(white.ok);
+    CHECK(white.warnings.empty());
+}
+
+TEST_CASE("gltf ext: KHR_materials_volume is accepted, with one note when it has a thickness") {
+    const std::string vol = "\"KHR_materials_volume\":{\"thicknessFactor\":0.3,\"attenuationDistance\":2}";
+    const Dense r = dense_cube();
+    const std::string ext = "[\"KHR_materials_volume\",\"KHR_materials_diffuse_transmission\"]";
+    const std::string root = ",\"materials\":[{\"extensions\":{" + vol +
+                             ",\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.6}}}],\"extensionsUsed\":" + ext +
+                             ",\"extensionsRequired\":" + ext;
+    const Cooked res = cook_glb(r.d.glb(cube_rest(r.ap, r.an, r.au, r.ai, "", root, "", ",\"material\":0", 2)));
+    INFO(res.text());
+    REQUIRE(res.ok);
+    CHECK(res.warning_count("ignored") == 0);
+    CHECK(res.warning_count("KHR_materials_volume is accepted but not used") == 1);  // once per file, two primitives
+    CHECK(res.view().submeshes.size() == 2);
+    CHECK(submesh_translucency(res) == doctest::Approx(0.6f).epsilon(0.005));
+
+    const Cooked zero = cook_with_material("{\"extensions\":{\"KHR_materials_volume\":{\"thicknessFactor\":0}}}");
+    REQUIRE(zero.ok);
+    CHECK(zero.warnings.empty());
+}
+
+TEST_CASE("gltf ext: material extras mce_translucency and mce_wrap cook the bits and win over the extension") {
+    const Cooked wrap = cook_with_material("{\"extras\":{\"mce_wrap\":0.75}}");
+    INFO(wrap.text());
+    REQUIRE(wrap.ok);
+    CHECK(submesh_wrap(wrap) == doctest::Approx(0.75f).epsilon(0.005));
+    CHECK(submesh_translucency(wrap) == 0.0f);
+    CHECK(wrap.warnings.empty());
+
+    const Cooked both = cook_with_material(
+        "{\"extras\":{\"mce_translucency\":0.25,\"mce_wrap\":1},\"extensions\":{\"KHR_materials_diffuse_transmission\":"
+        "{\"diffuseTransmissionFactor\":0.9}}}");
+    REQUIRE(both.ok);
+    CHECK(submesh_translucency(both) == doctest::Approx(0.25f).epsilon(0.005));  // the extras win
+    CHECK(submesh_wrap(both) == 1.0f);
+
+    // The extension alone still applies when the extras name only the wrap.
+    const Cooked mixed = cook_with_material(
+        "{\"extras\":{\"mce_wrap\":0.5},\"extensions\":{\"KHR_materials_diffuse_transmission\":{\"diffuseTransmissionFactor\":0.9}}}");
+    REQUIRE(mixed.ok);
+    CHECK(submesh_translucency(mixed) == doctest::Approx(0.9f).epsilon(0.005));
+    CHECK(submesh_wrap(mixed) == doctest::Approx(0.5f).epsilon(0.005));
+
+    // Bad values: a non-number is ignored with a warning, an out-of-range number clamped with one; unrelated extras are silent.
+    const Cooked bad = cook_with_material("{\"extras\":{\"mce_wrap\":\"soft\",\"mce_translucency\":-2,\"author\":\"x\"}}");
+    REQUIRE(bad.ok);
+    CHECK(submesh_wrap(bad) == 0.0f);
+    CHECK(submesh_translucency(bad) == 0.0f);
+    CHECK(bad.warning_count("must be a number in [0, 1]; ignored") == 1);
+    CHECK(bad.warning_count("outside [0, 1]; clamped") == 1);
 }
 
 // ---- sparse accessors -------------------------------------------------------------------------------------------

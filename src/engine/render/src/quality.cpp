@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "mce/convar.h"
+#include "mce/render/translucency.h"
 #include "unit_clamp.h"
 
 #if defined(__APPLE__)
@@ -42,10 +43,15 @@ MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
          "Light cookies (a texture projected by spot lights and the sun; off = plain lights)", CVarFlags::Saved);
+MCE_CVAR(cv_translucency, "r.translucency", true,
+         "Thin-surface translucency and wrap lighting (material translucency / wrap; off = plain diffuse)",
+         CVarFlags::Saved);
 MCE_CVAR(cv_particles, "r.particles", 1.0f,
          "Share (0..1) of the weather particles kept, on top of the tier's particle_scale (0 = none)", CVarFlags::Saved);
 
 }  // namespace
+
+bool translucency_cvar_on() { return cv_translucency.get_bool(); }
 
 QualitySettings quality_settings(QualityTier tier) {
     QualitySettings q;
@@ -77,6 +83,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
             q.light_cookie_lights = 4;
+            q.translucency_ambient = false;
+            q.translucency_scatter = false;
             q.particle_scale = 0.5f;
             break;
         case QualityTier::Medium:

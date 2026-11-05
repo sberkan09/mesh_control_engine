@@ -11,6 +11,8 @@
 //   (M-VISUAL2 4, all optional, 0 = off) "clearcoat": 0..1, "clearcoat_roughness": 0..1,
 //   "sheen_color": [r, g, b], "sheen_roughness": 0..1, "anisotropy": -1..1, "anisotropy_rotation": radians,
 //   "transmission": 0..1, "ior": 1..3 (default 1.5),
+//   (M-TRANSLUCENT 41c, 0 = off) "translucency": 0..1 (light through a thin surface), "wrap": 0..1 (wrap lighting); both are
+//   quantized to 8 bits into the material's flags word (mce/asset/material_translucency.h),
 //   (M-VISUAL3 2, parallax occlusion mapping, 0 = off) "height_scale": 0..0.5 (depth in texture repeats),
 //   "parallax_steps": [min, max] (4..64, march steps looking straight on and at a grazing angle),
 //   "textures": { "base_color": "guid:<uuid>", "normal": ..., "metallic_roughness": ..., "emissive": ...,
@@ -21,6 +23,7 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_translucency.h"
 
 namespace mce::cook {
 
@@ -91,7 +94,7 @@ public:
         if (!detail::check_keys(doc, {"format", "version", "guid", "name", "base_color", "metallic", "roughness", "emissive", "alpha_mode",
                                       "alpha_cutoff", "double_sided", "unlit", "uv_scale", "textures", "clearcoat",
                                       "clearcoat_roughness", "sheen_color", "sheen_roughness", "anisotropy", "anisotropy_rotation",
-                                      "transmission", "ior", "height_scale", "parallax_steps"},
+                                      "transmission", "ior", "height_scale", "parallax_steps", "translucency", "wrap"},
                                 file, kStage, diags))
             return false;
         const JsonValue fmt = doc.get("format");
@@ -178,6 +181,10 @@ public:
         ranged("transmission", 0, 1, e.transmission);
         ranged("ior", 1, 3, e.ior);
         ranged("height_scale", 0, 0.5, e.height_scale);
+        f32 translucency = 0.0f, wrap = 0.0f;
+        ranged("translucency", 0, 1, translucency);
+        ranged("wrap", 0, 1, wrap);
+        asset::set_material_translucency(m, translucency, wrap);
         e.set_height(height);
         // Height is data, not color: an sRGB import (the texture default) would be uploaded as sRGB and bend the depth.
         if (ChunkType ht = ChunkType::Manifest; !height.is_null() && in.lookup && in.lookup->type_of(height, ht) && ht == ChunkType::Texture) {

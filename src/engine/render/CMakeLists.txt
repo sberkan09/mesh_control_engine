@@ -24,6 +24,7 @@ mce_add_library(mce_render
         src/sprite_animation.cpp
         src/sprite_batch.cpp
         src/terrain.cpp
+        src/translucency.cpp
         src/text.cpp
         src/texture_store.cpp
         src/types.cpp

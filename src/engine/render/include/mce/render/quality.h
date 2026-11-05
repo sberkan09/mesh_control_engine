@@ -13,6 +13,8 @@
 //   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
 //   (M-LIGHTCOOKIE 40b: light cookies are on in every tier; the tier bounds the cost: 128 / 256 / 512 texel layers, 4 / 8 / 16
 //   layers and 4 / 8 / 16 cookied lights on Low / Medium / High)
+//   (M-TRANSLUCENT 41b: material translucency and wrap are on in every tier; Low drops the back side's ambient and the
+//   forward-scatter lobe; cvar r.translucency)
 //   (M-VISUAL 5: TAA in place of the pre-tier FXAA on High; M-VISUAL 8: Low drops depth of field and
 //   motion blur, every tier keeps auto exposure and the color grade; M-VISUAL2 1: Low drops
 //   screen-space reflections; M-PARTICLEQ 28a: particle_scale, the share of a weather emitter's rate and
@@ -83,6 +85,11 @@ struct QualitySettings {
     u32 light_cookie_size = 512;
     u32 light_cookie_layers = 16;
     u32 light_cookie_lights = 16;
+    // M-TRANSLUCENT 41b: material translucency and wrap are honored in every tier (art direction); the tier bounds the cost.
+    // Low drops the back side's ambient (the ambient keeps the full diffuse) and the forward-scatter lobe.
+    bool translucency = true;
+    bool translucency_ambient = true;
+    bool translucency_scatter = true;
     // M-PARTICLEQ 28a: the share of rate and max_particles a render-side weather emitter keeps (0..1); Low 0.5,
     // Medium and High 1. No CVar. The weather particles read it in a later step (28b).
     f32 particle_scale = 1.0f;
