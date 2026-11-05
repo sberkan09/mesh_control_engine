@@ -324,3 +324,53 @@ TEST_CASE("liveops: consent_name names every consent state") {
     CHECK(StringView(consent_name(Consent::Granted)) == StringView("granted"));
     CHECK(StringView(consent_name(Consent::Denied)) == StringView("denied"));
 }
+
+namespace {
+
+struct CaptureSink final : ConfigFetchSink {
+    u32 fetched_calls = 0;
+    u32 failed_calls = 0;
+    void fetched(const ConfigValues&) override { ++fetched_calls; }
+    void fetch_failed() override { ++failed_calls; }
+};
+
+}  // namespace
+
+TEST_CASE("remote config: a file fetcher with no readable config fails the fetch, and says it needs no consent") {
+    const std::filesystem::path root = std::filesystem::path(MCE_TEST_TMP_DIR) / "rc_file_fetcher";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root / "empty", ec);
+
+    {
+        FileConfigFetcher missing((root / "no_such_pack").string().c_str());
+        CHECK(StringView(missing.name()) == StringView("file"));
+        CHECK_FALSE(missing.needs_consent());
+        CaptureSink sink;
+        missing.fetch(sink);
+        CHECK(sink.failed_calls == 1);
+        CHECK(sink.fetched_calls == 0);
+    }
+    {
+        FileConfigFetcher empty((root / "empty").string().c_str());  // mounts, but holds no config
+        CaptureSink sink;
+        empty.fetch(sink);
+        CHECK(sink.failed_calls == 1);
+        CHECK(sink.fetched_calls == 0);
+    }
+}
+
+TEST_CASE("remote config: a damaged cache is ignored and the defaults stay in force") {
+    fresh_save_root("rc_bad_cache");
+    const byte junk[5] = {byte{1}, byte{2}, byte{3}, byte{4}, byte{5}};
+    REQUIRE(save::write("remote_config", Span<const byte>(junk, 5)));
+    REQUIRE(save::exists("remote_config"));
+
+    Game g;
+    g.start(nullptr);
+    g.step();
+    CHECK(g.seen().every == 3);  // the default, not whatever the cache held
+    CHECK(g.rc().get_string("motd", "?") == "Welcome");
+    CHECK(g.rc().values().size() == 4);
+    CHECK(g.rc().version() == 0);
+}
