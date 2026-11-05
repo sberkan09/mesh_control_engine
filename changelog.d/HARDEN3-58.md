@@ -1,0 +1,1 @@
+- Tests: `input_system` mouse-only rebind capture and `cancel_rebind`, `touch_zone` binding held from the touch origin, `Resized` event and the refused zero view size (M-HARDEN3 step 4).

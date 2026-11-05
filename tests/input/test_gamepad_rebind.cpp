@@ -354,3 +354,32 @@ TEST_CASE("gamepad: quadratic and cubic curves shape a stick and keep its sign; 
     in.release_pad(0);
     in.release_pad(99);  // harmless
 }
+
+TEST_CASE("FR-INP-040: a mouse-only capture takes a mouse button and ignores keys; cancel_rebind stops a wait") {
+    InputSystem in;
+    test::setup_default(in);
+    in.sample_for_tick(1);
+    CHECK_FALSE(in.begin_rebind(kGameplay, kJump, 9));
+    in.cancel_rebind();  // nothing waiting: nothing changes
+    CHECK(in.rebind_state() == RebindState::Idle);
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0, 5.f, RebindAccept::Mouse));
+    in.push_event(key_event(Key::K, true, in_tick(2)));  // a key is not accepted: it acts normally
+    in.sample_for_tick(2);
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.push_event(key_event(Key::K, false, in_tick(3)));
+    in.push_event(test::simple_event(platform::EventType::MouseButtonDown, in_tick(3),
+                                     static_cast<u32>(platform::MouseButton::Right)));
+    in.sample_for_tick(3);
+    REQUIRE(in.rebind_state() == RebindState::Captured);
+    CHECK(in.rebind_result().device == Device::MouseButton);
+    CHECK(in.rebind_result().code == static_cast<u32>(platform::MouseButton::Right));
+
+    REQUIRE(in.begin_rebind(kGameplay, kJump, 0));
+    CHECK(in.rebind_state() == RebindState::Waiting);
+    in.cancel_rebind();
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+    in.push_event(key_event(Key::K, true, in_tick(4)));  // after a cancel nothing is captured
+    in.sample_for_tick(4);
+    CHECK(in.rebind_state() == RebindState::Cancelled);
+}
