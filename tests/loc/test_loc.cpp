@@ -363,3 +363,62 @@ TEST_CASE("loc: try_text reports a hit, and set_default_locale changes the last 
     CHECK(d.locale() == "tr");
     CHECK(d.text("menu.play") == "Oyna");
 }
+
+TEST_CASE("loc: case mapping covers Cyrillic, Greek and Latin Extended-A, and passes other scripts through") {
+    // Cyrillic: the basic range and the U+0400..U+040F block (Ё, Ђ ...).
+    CHECK(upper("ru", "привет") == "ПРИВЕТ");
+    CHECK(lower("ru", "ПРИВЕТ") == "привет");
+    CHECK(upper("ru", "ёж") == "ЁЖ");
+    CHECK(lower("ru", "ЁЖ") == "ёж");
+    CHECK(upper("uk", "ѓ") == "Ѓ");
+    CHECK(lower("uk", "Ѓ") == "ѓ");
+
+    // Greek, with the final sigma going up to the capital Σ.
+    CHECK(upper("el", "αβγ") == "ΑΒΓ");
+    CHECK(lower("el", "ΑΒΓ") == "αβγ");
+    CHECK(upper("el", "ς") == "Σ");
+
+    // Latin Extended-A: pairs where the even code point is the capital, and where the odd one is.
+    CHECK(upper("pl", "ąćęłńóśźż") == "ĄĆĘŁŃÓŚŹŻ");
+    CHECK(lower("pl", "ĄĆĘŁŃÓŚŹŻ") == "ąćęłńóśźż");
+    CHECK(upper("cs", "ĺľň") == "ĹĽŇ");
+    CHECK(lower("cs", "ĹĽŇ") == "ĺľň");
+    CHECK(upper("fr", "ÿ") == "Ÿ");
+    CHECK(lower("fr", "Ÿ") == "ÿ");
+    CHECK(upper("en", "ſ") == "S");  // long s
+    CHECK(upper("en", "ı") == "I");  // dotless i
+
+    // Three- and four-byte sequences are kept as they are, between letters that change.
+    CHECK(upper("en", "a€😀b") == "A€😀B");
+    CHECK(lower("en", "A€😀B") == "a€😀b");
+    CHECK(upper("ja", "かな") == "かな");
+}
+
+TEST_CASE("loc: case mapping passes malformed UTF-8 bytes through untouched") {
+    CHECK(upper("en",
+                "a\xFF"
+                "b") ==
+          "A\xFF"
+          "B");                                      // a byte that starts no sequence
+    CHECK(upper("en", "a\xE2\x82") == "A\xE2\x82");  // a three-byte sequence cut short
+    CHECK(lower("en",
+                "A\xC3"
+                "(B") ==
+          "a\xC3"
+          "(b");                           // a continuation byte that is not one
+    CHECK(upper("en", "\x80") == "\x80");  // a lone continuation byte
+}
+
+TEST_CASE("loc: plural forms of Hebrew, Slovak and the languages without plurals") {
+    CHECK(plural_form("he", 1) == PluralForm::One);
+    CHECK(plural_form("he", 2) == PluralForm::Two);
+    CHECK(plural_form("he", 5) == PluralForm::Other);
+    CHECK(plural_form("sk", 1) == PluralForm::One);
+    CHECK(plural_form("sk", 4) == PluralForm::Few);
+    CHECK(plural_form("sk", 5) == PluralForm::Other);
+    CHECK(plural_form("be", 2) == PluralForm::Few);
+    CHECK(plural_form("uk", 25) == PluralForm::Many);
+    CHECK(plural_form("ar", 1) == PluralForm::One);
+    CHECK(plural_form("ar", 100) == PluralForm::Other);
+    for (const char* l : {"zh", "ko", "th", "vi", "id"}) CHECK(plural_form(l, 1) == PluralForm::Other);
+}
