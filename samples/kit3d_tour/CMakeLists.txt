@@ -35,6 +35,14 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_cookie_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_cookie.mcscene
                      -DTICKS=60 -DENTITIES=15 -DTOUR=kit3d_tour_cookie -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The translucency scene (M-TRANSLUCENT 41g): scenes/tour_translucent.mcscene, a low sun behind a Foliage3D row of leaf cards, a paper
+    # screen, a paper lantern around a PointLight3D and wax / plain / skin spheres; its models, textures and .mcmat files are made by
+    # gen_translucent.py. Named tour_translucent so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 10 entities.
+    # (Chosen over 09_openworld: its trees and grass are opaque scenery of a driving test whose hashes and cook must not move, while the
+    # tour already shows the 3D kit's data components in one project and a leaf card, a paper screen and a lantern need a staged light.)
+    add_test(NAME sample_kit3d_tour_translucent_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_translucent.mcscene
+                     -DTICKS=60 -DENTITIES=10 -DTOUR=kit3d_tour_translucent -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -61,4 +69,16 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_cookie_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_cookie_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The translucency capture: the scene at tick 30, written for a look (build/.../kit3d_tour_translucent.ppm; samples keep no goldens).
+    # The leaf row glows against the low sun, the paper screen and the lantern glow, the wax sphere has a soft terminator;
+    # `-r.translucency 0` draws the plain materials.
+    add_test(NAME sample_kit3d_tour_translucent_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_translucent.mcscene -capture_tick 30
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_translucent.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_translucent_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_translucent_gpu)
 endif()

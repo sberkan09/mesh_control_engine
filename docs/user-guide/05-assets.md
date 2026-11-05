@@ -331,8 +331,10 @@ Optional extension keys add lobes on top of the base (all 0 by default, which is
 `sheen_roughness` (cloth and velvet), `anisotropy` (-1..1) and `anisotropy_rotation` (radians; brushed
 metal), `transmission` (0..1, see-through like glass; the frame behind shows through, tinted by the base
 color) and `ior` (1..3, 0 = 1.5; sets a dielectric's reflectance). A value out of range is a cook error.
-`translucency` and `wrap` (0..1, 0 = off; M-TRANSLUCENT 41c) are cooked into the material too (8 bits each, so 0.5 reads back as
-0.502) and drawn from step 41d: light through a thin surface such as a leaf or paper, and wrapped diffuse for skin or wax.
+`translucency` (thin-surface diffuse transmission: a leaf, paper or a lamp shade lit from behind glows with its own colour) and
+`wrap` (a soft terminator for skin, wax or cloth), both 0..1 and 0 = off, are cooked into the material too (M-TRANSLUCENT; 8 bits
+each, so 0.5 reads back as 0.502; a value out of range is a cook error). Chapter 8 ("Translucency and wrap") has the glTF
+extension and `extras` route, the tiers and the limits.
 
 **Height map (parallax, M-VISUAL3 2).** `textures.height` names a grey image (white is high; import it with
 `"srgb": false`) and `height_scale` (0..0.5, in texture repeats; 0.02..0.1 is typical) turns it on, with
