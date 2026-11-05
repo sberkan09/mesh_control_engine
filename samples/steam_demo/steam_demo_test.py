@@ -94,13 +94,16 @@ def main():
     # 3. The depot, started like Steam starts it.
     stage = os.path.join(a.work, "stage")
     os.makedirs(stage)
-    shutil.copy2(a.player, os.path.join(stage, "SteamDemo"))
+    exe_name = "SteamDemo" + os.path.splitext(a.player)[1]  # ".exe" on Windows
+    shutil.copy2(a.player, os.path.join(stage, exe_name))
     if a.engine != "-":
         shutil.copy2(a.engine, stage)
     shutil.copy2(a.pack, os.path.join(stage, "assets.mce"))
     out = os.path.join(a.work, "SteamDemo-steam")
-    mce_steam.make_depot(stage, out, 480, "linux-x64", a.stub, "1.0.0", "Steam Demo")
-    exe = os.path.join(out, "content", "linux-x64", "SteamDemo")
+    # The depot of the host platform: the player looks for that platform's steam_api library name.
+    os_tag = {"win32": "win64", "darwin": "macos"}.get(sys.platform, "linux-x64")
+    mce_steam.make_depot(stage, out, 480, os_tag, a.stub, "1.0.0", "Steam Demo")
+    exe = os.path.join(out, "content", os_tag, exe_name)
     log = run([exe, "-pack", "assets.mce", "-headless", "1", "-ticks", TICKS, "-platform.error_box", "0",
                "-save_dir", os.path.join(a.work, "save_depot")], env=dict(env, SteamAppId="480"), cwd=os.path.dirname(exe))
     expect(log, r"Steam on \(app 480, Stub Player\)", "the depot's game signs in from SteamAppId")
