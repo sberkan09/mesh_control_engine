@@ -1,0 +1,1 @@
+- Light cookies documented, M-LIGHTCOOKIE step 40i: the `08-3d` guide gets the full light-cookie paragraph (spot and sun forms, the sampler-bank sharing with decals, tier caps, `r.light_cookies`, Luau and MCP reach) and the `PointLight` / `DirectionalLight` table rows; the milestone is closed and its ROADMAP row is done.
