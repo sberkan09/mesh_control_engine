@@ -8,6 +8,7 @@ mce_add_test(test_asset
         test_asset_system.cpp
         test_container.cpp
         test_guid_formats.cpp
+        test_material_translucency.cpp
         test_mods.cpp
     DEPS
         mce::mce_asset)
