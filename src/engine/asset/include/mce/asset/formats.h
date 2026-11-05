@@ -331,6 +331,13 @@ enum : u32 {
     OcclusionInMR = 1u << 4,
     // The MetallicRoughness slot holds an occlusion-only map: R is AO, G/B are not data.
     OcclusionOnly = 1u << 5,
+    // M-TRANSLUCENT 41a: two quantized factors, 0..255 for 0..1 (accessors in mce/asset/material_translucency.h): bits 8..15 the
+    // translucency (light through a thin surface), bits 16..23 the diffuse wrap. 0, 0 (every material cooked before) is off.
+    // Bits 6, 7 and 24..31 stay free.
+    TranslucencyShift = 8,
+    TranslucencyMask = 0xFFu << 8,
+    WrapShift = 16,
+    WrapMask = 0xFFu << 16,
 };
 }
 

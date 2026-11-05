@@ -140,7 +140,7 @@ What must be looked at on a real GPU or a windowed run (none blocks the mileston
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 41a | planned | | |
+| 41a | done (2026-11-05) | | Seam in: `MaterialFlags` reservation, `mce/asset/material_translucency.h`, `Forward3DDesc::translucency`, `Forward3DStats::translucent_draws`, tests. `include_fanout.py` before / after: `formats.h` 498 of 999 / 500 of 1001 TUs, `forward3d.h` 167 of 999 / 168 of 1001 (the two new test TUs only), `material_translucency.h` 0 / 1 of 1001 (its test). Grep of every reader of `MaterialChunk::flags` and `MaterialFlags` (asset, cook, render, kit, tools): none rejects unknown bits (`MaterialChunk::read` checks the size only). Deviation: the header includes `formats.h` instead of forward-declaring `MaterialChunk`, because the inline accessors read `flags` and need the complete type; every includer has `formats.h` already. |
 | 41b | planned | | |
 | 41c | planned | | |
 | 41d | planned | | |
