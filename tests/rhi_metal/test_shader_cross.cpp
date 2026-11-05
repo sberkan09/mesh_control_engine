@@ -161,8 +161,8 @@ TEST_CASE("shader_cross: the edge outline stage") {
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
 
-// M-LIGHTCOOKIE 40c / 40d: the cookie bake stage and the lit mesh stage (render's shaders3d.h, the real sources)
-// translate: the bake with CookieBakeU at [[buffer(1)]] and its source at the GL binding 6; the lit stage with the shared
+// M-LIGHTCOOKIE 40c to 40f: the cookie bake stage, the lit mesh stage and the volumetric injection (render's shaders3d.h,
+// the real sources) translate: the bake with CookieBakeU at [[buffer(1)]] and its source at the GL binding 6; the lit stage with the shared
 // bank 2 (u_slot2: decal texture 2 or the cookie atlas) at texture and sampler 2 and the cookie records (storage bank 2)
 // at [[buffer(10)]] (kStorageBufferBase 8 + 2). Not built on Linux (macOS only): recorded in M-LIGHTCOOKIE as unverified
 // until a Mac run.
@@ -181,4 +181,11 @@ TEST_CASE("shader_cross: the light cookie bake stage and the lit stage's cookie 
     CHECK(contains(lit.value(), "u_slot2 [[texture(2)]]"));
     CHECK(contains(lit.value(), "[[sampler(2)]]"));
     CHECK(contains(lit.value(), "[[buffer(10)]]"));
+    // M-LIGHTCOOKIE 40f: the volumetric injection binds the atlas and the records where the lit stage does.
+    auto inject = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kVolInjectFS, "vol_inject.frag", log);
+    REQUIRE_MESSAGE(inject.has_value(), log.c_str());
+    if (!inject) return;
+    CHECK(contains(inject.value(), "u_slot2 [[texture(2)]]"));
+    CHECK(contains(inject.value(), "[[sampler(2)]]"));
+    CHECK(contains(inject.value(), "[[buffer(10)]]"));
 }

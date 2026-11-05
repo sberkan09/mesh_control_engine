@@ -175,7 +175,7 @@ TEST_CASE("light cookie: spot_cookie_edge is 1 when off, 0 at the border and a s
 TEST_CASE("light cookie: sun_cookie_uv has the period size and shifts by offset / size") {
     SunCookie c;
     c.size = 20.0f;
-    const math::vec3 down{0.0f, -1.0f, 0.0f};  // right = +X, up = +Z
+    const math::vec3 down{0.0f, -1.0f, 0.0f};  // the ground point is (x, z)
     const math::vec3 p{3.0f, 7.0f, -4.0f};
     const math::vec2 uv = sun_cookie_uv(p, down, c);
     CHECK(uv.x == doctest::Approx(3.0f / 20.0f));
@@ -219,7 +219,7 @@ TEST_CASE("light cookie: the sun roll turns the pattern counter-clockwise in the
     CHECK(r.y == doctest::Approx(-std::sin(0.7f) * 0.5f));
 }
 
-TEST_CASE("light cookie: the sun axes are stable under a tiny move of the sun and sanitize their inputs") {
+TEST_CASE("light cookie: the sun pattern is fixed on the ground, carried along the sun, and sanitizes its inputs") {
     SunCookie c;
     const math::vec3 world{12.0f, 3.0f, -8.0f};
     const math::vec3 d = math::normalize(math::vec3{0.3f, -0.9f, 0.1f});
@@ -227,10 +227,38 @@ TEST_CASE("light cookie: the sun axes are stable under a tiny move of the sun an
     const math::vec2 a = sun_cookie_uv(world, d, c), b = sun_cookie_uv(world, d2, c);
     CHECK(std::fabs(a.x - b.x) < 1e-3f);
     CHECK(std::fabs(a.y - b.y) < 1e-3f);
-    // Exactly vertical suns share the +Z hint, so a tiny move there does not swim either.
+    // Near the zenith there is no basis switch: a tiny move across vertical does not snap.
     const math::vec2 v1 = sun_cookie_uv(world, {0.0f, -1.0f, 0.0f}, c), v2 = sun_cookie_uv(world, {0.001f, -1.0f, 0.0f}, c);
-    CHECK(std::fabs(v1.x - v2.x) < 1e-2f);
-    CHECK(std::fabs(v1.y - v2.y) < 1e-2f);
+    const math::vec2 v3 = sun_cookie_uv(world, {0.0f, -1.0f, 0.02f}, c), v4 = sun_cookie_uv(world, {0.0f, -1.0f, 0.0175f}, c);
+    CHECK(std::fabs(v1.x - v2.x) < 1e-3f);
+    CHECK(std::fabs(v1.y - v2.y) < 1e-3f);
+    CHECK(std::fabs(v3.x - v4.x) < 1e-3f);
+    CHECK(std::fabs(v3.y - v4.y) < 1e-3f);
+    // On the ground (y = 0) the pattern does not depend on the sun at all (no swim with the azimuth or the height).
+    const math::vec3 ground{12.0f, 0.0f, -8.0f};
+    const math::vec2 g0 = sun_cookie_uv(ground, {0.0f, -1.0f, 0.0f}, c);
+    for (math::vec3 sd : {math::vec3{0.3f, -0.9f, 0.1f}, math::vec3{-0.7f, -0.4f, 0.6f}, math::vec3{0.0f, -0.2f, -1.0f}}) {
+        const math::vec2 g = sun_cookie_uv(ground, sd, c);
+        CHECK(g.x == doctest::Approx(g0.x));
+        CHECK(g.y == doctest::Approx(g0.y));
+    }
+    // Above the ground a point takes the pattern of the ground point the sun's ray through it reaches.
+    const math::vec3 hit = world + d * (world.y / -d.y);
+    CHECK(std::fabs(hit.y) < 1e-4f);
+    const math::vec2 h = sun_cookie_uv(hit, d, c);
+    CHECK(a.x == doctest::Approx(h.x));
+    CHECK(a.y == doctest::Approx(h.y));
+    // A grazing (or horizontal) sun is floored at kSunCookieMinDy: finite, and every sun below the floor projects alike.
+    const math::vec2 flat = sun_cookie_uv(world, {1.0f, 0.0f, 0.0f}, c);
+    const math::vec2 low = sun_cookie_uv(world, {1.0f, -0.01f, 0.0f}, c);
+    CHECK(std::isfinite(flat.x));
+    CHECK(std::isfinite(flat.y));
+    CHECK(flat.x == doctest::Approx((12.0f + 3.0f / kSunCookieMinDy) / 20.0f));
+    CHECK(std::fabs(flat.x - low.x) < 1e-3f);
+    CHECK(std::fabs(flat.y - low.y) < 1e-3f);
+    CHECK(sun_cookie_dy(0.0f) == -kSunCookieMinDy);
+    CHECK(sun_cookie_dy(-0.5f) == -0.5f);
+    CHECK(sun_cookie_dy(0.01f) == kSunCookieMinDy);
     // A NaN size is the default 20, a zero or NaN direction looks straight down, non-finite roll and offset count as 0.
     SunCookie bad;
     bad.size = kNaN;

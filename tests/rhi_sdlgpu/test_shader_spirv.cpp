@@ -266,7 +266,8 @@ TEST_CASE("shader_spirv: the edge outline stage") {
 // SDL GPU. The bake: CookieBakeU at bank kPass (1), the source at sampler 6 (a 2D array), no storage buffers. The lit
 // mesh and terrain stages: all 16 sampler banks, the shared bank 2 (decal texture 2 or the cookie atlas) a 2D array, and
 // six storage buffers (clusters 4, light pool 5, light indices 6, local shadows 11, decals 15 and the cookie records at
-// storage bank 2), under SDL GPU's eight per stage.
+// storage bank 2), under SDL GPU's eight per stage. The lit stages carry the sun's cookie (40e) in PassU and the same
+// atlas (texelFetch at sampler 2); the volumetric injection (40f) is checked below.
 TEST_CASE("shader_spirv: the light cookie bake stage and the lit stages with the cookie records") {
     FixedString<1024> log;
     {
@@ -295,6 +296,28 @@ TEST_CASE("shader_spirv: the light cookie bake stage and the lit stages with the
             if (res.sampler_slot[i] == 2) slot2 = res.sampler_kind[i] == SamplerKind::Tex2DArray;
         CHECK(slot2);
         CHECK(res.storage_count == 6);
+        bool cookies = false;
+        for (u32 i = 0; i < res.storage_count; ++i) cookies = cookies || res.storage_binding[i] == 2;
+        CHECK(cookies);
+    }
+    // M-LIGHTCOOKIE 40f: the volumetric injection reads the same cookies (the spot records, the sun's PassU members and
+    // the atlas at the bank the pass has free of decals, 2): the clusters' three lists, the local shadows and the
+    // records (five storage buffers), the atlas a 2D array at sampler 2 beside the shadow maps at 9.
+    {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kVolInjectFS, "vol_inject.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        bool slot2 = false, shadow = false;
+        for (u32 i = 0; i < res.sampler_count; ++i) {
+            if (res.sampler_slot[i] == 2) slot2 = res.sampler_kind[i] == SamplerKind::Tex2DArray;
+            shadow = shadow || res.sampler_slot[i] == 9;
+        }
+        CHECK(slot2);
+        CHECK(shadow);
+        CHECK(res.storage_count == 5);
         bool cookies = false;
         for (u32 i = 0; i < res.storage_count; ++i) cookies = cookies || res.storage_binding[i] == 2;
         CHECK(cookies);
