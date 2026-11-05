@@ -123,7 +123,6 @@
     { "name": "linux-asan",          "configurePreset": "linux-asan" },
     { "name": "macos-debug",         "configurePreset": "macos-debug" },
     { "name": "macos-release",       "configurePreset": "macos-release" },
-    { "name": "macos-release-hosted", "inherits": "macos-release", "filter": { "exclude": { "label": "gpu|slow" } } },
     { "name": "macos-asan",          "configurePreset": "macos-asan" },
     { "name": "android-arm64-debug",   "configurePreset": "android-arm64-debug" },
     { "name": "android-arm64-release", "configurePreset": "android-arm64-release" },
@@ -145,6 +144,7 @@
     { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-release-hosted", "inherits": "macos-release", "filter": { "exclude": { "label": "gpu|slow" } } },
     { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } }
   ]
 }
