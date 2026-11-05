@@ -1,0 +1,13 @@
+site_name: Mesh Control Engine
+site_url: https://sberkan09.github.io/mesh_control_engine/
+repo_url: https://github.com/sberkan09/mesh_control_engine
+docs_dir: docs
+site_dir: build/site
+theme:
+  name: readthedocs
+# Plain Markdown, no nav: mkdocs lists every page. Links are checked by scripts/ci/check_docs.py (walls stage).
+validation:
+  links:
+    not_found: ignore
+    anchors: ignore
+    unrecognized_links: ignore

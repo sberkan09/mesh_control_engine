@@ -1,0 +1,48 @@
+# Builds the docs/ directory with MkDocs and deploys it to GitHub Pages.
+# Needs Settings > Pages > Source = "GitHub Actions" (a repository setting, not a file). Until that is on,
+# the build job still runs (so a PR checks the site builds) and the deploy job is skipped.
+name: pages
+
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', 'mkdocs.yml', '.github/workflows/pages.yml']
+  pull_request:
+    paths: ['mkdocs.yml', '.github/workflows/pages.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install mkdocs==1.6.1
+      - run: mkdocs build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    # Only from master, and only once Pages is switched on (repository variable PAGES_ENABLED=true).
+    if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
