@@ -28,6 +28,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_ink_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_ink.mcscene
                      -DTICKS=60 -DENTITIES=23 -DTOUR=kit3d_tour_ink -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The cookie scene (M-LIGHTCOOKIE 40h): scenes/tour_cookie.mcscene, a room with a window wall, a SpotLight3D + LightCookie3D shining a
+    # window grid onto the floor and a SunCookie3D leaf dapple over the terrain; its textures are made by gen_cookies.py. Named tour_cookie so it sorts after
+    # scenes/tour.mcscene, so the default scene stays the tour. 15 entities. (Chosen over 11_daynight and 09_openworld: the plan puts the
+    # cookie sample in the tour, which already shows the 3D kit's data components in one project.)
+    add_test(NAME sample_kit3d_tour_cookie_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_cookie.mcscene
+                     -DTICKS=60 -DENTITIES=15 -DTOUR=kit3d_tour_cookie -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -43,4 +50,15 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_ink_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_ink_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The cookie capture: the cookie scene at tick 30, written for a look (build/.../kit3d_tour_cookie.ppm; samples keep no goldens).
+    # The window grid lies on the floor and the leaf dapple on the terrain; `-r.light_cookies 0` draws the plain lights.
+    add_test(NAME sample_kit3d_tour_cookie_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_cookie.mcscene -capture_tick 30
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_cookie.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_cookie_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_cookie_gpu)
 endif()
