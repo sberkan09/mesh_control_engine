@@ -80,6 +80,9 @@ struct Forward3DDesc {
     // Light cookie bake pipeline and atlas (M-LIGHTCOOKIE 40a), created lazily when a scene has a cookie. False (or -r.light_cookies 0)
     // draws every light without one.
     bool light_cookies = true;
+    // Translucency and diffuse wrap (M-TRANSLUCENT 41a): materials carrying the factors (mce/asset/material_translucency.h) light their
+    // back and terminator. False (or -r.translucency 0) forces every draw's value to 0 for the renderer's life.
+    bool translucency = true;
     // Edge outline pipelines (M-OUTLINE 39a), and with them the prepass pipelines the outline reads; a scene turns it on with
     // PostFx::outline. False (or -r.edge_outline 0) draws every scene without it.
     bool edge_outline = true;
@@ -143,6 +146,7 @@ struct Forward3DStats {
     u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
     u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
     bool sun_cookie = false;         // the sun's cookie shaped this frame
+    u32 translucent_draws = 0;       // draws this frame whose resolved translucency or wrap is not 0 (M-TRANSLUCENT)
     u32 batches = 0;                 // instance batches drawn (M-VISUAL 9)
     bool batches_gpu = false;        // ... culled by the compute pass (false: on the CPU)
     bool occlusion = false;          // ... and tested against the depth pyramid
