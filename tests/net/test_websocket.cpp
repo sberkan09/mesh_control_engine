@@ -200,3 +200,100 @@ TEST_CASE("net websocket: pending_bytes counts what a send queued until flush ha
     REQUIRE(pump(server, s, client, c, [&] { return s.received == 2; }));
     CHECK(client.pending_bytes(to_server) == 0);  // all of it reached the socket
 }
+
+TEST_CASE("net websocket: a bad description or a full client is refused, and a closed host answers with zeros") {
+    WebSocketHost h;
+    WebSocketDesc d = loopback();
+    d.channels = 0;
+    CHECK_FALSE(h.listen(d));
+    d = loopback();
+    d.max_peers = 0;
+    CHECK_FALSE(h.listen(d));
+
+    // Closed: no stats, a broadcast and a connect do nothing.
+    CHECK(h.stats(0).rtt_ms == 0);
+    const Array<u8> msg = pattern(8);
+    h.broadcast(0, Span<const u8>(msg.data(), msg.size()), Delivery::Reliable);
+    CHECK(h.connect("127.0.0.1", 1) == kInvalidPeer);
+
+    // A client built with one slot has none left for a second connection.
+    WebSocketHost server;
+    REQUIRE(server.listen(loopback()));
+    WebSocketHost client;
+    WebSocketDesc cd = WebSocketHost::client_desc();
+    cd.max_peers = 1;
+    REQUIRE(client.open_client(cd));
+    REQUIRE(client.connect("127.0.0.1", server.bound_port()) != kInvalidPeer);
+    CHECK(client.connect("127.0.0.1", server.bound_port()) == kInvalidPeer);
+}
+
+TEST_CASE("net websocket: broadcast reaches every connected client, and pings keep a live link up and measure it") {
+    WebSocketDesc sd = loopback(3);
+    sd.ping_interval_ms = 5;
+    WebSocketHost server;
+    REQUIRE(server.listen(sd));
+    WebSocketHost a, b;
+    WebSocketDesc cd = WebSocketHost::client_desc();
+    cd.channels = 3;
+    cd.ping_interval_ms = 5;
+    REQUIRE(a.open_client(cd));
+    REQUIRE(b.open_client(cd));
+    const PeerId pa = a.connect("127.0.0.1", server.bound_port());
+    const PeerId pb = b.connect("127.0.0.1", server.bound_port());
+    Seen s, ca, cb;
+    const auto both_up = [&] { return ca.connected == pa && cb.connected == pb; };
+    const auto run = [&](auto&& done) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        while (std::chrono::steady_clock::now() < deadline) {
+            for (Event ev; server.poll(ev);) take(s, ev);
+            for (Event ev; a.poll(ev);) take(ca, ev);
+            for (Event ev; b.poll(ev);) take(cb, ev);
+            server.flush();
+            a.flush();
+            b.flush();
+            if (done()) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
+    };
+    REQUIRE(run(both_up));
+
+    const Array<u8> msg = pattern(33);
+    server.broadcast(2, Span<const u8>(msg.data(), msg.size()), Delivery::Reliable);
+    REQUIRE(run([&] { return ca.received == 1 && cb.received == 1; }));
+    CHECK(ca.channel == 2);
+    CHECK(same(ca.last, msg));
+    CHECK(same(cb.last, msg));
+
+    // Let several ping intervals pass: pongs come back, nobody is dropped, and stats stay readable.
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(120);
+    run([&] { return std::chrono::steady_clock::now() > until; });
+    CHECK_FALSE(ca.disconnected);
+    CHECK_FALSE(cb.disconnected);
+    CHECK_FALSE(s.disconnected);
+    CHECK(server.stats(s.connected).rtt_ms < 1000);
+    CHECK(a.stats(pa).rtt_ms < 1000);
+    CHECK(a.stats(1000).rtt_ms == 0);  // no such peer
+}
+
+TEST_CASE("net websocket: a peer that answers no ping is dropped after the timeout") {
+    WebSocketDesc sd = loopback();
+    sd.ping_interval_ms = 5;
+    sd.timeout_ms = 80;
+    WebSocketHost server;
+    REQUIRE(server.listen(sd));
+    WebSocketHost silent;
+    REQUIRE(silent.open_client());
+    const PeerId p = silent.connect("127.0.0.1", server.bound_port());
+    Seen s, c;
+    REQUIRE(pump(server, s, silent, c, [&] { return s.connected != kInvalidPeer && c.connected == p; }));
+
+    // From here only the server runs; the client never reads its pings, so no pong comes back.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (!s.disconnected && std::chrono::steady_clock::now() < deadline) {
+        for (Event ev; server.poll(ev);) take(s, ev);
+        server.flush();
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(s.disconnected);
+}
