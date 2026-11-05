@@ -22,12 +22,14 @@ import argparse
 import json
 import os
 import pathlib
+import queue
 import re
 import select
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -61,17 +63,42 @@ def normalize_message(line):
 REPLY_TIMEOUT = 60.0
 
 
+def _pump(proc, state):
+    """Windows: select() only takes sockets, so a thread moves the pipe's bytes into a queue."""
+    while True:
+        chunk = os.read(proc.stdout.fileno(), 65536)
+        state.put(chunk)
+        if not chunk:
+            return
+
+
+_readers = {}
+
+
 def read_line(proc, buf, deadline_s=REPLY_TIMEOUT):
     """One stdout line from proc (bytes buffer kept in buf), or None on EOF / timeout."""
     fd = proc.stdout.fileno()
-    while b"\n" not in buf:
-        ready, _, _ = select.select([fd], [], [], deadline_s)
-        if not ready:
-            return None
-        chunk = os.read(fd, 65536)
-        if not chunk:
-            return None
-        buf += chunk
+    if os.name == "nt":
+        if proc not in _readers:
+            _readers[proc] = queue.Queue()
+            threading.Thread(target=_pump, args=(proc, _readers[proc]), daemon=True).start()
+        while b"\n" not in buf:
+            try:
+                chunk = _readers[proc].get(timeout=deadline_s)
+            except queue.Empty:
+                return None
+            if not chunk:
+                return None
+            buf += chunk
+    else:
+        while b"\n" not in buf:
+            ready, _, _ = select.select([fd], [], [], deadline_s)
+            if not ready:
+                return None
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                return None
+            buf += chunk
     line, _, rest = bytes(buf).partition(b"\n")
     buf[:] = rest
     return line.decode()

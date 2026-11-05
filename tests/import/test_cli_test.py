@@ -96,6 +96,10 @@ def main(work):
     fake = bin_dir / "mce_mcp"
     fake.write_text(FAKE)
     fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+    if os.name == "nt":
+        # Windows does not run a shebang: mce looks for mce_mcp<EXE>, so give it a .cmd that starts the script.
+        (bin_dir / "mce_mcp.cmd").write_text(f'@"{sys.executable}" "{fake}" %*\r\n')
+        mce.EXE = ".cmd"
     mce.BIN = bin_dir
 
     os.environ["MODE"] = "pass"
