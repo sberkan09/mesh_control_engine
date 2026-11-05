@@ -1,0 +1,1 @@
+- Tests: `GameServices::sign_in`, `show_achievements`, `show_leaderboard` and the no-provider handle (M-HARDEN3 step 4).
