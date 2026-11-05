@@ -7,7 +7,9 @@
 // color, normal, metallic-roughness (ORM), emissive and occlusion textures (all on TEXCOORD_0, one
 // KHR_texture_transform per material), plus KHR_materials_unlit, KHR_materials_emissive_strength and the
 // factors of KHR_materials_clearcoat / _sheen / _anisotropy / _transmission / _ior (their textures are not
-// imported); node TRS (or a decomposable matrix); translation/rotation/scale animation channels; skins with
+// imported); M-TRANSLUCENT 41c: KHR_materials_diffuse_transmission's diffuseTransmissionFactor (the translucency; its colour factor
+// and textures are not used), KHR_materials_volume (accepted, the surface stays thin) and the material extras
+// mce_translucency / mce_wrap (0..1; they win over the extension); node TRS (or a decomposable matrix); translation/rotation/scale animation channels; skins with
 // JOINTS_n / WEIGHTS_n (the 4 largest of up to 8 sets, renormalized; up to 256 joints per skin) and inverse
 // bind matrices.
 //
@@ -70,6 +72,7 @@
 
 #include "importer_common.h"
 #include "mce/asset/formats.h"
+#include "mce/asset/material_translucency.h"
 #include "mce/math/math.h"
 #include "mesh_build.h"
 #include "meshoptimizer.h"
@@ -95,6 +98,8 @@ constexpr StringView kSupportedExtensions[] = {"KHR_texture_transform",
                                                "KHR_materials_anisotropy",
                                                "KHR_materials_transmission",
                                                "KHR_materials_ior",
+                                               "KHR_materials_diffuse_transmission",
+                                               "KHR_materials_volume",
                                                "KHR_mesh_quantization",
                                                "EXT_meshopt_compression"};
 
@@ -112,7 +117,15 @@ constexpr u32 kMaxMorphTargets = 512;
 constexpr u32 kMaxInfluenceSets = 8;                   // JOINTS_0..7 / WEIGHTS_0..7
 
 // The warn-once features of Ctx::warn_once.
-enum FeatureWarning : u32 { kWarnColor = 1, kWarnTexcoord = 2, kWarnCamera = 4, kWarnLight = 8, kWarnMorph = 16 };
+enum FeatureWarning : u32 {
+    kWarnColor = 1,
+    kWarnTexcoord = 2,
+    kWarnCamera = 4,
+    kWarnLight = 8,
+    kWarnMorph = 16,
+    kWarnTransmitColor = 32,
+    kWarnVolume = 64
+};
 
 bool supported_extension(StringView name) {
     for (StringView s : kSupportedExtensions)
@@ -997,6 +1010,53 @@ asset::MaterialExt convert_material_ext(Ctx& cx, const Gltf& g, JsonValue mat_in
     return e;
 }
 
+// M-TRANSLUCENT 41c: the translucency and wrap bits of a material (see mce/asset/material_translucency.h).
+// KHR_materials_diffuse_transmission: diffuseTransmissionFactor -> translucency. MCE tints the transmitted light with the
+// base colour, so a diffuseTransmissionColorFactor other than white and the extension's textures are not used (one warning
+// per file). KHR_materials_volume is accepted; the surface is still thin (one warning per file when thicknessFactor > 0).
+// The material's `extras` (Blender writes custom properties there) may carry mce_translucency / mce_wrap (numbers, 0..1) and
+// win over the extension; an out-of-range value is clamped with a warning, a non-number is ignored with one.
+void convert_translucency(Ctx& cx, JsonValue mat, asset::MaterialChunk& m) {
+    f32 translucency = 0.0f, wrap = 0.0f;
+    const JsonValue ext = mat.get("extensions");
+    if (const JsonValue dt = ext.get("KHR_materials_diffuse_transmission"); dt.is_object()) {
+        if (const JsonValue f = dt.get("diffuseTransmissionFactor"); f.is_number()) {
+            const f64 v = f.as_number();
+            if (!(v >= 0.0 && v <= 1.0)) cx.warning(f, "diffuseTransmissionFactor is outside [0, 1]; clamped");
+            translucency = static_cast<f32>(v);
+        }
+        bool unused = dt.get("diffuseTransmissionTexture").valid() || dt.get("diffuseTransmissionColorTexture").valid();
+        if (const JsonValue c = dt.get("diffuseTransmissionColorFactor"); c.is_array()) {
+            for (u32 i = 0; i < c.size(); ++i)
+                if (!c.at(i).is_number() || c.at(i).as_number() != 1.0) unused = true;
+        }
+        if (unused)
+            cx.warn_once(kWarnTransmitColor, dt,
+                         "the transmitted light takes the base colour; diffuseTransmissionColorFactor and the extension's textures are not cooked");
+    }
+    if (const JsonValue vol = ext.get("KHR_materials_volume"); vol.is_object()) {
+        const JsonValue th = vol.get("thicknessFactor");
+        if (th.is_number() && th.as_number() > 0.0)
+            cx.warn_once(kWarnVolume, vol, "KHR_materials_volume is accepted but not used: translucency treats the surface as thin");
+    }
+    const JsonValue extras = mat.get("extras");
+    if (extras.is_object()) {
+        auto read = [&](StringView key, f32& dst) {
+            const JsonValue v = extras.get(key);
+            if (!v.valid()) return;
+            if (!v.is_number()) {
+                cx.warning(v, "this extras value must be a number in [0, 1]; ignored");
+                return;
+            }
+            if (!(v.as_number() >= 0.0 && v.as_number() <= 1.0)) cx.warning(v, "this extras value is outside [0, 1]; clamped");
+            dst = static_cast<f32>(v.as_number());
+        };
+        read("mce_translucency", translucency);
+        read("mce_wrap", wrap);
+    }
+    asset::set_material_translucency(m, translucency, wrap);
+}
+
 asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_index, TextureRef& tex) {
     asset::MaterialChunk m{};
     m.base_color[0] = m.base_color[1] = m.base_color[2] = m.base_color[3] = 1.0f;
@@ -1029,6 +1089,7 @@ asset::MaterialChunk convert_material(Ctx& cx, const Gltf& g, JsonValue mat_inde
     }
     if (mat.get("doubleSided").is_bool() && mat.get("doubleSided").as_bool()) m.flags |= asset::MaterialFlags::DoubleSided;
     if (mat.get("extensions").get("KHR_materials_unlit").valid()) m.flags |= asset::MaterialFlags::Unlit;
+    convert_translucency(cx, mat, m);
     if (base_color_texture(cx, g, mi, tex) && tex.present) set_texture(m, asset::MaterialSlot::BaseColor, tex.guid);
     // The other maps share TEXCOORD_0 and the base color's KHR_texture_transform (baked into the
     // UVs once per submesh); a map with a different transform samples with the base one.

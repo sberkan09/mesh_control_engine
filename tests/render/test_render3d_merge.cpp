@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 
+#include "mce/asset/material_translucency.h"
 #include "mce/render/mesh.h"
 #include "mce/render/scene3d.h"
 #include "mce/render/static_merge.h"
@@ -184,6 +185,27 @@ TEST_CASE("static merge: a material override, double-sided and lobes split the k
     CHECK((v.submeshes[1].material.flags & asset::MaterialFlags::DoubleSided) != 0);
     CHECK(v.material_ext(3).clearcoat == doctest::Approx(1.0f));
     CHECK(v.material_ext(2).clearcoat == doctest::Approx(0.0f));
+}
+
+TEST_CASE("static merge: a translucent or wrapped submesh is its own group and keeps its bits (M-TRANSLUCENT 41c)") {
+    const Piece plain = make_piece({0.5f, 0.5f, 0.5f}, 0.2f, 0.7f, 0.2f);
+    const Piece leaf = make_piece({0.5f, 0.5f, 0.5f}, 0.2f, 0.7f, 0.2f, {}, 128u << asset::MaterialFlags::TranslucencyShift);
+    const Piece skin = make_piece({0.5f, 0.5f, 0.5f}, 0.2f, 0.7f, 0.2f, {}, 255u << asset::MaterialFlags::WrapShift);
+    const MergeSource s[] = {src(plain, {0, 0, 0}), src(leaf, {2, 0, 0}), src(skin, {4, 0, 0}), src(leaf, {6, 0, 0}), src(plain, {8, 0, 0})};
+    Array<byte> blob;
+    REQUIRE(build_merged_mesh(Span<const MergeSource>(s, 5), blob));
+    const asset::MeshView v = asset::MeshView::read(blob.span()).value();
+    REQUIRE(v.submeshes.size() == 3);  // plain x2, leaf x2, skin
+    u32 translucent = 0, wrapped = 0, off = 0;
+    for (const asset::MeshSubmesh& sm : v.submeshes) {
+        const u32 bits = asset::translucency_bits(sm.material.flags);
+        translucent += (bits & asset::MaterialFlags::TranslucencyMask) != 0;
+        wrapped += (bits & asset::MaterialFlags::WrapMask) != 0;
+        off += bits == 0;
+    }
+    CHECK(translucent == 1);
+    CHECK(wrapped == 1);
+    CHECK(off == 1);
 }
 
 TEST_CASE("static merge: LOD level k is the union of each source's level min(k, levels - 1)") {

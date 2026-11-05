@@ -9,6 +9,7 @@
 
 #include "cook_test_util.h"
 #include "mce/asset/asset_system.h"
+#include "mce/asset/material_translucency.h"
 #include "mce/asset/xxhash.h"
 #include "mce/cook/cook.h"
 #include "mce/cook/envmap.h"
@@ -948,6 +949,49 @@ TEST_CASE("material: a height map imported as sRGB warns, naming the texture; sr
     const CookReport quiet = svc.cook(root.c_str(), CookOptions{});
     REQUIRE(quiet.ok());
     CHECK(height_warnings(quiet) == 0);
+}
+
+TEST_CASE("material: translucency and wrap cook into the flags word; a plain material keeps them 0; bad ranges fail") {
+    const std::string root = make_project("cook_material_translucency");
+    const std::string head = std::string(R"({ "format": "mce-material", "version": 1, "guid": ")") + kMatGuid;
+    auto cooked_chunk = [&](MaterialChunk& out) {
+        CookService cs;
+        const CookReport rep = cs.cook(root.c_str(), CookOptions{});
+        REQUIRE(rep.ok());
+        AssetSystem as;
+        const std::string cooked = root + "/cooked";
+        const StringView roots[] = {StringView(cooked.c_str())};
+        REQUIRE(as.mount(Span<const StringView>(roots, 1)).has_value());
+        auto mh = as.load_sync<Material>(G(kMatGuid));
+        REQUIRE(mh);
+        const Span<const byte> payload = as.resolve(mh.value());
+        REQUIRE(MaterialChunk::read(payload));
+        out = *MaterialChunk::read(payload).value();
+        as.release(AnyHandle(mh.value()));
+    };
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(", "double_sided": true, "translucency": 0.5, "wrap": 1 })");
+    MaterialChunk m{};
+    cooked_chunk(m);
+    CHECK(material_translucency(m) == doctest::Approx(0.5f).epsilon(0.005));
+    CHECK(material_wrap(m) == 1.0f);
+    CHECK((m.flags & MaterialFlags::DoubleSided) != 0u);
+
+    // Without the keys the flags word has no translucency or wrap bits: the chunk is what it was before 41c.
+    write_file(root + "/assets/materials/hero.mcmat", head + R"(", "double_sided": true })");
+    MaterialChunk plain{};
+    cooked_chunk(plain);
+    CHECK(translucency_bits(plain.flags) == 0u);
+    CHECK(plain.flags == MaterialFlags::DoubleSided);
+
+    // Out of range: a cook error naming the key.
+    CookService svc;
+    for (const char* body : {R"(", "translucency": 1.5 })", R"(", "wrap": -0.1 })"}) {
+        write_file(root + "/assets/materials/hero.mcmat", head + body);
+        const CookReport bad = svc.cook(root.c_str(), CookOptions{});
+        CHECK(!bad.ok());
+        CHECK(report_for(bad, kMatGuid)->status == AssetStatus::Failed);
+        CHECK(diag_text(bad).find("must be within [0, 1]") != std::string::npos);
+    }
 }
 
 TEST_CASE("material: the M-VISUAL2 4 lobes cook after the base block; a plain material has none; bad ranges fail") {
