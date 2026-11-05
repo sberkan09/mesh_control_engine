@@ -13,14 +13,14 @@ tests are excluded: hosted runners have no usable GPU. Linux stays the gate (`ci
 | 2. First-run build fixes, Windows (C4702 after `luaL_error`, module host headers for UMBRELLA targets without the umbrella, `net_arena` deps and `<algorithm>`, C4310 `char` casts, `_putenv_s`, `std::popcount`) | PR #1088 |
 | 3. macOS: `macos-26` runner (Xcode 16.4's libc++ has no floating-point `from_chars`) | PR #1088, builds green |
 | 4a. `test_core` (group 4): fixed in PR #1098, it passes on the hosted runner. Cause was not `PlatformInit` (that line is a test that fails `on_init` on purpose) but the convar settings tests writing to the nonexistent `/tmp` | done |
-| 4. Windows `ctest`: the build is green; 17 of 201 tests fail and two hung the first full run until the 4 h job limit (ctest now has `--timeout 600`, jobs 150 min) | open: `import_demo_reimport`, `sample_steam_demo`, `ai_demo_editor_bt`, `Dungeon_perf_counters`(+`_seeded`), `marble_garden_mctests`, `test_core` (0xc0000409), `test_cook`, `test_fuzz_script`, `test_fuzz_importers`, `cli_test`, `test_script`, `player_scripts`, `test_editor`, `mcp_transcript`, `test_mcp_playtest`, `test_mcp_agent`; each needs a look |
-| 5. macOS test failures below | `sdk_install` and `sample_steam_demo` fixed on master; `test_kit` and `test_mcp_agent` open |
+| 4. Windows `ctest` | done: all 197 non-GPU tests pass on the hosted runner (PRs #1098, #1099 Luau/MSVC, #1100 + #1101 paths and cook temp names, #1104 FBX test, #1122 the rest). Last causes: GPU-labelled tests ran because a command-line `-LE` did not override the preset filter (now `msvc-release-hosted`), `test_mcp_agent` split-screen case needs a window, and `sample_net_arena` defined a second `headless` convar that MSVC shadowed (the test fell into the windowed path and hung) |
+| 5. macOS test failures | done in #1122: `test_kit` `*_extract` read freed memory (pointer into a temporary frame; the frame now outlives it), `test_move3d` lap tolerance widened for AppleClang FMA drift, `test_mcp_agent` skips the window-opening case; `sdk_install` and `sample_steam_demo` were fixed earlier |
 | 6a. Android APK build (`android.yml`: host `mce_cook`, NDK r28, Gradle, debug-signed APK as an artifact) | done, PR #1097 (green on the first run, 19 min) |
 | 6b. Web build | already in the integration run (`tidy-web` group runs the `web` stage) |
-| 6c. Release packages (`release.yml`: Ember Step zip for Linux, Windows and macOS; on a `v*` tag attached to a GitHub release) | PR open; first run decides |
-| 6d. GitHub Pages for the docs (`pages.yml`, MkDocs) | PR open; the build runs on the PR, the deploy job waits for Settings > Pages > Source "GitHub Actions" and the repository variable `PAGES_ENABLED=true` |
+| 6c. Release packages (`release.yml`: Ember Step zip for Linux, Windows and macOS; on a `v*` tag attached to a GitHub release) | done, PR #1103 |
+| 6d. GitHub Pages for the docs (`pages.yml`, MkDocs) | done, PRs #1110 and #1120; live at https://sberkan09.github.io/mesh_control_engine/ (Pages Source "GitHub Actions", repository variable `PAGES_ENABLED=true`) |
 
-## Known macOS failures on the hosted runner (204 of 208 pass)
+## Known macOS failures on the hosted runner (history; all fixed, see steps 4 and 5)
 
 The runner is a VM without a Metal GPU, so some of these may be environmental; each needs a look before it is
 called so. None is skipped.
