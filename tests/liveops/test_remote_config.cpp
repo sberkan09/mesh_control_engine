@@ -374,3 +374,57 @@ TEST_CASE("remote config: a damaged cache is ignored and the defaults stay in fo
     CHECK(g.rc().values().size() == 4);
     CHECK(g.rc().version() == 0);
 }
+
+TEST_CASE("remote config: a stream that is not a recording is refused and changes nothing") {
+    fresh_save_root("rc_replay_bad");
+    const byte junk[16] = {};
+    const Span<const byte> streams[] = {Span<const byte>(), Span<const byte>(junk, 3), Span<const byte>(junk, 16)};
+    for (const Span<const byte>& s : streams) {
+        Game g;
+        g.start(nullptr);
+        ConfigReplayer rp(s);
+        g.service.set_replayer(&rp);
+        CHECK(rp.corrupt());
+        for (int i = 0; i < 5; ++i) g.step();
+        CHECK(g.seen().every == 3);  // the defaults stay in force
+        CHECK(g.seen().version == 0);
+    }
+}
+
+TEST_CASE("remote config: a recording cut short stops the replay at the damage") {
+    fresh_save_root("rc_replay_cut");
+    set_consent(Consent::Granted);
+    ConfigRecorder rec;
+    {
+        ScriptedFetcher fetcher;
+        Game g;
+        g.start(&fetcher);
+        g.service.set_recorder(&rec);
+        for (int i = 0; i < 30; ++i) {
+            if (i == 10) g.rc().apply_fetched();
+            g.step();
+        }
+        CHECK(g.seen().every == 5);
+    }
+    const Span<const byte> whole = rec.bytes();
+    // Cut at several points inside the one recorded change, after the header.
+    for (usize cut = 1; cut <= 12; cut += 3) {
+        fresh_save_root("rc_replay_cut_2");
+        Game g;
+        g.start(nullptr);
+        ConfigReplayer rp(Span<const byte>(whole.data(), whole.size() - cut));
+        g.service.set_replayer(&rp);
+        CHECK_FALSE(rp.corrupt());  // the header is whole
+        for (int i = 0; i < 30; ++i) g.step();
+        CHECK(rp.corrupt());
+        CHECK(g.seen().every == 3);  // the cut change never applied
+    }
+    set_consent(Consent::Unknown);
+}
+
+TEST_CASE("remote config: an unbound handle has no values and answers with the default") {
+    const RemoteConfig none;
+    CHECK(none.values().empty());
+    CHECK(none.get<i64>("every", 42) == 42);
+    CHECK(none.version() == 0);
+}

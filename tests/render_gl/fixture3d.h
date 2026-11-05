@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "../render/mesh_fixture.h"
+#include "mce/asset/material_translucency.h"
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -960,6 +961,65 @@ inline void outline_scene(Scene3D& s, const EdgeOutline* outline, bool taa = fal
     b.mesh = kOutlineBoxMesh;
     b.world = math::translation(kOutlineBoxAt);
     s.add(b);
+}
+
+// ---- M-TRANSLUCENT 41d: thin cards ------------------------------------------------------------------------------
+
+// Mesh `key`: one quad of 2 half x 2 half metres in its local xy plane, its normal +z (counter-clockwise seen from +z);
+// `reversed` stores the normal -z with the same winding (a surface whose normal points away from the side it faces).
+inline void upload_card(Fixture3D& f, u32 key, f32 half, bool reversed = false) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    asset::MeshSubmesh sm{};
+    sm.extent[0] = sm.extent[1] = half;
+    sm.extent[2] = 0.01f;
+    sm.uv_scale[0] = sm.uv_scale[1] = 1.0f;
+    for (int i = 0; i < 4; ++i) sm.material.base_color[i] = 1.0f;
+    sm.material.roughness = 0.9f;
+    const f32 xs[4] = {-1, 1, 1, -1}, ys[4] = {-1, -1, 1, 1};
+    for (int c = 0; c < 4; ++c) {
+        asset::MeshVertex q{};
+        q.position[0] = mesh_fixture::Builder::snorm(xs[c]);
+        q.position[1] = mesh_fixture::Builder::snorm(ys[c]);
+        q.normal[0] = q.normal[1] = reversed ? 32767 : 0;  // octahedral (1, 1) = -z, (0, 0) = +z
+        b.vertices.push_back(q);
+    }
+    for (u16 i : {u16(0), u16(1), u16(2), u16(0), u16(2), u16(3)}) b.indices.push_back(i);
+    sm.vertex_count = 4;
+    sm.index_count = 6;
+    b.submeshes.push_back(sm);
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// The world matrix that puts the card at `c` with its +z along `normal` (unit) and its +y as near `up` as it goes.
+inline math::mat4 card_world(vec3 c, vec3 normal, vec3 up = {0, 1, 0}) {
+    const vec3 z = math::normalize(normal);
+    vec3 x = math::cross(up, z);
+    x = math::length_sq(x) > 1e-6f ? math::normalize(x) : vec3{1, 0, 0};
+    const vec3 y = math::cross(z, x);
+    math::mat4 m = math::mat4::identity();
+    const vec3 cols[4] = {x, y, z, c};
+    for (u32 k = 0; k < 4; ++k) {
+        m.c[k][0] = cols[k].x;
+        m.c[k][1] = cols[k].y;
+        m.c[k][2] = cols[k].z;
+    }
+    return m;
+}
+
+// A double-sided material of colour `col` with the quantized translucency and wrap (set_material_translucency).
+inline MaterialOverride thin_material(vec3 col, f32 translucency, f32 wrap, f32 metallic = 0.0f, f32 roughness = 0.9f,
+                                      u32 flags = asset::MaterialFlags::DoubleSided) {
+    MaterialOverride m;
+    m.params.base_color[0] = col.x;
+    m.params.base_color[1] = col.y;
+    m.params.base_color[2] = col.z;
+    m.params.base_color[3] = 1.0f;
+    m.params.metallic = metallic;
+    m.params.roughness = roughness;
+    m.params.flags = flags;
+    asset::set_material_translucency(m.params, translucency, wrap);
+    return m;
 }
 
 }  // namespace mce::render_test

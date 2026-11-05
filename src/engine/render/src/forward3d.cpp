@@ -11,6 +11,7 @@
 #include "mce/render/lens_flare.h"
 #include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
+#include "mce/render/translucency.h"
 #include "shaders3d.h"
 #include "unit_clamp.h"
 
@@ -120,7 +121,8 @@ struct Forward3DPassU {
     vec4 meteor2;     // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
     vec4 sun_cookie;  // M-LIGHTCOOKIE 40e: x atlas layer, y strength, z size (m), w 1 = the sun has a cookie
     vec4 sun_cookie2; // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
-    vec4 free_[6];    // the rest of the 1536-byte block, unused (always 0)
+    vec4 translucency;  // M-TRANSLUCENT 41d: x 1 = the back side's ambient, y 1 = the forward-scatter lobe (translucency_frame)
+    vec4 free_[5];    // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -151,11 +153,12 @@ static_assert(
         offsetof(Forward3DPassU, meteor2) == offsetof(Forward3DPassU, meteor) + 16 &&
         offsetof(Forward3DPassU, sun_cookie) == offsetof(Forward3DPassU, meteor2) + 16 &&
         offsetof(Forward3DPassU, sun_cookie2) == offsetof(Forward3DPassU, sun_cookie) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 6 * 16,
+        offsetof(Forward3DPassU, translucency) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, translucency) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 5 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
     "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
-    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_free[6] follow p_sky_rot as in MCE_GLSL_PASS_U");
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_free[5] follow p_sky_rot as in MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
@@ -163,8 +166,8 @@ static_assert(
 // is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding). M-RAINBOW
 // 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
 // (p_meteor, p_meteor2): 8 free, the size unchanged. M-LIGHTCOOKIE 40e took two more (p_sun_cookie, p_sun_cookie2): 6
-// free, the size unchanged.
-static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 6 vec4 free)");
+// free, the size unchanged. M-TRANSLUCENT 41d took one (p_translucency): 5 free, the size unchanged.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 5 vec4 free)");
 
 namespace {
 
@@ -232,13 +235,18 @@ struct ObjectU {
     vec4 params;    // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 maps;      // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only
     mat4 dequant;   // skinned draws: quantized -> bind space
-    vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time
+    vec4 skin;      // x: first palette joint, -1 = rigid; instanced: y first visible slot, z time; w: translucency_object
     vec4 inst;      // instanced (M-VISUAL 9): wind amplitude, frequency, direction xz
     vec4 coat;      // M-VISUAL2 4 (material_ext_uniforms): clear coat, its alpha, anisotropy, its rotation
     vec4 sheen;     // rgb color, w alpha
     vec4 ext;       // x: lobes on, y: ior (0 = 1.5), z: transmission
     vec4 pom;       // M-VISUAL3 2 (parallax_uniforms): height scale, min and max march steps, fade-out view depth
 };
+// M-TRANSLUCENT 41d: o_skin.w carries the draw's translucency_object value (t8 + 256 * w8, 0 = off); the block keeps its
+// 23 vec4 (368 bytes, one 512-byte ring slot per draw) and its member order (MCE_GLSL_OBJECT_U).
+static_assert(sizeof(ObjectU) == 23 * 16, "ObjectU: 23 vec4 as MCE_GLSL_OBJECT_U");
+static_assert(offsetof(ObjectU, skin) == 17 * 16 && offsetof(ObjectU, inst) == 18 * 16 && offsetof(ObjectU, pom) == 22 * 16,
+              "ObjectU: o_skin after o_dequant, o_pom last, as MCE_GLSL_OBJECT_U");
 
 // A parallax material's march in ObjectU's terms; all zero (the shader skips it) for any other draw.
 void parallax_uniforms(const MaterialOverride* m, const ParallaxSettings& p, ObjectU& ou) {
@@ -470,6 +478,15 @@ void sun_cookie_params(const DirectionalLight& sun, u32 layer, const f64 origin[
     const f64 oy = (std::isfinite(c.offset.y) ? f64(c.offset.y) : 0.0) - sr * px + cr * py;
     pu.sun_cookie = {f32(layer), detail::ranged(c.strength, 0.0f, 1.0f, 1.0f), size, 1.0f};
     pu.sun_cookie2 = {wrapped(ox), wrapped(oy), std::cos(roll), std::sin(roll)};
+}
+
+// PassU's translucency switches (M-TRANSLUCENT 41d / 41e, translucency_frame): the back side's ambient and the
+// forward-scatter lobe, both 0 when Forward3DDesc::translucency, r.translucency or the tier says off. Only a draw whose
+// o_skin.w is not 0 reads them, so a frame without a translucent material is the same whatever they hold.
+void translucency_params(bool renderer_on, PassU& pu) {
+    if (!renderer_on) return;
+    const TranslucencyFrame t = translucency_frame(quality_settings(quality_tier()));
+    pu.translucency = {t.ambient ? 1.0f : 0.0f, t.scatter ? 1.0f : 0.0f, 0.0f, 0.0f};
 }
 
 }  // namespace
@@ -1794,6 +1811,7 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     for (mat4& c : pu.cascade) c = mat4::identity();
     const rhi::TextureHandle sky_tex = sky_params(*textures_, *device_, sky, pu, sky_texture_override());
     pu.ibl = {1.0f, sky.diffuse_ambient, f32(kIblLayers), ibl_own_source_ ? 1.0f : 0.0f};  // the sky's IBL, no probes
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: a translucent surface draws as in the main pass
     static constexpr ClusterRange kNoRange{0, 0};
     static constexpr GpuPointLight kNoLight{};
     static constexpr u32 kNoIndex = 0;
@@ -2324,6 +2342,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     meteor_params(scene.meteor(), pu);               // the meteors (M-METEOR 18c): main pass only too
     if (apply_fog && water_on(scene.water()) && !water_.is_null())
         water_params(scene.water(), origin_, water_depth_, pu);  // the water plane (M-WATER 15c): the main pass only
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: the tier's switches (read only by a translucent draw)
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
     cmd.bind_texture(rhi::bank::kSky, sky_tex, material_sampler_);
@@ -2601,6 +2620,7 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, false, true, pu);
     bind_local_shadows(cmd, scene, pu);
     pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
+    translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: as the main pass
     cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
     cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);
     // Every light in the pool; each probe's single cluster lists the kGiMaxCaptureLights that matter
@@ -2856,6 +2876,7 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
     u32 issued = 0;
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
+    const QualitySettings tier = quality_settings(quality_tier());  // M-TRANSLUCENT 41d: the draws' o_skin.w
     auto bind_map = [&](DrawCache& c, u32 i, u32 key) {
         if (key == c.tex[i]) return;
         const rhi::TextureHandle tex = key == ~0u ? white : textures_->get(key);
@@ -2927,6 +2948,11 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
         parallax_uniforms(terrain ? nullptr : inst.material, scene.parallax(), ou);
         ou.dequant = d.dequant;
         ou.skin = {palette_index(d.palette), 0.0f, 0.0f, 0.0f};
+        // M-TRANSLUCENT 41d: the material's translucency and wrap, or exactly 0 (off, unlit, the tier, r.translucency,
+        // Forward3DDesc::translucency; a terrain's layers carry none). The SSAO prepass and the captures get the same value.
+        if (!terrain)
+            ou.skin.w = translucency_object(mat.flags, (mat.flags & asset::MaterialFlags::Unlit) != 0, tier, desc_.translucency);
+        if (main && ou.skin.w != 0.0f) ++stats_.translucent_draws;
         material_ext_uniforms(material_ext_of(inst, sm), ou);
         const bool refracts = frame && ou.ext.z > 0.0f && !prepass && !terrain;
         if (refracts != cache.frame_at_ao) {  // the opaque frame in the SSAO's slot for this draw only
@@ -3122,6 +3148,7 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
     const Span<const InstanceBatch> batches = scene.batches();
+    const QualitySettings tier = quality_settings(quality_tier());
     for (u32 bi = 0; bi < batch_count_; ++bi) {
         if (!batch_views_[bi].culled) continue;
         const InstanceBatch& b = batches[bi];
@@ -3171,10 +3198,15 @@ void Forward3D::draw_batches(rhi::CommandBuffer& cmd, const Scene3D& scene, Draw
             ou.inst = batch_wind(b);
             parallax_uniforms(b.material, scene.parallax(), ou);
             material_ext_uniforms(b.material ? b.material->ext : sm.material_ext, ou);
+            // M-TRANSLUCENT 41d: as draw_meshes (a translucent leaf batch glows as its single draws do).
+            const f32 thin = translucency_object(mat.flags, (mat.flags & asset::MaterialFlags::Unlit) != 0, tier, desc_.translucency);
             for (u32 l = 0; l < levels; ++l) {
-                ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), 0.0f};
+                ou.skin = {-1.0f, f32(bv.slot[l]), scene.time(), thin};
                 cmd.set_uniforms(rhi::bank::kObject, rhi::as_bytes(ou));
-                if (batch_draw(cmd, mesh, 0, bi, l, s) && !prepass) ++stats_.main_draws;
+                if (batch_draw(cmd, mesh, 0, bi, l, s) && !prepass) {
+                    ++stats_.main_draws;
+                    if (thin != 0.0f) ++stats_.translucent_draws;
+                }
             }
         }
     }
