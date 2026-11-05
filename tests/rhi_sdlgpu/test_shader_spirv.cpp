@@ -323,3 +323,30 @@ TEST_CASE("shader_spirv: the light cookie bake stage and the lit stages with the
         CHECK(cookies);
     }
 }
+
+// M-TRANSLUCENT 41d / 41e: the lit mesh and terrain stages with the thin-surface terms (the o_skin.w decode, PassU's
+// p_translucency, the back shadow, the wrap, the two-sided SH9 and irradiance-volume reads) compile for SDL GPU with the
+// resources they had: all 16 sampler banks, the SH9 irradiance (15) and the irradiance volume (5) 2D textures, the same
+// six storage buffers and the uniform banks up to ObjectU (3). No new binding.
+TEST_CASE("shader_spirv: the lit stages with thin-surface translucency and wrap keep their resources") {
+    FixedString<1024> log;
+    const char* srcs[2] = {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS};
+    for (u32 k = 0; k < 2; ++k) {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, srcs[k], "pbr.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.sampler_count == 16);
+        bool sh9 = false, gi = false;
+        for (u32 i = 0; i < res.sampler_count; ++i) {
+            if (res.sampler_slot[i] == 15) sh9 = res.sampler_kind[i] == SamplerKind::Tex2D;
+            if (res.sampler_slot[i] == 5) gi = res.sampler_kind[i] == SamplerKind::Tex2D;
+        }
+        CHECK(sh9);
+        CHECK(gi);
+        CHECK(res.storage_count == 6);
+        CHECK(res.uniform_count == 4);  // banks up to 3 (ObjectU) declared
+    }
+}

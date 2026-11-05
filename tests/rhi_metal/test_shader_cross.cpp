@@ -189,3 +189,20 @@ TEST_CASE("shader_cross: the light cookie bake stage and the lit stage's cookie 
     CHECK(contains(inject.value(), "[[sampler(2)]]"));
     CHECK(contains(inject.value(), "[[buffer(10)]]"));
 }
+
+// M-TRANSLUCENT 41d / 41e: the lit mesh and terrain stages with the thin-surface terms (the o_skin.w decode, PassU's
+// p_translucency, the two-sided SH9 and irradiance-volume reads) translate with no new resource: the same SH9 texture at
+// texture 15, the volume at 5, the cookie records at [[buffer(10)]], no extra buffer. Not built on Linux (macOS only):
+// unverified until a Mac run, as the cookie case above.
+TEST_CASE("shader_cross: the lit stages with thin-surface translucency and wrap") {
+    FixedString<1024> log;
+    for (const char* src : {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS}) {
+        auto lit = translate_glsl(ShaderStage::Fragment, src, "pbr.frag", log);
+        REQUIRE_MESSAGE(lit.has_value(), log.c_str());
+        if (!lit) return;
+        CHECK(contains(lit.value(), "p_translucency"));
+        CHECK(contains(lit.value(), "u_env_sh [[texture(15)]]"));
+        CHECK(contains(lit.value(), "u_gi [[texture(5)]]"));
+        CHECK(contains(lit.value(), "[[buffer(10)]]"));
+    }
+}
