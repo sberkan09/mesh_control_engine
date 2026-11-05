@@ -328,3 +328,23 @@ TEST_CASE("app::run samples InputSystem once per tick through IInputSource") {
     CHECK(app::run(a, d) == 0);
     CHECK(a.ticks_with_actions == 30);
 }
+
+TEST_CASE("the map stack holds kMaxMapStack maps and refuses one more; text input carries 3- and 4-byte characters") {
+    InputSystem in;
+    test::setup_default(in);
+    // The default map is already on the stack; the rest fills up and the next push is refused.
+    u32 pushed = 0;
+    while (in.push_map(MCE_SID("UI"))) ++pushed;
+    CHECK(pushed > 0);
+    CHECK(pushed < InputSystem::kMaxMapStack);
+    CHECK_FALSE(in.push_map(MCE_SID("UI")));  // still full
+    for (u32 i = 0; i < pushed; ++i) in.pop_map();
+    CHECK(in.push_map(MCE_SID("UI")));  // room again
+    in.pop_map();
+
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 100), 0x20AC));   // euro sign, 3 bytes
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 200), 0x1F600));  // an emoji, 4 bytes
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 300), 'x'));
+    const InputState& s = in.sample_for_tick(1);
+    CHECK(s.text() == StringView("\xE2\x82\xAC\xF0\x9F\x98\x80x"));
+}

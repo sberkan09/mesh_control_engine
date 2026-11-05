@@ -320,3 +320,37 @@ TEST_CASE("FR-INP-040: cancel_rebind ends a waiting capture and leaves a finishe
     in.cancel_rebind();  // a captured result is not a waiting capture
     CHECK(in.rebind_state() == RebindState::Captured);
 }
+
+TEST_CASE("gamepad: quadratic and cubic curves shape a stick and keep its sign; an unknown slot reads as no axis") {
+    InputMapBuilder b;
+    b.map(MCE_SID("M"));
+    for (const auto& [name, curve] :
+         {std::pair<StringId, Curve>{MCE_SID("Quad"), Curve::Quadratic}, {MCE_SID("Cube"), Curve::Cubic}}) {
+        BindingDef w;
+        w.device = Device::GamepadAxis;
+        w.code = static_cast<u32>(GamepadAxis::RightX);
+        w.curve = curve;
+        b.action(name, ActionType::Axis1D).bind(w);
+    }
+    Array<byte> chunk;
+    b.encode(chunk);
+
+    InputSystem in;
+    REQUIRE(in.load_map(chunk.span()).has_value());
+    in.set_tick_origin_us(0);
+    in.push_event(pad_added(0, in_tick(1)));
+    in.push_event(pad_axis(0, GamepadAxis::RightX, 0.5f, in_tick(1)));
+    const InputState& s1 = in.sample_for_tick(1);
+    CHECK(s1.axis(MCE_SID("Quad")) == doctest::Approx(0.25f));
+    CHECK(s1.axis(MCE_SID("Cube")) == doctest::Approx(0.125f));
+    CHECK(in.gamepad_axis(0, GamepadAxis::RightX) == doctest::Approx(0.5f));
+
+    in.push_event(pad_axis(0, GamepadAxis::RightX, -0.5f, in_tick(2)));
+    const InputState& s2 = in.sample_for_tick(2);
+    CHECK(s2.axis(MCE_SID("Quad")) == doctest::Approx(-0.25f));
+    CHECK(s2.axis(MCE_SID("Cube")) == doctest::Approx(-0.125f));
+
+    CHECK(in.gamepad_axis(99, GamepadAxis::RightX) == 0.f);  // no such slot
+    in.release_pad(0);
+    in.release_pad(99);  // harmless
+}
