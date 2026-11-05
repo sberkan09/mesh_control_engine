@@ -188,7 +188,8 @@ TEST_CASE("snow sparkle extract: snow cover, a low sun and a clear sky add exact
 
     // the emitter follows the camera
     r.cam.position = {30.0f, 4.0f, -12.0f};
-    const render::ParticleEmitter* e1 = sparkle_of(r.frame());
+    const Shot e1_shot = r.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* e1 = sparkle_of(e1_shot);
     REQUIRE(e1 != nullptr);
     CHECK(e1->position.x == doctest::Approx(30.0f));
     CHECK(e1->position.z == doctest::Approx(-12.0f));

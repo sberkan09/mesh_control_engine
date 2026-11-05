@@ -206,7 +206,8 @@ TEST_CASE("cold breath extract: the manual floor adds one alpha-blended point em
     r.breath().mouth_forward_m = 1.0f;
     r.breath().mouth_down_m = 0.5f;
     r.cam.position = {30.0f, 4.0f, -12.0f};
-    const render::ParticleEmitter* moved = breath_of(r.frame());
+    const Shot moved_shot = r.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* moved = breath_of(moved_shot);
     REQUIRE(moved != nullptr);
     CHECK(moved->position.x == doctest::Approx(30.0f + r.scene.view().forward.x));
     CHECK(moved->position.y == doctest::Approx(4.0f + r.scene.view().forward.y - 0.5f));

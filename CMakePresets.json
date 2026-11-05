@@ -134,6 +134,7 @@
   "testPresets": [
     { "name": "msvc-debug",          "configurePreset": "msvc-debug",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "msvc-release",        "configurePreset": "msvc-release",        "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "msvc-release-hosted", "inherits": "msvc-release", "filter": { "exclude": { "label": "gpu|slow" } } },
     { "name": "msvc-asan",           "configurePreset": "msvc-asan",           "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "linux-gcc-debug",     "configurePreset": "linux-gcc-debug",     "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "linux-gcc-debug-slow", "configurePreset": "linux-gcc-debug", "output": { "outputOnFailure": true }, "filter": { "include": { "label": "slow" } } },
@@ -143,6 +144,7 @@
     { "name": "linux-asan",          "configurePreset": "linux-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "macos-debug",         "configurePreset": "macos-debug",         "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
     { "name": "macos-release",       "configurePreset": "macos-release",       "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } },
+    { "name": "macos-release-hosted", "inherits": "macos-release", "filter": { "exclude": { "label": "gpu|slow" } } },
     { "name": "macos-asan",          "configurePreset": "macos-asan",          "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "slow" } } }
   ]
 }

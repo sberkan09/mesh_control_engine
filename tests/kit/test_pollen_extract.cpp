@@ -315,7 +315,8 @@ TEST_CASE("pollen extract: the wind direction turns the drift and wind 0 drops i
     spring_day(no_weather);
     no_weather.add_pollen();
     no_weather.add_wind_direction(90.0f);
-    const render::ParticleEmitter* n = pollen_of(no_weather.frame());
+    const Shot n_shot = no_weather.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* n = pollen_of(n_shot);
     REQUIRE(n != nullptr);
     CHECK(n->direction.x == 0.0f);
     CHECK(n->direction.z == 0.0f);
@@ -325,7 +326,8 @@ TEST_CASE("pollen extract: the wind direction turns the drift and wind 0 drops i
     no_follow.add_pollen();
     no_follow.pollen().wind_follow = 0.0f;
     no_follow.add_wind(0.8f);
-    const render::ParticleEmitter* nf = pollen_of(no_follow.frame());
+    const Shot nf_shot = no_follow.frame();  // keep the frame alive: the emitter pointer points into it
+    const render::ParticleEmitter* nf = pollen_of(nf_shot);
     REQUIRE(nf != nullptr);
     CHECK(nf->direction.x == 0.0f);
     CHECK(nf->direction.z == 0.0f);

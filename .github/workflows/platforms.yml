@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: choco install ninja ccache --no-progress -y
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/AppData/Local/ccache
           key: ccache-win-${{ github.sha }}
@@ -54,9 +54,15 @@ jobs:
       - name: Build
         shell: bash
         run: cmake --build --preset msvc-release -- -k 0
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/ccache
+          key: ccache-win-${{ github.sha }}
       - name: Test (no gpu, no slow)
         shell: bash
-        run: ctest --preset msvc-release -j 4 -LE "gpu|slow" --timeout 600 --output-on-failure
+        run: ctest --preset msvc-release-hosted -j 4 --timeout 600 --output-on-failure
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -76,7 +82,7 @@ jobs:
       - name: Install Ninja and ccache
         run: brew install ninja ccache
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/Library/Caches/ccache
           key: ccache-mac-${{ github.sha }}
@@ -87,8 +93,14 @@ jobs:
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Build
         run: cmake --build --preset macos-release -- -k 0
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-mac-${{ github.sha }}
       - name: Test (no gpu, no slow)
-        run: ctest --preset macos-release -j 3 -LE "gpu|slow" --timeout 600
+        run: ctest --preset macos-release-hosted -j 3 --timeout 600
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
