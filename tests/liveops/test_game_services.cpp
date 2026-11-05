@@ -420,3 +420,70 @@ TEST_CASE("game services: the catalog finds items by id, in order, and reports k
     CHECK(empty.find_leaderboard("score") == kNoService);
     CHECK(empty.find_cloud_save("progress") == kNoService);
 }
+
+namespace {
+
+// A provider that only records what the game asked for.
+struct RecordingProvider final : IGameServicesProvider {
+    u32 shown_achievements = 0;
+    Array<u16> shown_leaderboards;
+    u32 interactive_sign_ins = 0;
+    GameServicesSink* sink = nullptr;
+    const char* name() const override { return "recording"; }
+    void start(const ServicesCatalog&, GameServicesSink& s) override { sink = &s; }
+    void sign_in(bool interactive) override {
+        if (interactive) ++interactive_sign_ins;
+        sink->signed_in(interactive);  // the silent attempt fails, the button's succeeds
+    }
+    void report_achievement(u16, u32) override {}
+    void submit_score(u16, i64) override {}
+    void cloud_save(u16, u64, Span<const byte>) override {}
+    void cloud_load(u16) override {}
+    void show_achievements() override { ++shown_achievements; }
+    void show_leaderboard(u16 leaderboard) override { shown_leaderboards.push_back(leaderboard); }
+};
+
+}  // namespace
+
+TEST_CASE("game services: with no provider sign-in and the platform screens do nothing and the catalog is empty") {
+    const fs::path root = fresh("gs_no_provider");
+    use_device(root / "device");
+    Device d;
+    d.start(nullptr);
+    d.step(2);
+    CHECK_FALSE(d.gs().available());
+    CHECK(d.gs().sign_in() == 0);
+    d.gs().show_achievements();  // no provider: nothing to show, nothing breaks
+    d.gs().show_leaderboard("score");
+    d.step();
+    // The game's own catalog still answers for this device; an unbound handle has none.
+    CHECK(GameServices().catalog().find_achievement("first_win") == kNoService);
+    CHECK(GameServices().catalog().find_leaderboard("score") == kNoService);
+}
+
+TEST_CASE("game services: sign_in asks the provider interactively, and the platform screens reach it") {
+    const fs::path root = fresh("gs_screens");
+    use_device(root / "device");
+    RecordingProvider provider;
+    Device d;
+    GameServicesOptions opt;
+    opt.retry_updates = 1000;  // the silent retry stays out of the way
+    d.start(&provider, opt);
+    d.step(2);
+    CHECK(d.gs().available());
+    CHECK_FALSE(d.gs().signed_in());  // the silent attempt failed
+    CHECK(provider.interactive_sign_ins == 0);
+    const u32 id = d.gs().sign_in();
+    CHECK(id != 0);
+    d.step(2);
+    CHECK(provider.interactive_sign_ins == 1);
+    CHECK(d.gs().signed_in());
+
+    d.gs().show_achievements();
+    CHECK(provider.shown_achievements == 1);
+    d.gs().show_leaderboard("score");
+    REQUIRE(provider.shown_leaderboards.size() == 1);
+    CHECK(provider.shown_leaderboards[0] == d.gs().catalog().find_leaderboard("score"));
+    d.gs().show_leaderboard("no_such_board");  // unknown id: the provider is not asked
+    CHECK(provider.shown_leaderboards.size() == 1);
+}
