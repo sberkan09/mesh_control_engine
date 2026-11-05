@@ -520,7 +520,6 @@ TEST_CASE("render_frame: camera.focus, camera.exposure and environment overrides
     CHECK(same_pixels(normal, shot("")));  // the overrides lived in one player run only
 }
 
-}  // TEST_SUITE("gpu")
 
 // M-VIEWS 6: the co-op arena's four-way split reaches the frame (every cell draws, none is wiped by a
 // later cell's clear), render_frame's `view` shows one player's camera or the minimap's, and the
@@ -569,3 +568,5 @@ TEST_CASE("render_frame: a four-way split screen, one player's view and a render
     CHECK(mini.images.size() == 1);
     CHECK_FALSE(same_pixels(mini.images[0], v1.images[0]));
 }
+
+}  // TEST_SUITE("gpu")
