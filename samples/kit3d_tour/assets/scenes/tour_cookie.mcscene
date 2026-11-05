@@ -1,0 +1,417 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000012",
+ "name": "tour_cookie",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      0.35,
+      -1,
+      -0.12
+     ],
+     "sun_intensity": 1.8,
+     "sun_shadows": 1,
+     "ambient_sky": [
+      0.22,
+      0.26,
+      0.34
+     ],
+     "ambient_ground": [
+      0.1,
+      0.1,
+      0.1
+     ],
+     "volumetric_fog": 1,
+     "volumetric_density": 0.08,
+     "volumetric_anisotropy": 0.5,
+     "volumetric_distance": 60,
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.1
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 62
+    },
+    "LocalTransform": {
+     "position": [
+      1.5,
+      2.3,
+      9.5
+     ],
+     "rotation": [
+      -0.0513,
+      0.0596,
+      0.0031,
+      0.9969
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Floor",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.55,
+      0.42,
+      0.3,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.05,
+      -1
+     ],
+     "scale": [
+      1.6666666666666667,
+      0.1,
+      2.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Wall left",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -5,
+      2.25,
+      -1
+     ],
+     "scale": [
+      0.049999999999999996,
+      4.5,
+      2.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Wall right",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      5,
+      2.25,
+      -1
+     ],
+     "scale": [
+      0.049999999999999996,
+      4.5,
+      2.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Wall back left",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -4.575,
+      2.25,
+      -6
+     ],
+     "scale": [
+      0.24166666666666667,
+      4.5,
+      0.075
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Wall back right",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      4.575,
+      2.25,
+      -6
+     ],
+     "scale": [
+      0.24166666666666667,
+      4.5,
+      0.075
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Wall sill",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.35,
+      -6
+     ],
+     "scale": [
+      1.2833333333333334,
+      0.5,
+      0.075
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Wall lintel",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.8,
+      0.78,
+      0.74,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      4.2,
+      -6
+     ],
+     "scale": [
+      1.2833333333333334,
+      0.6,
+      0.075
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Roof",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.35,
+      0.3,
+      0.28,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      4.65,
+      -0.5
+     ],
+     "scale": [
+      1.7666666666666666,
+      0.3,
+      2.9
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Table",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:f509e671-224a-4f95-aa19-4ca6a503025a",
+     "tint": [
+      0.45,
+      0.3,
+      0.2,
+      1
+     ],
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      -3.4,
+      0.55,
+      -4.6
+     ],
+     "scale": [
+      0.26666666666666666,
+      0.9,
+      0.25
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Cart",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:e213f420-52a9-4b08-996e-d214d9d86a75",
+     "cast_shadows": 1
+    },
+    "LocalTransform": {
+     "position": [
+      3.3,
+      0.5,
+      -3.8
+     ],
+     "rotation": [
+      0,
+      0.3827,
+      0,
+      0.9239
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Window light",
+   "components": {
+    "SpotLight3D": {
+     "color": [
+      1.0,
+      0.93,
+      0.8,
+      1
+     ],
+     "direction": [
+      0.0,
+      -0.425,
+      0.9052
+     ],
+     "intensity": 200,
+     "radius": 30,
+     "outer_deg": 20,
+     "inner_deg": 17,
+     "cast_shadows": 1
+    },
+    "LightCookie3D": {
+     "texture": "guid:b0a30000-0000-4000-8000-000000000030",
+     "strength": 1,
+     "edge": 0.1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      5.5,
+      -11
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Leaf dapple",
+   "components": {
+    "SunCookie3D": {
+     "texture": "guid:b0a30000-0000-4000-8000-000000000031",
+     "strength": 1,
+     "size": 12,
+     "offset": [
+      1.5,
+      0.5
+     ],
+     "roll_deg": 20
+    },
+    "LocalTransform": {}
+   }
+  }
+ ]
+}

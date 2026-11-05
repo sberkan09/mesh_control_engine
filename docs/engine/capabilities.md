@@ -127,8 +127,8 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LensFlare3D` | `mce/kit/lens_flare.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/11_daynight/assets/scenes/sunrise.mcscene |
-| `LightCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-LIGHTCOOKIE 40g: tested in tests/kit/test_light_cookie_extract.cpp; a sample gets one in 40h (remove this line then) |
-| `SunCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-LIGHTCOOKIE 40g: tested in tests/kit/test_light_cookie_extract.cpp; a sample gets one in 40h (remove this line then) |
+| `LightCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
+| `SunCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
 | `LightFlicker3D` | `mce/kit/light_flicker.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `LightningBolt` | `mce/kit/lightning_bolt.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WeaponPreset3D` | `mce/kit/loadout3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
