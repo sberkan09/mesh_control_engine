@@ -9,6 +9,7 @@
 #include "mce/log.h"
 #include "mce/render/edge_outline.h"
 #include "mce/render/lens_flare.h"
+#include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
 #include "shaders3d.h"
 #include "unit_clamp.h"
@@ -79,7 +80,7 @@ struct Forward3DPassU {
     vec4 probe_min[kMaxReflectionProbes];  // w: blend distance
     vec4 probe_max[kMaxReflectionProbes];  // w: first ibl_env layer
     vec4 ao;           // x: SSAO on, y: contact shadows on (bank kAo's g)
-    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0
+    vec4 local;        // x: local-light shadows on (M-VISUAL 4), y: shadow-map layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d)
     vec4 gi;           // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 gi_min;
     vec4 gi_max;
@@ -379,6 +380,55 @@ EdgeOutlineFrame outline_frame(const Scene3D& scene, bool volumetric_fog) {
     const f32 fog = setting.fog_follow && !volumetric_fog ? scene.fog().density : 0.0f;
     const rhi::Extent2D out = scene.view().viewport;
     return edge_outline_frame(setting, out.width, out.height, fog, quality_settings(quality_tier()).edge_outline_wide);
+}
+
+// ---- M-LIGHTCOOKIE 40c / 40d: light cookies (record_cookie_bake, upload_cookie_records; the packing in shaders3d.h
+// MCE_GLSL_COOKIE).
+
+// kCookieBakeFS's CookieBakeU, bank kPass.
+struct CookieBakeU {
+    vec4 tap;    // x source lod, y four taps, z tap offset (uv)
+    vec4 clamp;  // xy lowest uv, zw highest
+};
+static_assert(sizeof(CookieBakeU) == shaders3d::kCookieBakeUBytes, "CookieBakeU: 2 vec4, as kCookieBakeFS");
+
+// The frame-level switch beyond Forward3DDesc::light_cookies (create_pipelines clears that for -r.light_cookies 0 at
+// startup): the cvar now (Saved, so it can change while running) and the tier.
+bool cookies_allowed() {
+    static const ConVar* cv = ConVar::find(MCE_SID("r.light_cookies"));
+    return (!cv || cv->get_bool()) && quality_settings(quality_tier()).light_cookies;
+}
+
+// cookie_records_ holds this view's record count (at most kMaxCookieLights) and, in this bit, whether a view of the
+// current frame has baked or bound the atlas already: record_view keeps the bit across a frame's later views and clears
+// it on the first. Until it is set the atlas may be recreated (forward3d.h is frozen for this milestone: no new member).
+constexpr u32 kCookieAtlasInUse = 1u << 31;
+u32 cookie_count(u32 records) { return records & ~kCookieAtlasInUse; }
+
+// The tier's atlas: S (a power of two, 16..2048) and its layer count (1..kMaxCookieLayers).
+u32 cookie_atlas_size(const QualitySettings& q) {
+    u32 s = 16;
+    while (s < 2048 && s * 2 <= q.light_cookie_size) s *= 2;
+    return s;
+}
+u32 cookie_atlas_layers(const QualitySettings& q) { return clamp(q.light_cookie_layers, 1u, kMaxCookieLayers); }
+
+// What an atlas layer holds: the key, the TextureStore generation (its handle) and whether it was resident when baked
+// (a texture not loaded yet bakes white and is retried until it is). Never 0, the value of an empty layer.
+u32 cookie_tag(const TextureStore& textures, u32 key) {
+    const bool resident = textures.contains(key);
+    const rhi::TextureHandle h = resident ? textures.get(key) : rhi::TextureHandle{};
+    const u32 words[4] = {key, h.index, h.generation, resident ? 1u : 0u};
+    u32 x = 2166136261u;
+    for (u32 w : words)
+        for (u32 b = 0; b < 4; ++b) x = (x ^ ((w >> (8 * b)) & 0xFFu)) * 16777619u;
+    return x | 1u;
+}
+
+// The spot cookies of this frame (the sun's cookie is 40e's: a sun without one here keeps it out of the plan).
+CookiePlan spot_cookie_plan(const Scene3D& scene, const QualitySettings& q, Span<u32> light_record) {
+    static const DirectionalLight kNoSunCookie{};
+    return plan_cookies(scene.point_lights(), kNoSunCookie, cookie_atlas_layers(q), q.light_cookie_lights, light_record);
 }
 
 }  // namespace
@@ -1003,6 +1053,11 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) outline_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the edge outline shader failed, drawing frames without the outline");
     }
+    // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
+    // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
+    // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
+    const ConVar* cv_light_cookies = ConVar::find(MCE_SID("r.light_cookies"));
+    if (cv_light_cookies && !cv_light_cookies->get_bool()) desc_.light_cookies = false;
     const bool taa = desc_.taa && cv_taa.get_bool(), post_fx = desc_.post_fx && cv_post_fx.get_bool();
     if (taa || post_fx) {  // the velocity prepass: TAA, motion blur and depth of field
         rhi::GraphicsPipelineDesc vp = sp;  // the shadow vertex streams, depth-tested, both faces
@@ -1228,6 +1283,8 @@ void Forward3D::shutdown() {
                                   &fx_[0], &fx_[1], &flare_occ_, &outline_dst_, &cookie_atlas_})
         destroy(*device_, *t);
     atmo_key_ = 0;
+    for (u32& k : cookie_keys_) k = 0;  // the atlas is gone: every layer is empty
+    cookie_records_ = 0;
     water_failed_ = false;
     gi_size_ = {};
     gi_face_layers_ = gi_shadow_layer_ = gi_cursor_ = gi_filled_ = 0;
@@ -1341,6 +1398,9 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
     out_ = out;
+    // M-LIGHTCOOKIE: no records until upload_cookie_records finds this view's cookies (bank 2 is the decals'); whether an
+    // earlier view of this frame used the atlas survives into the later views.
+    cookie_records_ = out.first ? 0u : (cookie_records_ & kCookieAtlasInUse);
     for (u32& b : inst_budget_) b = 0;
     if (out.first) {  // the frame's budget, shared by all its views (the device's ring is per frame slot)
         const usize ring = desc_.geometry_ring_bytes / 4;
@@ -1418,6 +1478,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsSsr);
     record_contact(cmd, scene);
     timestamp(cmd, kTsContact);
+    record_cookie_bake(cmd, scene);  // M-LIGHTCOOKIE 40c: before every pass that reads the atlas; in the shadow bucket
     record_shadows(cmd, scene);
     record_local_shadows(cmd, scene);
     timestamp(cmd, kTsShadow);
@@ -1760,6 +1821,8 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
             static constexpr LocalShadowRecord kNoShadow{};
             cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
+            static constexpr GpuCookieRecord kNoCookie{};  // captures draw no cookies (PassU::local.z = 0)
+            cmd.set_storage_data(rhi::bank::kLightCookies, rhi::as_bytes(kNoCookie));
             bind_decals(cmd, scene, false);
             DrawCache cache;
             draw_meshes(cmd, scene, draws, 0, static_cast<u32>(draws.size()), static_cast<u32>(draws.size()), cache, false);
@@ -2199,6 +2262,16 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     }
     cmd.bind_texture(rhi::bank::kSsr, stats_.ssr ? ssr_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);
+    // Light cookies (M-LIGHTCOOKIE 40d): the records and the light pool with Light.shadow.z, when this view has any;
+    // bank 2 then holds the atlas in the main pass (bind_decals).
+    // The volumetric injection (apply_fog false) keeps the dummy record and the plain pool: kVolInjectFS has no cookie
+    // code yet (40f), and its bank 2 is the white stand-in.
+    if (apply_fog) {
+        pu.local.z = upload_cookie_records(cmd, scene) > 0 ? 1.0f : 0.0f;
+    } else {
+        cookie_records_ &= kCookieAtlasInUse;
+        pu.local.z = 0.0f;
+    }
     // Decals (M-VISUAL 9): the main pass only; the fog injection takes the stand-ins.
     pu.decals.x = f32(bind_decals(cmd, scene, apply_fog));
     if (apply_fog) stats_.decals = static_cast<u32>(pu.decals.x);
@@ -2229,7 +2302,8 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
         cmd.set_storage_data(rhi::bank::kClusters, cl.ranges().empty() ? rhi::as_bytes(kNoRange) : std::as_bytes(cl.ranges()));
         cmd.set_storage_data(rhi::bank::kLightIndices, cl.indices().empty() ? rhi::as_bytes(kNoIndex) : std::as_bytes(cl.indices()));
     }
-    cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
+    if (cookie_count(cookie_records_) == 0)  // else upload_cookie_records uploaded the pool with the cookie links
+        cmd.set_storage_data(rhi::bank::kLightPool, cl.lights().empty() ? rhi::as_bytes(kNoLight) : std::as_bytes(cl.lights()));
     stats_.point_lights = static_cast<u32>(cl.lights().size());
     stats_.light_indices = static_cast<u32>(cl.indices().size());
 
@@ -2716,6 +2790,10 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
 void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene, PassU& pu) {
     // Local-light shadow records, one per atlas tile (GpuPointLight::shadow points into them).
     static constexpr LocalShadowRecord kNoShadow{};
+    // M-LIGHTCOOKIE 40d: the lit shaders declare LightCookies; a one-record stand-in unless the main pass's
+    // upload_cookie_records replaces it (an unbound SSBO is undefined even when unread).
+    static constexpr GpuCookieRecord kNoCookie{};
+    cmd.set_storage_data(rhi::bank::kLightCookies, rhi::as_bytes(kNoCookie));
     if (!local_shadows_) {
         cmd.set_storage_data(rhi::bank::kLocalShadows, rhi::as_bytes(kNoShadow));
         return;
@@ -3595,6 +3673,154 @@ void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
         }
     }
     timestamp(cmd, kTsFxaa);
+}
+
+
+// ---- M-LIGHTCOOKIE 40c: the cookie atlas, before the shadow passes (its time falls in the shadow bucket). One layer per
+// distinct cookie texture of the frame's plan (plan_cookies: first-seen order, so an unchanged scene keeps its layers),
+// each holding its texture at the tier's size S and its mip chain packed beside it (shaders3d.h MCE_GLSL_COOKIE): the RHI
+// renders into a layer and a viewport of an array but not into a mip, and has no texture copy, so every level is one
+// fullscreen draw of kCookieBakeFS from the source texture itself. A layer is baked only when what it holds changed
+// (cookie_tag: key, TextureStore generation, residency), so a static scene bakes once and a second view of the same
+// scene in the frame bakes nothing. Nothing with no cookie, Forward3DDesc::light_cookies false, -r.light_cookies 0 or a
+// tier without cookies: no pipeline, no atlas, no pass.
+//
+// The atlas and the pipeline are shared by the views (not per-view state) and destroyed in shutdown only. The atlas is
+// recreated for a new tier size or layer count only while no earlier view of the frame has baked or bound it
+// (kCookieAtlasInUse): such a view's commands in the same command buffer still reference the handle, so a later view then
+// keeps the atlas as it is (upload_cookie_records draws it plain if its layers do not hold that view's plan).
+void Forward3D::record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    if (!desc_.light_cookies || !cookies_allowed()) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    const CookiePlan plan = spot_cookie_plan(scene, q, {});
+    if (plan.count == 0) return;
+    if (cookie_pipe_.is_null()) {
+        rhi::GraphicsPipelineDesc fs;
+        fs.vertex_shader = {shaders3d::kFullscreenVS, "fullscreen.vert"};
+        fs.fragment_shader = {shaders3d::kCookieBakeFS, "light_cookie_bake.frag"};
+        fs.state.depth = {};
+        fs.debug_name = "light_cookie.bake";
+        if (auto p = device_->create_pipeline(fs)) {
+            cookie_pipe_ = p.value();
+        } else {
+            MCE_LOG_WARN("render3d: the light cookie bake shader failed, drawing lights without their cookies");
+            desc_.light_cookies = false;
+            return;
+        }
+    }
+    const u32 size = cookie_atlas_size(q), layers = cookie_atlas_layers(q);
+    const rhi::Extent2D extent{size + size / 2, size};
+    if (!cookie_atlas_.is_null() && (cookie_records_ & kCookieAtlasInUse) == 0) {
+        const rhi::TextureDesc have = device_->texture_desc(cookie_atlas_);
+        if (!(have.size == extent) || have.array_layers != layers) destroy(*device_, cookie_atlas_);
+    }
+    if (cookie_atlas_.is_null()) {
+        rhi::TextureDesc d;
+        d.size = extent;
+        d.format = rhi::TextureFormat::RGBA8_UNorm;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.light_cookies";
+        cookie_atlas_ = device_->create_texture(d);
+        for (u32& k : cookie_keys_) k = 0;
+        if (cookie_atlas_.is_null()) return;
+    }
+    cookie_records_ |= kCookieAtlasInUse;
+    // A later view of the frame bakes into the atlas the first one left (its own size and layers).
+    const rhi::TextureDesc atlas = device_->texture_desc(cookie_atlas_);
+    const u32 s0 = atlas.size.height, n = min<u32>(plan.count, atlas.array_layers);
+    const u32 levels = static_cast<u32>(std::lround(std::log2(f32(s0)))) + 1;
+    bool scoped = false;
+    for (u32 layer = 0; layer < n; ++layer) {
+        const u32 key = plan.key[layer];
+        const u32 tag = cookie_tag(*textures_, key);
+        if (cookie_keys_[layer] == tag) continue;
+        if (!scoped) {
+            cmd.push_debug_scope("light_cookies");
+            scoped = true;
+        }
+        // A texture not loaded yet (or not a 2D array: an adopted render texture) bakes white, the plain light.
+        rhi::TextureHandle src = textures_->contains(key) ? textures_->get(key) : textures_->white();
+        if (device_->texture_desc(src).dimension != rhi::TextureDimension::Tex2DArray) src = textures_->white();
+        const rhi::TextureDesc sd = device_->texture_desc(src);
+        const f32 src_size = f32(max(sd.size.width, sd.size.height));
+        const u32 src_mips = max<u32>(sd.mip_levels, 1u);
+        cmd.bind_texture(rhi::bank::kFirstSampler, src, material_sampler_);
+        for (u32 k = 0; k < levels; ++k) {
+            const u32 s = max(s0 >> k, 1u);
+            const u32 ox = k == 0 ? 0u : s0, oy = k == 0 ? 0u : s0 - 2u * s;  // rows from v = 0 (GL's layout)
+            rhi::PassAttachment out;
+            out.texture = cookie_atlas_;
+            out.layer = static_cast<u16>(layer);
+            out.load = k == 0 ? rhi::LoadOp::Clear : rhi::LoadOp::Load;  // the first level's pass clears the whole layer
+            out.clear.color[0] = out.clear.color[1] = out.clear.color[2] = out.clear.color[3] = 1.0f;
+            rhi::RenderPassDesc p;
+            p.colors = Span<const rhi::PassAttachment>(&out, 1);
+            // Rect2D is top-left based; the layer holds GL's layout, whose row 0 is the bottom.
+            p.viewport = rhi::Rect2D{i32(ox), i32(s0 - oy - s), s, s};
+            p.debug_name = "light_cookie.bake";
+            cmd.begin_pass(p);
+            cmd.bind_pipeline(cookie_pipe_);
+            CookieBakeU u{};
+            const f32 ratio = src_size / f32(s);
+            if (ratio > 1.0f) {  // minified: four taps at the source mip one finer than this level
+                const f32 lod = min(std::log2(ratio * 0.5f), f32(src_mips - 1));
+                u.tap = {lod, 1.0f, 0.25f / f32(s), 0.0f};
+            } else {
+                u.tap = {0.0f, 0.0f, 0.0f, 0.0f};
+            }
+            // The clamp comes from the coarser of the two source mips a fractional lod mixes: half a texel of the finer
+            // one lets the coarser's bilinear tap wrap the opposite edge in through the repeat sampler (a non power of
+            // two source, whose levels do not halve evenly, shows it at the border).
+            const u32 read = min(static_cast<u32>(std::ceil(max(u.tap.x, 0.0f))), src_mips - 1);
+            const f32 rw = f32(max(sd.size.width >> read, 1u)), rh = f32(max(sd.size.height >> read, 1u));
+            u.clamp = {0.5f / rw, 0.5f / rh, 1.0f - 0.5f / rw, 1.0f - 0.5f / rh};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        }
+        cookie_keys_[layer] = tag;
+    }
+    if (scoped) cmd.pop_debug_scope();
+}
+
+// ---- M-LIGHTCOOKIE 40d: this view's cookie records (bank kLightCookies) and the light pool with each cookied spot's
+// Light.shadow.z = record + 1, when the atlas holds every layer of the view's plan; 0 (and nothing uploaded: the
+// stand-in of bind_local_shadows stays) otherwise. cookie_records_ is then what bind_decals and bind_main_state read.
+u32 Forward3D::upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    cookie_records_ &= kCookieAtlasInUse;
+    if (!desc_.light_cookies || cookie_atlas_.is_null() || cookie_pipe_.is_null() || !cookies_allowed()) return 0;
+    const Span<const PointLight> lights = scene.point_lights();
+    const QualitySettings q = quality_settings(quality_tier());
+    Array<u32> record_of(mem::heap());
+    record_of.resize(lights.size());
+    const CookiePlan plan = spot_cookie_plan(scene, q, record_of.span());
+    if (plan.lights == 0) return 0;
+    if (plan.count > device_->texture_desc(cookie_atlas_).array_layers) return 0;
+    for (u32 layer = 0; layer < plan.count; ++layer)
+        if (cookie_keys_[layer] != cookie_tag(*textures_, plan.key[layer])) return 0;  // not baked for this view
+    const ClusterLights& cl = stats_.gpu_clusters ? scene.cluster_setup() : scene.clusters();
+    const Span<const GpuPointLight> pool = cl.lights();
+    Array<GpuPointLight> linked(mem::heap());
+    linked.resize(pool.size());
+    for (u32 i = 0; i < pool.size(); ++i) linked[i] = pool[i];
+    GpuCookieRecord records[kMaxCookieLights] = {};
+    for (u32 i = 0; i < lights.size() && i < linked.size(); ++i) {
+        const u32 r = record_of[i];
+        if (r == ~0u) continue;
+        records[r] = cookie_record(lights[i], plan.layer_of[r]);
+        // params.w: the frustum's width per metre along the axis (2 tan of spot_cookie_matrix's clamped half-angle), the
+        // term cookie_lod takes as 2 * distance * tan(outer).
+        records[r].params.w = 2.0f * std::tan(detail::ranged(lights[i].spot_outer, 0.01f, 1.45f, 0.5f));
+        linked[i].shadow.z = f32(r + 1);
+    }
+    cmd.set_storage_data(rhi::bank::kLightCookies, std::as_bytes(Span<const GpuCookieRecord>(records, plan.lights)));
+    cmd.set_storage_data(rhi::bank::kLightPool, std::as_bytes(linked.span()));
+    stats_.cookie_lights = plan.lights;
+    stats_.cookie_layers = plan.count;
+    cookie_records_ = plan.lights | kCookieAtlasInUse;
+    return plan.lights;
 }
 
 }  // namespace mce::render

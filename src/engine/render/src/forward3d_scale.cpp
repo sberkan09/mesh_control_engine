@@ -569,6 +569,12 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
     bool resident[kMaxDecalTextures] = {};
     for (u32 t = 0; t < kMaxDecalTextures; ++t) tex[t] = white;
     Array<DecalRecord> records(mem::heap());
+    // M-LIGHTCOOKIE 40c: a view with light cookies (upload_cookie_records ran just before) puts the cookie atlas at bank 2,
+    // decal texture slot 2's bank (the lit shader has no free bank; shaders3d.h MCE_GLSL_COOKIE): its decals that need
+    // the third texture are skipped, as Scene3D::build skips one past the third. Without cookies bank 2 is as before.
+    // (cookie_records_'s bit 31 says whether a view of the frame used the atlas, forward3d.cpp kCookieAtlasInUse.)
+    const bool cookies = on && (cookie_records_ & ~(1u << 31)) > 0 && !cookie_atlas_.is_null();
+    u32 cookie_dropped = 0;
     if (on) {
         // Decals past kMaxDecals or the third distinct texture are skipped silently by Scene3D::build: say so once.
         static bool warned = false;
@@ -588,6 +594,10 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
         for (u32 i = 0; i < decals.size(); ++i) {
             const Decal& d = decals[i];
             if (slots[i] != ~0u && !resident[slots[i]]) continue;  // its texture is not loaded yet
+            if (cookies && slots[i] == kMaxDecalTextures - 1) {
+                ++cookie_dropped;
+                continue;
+            }
             DecalRecord r;
             r.inv_world = inverse(d.world);
             r.uv_rect = d.uv_rect;
@@ -598,7 +608,21 @@ u32 Forward3D::bind_decals(rhi::CommandBuffer& cmd, const Scene3D& scene, bool o
             records.push_back(r);
         }
     }
-    for (u32 t = 0; t < kMaxDecalTextures; ++t) cmd.bind_texture(rhi::bank::kDecalTexture0 + t, tex[t], material_sampler_);
+    if (cookie_dropped > 0) {
+        static bool warned_cookie = false;
+        if (!warned_cookie) {
+            warned_cookie = true;
+            MCE_LOG_WARN("render3d: {} visible decal(s) dropped: a frame with light cookies draws decals from at most {} "
+                         "distinct textures (the cookies take the third texture's slot)",
+                         cookie_dropped, kMaxDecalTextures - 1);
+        }
+    }
+    for (u32 t = 0; t < kMaxDecalTextures; ++t) {
+        if (cookies && t == kMaxDecalTextures - 1)
+            cmd.bind_texture(rhi::bank::kDecalTexture0 + t, cookie_atlas_, linear_clamp_);
+        else
+            cmd.bind_texture(rhi::bank::kDecalTexture0 + t, tex[t], material_sampler_);
+    }
     if (records.empty()) {
         cmd.set_storage_data(rhi::bank::kDecals, rhi::as_bytes(kNone));
         return 0;

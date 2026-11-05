@@ -47,7 +47,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_probe_min[4];   // box, w: blend distance
     vec4 p_probe_max[4];   // box, w: first u_env layer (sharp capture, then the pre-filtered layers)
     vec4 p_ao;             // x: screen-space ambient occlusion on (M-VISUAL 3), y: contact shadows on (u_ao.g, M-VISUAL2 3)
-    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0
+    vec4 p_local;          // x: local-light shadows on (M-VISUAL 4), y: u_shadow layer of cascade 0, z: light cookies on (M-LIGHTCOOKIE 40d)
     vec4 p_gi;             // x: irradiance volume on (M-VISUAL 6), y: intensity, z: normal bias, w: fade distance
     vec4 p_gi_min;         // xyz: volume box
     vec4 p_gi_max;
@@ -371,6 +371,55 @@ vec4 vol_fog(vec2 uv, float depth) {
 }
 )"
 
+// Light cookies (M-LIGHTCOOKIE 40c / 40d): a texture a spot light projects through its cone. There is no free sampler
+// bank in the lit shader (all 16 are taken, and Metal and WebGPU stop at 16), so the cookie atlas shares bank 2 with the
+// third decal texture: one variable, u_slot2, read by decal_texture() (p_local.z == 0, the frame's decal texture 2) and
+// by cookie_sample() (p_local.z > 0, the atlas; the frame then draws at most two decal textures). Two variables on one
+// binding do not compile for Vulkan.
+//
+// The atlas (Forward3D::record_cookie_bake) is a 2D array, one layer per distinct cookie texture, of 1.5 S x S texels for
+// the tier's cookie size S and one mip: the RHI renders into a layer of an array (PassAttachment::layer) and a viewport,
+// not into a mip, so the mip chain is packed into the layer (level 0 at texel (0, 0), S wide; level k >= 1, S / 2^k wide,
+// at (S, S - 2 S / 2^k), rows counted from v = 0) and filtered here: two bilinear fetches at lod 0, each clamped half a
+// texel inside its level, mixed by the fraction of the lod. Records (LightCookies, storage bank 2, GpuCookieRecord in
+// light_cookie.h): vp = spot_cookie_matrix, params = {layer, strength, edge, 2 tan(spot_outer)}; Light.shadow.z is the
+// record index + 1 (0 = no cookie). cookie_edge and cookie_lod mirror spot_cookie_edge and cookie_lod literally.
+#define MCE_GLSL_COOKIE R"(
+layout(binding = 2) uniform sampler2DArray u_slot2;
+struct CookieRec { mat4 vp; vec4 params; };
+layout(std430, binding = 2) readonly buffer LightCookies { CookieRec l_cookies[]; };
+float cookie_smooth_step(float a, float b, float x) {  // b > a in every call (edge > 0)
+    float t = clamp((x - a) / (b - a), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+float cookie_edge(vec2 uv, float edge) {
+    if (!(edge > 0.0)) return 1.0;
+    float fx = uv.x < 1.0 - uv.x ? uv.x : 1.0 - uv.x;
+    float fy = uv.y < 1.0 - uv.y ? uv.y : 1.0 - uv.y;
+    return cookie_smooth_step(0.0, edge * 0.5, fx < fy ? fx : fy);
+}
+// log2(max(footprint / texel, 1)) clamped to 0..log2(size), texel = distance * width / size (width = 2 tan(outer)).
+float cookie_lod(float footprint, float distance, float width, float size) {
+    float texel = distance * width / size;
+    if (!(footprint > 0.0) || !(texel > 0.0)) return 0.0;
+    return clamp(log2(max(footprint / texel, 1.0)), 0.0, log2(size));
+}
+vec3 cookie_level(vec2 uv, float layer, float k, float size) {
+    float s = size * exp2(-k);
+    vec2 o = k < 0.5 ? vec2(0.0) : vec2(size, size - 2.0 * s);
+    vec2 t = o + clamp(uv * s, vec2(0.5), vec2(s - 0.5));
+    return textureLod(u_slot2, vec3(t / vec2(1.5 * size, size), layer), 0.0).rgb;
+}
+// size: the atlas's S (its height, textureSize(u_slot2, 0).y).
+vec3 cookie_sample(vec2 uv, float layer, float lod, float size) {
+    float k0 = floor(lod);
+    float f = lod - k0;
+    vec3 c = cookie_level(uv, layer, k0, size);
+    if (f > 0.0) c += (cookie_level(uv, layer, min(k0 + 1.0, log2(size)), size) - c) * f;  // equal levels: c exactly
+    return c;
+}
+)"
+
 // The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
 // splat layers (terrain_surface) instead of the material's maps.
 #define MCE_GLSL_MESH_FS R"(
@@ -568,11 +617,10 @@ struct DecalRec {
 layout(std430, binding = 15) readonly buffer Decals { DecalRec d_decals[]; };
 layout(binding = 0) uniform sampler2DArray u_decal0;
 layout(binding = 1) uniform sampler2DArray u_decal1;
-layout(binding = 2) uniform sampler2DArray u_decal2;
-vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {
+vec4 decal_texture(int slot, vec2 uv, vec2 gx, vec2 gy) {  // slot 2 is u_slot2 (MCE_GLSL_COOKIE)
     if (slot == 0) return textureGrad(u_decal0, vec3(uv, 0.0), gx, gy);
     if (slot == 1) return textureGrad(u_decal1, vec3(uv, 0.0), gx, gy);
-    return textureGrad(u_decal2, vec3(uv, 0.0), gx, gy);
+    return textureGrad(u_slot2, vec3(uv, 0.0), gx, gy);
 }
 // `ng`: the geometric normal; derivatives come from outside the loop (its branches diverge).
 void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout vec3 emit, inout float fill) {
@@ -1007,6 +1055,10 @@ void main() {
         color = shade(n, v, l, diffuse, f0, a, p_light_color.rgb) * sh;
 
         // Forward+ point and spot lights of this fragment's cluster.
+        // M-LIGHTCOOKIE 40d: the pixel's world footprint for the cookie's mip, taken here in uniform control flow (the
+        // loop's branches diverge, and derivatives there are undefined); the cookie itself is sampled with textureLod.
+        float cookie_px = 0.0;
+        if (p_local.z > 0.5) cookie_px = max(length(dFdx(v_world)), length(dFdy(v_world)));
         uvec2 range = c_ranges[cluster_of(depth)];
         for (uint i = 0u; i < range.y; ++i) {
             Light L = l_lights[l_indices[range.x + i]];
@@ -1019,11 +1071,29 @@ void main() {
             float cone = clamp(dot(-ld, L.spot.xyz) + L.spot.w, 0.0, 1.0);  // point lights: 0·x + 1
             att *= cone * cone;
             if (att <= 0.0) continue;
+            // The light's cookie (a spot's record, before the shadow: a black texel skips its taps). lc multiplies the
+            // light's colour; a light without one keeps today's expression.
+            bool cookied = p_local.z > 0.5 && L.shadow.z > 0.0;
+            vec3 lc = vec3(1.0);
+            if (cookied) {
+                CookieRec c = l_cookies[int(L.shadow.z) - 1];
+                vec4 q = c.vp * vec4(v_world, 1.0);
+                vec3 tint = vec3(0.0);
+                if (q.w > 0.0) {
+                    vec2 cuv = q.xy / q.w * 0.5 + 0.5;
+                    if (all(greaterThanEqual(cuv, vec2(0.0))) && all(lessThanEqual(cuv, vec2(1.0)))) {
+                        float size = float(textureSize(u_slot2, 0).y);
+                        tint = cookie_sample(cuv, c.params.x, cookie_lod(cookie_px, q.w, c.params.w, size), size) * cookie_edge(cuv, c.params.z);
+                    }
+                }
+                lc = 1.0 + (tint - 1.0) * c.params.y;  // mix(1, tint, strength), exactly 1 for a white texel or strength 0
+                if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
+            }
             if (L.shadow.x >= 0.0 && p_local.x > 0.5) {
                 att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ld);
                 if (att <= 0.0) continue;
             }
-            color += shade(n, v, ld, diffuse, f0, a, L.color.rgb * att);
+            color += shade(n, v, ld, diffuse, f0, a, cookied ? L.color.rgb * att * lc : L.color.rgb * att);
         }
 
         // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum, or with
@@ -1113,8 +1183,8 @@ void main() {
     o_color = vec4(color, base.a);
 }
 )"
-constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
-constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_MESH_FS;
+constexpr const char* kMeshFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE MCE_GLSL_MESH_FS;
+constexpr const char* kTerrainFS = "#version 450 core\n#define MCE_TERRAIN 1\n" MCE_GLSL_FRAME_U MCE_GLSL_PASS_U MCE_GLSL_OBJECT_U MCE_GLSL_IBL MCE_GLSL_LIGHTS MCE_GLSL_VOLUME MCE_GLSL_COOKIE MCE_GLSL_MESH_FS;
 
 constexpr const char* kShadowVS = R"(#version 450 core
 layout(std140, binding = 3) uniform ShadowU { mat4 s_mvp; };
@@ -3643,6 +3713,35 @@ void main() {
     float a = o_misc.y * e * fade(c.a, o_fade.x, o_fade.y, o_fade.z);
     // A pixel without a line is the source exactly (no mix rounding).
     o_color = a > 0.0 ? vec4(mix(src.rgb, o_line.rgb, a), src.a) : src;
+}
+)";
+
+// M-LIGHTCOOKIE 40c: one level of one cookie atlas layer (Forward3D::record_cookie_bake, a fullscreen triangle whose
+// viewport is the level's square in the layer; see MCE_GLSL_COOKIE for the packing). The cookie texture (a TextureStore
+// 2D array, layer 0, any size) is read at the level's texel centres: a level the source covers with more texels than it
+// has takes four taps a quarter of its texel off the centre at the source mip one finer than the level (with the source's
+// box mips that is the exact 2x2 box of that mip); a level at or above the source's size takes one bilinear tap of mip 0.
+// The taps are clamped half a texel inside the source (CookieBakeU::clamp): the sampler repeats, the cookie does not.
+// rgb is kept, a is written 1. Portable: one block, one combined sampler at the post bank, explicit textureLod.
+inline constexpr int kCookieBakeUBytes = 32;  // 2 vec4: tap, clamp
+constexpr const char* kCookieBakeFS = R"(#version 450 core
+layout(std140, binding = 1) uniform CookieBakeU {
+    vec4 b_tap;    // x: source lod, y: 1 = four taps (minified), z: the taps' offset in uv (a quarter of the level's texel)
+    vec4 b_clamp;  // xy: lowest uv a tap may read, zw: highest (half a texel inside the read source mip)
+};
+layout(binding = 6) uniform sampler2DArray u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+vec3 tap(vec2 uv) { return textureLod(u_src, vec3(clamp(uv, b_clamp.xy, b_clamp.zw), 0.0), b_tap.x).rgb; }
+void main() {
+    vec3 c;
+    if (b_tap.y > 0.5) {
+        float d = b_tap.z;
+        c = 0.25 * (tap(v_uv + vec2(-d, -d)) + tap(v_uv + vec2(d, -d)) + tap(v_uv + vec2(-d, d)) + tap(v_uv + vec2(d, d)));
+    } else {
+        c = tap(v_uv);
+    }
+    o_color = vec4(c, 1.0);
 }
 )";
 

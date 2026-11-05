@@ -261,3 +261,42 @@ TEST_CASE("shader_spirv: the edge outline stage") {
     CHECK(res.storage_count == 0);
     CHECK(res.uniform_count == 2);
 }
+
+// M-LIGHTCOOKIE 40c / 40d: the cookie bake stage and the lit stages (render's shaders3d.h, the real sources) compile for
+// SDL GPU. The bake: CookieBakeU at bank kPass (1), the source at sampler 6 (a 2D array), no storage buffers. The lit
+// mesh and terrain stages: all 16 sampler banks, the shared bank 2 (decal texture 2 or the cookie atlas) a 2D array, and
+// six storage buffers (clusters 4, light pool 5, light indices 6, local shadows 11, decals 15 and the cookie records at
+// storage bank 2), under SDL GPU's eight per stage.
+TEST_CASE("shader_spirv: the light cookie bake stage and the lit stages with the cookie records") {
+    FixedString<1024> log;
+    {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCookieBakeFS, "light_cookie_bake.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        REQUIRE(res.sampler_count == 1);
+        CHECK(res.sampler_slot[0] == 6);
+        CHECK(res.sampler_kind[0] == SamplerKind::Tex2DArray);
+        CHECK(res.storage_count == 0);
+        CHECK(res.uniform_count == 2);
+    }
+    for (const char* src : {mce::render::shaders3d::kMeshFS, mce::render::shaders3d::kTerrainFS}) {
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, "pbr.frag", spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.sampler_count == 16);
+        bool slot2 = false;
+        for (u32 i = 0; i < res.sampler_count; ++i)
+            if (res.sampler_slot[i] == 2) slot2 = res.sampler_kind[i] == SamplerKind::Tex2DArray;
+        CHECK(slot2);
+        CHECK(res.storage_count == 6);
+        bool cookies = false;
+        for (u32 i = 0; i < res.storage_count; ++i) cookies = cookies || res.storage_binding[i] == 2;
+        CHECK(cookies);
+    }
+}
