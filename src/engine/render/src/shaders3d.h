@@ -87,7 +87,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_meteor2;        // x rate (0..30 per minute), y the wrapped time (0..60 s), z seed (0..65535), w 0
     vec4 p_sun_cookie;     // M-LIGHTCOOKIE 40e: x atlas layer, y strength (0..1), z size (m per repeat), w 1 = the sun has a cookie
     vec4 p_sun_cookie2;    // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
-    vec4 p_free[6];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_translucency;   // M-TRANSLUCENT: x back ambient, y scatter lobe
+    vec4 p_free[5];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -117,7 +118,7 @@ layout(std140, binding = 3) uniform ObjectU {
     vec4 o_params;     // x: alpha cutoff (0 = no mask), y: unlit, z: roughness, w: metallic
     vec4 o_maps;       // x: normal map, y: ORM map, z: occlusion in ORM.r, w: occlusion-only map
     mat4 o_dequant;    // skinned draws: quantized -> bind space (o_model is then the instance's world)
-    vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time
+    vec4 o_skin;       // x: first joint in the palette, -1 = rigid; instanced draws: y first visible slot, z time; w: t8 + 256 w8
     vec4 o_inst;       // instanced draws (M-VISUAL 9): x wind amplitude, y wind frequency, zw wind direction (xz)
     vec4 o_coat;       // M-VISUAL2 4: x clear coat, y its alpha (roughness²), z anisotropy, w its rotation (radians)
     vec4 o_sheen;      // rgb sheen color, w its alpha (roughness², at least 0.0078)
@@ -476,8 +477,184 @@ vec3 sun_cookie(vec3 rel, float lod, float size) {
 }
 )"
 
+// The lit stage's weather pieces, spliced into MCE_GLSL_MESH_FS where they stood (M-TRANSLUCENT 41d moved their comments
+// out of the GLSL: kMeshFS / kTerrainFS stay under 65535 bytes, the longest literal MSVC takes and clang's
+// -Woverlength-strings bound; check with strlen when the lit shader grows).
+//
+// ---- wet surfaces (M-WETSURFACE 5b), behind p_wet.x > 0. Value noise on integer lattice hashes (no sin():
+// its precision differs across GPUs), periodic over 256 m: each octave fits a whole number of cells into that
+// span, so the floating origin enters mod 256 m and the puddles stay put across a rebase.
+// q: meters in 0..256; `cells`: lattice cells across 256 m (a whole number, >= 1).
+// Puddle cover 0..1 at world point p: two octaves (1 and 2.03 per puddle cell, each rounded to whole cells per
+// 256 m), crevices (low ao) fill first,
+// only on up-facing surfaces (`ng`: the geometric normal). The threshold falls as wetness and coverage rise.
+// Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
+// more, ask for roughness 0.03 (the lighting's clamp to 0.045 below wins, so they draw at 0.045) and flatten the
+// normal map (`fill`). Metals neither darken (their albedo is their F0) nor smooth: water beads on them, and the
+// gate holds a wet metal sphere's look within 1%. Returns the puddle cover (the rain ripples' mask).
+#define MCE_GLSL_WET R"(
+uint wet_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    v.x += v.y * 1664525u;
+    v.y += v.x * 1664525u;
+    v ^= v >> 16u;
+    return v.x;
+}
+float wet_lattice(uvec2 c, uint seed) { return float(wet_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
+float wet_value(vec2 q, float cells, uint seed) {
+    vec2 g = max(q * (cells / 256.0), vec2(0.0));
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uint m = uint(cells);
+    uvec2 c0 = uvec2(i) % m;  // g may round up to `cells`: it wraps to cell 0
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = wet_lattice(c0, seed), b = wet_lattice(uvec2(c1.x, c0.y), seed);
+    float c = wet_lattice(uvec2(c0.x, c1.y), seed), d = wet_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float wet_puddle(vec3 p, vec3 ng, float ao) {
+    float up = smoothstep(0.9, 0.98, ng.y);
+    if (up <= 0.0) return 0.0;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_wet.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_wet.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0u) * 0.65 + wet_value(q, c2, 0x9E3779B9u) * 0.35 + (1.0 - ao) * 0.25;
+    float t = 1.0 - 0.8 * p_wet.y * p_wet.x;
+    return smoothstep(t - 0.03, t + 0.03, h) * up;
+}
+float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
+    float w = p_wet.x;
+    float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
+    float dielectric = 1.0 - clamp(metallic, 0.0, 1.0);
+    float porosity = dielectric * clamp(rough * 1.25, 0.0, 1.0);
+    albedo *= mix(1.0, 1.0 - p_wet.w, w * porosity) * mix(1.0, 1.0 - p_wet.w, pud * dielectric);
+    rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
+    rough = mix(rough, 0.03, pud);
+    fill = max(fill, pud);
+    return pud;
+}
+)"
+
+// ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
+// water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
+// normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
+//   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
+//   c   = clamp(cover * coverage * (1 + wind_bias * dot(ng.xz, wind_dir)), 0, 1)
+//         the share of the surface to whiten; the wind blows toward wind_dir (p_snow2.xy, M-WINDDIR 8c; +x by
+//         default), so slopes facing that way (lee) take up to 1 + wind_bias times the share and those facing into
+//         it (windward) down to 1 - wind_bias; flat ground (ng.xz = 0) is unchanged. With wind_dir (1, 0) the dot
+//         is ng.x exactly (ng.x * 1 + ng.z * 0), so the default frame is the pre-8c one bit for bit.
+//   noise (p_snow.z > 0): h = the two-octave value noise of the puddles (1 and 2.03 per cell, other seeds),
+//         s = c - 0.5, t = 0.5 - s (0.48 + 2.55 s^4) (a fit of the noise's quantiles: about the share c of points
+//         has h > t), mask = smoothstep(t - 0.04, t + 0.04, h) * min(4 c, 1) (the factor fades the last
+//         percent in from cover 0) * up
+//   no noise (Low): mask = c * up, an even layer of the same mean whiteness.
+// Under the mask: albedo toward 0.9 white, roughness toward 0.8, metallic toward 0 (snow on metal is snow), and
+// the normal map flattens (`fill`: the layer hides the surface's relief). Snow over a puddle stills it: `pud`, the
+// rain ripples' mask, keeps only the uncovered share. `snow` receives the mask (M-TRANSLUCENT 41d: a snowed-on
+// translucent surface lets through only its uncovered share).
+#define MCE_GLSL_SNOW R"(
+float snow_mask(vec3 p, vec3 ng) {
+    float up = smoothstep(0.55, 0.85, ng.y);
+    if (up <= 0.0) return 0.0;
+    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * dot(ng.xz, p_snow2.xy)), 0.0, 1.0);
+    if (p_snow.z <= 0.0) return c * up;
+    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
+    float c1 = max(floor(256.0 * p_snow.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_snow.z + 0.5), 1.0);
+    float h = wet_value(q, c1, 0x85EBCA6Bu) * 0.65 + wet_value(q, c2, 0xC2B2AE35u) * 0.35;
+    float s = c - 0.5;
+    float t = 0.5 - s * (0.48 + 2.55 * s * s * s * s);
+    return smoothstep(t - 0.04, t + 0.04, h) * min(4.0 * c, 1.0) * up;
+}
+void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill,
+                inout float pud, inout float snow) {
+    float m = snow_mask(p, ng);
+    snow = m;
+    albedo = mix(albedo, vec3(0.9), m);
+    rough = mix(rough, 0.8, m);
+    metallic = mix(metallic, 0.0, m);
+    fill = max(fill, m);
+    pud *= 1.0 - m;
+}
+)"
+
+// ---- rain ripples (M-RAINFX 7b), behind p_ripple.x > 0 and only where a puddle lies (`pud`, apply_wet's cover
+// after the snow): a frame with no wetness, no puddles or no ripples is the ripple-less one bit for bit, and ground
+// outside the puddles never changes. Drops land on a grid of 0.5 m cells, 512 across the puddles' 256 m period (the
+// same origin p_wet2.xy, so a floating-origin rebase keeps them in place). Cell c holds a drop when its hash is
+// below the density; its period is 3..6 quarter seconds and its phase hashed. In each cycle the drop lands at a
+// hashed point of its cell (the cycle index wraps with the clock: p_ripple.w is the speed-scaled time mod 60 s,
+// which every period divides) and two concentric rings grow from it, radius u * 0.8 and u * 0.44 cells for the
+// cycle's age u = 0..1, fading in over the first tenth and out as (1 - u)^2. A ring is the slope of a smooth bump
+// (1 - y^2)^2, y = (distance - radius) / (half width), half width ring_width * 0.3 cells: the longest reach,
+// 0.9 + 0.8 + 0.3 cells from a cell's corner, stays inside the 3 x 3 cells searched. No derivatives: the branch is
+// not uniform.
+// The rings tilt the water's normal by up to ~0.4 rad per ring and roughen it a little at their crests.
+#define MCE_GLSL_RIPPLES R"(
+float ripple_ring(float x, float hw) {
+    float y = x / hw;
+    return abs(y) < 1.0 ? y * (1.0 - y * y) * 2.598 : 0.0;  // the outward slope, peak 1 at y = 1 / sqrt(3)
+}
+vec2 ripple_tilt(vec3 p) {
+    vec2 g = mod(p.xz + p_wet2.xy, 256.0) * 2.0;  // cells
+    vec2 i = floor(g);
+    float t4 = p_ripple.w * 4.0;  // quarter seconds, 0..240
+    float hw = p_ripple.z * 0.3;
+    vec2 tilt = vec2(0.0);
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx) {
+            vec2 cell = i + vec2(float(dx), float(dy));
+            uvec2 c = uvec2(mod(cell, 512.0));
+            uint h = wet_hash(c + uvec2(0x68E31DA4u, 0xB5297A4Du));
+            if (float(h & 0xFFFFu) * (1.0 / 65536.0) >= p_ripple.y) continue;
+            uint k = 3u + ((h >> 16u) & 3u);
+            float tp = t4 / float(k) + float(h >> 18u) * (1.0 / 16384.0);  // cycles
+            float cyc = floor(tp);
+            float u = tp - cyc;
+            uint cy = uint(cyc) % (240u / k);
+            uint h2 = wet_hash(uvec2(c.x ^ (cy * 0x27D4EB2Du), c.y + 0x165667B1u));
+            vec2 drop = cell + 0.1 + 0.8 * vec2(float(h2 & 0xFFFFu), float(h2 >> 16u)) * (1.0 / 65536.0);
+            vec2 d = g - drop;
+            float dist = length(d);
+            if (dist < 1e-4) continue;
+            float a = smoothstep(0.0, 0.1, u) * (1.0 - u) * (1.0 - u);
+            float s = ripple_ring(dist - 0.8 * u, hw) + 0.5 * ripple_ring(dist - 0.44 * u, hw);
+            tilt += d * (a * s / dist);
+        }
+    return tilt;
+}
+void apply_ripples(vec3 p, float pud, inout vec3 n, inout float rough) {
+    vec2 t = ripple_tilt(p) * (p_ripple.x * pud);
+    n = normalize(n + vec3(t.x, 0.0, t.y) * 0.4);
+    rough += 0.04 * min(length(t), 1.0);
+}
+)"
+
 // The forward material shader. kTerrainFS is the same with MCE_TERRAIN: the surface comes from the
 // splat layers (terrain_surface) instead of the material's maps.
+//
+// M-TRANSLUCENT 41d / 41e (thin-surface translucency and wrap; docs/milestones/M-TRANSLUCENT.md). ObjectU::o_skin.w =
+// t8 + 256 * w8 (translucency_object; 0 = off: `thin` false, today's statements, untouched). A per-draw value, so `thin`
+// is uniform across the draw. tr: the share of the diffuse let through (none on metal or under snow), wr: the wrap;
+// diffuse_f: what the surface still reflects (KHR_materials_diffuse_transmission's mix); tcol: what its back lets
+// through, tinted by its own colour (diffuse = base * (1 - metallic), after the transmission's share). wrap_diffuse,
+// wrap_extra, translucency_back and the constants mirror mce/render/translucency.h literally (n_dot_l = dot(n, l), l
+// toward the light); thin_terms is one light's wrap extra plus its back term (`eb`: the light behind its back shadow).
+// The sun: the front shadow where the wrap reaches (n.l > -wr), the back shadow where light comes through (tr > 0,
+// n.l < 0) with the geometric normal flipped for the normal offset, so the receiver sits on the leaf's lit side: the
+// leaf does not shadow its own back and a second leaf between it and the sun does (one cascade lookup per pixel, two
+// only in a translucent surface's wrap band); no contact shadow on the back; the cookie multiplies all three terms. A
+// local light: its one local_shadow lookup takes the flipped offset where it lights the back, and its back term only
+// where it lights the back (`eb` 0 when n.l >= 0, as the sun's shb). Snow damps tr by the mask of the surface's
+// upward face (a leaf seen from below under snow does not glow). Clear coat and sheen act on shade() and the front
+// ambient only, not on the wrap extra, the back term or the back ambient. The ambient (Medium and High,
+// p_translucency.x): the front reflects diffuse_f, the back lets tcol of the irradiance along -n through:
+// sh_irradiance2 (the nine SH texels once; the odd band flips its sign under -n; equal to two sh_irradiance calls within
+// rounding) or the hemisphere gradient at -n, and in the irradiance volume gi_irradiance2's back sum (the same probe
+// texels and the front's weights); SSAO darkens it, the sky's sun-side factor does not. Low: the full diffuse, as today.
 #define MCE_GLSL_MESH_FS R"(
 layout(binding = 6) uniform sampler2DArray u_albedo;
 layout(binding = 7) uniform sampler2DArray u_normal_map;
@@ -577,6 +754,20 @@ vec3 direct_ext(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) 
 vec3 shade(vec3 n, vec3 v, vec3 l, vec3 diffuse, vec3 f0, float a, vec3 e) {
     return o_ext.x > 0.5 ? direct_ext(n, v, l, diffuse, f0, a, e) : direct(n, v, l, diffuse, f0, a, e);
 }
+// M-TRANSLUCENT: mirrors of translucency.h
+const float kTranslucencyDistortion = 0.2;
+const float kTranslucencyPower = 4.0;
+const float kTranslucencyScatter = 0.5;
+float wrap_diffuse(float n_dot_l, float wrap) { return max(n_dot_l + wrap, 0.0) / ((1.0 + wrap) * (1.0 + wrap)); }
+float wrap_extra(float n_dot_l, float wrap) { return wrap_diffuse(n_dot_l, wrap) - max(n_dot_l, 0.0); }
+float translucency_back(float n_dot_l, float v_dot_t, bool scatter) {
+    return max(-n_dot_l, 0.0) + (scatter ? kTranslucencyScatter * pow(max(v_dot_t, 0.0), kTranslucencyPower) : 0.0);
+}
+vec3 thin_terms(vec3 n, vec3 v, vec3 l, vec3 diffuse_f, vec3 tcol, float wr, vec3 e, vec3 eb) {
+    float nl = dot(n, l);
+    return diffuse_f * wrap_extra(nl, wr) * e +
+           tcol * translucency_back(nl, dot(v, -normalize(l + n * kTranslucencyDistortion)), p_translucency.y > 0.5) * eb;
+}
 
 // Split-sum environment BRDF, analytic fit (Karis, "Physically Based Shading on Mobile").
 vec3 env_brdf(vec3 f0, float rough, float NoV) {
@@ -616,14 +807,21 @@ vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
 layout(binding = 5) uniform sampler2D u_gi;
 const vec3 kGiTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.57735027, -0.57735027, -0.57735027),
                                  vec3(-0.57735027, 0.57735027, -0.57735027), vec3(-0.57735027, -0.57735027, 0.57735027));
-vec3 gi_probe(ivec3 c, vec3 n) {
-    ivec2 t = ivec2(c.x * 4, c.y + int(p_gi_counts.y) * c.z);
-    vec3 e = vec3(0.0);
-    for (int k = 0; k < 4; ++k) e += texelFetch(u_gi, t + ivec2(k, 0), 0).rgb * (0.25 + 1.5 * dot(kGiTetra[k], n));
-    return max(e, vec3(0.0));
+void sh_irradiance2(vec3 n, out vec3 front, out vec3 back) {
+    vec3 odd = texelFetch(u_env_sh, ivec2(1, 0), 0).rgb * (0.488603 * n.y);
+    odd += texelFetch(u_env_sh, ivec2(2, 0), 0).rgb * (0.488603 * n.z);
+    odd += texelFetch(u_env_sh, ivec2(3, 0), 0).rgb * (0.488603 * n.x);
+    vec3 even = texelFetch(u_env_sh, ivec2(0, 0), 0).rgb * 0.282095;
+    even += texelFetch(u_env_sh, ivec2(4, 0), 0).rgb * (1.092548 * n.x * n.y);
+    even += texelFetch(u_env_sh, ivec2(5, 0), 0).rgb * (1.092548 * n.y * n.z);
+    even += texelFetch(u_env_sh, ivec2(6, 0), 0).rgb * (0.315392 * (3.0 * n.z * n.z - 1.0));
+    even += texelFetch(u_env_sh, ivec2(7, 0), 0).rgb * (1.092548 * n.x * n.z);
+    even += texelFetch(u_env_sh, ivec2(8, 0), 0).rgb * (0.546274 * (n.x * n.x - n.y * n.y));
+    front = max(even + odd, vec3(0.0));
+    back = max(even - odd, vec3(0.0));
 }
-// rgb: irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
-vec4 gi_irradiance(vec3 p, vec3 n) {
+vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
+    back = vec3(0.0);
     vec3 bmin = p_gi_min.xyz, bmax = p_gi_max.xyz;
     vec3 inside = min(p - bmin, bmax - p);
     float fade = clamp(1.0 + min(min(inside.x, inside.y), inside.z) / max(p_gi.w, 1e-3), 0.0, 1.0);
@@ -633,7 +831,7 @@ vec4 gi_irradiance(vec3 p, vec3 n) {
     vec3 g = (clamp(p + n * p_gi.z, bmin, bmax) - bmin) / cell;
     ivec3 base = clamp(ivec3(floor(g)), ivec3(0), counts - 2);
     vec3 f = clamp(g - vec3(base), 0.0, 1.0);
-    vec3 sum = vec3(0.0);
+    vec3 sum = vec3(0.0), bsum = vec3(0.0);
     float wsum = 0.0;
     for (int i = 0; i < 8; ++i) {
         ivec3 o = ivec3(i & 1, (i >> 1) & 1, i >> 2);
@@ -643,10 +841,26 @@ vec4 gi_irradiance(vec3 p, vec3 n) {
         float d2 = dot(to, to);
         float b = d2 > 1e-8 ? (dot(to * inversesqrt(d2), n) + 1.0) * 0.5 : 1.0;
         w *= b * b + 0.05;
-        sum += gi_probe(base + o, n) * w;
+        ivec3 c = base + o;
+        ivec2 t = ivec2(c.x * 4, c.y + int(p_gi_counts.y) * c.z);
+        vec3 e = vec3(0.0), eb = vec3(0.0);
+        for (int k = 0; k < 4; ++k) {
+            vec3 q = texelFetch(u_gi, t + ivec2(k, 0), 0).rgb;
+            float d = 1.5 * dot(kGiTetra[k], n);
+            e += q * (0.25 + d);
+            eb += q * (0.25 - d);
+        }
+        sum += max(e, vec3(0.0)) * w;
+        bsum += max(eb, vec3(0.0)) * w;
         wsum += w;
     }
+    back = bsum / max(wsum, 1e-6);
     return vec4(sum / max(wsum, 1e-6), fade);
+}
+// rgb: irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
+vec4 gi_irradiance(vec3 p, vec3 n) {
+    vec3 b;
+    return gi_irradiance2(p, n, b);
 }
 
 uint cluster_of(float depth) {
@@ -707,150 +921,7 @@ void apply_decals(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout f
     }
 }
 
-// ---- wet surfaces (M-WETSURFACE 5b), behind p_wet.x > 0. Value noise on integer lattice hashes (no sin():
-// its precision differs across GPUs), periodic over 256 m: each octave fits a whole number of cells into that
-// span, so the floating origin enters mod 256 m and the puddles stay put across a rebase.
-uint wet_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), one lane
-    v = v * 1664525u + 1013904223u;
-    v.x += v.y * 1664525u;
-    v.y += v.x * 1664525u;
-    v ^= v >> 16u;
-    v.x += v.y * 1664525u;
-    v.y += v.x * 1664525u;
-    v ^= v >> 16u;
-    return v.x;
-}
-float wet_lattice(uvec2 c, uint seed) { return float(wet_hash(c + uvec2(seed, 0u)) >> 8u) * (1.0 / 16777216.0); }
-// q: meters in 0..256; `cells`: lattice cells across 256 m (a whole number, >= 1).
-float wet_value(vec2 q, float cells, uint seed) {
-    vec2 g = max(q * (cells / 256.0), vec2(0.0));
-    vec2 i = floor(g);
-    vec2 f = g - i;
-    f = f * f * (3.0 - 2.0 * f);
-    uint m = uint(cells);
-    uvec2 c0 = uvec2(i) % m;  // g may round up to `cells`: it wraps to cell 0
-    uvec2 c1 = (c0 + 1u) % m;
-    float a = wet_lattice(c0, seed), b = wet_lattice(uvec2(c1.x, c0.y), seed);
-    float c = wet_lattice(uvec2(c0.x, c1.y), seed), d = wet_lattice(c1, seed);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-// Puddle cover 0..1 at world point p: two octaves (1 and 2.03 per puddle cell, each rounded to whole cells per
-// 256 m), crevices (low ao) fill first,
-// only on up-facing surfaces (`ng`: the geometric normal). The threshold falls as wetness and coverage rise.
-float wet_puddle(vec3 p, vec3 ng, float ao) {
-    float up = smoothstep(0.9, 0.98, ng.y);
-    if (up <= 0.0) return 0.0;
-    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
-    float c1 = max(floor(256.0 * p_wet.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_wet.z + 0.5), 1.0);
-    float h = wet_value(q, c1, 0u) * 0.65 + wet_value(q, c2, 0x9E3779B9u) * 0.35 + (1.0 - ao) * 0.25;
-    float t = 1.0 - 0.8 * p_wet.y * p_wet.x;
-    return smoothstep(t - 0.03, t + 0.03, h) * up;
-}
-// Darker porous albedo and lower roughness; puddles (standing water) darken the dielectric surface under them once
-// more, ask for roughness 0.03 (the lighting's clamp to 0.045 below wins, so they draw at 0.045) and flatten the
-// normal map (`fill`). Metals neither darken (their albedo is their F0) nor smooth: water beads on them, and the
-// gate holds a wet metal sphere's look within 1%. Returns the puddle cover (the rain ripples' mask).
-float apply_wet(vec3 p, vec3 ng, float ao, inout vec3 albedo, inout float rough, float metallic, inout float fill) {
-    float w = p_wet.x;
-    float pud = (p_wet2.w > 0.5 && p_wet.y > 0.0) ? wet_puddle(p, ng, ao) : 0.0;
-    float dielectric = 1.0 - clamp(metallic, 0.0, 1.0);
-    float porosity = dielectric * clamp(rough * 1.25, 0.0, 1.0);
-    albedo *= mix(1.0, 1.0 - p_wet.w, w * porosity) * mix(1.0, 1.0 - p_wet.w, pud * dielectric);
-    rough = mix(rough, min(rough, p_wet2.z), w * dielectric);
-    rough = mix(rough, 0.03, pud);
-    fill = max(fill, pud);
-    return pud;
-}
-
-// ---- snow cover (M-SNOWCOVER 6b), behind p_snow.x > 0, after apply_wet: the snow's values replace whatever the
-// water did under it, so snow wins over puddles where its mask is high. The mask, at world point p with geometric
-// normal ng (the interpolated vertex normal, the puddles' stand-in: a sphere's cap is up-facing and collects snow):
-//   up  = smoothstep(0.55, 0.85, ng.y)                     slopes up to ~32 degrees fully, none past ~57
-//   c   = clamp(cover * coverage * (1 + wind_bias * dot(ng.xz, wind_dir)), 0, 1)
-//         the share of the surface to whiten; the wind blows toward wind_dir (p_snow2.xy, M-WINDDIR 8c; +x by
-//         default), so slopes facing that way (lee) take up to 1 + wind_bias times the share and those facing into
-//         it (windward) down to 1 - wind_bias; flat ground (ng.xz = 0) is unchanged. With wind_dir (1, 0) the dot
-//         is ng.x exactly (ng.x * 1 + ng.z * 0), so the default frame is the pre-8c one bit for bit.
-//   noise (p_snow.z > 0): h = the two-octave value noise of the puddles (1 and 2.03 per cell, other seeds),
-//         s = c - 0.5, t = 0.5 - s (0.48 + 2.55 s^4) (a fit of the noise's quantiles: about the share c of points
-//         has h > t), mask = smoothstep(t - 0.04, t + 0.04, h) * min(4 c, 1) (the factor fades the last
-//         percent in from cover 0) * up
-//   no noise (Low): mask = c * up, an even layer of the same mean whiteness.
-float snow_mask(vec3 p, vec3 ng) {
-    float up = smoothstep(0.55, 0.85, ng.y);
-    if (up <= 0.0) return 0.0;
-    float c = clamp(p_snow.x * p_snow.y * (1.0 + p_snow.w * dot(ng.xz, p_snow2.xy)), 0.0, 1.0);
-    if (p_snow.z <= 0.0) return c * up;
-    vec2 q = mod(p.xz + p_wet2.xy, 256.0);
-    float c1 = max(floor(256.0 * p_snow.z + 0.5), 1.0), c2 = max(floor(256.0 * 2.03 * p_snow.z + 0.5), 1.0);
-    float h = wet_value(q, c1, 0x85EBCA6Bu) * 0.65 + wet_value(q, c2, 0xC2B2AE35u) * 0.35;
-    float s = c - 0.5;
-    float t = 0.5 - s * (0.48 + 2.55 * s * s * s * s);
-    return smoothstep(t - 0.04, t + 0.04, h) * min(4.0 * c, 1.0) * up;
-}
-// Under the mask: albedo toward 0.9 white, roughness toward 0.8, metallic toward 0 (snow on metal is snow), and
-// the normal map flattens (`fill`: the layer hides the surface's relief). Snow over a puddle stills it: `pud`, the
-// rain ripples' mask, keeps only the uncovered share.
-void apply_snow(vec3 p, vec3 ng, inout vec3 albedo, inout float rough, inout float metallic, inout float fill,
-                inout float pud) {
-    float m = snow_mask(p, ng);
-    albedo = mix(albedo, vec3(0.9), m);
-    rough = mix(rough, 0.8, m);
-    metallic = mix(metallic, 0.0, m);
-    fill = max(fill, m);
-    pud *= 1.0 - m;
-}
-
-// ---- rain ripples (M-RAINFX 7b), behind p_ripple.x > 0 and only where a puddle lies (`pud`, apply_wet's cover
-// after the snow): a frame with no wetness, no puddles or no ripples is the ripple-less one bit for bit, and ground
-// outside the puddles never changes. Drops land on a grid of 0.5 m cells, 512 across the puddles' 256 m period (the
-// same origin p_wet2.xy, so a floating-origin rebase keeps them in place). Cell c holds a drop when its hash is
-// below the density; its period is 3..6 quarter seconds and its phase hashed. In each cycle the drop lands at a
-// hashed point of its cell (the cycle index wraps with the clock: p_ripple.w is the speed-scaled time mod 60 s,
-// which every period divides) and two concentric rings grow from it, radius u * 0.8 and u * 0.44 cells for the
-// cycle's age u = 0..1, fading in over the first tenth and out as (1 - u)^2. A ring is the slope of a smooth bump
-// (1 - y^2)^2, y = (distance - radius) / (half width), half width ring_width * 0.3 cells: the longest reach,
-// 0.9 + 0.8 + 0.3 cells from a cell's corner, stays inside the 3 x 3 cells searched. No derivatives: the branch is
-// not uniform.
-float ripple_ring(float x, float hw) {
-    float y = x / hw;
-    return abs(y) < 1.0 ? y * (1.0 - y * y) * 2.598 : 0.0;  // the outward slope, peak 1 at y = 1 / sqrt(3)
-}
-vec2 ripple_tilt(vec3 p) {
-    vec2 g = mod(p.xz + p_wet2.xy, 256.0) * 2.0;  // cells
-    vec2 i = floor(g);
-    float t4 = p_ripple.w * 4.0;  // quarter seconds, 0..240
-    float hw = p_ripple.z * 0.3;
-    vec2 tilt = vec2(0.0);
-    for (int dy = -1; dy <= 1; ++dy)
-        for (int dx = -1; dx <= 1; ++dx) {
-            vec2 cell = i + vec2(float(dx), float(dy));
-            uvec2 c = uvec2(mod(cell, 512.0));
-            uint h = wet_hash(c + uvec2(0x68E31DA4u, 0xB5297A4Du));
-            if (float(h & 0xFFFFu) * (1.0 / 65536.0) >= p_ripple.y) continue;
-            uint k = 3u + ((h >> 16u) & 3u);
-            float tp = t4 / float(k) + float(h >> 18u) * (1.0 / 16384.0);  // cycles
-            float cyc = floor(tp);
-            float u = tp - cyc;
-            uint cy = uint(cyc) % (240u / k);
-            uint h2 = wet_hash(uvec2(c.x ^ (cy * 0x27D4EB2Du), c.y + 0x165667B1u));
-            vec2 drop = cell + 0.1 + 0.8 * vec2(float(h2 & 0xFFFFu), float(h2 >> 16u)) * (1.0 / 65536.0);
-            vec2 d = g - drop;
-            float dist = length(d);
-            if (dist < 1e-4) continue;
-            float a = smoothstep(0.0, 0.1, u) * (1.0 - u) * (1.0 - u);
-            float s = ripple_ring(dist - 0.8 * u, hw) + 0.5 * ripple_ring(dist - 0.44 * u, hw);
-            tilt += d * (a * s / dist);
-        }
-    return tilt;
-}
-// The rings tilt the water's normal by up to ~0.4 rad per ring and roughen it a little at their crests.
-void apply_ripples(vec3 p, float pud, inout vec3 n, inout float rough) {
-    vec2 t = ripple_tilt(p) * (p_ripple.x * pud);
-    n = normalize(n + vec3(t.x, 0.0, t.y) * 0.4);
-    rough += 0.04 * min(length(t), 1.0);
-}
-
+)" MCE_GLSL_WET MCE_GLSL_SNOW MCE_GLSL_RIPPLES R"(
 #ifdef MCE_TERRAIN
 // ---- splat-layered terrain (M-TERRAIN 2): the layers' maps are layers of u_albedo / u_normal_map /
 // u_orm, the weights two RGBA layers of u_emissive (no emissive on a terrain), the parameters TerrainU.
@@ -1066,10 +1137,10 @@ void main() {
                 metallic *= orm.b;
             }
         }
-        float fill = 0.0, pud = 0.0;
+        float fill = 0.0, pud = 0.0, snow = 0.0;
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
         if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
-        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud);  // after the water: snow wins
+        if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud, snow);  // after the water: snow wins
 #ifdef MCE_TERRAIN
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
@@ -1085,6 +1156,16 @@ void main() {
         vec3 diffuse = base.rgb * (1.0 - metallic);
         float trans = o_ext.w > 0.5 ? o_ext.z * (1.0 - metallic) : 0.0;  // transmission takes the diffuse's place
         diffuse *= 1.0 - trans;
+        bool thin = o_skin.w > 0.0;
+        float tr = 0.0, wr = 0.0;
+        if (thin) {
+            vec3 gn = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
+            float sd = p_snow.x > 0.0 && gn.y < 0.0 ? snow_mask(v_world, -gn) : snow;
+            tr = mod(o_skin.w, 256.0) / 255.0 * (1.0 - metallic) * (1.0 - sd);
+            wr = floor(o_skin.w * (1.0 / 256.0)) / 255.0;
+        }
+        vec3 diffuse_f = thin ? diffuse * (1.0 - tr) : diffuse;
+        vec3 tcol = diffuse * tr;
         float ior_f0 = o_ext.y > 0.0 ? ((o_ext.y - 1.0) / (o_ext.y + 1.0)) * ((o_ext.y - 1.0) / (o_ext.y + 1.0)) : 0.04;
         vec3 f0 = mix(vec3(ior_f0), base.rgb, metallic);
         vec3 v = normalize(u_camera_pos.xyz - v_world);
@@ -1103,8 +1184,16 @@ void main() {
 
         // The sun, shadowed.
         vec3 l = -p_light_dir.xyz;
-        float sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
-        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0) {  // contact shadows: what the cascades are too coarse to see
+        float sh, shb = 0.0;
+        if (thin) {
+            vec3 ng = normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0);
+            float nl = dot(n, l);
+            sh = nl > -wr ? shadow_term(v_world, ng, l, depth) : 0.0;
+            if (tr > 0.0 && nl < 0.0) shb = shadow_term(v_world, -ng, l, depth);
+        } else {
+            sh = dot(n, l) > 0.0 ? shadow_term(v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), l, depth) : 0.0;
+        }
+        if (p_ao.y > 0.5 && o_ext.w < 0.5 && sh > 0.0 && dot(n, l) > 0.0) {  // contact shadows: what the cascades are too coarse to see
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             sh *= textureLod(u_ao, c.xy / c.w * 0.5 + 0.5, 0.0).g;
         }
@@ -1113,7 +1202,20 @@ void main() {
         // themselves are read with an explicit lod.
         float cookie_px = 0.0;
         if (p_local.z > 0.5) cookie_px = max(length(dFdx(v_world)), length(dFdy(v_world)));
-        if (p_sun_cookie.w > 0.5) {  // the sun's cookie multiplies its direct term only (after the shadows; sh stays for the ambient)
+        if (thin) {
+            vec3 Lc = p_light_color.rgb;
+            vec3 sun = shade(n, v, l, diffuse_f, f0, a, Lc) * sh + thin_terms(n, v, l, diffuse_f, tcol, wr, Lc * sh, Lc * shb);
+            if (p_sun_cookie.w > 0.5) {
+                vec3 sc = vec3(0.0);
+                if (sh > 0.0 || shb > 0.0) {
+                    float size = float(textureSize(u_slot2, 0).y);
+                    sc = sun_cookie(v_world - u_camera_pos.xyz, cookie_lod_sun(cookie_px, p_sun_cookie.z, size), size);
+                }
+                color = max(sc.r, max(sc.g, sc.b)) > 0.0 ? sun * sc : vec3(0.0);
+            } else {
+                color = sun;
+            }
+        } else if (p_sun_cookie.w > 0.5) {  // the sun's cookie multiplies its direct term only (after the shadows; sh stays for the ambient)
             vec3 sc = vec3(0.0);
             if (sh > 0.0) {
                 float size = float(textureSize(u_slot2, 0).y);
@@ -1156,10 +1258,16 @@ void main() {
                 if (max(lc.r, max(lc.g, lc.b)) <= 0.0) continue;
             }
             if (L.shadow.x >= 0.0 && p_local.x > 0.5) {
-                att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * (gl_FrontFacing ? 1.0 : -1.0), ld);
+                float side = (gl_FrontFacing ? 1.0 : -1.0) * (thin && tr > 0.0 && dot(n, ld) < 0.0 ? -1.0 : 1.0);
+                att *= local_shadow(L.shadow, L.pos_radius.xyz, v_world, normalize(v_normal) * side, ld);
                 if (att <= 0.0) continue;
             }
-            color += shade(n, v, ld, diffuse, f0, a, cookied ? L.color.rgb * att * lc : L.color.rgb * att);
+            if (thin) {
+                vec3 E = cookied ? L.color.rgb * att * lc : L.color.rgb * att;
+                color += shade(n, v, ld, diffuse_f, f0, a, E) + thin_terms(n, v, ld, diffuse_f, tcol, wr, E, dot(n, ld) < 0.0 ? E : vec3(0.0));
+            } else {
+                color += shade(n, v, ld, diffuse, f0, a, cookied ? L.color.rgb * att * lc : L.color.rgb * att);
+            }
         }
 
         // Ambient: hemisphere diffuse + sky reflections through the analytic split-sum, or with
@@ -1172,17 +1280,40 @@ void main() {
             r = reflect(-v, normalize(mix(n, an, abs(o_coat.z) * clamp(5.0 * rough, 0.0, 1.0))));
         }
         float horizon = clamp(1.0 + dot(r, normalize(v_normal)), 0.0, 1.0);
-        vec3 amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+        bool thin_amb = thin && p_translucency.x > 0.5;
+        vec3 amb_diffuse, amb_back = vec3(0.0);
+        if (thin_amb) {
+            vec3 irr_f, irr_b;
+            if (p_ibl.x > 0.5) {
+                sh_irradiance2(n, irr_f, irr_b);
+                irr_f *= p_ibl.y;
+                irr_b *= p_ibl.y;
+            } else {
+                irr_f = mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
+                irr_b = mix(p_amb_ground.rgb, p_amb_sky.rgb, -n.y * 0.5 + 0.5);
+            }
+            amb_diffuse = irr_f * diffuse_f;
+            amb_back = irr_b * tcol;
+        } else {
+            amb_diffuse = p_ibl.x > 0.5 ? sh_irradiance(n) * diffuse * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5) * diffuse;
+        }
         vec3 amb_spec, spec_brdf;
         // The irradiance volume: its light in place of the sky's, and the sky's reflections dimmed by how
         // much of the sky's irradiance reaches this point (rooms do not mirror the open sky).
         float gi_w = 0.0, sky_vis = 1.0;
         if (p_gi.x > 0.5) {
-            vec4 gi = gi_irradiance(v_world, n);
+            vec4 gi;
+            if (thin_amb) {
+                vec3 gi_back;
+                gi = gi_irradiance2(v_world, n, gi_back);
+                amb_back = mix(amb_back, gi_back * p_gi.y * tcol, gi.a);
+            } else {
+                gi = gi_irradiance(v_world, n);
+            }
             gi_w = gi.a;
             vec3 irr = gi.rgb * p_gi.y;
             vec3 sky_irr = p_ibl.x > 0.5 ? sh_irradiance(n) * p_ibl.y : mix(p_amb_ground.rgb, p_amb_sky.rgb, n.y * 0.5 + 0.5);
-            amb_diffuse = mix(amb_diffuse, irr * diffuse, gi_w);
+            amb_diffuse = mix(amb_diffuse, irr * (thin_amb ? diffuse_f : diffuse), gi_w);
             const vec3 kLuma = vec3(0.2126, 0.7152, 0.0722);
             sky_vis = mix(1.0, clamp(dot(irr, kLuma) / max(dot(sky_irr, kLuma), 1e-4), 0.0, 1.0), gi_w);
         }
@@ -1225,6 +1356,7 @@ void main() {
             }
         }
         color += (amb_diffuse * sun_side + amb_spec) * ao;
+        if (thin_amb) color += amb_back * ao;
         if (trans > 0.0) {  // thin-walled refraction: the opaque frame (bank kAo), shifted by the view normal, tinted
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             float ior = o_ext.y > 0.0 ? o_ext.y : 1.5;
@@ -3461,6 +3593,9 @@ void main() {
 #undef MCE_GLSL_INSTANCES
 
 #undef MCE_GLSL_IBL
+#undef MCE_GLSL_WET
+#undef MCE_GLSL_SNOW
+#undef MCE_GLSL_RIPPLES
 #undef MCE_GLSL_IBL_SAMPLING
 #undef MCE_GLSL_FRAME_U
 #undef MCE_GLSL_PASS_U

@@ -1164,3 +1164,124 @@ TEST_CASE("golden: static_merge_kit: a modular kit of 32 pieces merged into two 
     CHECK(st.main_draws == 2 + kit.materials * kit.cells);  // the fixture's ground and box, then the kit
     check_golden("static_merge_kit", f);
 }
+
+// ---- M-TRANSLUCENT 41d / 41e: thin-surface translucency and wrap -----------------------------------------------------
+
+// A low sun behind a row of leaf cards (a low camera looking into it): a plain card on the left (dark but for the
+// ambient), a translucent one (0.8) glowing green in the middle, and on the right a translucent card behind a second
+// one, dark where the front card shadows its back.
+TEST_CASE("golden: translucency_leaf_backlit: leaf cards lit from behind by a low sun, one behind another") {
+    Fixture3D f;
+    f.pitch_deg = 5.0f;
+    f.look_at = {0.0f, 1.0f, 0.0f};
+    upload_card(f, 60, 0.55f);
+    const vec3 cam = orbit_camera(f.look_at, 0.0f, math::radians(f.pitch_deg), 7.0f).position;
+    const vec3 sun = math::normalize(vec3{0.25f, -0.3f, 1.0f});
+    const vec3 leaf_color{0.25f, 0.6f, 0.12f};
+    const MaterialOverride plain = thin_material(leaf_color, 0.0f, 0.0f);
+    const MaterialOverride leaf = thin_material(leaf_color, 0.8f, 0.0f);
+    const MaterialOverride yellow = thin_material({0.6f, 0.5f, 0.1f}, 0.8f, 0.0f);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight light;
+        light.direction = sun;
+        s.set_light(light);
+        s.set_sky(gradient_sky());
+        const vec3 at[3] = {{-2.2f, 1.2f, 2.2f}, {-0.8f, 1.3f, 2.6f}, {0.9f, 1.25f, 2.4f}};
+        const MaterialOverride* m[3] = {&plain, &leaf, &leaf};
+        for (int i = 0; i < 3; ++i) {
+            MeshInstance c;
+            c.mesh = 60;
+            c.world = card_world(at[i], math::normalize(cam - at[i]));
+            c.material = m[i];
+            s.add(c);
+        }
+        MeshInstance front;  // between the right card and the sun, a little higher: it shades the card's upper part
+        front.mesh = 60;
+        const vec3 p = at[2] - sun * 0.6f + vec3{0.25f, 0.35f, 0.0f};
+        front.world = card_world(p, math::normalize(cam - p));
+        front.material = &yellow;
+        s.add(front);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 2);  // the two green cards draw as one instanced run
+    check_golden("translucency_leaf_backlit", f);
+}
+
+// Two white spheres under a side sun with its cascades: plain on the left, wrap 0.6 on the right (a soft terminator).
+TEST_CASE("golden: translucency_wrap: a plain and a wrapped sphere under a side sun") {
+    Fixture3D f;
+    f.pitch_deg = 20.0f;
+    upload_sphere(f, 61, {-1.4f, 0.8f, 0.8f}, 0.8f);
+    upload_sphere(f, 62, {1.4f, 0.8f, 0.8f}, 0.8f);
+    const MaterialOverride plain = thin_material({0.85f, 0.85f, 0.85f}, 0.0f, 0.0f, 0.0f, 0.7f, 0);
+    const MaterialOverride wax = thin_material({0.9f, 0.75f, 0.6f}, 0.0f, 0.6f, 0.0f, 0.7f, 0);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        DirectionalLight light;
+        light.direction = math::normalize(vec3{1.0f, -0.35f, -0.15f});
+        s.set_light(light);
+        s.set_sky(gradient_sky());
+        for (u32 k : {61u, 62u}) {
+            MeshInstance m;
+            m.mesh = k;
+            m.material = k == 61u ? &plain : &wax;
+            s.add(m);
+        }
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 1);
+    check_golden("translucency_wrap", f);
+}
+
+// At night: a paper lantern (the fixture's box at 0.6 scale, translucency 0.7) around a warm point light that casts
+// shadows, beside the fixture's box, and a spot behind a translucent leaf card lighting it within its cone.
+TEST_CASE("golden: translucency_lantern: a paper lantern around a shadowed point light and a spot behind a leaf") {
+    Fixture3D f;
+    upload_card(f, 60, 0.6f);
+    const vec3 cam = orbit_camera(f.look_at, 0.0f, math::radians(f.pitch_deg), 7.0f).position;
+    const MaterialOverride paper = thin_material({0.9f, 0.8f, 0.6f}, 0.7f, 0.0f, 0.0f, 0.9f, 0);
+    const MaterialOverride leaf = thin_material({0.25f, 0.6f, 0.12f}, 0.9f, 0.0f);
+    const vec3 card_at{1.7f, 0.9f, 1.6f};
+    const vec3 card_n = math::normalize(cam - card_at);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        no_sun(s);
+        DirectionalLight sun = s.light();
+        sun.ambient_sky = sun.ambient_ground = {0.03f, 0.03f, 0.05f};
+        s.set_light(sun);
+        Sky sky;
+        sky.enabled = false;
+        sky.specular_ambient = 0.0f;
+        s.set_sky(sky);
+        Fog fog;
+        fog.color = {0.01f, 0.01f, 0.02f};
+        s.set_fog(fog);
+        MeshInstance box;
+        box.mesh = 1;
+        box.world = math::translation({-1.6f, 0.0f, 1.4f}) * math::scaling({0.6f, 0.6f, 0.6f});
+        box.material = &paper;
+        s.add(box);
+        PointLight lamp;
+        lamp.position = {-1.6f, 0.3f, 1.4f};
+        lamp.radius = 4.0f;
+        lamp.intensity = 0.12f;
+        lamp.color = {1.0f, 0.8f, 0.5f};
+        lamp.cast_shadows = true;
+        s.add_point_light(lamp);
+        LocalShadowSettings ls;
+        ls.tile = 256;  // six cube faces fit the 1024 atlas
+        s.set_local_shadows(ls);
+        MeshInstance c;
+        c.mesh = 60;
+        c.world = card_world(card_at, card_n);
+        c.material = &leaf;
+        s.add(c);
+        PointLight spot;
+        spot.position = card_at - card_n * 1.0f;
+        spot.direction = card_n;
+        spot.radius = 4.0f;
+        spot.intensity = 3.0f;
+        spot.spot_inner = math::radians(14.0f);
+        spot.spot_outer = math::radians(18.0f);
+        s.add_point_light(spot);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().translucent_draws == 2);
+    CHECK(f.renderer.forward_3d().last_stats().local_shadow_tiles == 6);
+    check_golden("translucency_lantern", f);
+}
