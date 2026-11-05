@@ -1,0 +1,1 @@
+- Tests: `mce_ui` property binding over every numeric width, int and string convar bindings, slider drag and toggle click by pointer, orphan / stray-tab builders, `Builder` style / text_size / nav, `set_scroll` before layout (M-HARDEN3 step 4).
