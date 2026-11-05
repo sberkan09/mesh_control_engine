@@ -1,0 +1,1 @@
+- Tests: `remote_config` replay refuses a stream that is not a recording, stops at a cut recording, and an unbound handle answers with the default (M-HARDEN3 step 4).
