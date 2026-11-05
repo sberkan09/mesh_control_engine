@@ -4,6 +4,7 @@
 name: pages
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths: ['docs/**', 'mkdocs.yml', '.github/workflows/pages.yml']
@@ -34,7 +35,7 @@ jobs:
 
   deploy:
     # Only from master, and only once Pages is switched on (repository variable PAGES_ENABLED=true).
-    if: github.event_name == 'push' && vars.PAGES_ENABLED == 'true'
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && vars.PAGES_ENABLED == 'true'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
