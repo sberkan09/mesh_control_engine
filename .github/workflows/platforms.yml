@@ -60,18 +60,9 @@ jobs:
         with:
           path: ~/AppData/Local/ccache
           key: ccache-win-${{ github.sha }}
-      - name: TEMP net_arena hang probe
-        shell: bash
-        continue-on-error: true
-        run: |
-          cd build/msvc-release/samples/net_arena
-          for t in 1 10 60 300; do
-            echo "== -ticks $t"
-            timeout 90 ./sample_net_arena.exe -headless 1 -clients 2 -latency 60 -jitter 10 -loss 0.0 -ticks $t || echo "exit $?"
-          done
       - name: Test (no gpu, no slow)
         shell: bash
-        run: ctest --preset msvc-release-hosted -j 4 --timeout 600 --output-on-failure -E "sample_net_arena_(sim|two)"  # TEMP: excluded while the hang is probed
+        run: ctest --preset msvc-release-hosted -j 4 --timeout 600 --output-on-failure
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4

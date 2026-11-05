@@ -34,7 +34,8 @@ using namespace mce::math;
 using namespace mce::render;
 using namespace mce::samples;
 
-MCE_CVAR(cv_headless, "headless", false, "Run a whole match over SimNetwork without a window", CVarFlags::None);
+// "headless" is the engine's own convar (core app.cpp); a second definition here is shadowed on MSVC (-headless 1
+// then lands on the engine's and this one stays false), so the sample reads the engine's.
 MCE_CVAR(cv_serve, "serve", false, "Run a dedicated server on UDP", CVarFlags::None);
 MCE_CVAR(cv_connect, "connect", "", "host:port of a server to play on (windowed)", CVarFlags::None);
 MCE_CVAR(cv_port, "port", 27015, "-serve: the UDP port", CVarFlags::None);
@@ -444,7 +445,8 @@ int main(int argc, char** argv) {
     log::init(log_desc);
     console::parse_command_line(argc, argv);
     int rc = 0;
-    if (cv_headless.get_bool()) rc = run_sim();
+    const ConVar* headless = ConVar::find(StringId("headless"));
+    if (headless && headless->get_bool()) rc = run_sim();
     else if (cv_serve.get_bool()) rc = run_serve();
     else rc = run_window();
     log::shutdown();
