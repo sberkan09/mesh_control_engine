@@ -1,0 +1,1 @@
+- Tests: the full input map stack, 3- and 4-byte text input, quadratic / cubic stick curves, `gamepad_axis` on an unknown slot (M-HARDEN3 step 4).
