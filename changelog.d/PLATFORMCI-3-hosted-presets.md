@@ -1,0 +1,1 @@
+- CI: the Windows and macOS hosted-runner jobs use `msvc-release-hosted` / `macos-release-hosted` test presets that exclude `gpu` and `slow`; a command-line `-LE` did not override the preset's own `slow` filter, so GPU tests ran on runners without OpenGL 4.5.
