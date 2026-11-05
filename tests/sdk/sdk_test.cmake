@@ -138,7 +138,7 @@ if(NOT LAST_OUTPUT MATCHES "300 ticks, [0-9]+ entities, state_hash")
 endif()
 # A fresh project registers its smoke test, so ctest (and the MCP tool module_test) has one to run.
 expect_exit(0 ${CMAKE_CTEST_COMMAND} --test-dir "${project}/build" -R headless_300)
-if(NOT LAST_OUTPUT MATCHES "100% tests passed, 0 tests failed out of 1")
+if(NOT LAST_OUTPUT MATCHES "100% tests passed(, 0 tests failed)? out of 1")
     message(FATAL_ERROR "the project's smoke test:\n${LAST_OUTPUT}")
 endif()
 if(NOT EXISTS "${WORK_DIR}/shipped/SdkProbe/CREDITS.md")
