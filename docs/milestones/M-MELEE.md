@@ -1,6 +1,6 @@
 # M-MELEE: melee attack in 09_openworld
 
-**Status:** done (2026-11-02), except a swing sound and hit feedback. Closes "melee" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
+**Status:** done (2026-11-02), except hit feedback beyond the sound. Closes "melee" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows The swing sound landed with [M-GAMEFEEL-SFX](M-GAMEFEEL-SFX.md).
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md); progression and goals come after it. Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`melee3d`). No ECS, render or physics core, no
