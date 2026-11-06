@@ -95,6 +95,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraFollow3D` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `PhysicsEvents` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `NavGridSource` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `EventSfx3D` | `mce/kit/event_sfx3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: shown in samples/09_openworld by M-GAMEFEEL-SFX step 2 (remove this line then) |
 | `FaceVelocity3D` | `mce/kit/face_velocity.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `FallDeath3D` | `mce/kit/fall_death.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Firefly` | `mce/kit/firefly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
