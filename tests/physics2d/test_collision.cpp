@@ -253,3 +253,27 @@ TEST_CASE("dynamic tree: insert/move/remove keeps a valid balanced tree; queries
         if (t.fat_aabb(ids[i]).overlaps(q)) ++brute;
     CHECK(hits == brute);
 }
+
+TEST_CASE("shapes: a convex polygon holds kMaxPolygonVertices points, more are cut to the first 16") {
+    vec2 ring[kMaxPolygonVertices + 1];
+    for (u32 i = 0; i <= kMaxPolygonVertices; ++i) {
+        const f32 a = 6.2831853f * static_cast<f32>(i) / static_cast<f32>(kMaxPolygonVertices + 1);
+        ring[i] = vec2(std::cos(a), std::sin(a));
+    }
+    // N-1 and N points on a circle are all hull vertices.
+    for (const u32 n : {kMaxPolygonVertices - 1, kMaxPolygonVertices}) {
+        CAPTURE(n);
+        const ColliderShape c = ColliderShape::convex(Span<const vec2>(ring, n));
+        CHECK(c.vertex_count == n);
+        Shape s;
+        REQUIRE(build_shape(c, s));
+        CHECK(s.count == n);
+    }
+    // N+1: the shape keeps the first 16 and still builds; the 17th is never read.
+    const ColliderShape over = ColliderShape::convex(Span<const vec2>(ring, kMaxPolygonVertices + 1));
+    CHECK(over.vertex_count == kMaxPolygonVertices);
+    CHECK(over.vertices[kMaxPolygonVertices - 1] == ring[kMaxPolygonVertices - 1]);
+    Shape s;
+    REQUIRE(build_shape(over, s));
+    CHECK(s.count == kMaxPolygonVertices);
+}
