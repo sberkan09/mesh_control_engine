@@ -13,6 +13,7 @@
 #include "mce/kit/decal_scatter.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/lens_flare.h"
+#include "mce/kit/lens_rain.h"
 #include "mce/kit/light_cookie.h"
 #include "mce/kit/light_flicker.h"
 #include "mce/kit/static_merge3d.h"
@@ -280,6 +281,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
                               TerrainCollider3D, TerrainFoliage3D, StaticMerge3D, ChunkLod3D>();
     world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
+    world.register_components<LensRain3D>();  // M-LENSRAIN 42d: advanced by kit_lens_rain (install_weather), read by Kit3DExtract
     world.register_components<EdgeOutline3D>();  // M-OUTLINE 39d: read by Kit3DExtract; no system
     world.register_components<LightCookie3D, SunCookie3D>();  // M-LIGHTCOOKIE 40g: read by Kit3DExtract; no system
     world.register_components<LightFlicker3D>();  // M-FLICKER 36a: read by Kit3DExtract (36b); no system

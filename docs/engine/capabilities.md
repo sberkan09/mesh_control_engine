@@ -128,6 +128,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LensFlare3D` | `mce/kit/lens_flare.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/11_daynight/assets/scenes/sunrise.mcscene |
+| `LensRain3D` | `mce/kit/lens_rain.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-LENSRAIN 42d: tested in tests/kit/test_lens_rain_extract.cpp; a sample gets one in 42e (remove this line then) |
 | `LightCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
 | `SunCookie3D` | `mce/kit/light_cookie.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cookie.mcscene |
 | `LightFlicker3D` | `mce/kit/light_flicker.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |

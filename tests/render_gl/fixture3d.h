@@ -1022,4 +1022,67 @@ inline MaterialOverride thin_material(vec3 col, f32 translucency, f32 wrap, f32 
     return m;
 }
 
+// ---- M-LENSRAIN 42c: rain on the camera lens ------------------------------------------------------------------------
+
+// The lens rain the cases draw: wet (amount 0.8), the default density and size, a strong mirror (refraction 2: every
+// point inside a drop reads the source across the drop's centre), no glass blur and no trails (so a changed pixel lies
+// inside a drop disc), drops that do not fall (fall_speed 0: still drops, placed independently of the time).
+inline LensRain lens_rain_setting() {
+    LensRain r;
+    r.enabled = true;
+    r.amount = 0.8f;
+    r.refraction = 2.0f;
+    r.blur = 0.0f;
+    r.trail = 0.0f;
+    r.fall_speed = 0.0f;
+    r.seed = 5;
+    return r;
+}
+
+// `rain` (null: the default, disabled) at scene time `time`, bloom and FXAA off (each would carry a changed pixel to
+// its neighbours, and the cases count changed pixels).
+inline void lens_rain_scene(Scene3D& s, const LensRain* rain, f32 time = 0.0f) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.rain = rain ? *rain : LensRain{};
+    s.set_post(post);
+}
+
+// The split sky: the camera 50 m up looking level (the ground slab and the box are far below the view), the sun off,
+// a blue sky above the horizon (v = 0.5) and a red "ground" below it, no IBL: a frame of two colours, so a drop that
+// shows the far side of the horizon is found by its colour alone.
+inline void lens_rain_split_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 50.0f, 0.0f};
+    f.pitch_deg = 0.0f;
+}
+
+inline void lens_rain_split_sky(Scene3D& s) {
+    no_sun(s);
+    Sky sky;
+    sky.zenith = sky.horizon = {0.05f, 0.1f, 0.6f};
+    sky.ground = {0.6f, 0.08f, 0.05f};
+    sky.ibl = false;
+    s.set_sky(sky);
+}
+
+// The gradient sky: the same raised camera looking 20 degrees up (the horizon near the bottom row), the sun off, a sky
+// running from a warm horizon to a deep blue zenith: every row differs from the next, so a drop's mirrored lookup
+// changes nearly every pixel it covers (on a uniform ground only its rim would).
+inline void lens_rain_gradient_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 50.0f, 0.0f};
+    f.pitch_deg = -20.0f;
+}
+
+inline void lens_rain_gradient_sky(Scene3D& s) {
+    no_sun(s);
+    Sky sky;
+    sky.zenith = {0.02f, 0.05f, 0.5f};
+    sky.horizon = {0.9f, 0.6f, 0.3f};
+    sky.ground = {0.1f, 0.4f, 0.1f};
+    sky.ibl = false;
+    s.set_sky(sky);
+}
+
 }  // namespace mce::render_test

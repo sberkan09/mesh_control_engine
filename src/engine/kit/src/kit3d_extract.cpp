@@ -35,6 +35,7 @@
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/lens_flare.h"
+#include "mce/kit/lens_rain.h"
 #include "mce/kit/light_cookie.h"
 #include "mce/kit/ground_mist.h"
 #include "mce/kit/moon.h"
@@ -1523,6 +1524,31 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings flare_shadows;
             render::apply_quality(quality_, flare_shadows, flare_post);
             post.flare = flare_post.flare;
+        }
+    }
+    {  // rain on the lens (M-LENSRAIN 42d): the first LensRain3D; without one or when disabled post.rain keeps the disabled
+       // default, written every frame so a stale one never survives. amount = wet_q / 2^24 (the kit_lens_rain state).
+        const LensRain3D* lens_rain = nullptr;
+        world.query<const LensRain3D&>().each([&](const LensRain3D& c) {
+            if (!lens_rain) lens_rain = &c;
+        });
+        if (lens_rain && lens_rain->enabled != 0u) {
+            render::LensRain& lr = post.rain;
+            lr.enabled = true;
+            lr.amount = static_cast<f32>(static_cast<f64>(std::min(lens_rain->wet_q, 1u << 24)) / static_cast<f64>(1u << 24));
+            lr.density = lens_rain->density;
+            lr.size = lens_rain->size;
+            lr.refraction = lens_rain->refraction;
+            lr.blur = lens_rain->blur;
+            lr.trail = lens_rain->trail;
+            lr.fall_speed = lens_rain->fall_speed;
+            lr.seed = lens_rain->seed;
+            // The 42b quality step on a throwaway PostFx (tier, r.lens_rain and the Range clamps); only the rain returns.
+            render::PostFx rain_post;
+            rain_post.rain = lr;
+            render::ShadowSettings rain_shadows;
+            render::apply_quality(quality_, rain_shadows, rain_post);
+            post.rain = rain_post.rain;
         }
     }
     {  // edge outline (M-OUTLINE 39d): the first EdgeOutline3D; without one or when disabled post.outline keeps the disabled

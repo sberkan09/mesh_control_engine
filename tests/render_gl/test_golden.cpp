@@ -1031,6 +1031,56 @@ TEST_CASE("golden: cookie_shafts: a window-grid spot light drawing light shafts 
     check_golden("cookie_shafts", f);
 }
 
+// ---- M-LENSRAIN 42c: rain on the camera lens ------------------------------------------------------------------------
+
+// The fixture's box on the ground through a wet lens: still and falling drops of both grids (High), mirrored lookups
+// with their rims, trails behind the big falling drops and the softened glass between them, then bloom and FXAA as by
+// default. lens_rain_off is the same frame with the setting disabled (the pass not recorded): its PNG is byte-identical
+// to ibl_off.png in both linux-gl and linux-sdlgpu (the plain fixture frame; the scene time moves nothing in it), kept
+// under its own name so the pair documents the off path next to the drops.
+namespace {
+
+LensRain golden_lens_rain() {
+    LensRain r;
+    r.enabled = true;
+    r.amount = 0.8f;
+    r.size = 1.3f;
+    r.blur = 0.35f;
+    r.trail = 0.8f;
+    r.fall_speed = 1.0f;
+    r.seed = 3;
+    return r;
+}
+
+}  // namespace
+
+TEST_CASE("golden: lens_rain_drops: drops, trails and the wet glass over the box scene") {
+    Fixture3D f;
+    const LensRain r = golden_lens_rain();
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(7.25f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.rain = r;
+        s.set_post(post);
+    });
+    CHECK(f.renderer.forward_3d().last_stats().lens_rain);
+    check_golden("lens_rain_drops", f);
+}
+
+TEST_CASE("golden: lens_rain_off: the same frame with the lens rain disabled") {
+    Fixture3D f;
+    LensRain r = golden_lens_rain();
+    r.enabled = false;
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(7.25f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.rain = r;
+        s.set_post(post);
+    });
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().lens_rain);
+    check_golden("lens_rain_off", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
