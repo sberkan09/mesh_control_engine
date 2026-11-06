@@ -11,7 +11,7 @@
 | # | Step | State |
 |---|---|---|
 | 1 | Survey: every `constexpr ... kMax*` in the public headers (outside the modules above) whose name no file under `tests/` mentions | done 2026-11-05: 43 constants, 31 with no mention (listed below). A name in a test is not proof (a test may use the literal), so step 2 reads the code that uses each constant before writing a test |
-| 2 | Boundary tests for the listed constants, one cluster per PR: `N-1`, `N`, `N+1`, and the empty input | in progress: `kMaxSubtitleLines` (`max_lines` capped, 0 shows nothing, a 400-byte line is cut at the 256-byte display buffer) in `test_subtitles.cpp` |
+| 2 | Boundary tests for the listed constants, one cluster per PR: `N-1`, `N`, `N+1`, and the empty input | in progress: `kMaxSubtitleLines` (`max_lines` capped, 0 shows nothing, a 400-byte line is cut at the 256-byte display buffer) in `test_subtitles.cpp`; `kMaxTextBytes` (fills to 64 exactly, drops a 2-byte char that no longer fits), `kMaxTouchPoints` (oldest four of six fingers) and `kMaxActionLabel` (47 kept, longer cut, round-trips at the limit) in `test_actions.cpp`, `test_touch.cpp` and `test_options.cpp` |
 | 3 | Survey 2: `FixedString<N>` fields set from caller-supplied text (names, ids, keys): does a longer text truncate, refuse or overrun | open |
 | 4 | Boundary tests for what step 3 lists, one cluster per PR | open |
 

@@ -372,3 +372,17 @@ TEST_CASE("a Resized event changes the view the tap slop is measured in; a zero 
     in.sample_for_tick(5);
     CHECK(in.state().jump_pressed);
 }
+
+TEST_CASE("M-HARDEN4: a snapshot carries kMaxTouchPoints touches, the oldest first, and drops the rest") {
+    InputSystem in;
+    setup(in);
+    constexpr u32 kFingers = kMaxTouchPoints + 2;
+    static_assert(kFingers <= platform::kMaxTouches);
+    for (u32 slot = 0; slot < kFingers; ++slot)
+        in.push_event(test::touch_event(EventType::TouchDown, kFingers - 1 - slot, 0.1f * static_cast<f32>(slot), 0.5f,
+                                        at(1, 0.1f + 0.05f * static_cast<f32>(slot))));
+    in.sample_for_tick(1);
+    REQUIRE(in.state().touch_count == kMaxTouchPoints);
+    for (u32 i = 0; i < kMaxTouchPoints; ++i)
+        CHECK(in.state().touches[i].slot == kFingers - 1 - i);  // started first = listed first
+}
