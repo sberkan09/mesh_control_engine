@@ -43,6 +43,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_translucent_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_translucent.mcscene
                      -DTICKS=60 -DENTITIES=10 -DTOUR=kit3d_tour_translucent -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The lens rain scene (M-LENSRAIN 42e): scenes/tour_lensrain.mcscene, lit spheres and coloured lamps in a dusk, a Weather entity told to
+    # rain (2 s transition) and a LensRain3D (wet_rate 2); made by gen_lensrain.py. Named tour_lensrain so it sorts after scenes/tour.mcscene,
+    # so the default scene stays the tour. 13 entities. 300 ticks (5 s): the lens is wet from about tick 120, so wet_q (hashed) has moved and
+    # the two plays must agree on it. (Chosen over 12_weather: its weather script, entity count and hashes are pinned by its own test.)
+    add_test(NAME sample_kit3d_tour_lensrain_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_lensrain.mcscene
+                     -DTICKS=300 -DENTITIES=13 -DTOUR=kit3d_tour_lensrain -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -81,4 +88,15 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_translucent_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_translucent_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The lens rain capture: the scene at tick 300, written for a look (build/.../kit3d_tour_lensrain.ppm; samples keep no goldens). Drops
+    # lie on the lens over the lit spheres and lamps; `-r.lens_rain 0` draws the dry lens.
+    add_test(NAME sample_kit3d_tour_lensrain_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_lensrain.mcscene -capture_tick 300
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_lensrain.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_lensrain_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_lensrain_gpu)
 endif()
