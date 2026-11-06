@@ -147,3 +147,37 @@ TEST_CASE("input script: clear_segments drops the segments and the script takes 
     CHECK(s.segments().size() == 1);
     CHECK(s.segments()[0].from == 9);
 }
+
+namespace {
+std::string actions_line(const char* ticks, u32 first, u32 count) {
+    std::string line = ticks;
+    for (u32 i = first; i < first + count; ++i) line += " a" + std::to_string(i);
+    return line;
+}
+}  // namespace
+
+TEST_CASE("input script: a line holds kMaxActions actions, one more is a parse error") {
+    InputScript at;
+    REQUIRE(at.parse(actions_line("5", 0, kMaxActions) + "\n").has_value());
+    CHECK(at.segments().size() == kMaxActions);
+
+    InputScript over;
+    const Result<void> r = over.parse("1 keep\n" + actions_line("5", 0, kMaxActions + 1) + "\n");
+    REQUIRE_FALSE(r.has_value());
+    CHECK(r.error().code == Errc::ParseError);
+    CHECK(r.error().detail == 2);
+    CHECK(r.error().path.view().find("too many actions") != StringView::npos);
+}
+
+TEST_CASE("input script: more than kMaxActions distinct actions on one tick drop the extra one") {
+    InputScript s;
+    REQUIRE(s.parse(actions_line("5", 0, kMaxActions) + "\n" + actions_line("5", kMaxActions, 1) + "\n").has_value());
+    REQUIRE(s.segments().size() == kMaxActions + 1);
+    const StringId last = s.segments()[kMaxActions].action;
+    const StringId first = s.segments()[0].action;
+
+    const InputState& st = s.evaluate(5);
+    CHECK(st.action_count == kMaxActions);
+    CHECK(st.held(first));
+    CHECK_FALSE(st.held(last));  // the 65th is dropped (and logged), not written past the array
+}
