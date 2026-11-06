@@ -1217,6 +1217,10 @@ def scene():
         "Wanted3D": {},
         "DriveReadout3D": {},  # the HUD's speed and gear in a car (M-DRIVEHUD)
         "FallDeath3D": {"min_y": -40},  # a fall through the map ends in WASTED (M-FALLDEATH)
+        # Sounds for the events that were silent (M-GAMEFEEL-SFX): grenade throw and blast, melee swing, cash, ammo crate, goal.
+        "EventSfx3D": {"throw_clip": "guid:" + audio_guid("hit_1"), "throw_db": -8, "blast_clip": "guid:" + audio_guid("crash_2"), "blast_db": 3,
+                       "melee_clip": "guid:" + audio_guid("hit_3"), "cash_clip": "guid:" + audio_guid("hit_tick"), "cash_db": -6,
+                       "ammo_clip": "guid:" + audio_guid("hit_tick"), "ammo_db": -10, "goal_clip": "guid:" + audio_guid("kill_ding"), "goal_db": -4},
         "HitMarker3D": {"hit_clip": "guid:" + audio_guid("hit_tick"), "kill_clip": "guid:" + audio_guid("kill_ding")},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
