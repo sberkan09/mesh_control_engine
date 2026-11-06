@@ -1,6 +1,6 @@
 # M-GRENADE: thrown grenades in 09_openworld
 
-**Status:** done (2026-11-03), except a throw sound, a blast effect and a shove on physics bodies. Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows
+**Status:** done (2026-11-03), except a shove on physics bodies. Closes "grenades" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) step 2c. Follows The throw and blast sounds landed with [M-GAMEFEEL-SFX](M-GAMEFEEL-SFX.md).
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md), [M-MELEE](M-MELEE.md) and [M-PROGRESS](M-PROGRESS.md). Cover (2d) stays with the police thread.
 
 **Scope.** The game layer only: `samples/09_openworld` plus one new kit module (`grenade3d`). No ECS, render or physics core, no

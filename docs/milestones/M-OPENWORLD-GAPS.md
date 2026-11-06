@@ -98,7 +98,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 ## E. Suggested order (smallest steps that make it feel like a game)
 
 1. **E2 HUD + wanted stars + health + ammo** (A1): copy `10_missions` `hud.mcui`; one `.mcui`, no code. Biggest feel gain.
-2. **E3 audio pass** (A6): done, see [M-OPENWORLD-AUDIO](M-OPENWORLD-AUDIO.md). Engine loop, shot, footsteps, siren, ambience; hit sounds and radio remain.
+2. **E3 audio pass** (A6): done, see [M-OPENWORLD-AUDIO](M-OPENWORLD-AUDIO.md). Engine loop, shot, footsteps, siren, ambience; hit, throw, melee and pickup sounds landed with [M-GAMEFEEL-SFX](M-GAMEFEEL-SFX.md).
 3. **E4 busted and wasted + police cars + arrest** (A7-A9; respawn, cars and roadblocks done, see [M-OPENWORLD-POLICE](M-OPENWORLD-POLICE.md)): data only, uses M-WASTED and M-ARREST components.
 4. **E5 look pass**: roads with markings and crossings (done, E7: [M-OPENWORLD-LOOK](M-OPENWORLD-LOOK.md)), a sky HDRI, tint/exposure check on GL and Metal, shot effects.
 5. **E6 day/night + weather** (A4, A5), **E7 missions + minimap** (A2, A3), **E8 shops, carjack, wrecks** (A10, A11).
