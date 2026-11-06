@@ -1,0 +1,1 @@
+- A convex collider holds exactly `kMaxPolygonVertices` points and builds a full hull from 15, 16 or 17 ring points; the 17th is cut, never read (`tests/physics2d/test_collision.cpp`).
