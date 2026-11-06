@@ -30,6 +30,7 @@ mce_add_library(mce_render
         src/text.cpp
         src/texture_store.cpp
         src/types.cpp
+        src/underwater.cpp
         src/video.cpp
         src/plmpeg_impl.c
     PUBLIC_DEPS
