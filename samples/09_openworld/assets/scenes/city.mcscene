@@ -38688,6 +38688,19 @@
     "FallDeath3D": {
      "min_y": -40
     },
+    "EventSfx3D": {
+     "throw_clip": "guid:93528939-b42f-541b-b8ec-69ede39e287c",
+     "throw_db": -8,
+     "blast_clip": "guid:abff2051-2387-59b4-82be-1af024f52f6a",
+     "blast_db": 3,
+     "melee_clip": "guid:5dd74588-c746-5ed3-b42a-45425690ab14",
+     "cash_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
+     "cash_db": -6,
+     "ammo_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
+     "ammo_db": -10,
+     "goal_clip": "guid:fb824104-ebe2-580e-afb3-0b9f149bb034",
+     "goal_db": -4
+    },
     "HitMarker3D": {
      "hit_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
      "kill_clip": "guid:fb824104-ebe2-580e-afb3-0b9f149bb034"
