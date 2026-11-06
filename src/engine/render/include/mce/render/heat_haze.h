@@ -46,7 +46,8 @@ struct HeatHazeFrame {
     HeatHazeVolumeFrame volumes[8];  // kHeatHazeMaxVolumes
 };
 
-// Projects the sphere (world-space centre and radius) to `out`. `view` is the world-to-view matrix (right-handed, the camera
+// Projects the sphere (world-space centre and radius) to `out`. A perspective camera is assumed (an orthographic view is
+// unsupported: the angular radius and the distance depth have no meaning there). `view` is the world-to-view matrix (right-handed, the camera
 // looks down -z) and `view_proj` the world-to-clip one. The screen radius uses the angular radius of the sphere, so it holds
 // near the camera. A camera inside the sphere gives a radius of 2 (more than the screen covers) centred at the projected
 // centre, or at the middle of the screen when the centre is behind the camera. False (out untouched) when the sphere is fully
@@ -57,8 +58,8 @@ bool heat_haze_project(const math::mat4& view_proj, const math::mat4& view, math
 // Culls the setting's volumes (at most min(count, 8)) and fills `out`; returns the number kept (out.count). A volume is
 // dropped by heat_haze_project returning false. The look parameters are clamped to the HeatHaze ranges (radius is used by the
 // projection; strength 0..2 (NaN 0.5), rise 0..4 (NaN 0.6), scale 0.25..4 (NaN 1), softness 0..1 (NaN 0.5)). Order is the
-// setting's order (nothing is sorted: the shader sums the displacements). `time_s` is the renderer's wrapped scene clock
-// (NaN or infinite -> 0); `aspect` is width / height (NaN or <= 0 -> 1).
+// setting's order (nothing is sorted: the shader sums the displacements). `time_s` is the scene clock (Scene3D::time(), an
+// unwrapped f32 in seconds; the pass wraps the phase itself) (NaN or infinite -> 0); `aspect` is width / height (NaN or <= 0 -> 1).
 u32 heat_haze_frame(const HeatHaze& haze, const math::mat4& view_proj, const math::mat4& view, f32 aspect, f32 time_s,
                     HeatHazeFrame& out);
 

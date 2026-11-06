@@ -43,6 +43,7 @@
 #include "mce/kit/cold_breath.h"
 #include "mce/kit/decal_scatter.h"
 #include "mce/kit/edge_outline.h"
+#include "mce/kit/heat_haze.h"
 #include "mce/kit/lens_flare.h"
 #include "mce/kit/lens_rain.h"
 #include "mce/kit/light_cookie.h"
@@ -135,6 +136,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LightFlicker3D>("LightFlicker3D", sizeof(LightFlicker3D::pad_));  // light_flicker.h (M-FLICKER 36a)
     expect_pad<LensFlare3D>("LensFlare3D", sizeof(LensFlare3D::pad_));  // lens_flare.h (M-LENSFLARE 38d)
     expect_pad<LensRain3D>("LensRain3D", sizeof(LensRain3D::pad_));  // lens_rain.h (M-LENSRAIN 42d)
+    expect_pad<HeatHaze3D>("HeatHaze3D", sizeof(HeatHaze3D::pad_));  // heat_haze.h (M-HEATHAZE 43d)
     expect_pad<EdgeOutline3D>("EdgeOutline3D", sizeof(EdgeOutline3D::pad_));  // edge_outline.h (M-OUTLINE 39d)
     expect_pad<LightCookie3D>("LightCookie3D", sizeof(LightCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<SunCookie3D>("SunCookie3D", sizeof(SunCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)

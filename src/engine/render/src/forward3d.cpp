@@ -1,6 +1,7 @@
 #include "mce/render/forward3d.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -375,7 +376,7 @@ static_assert(offsetof(LensRainU, drop) == 0 && offsetof(LensRainU, look) == 16 
 // M-HEATHAZE 43c: kHazeFS's HazeU (shaders3d.h), bank kPass. Filled from heat_haze_frame, the view's projection and
 // the scene clock only (record_heat_haze).
 struct HazeU {
-    vec4 frame;    // volumes, aspect, 1 / proj[0][0], 1 / proj[1][1] (0, 0 for an orthographic view)
+    vec4 frame;    // volumes, aspect, 1 / proj[0][0], 1 / proj[1][1] (0, 0 for an orthographic view, which is unsupported)
     vec4 vol[16];  // per volume: centre uv, near distance, screen radius; strength, rise phase (cells), scale, softness
 };
 static_assert(sizeof(HazeU) == shaders3d::kHazeUBytes, "HazeU: 17 vec4, as kHazeFS");
@@ -3726,7 +3727,16 @@ void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) 
 void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const HeatHaze& setting = scene.post().haze;
     if (setting.count == 0) return;
-    if (haze_pipe_.is_null() || out_.linear_output) return;
+    if (haze_pipe_.is_null()) {
+        // Volumes were asked for but the pipeline does not exist (no prepass pipeline: ssao, ssr, contact shadows and the
+        // edge outline all off at startup; or a refused shader): said once per process, not per frame.
+        static std::atomic<bool> warned{false};
+        if (!out_.linear_output && !warned.exchange(true))
+            MCE_LOG_WARN("render3d: heat haze volumes are set but the heat haze pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without the haze");
+        return;
+    }
+    if (out_.linear_output) return;
     const QualitySettings q = quality_settings(quality_tier());
     static const ConVar* cv = ConVar::find(MCE_SID("r.heat_haze"));
     if (!q.heat_haze || (cv && !cv->get_bool())) return;
@@ -3744,7 +3754,8 @@ void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) 
     record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
     if (ao_gbuf_.is_null()) return;
     HazeU hu{};
-    // A perspective projection (proj[2][3] = -1) gives the ray slopes; an orthographic one leaves them 0 (ray length 1).
+    // A perspective projection (proj[2][3] = -1) gives the ray slopes; an orthographic one leaves them 0 (ray length 1) so the
+    // shader never divides, but an orthographic view is unsupported: heat_haze_project assumes a perspective camera.
     const bool persp = view.proj.c[2][3] != 0.0f && view.proj.c[0][0] != 0.0f && view.proj.c[1][1] != 0.0f;
     hu.frame = {f32(fr.count), fr.aspect, persp ? 1.0f / view.proj.c[0][0] : 0.0f, persp ? 1.0f / view.proj.c[1][1] : 0.0f};
     const f64 period = f64(shaders3d::kHazePeriodCells);
