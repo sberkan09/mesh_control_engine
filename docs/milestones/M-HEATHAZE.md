@@ -1,6 +1,6 @@
 # M-HEATHAZE — Heat haze: the air above a fire, an engine or hot sand bends the picture behind it (milestone record)
 
-**Status:** planned (2026-11-06), nothing built yet. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LENSRAIN (the same post-pass pattern), M-LENSFLARE (the prepass depth read) and the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md`, item 8). Today the renderer has fire and smoke particles, emissive glow and bloom, but a fire, a car exhaust or a desert road never bends the air: nothing in the frame refracts what lies behind a hot spot. No Linear issues (free issue limit); this record is the tracker.
+**Status:** 43a and 43b done (2026-11-06; data seam, pure helpers and quality tiers, nothing draws yet), 43c to 43f planned. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-LENSRAIN (the same post-pass pattern), M-LENSFLARE (the prepass depth read) and the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md`, item 8). Today the renderer has fire and smoke particles, emissive glow and bloom, but a fire, a car exhaust or a desert road never bends the air: nothing in the frame refracts what lies behind a hot spot. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** no type, file or milestone called `HeatHaze`, `heat_haze` or `HazeVolume` exists (`src/`, `docs/`, `tests/`, `samples/` checked 2026-11-06; the only hits are prose about shimmer in the M-TRANSLUCENT and M-OUTLINE records). The render setting is `render::HeatHaze` (in `PostFx::haze`, an array of volumes), the pure helpers live in `mce/render/heat_haze.h`, the kit component is `HeatHaze3D` (`mce/kit/heat_haze.h`).
 
@@ -31,8 +31,8 @@
 
 | Step | What | Modules | Model |
 |---|---|---|---|
-| 43a. Seam: setting, stats and members | `render::HeatHaze` / `HeatHazeVolume` and `PostFx::haze` in `scene3d.h`; `Forward3DStats::heat_haze_volumes`, the private members and the `record_heat_haze` declaration in `forward3d.h`; defaults test; the `include_fanout.py` numbers. Data only | render | Sonnet |
-| 43b. Pure helpers and quality | `mce/render/heat_haze.h` / `src/heat_haze.cpp` (`heat_haze_project`, `_frame`, `_falloff`, `_hash`), `QualitySettings::heat_haze` / `heat_haze_volumes`, `r.heat_haze`, clamps; `tests/render/test_heat_haze.cpp` | render | Sonnet |
+| 43a. Seam: setting, stats and members (done) | `render::HeatHaze` / `HeatHazeVolume` and `PostFx::haze` in `scene3d.h`; `Forward3DStats::heat_haze_volumes`, the private members and the `record_heat_haze` declaration in `forward3d.h`; defaults test; the `include_fanout.py` numbers. Data only | render | Sonnet |
+| 43b. Pure helpers and quality (done) | `mce/render/heat_haze.h` / `src/heat_haze.cpp` (`heat_haze_project`, `_frame`, `_falloff`, `_hash`), `QualitySettings::heat_haze` / `heat_haze_volumes`, `r.heat_haze`, clamps; `tests/render/test_heat_haze.cpp` | render | Sonnet |
 | 43c. The pass | `kHazeFS`, `HazeU` and its `static_assert`s, pipeline, `record_heat_haze` after `record_lens_rain`, stats; `tests/render_gl/test_render3d_heat_haze_gl.cpp` (GL and SDL GPU), goldens `heat_haze_fire` and `heat_haze_off` in `linux-gl` and `linux-sdlgpu`, the `test_shader_spirv` and `test_shader_cross` cases | render, tests | **Opus** (independent Opus review) |
 | 43d. Kit component and feed | `HeatHaze3D`, registration, zeroed pad and `test_padding` entry, the `engine_components.cpp` includes (editor core, MCP app, cook), the `capabilities` row and a `sample_coverage.allow` line until 43e, the MCP transcript golden component count (read it from master right before the PR), the feed in `kit3d_extract.cpp`; `tests/kit/test_heat_haze.cpp`, `test_heat_haze_extract.cpp` | kit | Sonnet |
 | 43e. Sample | a `kit3d_tour` scene `tour_haze.mcscene` (sorts after `tour.mcscene`, default run unchanged) with a campfire (an emissive stack and a point light) under a `HeatHaze3D`, a checker backdrop and a thin pole in front of the haze to show the depth mask; deterministic generator; `sample_kit3d_tour_haze_headless` and `_gpu` (slow) | samples | Sonnet |
@@ -61,4 +61,6 @@ Headless (llvmpipe, lavapipe): off equals the plain frame exactly; a volume on s
 
 ## Follow-ups
 
-(none yet)
+- `include_fanout.py` after 43a/43b (measured 2026-11-06 on the seam branch, test files included; upper bounds): `scene3d.h` 201 of 1015 TUs (WARNING, the seam PR), `forward3d.h` 177 (WARNING, the seam PR), `quality.h` 132, the new `mce/render/heat_haze.h` 2 (`heat_haze.cpp` and `test_heat_haze.cpp`; the later includers `forward3d.cpp`, `quality.cpp`, the extract and install add a few more). No later step touches `scene3d.h` or `forward3d.h`.
+- `heat_haze_hash` is `h = mix(x); h = mix(h ^ y * 0x85ebca6b); h = mix(h ^ seed * 0xc2b2ae35)` with the lowbias32 `mix` of `lens_rain_hash`; the GLSL port in 43c must match the goldens in `tests/render/test_heat_haze.cpp`.
+- `heat_haze_project` clamps the nearest depth to `kHeatHazeNearPlane` (0.05 m) and drops a volume whose centre is behind the camera plane while the camera is outside it (a sliver at the screen edge is lost, conservative); a camera inside a sphere gives screen radius 2 (covers the screen).

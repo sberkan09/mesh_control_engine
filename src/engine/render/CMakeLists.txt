@@ -13,6 +13,7 @@ mce_add_library(mce_render
         src/edge_outline.cpp
         src/forward3d.cpp
         src/forward3d_scale.cpp
+        src/heat_haze.cpp
         src/lens_flare.cpp
         src/lens_rain.cpp
         src/light_cookie.cpp

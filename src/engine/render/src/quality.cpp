@@ -41,6 +41,8 @@ MCE_CVAR(cv_lens_flare, "r.lens_flare", true,
          "Sun lens flare (PostFx::flare; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_lens_rain, "r.lens_rain", true,
          "Rain on the camera lens (PostFx::rain; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_heat_haze, "r.heat_haze", true,
+         "Heat haze (PostFx::haze; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
@@ -83,6 +85,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.lens_flare_starburst = false;
             q.lens_rain = false;
             q.lens_rain_layers = 0;
+            q.heat_haze = false;
+            q.heat_haze_volumes = 0;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
@@ -101,6 +105,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.parallax_max_steps = 16;
             q.lens_flare_starburst = false;
             q.lens_rain_layers = 1;
+            q.heat_haze_volumes = 4;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
             q.light_cookie_lights = 8;
@@ -176,6 +181,28 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     lr.blur = detail::ranged(lr.blur, 0.0f, 1.0f, 0.35f);
     lr.trail = detail::ranged(lr.trail, 0.0f, 1.0f, 0.5f);
     lr.fall_speed = detail::ranged(lr.fall_speed, 0.0f, 2.0f, 0.25f);
+    // M-HEATHAZE 43b: heat haze. Off for the tier or r.heat_haze 0; the count is trimmed to the tier's cap, a volume with a
+    // non-finite centre is dropped (the rest close up), the ranges clamp, NaN -> the default.
+    HeatHaze& hh = post.haze;
+    {
+        const u32 cap = (q.heat_haze && cv_heat_haze.get_bool())
+                            ? (q.heat_haze_volumes < kHeatHazeMaxVolumes ? q.heat_haze_volumes : kHeatHazeMaxVolumes)
+                            : 0u;
+        const u32 in = hh.count < kHeatHazeMaxVolumes ? hh.count : kHeatHazeMaxVolumes;
+        u32 out = 0;
+        for (u32 i = 0; i < in && out < cap; ++i) {
+            HeatHazeVolume v = hh.volumes[i];
+            if (!std::isfinite(v.center.x) || !std::isfinite(v.center.y) || !std::isfinite(v.center.z)) continue;
+            v.radius = detail::ranged(v.radius, 0.05f, 50.0f, 1.0f);
+            v.strength = detail::ranged(v.strength, 0.0f, 2.0f, 0.5f);
+            v.rise = detail::ranged(v.rise, 0.0f, 4.0f, 0.6f);
+            v.scale = detail::ranged(v.scale, 0.25f, 4.0f, 1.0f);
+            v.softness = detail::ranged(v.softness, 0.0f, 1.0f, 0.5f);
+            hh.volumes[out++] = v;
+        }
+        for (u32 i = out; i < kHeatHazeMaxVolumes; ++i) hh.volumes[i] = HeatHazeVolume{};
+        hh.count = out;
+    }
     // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
     EdgeOutline& eo = post.outline;
     eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();

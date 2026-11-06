@@ -144,6 +144,7 @@ struct Forward3DStats {
     bool edge_outline = false;       // the edge outline pass drew this frame (M-OUTLINE)
     bool lens_rain = false;          // the lens rain pass drew this frame (M-LENSRAIN)
     f32 lens_rain_amount = 0.0f;     // the wetness it drew with (0 = not drawn)
+    u32 heat_haze_volumes = 0;       // volumes the heat haze pass drew this frame (M-HEATHAZE; 0 = not drawn)
     u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
     u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
     u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
@@ -364,6 +365,7 @@ private:
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
     void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
+    void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -524,6 +526,8 @@ private:
     rhi::TextureHandle flare_occ_;
     // M-LENSRAIN: the lens rain composite pipeline (writes post_fx_target; no target of its own).
     rhi::PipelineHandle rain_pipe_;
+    // M-HEATHAZE: the heat haze composite pipeline (writes post_fx_target; no target of its own).
+    rhi::PipelineHandle haze_pipe_;
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
     rhi::TextureHandle outline_dst_;
