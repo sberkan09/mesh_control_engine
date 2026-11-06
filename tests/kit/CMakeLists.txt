@@ -101,6 +101,8 @@ mce_add_test(test_kit UMBRELLA
         test_edge_outline_extract.cpp
         test_lens_flare.cpp
         test_lens_flare_extract.cpp
+        test_lens_rain.cpp
+        test_lens_rain_extract.cpp
         test_light_cookie.cpp
         test_light_cookie_extract.cpp
         test_light_flicker.cpp

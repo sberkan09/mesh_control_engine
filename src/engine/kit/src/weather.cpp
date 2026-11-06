@@ -11,6 +11,7 @@
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/lightning_bolt.h"
+#include "mce/kit/lens_rain.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/thunder_delay.h"
 #include "mce/kit/timed_light.h"
@@ -220,6 +221,38 @@ void kit_snow_cover(Frame& f) {
     });
 }
 
+// Lens rain (M-LENSRAIN 42d): LensRain3D::wet_q, integers on the fixed tick dt (see lens_rain.h). Rises toward the Weather
+// intensity (fade / fade_den) under rain or storm in about 4 s / wet_rate, else falls in about 40 s / wet_rate.
+void kit_lens_rain(Frame& f) {
+    const Weather* weather = nullptr;
+    f.query<const Weather>().each([&](Entity, const Weather& w) {
+        if (!weather) weather = &w;
+    });
+    const f64 dt = static_cast<f64>(f.dt);
+    bool first = true;  // one LensRain3D per scene: the first in ECS order drives
+    f.query<LensRain3D>().each([&](Entity, LensRain3D& c) {
+        if (!first) return;
+        first = false;
+        c.pad_[0] = c.pad_[1] = c.pad_[2] = 0;
+        if (c.wet_q > kWetMax) c.wet_q = kWetMax;
+        if (!weather || !(dt > 0.0)) return;
+        const f64 rate = std::isnan(c.wet_rate) ? 1.0 : std::clamp(static_cast<f64>(c.wet_rate), 0.1, 4.0);
+        const u64 up = std::max<u64>(1, kWetMax / ticks_of(4.0 / rate, dt));
+        const u64 down = std::max<u64>(1, kWetMax / ticks_of(40.0 / rate, dt));
+        const bool raining = weather->current == WeatherKind::Rain || weather->current == WeatherKind::Storm;
+        if (raining) {
+            const u64 target = weather->fade_den > 0 ? std::min<u64>(kWetMax, mul_div(kWetMax, weather->fade, weather->fade_den)) : 0;
+            if (c.wet_q < target) {
+                c.wet_q = static_cast<u32>(std::min<u64>(c.wet_q + up, target));
+            } else {
+                c.wet_q = static_cast<u32>(c.wet_q > target + down ? c.wet_q - down : target);
+            }
+        } else {
+            c.wet_q = c.wet_q > down ? static_cast<u32>(c.wet_q - down) : 0;
+        }
+    });
+}
+
 // Wind direction (M-WINDDIR 8a): the heading in 1/65536 degree as an integer, advanced by a fixed-point drift.
 constexpr i64 kWindFull = 360ll * 65536;  // one turn in angle_q units
 
@@ -286,6 +319,8 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<ThunderDelay>();  // M-RAINFX 7e: advanced by kit_thunder_delay (install_precipitation)
     world.register_components<SnowCover>();  // M-SNOWCOVER 6c: advanced by kit_snow_cover, read by Kit3DExtract
     world.add_system(Phase::FixedUpdate_Pre, "kit_snow_cover", &kit_snow_cover, "kit_weather");
+    world.register_components<LensRain3D>();  // M-LENSRAIN 42d: advanced by kit_lens_rain, read by Kit3DExtract
+    world.add_system(Phase::FixedUpdate_Pre, "kit_lens_rain", &kit_lens_rain, "kit_weather");
     world.register_components<WindDirection>();  // M-WINDDIR 8a: advanced by kit_wind_direction, read by Kit3DExtract (8d)
     world.add_system(Phase::FixedUpdate_Pre, "kit_wind_direction", &kit_wind_direction, "kit_weather");
     world.register_components<WindGust>();  // M-WINDGUST 12a: advanced by kit_wind_gust, read through effective_wind

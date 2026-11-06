@@ -96,6 +96,7 @@
 #include "mce/kit/decal_scatter.h"          // DecalScatter3D (M-DECALSCATTER 35a)
 #include "mce/kit/edge_outline.h"           // EdgeOutline3D (M-OUTLINE 39d)
 #include "mce/kit/lens_flare.h"             // LensFlare3D (M-LENSFLARE 38d)
+#include "mce/kit/lens_rain.h"              // LensRain3D (M-LENSRAIN 42d)
 #include "mce/kit/light_cookie.h"           // LightCookie3D, SunCookie3D (M-LIGHTCOOKIE 40g)
 #include "mce/kit/light_flicker.h"          // LightFlicker3D (M-FLICKER 36a)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
