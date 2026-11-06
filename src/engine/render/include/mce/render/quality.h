@@ -9,6 +9,7 @@
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
+//   (M-HEATHAZE 43b: heat haze is off on Low, up to 4 volumes on Medium, up to 8 on High)
 //   (M-LENSRAIN 42b: rain on the camera lens is off on Low, one drop grid on Medium, two on High)
 //   (M-LENSFLARE 38b: the sun lens flare is off on Low, without starburst on Medium, complete on High)
 //   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
@@ -80,6 +81,10 @@ struct QualitySettings {
     // the number of overlaid drop grids the pass draws (Low 0, Medium 1, High 2).
     bool lens_rain = true;
     u32 lens_rain_layers = 2;
+    // M-HEATHAZE 43b: heat haze is honored (off: PostFx::haze.count 0, the frame without the pass), and the number of
+    // volumes it draws (Low 0, Medium 4, High 8).
+    bool heat_haze = true;
+    u32 heat_haze_volumes = 8;
     // M-OUTLINE 39b: the edge outline is honored (off: PostFx::outline.enabled false) in every tier, and, separately,
     // its wide kernel (8 taps; Low uses the 4-tap cross).
     bool edge_outline = true;
@@ -126,7 +131,10 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // ghost_chroma 0..1 (NaN 0.5), starburst 0..4 (NaN 0), starburst_rays 2..16, occlusion_radius 0.002..0.1 (NaN
 // 0.015), edge_fade 0.01..0.5 (NaN 0.1). And the lens rain (PostFx::rain): `enabled` is turned off by the Low tier
 // (lens_rain false) and `r.lens_rain 0`; amount 0..1 (NaN 0), density 0..4 (NaN 1), size 0.25..4 (NaN 1), refraction
-// 0..2 (NaN 1), blur 0..1 (NaN 0.35), trail 0..1 (NaN 0.5), fall_speed 0..2 (NaN 0.25). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
+// 0..2 (NaN 1), blur 0..1 (NaN 0.35), trail 0..1 (NaN 0.5), fall_speed 0..2 (NaN 0.25). And the heat haze (PostFx::haze): `count` becomes 0 on the Low tier (heat_haze false) and
+// `r.heat_haze 0`, is trimmed to the tier's heat_haze_volumes and kHeatHazeMaxVolumes, a volume with a non-finite centre is
+// dropped (the rest close up), and per volume radius 0.05..50 (NaN 1), strength 0..2 (NaN 0.5), rise 0..4 (NaN 0.6), scale
+// 0.25..4 (NaN 1), softness 0..1 (NaN 0.5). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
 // (edge_outline false) and `r.edge_outline 0`; colour 0..16 per channel (NaN: 0.02, 0.02, 0.025), opacity 0..1 (NaN 1),
 // thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
 // normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.

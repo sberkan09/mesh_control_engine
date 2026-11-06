@@ -168,6 +168,26 @@ struct LensRain {
     u32 seed = 1;               // selects the drop pattern
 };
 
+// M-HEATHAZE 43a. Heat haze: the air above a fire, an engine or hot sand bends the picture behind it. Each volume is a
+// world-space sphere; the heat haze pass displaces what is seen through it with a slowly rising noise field, masked by
+// depth. Off by default (count 0 records nothing), so a frame is unchanged. The ranges are the clamps apply_quality applies
+// (M-HEATHAZE 43b). kHeatHazeMaxVolumes is the one definition: the CPU helpers in mce/render/heat_haze.h use it too.
+inline constexpr u32 kHeatHazeMaxVolumes = 8;
+
+struct HeatHazeVolume {
+    math::vec3 center{0.0f, 0.0f, 0.0f};  // world space; a non-finite centre drops the volume
+    f32 radius = 1.0f;                    // metres (0.05..50)
+    f32 strength = 0.5f;                  // displacement multiplier (0..2)
+    f32 rise = 0.6f;                      // how fast the noise rises (0..4)
+    f32 scale = 1.0f;                     // noise frequency multiplier (0.25..4)
+    f32 softness = 0.5f;                  // width of the soft rim, as a fraction of the radius (0..1)
+};
+
+struct HeatHaze {
+    u32 count = 0;  // volumes in use (0..kHeatHazeMaxVolumes); 0 records nothing
+    HeatHazeVolume volumes[kHeatHazeMaxVolumes];
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -199,6 +219,7 @@ struct PostFx {
     } lens;
     LensFlare flare;  // M-LENSFLARE 38a
     LensRain rain;  // M-LENSRAIN 42a
+    HeatHaze haze;  // M-HEATHAZE 43a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 
