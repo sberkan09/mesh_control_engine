@@ -220,3 +220,18 @@ TEST_CASE("shader_cross: the lens rain stage") {
     CHECK(contains(msl.value(), "[[sampler(6)]]"));
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
+
+// M-HEATHAZE 43c: the heat haze's fragment stage (render's shaders3d.h, the real source) translates, with HazeU at
+// [[buffer(1)]], the HDR frame at the GL binding 6 and the opaque prepass at 7, as Forward3D::record_heat_haze binds
+// them. Not built on Linux (macOS only): unverified until a Mac run, like the lens rain case above.
+TEST_CASE("shader_cross: the heat haze stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kHazeFS, "haze.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}

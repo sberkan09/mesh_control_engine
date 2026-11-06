@@ -1081,6 +1081,45 @@ TEST_CASE("golden: lens_rain_off: the same frame with the lens rain disabled") {
     check_golden("lens_rain_off", f);
 }
 
+// ---- M-HEATHAZE 43c: heat haze --------------------------------------------------------------------------------------
+
+// The fixture's box before the checker wall, a haze sphere over the box (a fire's hot air) bending the wall and the
+// box's top behind it at a fixed scene time, then bloom and FXAA as by default. heat_haze_off is the same frame with
+// count 0 (the pass not recorded), kept under its own name so the pair documents the off path next to the haze.
+namespace {
+
+void golden_heat_haze(Fixture3D& f, u32 count) {
+    upload_haze_wall(f, 70);
+    f.render(0.0f, true, [&](Scene3D& s) {
+        s.set_time(4.5f, 1.0f / 60.0f);
+        PostFx post = s.post();
+        post.haze.count = count;
+        post.haze.volumes[0].center = {0.0f, 1.5f, -0.3f};
+        post.haze.volumes[0].radius = 1.5f;
+        post.haze.volumes[0].strength = 2.0f;
+        s.set_post(post);
+        MeshInstance w;
+        w.mesh = 70;
+        s.add(w);
+    });
+}
+
+}  // namespace
+
+TEST_CASE("golden: heat_haze_fire: a haze sphere over the box bends the checker wall behind it") {
+    Fixture3D f;
+    golden_heat_haze(f, 1);
+    CHECK(f.renderer.forward_3d().last_stats().heat_haze_volumes == 1);
+    check_golden("heat_haze_fire", f);
+}
+
+TEST_CASE("golden: heat_haze_off: the same frame without a haze volume") {
+    Fixture3D f;
+    golden_heat_haze(f, 0);
+    CHECK(f.renderer.forward_3d().last_stats().heat_haze_volumes == 0);
+    check_golden("heat_haze_off", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
