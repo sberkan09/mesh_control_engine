@@ -279,3 +279,41 @@ TEST_CASE("mods: a mod pack cannot carry script bytecode, new or overriding (M-S
     REQUIRE(trusted.mount(Span<const StringView>(game_root, 1), own));
     CHECK(trusted.find(kScript) != kInvalidAssetKey);
 }
+
+TEST_CASE("mods: kMaxMods packs load, the next one is skipped as too many") {
+    const std::string dir = tmp_dir("mods_limit");
+    std::vector<std::string> paths;
+    std::vector<std::string> mod_ids;
+    for (u32 i = 0; i <= kMaxMods; ++i) {  // kMaxMods + 1 packs
+        char file[32];
+        char id[32];
+        std::snprintf(file, sizeof(file), "p%03u.mce", i);
+        std::snprintf(id, sizeof(id), "m%03u", i);
+        paths.push_back(make_mod(dir, file, id));
+        mod_ids.emplace_back(id);
+    }
+    std::vector<StringView> packs;
+    for (const std::string& p : paths) packs.push_back(p);
+
+    // At the limit: nothing is skipped.
+    const ModList at = resolve_mods(Span<const StringView>(packs.data(), kMaxMods), nullptr, {});
+    CHECK(at.mods.size() == kMaxMods);
+    CHECK(at.skipped.empty());
+
+    // One more: the last by file name is skipped with a reason.
+    const ModList over = resolve_mods(Span<const StringView>(packs.data(), packs.size()), nullptr, {});
+    CHECK(over.mods.size() == kMaxMods);
+    REQUIRE(over.skipped.size() == 1);
+    CHECK(over.skipped[0].what.view() == paths.back());
+    CHECK(over.skipped[0].reason.view() == "too many mods");
+
+    // With a load_order.txt the cut is the same: the id listed last is the one left out.
+    std::string text;
+    for (const std::string& id : mod_ids) text += id + "\n";
+    const StringView order = text;
+    const ModList listed = resolve_mods(Span<const StringView>(packs.data(), packs.size()), &order, {});
+    CHECK(listed.mods.size() == kMaxMods);
+    REQUIRE(listed.skipped.size() == 2);  // cut as "too many mods", then reported as not listed
+    CHECK(listed.skipped[0].reason.view() == "too many mods");
+    CHECK(listed.skipped[1].what.view() == paths.back());
+}
