@@ -479,6 +479,13 @@ An `AmmoShop3D` also sells grenades (10 rounds' price each, up to `max_count`) a
 `Grenade3D` up to its `max_count`. A holder that is already full leaves the crate where it is. Otherwise `AmmoPickedUp3D` is
 pushed and the crate is destroyed (`respawn` 0) or becomes available again after `respawn` s.
 
+### Event sounds
+
+`mce/kit/event_sfx3d.h`: an `EventSfx3D` on the entity the events belong to (the player) gives each of six game events its own
+clip and gain: `throw_clip` (`GrenadeThrown3D` of this entity), `blast_clip` (`GrenadeBlast3D` whose `owner` it is), `melee_clip`
+(`MeleeSwung3D`), `cash_clip` (`CashPickedUp3D`), `ammo_clip` (`AmmoPickedUp3D`) and `goal_clip` (`GoalDone3D` whose `owner` it is).
+Each matching event pushes one 2D `audio::PlaySfx`; a null clip is silent. The sound reaches the mixer one tick after the event.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

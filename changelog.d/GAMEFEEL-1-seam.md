@@ -1,0 +1,1 @@
+- Event sounds (M-GAMEFEEL-SFX 1): `EventSfx3D` (a clip and gain for grenade throw and blast, melee, cash, ammo and goal events) and system `kit_event_sfx`. Docs: `docs/user-guide/09-physics.md`.

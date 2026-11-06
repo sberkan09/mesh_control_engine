@@ -1,6 +1,6 @@
 # M-GAMEFEEL-SFX: sounds for the sample's game events
 
-**Status:** plan (2026-11-06). Closes the "throw sound, blast effect", "melee sound and hit feedback" and "pickup sound" items left
+**Status:** step 1 done (2026-11-06). Closes the "throw sound, blast effect", "melee sound and hit feedback" and "pickup sound" items left
 open by [M-GRENADE](M-GRENADE.md), [M-MELEE](M-MELEE.md) and [M-AMMOPICKUP](M-AMMOPICKUP.md). Sits beside
 [M-OPENWORLD-AUDIO](M-OPENWORLD-AUDIO.md) (engines, shots, footsteps, sirens) and [M-HITMARKER](M-HITMARKER.md) (hit and kill ticks).
 Game layer only: `samples/09_openworld` plus one new kit module. No ECS, render or audio core.
@@ -14,15 +14,14 @@ into a sound, and `SfxTrigger` fires on a component condition, not on an event.
 ## Design
 
 `EventSfx3D` on one entity (the player): an `AssetRef<Sfx>` and a gain for each event, a null clip is silent. System `kit_event_sfx`
-(FixedUpdate_Post, after `audio_bridge`'s sibling `kit_world_audio`) reads the six events and pushes one `audio::PlaySfx` each;
-blasts and pickups play 3D at the event's point, the rest 2D. A cooldown per event kind (default 0.05 s) stops a burst of
-events from stacking on one tick. No state beyond the cooldowns, padding-free with a `static_assert(sizeof)`.
+(FixedUpdate_Post) reads the six events and pushes one `audio::PlaySfx` each;
+all six play 2D (a 3D blast needs a registered attenuation; later if wanted). No state, padding-free with a `static_assert(sizeof)`.
 
 ## Steps (seam, feature, polish; each its own PR)
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | `EventSfx3D`, system `kit_event_sfx`, unit tests (each event pushes one `PlaySfx`, a null clip is silent, cooldown, 3D position for blast and pickup). No sample change. | open |
+| 1 seam | `EventSfx3D`, system `kit_event_sfx`, unit tests (each event pushes one `PlaySfx`, a null clip, another owner and a dead entity are silent, no audio events installed is harmless). No sample change. | done |
 | 2 feature | Sample: clips from the existing CC0 set (throw: `hit_1` quiet; blast: `crash_2` +3 dB; melee: `hit_3`; cash: `hit_tick`; ammo: `hit_tick` lower; goal: `kill_ding`), `test_mcp_openworld` inspect check, regenerated assets, temporary sample_coverage line removed. | open |
 | 3 polish | User guide, closing doc, strike-throughs in M-GRENADE, M-MELEE, M-AMMOPICKUP and M-OPENWORLD-GAPS. | open |
 
