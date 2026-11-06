@@ -343,7 +343,8 @@ TEST_CASE("lens rain: a falling drop moves down the screen at about fall_speed")
             if (q.x < pick->cell0.x || q.x > pick->cell0.x + pick->cell || q.y < pick->cell0.y ||
                 q.y > pick->cell0.y + pick->cell || same_px(s.px, plain.px, p))
                 continue;
-            sum += f64(p / kW);
+            const usize row = p / kW;  // the pixel's row (integer on purpose)
+            sum += f64(row);
             ++n;
         }
         CHECK(n > 10);
@@ -579,7 +580,7 @@ TEST_CASE("lens rain: the glass blur softens a hard edge by a bounded amount and
             int spread = 0;
             for (i32 j = -2; j <= 2; ++j) {
                 for (i32 i = -2; i <= 2; ++i) {
-                    const usize o = usize(i32(p) + j * i32(kW) + i);
+                    const usize o = static_cast<usize>(i32(p) + j * i32(kW) + i);
                     for (usize c = 0; c < 3; ++c)
                         spread = std::max(spread, std::abs(int(plain.px[o * 4 + c]) - int(plain.px[p * 4 + c])));
                 }
