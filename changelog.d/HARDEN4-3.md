@@ -1,0 +1,1 @@
+- Analytics holds exactly `kMaxParams` params and refuses one more; a crash report of exactly `kMaxReportBytes` is uploaded and one byte more is skipped and kept (`tests/liveops/test_liveops.cpp`).
