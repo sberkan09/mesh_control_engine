@@ -142,6 +142,8 @@ struct Forward3DStats {
     bool lens_flare = false;         // the sun lens flare pass drew this frame (M-LENSFLARE)
     f32 lens_flare_strength = 0.0f;  // its overall strength after the horizon, edge and occlusion fades (0 = not drawn)
     bool edge_outline = false;       // the edge outline pass drew this frame (M-OUTLINE)
+    bool lens_rain = false;          // the lens rain pass drew this frame (M-LENSRAIN)
+    f32 lens_rain_amount = 0.0f;     // the wetness it drew with (0 = not drawn)
     u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
     u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
     u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
@@ -361,6 +363,7 @@ private:
     void record_taa(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_post_fx(rhi::CommandBuffer& cmd, const Scene3D& scene);
     void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
+    void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -519,6 +522,8 @@ private:
     // the target is written and read within one record.
     rhi::PipelineHandle flare_occ_pipe_, flare_pipe_;
     rhi::TextureHandle flare_occ_;
+    // M-LENSRAIN: the lens rain composite pipeline (writes post_fx_target; no target of its own).
+    rhi::PipelineHandle rain_pipe_;
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
     rhi::TextureHandle outline_dst_;

@@ -9,6 +9,7 @@
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
+//   (M-LENSRAIN 42b: rain on the camera lens is off on Low, one drop grid on Medium, two on High)
 //   (M-LENSFLARE 38b: the sun lens flare is off on Low, without starburst on Medium, complete on High)
 //   (M-OUTLINE 39b: the edge outline is on in every tier: 4 taps on Low, 8 on Medium and High)
 //   (M-LIGHTCOOKIE 40b: light cookies are on in every tier; the tier bounds the cost: 128 / 256 / 512 texel layers, 4 / 8 / 16
@@ -75,6 +76,10 @@ struct QualitySettings {
     // and, separately, its starburst (the per-pixel angular term). Low turns the flare off; Medium drops the starburst.
     bool lens_flare = true;
     bool lens_flare_starburst = true;
+    // M-LENSRAIN 42b: rain on the camera lens is honored (off: PostFx::rain.enabled false, the frame without the pass), and
+    // the number of overlaid drop grids the pass draws (Low 0, Medium 1, High 2).
+    bool lens_rain = true;
+    u32 lens_rain_layers = 2;
     // M-OUTLINE 39b: the edge outline is honored (off: PostFx::outline.enabled false) in every tier, and, separately,
     // its wide kernel (8 taps; Low uses the 4-tap cross).
     bool edge_outline = true;
@@ -119,7 +124,9 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // the ranges are clamped (NaN -> the default): intensity 0..4 (NaN 1), visibility 0..1 (NaN 1), halo 0..4 (NaN 1),
 // halo_radius 0.02..0.6 (NaN 0.25), ghost_count 0..6, ghost_intensity 0..4 (NaN 1), ghost_spacing 0.25..2 (NaN 1),
 // ghost_chroma 0..1 (NaN 0.5), starburst 0..4 (NaN 0), starburst_rays 2..16, occlusion_radius 0.002..0.1 (NaN
-// 0.015), edge_fade 0.01..0.5 (NaN 0.1). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
+// 0.015), edge_fade 0.01..0.5 (NaN 0.1). And the lens rain (PostFx::rain): `enabled` is turned off by the Low tier
+// (lens_rain false) and `r.lens_rain 0`; amount 0..1 (NaN 0), density 0..4 (NaN 1), size 0.25..4 (NaN 1), refraction
+// 0..2 (NaN 1), blur 0..1 (NaN 0.35), trail 0..1 (NaN 0.5), fall_speed 0..2 (NaN 0.25). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
 // (edge_outline false) and `r.edge_outline 0`; colour 0..16 per channel (NaN: 0.02, 0.02, 0.025), opacity 0..1 (NaN 1),
 // thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
 // normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.

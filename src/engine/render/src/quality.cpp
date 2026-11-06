@@ -39,6 +39,8 @@ MCE_CVAR(cv_meteor, "r.meteor", true,
          "Meteors in the night sky (MeteorSky; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_lens_flare, "r.lens_flare", true,
          "Sun lens flare (PostFx::flare; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_lens_rain, "r.lens_rain", true,
+         "Rain on the camera lens (PostFx::rain; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
@@ -79,6 +81,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.meteor = false;
             q.lens_flare = false;
             q.lens_flare_starburst = false;
+            q.lens_rain = false;
+            q.lens_rain_layers = 0;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
@@ -96,6 +100,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.parallax_distance = 15.0f;
             q.parallax_max_steps = 16;
             q.lens_flare_starburst = false;
+            q.lens_rain_layers = 1;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
             q.light_cookie_lights = 8;
@@ -161,6 +166,16 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     fl.starburst_rays = fl.starburst_rays < 2u ? 2u : (fl.starburst_rays > 16u ? 16u : fl.starburst_rays);
     fl.occlusion_radius = detail::ranged(fl.occlusion_radius, 0.002f, 0.1f, 0.015f);
     fl.edge_fade = detail::ranged(fl.edge_fade, 0.01f, 0.5f, 0.1f);
+    // M-LENSRAIN 42b: rain on the camera lens. Off for the tier or r.lens_rain 0; the ranges clamp, NaN -> the default.
+    LensRain& lr = post.rain;
+    lr.enabled = lr.enabled && q.lens_rain && cv_lens_rain.get_bool();
+    lr.amount = detail::ranged(lr.amount, 0.0f, 1.0f, 0.0f);
+    lr.density = detail::ranged(lr.density, 0.0f, 4.0f, 1.0f);
+    lr.size = detail::ranged(lr.size, 0.25f, 4.0f, 1.0f);
+    lr.refraction = detail::ranged(lr.refraction, 0.0f, 2.0f, 1.0f);
+    lr.blur = detail::ranged(lr.blur, 0.0f, 1.0f, 0.35f);
+    lr.trail = detail::ranged(lr.trail, 0.0f, 1.0f, 0.5f);
+    lr.fall_speed = detail::ranged(lr.fall_speed, 0.0f, 2.0f, 0.25f);
     // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
     EdgeOutline& eo = post.outline;
     eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();

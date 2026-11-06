@@ -1327,7 +1327,7 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
