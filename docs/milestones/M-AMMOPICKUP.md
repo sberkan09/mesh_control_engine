@@ -1,6 +1,6 @@
 # M-AMMOPICKUP: ammo crates in 09_openworld
 
-**Status:** done (2026-11-04), except a pickup sound and a crate mesh. Closes "no ammo pickups" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) section C. Follows
+**Status:** done (2026-11-04), except a crate mesh. Closes "no ammo pickups" in [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) section C. Follows The pickup sound landed with [M-GAMEFEEL-SFX](M-GAMEFEEL-SFX.md).
 [M-GRENADE](M-GRENADE.md) and [M-AMMOSHOP](M-AMMOSHOP.md) (the shop sells rounds for cash; a crate gives them away, once in a
 while, where you find it). Cover (2d) stays with the police thread.
 
