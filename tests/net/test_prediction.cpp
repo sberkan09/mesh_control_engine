@@ -326,3 +326,45 @@ TEST_CASE("prediction: the input packet header round-trips and refuses a wrong p
         CHECK_FALSE(net::detail::read_input_header(r, 4, newest, count));
     }
 }
+
+TEST_CASE("net prediction: a silent server holds at most 256 pending inputs, the newest ones") {
+    Predictor<Input, State> client;
+    client.init(PredictionDesc{}, step);
+    client.reset(State{});
+    for (u32 i = 1; i <= 255; ++i) client.push(Input{0.0f});
+    CHECK(client.stats().pending == 255);
+    client.push(Input{0.0f});
+    CHECK(client.stats().pending == 256);  // exactly at the limit: nothing dropped yet
+    for (u32 i = 257; i <= 300; ++i) CHECK(client.push(Input{0.0f}) == i);
+    CHECK(client.stats().pending == 256);  // the oldest 44 went, sequence numbers kept counting
+    CHECK(client.last_seq() == 300);
+
+    // An ack for a dropped input still clears up to it; one for the newest empties the queue.
+    client.reconcile(30, State{});
+    CHECK(client.stats().pending == 256);
+    client.reconcile(300, State{});
+    CHECK(client.stats().pending == 0);
+}
+
+TEST_CASE("net prediction: redundancy is clamped to 1..32 inputs per packet") {
+    InputReceiver<Input> server;
+    auto sent_inputs = [&](u32 redundancy) {
+        Predictor<Input, State> client;
+        PredictionDesc d;
+        d.redundancy = redundancy;
+        client.init(d, step);
+        client.reset(State{});
+        for (u32 i = 0; i < 40; ++i) client.push(Input{0.0f});
+        const Array<u8> bytes = packet_of(client);
+        InputReceiver<Input> fresh;
+        server = fresh;
+        u32 ran = 0;
+        server.receive(Span<const u8>(bytes.data(), bytes.size()), [&](const Input&) { ++ran; });
+        return ran;
+    };
+    CHECK(sent_inputs(0) == 1);
+    CHECK(sent_inputs(1) == 1);
+    CHECK(sent_inputs(32) == 32);
+    CHECK(sent_inputs(33) == 32);
+    CHECK(sent_inputs(1000) == 32);
+}

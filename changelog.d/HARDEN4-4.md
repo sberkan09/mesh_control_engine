@@ -1,0 +1,1 @@
+- The net predictor keeps at most 256 pending inputs (the newest) and clamps `redundancy` to 1..32 per packet (`tests/net/test_prediction.cpp`).
