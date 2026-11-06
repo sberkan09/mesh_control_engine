@@ -1,0 +1,1 @@
+- Tests: `kMaxTextBytes`, `kMaxTouchPoints` and `kMaxActionLabel` at the limit and one past it (M-HARDEN4 step 2).

@@ -348,3 +348,21 @@ TEST_CASE("the map stack holds kMaxMapStack maps and refuses one more; text inpu
     const InputState& s = in.sample_for_tick(1);
     CHECK(s.text() == StringView("\xE2\x82\xAC\xF0\x9F\x98\x80x"));
 }
+
+TEST_CASE("M-HARDEN4: text input fills kMaxTextBytes exactly, then drops what does not fit") {
+    InputSystem in;
+    test::setup_default(in);
+    for (u32 i = 0; i < kMaxTextBytes - 1; ++i)
+        in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 100 + i), 'a'));
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 400), 0x00FC));  // 2 bytes: 65, refused
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 410), 'b'));     // 1 byte: 64, fits
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(1, 420), 'c'));     // full: dropped
+    const InputState& s = in.sample_for_tick(1);
+    REQUIRE(s.text().size() == kMaxTextBytes);
+    CHECK(s.text()[kMaxTextBytes - 2] == 'a');
+    CHECK(s.text()[kMaxTextBytes - 1] == 'b');
+
+    // The next tick starts empty and accepts text again.
+    in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(2, 100), 'z'));
+    CHECK(in.sample_for_tick(2).text() == StringView("z"));
+}
