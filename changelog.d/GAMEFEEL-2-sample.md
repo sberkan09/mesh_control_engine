@@ -1,0 +1,1 @@
+- 09_openworld: the player carries `EventSfx3D` with clips for the grenade throw and blast, melee, cash, ammo and goal events (M-GAMEFEEL-SFX step 2).
