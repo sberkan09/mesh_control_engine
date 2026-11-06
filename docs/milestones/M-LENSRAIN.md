@@ -1,6 +1,6 @@
 # M-LENSRAIN — Rain on the camera lens: drops that gather on the glass, bend the picture and run off (milestone record)
 
-**Status:** planned (2026-11-06), nothing built yet. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-RAINFX (its "Not in scope" names "rain on the camera lens"), M-WETSURFACE, M-LENSFLARE and the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md`, item 8, post-process). Today the frame has rain particles, wet surfaces, ripples and splashes, and the camera look (vignette, grain, chromatic aberration, lens dirt, flare), but a camera in a storm sees a perfectly clean lens. No Linear issues (free issue limit); this record is the tracker.
+**Status:** done (2026-11-06), steps 42a to 42f. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-RAINFX (its "Not in scope" names "rain on the camera lens"), M-WETSURFACE, M-LENSFLARE and the 3D visual assessment (`assessments/3d-gorsellik-degerlendirmesi.md`, item 8, post-process). Today the frame has rain particles, wet surfaces, ripples and splashes, and the camera look (vignette, grain, chromatic aberration, lens dirt, flare), but a camera in a storm sees a perfectly clean lens. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** no type, file or milestone called `LensRain`, `LensDrops` or `lens_rain` exists (`src/`, `docs/`, `tests/`, `samples/` checked 2026-11-06; the "droplet" hits are terrain and asset-pipeline prose). The render setting is `render::LensRain` (in `PostFx::rain`), the pure helpers live in `mce/render/lens_rain.h`, the kit component is `LensRain3D` (`mce/kit/lens_rain.h`).
 
@@ -50,12 +50,12 @@
 
 | Step | What | Modules | Model |
 |---|---|---|---|
-| 42a. Seam: setting, stats and members | `render::LensRain` and `PostFx::rain` in `scene3d.h`; `Forward3DStats::lens_rain` / `lens_rain_amount`, the private pipeline member and the `record_lens_rain` declaration in `forward3d.h`; a compile test of the defaults; the `include_fanout.py` numbers in the PR description. Data only | render | Sonnet |
-| 42b. Pure helpers and quality | `mce/render/lens_rain.h` / `src/lens_rain.cpp` (`lens_rain_wetness_step`, `lens_rain_frame`, `lens_rain_hash`), `QualitySettings::lens_rain` / `lens_rain_layers`, `r.lens_rain`, the clamps; `tests/render/test_lens_rain.cpp` (hash goldens, wetting and drying curve, the off cases, the tiers, the cvar) | render | Sonnet |
-| 42c. The pass | `kLensRainFS`, `LensRainU` and its `static_assert`s, the pipeline, `record_lens_rain` after `record_flare`, stats; `tests/render_gl/test_render3d_lens_rain_gl.cpp` (GL and SDL GPU), goldens `lens_rain_drops` and `lens_rain_off` in `linux-gl` and `linux-sdlgpu`, the `test_shader_spirv` and `test_shader_cross` cases | render, tests | **Opus** (independent Opus review) |
-| 42d. Kit component and feed | `LensRain3D` with `wet_q`, its tick system, registration in `install_kit3d`, zeroed pad and `test_padding` entry, the `engine_components.cpp` includes, the `capabilities` row and a `sample_coverage.allow` line until 42e, the MCP transcript golden bump; the feed in `kit3d_extract.cpp`; `tests/kit/test_lens_rain.cpp` (wetting and drying over ticks, save round trip, hash of the world with and without) and `test_lens_rain_extract.cpp` | kit | Sonnet |
-| 42e. Sample | `samples/12_weather` gets a `LensRain3D` if its weather cycle reaches rain at a capture tick (42e checks), else a new `kit3d_tour` scene `tour_lensrain.mcscene` (named so it sorts after `tour.mcscene`) with a deterministic generator; the sample's expectations, the allow-line removed | samples | Sonnet |
-| 42f. Docs and close | the `08-3d` post-processing paragraph (what the pass is, wetness, the tiers, `r.lens_rain`, the component and its `wet_q`), the render API table row for `PostFx`, milestone status, follow-ups, ROADMAP row, changelog | docs | Sonnet |
+| 42a. Seam: setting, stats and members (done) | `render::LensRain` and `PostFx::rain` in `scene3d.h`; `Forward3DStats::lens_rain` / `lens_rain_amount`, the private pipeline member and the `record_lens_rain` declaration in `forward3d.h`; a compile test of the defaults; the `include_fanout.py` numbers in the PR description. Data only | render | Sonnet |
+| 42b. Pure helpers and quality (done) | `mce/render/lens_rain.h` / `src/lens_rain.cpp` (`lens_rain_wetness_step`, `lens_rain_frame`, `lens_rain_hash`), `QualitySettings::lens_rain` / `lens_rain_layers`, `r.lens_rain`, the clamps; `tests/render/test_lens_rain.cpp` (hash goldens, wetting and drying curve, the off cases, the tiers, the cvar) | render | Sonnet |
+| 42c. The pass (done) | `kLensRainFS`, `LensRainU` and its `static_assert`s, the pipeline, `record_lens_rain` after `record_flare`, stats; `tests/render_gl/test_render3d_lens_rain_gl.cpp` (GL and SDL GPU), goldens `lens_rain_drops` and `lens_rain_off` in `linux-gl` and `linux-sdlgpu`, the `test_shader_spirv` and `test_shader_cross` cases | render, tests | **Opus** (independent Opus review) |
+| 42d. Kit component and feed (done) | `LensRain3D` with `wet_q`, its tick system, registration in `install_kit3d`, zeroed pad and `test_padding` entry, the `engine_components.cpp` includes, the `capabilities` row and a `sample_coverage.allow` line until 42e, the MCP transcript golden bump; the feed in `kit3d_extract.cpp`; `tests/kit/test_lens_rain.cpp` (wetting and drying over ticks, save round trip, hash of the world with and without) and `test_lens_rain_extract.cpp` | kit | Sonnet |
+| 42e. Sample (done) | `samples/12_weather` gets a `LensRain3D` if its weather cycle reaches rain at a capture tick (42e checks), else a new `kit3d_tour` scene `tour_lensrain.mcscene` (named so it sorts after `tour.mcscene`) with a deterministic generator; the sample's expectations, the allow-line removed | samples | Sonnet |
+| 42f. Docs and close (done) | the `08-3d` post-processing paragraph (what the pass is, wetness, the tiers, `r.lens_rain`, the component and its `wet_q`), the render API table row for `PostFx`, milestone status, follow-ups, ROADMAP row, changelog | docs | Sonnet |
 
 42c is the only step that writes a shader or a draw path: Opus-written, independent Opus review (the author does not review it). Checklist: the off-check, the order against the exposure histogram and bloom, no write into the TAA history, the `LensRainU` mirror, the hash port, constant loop bounds, the backend limits. 42a, 42b, 42c, 42d, 42e, 42f stack in order; 42d may start after 42a. To save CI cycles 42a+42b ship as one PR, 42c+42d as a second, 42e+42f as a third.
 
@@ -80,4 +80,17 @@ Headless (llvmpipe, lavapipe): off equals the plain frame exactly; `amount` > 0 
 
 ## Follow-ups
 
-(none yet)
+- Metal and WebGPU: the shader is plain GLSL 450 through `translate_glsl` / the WGSL cross compile, verified only on GL and SDL GPU (llvmpipe, lavapipe); translate and check on a device.
+- Drop motion with camera shake or camera motion (the field is fixed to the screen).
+- Per-camera wetness (one `wet_q` for the main camera today) and lens rain on render-to-texture cameras.
+- Real-GPU look and cost on row A15 of `/mnt/project-files/assessments/gpu-gereken-isler.md`; the drop size, dome profile, rim and blur are look choices only a display can judge.
+
+## Deviations from the plan
+
+- 42c and 42d shipped together in one PR (as the plan's PR grouping suggested), 42e and 42f in a third.
+- The refraction profile is the separable one (the mirrored, magnified lookup built from a smooth dome in each axis), not a radial dome.
+- The pass takes its time from `scene.time()` (the renderer's wrapped frame time), never the simulation tick.
+- The 42d tick system `kit_lens_rain` lives in `install_weather` (after `kit_weather`), not in a separate kit install.
+- Render-to-texture views skip the pass; only the main view is wet.
+- The wetness rates are whole numbers of ticks (`llround(seconds / dt)`, at least 1) and an integer step of 2^24 / ticks per tick, divided by `wet_rate`, so no float helper enters the hashed state.
+- 42e: `12_weather` was not used (its entity count, weather script and hashes are pinned by its own test and its only capture is at tick 1500, after the rain); the sample is the `tour_lensrain` scene in `kit3d_tour`, made by `samples/kit3d_tour/gen_lensrain.py`, reusing the tour's terrain, sphere and plain material. Its headless test runs 300 ticks (not 60) so `wet_q` has risen and the two plays must agree on it.
