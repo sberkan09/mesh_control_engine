@@ -9,6 +9,7 @@
 #include "mce/log.h"
 #include "mce/render/edge_outline.h"
 #include "mce/render/lens_flare.h"
+#include "mce/render/lens_rain.h"
 #include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
 #include "mce/render/translucency.h"
@@ -358,6 +359,17 @@ static_assert(sizeof(FlareU) == shaders3d::kFlareUBytes, "FlareU: 15 vec4, as MC
 static_assert(offsetof(FlareU, sun) == 0 && offsetof(FlareU, color) == 16 && offsetof(FlareU, shape) == 32 &&
                   offsetof(FlareU, ghost) == 48,
               "FlareU: f_sun / f_color / f_shape / f_ghost[12] as in MCE_GLSL_FLARE_U");
+
+// M-LENSRAIN 42c: kLensRainFS's LensRainU (shaders3d.h), bank kPass. Filled from lens_rain_frame and the tier's grid
+// count only (record_lens_rain).
+struct LensRainU {
+    vec4 drop;   // amount, density, size, refraction
+    vec4 look;   // blur, trail, view heights a speed-1 drop falls per kLensRainPeriod, the wrapped time / the period
+    vec4 frame;  // aspect, seed & 0xffff, seed >> 16, drop grids (1 or 2)
+};
+static_assert(sizeof(LensRainU) == shaders3d::kLensRainUBytes, "LensRainU: 3 vec4, as kLensRainFS");
+static_assert(offsetof(LensRainU, drop) == 0 && offsetof(LensRainU, look) == 16 && offsetof(LensRainU, frame) == 32,
+              "LensRainU: r_drop / r_look / r_frame as in kLensRainFS");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1111,6 +1123,16 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) outline_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the edge outline shader failed, drawing frames without the outline");
     }
+    {
+        // M-LENSRAIN 42c: the lens rain composite. It reads only post_source_, so unlike the flare it needs no
+        // prepass and is made on every renderer. A driver that refuses it keeps the frame without the drops rather than
+        // failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kLensRainFS, "lens_rain.frag"};
+        fs.debug_name = "lens_rain";
+        if (auto p = device_->create_pipeline(fs)) rain_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the lens rain shader failed, drawing frames without the drops");
+    }
     // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
     // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
     // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
@@ -1557,6 +1579,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
+    record_lens_rain(cmd, scene);  // M-LENSRAIN 42c: after the flare (refracted too), before bloom; same bucket
     record_post(cmd, scene, target);
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
@@ -3588,6 +3611,75 @@ void Forward3D::record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     post_source_ = dst;
     stats_.edge_outline = true;
     stats_.edge_outline_taps = fr.taps;
+}
+
+// ---- M-LENSRAIN 42c: rain on the camera lens, right after the flare and before bloom: after TAA, depth of field,
+// motion blur and the exposure histogram, so the drops do not pump the exposure and TAA neither smears them nor keeps
+// them in its history; bloom, lens dirt, the tonemapper and the grade then act on them like on the rest of the frame.
+// One fullscreen pass (kLensRainFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that
+// target; never in place, because with TAA post_source_ is the history slot the next frame reprojects (post_fx_target
+// alternates its two textures, so the target is never the texture an earlier post pass of this frame left in
+// post_source_).
+// Records nothing (the frame is the one without the pass bit for bit, stats_.lens_rain false) when the setting is off,
+// its amount is 0 or NaN (lens_rain_frame), the tier has no drop grids (Low), r.lens_rain is 0 or the pipeline failed.
+// apply_quality already clears `enabled` for the tier and the cvar; both are read again here, as cookies_allowed does,
+// so a caller that skips apply_quality (a test, a tool) still gets the tier's behaviour and the tier's grid count.
+// The drops' clock is the scene's (Scene3D::set_time: the clock the ripples, clouds and film grain read), never the
+// simulation tick. Scene3D::time() is an f32, so its resolution is f32's (as for the ripples: it coarsens as the clock
+// grows); it is only widened to f64 for the wrap to kLensRainPeriod, which adds no error of its own. The shader
+// rounds each drop to whole fall cycles per period, so the wrap does not show, and the field repeats every 600 s
+// (kLensRainFS). Nothing is written back to the scene: the pass is render-side only.
+// Views: post_fx_target's pair (fx_, fx_size_, fx_next_) is per view slot (MCE_FORWARD3D_VIEW_STATE), so views of
+// different sizes in one frame never recreate each other's targets (test_render3d_lens_rain_gl's two-view case). A
+// linear_output view (a render-to-texture camera that materials sample) records no drops: rain on the lens of a camera
+// other than the player's is out of the milestone's scope, and a monitor in the scene should not wear the player's
+// drops. Split-screen views into the window keep them.
+namespace {
+constexpr f64 kLensRainPeriod = 600.0;  // seconds; long enough that the rounding to whole cycles barely moves a speed
+}  // namespace
+
+void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const LensRain& setting = scene.post().rain;
+    if (!setting.enabled || rain_pipe_.is_null() || out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.lens_rain"));
+    const u32 layers = q.lens_rain_layers < u32(shaders3d::kLensRainMaxLayers) ? q.lens_rain_layers
+                                                                               : u32(shaders3d::kLensRainMaxLayers);
+    if (!q.lens_rain || layers == 0 || (cv && !cv->get_bool())) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const LensRainFrame fr = lens_rain_frame(setting, scene.time(), f32(out.width) / f32(out.height));
+    if (!(fr.amount > 0.0f)) return;
+
+    const f64 t = f64(fr.time);  // finite (lens_rain_frame); an f32 clock widened for the wrap only
+    f32 share = f32((t - kLensRainPeriod * std::floor(t / kLensRainPeriod)) / kLensRainPeriod);
+    if (!(share >= 0.0f && share < 1.0f)) share = 0.0f;  // f32 rounding of a share just below 1
+    LensRainU ru;
+    ru.drop = {fr.amount, fr.density, fr.size, fr.refraction};
+    ru.look = {fr.blur, fr.trail, f32(f64(fr.fall_speed) * kLensRainPeriod / 60.0), share};
+    // The seed as two 16-bit halves: each is an exact float, so the shader rebuilds the u32 bit for bit (a bit cast of
+    // the whole u32 could land on a NaN pattern a backend is free to canonicalize).
+    ru.frame = {fr.aspect, f32(fr.seed & 0xffffu), f32(fr.seed >> 16), f32(layers)};
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "lens_rain";
+    cmd.push_debug_scope("lens_rain");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(rain_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(ru));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear lookups, clamped at the border
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.lens_rain = true;
+    stats_.lens_rain_amount = fr.amount;
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {

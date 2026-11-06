@@ -350,3 +350,21 @@ TEST_CASE("shader_spirv: the lit stages with thin-surface translucency and wrap 
         CHECK(res.uniform_count == 4);  // banks up to 3 (ObjectU) declared
     }
 }
+
+// M-LENSRAIN 42c: the lens rain's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_lens_rain binds them: LensRainU at bank kPass (1), the HDR frame at sampler 6; no
+// storage buffers (its u32 hash, constant-bound loops and explicit textureLod / texelFetch go through glslang as is).
+TEST_CASE("shader_spirv: the lens rain stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kLensRainFS, "lens_rain.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 1);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}

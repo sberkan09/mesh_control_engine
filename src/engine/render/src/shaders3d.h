@@ -3983,4 +3983,153 @@ void main() {
 }
 )";
 
+// ---- M-LENSRAIN 42c: rain on the camera lens (Forward3D::record_lens_rain), after the flare and before bloom. One
+// fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) into the post-fx ping-pong target. LensRainU
+// rides bank kPass; its C++ mirror is LensRainU in forward3d.cpp (static_asserts on kLensRainUBytes and the offsets).
+// Everything in it comes from lens_rain_frame (mce/render/lens_rain.h) and the tier's drop grid count.
+//
+// Units: p = v_uv * (aspect, 1) is the position in view heights (v = 0 is the bottom row, the fullscreen pass's
+// convention), so drops are round on any aspect. A grid layer cuts p into square cells of 0.22 * size view heights
+// (about 6 across a 4:3 view at size 1); each cell holds at most one drop, which never leaves its cell (its centre
+// stays a radius inside it), so a pixel only ever looks at its own cell: no neighbour loop. Because of that,
+// amount * density saturates at one drop per cell and grid: past 1 it only fades the last drops fully in.
+//
+// Per cell (h0 = lens_rain_hash(cell, layer seed), the C++ hash ported constant for constant in lr_mix / lr_hash):
+//   bits 0..11  u, the drop exists where e = amount * density - u > 0; it fades in over e 0..0.05 (so a rising or
+//               falling wetness grows and shrinks drops instead of popping them);
+//   bits 12..23 the fall phase offset;   bits 24..31 the fall speed variation, 0.5..1.5.
+// h2 = lens_rain_hash(h0, 0xffffffff, layer seed) (a cycle index never reaches that value): the drop's size, fixed per
+// cell, so the fall cycle length below never depends on a per-cycle value: full radius 0.18..0.40 of the cell (one
+// grid at amount 1 covers about 0.3 of the view, two about 0.48), times 0.55..1 with the amount; the big half of the
+// drops leaves trails.
+// Per fall cycle (h1 = lens_rain_hash(h0, cycle, layer seed): a fresh drop every time it re-seeds at the cell top):
+//   bits 8..19 the x position inside the cell.
+// Time: r_look.w is the frame time wrapped to the CPU's 600 s period, as a share of it (0..1), so the whole field
+// repeats every 600 s. A drop makes n whole fall cycles per period, n = round(the view heights a drop falls per period
+// / its travel cell - 2 * full radius), so it falls at about fall_speed view heights per minute (times its 0.5..1.5
+// variation; a drop drawn below full size travels a little further at the same n, so a little faster); any
+// fall_speed > 0 makes n at least 1 (at very small speeds the rounding to whole cycles dominates: at least one fall per
+// 600 s), fall_speed 0 leaves the drops still. phase = fract(w * n + offset) is continuous across the wrap, and so is
+// the cycle index taken mod n (floor(n + offset) mod n == floor(offset) mod n): the wrap never pops. A still drop sits
+// in the fade-free middle of the cycle. A drop fades in over the first tenth of its cycle and out over the last, so
+// re-seeding at the cell edge does not pop.
+//
+// Inside a drop (q = d / radius, d = p - centre, s = |q|) the source is read at centre + d * (1 - 1.5 r) * (1 + 1.5 r
+// s^2), r = refraction: the factor's sign depends on r only and its size grows with s, so the sampled radius grows
+// monotonically from the centre to the rim (no fold back; a lens, strongest toward the rim) for every refraction.
+// r 0 reads p itself; 0 < r < 2/3 an upright, magnified view; r = 2/3 the centre's colour over the whole drop (the
+// focus); r > 2/3 the scene around the drop mirrored (upside down and left-right), the sampled radius growing faster
+// than s toward the rim (the drop shows ever more of the scene there). A thin rim brightens by 1 + 0.5 * rim. A big falling drop leaves a trail between where its cycle started and where it is: a
+// one-tap vertical smear (the source a little above, 1.1 times as bright: the wet film), weighted by `trail`, at most
+// 0.35 radius to either side. Between the drops the glass softens the picture: a 9-tap tent (weights 1 2 1 / 2 4 2 /
+// 1 2 1, the centre is the exact texel) mixed in by blur * amount, 1.5 texels apart up to 360 rows and proportionally
+// wider above (its look on a large display goes to the GPU list). Portable on purpose: one block, one combined sampler
+// at the post bank, explicit texelFetch / textureLod (no implicit derivatives anywhere, so the non-uniform `continue`
+// and branches are safe), constant loop bounds (two layers, the second skipped by a uniform test), u32 math that wraps
+// as the C++ does.
+inline constexpr int kLensRainUBytes = 48;  // 3 vec4: drop, look, frame
+inline constexpr int kLensRainMaxLayers = 2;  // the shader's layer loop bound (QualitySettings::lens_rain_layers <= 2)
+constexpr const char* kLensRainFS = R"(#version 450 core
+layout(std140, binding = 1) uniform LensRainU {
+    vec4 r_drop;   // x: amount (0..1, > 0 when recorded), y: density (0..4), z: size (0.25..4), w: refraction (0..2)
+    vec4 r_look;   // x: blur (0..1), y: trail (0..1), z: view heights a speed-1 drop falls per wrap period, w: time (0..1 of it)
+    vec4 r_frame;  // x: aspect (width / height), y: seed & 0xffff, z: seed >> 16 (both exact in a float), w: grids (1, 2)
+};
+layout(binding = 6) uniform sampler2D u_src;
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+// lens_rain_hash (src/engine/render/src/lens_rain.cpp), step for step: lowbias32 mixes, u32 wrapping arithmetic.
+uint lr_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint lr_hash(uint cx, uint cy, uint seed) {
+    uint h = lr_mix(cx);
+    h = lr_mix(h ^ (cy * 0x9e3779b9u));
+    h = lr_mix(h ^ seed);
+    return h;
+}
+float lr_unit12(uint h) { return float(h & 0xfffu) / 4096.0; }  // 12 bits -> [0, 1)
+vec3 lr_src(vec2 uv) { return textureLod(u_src, clamp(uv, vec2(0.0), vec2(1.0)), 0.0).rgb; }
+
+void main() {
+    vec3 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0).rgb;
+    vec2 size = vec2(textureSize(u_src, 0));
+    float amount = r_drop.x;
+
+    // The wet glass between the drops. blur * amount 0 keeps src exactly (mix(a, b, 0) == a).
+    vec2 tx = vec2(1.5 * max(1.0, size.y / 360.0)) / size;
+    vec3 tent = src * 4.0;
+    for (int j = -1; j <= 1; ++j) {
+        for (int i = -1; i <= 1; ++i) {
+            if (i == 0 && j == 0) continue;
+            tent += lr_src(v_uv + vec2(float(i), float(j)) * tx) * float((2 - abs(i)) * (2 - abs(j)));
+        }
+    }
+    vec3 col = mix(src, tent * (1.0 / 16.0), clamp(r_look.x * amount, 0.0, 1.0));
+
+    uint seed = uint(r_frame.y) | (uint(r_frame.z) << 16u);
+    vec2 p = v_uv * vec2(r_frame.x, 1.0);
+    float aa = 1.5 / size.y;  // the drop's edge is smoothed over 1.5 rows
+    for (int l = 0; l < 2; ++l) {
+        if (float(l) >= r_frame.w) break;  // uniform: the tier's grid count
+        // The second grid: smaller cells (0.62), shifted off the first's lines, its own seed.
+        float cell = 0.22 * r_drop.z * (l == 0 ? 1.0 : 0.62);
+        vec2 g = p / cell + (l == 0 ? vec2(0.0) : vec2(0.37, 0.53));  // >= 0: the cell index is a plain uint
+        vec2 gi = floor(g);
+        vec2 f = (g - gi) * cell;  // the position in the cell, view heights
+        uint lseed = seed + uint(l) * 0x632be5abu;
+        uint h0 = lr_hash(uint(gi.x), uint(gi.y), lseed);
+        float e = amount * r_drop.y - lr_unit12(h0);
+        if (e <= 0.0) continue;  // no drop in this cell
+        uint h2 = lr_hash(h0, 0xffffffffu, lseed);
+        float big = float(h2 & 0xffu) / 255.0;
+        float rfull = (0.18 + 0.22 * big) * cell;
+        float rr = rfull * mix(0.55, 1.0, amount);
+        float off0 = lr_unit12(h0 >> 12u);
+        float n = floor(r_look.z * (0.5 + float(h0 >> 24u) / 256.0) / (cell - 2.0 * rfull) + 0.5);
+        if (r_look.z > 0.0) n = max(n, 1.0);
+        float phase;
+        uint cyc;
+        if (n > 0.5) {
+            float x = r_look.w * n + off0;
+            phase = fract(x);
+            cyc = uint(x) % uint(n);
+        } else {
+            phase = 0.1 + 0.8 * off0;
+            cyc = 0u;
+        }
+        uint h1 = lr_hash(h0, cyc, lseed);
+        float top = cell - rr;  // where a cycle starts (v grows upward: the drop runs down toward rr)
+        vec2 c = vec2(rr + (cell - 2.0 * rr) * lr_unit12(h1 >> 8u), mix(top, rr, phase));
+        float fade = smoothstep(0.0, 0.05, e) * smoothstep(0.0, 0.1, phase) * (1.0 - smoothstep(0.9, 1.0, phase));
+        vec2 d = f - c;
+        if (n > 0.5 && r_look.y > 0.0 && d.y > 0.0 && f.y < top) {
+            // The run above a big drop: strongest right behind it, gone at the cycle's start, narrower than the drop.
+            float across = 1.0 - smoothstep(0.0, 0.35 * rr, abs(d.x));
+            float along = 1.0 - d.y / max(top - c.y, 1e-4);
+            float wt = 0.6 * r_look.y * smoothstep(0.5, 1.0, big) * fade * across * along;
+            // The film of water left behind catches a little light: 1.1 times the smeared source.
+            if (wt > 0.0) col = mix(col, lr_src(v_uv + vec2(0.0, 0.5 * d.y)) * 1.1, wt);
+        }
+        float dist = length(d);
+        if (dist < rr) {
+            vec2 q = d / rr;  // the unit disc
+            float s2 = dot(q, q);
+            vec2 m = c + d * ((1.0 - 1.5 * r_drop.w) * (1.0 + 1.5 * r_drop.w * s2));  // the point the drop shows
+            vec2 o = m - f;  // view heights; x back to uv by the aspect
+            float rim = smoothstep(0.7, 1.0, sqrt(s2));
+            vec3 drop = lr_src(v_uv + vec2(o.x / r_frame.x, o.y)) * (1.0 + 0.5 * rim);
+            col = mix(col, drop, fade * (1.0 - smoothstep(rr - aa, rr, dist)));
+        }
+    }
+    o_color = vec4(col, 1.0);
+}
+)";
+
 }  // namespace mce::render::shaders3d

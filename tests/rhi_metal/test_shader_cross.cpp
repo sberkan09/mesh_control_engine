@@ -206,3 +206,17 @@ TEST_CASE("shader_cross: the lit stages with thin-surface translucency and wrap"
         CHECK(contains(lit.value(), "[[buffer(10)]]"));
     }
 }
+
+// M-LENSRAIN 42c: the lens rain's fragment stage (render's shaders3d.h, the real source) translates, with LensRainU at
+// [[buffer(1)]] and its source at the GL binding 6 Forward3D::record_lens_rain binds. Not built on Linux (macOS only):
+// unverified until a Mac run, like the cookie case above.
+TEST_CASE("shader_cross: the lens rain stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kLensRainFS, "lens_rain.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "[[sampler(6)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}
