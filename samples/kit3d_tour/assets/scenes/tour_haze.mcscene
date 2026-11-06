@@ -1,0 +1,889 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000015",
+ "name": "tour_haze",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      -0.3,
+      -0.25,
+      0.9
+     ],
+     "sun_intensity": 0.8,
+     "sun_shadows": 0,
+     "sun_color": [
+      0.8,
+      0.8,
+      1.0
+     ],
+     "ambient_sky": [
+      0.25,
+      0.28,
+      0.4
+     ],
+     "ambient_ground": [
+      0.12,
+      0.12,
+      0.14
+     ],
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.2
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 55
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      1.4,
+      6.0
+     ],
+     "rotation": [
+      -0.0262,
+      0,
+      0,
+      0.9997
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Campfire",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.6,
+      0.25,
+      1
+     ],
+     "offset": [
+      0,
+      0.6,
+      0
+     ],
+     "intensity": 4,
+     "radius": 8
+    },
+    "LightFlicker3D": {
+     "depth": 0.4,
+     "rate_hz": 9,
+     "seed": 3
+    },
+    "HeatHaze3D": {
+     "radius": 1.2,
+     "strength": 0.9,
+     "rise": 0.8,
+     "scale": 1.0,
+     "softness": 0.5,
+     "offset_y": 1.2,
+     "fire_follow": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Fire",
+   "components": {
+    "ParticleEmitter3D": {
+     "rate": 40,
+     "collide": 1
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.2,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Ember base",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.35,
+      0.08,
+      1.0
+     ],
+     "emissive_tint": [
+      6.0,
+      6.0,
+      6.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.2,
+      0
+     ],
+     "scale": [
+      0.55,
+      0.55,
+      0.55
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Ember mid",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.5,
+      0.1,
+      1.0
+     ],
+     "emissive_tint": [
+      6.0,
+      6.0,
+      6.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.5,
+      0
+     ],
+     "scale": [
+      0.4,
+      0.4,
+      0.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Ember top",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.75,
+      0.25,
+      1.0
+     ],
+     "emissive_tint": [
+      6.0,
+      6.0,
+      6.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0.75,
+      0
+     ],
+     "scale": [
+      0.25,
+      0.25,
+      0.25
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Check 0-0",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Check 0-1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Check 0-2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -1.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Check 0-3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Check 0-4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      1.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Check 0-5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Check 0-6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.0,
+      0.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 16,
+   "name": "Check 1-0",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "name": "Check 1-1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 18,
+   "name": "Check 1-2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -1.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 19,
+   "name": "Check 1-3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 20,
+   "name": "Check 1-4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      1.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 21,
+   "name": "Check 1-5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 22,
+   "name": "Check 1-6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.0,
+      1.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 23,
+   "name": "Check 2-0",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 24,
+   "name": "Check 2-1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 25,
+   "name": "Check 2-2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -1.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 26,
+   "name": "Check 2-3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 27,
+   "name": "Check 2-4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      1.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 28,
+   "name": "Check 2-5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.2,
+      0.3,
+      0.7,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 29,
+   "name": "Check 2-6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.9,
+      0.85,
+      0.75,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.0,
+      2.5,
+      -4.0
+     ],
+     "scale": [
+      0.95,
+      0.95,
+      0.95
+     ]
+    }
+   }
+  },
+  {
+   "id": 30,
+   "name": "Pole",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.1,
+      0.1,
+      0.1,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.5,
+      1.4,
+      2.5
+     ],
+     "scale": [
+      0.06,
+      2.8,
+      0.06
+     ]
+    }
+   }
+  }
+ ]
+}

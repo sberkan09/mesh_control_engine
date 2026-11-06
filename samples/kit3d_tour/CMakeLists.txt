@@ -50,6 +50,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_lensrain_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_lensrain.mcscene
                      -DTICKS=300 -DENTITIES=13 -DTOUR=kit3d_tour_lensrain -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The heat haze scene (M-HEATHAZE 43e): scenes/tour_haze.mcscene, a campfire (glowing stack, fire particles, flickering point light)
+    # under a HeatHaze3D with fire_follow, a backdrop grid of tinted spheres and a thin pole in front; made by gen_haze.py. Named
+    # tour_haze so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 30 entities. 300 ticks (5 s): the flicker and
+    # the fire particles have run, so the two plays must agree on them (the haze itself is render-side and hashes nothing).
+    add_test(NAME sample_kit3d_tour_haze_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_haze.mcscene
+                     -DTICKS=300 -DENTITIES=30 -DTOUR=kit3d_tour_haze -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -99,4 +106,15 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_lensrain_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_lensrain_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The heat haze capture: the scene at tick 300, written for a look (build/.../kit3d_tour_haze.ppm; samples keep no goldens). The
+    # grid behind the fire wobbles, the pole in front stays sharp; `-r.heat_haze 0` draws it without the haze.
+    add_test(NAME sample_kit3d_tour_haze_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_haze.mcscene -capture_tick 300
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_haze.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_haze_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_haze_gpu)
 endif()
