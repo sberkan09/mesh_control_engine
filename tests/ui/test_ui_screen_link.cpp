@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include <cstdio>
+
 #include "mce/ecs/world.h"
 #include "mce/input/script.h"
 #include "mce/refl/refl.h"
@@ -206,4 +208,31 @@ TEST_CASE("ui link: actions and bindings survive encode / decode and build / ext
     data.widgets[0].format.assign("%s");  // a format printf would misread never loads
     encode_ui_document(data, chunk);
     CHECK_FALSE(decode_ui_document(chunk.span(), back).has_value());
+}
+
+TEST_CASE("ui document codec: kMaxDocumentWidgets widgets load, one more does not") {
+    DocumentData d;
+    d.widgets.reserve(kMaxDocumentWidgets + 1);
+    for (u32 i = 0; i < kMaxDocumentWidgets; ++i) {
+        WidgetData w;
+        char name[16];
+        std::snprintf(name, sizeof(name), "w%u", i);
+        w.name.assign(name);
+        d.widgets.push_back(w);
+    }
+    Array<byte> chunk;
+    encode_ui_document(d, chunk);
+    DocumentData back;
+    REQUIRE(decode_ui_document(chunk.span(), back).has_value());
+    CHECK(back.widgets.size() == kMaxDocumentWidgets);
+
+    WidgetData extra;
+    extra.name.assign("one_more");
+    d.widgets.push_back(extra);
+    Array<byte> over;
+    encode_ui_document(d, over);
+    const Result<void> r = decode_ui_document(over.span(), back);
+    REQUIRE_FALSE(r.has_value());
+    CHECK(r.error().code == Errc::OutOfBounds);
+    CHECK(back.widgets.empty());  // a refused chunk leaves nothing half loaded
 }
