@@ -103,6 +103,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `GrenadeLive3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: spawned by the engine at a throw; nothing to author |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `HeatHaze3D` | `mce/kit/heat_haze.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-HEATHAZE 43d: tested in tests/kit/test_heat_haze_extract.cpp; a sample gets one in 43e (remove this line then) |
 | `HitMarker3D` | `mce/kit/hit_marker.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ImpactFx3D` | `mce/kit/impact_fx.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |

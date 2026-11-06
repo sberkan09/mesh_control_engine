@@ -368,3 +368,24 @@ TEST_CASE("shader_spirv: the lens rain stage") {
     CHECK(res.storage_count == 0);
     CHECK(res.uniform_count == 2);
 }
+
+// M-HEATHAZE 43c: the heat haze's fragment stage (render's shaders3d.h, the real source) compiles for SDL GPU with its
+// resources where Forward3D::record_heat_haze binds them: HazeU at bank kPass (1), the HDR frame at sampler 6 and the
+// opaque prepass at sampler 7; no storage buffers (its u32 hash, the int -> uint lattice indices, the constant-bound
+// loop and explicit textureLod / texelFetch go through glslang as is).
+TEST_CASE("shader_spirv: the heat haze stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kHazeFS, "haze.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}

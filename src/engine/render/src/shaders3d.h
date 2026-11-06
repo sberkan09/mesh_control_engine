@@ -4132,4 +4132,135 @@ void main() {
 }
 )";
 
+// ---- M-HEATHAZE 43c: heat haze (Forward3D::record_heat_haze), after the flare and the lens rain and before bloom. One
+// fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) and the half-resolution opaque prepass (u_gbuf,
+// bank kNormal, point: a = the view depth, 0 for sky) into the post-fx ping-pong target. HazeU rides bank kPass; its
+// C++ mirror is HazeU in forward3d.cpp (static_asserts on kHazeUBytes and the offsets). Everything in it comes from
+// heat_haze_frame (mce/render/heat_haze.h), the view's projection and the scene clock.
+//
+// Units: p = v_uv * (aspect, 1) in view heights (v = 0 the bottom row, the fullscreen pass's convention); a volume's
+// screen disc is its projected centre and screen radius (view heights). Per volume (constant bound 8, a uniform break
+// at the count): w = heat_haze_falloff(|p - c| / r, softness) ported literally (hh_falloff); the depth mask
+// m = smoothstep(near - 0.5, near + 0.5, the pixel's distance), where the distance is the prepass view depth times the
+// pixel ray's length (heat_haze_project's near depth is a distance along the ray, not a view z) and sky counts as far;
+// offset += hh_dir(q) * strength * w * m * 0.02 view heights, q = (p - c) / r * kHazeCells * scale. hh_dir is two
+// octaves (the second at twice the frequency, half the weight) of a two-channel value noise on heat_haze_hash, ported
+// constant for constant (hh_mix / hh_hash, seeds 4 * volume + channel); its lattice rows wrap every 256 cells (& 255u:
+// exact for negative indices, since 256 divides 2^32) and the field rises by HazeU's phase, rise * kHazeCells * scale
+// cells per second wrapped by the CPU to 0..256 (so the rising field repeats seamlessly and the f32 coordinates stay
+// small however long the clock runs). A pixel that no volume moves (outside every disc, or masked) is the source exactly
+// (texelFetch). Otherwise the source is read at uv + offset (bilinear); a lookup that lands on a pixel nearer than the
+// nearest contributing volume (an occluder in front of the haze that the displacement would pull in) falls back to the
+// undisplaced pixel, smoothly over the same 1 m band, so a front object's silhouette stays sharp from both sides.
+// Portable on purpose: one block, combined samplers at the post banks, explicit texelFetch / textureLod (no implicit
+// derivatives anywhere, so the non-uniform `continue` is safe), constant loop bounds, u32 math that wraps as the C++
+// does, int -> uint conversions that keep the bit pattern (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kHazeUBytes = 272;  // 17 vec4: frame, then 2 per volume
+inline constexpr int kHazeMaxVolumes = 8;  // the shader's loop bound (= kHeatHazeMaxVolumes, scene3d.h)
+inline constexpr float kHazeCells = 3.0f;  // noise lattice cells per screen radius at scale 1 (kHazeFS)
+inline constexpr float kHazePeriodCells = 256.0f;  // the lattice rows' wrap (kHazeFS's & 255u)
+// heat_haze_hash (src/engine/render/src/heat_haze.cpp), step for step. A macro so test_render3d_heat_haze_gl can run the
+// port alone and compare it with the C++ hash bit for bit.
+#define MCE_GLSL_HEAT_HAZE_HASH R"(
+uint hh_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint hh_hash(uint x, uint y, uint seed) {
+    uint h = hh_mix(x);
+    h = hh_mix(h ^ (y * 0x85ebca6bu));
+    h = hh_mix(h ^ (seed * 0xc2b2ae35u));
+    return h;
+}
+)"
+constexpr const char* kHazeFS = "#version 450 core\n" MCE_GLSL_HEAT_HAZE_HASH R"(
+layout(std140, binding = 1) uniform HazeU {
+    vec4 h_frame;     // x: volumes (1..8), y: aspect (width / height), zw: 1 / proj[0][0], 1 / proj[1][1] (0: orthographic)
+    vec4 h_vol[16];   // per volume: [2i] centre uv, near distance (m), screen radius (view heights);
+                      //             [2i + 1] strength (0..2), rise phase (cells, 0..256), scale (0.25..4), softness (0..1)
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+const float kCells = 3.0;  // kHazeCells
+
+// heat_haze_falloff (heat_haze.cpp), literally; softness is already clamped by heat_haze_frame.
+float hh_falloff(float d, float s) {
+    d = max(d, 0.0);
+    if (s <= 0.0) return d < 1.0 ? 1.0 : 0.0;
+    float x = clamp((d - (1.0 - s)) / s, 0.0, 1.0);
+    return clamp(1.0 - x * x * (3.0 - 2.0 * x), 0.0, 1.0);
+}
+float hh_unit(uint h) { return float(h & 0xffffu) / 32767.5 - 1.0; }  // 16 bits -> [-1, 1]
+// Value noise on the lattice, rows wrapped every 256 cells. -1..1.
+float hh_noise(vec2 q, uint seed) {
+    vec2 i = floor(q);
+    vec2 f = q - i;
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    uint x0 = uint(int(i.x));
+    uint y0 = uint(int(i.y)) & 255u;
+    uint x1 = x0 + 1u;
+    uint y1 = (y0 + 1u) & 255u;
+    float a = hh_unit(hh_hash(x0, y0, seed));
+    float b = hh_unit(hh_hash(x1, y0, seed));
+    float c = hh_unit(hh_hash(x0, y1, seed));
+    float d = hh_unit(hh_hash(x1, y1, seed));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+// The displacement direction at q (lattice cells), rising by `phase` cells: two octaves, two channels. |each| <= 1.
+vec2 hh_dir(vec2 q, float phase, uint seed) {
+    vec2 q1 = vec2(q.x, q.y - phase);
+    float phase2 = 2.0 * phase;
+    if (phase2 >= 256.0) phase2 -= 256.0;  // a whole wrap: the same rows
+    vec2 q2 = vec2(2.0 * q.x + 17.0, 2.0 * q.y - phase2);
+    float x = hh_noise(q1, seed) + 0.5 * hh_noise(q2, seed + 2u);
+    float y = hh_noise(q1, seed + 1u) + 0.5 * hh_noise(q2, seed + 3u);
+    return vec2(x, y) * (1.0 / 1.5);
+}
+
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float aspect = h_frame.y;
+    vec2 p = v_uv * vec2(aspect, 1.0);
+    // The pixel's distance along its ray (sky: far, so the haze bends the horizon).
+    vec2 ndc = v_uv * 2.0 - 1.0;
+    vec2 slope = ndc * h_frame.zw;
+    float ray = sqrt(1.0 + dot(slope, slope));
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    float dist = z > 0.0 ? z * ray : 1e30;
+    vec2 offset = vec2(0.0);
+    float nearest = 1e30;
+    for (int i = 0; i < 8; ++i) {
+        if (float(i) >= h_frame.x) break;  // uniform: the volume count
+        vec4 a = h_vol[2 * i];
+        vec4 b = h_vol[2 * i + 1];
+        vec2 d = p - a.xy * vec2(aspect, 1.0);
+        float w = hh_falloff(length(d) / a.w, b.w);
+        if (w <= 0.0) continue;
+        float m = smoothstep(a.z - 0.5, a.z + 0.5, dist);
+        if (m <= 0.0) continue;  // the pixel is in front of the haze
+        vec2 q = d / a.w * (kCells * b.z);
+        offset += hh_dir(q, b.y, uint(i) * 4u) * (b.x * w * m * 0.02);
+        nearest = min(nearest, a.z);
+    }
+    if (offset.x == 0.0 && offset.y == 0.0) {
+        o_color = src;  // untouched, bit for bit
+    } else {
+        vec2 uv2 = v_uv + vec2(offset.x / aspect, offset.y);
+        vec4 moved = textureLod(u_src, clamp(uv2, vec2(0.0), vec2(1.0)), 0.0);
+        float z2 = textureLod(u_gbuf, uv2, 0.0).a;
+        float dist2 = z2 > 0.0 ? z2 * ray : 1e30;
+        // 1: the lookup lies behind the haze's near surface; 0: it landed on a nearer occluder (keep the pixel).
+        float keep = smoothstep(nearest - 0.5, nearest + 0.5, dist2);
+        o_color = keep >= 1.0 ? vec4(moved.rgb, src.a) : (keep <= 0.0 ? src : vec4(mix(src.rgb, moved.rgb, keep), src.a));
+    }
+}
+)";
+
 }  // namespace mce::render::shaders3d

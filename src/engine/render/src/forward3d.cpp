@@ -1,6 +1,7 @@
 #include "mce/render/forward3d.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -8,6 +9,7 @@
 #include "mce/convar.h"
 #include "mce/log.h"
 #include "mce/render/edge_outline.h"
+#include "mce/render/heat_haze.h"
 #include "mce/render/lens_flare.h"
 #include "mce/render/lens_rain.h"
 #include "mce/render/light_cookie.h"
@@ -370,6 +372,17 @@ struct LensRainU {
 static_assert(sizeof(LensRainU) == shaders3d::kLensRainUBytes, "LensRainU: 3 vec4, as kLensRainFS");
 static_assert(offsetof(LensRainU, drop) == 0 && offsetof(LensRainU, look) == 16 && offsetof(LensRainU, frame) == 32,
               "LensRainU: r_drop / r_look / r_frame as in kLensRainFS");
+
+// M-HEATHAZE 43c: kHazeFS's HazeU (shaders3d.h), bank kPass. Filled from heat_haze_frame, the view's projection and
+// the scene clock only (record_heat_haze).
+struct HazeU {
+    vec4 frame;    // volumes, aspect, 1 / proj[0][0], 1 / proj[1][1] (0, 0 for an orthographic view, which is unsupported)
+    vec4 vol[16];  // per volume: centre uv, near distance, screen radius; strength, rise phase (cells), scale, softness
+};
+static_assert(sizeof(HazeU) == shaders3d::kHazeUBytes, "HazeU: 17 vec4, as kHazeFS");
+static_assert(offsetof(HazeU, frame) == 0 && offsetof(HazeU, vol) == 16, "HazeU: h_frame / h_vol[16] as in kHazeFS");
+static_assert(2 * shaders3d::kHazeMaxVolumes == 16 && u32(shaders3d::kHazeMaxVolumes) == kHeatHazeMaxVolumes,
+              "HazeU: two vec4 per volume, the shader's loop bound is kHeatHazeMaxVolumes");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1133,6 +1146,16 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) rain_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the lens rain shader failed, drawing frames without the drops");
     }
+    if (!ao_prepass_.is_null()) {
+        // M-HEATHAZE 43c: the heat haze composite. Its depth mask reads the half-resolution opaque prepass, so like the
+        // flare it is made only where that prepass exists (SSAO, SSR, contact shadows or the edge outline on); without
+        // it the pass is never recorded. A driver that refuses the shader keeps the frame without the haze.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {kHazeFS, "haze.frag"};
+        fs.debug_name = "heat_haze";
+        if (auto p = device_->create_pipeline(fs)) haze_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the heat haze shader failed, drawing frames without the haze");
+    }
     // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
     // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
     // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
@@ -1580,6 +1603,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsPostFx);
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
     record_lens_rain(cmd, scene);  // M-LENSRAIN 42c: after the flare (refracted too), before bloom; same bucket
+    record_heat_haze(cmd, scene);  // M-HEATHAZE 43c: after the lens rain (its drops bend too), before bloom; same bucket
     record_post(cmd, scene, target);
     // What the next frame's reflections read: this frame's HDR color and the projection it was drawn with.
     ssr_prev_vp_ = jitter_ * scene.view().view_proj;
@@ -3680,6 +3704,89 @@ void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) 
     post_source_ = dst;
     stats_.lens_rain = true;
     stats_.lens_rain_amount = fr.amount;
+}
+
+// ---- M-HEATHAZE 43c: heat haze, right after the lens rain and before bloom: after TAA, depth of field, motion blur,
+// the exposure histogram, the flare and the lens rain (so the haze bends the flare and the drops too and neither pumps
+// the exposure nor enters the TAA history); bloom, lens dirt, the tonemapper and the grade then act on the bent picture.
+// One fullscreen pass (kHazeFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that target;
+// never in place (with TAA post_source_ is the history slot the next frame reprojects; post_fx_target alternates its
+// two textures, so the target is never the texture an earlier post pass of this frame left in post_source_).
+// The depth mask reads the half-resolution opaque prepass (ao_gbuf_), drawn by record_prepass: a no-op when SSAO, SSR,
+// contact shadows, the water, the outline or the flare drew it already this frame, otherwise the one cost the haze adds
+// besides its own pass.
+// Records nothing (the frame is the one without the pass bit for bit, stats_.heat_haze_volumes 0) when PostFx::haze has
+// no volume (checked first: nothing at all is touched), the pipeline does not exist (no prepass pipeline, a refused
+// shader), the view renders to a texture (out_.linear_output, as the lens rain: a monitor in the scene does not wear
+// the player's haze), the tier has no haze (Low) or r.heat_haze is 0, or no volume is on screen (heat_haze_frame).
+// The tier and the cvar are read again here although apply_quality already trimmed the count, so a caller that skips
+// apply_quality (a test, a tool) still gets the tier's cap.
+// The projection is the unjittered one: the pass runs on the resolved frame. The noise's clock is the scene's
+// (Scene3D::set_time), widened to f64 for the per-volume rise phase, which is wrapped to the lattice's 256-row period
+// here, so the rising field never pops and its coordinates stay small. Nothing is written back to the scene.
+void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const HeatHaze& setting = scene.post().haze;
+    if (setting.count == 0) return;
+    if (haze_pipe_.is_null()) {
+        // Volumes were asked for but the pipeline does not exist (no prepass pipeline: ssao, ssr, contact shadows and the
+        // edge outline all off at startup; or a refused shader): said once per process, not per frame.
+        static std::atomic<bool> warned{false};
+        if (!out_.linear_output && !warned.exchange(true))
+            MCE_LOG_WARN("render3d: heat haze volumes are set but the heat haze pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without the haze");
+        return;
+    }
+    if (out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.heat_haze"));
+    if (!q.heat_haze || (cv && !cv->get_bool())) return;
+    const u32 cap = q.heat_haze_volumes < kHeatHazeMaxVolumes ? q.heat_haze_volumes : kHeatHazeMaxVolumes;
+    if (cap == 0) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    HeatHaze capped = setting;
+    if (capped.count > cap) capped.count = cap;
+    const View3D& view = scene.view();
+    HeatHazeFrame fr;
+    if (heat_haze_frame(capped, view.view_proj, view.view, f32(out.width) / f32(out.height), scene.time(), fr) == 0)
+        return;
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    HazeU hu{};
+    // A perspective projection (proj[2][3] = -1) gives the ray slopes; an orthographic one leaves them 0 (ray length 1) so the
+    // shader never divides, but an orthographic view is unsupported: heat_haze_project assumes a perspective camera.
+    const bool persp = view.proj.c[2][3] != 0.0f && view.proj.c[0][0] != 0.0f && view.proj.c[1][1] != 0.0f;
+    hu.frame = {f32(fr.count), fr.aspect, persp ? 1.0f / view.proj.c[0][0] : 0.0f, persp ? 1.0f / view.proj.c[1][1] : 0.0f};
+    const f64 period = f64(shaders3d::kHazePeriodCells);
+    for (u32 i = 0; i < fr.count; ++i) {
+        const HeatHazeVolumeFrame& v = fr.volumes[i];
+        const f64 cells = f64(fr.time) * f64(v.rise) * f64(shaders3d::kHazeCells) * f64(v.scale);
+        f32 phase = f32(cells - period * std::floor(cells / period));
+        if (!(phase >= 0.0f && phase < shaders3d::kHazePeriodCells)) phase = 0.0f;  // f32 rounding just below 256
+        hu.vol[2 * i] = {v.center.x, v.center.y, v.near_depth, v.screen_radius};
+        hu.vol[2 * i + 1] = {v.strength, phase, v.scale, v.softness};
+    }
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "heat_haze";
+    cmd.push_debug_scope("heat_haze");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(haze_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(hu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear displaced lookups, clamped
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);    // nearest: a tap reads one prepass texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.heat_haze_volumes = fr.count;
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {

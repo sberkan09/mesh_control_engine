@@ -1085,4 +1085,82 @@ inline void lens_rain_gradient_sky(Scene3D& s) {
     s.set_sky(sky);
 }
 
+// ---- M-HEATHAZE 43c: heat haze ---------------------------------------------------------------------------------------
+
+// Mesh `key`: a checker wall of 0.4 m tiles (30 x 15, light and dark), 12 m wide and 6 m tall, standing on the ground
+// 3 m behind the origin and facing the camera (+z): sharp edges everywhere, so a displacement of a pixel shows.
+inline void upload_haze_wall(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    constexpr u32 kCols = 30, kRows = 15;
+    constexpr f32 kTile = 0.4f;
+    for (u32 y = 0; y < kRows; ++y)
+        for (u32 x = 0; x < kCols; ++x) {
+            mesh_fixture::Box t;
+            t.center = {(f32(x) + 0.5f) * kTile - 0.5f * kTile * f32(kCols), (f32(y) + 0.5f) * kTile, -3.0f};
+            t.half = {0.5f * kTile, 0.5f * kTile, 0.05f};
+            const f32 c = (x + y) % 2 == 0 ? 0.85f : 0.06f;
+            t.color[0] = t.color[1] = c;
+            t.color[2] = c * 0.9f;
+            b.add_box(t);
+        }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// Mesh `key`: a thin green pole (0.2 m square, 3 m tall, in 0.1 m bands of two greens, so a displacement inside it would
+// show) standing on the origin; placed in front of the haze it is the occluder the depth mask must keep sharp.
+inline void upload_haze_pole(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    for (u32 i = 0; i < 30; ++i) {
+        mesh_fixture::Box band;
+        band.center = {0.0f, 0.05f + 0.1f * f32(i), 0.0f};
+        band.half = {0.1f, 0.05f, 0.1f};
+        band.color[0] = 0.04f;
+        band.color[1] = i % 2 == 0 ? 0.85f : 0.4f;
+        band.color[2] = 0.04f;
+        b.add_box(band);
+    }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// The level camera the cases use: 7 m in front of (0, 1.5, 0), looking at the wall through the haze sphere.
+inline void haze_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 1.5f, 0.0f};
+    f.pitch_deg = 0.0f;
+}
+
+// One haze sphere at `center` (radius 1.5 m) with a strong displacement (strength 1.5) so the 160 x 120 frame moves by
+// whole pixels; the default rise, scale and softness.
+inline HeatHaze haze_setting(vec3 center = {0.0f, 1.5f, 0.0f}, f32 radius = 1.5f, f32 strength = 1.5f) {
+    HeatHaze h;
+    h.count = 1;
+    h.volumes[0].center = center;
+    h.volumes[0].radius = radius;
+    h.volumes[0].strength = strength;
+    return h;
+}
+
+// `haze` (null: none) at scene time `time` over the wall (mesh `wall`), with the pole (mesh `pole`, ~0u: none) at
+// `pole_at`; bloom and FXAA off (each would carry a changed pixel to its neighbours, and the cases count changed
+// pixels).
+inline void heat_haze_scene(Scene3D& s, const HeatHaze* haze, f32 time, u32 wall, u32 pole = ~0u,
+                            vec3 pole_at = {0.3f, 0.0f, 2.5f}) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    post.bloom = false;
+    post.fxaa = false;
+    post.haze = haze ? *haze : HeatHaze{};
+    s.set_post(post);
+    MeshInstance w;
+    w.mesh = wall;
+    s.add(w);
+    if (pole != ~0u) {
+        MeshInstance m;
+        m.mesh = pole;
+        m.world = math::translation(pole_at);
+        s.add(m);
+    }
+}
+
 }  // namespace mce::render_test

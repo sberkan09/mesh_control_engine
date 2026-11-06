@@ -34,6 +34,7 @@
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/day_cycle.h"
 #include "mce/kit/edge_outline.h"
+#include "mce/kit/heat_haze.h"
 #include "mce/kit/lens_flare.h"
 #include "mce/kit/lens_rain.h"
 #include "mce/kit/light_cookie.h"
@@ -1549,6 +1550,59 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings rain_shadows;
             render::apply_quality(quality_, rain_shadows, rain_post);
             post.rain = rain_post.rain;
+        }
+    }
+    {  // heat haze (M-HEATHAZE 43d): the first eight enabled HeatHaze3D in entity id order (not table order, so the pick never
+       // depends on archetype layout); without one post.haze keeps the empty default, written every frame so a stale one never
+       // survives. The centre is the entity's pose (WorldTransform, else LocalTransform: the same render-relative space as the
+       // lights, which a floating-origin rebase has already moved with the world) plus offset_y. fire_follow reads the entity's
+       // PointLight3D at the frame's render clock, flicker included (as the light feed in extract()).
+        struct Pick {
+            u32 index = ~0u;
+            render::HeatHazeVolume v;
+        };
+        Pick picks[render::kHeatHazeMaxVolumes];
+        u32 picked = 0;
+        const f64 haze_clock = static_cast<f64>(!bake_mode_ && !extra_view_ ? time_ + max(frame_dt_, 0.0f) : time_);
+        world.query<const HeatHaze3D&>().each([&](Entity e, const HeatHaze3D& c) {
+            if (c.enabled == 0u) return;
+            if (picked == render::kHeatHazeMaxVolumes && e.index > picks[picked - 1].index) return;
+            vec3 pos, scale;
+            quat rot;
+            if (!pose_of(world, e, pos, rot, scale)) return;
+            Pick p;
+            p.index = e.index;
+            p.v.center = pos + vec3{0.0f, c.offset_y, 0.0f};
+            p.v.radius = c.radius;
+            p.v.strength = c.strength;
+            p.v.rise = c.rise;
+            p.v.scale = c.scale;
+            p.v.softness = c.softness;
+            if (c.fire_follow > 0.0f) {
+                if (const PointLight3D* l = world.try_get<PointLight3D>(e)) {
+                    f32 intensity = l->intensity, radius = l->radius;
+                    if (const LightFlicker3D* f = world.try_get<LightFlicker3D>(e); f && f->enabled != 0u) {
+                        intensity *= light_flicker_scale(*f, haze_clock, e.index);
+                        radius *= light_flicker_radius_scale(*f, haze_clock, e.index);
+                    }
+                    p.v.strength *= heat_haze_fire_scale(c.fire_follow, intensity, radius);
+                }
+            }
+            u32 at = picked < render::kHeatHazeMaxVolumes ? picked++ : picked - 1;  // the last slot is replaced when full
+            while (at > 0 && picks[at - 1].index > p.index) {
+                picks[at] = picks[at - 1];
+                --at;
+            }
+            picks[at] = p;
+        });
+        if (picked > 0) {
+            // The 43b quality step on a throwaway PostFx (tier, r.heat_haze, the count cap and the Range clamps); only the haze returns.
+            render::PostFx haze_post;
+            haze_post.haze.count = picked;
+            for (u32 i = 0; i < picked; ++i) haze_post.haze.volumes[i] = picks[i].v;
+            render::ShadowSettings haze_shadows;
+            render::apply_quality(quality_, haze_shadows, haze_post);
+            post.haze = haze_post.haze;
         }
     }
     {  // edge outline (M-OUTLINE 39d): the first EdgeOutline3D; without one or when disabled post.outline keeps the disabled

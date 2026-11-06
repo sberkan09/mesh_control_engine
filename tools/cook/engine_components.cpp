@@ -96,6 +96,7 @@
 #include "mce/kit/cold_breath.h"          // ColdBreath (M-COLDBREATH 34a)
 #include "mce/kit/decal_scatter.h"          // DecalScatter3D (M-DECALSCATTER 35a)
 #include "mce/kit/edge_outline.h"           // EdgeOutline3D (M-OUTLINE 39d)
+#include "mce/kit/heat_haze.h"              // HeatHaze3D (M-HEATHAZE 43d)
 #include "mce/kit/lens_flare.h"             // LensFlare3D (M-LENSFLARE 38d)
 #include "mce/kit/lens_rain.h"              // LensRain3D (M-LENSRAIN 42d)
 #include "mce/kit/light_cookie.h"           // LightCookie3D, SunCookie3D (M-LIGHTCOOKIE 40g)
