@@ -578,9 +578,9 @@ TEST_CASE("lens rain: the glass blur softens a hard edge by a bounded amount and
         for (usize x = 2; x + 2 < kW; ++x) {
             const usize p = y * kW + x;
             int spread = 0;
-            for (i32 j = -2; j <= 2; ++j) {
-                for (i32 i = -2; i <= 2; ++i) {
-                    const usize o = static_cast<usize>(i32(p) + j * i32(kW) + i);
+            for (usize j = 0; j <= 4; ++j) {
+                for (usize i = 0; i <= 4; ++i) {
+                    const usize o = (y - 2 + j) * kW + (x - 2 + i);  // the 5x5 neighbourhood
                     for (usize c = 0; c < 3; ++c)
                         spread = std::max(spread, std::abs(int(plain.px[o * 4 + c]) - int(plain.px[p * 4 + c])));
                 }
