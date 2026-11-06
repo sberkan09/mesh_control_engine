@@ -284,6 +284,8 @@ TEST_CASE("mods: kMaxMods packs load, the next one is skipped as too many") {
     const std::string dir = tmp_dir("mods_limit");
     std::vector<std::string> paths;
     std::vector<std::string> mod_ids;
+    paths.reserve(kMaxMods + 1);
+    mod_ids.reserve(kMaxMods + 1);
     for (u32 i = 0; i <= kMaxMods; ++i) {  // kMaxMods + 1 packs
         char file[32];
         char id[32];
@@ -293,6 +295,7 @@ TEST_CASE("mods: kMaxMods packs load, the next one is skipped as too many") {
         mod_ids.emplace_back(id);
     }
     std::vector<StringView> packs;
+    packs.reserve(paths.size());
     for (const std::string& p : paths) packs.push_back(p);
 
     // At the limit: nothing is skipped.
