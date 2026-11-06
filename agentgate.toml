@@ -1,5 +1,5 @@
 [agentgate]
-base = "dev_claude"
+base = "master"
 agent_branches = ["claude/*"]
 
 [tests]
