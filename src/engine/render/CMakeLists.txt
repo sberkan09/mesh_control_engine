@@ -14,6 +14,7 @@ mce_add_library(mce_render
         src/forward3d.cpp
         src/forward3d_scale.cpp
         src/lens_flare.cpp
+        src/lens_rain.cpp
         src/light_cookie.cpp
         src/mesh.cpp
         src/quality.cpp

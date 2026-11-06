@@ -154,6 +154,20 @@ struct EdgeOutline {
     bool fog_follow = true;                       // lines fade in the exp² Fog; ignored while Volumetrics is on
 };
 
+// M-LENSRAIN 42a. Rain on the camera lens (drops that gather on the glass, refract the picture and run off), read by the lens rain
+// pass; off by default, so a frame is unchanged. The ranges are the clamps apply_quality applies (M-LENSRAIN 42b).
+struct LensRain {
+    bool enabled = false;       // off draws the frame without the pass
+    f32 amount = 0.0f;          // how wet the lens is now (0..1); 0 records nothing
+    f32 density = 1.0f;         // drops per cell, a multiplier (0..4)
+    f32 size = 1.0f;            // drop radius multiplier (0.25..4)
+    f32 refraction = 1.0f;      // strength of the mirrored magnification inside a drop (0..2)
+    f32 blur = 0.35f;           // how much the glass between the drops softens the picture (0..1)
+    f32 trail = 0.5f;           // strength of the runs behind larger drops (0..1)
+    f32 fall_speed = 0.25f;     // how fast the big drops creep down, in view heights per minute (0..2)
+    u32 seed = 1;               // selects the drop pattern
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -184,6 +198,7 @@ struct PostFx {
         f32 dirt_intensity = 0.0f;
     } lens;
     LensFlare flare;  // M-LENSFLARE 38a
+    LensRain rain;  // M-LENSRAIN 42a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 
