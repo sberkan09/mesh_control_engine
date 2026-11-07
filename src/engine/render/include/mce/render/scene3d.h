@@ -188,6 +188,20 @@ struct HeatHaze {
     HeatHazeVolume volumes[kHeatHazeMaxVolumes];
 };
 
+// M-UNDERWATER 44a. The camera under the water plane: one post pass turns the frame into an underwater picture (per-channel
+// absorption with distance, fog in the water's scatter colour, a gentle screen wobble, the surface seen from below as a lid
+// with a Snell window). Look tweaks only: the colours come from the water carrier (WaterSurface). It acts only while a water
+// plane is drawn and the camera is below it (plus a blend band), so it is on by default and a scene without water is unchanged.
+// The ranges are the clamps apply_quality applies (M-UNDERWATER 44b).
+struct Underwater {
+    bool enabled = true;     // false draws the frame without the pass
+    f32 strength = 1.0f;     // scales the whole look (0..1); 0 is off
+    f32 wobble = 0.5f;       // screen wobble amplitude multiplier (0..2)
+    f32 fog_scale = 1.0f;    // multiplies the water's depth_scale_m to get the absorption length (0.25..4)
+    f32 band = 0.0f;         // the surface-crossing blend half-width in metres (0 = automatic, else 0.05..2)
+    u8 pad_[3] = {};
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -220,6 +234,7 @@ struct PostFx {
     LensFlare flare;  // M-LENSFLARE 38a
     LensRain rain;  // M-LENSRAIN 42a
     HeatHaze haze;  // M-HEATHAZE 43a
+    Underwater underwater;  // M-UNDERWATER 44a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 

@@ -43,6 +43,8 @@ MCE_CVAR(cv_lens_rain, "r.lens_rain", true,
          "Rain on the camera lens (PostFx::rain; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_heat_haze, "r.heat_haze", true,
          "Heat haze (PostFx::haze; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_underwater, "r.underwater", true,
+         "Camera under water look (PostFx::underwater; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
@@ -87,6 +89,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.lens_rain_layers = 0;
             q.heat_haze = false;
             q.heat_haze_volumes = 0;
+            q.underwater_detail = 0;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
@@ -106,6 +109,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.lens_flare_starburst = false;
             q.lens_rain_layers = 1;
             q.heat_haze_volumes = 4;
+            q.underwater_detail = 1;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
             q.light_cookie_lights = 8;
@@ -203,6 +207,14 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
         for (u32 i = out; i < kHeatHazeMaxVolumes; ++i) hh.volumes[i] = HeatHazeVolume{};
         hh.count = out;
     }
+    // M-UNDERWATER 44b: the camera under water look. Off for the tier or r.underwater 0; the ranges clamp, NaN -> the default
+    // (band: 0 = automatic, else 0.05..2).
+    Underwater& uw = post.underwater;
+    uw.enabled = uw.enabled && q.underwater && cv_underwater.get_bool();
+    uw.strength = detail::ranged(uw.strength, 0.0f, 1.0f, 1.0f);
+    uw.wobble = detail::ranged(uw.wobble, 0.0f, 2.0f, 0.5f);
+    uw.fog_scale = detail::ranged(uw.fog_scale, 0.25f, 4.0f, 1.0f);
+    uw.band = uw.band == uw.band ? (uw.band > 0.0f ? detail::ranged(uw.band, 0.05f, 2.0f, 0.0f) : 0.0f) : 0.0f;
     // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
     EdgeOutline& eo = post.outline;
     eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();
