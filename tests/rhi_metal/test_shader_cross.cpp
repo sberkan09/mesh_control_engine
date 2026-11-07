@@ -235,3 +235,18 @@ TEST_CASE("shader_cross: the heat haze stage") {
     CHECK(contains(msl.value(), "[[sampler(7)]]"));
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
+
+// M-UNDERWATER 44c: the underwater fragment stage (render's shaders3d.h, the real source) translates, with UnderwaterU at
+// [[buffer(1)]], the HDR frame at the GL binding 6 and the opaque prepass at 7, as Forward3D::record_underwater binds
+// them. Not built on Linux (macOS only): unverified until a Mac run, like the heat haze case above.
+TEST_CASE("shader_cross: the underwater stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kUnderwaterFS, "underwater.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}

@@ -102,6 +102,7 @@ mce_add_test(test_kit UMBRELLA
         test_edge_outline_extract.cpp
         test_heat_haze.cpp
         test_heat_haze_extract.cpp
+        test_underwater_extract.cpp
         test_lens_flare.cpp
         test_lens_flare_extract.cpp
         test_lens_rain.cpp

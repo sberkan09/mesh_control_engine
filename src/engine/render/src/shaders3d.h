@@ -4263,4 +4263,105 @@ void main() {
 }
 )";
 
+// ---- M-UNDERWATER 44c: the camera under water (Forward3D::record_underwater), after the flare and before the lens rain,
+// the heat haze and bloom. One fullscreen pass from post_source_ (u_src, bank kAlbedo, linear clamp) and, at detail 1 and
+// 2, the half-resolution opaque prepass (u_gbuf, bank kNormal, point: a = the view depth, 0 for sky or nothing drawn; at
+// detail 0 the 1 x 1 ao_off_ is bound and never read) into the post-fx ping-pong target. UnderwaterU rides bank kPass;
+// its C++ mirror is UnderwaterU in forward3d.cpp (static_asserts on kUnderwaterUBytes and every offset). Everything in it
+// comes from underwater_frame (mce/render/underwater.h, the single source of truth for the look's numbers): the
+// critical cosine of the Snell window and the fog's far cap ride in the w of u_up and u_fwd, so no constant of the
+// helpers is repeated here. The functions of MCE_GLSL_UNDERWATER are ports of underwater_window, _lid_distance and
+// _transmittance, step for step; test_render3d_underwater_gl runs them alone on the GPU against the C++ helpers.
+//
+// Per pixel (detail 1 and 2):
+//   1. uv2 = uv + s * amp * (wx / aspect, wy): wx = 0.7 sin(38 uv.y + ph1.x) (+ 0.3 sin(71 uv.y + ph2.x) at detail 2),
+//      wy = 0.7 sin(43 uv.x + ph1.y) (+ 0.3 sin(79 uv.x + ph2.y)), in view heights; the phases are whole-cycle and wrapped
+//      to 0..2 pi on the CPU, so the arguments stay below 80; uv2 is clamped to the frame.
+//   2. the world ray of uv2, dir = normalize(right * ndc.x * slope_x + up * ndc.y * slope_y + fwd), and the prepass
+//      distance d = a * |(ndc * slope, 1)| (the view depth times the ray length), or the far cap where a == 0.
+//   3. an up-going ray (dir.y > 0) whose distance to the mean surface t_s = max(cam_depth, 0) / dir.y is below d is the
+//      lid: the scene colour is discarded for mix(scatter, window colour, window(dir.y)) seen through t_s of water.
+//      (cam_depth <= 0, the camera in the band above the mean surface, makes t_s 0: the whole upper half is the lid,
+//      faded in by s, so the lid does not pop when the camera crosses the mean level.)
+//   4. otherwise absorption and fog over d: c * T + scatter * (1 - mean(T)), T = exp(-sigma * d).
+//   5. out = mix(the unwobbled source, that colour, s): s is the surface-crossing blend times the strength.
+// Detail 0 (Low, or no prepass pipeline) is the flat tint: one tap, sigma already times the flat distance (the CPU), so
+// the shader takes d = 1; no wobble, no lid, no depth read.
+// Portable on purpose: one block, combined samplers at the post banks, explicit texelFetch / textureLod (no derivatives
+// anywhere), no loop, branches on uniforms or per-pixel values only around taps with explicit lod, exp only of
+// non-positive numbers, sin of small arguments, every division by a clamped value (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kUnderwaterUBytes = 128;  // 8 vec4: frame, right, up, fwd, sigma, scatter, lid, phase
+#define MCE_GLSL_UNDERWATER R"(
+// underwater_window (underwater.cpp), literally: c the critical cosine, s the edge softness (both from the CPU).
+float uw_window(float dir_y, float c, float s) {
+    float lo = c - s;
+    float x = clamp((dir_y - lo) / (2.0 * s), 0.0, 1.0);
+    return x * x * (3.0 - 2.0 * x);
+}
+// underwater_lid_distance: cam_depth / max(dir_y, 1e-3), clamped to 0..far_cap.
+float uw_lid_distance(float cam_depth, float dir_y, float far_cap) {
+    float y = dir_y > 1e-3 ? dir_y : 1e-3;
+    return clamp(cam_depth / y, 0.0, far_cap);
+}
+// underwater_transmittance: exp(-sigma * dist) per channel, dist clamped to 0..far_cap, sigma to >= 0.
+vec3 uw_transmittance(vec3 sigma, float dist, float far_cap) {
+    float d = clamp(dist, 0.0, far_cap);
+    return clamp(exp(-max(sigma, vec3(0.0)) * d), vec3(0.0), vec3(1.0));
+}
+// Absorption and fog over dist: each channel of what is seen fades at its own rate (red first), and one fog colour, the
+// scatter colour, grows with the mean transmittance.
+vec3 uw_fog(vec3 c, vec3 sigma, vec3 scatter, float dist, float far_cap) {
+    vec3 t = uw_transmittance(sigma, dist, far_cap);
+    return c * t + scatter * (1.0 - (t.r + t.g + t.b) * (1.0 / 3.0));
+}
+)"
+constexpr const char* kUnderwaterFS = "#version 450 core\n" MCE_GLSL_UNDERWATER R"(
+layout(std140, binding = 1) uniform UnderwaterU {
+    vec4 u_frame;    // x: submersion s (0..1], y: aspect (width / height), zw: 1 / proj[0][0], 1 / proj[1][1]
+    vec4 u_right;    // xyz: the camera's right (world), w: the camera's depth below the mean surface (m, render-relative)
+    vec4 u_up;       // xyz: the camera's up, w: the Snell window's critical cosine (kUnderwaterWindowCos)
+    vec4 u_fwd;      // xyz: the camera's forward, w: the fog's far cap (kUnderwaterFarCap, m)
+    vec4 u_sigma;    // rgb: absorption per metre (detail 0: times the flat distance), w: wobble amplitude (view heights)
+    vec4 u_scatter;  // rgb: the fog colour, w: the detail tier (0, 1, 2)
+    vec4 u_lid;      // rgb: the window colour, w: the window's edge softness
+    vec4 u_phase;    // the wobble phases (radians, 0..2 pi): xy octave 1 (x, y), zw octave 2
+};
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled (detail 1 and 2)
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float s = u_frame.x;
+    float far_cap = u_fwd.w;
+    vec3 c;
+    if (u_scatter.w < 0.5) {
+        c = uw_fog(src.rgb, u_sigma.rgb, u_scatter.rgb, 1.0, far_cap);  // the flat tint: sigma holds the distance
+    } else {
+        float wx = 0.7 * sin(v_uv.y * 38.0 + u_phase.x);
+        float wy = 0.7 * sin(v_uv.x * 43.0 + u_phase.y);
+        if (u_scatter.w > 1.5) {
+            wx += 0.3 * sin(v_uv.y * 71.0 + u_phase.z);
+            wy += 0.3 * sin(v_uv.x * 79.0 + u_phase.w);
+        }
+        float amp = s * u_sigma.w;
+        vec2 uv2 = clamp(v_uv + amp * vec2(wx / max(u_frame.y, 1e-3), wy), vec2(0.0), vec2(1.0));
+        vec3 seen = textureLod(u_src, uv2, 0.0).rgb;
+        vec2 slope = (uv2 * 2.0 - 1.0) * u_frame.zw;
+        vec3 dir = normalize(u_right.xyz * slope.x + u_up.xyz * slope.y + u_fwd.xyz);
+        float z = textureLod(u_gbuf, uv2, 0.0).a;
+        float d = z > 0.0 ? z * sqrt(1.0 + dot(slope, slope)) : far_cap;
+        float t_s = uw_lid_distance(max(u_right.w, 0.0), dir.y, far_cap);
+        if (dir.y > 0.0 && t_s < d) {
+            vec3 lid = mix(u_scatter.rgb, u_lid.rgb, uw_window(dir.y, u_up.w, u_lid.w));
+            c = uw_fog(lid, u_sigma.rgb, u_scatter.rgb, t_s, far_cap);
+        } else {
+            c = uw_fog(seen, u_sigma.rgb, u_scatter.rgb, d, far_cap);
+        }
+    }
+    o_color = vec4(s >= 1.0 ? c : mix(src.rgb, c, s), src.a);
+}
+)";
+
 }  // namespace mce::render::shaders3d

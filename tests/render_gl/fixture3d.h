@@ -1163,4 +1163,63 @@ inline void heat_haze_scene(Scene3D& s, const HeatHaze* haze, f32 time, u32 wall
     }
 }
 
+// ---- M-UNDERWATER 44c: the camera under water -------------------------------------------------------------------------
+
+// The underwater scene: a calm sea at level kUnderwaterLevel (amplitude and foam 0, so the water itself never records the
+// prepass) over the fixture's box and ground, and three equal grey pillars (mesh `key`, 0.6 m square and 2.4 m tall,
+// standing on y = 0) at 3, 8 and 20 m in front of the camera at (0, 1.2, 7) (kUnderwaterPillars: each pillar's front-face
+// centre at the camera's height; to the sides of the box, so none hides another): the red-first fade with distance.
+inline constexpr f32 kUnderwaterLevel = 3.2f;
+inline constexpr vec3 kUnderwaterPillars[3] = {{-1.2f, 1.2f, 4.3f}, {1.6f, 1.2f, -0.7f}, {-3.2f, 1.2f, -12.7f}};
+
+inline void upload_underwater_pillars(Fixture3D& f, u32 key) {
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    for (const vec3& p : kUnderwaterPillars) {
+        mesh_fixture::Box box;
+        box.center = {p.x, 1.2f, p.z - 0.3f};
+        box.half = {0.3f, 1.2f, 0.3f};
+        box.color[0] = box.color[1] = box.color[2] = 0.75f;
+        b.add_box(box);
+    }
+    REQUIRE(f.renderer.meshes().upload(key, 1, b.build().span()).has_value());
+}
+
+// Places the orbit camera at `pos` looking `pitch_deg` down (negative: up), yaw 0 (toward -z).
+inline void underwater_place_camera(Fixture3D& f, vec3 pos, f32 pitch_deg) {
+    const f32 p = math::radians(pitch_deg);
+    f.pitch_deg = pitch_deg;
+    f.look_at = {pos.x, pos.y - 7.0f * std::sin(p), pos.z - 7.0f * std::cos(p)};
+}
+
+inline WaterSurface underwater_water(f32 level = kUnderwaterLevel) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = level;
+    w.amplitude = 0.0f;
+    w.foam_amount = 0.0f;
+    w.time = 12.5f;
+    return w;
+}
+
+// The water `w` (null: none) with the look `uw` at scene time `time`, the pillars (mesh `pillars`, ~0u: none); bloom and
+// FXAA off unless `post_default` (each carries a changed pixel to its neighbours, and the cases compare pixels).
+inline void underwater_scene(Scene3D& s, const WaterSurface* w, const Underwater& uw, f32 time, u32 pillars,
+                             bool post_default = false) {
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.underwater = uw;
+    s.set_post(post);
+    if (w) s.set_water(*w);
+    if (pillars != ~0u) {
+        MeshInstance m;
+        m.mesh = pillars;
+        s.add(m);
+    }
+}
+
 }  // namespace mce::render_test
