@@ -20,3 +20,7 @@ done
 apt-get install -y -qq --no-install-recommends gdb > /dev/null 2>&1
 R=$(find $B -name test_rhi_sdlgpu -type f -perm -u+x | head -1); echo "== gdb $R under SDL offscreen (NVIDIA ICD)"
 SDL_VIDEODRIVER=offscreen VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json timeout 120 gdb -q -batch -ex run -ex bt $R 2>&1 | grep -E '^#|SIGSEGV|error|Error' | head -25
+G=$(find $B -name test_golden_gl -type f -perm -u+x | head -1)
+echo "== which driver libraries the golden runs load (LD_DEBUG=files)"
+echo "GL offscreen: $(LD_DEBUG=files SDL_VIDEODRIVER=offscreen $G 2>&1 | grep -o -E 'file=[^ ]*(nvidia|mesa|swrast|llvmpipe|lvp)[^ ]*' | sort -u | tr '\n' ' ')"
+echo "sdlgpu Xvfb: $(LD_DEBUG=files MCE_RHI=sdlgpu VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json xvfb-run -a -s '-screen 0 1920x1080x24' $G 2>&1 | grep -o -E 'file=[^ ]*(nvidia|mesa|swrast|llvmpipe|lvp)[^ ]*' | sort -u | tr '\n' ' ')"
