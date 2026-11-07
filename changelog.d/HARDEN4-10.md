@@ -1,0 +1,1 @@
+- Steam holds exactly `kMaxCalls` asynchronous calls waiting and refuses the next one (`tests/platform/test_steam.cpp`).
