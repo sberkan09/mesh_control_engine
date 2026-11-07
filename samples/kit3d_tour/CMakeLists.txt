@@ -64,6 +64,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_underwater_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_underwater.mcscene
                      -DTICKS=300 -DENTITIES=8 -DTOUR=kit3d_tour_underwater -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The sun shafts scene (M-SUNSHAFTS 45e): scenes/tour_shafts.mcscene, a sun 4 degrees above the horizon ahead of the camera, a row of
+    # 9 tall trunks and a two-part wall with a gap between them, light exp2 fog and a SunShafts3D on the world entity; made by
+    # gen_shafts.py. Named tour_shafts so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 14 entities. 300 ticks
+    # (5 s) like the haze (the look is render-side and hashes nothing; the two plays must still agree).
+    add_test(NAME sample_kit3d_tour_shafts_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_shafts.mcscene
+                     -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_shafts -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -135,4 +142,15 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_underwater_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_underwater_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The sun shafts capture: the scene at tick 300, written for a look (build/.../kit3d_tour_shafts.ppm; samples keep no goldens).
+    # Rays fan out from the low sun through the gaps between the trunks and the wall; `-r.sun_shafts 0` draws it without them.
+    add_test(NAME sample_kit3d_tour_shafts_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_shafts.mcscene -capture_tick 300
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_shafts.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_shafts_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_shafts_gpu)
 endif()
