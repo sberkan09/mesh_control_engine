@@ -45,6 +45,8 @@ MCE_CVAR(cv_heat_haze, "r.heat_haze", true,
          "Heat haze (PostFx::haze; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_underwater, "r.underwater", true,
          "Camera under water look (PostFx::underwater; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_sun_shafts, "r.sun_shafts", true,
+         "Sun light shafts (PostFx::shafts; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
@@ -90,6 +92,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.heat_haze = false;
             q.heat_haze_volumes = 0;
             q.underwater_detail = 0;
+            q.sun_shafts = false;
+            q.sun_shafts_samples = 0;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
@@ -110,6 +114,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.lens_rain_layers = 1;
             q.heat_haze_volumes = 4;
             q.underwater_detail = 1;
+            q.sun_shafts_samples = 16;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
             q.light_cookie_lights = 8;
@@ -215,6 +220,16 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     uw.wobble = detail::ranged(uw.wobble, 0.0f, 2.0f, 0.5f);
     uw.fog_scale = detail::ranged(uw.fog_scale, 0.25f, 4.0f, 1.0f);
     uw.band = uw.band == uw.band ? (uw.band > 0.0f ? detail::ranged(uw.band, 0.05f, 2.0f, 0.0f) : 0.0f) : 0.0f;
+    // M-SUNSHAFTS 45b: the sun light shafts. Off for the tier or r.sun_shafts 0; the ranges clamp, NaN -> the default.
+    SunShafts& ss = post.shafts;
+    ss.enabled = ss.enabled && q.sun_shafts && cv_sun_shafts.get_bool();
+    ss.intensity = detail::ranged(ss.intensity, 0.0f, 4.0f, 1.0f);
+    ss.length = detail::ranged(ss.length, 0.1f, 1.0f, 0.85f);
+    ss.decay = detail::ranged(ss.decay, 0.8f, 1.0f, 0.97f);
+    ss.threshold = detail::ranged(ss.threshold, 0.05f, 16.0f, 1.0f);
+    ss.cap = detail::ranged(ss.cap, 0.0f, 8.0f, 1.5f);
+    ss.visibility = detail::ranged(ss.visibility, 0.0f, 1.0f, 1.0f);
+    ss.scatter_m = detail::ranged(ss.scatter_m, 5.0f, 500.0f, 60.0f);
     // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
     EdgeOutline& eo = post.outline;
     eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();

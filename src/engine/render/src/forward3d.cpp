@@ -1403,7 +1403,7 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &haze_pipe_, &underwater_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &haze_pipe_, &underwater_pipe_, &shafts_pipe_, &shafts_comp_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
@@ -1414,7 +1414,7 @@ void Forward3D::shutdown() {
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
                                   &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
-                                  &fx_[0], &fx_[1], &flare_occ_, &outline_dst_, &cookie_atlas_})
+                                  &fx_[0], &fx_[1], &flare_occ_, &outline_dst_, &shafts_buf_, &cookie_atlas_})
         destroy(*device_, *t);
     atmo_key_ = 0;
     for (u32& k : cookie_keys_) k = 0;  // the atlas is gone: every layer is empty
