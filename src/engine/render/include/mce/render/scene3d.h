@@ -218,6 +218,19 @@ struct SunShafts {
     u8 pad_[3] = {};
 };
 
+// M-DYNRES 46a. Dynamic resolution: an opt-in controller that moves the 3D render scale from the measured GPU frame time so
+// the frame stays inside `target_ms` (the scale is quantized to 1/16, never above the tier's render_scale and never below
+// the floor; it is render-side only and never reaches the simulation). Off by default (the frame is then bit-identical to one
+// without the controller). The ranges are the clamps apply_quality applies (M-DYNRES 46b); NaN falls back to the default.
+struct DynamicResolution {
+    bool enabled = false;       // false draws the frame at the tier's fixed render scale
+    f32 target_ms = 14.0f;      // the GPU budget of the 3D frame in milliseconds (4..100)
+    f32 min_scale = 0.6f;       // the floor of the render scale (0.5..1)
+    f32 max_scale = 1.0f;       // an extra ceiling below the tier's (min_scale..1)
+    f32 headroom = 0.15f;       // the scale rises only while the next step's estimate stays below target_ms * (1 - headroom) (0.05..0.5)
+    u8 pad_[3] = {};
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -252,6 +265,7 @@ struct PostFx {
     HeatHaze haze;  // M-HEATHAZE 43a
     Underwater underwater;  // M-UNDERWATER 44a
     SunShafts shafts;  // M-SUNSHAFTS 45a
+    DynamicResolution dynres;  // M-DYNRES 46a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 

@@ -9,6 +9,7 @@
 //   High     4x    2048        3         on     TAA   1.0           runtime updates                      8 px, 64 slices
 //   terrain LOD error (M-TERRAIN): 4 px on Low, 2 px on Medium, 1 px on High; splat layers: weight blend on
 //   Low, height blend on Medium, height blend and triplanar on High
+//   (M-DYNRES 46b: dynamic resolution is allowed in every tier, ceiling = render_scale, floor 0.5 on Low and Medium, 0.65 on High)
 //   (M-SUNSHAFTS 45b: sun light shafts are off on Low, 16 samples on Medium, 32 on High)
 //   (M-UNDERWATER 44b: the camera under water look is on in every tier: a flat tint on Low, per-pixel distance, lid and one
 //   wobble octave on Medium, two octaves on High)
@@ -96,6 +97,11 @@ struct QualitySettings {
     // samples per pixel the pass walks (Low 0 and off, Medium 16, High 32). A tier property: no scene field sets it.
     bool sun_shafts = true;
     u32 sun_shafts_samples = 32;
+    // M-DYNRES 46b: dynamic resolution is honored (off: PostFx::dynres.enabled false, the fixed render_scale) and the lowest
+    // scale it may reach (Low 0.5, Medium 0.5, High 0.65: the best tier does not drop to a visibly soft picture). The tier's
+    // render_scale is the ceiling. A tier property: no scene field sets it.
+    bool dynres = true;
+    f32 dynres_floor = 0.65f;
     // M-OUTLINE 39b: the edge outline is honored (off: PostFx::outline.enabled false) in every tier, and, separately,
     // its wide kernel (8 taps; Low uses the 4-tap cross).
     bool edge_outline = true;
@@ -146,7 +152,7 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc);
 // `r.heat_haze 0`, is trimmed to the tier's heat_haze_volumes and kHeatHazeMaxVolumes, a volume with a non-finite centre is
 // dropped (the rest close up), and per volume radius 0.05..50 (NaN 1), strength 0..2 (NaN 0.5), rise 0..4 (NaN 0.6), scale
 // 0.25..4 (NaN 1), softness 0..1 (NaN 0.5). And the underwater look (PostFx::underwater): `enabled` is turned off by `underwater` false and `r.underwater 0`, strength 0..1 (NaN 1), wobble 0..2 (NaN 0.5), fog_scale
-// 0.25..4 (NaN 1), band 0 or 0.05..2 (NaN 0). And the sun shafts (PostFx::shafts): `enabled` is turned off by the tier (sun_shafts false) and `r.sun_shafts 0`, intensity 0..4 (NaN 1), length 0.1..1 (NaN 0.85), decay 0.8..1 (NaN 0.97), threshold 0.05..16 (NaN 1), cap 0..8 (NaN 1.5), visibility 0..1 (NaN 1), scatter_m 5..500 (NaN 60). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
+// 0.25..4 (NaN 1), band 0 or 0.05..2 (NaN 0). And the dynamic resolution (PostFx::dynres): `enabled` is turned off by the tier (dynres false) and `r.dynres 0`, target_ms 4..100 (NaN 14), min_scale 0.5..1 (NaN 0.6), max_scale min_scale..1 (NaN 1), headroom 0.05..0.5 (NaN 0.15). And the sun shafts (PostFx::shafts): `enabled` is turned off by the tier (sun_shafts false) and `r.sun_shafts 0`, intensity 0..4 (NaN 1), length 0.1..1 (NaN 0.85), decay 0.8..1 (NaN 0.97), threshold 0.05..16 (NaN 1), cap 0..8 (NaN 1.5), visibility 0..1 (NaN 1), scatter_m 5..500 (NaN 60). And the edge outline (PostFx::outline): `enabled` is turned off by the tier
 // (edge_outline false) and `r.edge_outline 0`; colour 0..16 per channel (NaN: 0.02, 0.02, 0.025), opacity 0..1 (NaN 1),
 // thickness 0.5..4 (NaN 1), depth_threshold 0.001..1 (NaN 0.05), normal_threshold 0.01..2 (NaN 0.4), depth_weight and
 // normal_weight 0..1 (NaN 1), fade_start 0..10000 (NaN 30), fade_end 0..10000 (NaN 80) and never below fade_start.
