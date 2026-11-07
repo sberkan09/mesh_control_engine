@@ -199,7 +199,10 @@ Result<bool> apply_change(World& world, asset::AssetSystem& assets, Array<Entity
     if (!c->load_slot.empty()) {
         const FixedString<64> slot = c->load_slot;
         c->load_slot.clear();
-        if (Result<save::LoadStats> r = save::load_game(world, slot.view()); r) {
+        if (slot.truncated()) {
+            // A cut name would load a different slot than the one asked for.
+            MCE_LOG_ERROR("scene: save slot name is longer than {} bytes, not loaded", slot.capacity());
+        } else if (Result<save::LoadStats> r = save::load_game(world, slot.view()); r) {
             MCE_LOG_INFO("scene: save '{}' loaded ({} entities)", slot.view(), r.value().entities);
         } else {
             FixedString<512> why;

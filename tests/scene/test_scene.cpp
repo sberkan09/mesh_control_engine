@@ -5,6 +5,7 @@
 #include "cook_test_util.h"
 #include "mce/asset/asset_system.h"
 #include "mce/cook/cook.h"
+#include "mce/ecs/save.h"
 #include "mce/ecs/transform.h"
 #include "mce/kit/sprite_extract.h"
 #include "mce/scene/entity_names.h"
@@ -184,4 +185,29 @@ TEST_CASE("scene: entities are found by name, names go with a scene change, and 
     REQUIRE(scene::apply_change(w, assets, &after).value());
     CHECK(scene::find_entity(w, "Camera") == after[1]);
     CHECK(w.alive(after[1]));
+}
+
+TEST_CASE("scene: request_load with a slot name past 63 bytes loads nothing, a 63-byte one loads") {
+    const std::string root = fresh_dir("scene_slot_limit");
+    save::set_root(root + "/saves");
+    asset::AssetSystem assets;
+
+    World saved;
+    saved.register_components<SaveKey>();
+    saved.spawn_with(SaveKey{7});
+    const std::string fits(63, 'a');
+    REQUIRE(save::save_game(saved, fits, {}));
+
+    World w;
+    w.register_components<SaveKey>();
+    scene::request_load(w, fits);
+    REQUIRE(scene::apply_change(w, assets, nullptr));
+    CHECK(w.query<const SaveKey&>().count() == 1);
+
+    // 64 bytes would be cut to the 63-byte slot above, which exists: it must not be loaded instead.
+    World other;
+    other.register_components<SaveKey>();
+    scene::request_load(other, fits + "b");
+    REQUIRE(scene::apply_change(other, assets, nullptr));
+    CHECK(other.query<const SaveKey&>().count() == 0);
 }
