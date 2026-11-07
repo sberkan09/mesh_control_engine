@@ -1388,7 +1388,7 @@ void Forward3D::destroy_targets() {
     size_ = {};
 }
 
-void Forward3D::ensure_targets(rhi::Extent2D size) {
+void Forward3D::ensure_targets(rhi::Extent2D size, bool /*keep_history*/) {
     if (size == size_ && !hdr_.is_null()) return;
     destroy_targets();
     size_ = size;

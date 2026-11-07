@@ -36,11 +36,13 @@
 namespace mce::render {
 
 struct Forward3DPassU;  // forward3d.cpp: the lit passes' PassU block
+struct DynResState;     // M-DYNRES: dynres.h, the controller's state (kept out of this header)
 
 struct Forward3DDesc {
     u32 msaa = 4;            // 1 = no multisampling (the HDR target is rendered directly)
     u32 shadow_size = 2048;  // per cascade; keep ShadowSettings::resolution equal (texel snapping)
     f32 render_scale = 1.0f; // 3D targets at viewport * scale (0.5..1); tonemap/FXAA upsample (quality.h)
+    f32 dynres_floor = 0.6f; // M-DYNRES 46a: the tier's lowest dynamic render scale (0.5..1; apply_quality fills it from QualitySettings)
     bool encode_srgb_output = true;  // the backbuffer/editor targets are plain RGBA8 (see RendererDesc)
     bool timestamps = true;          // write GPU timestamps [timestamp_base, timestamp_base + kStageCount]
     u32 timestamp_base = 0;
@@ -149,6 +151,9 @@ struct Forward3DStats {
     f32 underwater_submersion = 0.0f;  // the submersion it drew with, 0..1 (0 = not drawn)
     bool sun_shafts = false;         // the sun shafts pass drew this frame (M-SUNSHAFTS)
     f32 sun_shafts_strength = 0.0f;  // the combined strength it drew with (0 = not drawn)
+    f32 render_scale = 1.0f;         // the scale this view drew at (1 = 1:1; M-DYNRES)
+    bool dynres = false;             // the dynamic resolution controller ran this frame (M-DYNRES)
+    f32 dynres_cost_ms = 0.0f;       // its smoothed measured cost converted to ms at the current scale (0 = none)
     u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
     u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
     u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
@@ -344,7 +349,8 @@ private:
     void swap_view(ViewState& v);
     void destroy_view_resources();
     ResultV create_pipelines();
-    void ensure_targets(rhi::Extent2D size);
+    void ensure_targets(rhi::Extent2D size, bool keep_history = false);  // keep_history: M-DYNRES 46c (ignored until then)
+    void update_dynres(const Scene3D& scene);  // M-DYNRES 46c (declared only until then)
     void destroy_targets();
     void timestamp(rhi::CommandBuffer& cmd, u32 stage);
     void record_clusters(rhi::CommandBuffer& cmd, const Scene3D& scene);
@@ -540,6 +546,8 @@ private:
     // ray buffer (shared by the views like outline_dst_, recreated on a size change by the first view that draws shafts).
     rhi::PipelineHandle shafts_pipe_, shafts_comp_pipe_;
     rhi::TextureHandle shafts_buf_;
+    // M-DYNRES: the dynamic resolution controller's state (46c creates it in init and frees it in shutdown; null until then).
+    DynResState* dynres_ = nullptr;
     bool shafts_buf_used_ = false;  // a view of this frame recorded into shafts_buf_ (cleared on the frame's first view)
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
