@@ -226,7 +226,8 @@ TEST_CASE("steam: kMaxCalls calls wait at once, the next one is refused") {
     CHECK_FALSE(steam::await_call(2000, 1104, count, &answered));  // kMaxCalls + 1: refused, never called
     steam::run_callbacks(nullptr, nullptr);
     steam::run_callbacks(nullptr, nullptr);
-    CHECK(answered <= static_cast<int>(steam::kMaxCalls));  // handles Steam does not know are lost or failed, each at most once
+    // Handles Steam does not know are lost or failed, each at most once.
+    CHECK(answered <= static_cast<int>(steam::kMaxCalls));
     steam::shutdown();
 }
 
