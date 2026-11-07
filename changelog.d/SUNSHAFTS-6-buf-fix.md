@@ -1,0 +1,1 @@
+- M-SUNSHAFTS: the sun shafts buffer is recreated by the first view that draws shafts, so a window view recorded after a render-texture view keeps half-resolution shafts after a resize (they no longer fall back to full resolution or vanish with the edge outline on).

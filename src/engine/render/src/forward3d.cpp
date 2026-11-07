@@ -1570,6 +1570,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     MCE_ASSERT_MSG(!cmd.in_pass(), "Forward3D::record inside a pass");
     stats_ = {};
     out_ = out;
+    if (out.first) shafts_buf_used_ = false;  // M-SUNSHAFTS: no view of this frame has recorded into shafts_buf_ yet
     // M-LIGHTCOOKIE: no records until upload_cookie_records finds this view's cookies (bank 2 is the decals'); whether an
     // earlier view of this frame used the atlas survives into the later views.
     cookie_records_ = out.first ? 0u : (cookie_records_ & kCookieAtlasInUse);
@@ -3663,8 +3664,10 @@ void Forward3D::record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 // The pipelines are made at startup (create_pipelines) only where the prepass exists; when they do not (no prepass
 // pipeline, a refused shader) a frame that would draw says so once per process and records nothing.
 // shafts_buf_ is shared by the views (not per-view state), half of post_size_, R11G11B10F. A size change never frees a
-// handle that commands recorded earlier in the same frame still reference: shafts_buf_ is recreated only on the frame's
-// first view (or when it does not exist yet); a later view of another size the same frame accumulates into its own
+// handle that commands recorded earlier in the same frame still reference: shafts_buf_ is recreated only by a view
+// that finds it unused this frame (shafts_buf_used_, cleared on the frame's first view and set when a view records into
+// it: render-texture views record first and draw no shafts, so "first" is not the window view), or when it does not
+// exist yet; a later view of another size the same frame accumulates into its own
 // per-view render-size target of the same format instead, trans_src_ (free from the resolve on, as record_outline uses
 // it), unless trans_src_ is this view's post_source_ (the outline wrote it and nothing after it moved post_source_), in
 // which case that view draws no shafts. Nothing is written back to the scene.
@@ -3704,7 +3707,7 @@ void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene)
     const rhi::Extent2D half{max(out.width / 2u, 1u), max(out.height / 2u, 1u)};
     rhi::TextureHandle buf = shafts_buf_;
     if (buf.is_null() || !(device_->texture_size(buf) == half)) {
-        if (out_.first || shafts_buf_.is_null()) {
+        if (!shafts_buf_used_ || shafts_buf_.is_null()) {
             destroy(*device_, shafts_buf_);
             rhi::TextureDesc d;
             d.size = half;
@@ -3724,6 +3727,8 @@ void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene)
         }
         if (buf.is_null()) return;
     }
+
+    if (buf == shafts_buf_) shafts_buf_used_ = true;
 
     // The per-sample weight factor: decay per 1/32 of the walk, so 16 samples (decay^2 per step) weigh the walk as 32 do.
     f32 per = fr.decay;

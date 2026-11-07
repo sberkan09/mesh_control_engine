@@ -622,6 +622,58 @@ TEST_CASE("sun shafts: a render-to-texture view records no shafts") {
     }
 }
 
+TEST_CASE("sun shafts: after a resize a window view recorded after a render-texture view gets half-resolution shafts") {
+    ShaftsFixture h;
+    const SunShafts on = sun_shafts_setting();
+    const rhi::Extent2D small{128, 96};
+    // One frame of two views: a render-texture view first (the frame's first, it draws no shafts), then the window view
+    // at `small` (not first) with the edge outline on and TAA off, so a trans_src_ fallback would draw nothing.
+    auto frame = [&](const SunShafts* shafts, Forward3DStats& stats) {
+        h.f.device->begin_frame(h.f.frame++);
+        rhi::CommandBuffer cmd;
+        for (const bool rt : {true, false}) {
+            const rhi::Extent2D size = rt ? rhi::Extent2D{kW, kH} : small;
+            Scene3D scene(h.f.renderer.meshes(), mem::heap());
+            scene.begin(orbit_camera(h.f.look_at, 0.0f, math::radians(h.f.pitch_deg), 7.0f), size);
+            MeshInstance ground;
+            ground.mesh = 2;
+            scene.add(ground);
+            sun_shafts_scene(scene, lens_flare_toward(scene.view(), kShaftsSunU, kShaftsSunV), shafts);
+            PostFx post = scene.post();
+            post.taa = false;
+            post.outline = outline_setting();
+            scene.set_post(post);
+            scene.build();
+            Forward3D::ViewOutput out;
+            out.slot = rt ? 1u : 0u;
+            out.first = rt;
+            out.linear_output = rt;
+            if (!rt) out.rect = rhi::Rect2D{0, 0, size.width, size.height};
+            h.f.renderer.record_3d(cmd, scene, h.f.target, out);
+            stats = h.f.renderer.forward_3d().last_stats();
+        }
+        h.f.device->submit(cmd);
+        REQUIRE(h.f.device->read_pixels(h.f.target, rhi::Rect2D{0, 0, kW, kH}, h.f.pixels.span()).has_value());
+        h.f.device->end_frame();
+        CHECK(h.f.device->validation_error_count() == 0);
+        return h.f.pixels;
+    };
+    // The window at its first size makes shafts_buf_ at 80 x 60.
+    const Shot first = h.draw(&on);
+    REQUIRE(first.stats.sun_shafts);
+    Forward3DStats with_stats, without_stats;
+    const Array<u8> with = frame(&on, with_stats);
+    const Array<u8> without = frame(nullptr, without_stats);
+    CHECK(with_stats.sun_shafts);
+    CHECK_FALSE(without_stats.sun_shafts);
+    const SunPx sp = sun_px();
+    const int r = int(sp.r * 8.0f);
+    const Added a = added(with, without, int(sp.x) - r, int(sp.y) - r, int(sp.x) + r, int(sp.y) + r);
+    MESSAGE("light the shafts added around the sun after the resize: " << a.sum);
+    CHECK(a.sum > 500);
+    CHECK(a.darkest == 0);
+}
+
 TEST_CASE("sun shafts: the sun sweeping across the border, through the horizon and behind the camera does not pop") {
     // Each sweep moves the sun in small steps and measures the added light (the frame with the pass minus the frame
     // without it, summed over the whole frame); the largest change between adjacent steps stays a small share of the
