@@ -15,6 +15,7 @@
 #include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
 #include "mce/render/translucency.h"
+#include "mce/render/underwater.h"
 #include "shaders3d.h"
 #include "unit_clamp.h"
 
@@ -383,6 +384,26 @@ static_assert(sizeof(HazeU) == shaders3d::kHazeUBytes, "HazeU: 17 vec4, as kHaze
 static_assert(offsetof(HazeU, frame) == 0 && offsetof(HazeU, vol) == 16, "HazeU: h_frame / h_vol[16] as in kHazeFS");
 static_assert(2 * shaders3d::kHazeMaxVolumes == 16 && u32(shaders3d::kHazeMaxVolumes) == kHeatHazeMaxVolumes,
               "HazeU: two vec4 per volume, the shader's loop bound is kHeatHazeMaxVolumes");
+
+// M-UNDERWATER 44c: kUnderwaterFS's UnderwaterU (shaders3d.h), bank kPass. Filled from underwater_frame only (and the two
+// constants of mce/render/underwater.h the shader must not repeat: the window's critical cosine and the far cap), in
+// record_underwater.
+struct UnderwaterU {
+    vec4 frame;    // submersion, aspect, 1 / proj[0][0], 1 / proj[1][1]
+    vec4 right;    // the camera's right (world), w: its depth below the mean surface (m, render-relative)
+    vec4 up;       // the camera's up, w: kUnderwaterWindowCos
+    vec4 fwd;      // the camera's forward, w: kUnderwaterFarCap
+    vec4 sigma;    // absorption per metre (detail 0: times kUnderwaterFlatDistance), w: wobble amplitude (view heights)
+    vec4 scatter;  // the fog colour, w: the detail tier (0, 1, 2)
+    vec4 lid;      // the window colour, w: the window's edge softness
+    vec4 phase;    // the wobble phases (radians): octave 1 x, y, octave 2 x, y
+};
+static_assert(sizeof(UnderwaterU) == shaders3d::kUnderwaterUBytes, "UnderwaterU: 8 vec4, as kUnderwaterFS");
+static_assert(offsetof(UnderwaterU, frame) == 0 && offsetof(UnderwaterU, right) == 16 && offsetof(UnderwaterU, up) == 32 &&
+                  offsetof(UnderwaterU, fwd) == 48 && offsetof(UnderwaterU, sigma) == 64 &&
+                  offsetof(UnderwaterU, scatter) == 80 && offsetof(UnderwaterU, lid) == 96 &&
+                  offsetof(UnderwaterU, phase) == 112,
+              "UnderwaterU: u_frame / u_right / u_up / u_fwd / u_sigma / u_scatter / u_lid / u_phase as in kUnderwaterFS");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1602,6 +1623,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
+    record_underwater(cmd, scene);  // M-UNDERWATER 44c: after the flare (attenuated too), before the lens rain; same bucket
     record_lens_rain(cmd, scene);  // M-LENSRAIN 42c: after the flare (refracted too), before bloom; same bucket
     record_heat_haze(cmd, scene);  // M-HEATHAZE 43c: after the lens rain (its drops bend too), before bloom; same bucket
     record_post(cmd, scene, target);
@@ -3787,6 +3809,99 @@ void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) 
     cmd.pop_debug_scope();
     post_source_ = dst;
     stats_.heat_haze_volumes = fr.count;
+}
+
+// ---- M-UNDERWATER 44c: the camera under water, right after the flare and before the lens rain, the heat haze and bloom:
+// after TAA, depth of field, motion blur and the exposure histogram (so the look neither enters the TAA history nor
+// pumps the exposure) and after the flare (the sun is above the water, so its flare is attenuated like the rest); the
+// lens drops, the haze, bloom, lens dirt, the tonemapper and the grade then act on the underwater picture. One fullscreen
+// pass (kUnderwaterFS) from post_source_ into the post-fx ping-pong target, then post_source_ = that target; never in
+// place (with TAA post_source_ is the history slot the next frame reprojects; post_fx_target alternates its two
+// textures, so the target is never the texture an earlier post pass of this frame left in post_source_).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.underwater false) when
+// the tier has no underwater look or r.underwater is 0 (read again here although apply_quality already cleared
+// `enabled`, so a caller that skips apply_quality still gets them), the view renders to a texture (out_.linear_output: a
+// monitor in the scene does not wear the player's diving mask), or underwater_frame says no: the water is not on, the
+// setting is off or its strength 0, an orthographic view, non-finite input, or the camera above the crossing band (the
+// wave-free test against the mean level, render-relative: (level_y - origin_[1]) - view.position.y).
+// The pipeline is made on the first frame that needs it (so a renderer whose camera never dives compiles nothing); a
+// driver that refuses the shader keeps the frame without the look, said once per process and not tried again.
+// Detail 1 and 2 read the half-resolution opaque prepass (ao_gbuf_) through record_prepass: a no-op when SSAO, SSR,
+// contact shadows, the water, the outline or the flare drew it already this frame. Without the prepass pipeline (SSAO,
+// SSR, contact shadows and the edge outline all off at startup) the pass takes the detail-0 path, the flat tint, with
+// ao_off_ bound, and says so once per process: a camera under the surface that shows the unchanged picture is worse
+// than a flat one. Detail 0 never records the prepass. Nothing is written back to the scene.
+void Forward3D::record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.underwater"));
+    if (!q.underwater || (cv && !cv->get_bool())) return;
+    if (out_.linear_output) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const bool depth = !ao_prepass_.is_null();
+    const u32 detail = depth ? q.underwater_detail : 0u;
+    UnderwaterFrame fr;
+    if (!underwater_frame(scene.water(), scene.post().underwater, scene.view(), origin_, scene.light(), scene.time(),
+                          f32(out.width) / f32(out.height), detail, fr))
+        return;
+    if (!depth && q.underwater_detail > 0) {
+        static std::atomic<bool> warned_flat{false};
+        if (!warned_flat.exchange(true))
+            MCE_LOG_WARN("render3d: the camera is under water but the renderer has no opaque prepass (ssao, ssr, contact "
+                         "shadows and the edge outline all off at startup); drawing the flat underwater tint");
+    }
+    if (underwater_pipe_.is_null()) {
+        static std::atomic<bool> refused{false};
+        if (refused.load()) return;
+        rhi::GraphicsPipelineDesc fs;
+        fs.vertex_shader = {shaders3d::kFullscreenVS, "fullscreen.vert"};
+        fs.fragment_shader = {shaders3d::kUnderwaterFS, "underwater.frag"};
+        fs.state.depth = {};
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.debug_name = "underwater";
+        if (auto p = device_->create_pipeline(fs)) {
+            underwater_pipe_ = p.value();
+        } else {
+            if (!refused.exchange(true))
+                MCE_LOG_WARN("render3d: the camera is under water but the underwater shader failed; drawing frames without "
+                             "the underwater look");
+            return;
+        }
+    }
+    if (fr.detail > 0) {
+        record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+        if (ao_gbuf_.is_null()) return;
+    }
+    UnderwaterU uu;
+    uu.frame = {fr.submersion, fr.aspect, fr.slope_x, fr.slope_y};
+    uu.right = vec4(fr.right, fr.cam_depth);
+    uu.up = vec4(fr.up, kUnderwaterWindowCos);
+    uu.fwd = vec4(fr.forward, kUnderwaterFarCap);
+    uu.sigma = vec4(fr.sigma, fr.wobble_amp);
+    uu.scatter = vec4(fr.scatter, f32(fr.detail));
+    uu.lid = vec4(fr.lid, fr.window_softness);
+    uu.phase = {fr.phase[0], fr.phase[1], fr.phase[2], fr.phase[3]};
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "underwater";
+    cmd.push_debug_scope("underwater");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(underwater_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(uu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // bilinear wobbled lookups, clamped
+    cmd.bind_texture(rhi::bank::kNormal, fr.detail > 0 ? ao_gbuf_ : ao_off_, point_sampler_);  // nearest: one texel
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.underwater = true;
+    stats_.underwater_submersion = fr.submersion;
 }
 
 void Forward3D::record_post(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::TextureHandle target) {

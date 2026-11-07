@@ -1120,6 +1120,40 @@ TEST_CASE("golden: heat_haze_off: the same frame without a haze volume") {
     check_golden("heat_haze_off", f);
 }
 
+// ---- M-UNDERWATER 44c: the camera under water -----------------------------------------------------------------------
+
+// The camera 2 m under a calm sea, looking 10 degrees up past the fixture's box at three equal grey pillars at 3, 8 and
+// 20 m: red fades first and the far pillar sinks into the scatter colour, the lid fills the upper part of the frame, at
+// a fixed scene time (the wobble), then bloom and FXAA as by default. underwater_off is the same frame with
+// PostFx::underwater.enabled false (the pass not recorded: the plain water plane seen from below), kept under its own
+// name so the pair documents the off path next to the look.
+namespace {
+
+void golden_underwater(Fixture3D& f, bool enabled) {
+    upload_underwater_pillars(f, 76);
+    underwater_place_camera(f, {0.0f, 1.2f, 7.0f}, -10.0f);
+    const WaterSurface water = underwater_water();
+    Underwater uw;
+    uw.enabled = enabled;
+    f.render(0.0f, true, [&](Scene3D& s) { underwater_scene(s, &water, uw, 4.5f, 76, true); });
+}
+
+}  // namespace
+
+TEST_CASE("golden: underwater_deep: the camera under a calm sea, the pillars fading red first into the water") {
+    Fixture3D f;
+    golden_underwater(f, true);
+    CHECK(f.renderer.forward_3d().last_stats().underwater);
+    check_golden("underwater_deep", f);
+}
+
+TEST_CASE("golden: underwater_off: the same frame without the underwater look") {
+    Fixture3D f;
+    golden_underwater(f, false);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().underwater);
+    check_golden("underwater_off", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
