@@ -147,6 +147,8 @@ struct Forward3DStats {
     u32 heat_haze_volumes = 0;       // volumes the heat haze pass drew this frame (M-HEATHAZE; 0 = not drawn)
     bool underwater = false;         // the underwater pass drew this frame (M-UNDERWATER)
     f32 underwater_submersion = 0.0f;  // the submersion it drew with, 0..1 (0 = not drawn)
+    bool sun_shafts = false;         // the sun shafts pass drew this frame (M-SUNSHAFTS)
+    f32 sun_shafts_strength = 0.0f;  // the combined strength it drew with (0 = not drawn)
     u32 edge_outline_taps = 0;       // neighbour taps it used per pixel (4 or 8; 0 = not drawn)
     u32 cookie_lights = 0;           // lights that drew with a cookie this frame (M-LIGHTCOOKIE)
     u32 cookie_layers = 0;           // atlas layers in use (distinct cookie textures)
@@ -369,6 +371,7 @@ private:
     void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
     void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
     void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
+    void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c (declared only until then)
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -533,6 +536,10 @@ private:
     rhi::PipelineHandle haze_pipe_;
     // M-UNDERWATER: the underwater composite pipeline (writes post_fx_target; no target of its own).
     rhi::PipelineHandle underwater_pipe_;
+    // M-SUNSHAFTS: the half-resolution accumulation and the full-resolution composite pipelines, and the half-resolution
+    // ray buffer (shared by the views like outline_dst_, recreated on a size change on the frame's first view).
+    rhi::PipelineHandle shafts_pipe_, shafts_comp_pipe_;
+    rhi::TextureHandle shafts_buf_;
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
     rhi::TextureHandle outline_dst_;

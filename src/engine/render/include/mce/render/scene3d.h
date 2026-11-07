@@ -202,6 +202,22 @@ struct Underwater {
     u8 pad_[3] = {};
 };
 
+// M-SUNSHAFTS 45a. Sun light shafts: an opt-in screen-space radial scatter from the sun through the gaps in the scene, added
+// to the HDR frame before the lens flare, bloom and the tonemapper. The sun is Scene3D::light(); the sample count is a
+// quality-tier property, not a field. Off by default (the frame is then bit-identical to one without the pass). The ranges
+// are the clamps apply_quality applies (M-SUNSHAFTS 45b); NaN falls back to the default.
+struct SunShafts {
+    bool enabled = false;       // false draws the frame without the pass
+    f32 intensity = 1.0f;       // gain on the sun colour (0..4)
+    f32 length = 0.85f;         // how far toward the sun the walk goes, as a fraction of the pixel-to-sun distance (0.1..1)
+    f32 decay = 0.97f;          // per-sample weight falloff, so the nearer part of the walk counts more (0.8..1)
+    f32 threshold = 1.0f;       // HDR luminance above which a sky sample is a source (0.05..16)
+    f32 cap = 1.5f;             // the most the pass can add per channel, as a soft clamp (0..8)
+    f32 visibility = 1.0f;      // the caller's dimming, e.g. cloud cover (0..1)
+    f32 scatter_m = 60.0f;      // view distance over which a geometry pixel gains its full veil (5..500)
+    u8 pad_[3] = {};
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -235,6 +251,7 @@ struct PostFx {
     LensRain rain;  // M-LENSRAIN 42a
     HeatHaze haze;  // M-HEATHAZE 43a
     Underwater underwater;  // M-UNDERWATER 44a
+    SunShafts shafts;  // M-SUNSHAFTS 45a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
 
