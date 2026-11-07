@@ -454,3 +454,23 @@ TEST_CASE("recipes: the catalog's own checks refuse a recipe built wrong in code
     REQUIRE(dup.add_recipe(r, Span<const asset::RecipeIngredient>(&ok, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
     CHECK_FALSE(dup.add_recipe(r, Span<const asset::RecipeIngredient>(&ok, 1), Span<const asset::RecipeIngredient>(&ok, 1)));
 }
+
+TEST_CASE("items: an id or name of 63 bytes cooks, one byte more is a cook error naming the file") {
+    const std::string s63(63, 'a'), s64(64, 'a');
+    const auto item_with = [](const std::string& fields) { return catalog_json("{ " + fields + " }", ""); };
+    int n = 0;
+    const auto cooks = [&](const std::string& text, std::string* diags) {
+        return cook_text("items_limit_" + std::to_string(n++), text, diags);
+    };
+
+    std::string diags;
+    CHECK(cooks(item_with(R"("id": ")" + s63 + R"(")"), &diags));
+    CHECK(cooks(item_with(R"("id": "a", "name": ")" + s63 + R"(")"), &diags));
+
+    diags.clear();
+    CHECK_FALSE(cooks(item_with(R"("id": ")" + s64 + R"(")"), &diags));
+    CHECK(diags.find("items.mcitems") != std::string::npos);
+    diags.clear();
+    CHECK_FALSE(cooks(item_with(R"("id": "a", "name": ")" + s64 + R"(")"), &diags));
+    CHECK(diags.find("items.mcitems") != std::string::npos);
+}
