@@ -86,6 +86,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `DriveReadout3D` | `mce/kit/drive_readout.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `DuskBat` | `mce/kit/dusk_bat.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Dust` | `mce/kit/dust.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/03_platformer/main.cpp |
+| `DynamicResolution3D` | `mce/kit/dynamic_resolution.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-DYNRES 46d: tested in tests/kit/test_dynamic_resolution_extract.cpp; a sample gets one in 46e (remove this line then) |
 | `EdgeOutline3D` | `mce/kit/edge_outline.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_ink.mcscene |
 | `SfxTrigger` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ParticleBurst` | `mce/kit/effects.h` | yes | yes | yes | docs/user-guide/07-2d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |

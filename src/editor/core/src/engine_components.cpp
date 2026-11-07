@@ -99,6 +99,7 @@
 #include "mce/kit/light_cookie.h"           // LightCookie3D, SunCookie3D (M-LIGHTCOOKIE 40g)
 #include "mce/kit/light_flicker.h"          // LightFlicker3D (M-FLICKER 36a)
 #include "mce/kit/sun_shafts.h"             // SunShafts3D (M-SUNSHAFTS 45d)
+#include "mce/kit/dynamic_resolution.h"     // DynamicResolution3D (M-DYNRES 46d)
 #include "mce/kit/wind_gust.h"           // WindGust (M-WINDGUST 12a)
 #include "mce/kit/wind_sway.h"          // WindSway (M-WINDSWAY 1)
 #include "mce/kit/map_markers.h"       // MapMarker (M-MISSION 2)
