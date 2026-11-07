@@ -125,6 +125,7 @@
 #include "mce/platform/screen_reader.h"
 #include "mce/platform/window.h"
 #include "mce/render/asset_upload.h"
+#include "mce/render/dynres.h"
 #include "mce/render/quality.h"
 #include "mce/render/renderer.h"
 #include "mce/rhi/default_device.h"
@@ -2113,10 +2114,17 @@ private:
         const bool capture = !cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 ||
                              !cv_capture_ticks.get_string().empty();
         if (!capture) return;
+        // Only a schedule that parses keeps the controller on: the renderer ignores a malformed one and measures.
         const ConVar* inject = ConVar::find(MCE_SID("r.dynres.inject"));
-        if (inject && !inject->get_string().empty()) return;
+        render::DynResInject schedule;
+        if (inject && render::dynres_parse_inject(inject->get_string(), schedule)) return;
         ConVar* dynres = ConVar::find(MCE_SID("r.dynres"));
-        if (dynres && dynres->get_bool()) dynres->set_string("0");
+        if (!dynres || !dynres->get_bool()) return;
+        if (dynres->from_command_line())  // an explicit -r.dynres 1
+            MCE_LOG_INFO("{}: capture run: r.dynres 1 is overridden (the render scale holds at the tier's; give "
+                         "-r.dynres.inject a cost schedule to run the controller)",
+                         desc_.app_name);
+        dynres->set_string("0");
     }
 
     // Relative mouse while a mouse-look camera plays; the cursor comes back for the pause overlay,

@@ -495,3 +495,72 @@ TEST_CASE("dynres: a device frame not in the ring gives no sample; two first vie
         CHECK(f.device->validation_error_count() == 0);
     }
 }
+
+TEST_CASE("dynres: a frame stamped by a render-texture view gives no measured sample; injection still steps") {
+    // record_views records render textures first, so such a frame's `first` view (the one that writes the GPU timestamps)
+    // draws at the tier's static scale: its span says nothing about the window scale and is not a sample. The control
+    // run (the window view first, the same views) shows the measured path does take samples on this backend.
+    constexpr f32 kCeiling = 0.85f;
+    constexpr u32 kFrames = 12;
+    const DynamicResolution on = dynres_on();
+    auto run = [&](bool texture_first, std::vector<Forward3DStats>& win, bool& has_stamps) {
+        DynFixture d(desc_for(kCeiling));
+        Fixture3D& f = d.f;
+        has_stamps = f.device->caps().timestamp_queries || f.device->caps().fence_timestamps;
+        rhi::TextureDesc td;
+        td.size = {kW, kH};
+        td.format = rhi::TextureFormat::RGBA16F;
+        td.usage = rhi::TextureUsage::SampledColorTarget;
+        td.dimension = rhi::TextureDimension::Tex2DArray;
+        td.debug_name = "test.render_texture";
+        const rhi::TextureHandle rt = f.device->create_texture(td);
+        const u32 key = f.renderer.textures().allocate_key();
+        f.renderer.textures().adopt(key, 1, rt);
+        for (u32 k = 0; k < kFrames; ++k) {
+            f.device->begin_frame(f.frame++);
+            rhi::CommandBuffer cmd;
+            Forward3D::ViewOutput tex;
+            tex.slot = 1;
+            tex.linear_output = true;
+            tex.first = texture_first;
+            Forward3D::ViewOutput w;
+            w.slot = 0;
+            w.first = !texture_first;
+            if (texture_first) record_box(f, cmd, rt, {kW, kH}, 30.0f, tex, on);
+            record_box(f, cmd, f.target, {kW, kH}, 0.0f, w, on);
+            win.push_back(f.renderer.forward_3d().last_stats());
+            if (!texture_first) record_box(f, cmd, rt, {kW, kH}, 30.0f, tex, on);
+            f.device->submit(cmd);
+            f.device->end_frame();
+        }
+        CHECK(f.device->validation_error_count() == 0);
+        f.renderer.textures().release(key);
+    };
+    {  // measured
+        std::vector<Forward3DStats> tex_first, win_first;
+        bool stamps = false;
+        run(true, tex_first, stamps);
+        for (const Forward3DStats& s : tex_first) {
+            CHECK(s.dynres);
+            CHECK(s.render_scale == kCeiling);  // no sample: the ceiling holds and no `dynres: scale` line is logged
+            CHECK(s.dynres_cost_ms == 0.0f);   // the smoothed cost was never seeded
+        }
+        run(false, win_first, stamps);
+        bool sampled = false;
+        for (const Forward3DStats& s : win_first) sampled = sampled || s.dynres_cost_ms > 0.0f;
+        MESSAGE("backend timestamps: " << stamps << ", window-first run took a measured sample: " << sampled);
+        if (stamps) CHECK(sampled);  // the control: the same frames stamped by the window view are samples
+    }
+    {  // injected: the cost is the whole frame's, so a texture-first frame still steps as the CPU controller says
+        CvarScope inject("r.dynres.inject", "26@0");
+        const std::vector<f32> want = cpu_sequence(on, 0.5f, kCeiling, "26@0", kFrames);
+        std::vector<Forward3DStats> tex_first;
+        bool stamps = false;
+        run(true, tex_first, stamps);
+        for (u32 k = 0; k < kFrames; ++k) {
+            CAPTURE(k);
+            CHECK(tex_first[k].render_scale == want[k]);
+        }
+        CHECK(want.back() < kCeiling);
+    }
+}

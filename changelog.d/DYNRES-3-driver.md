@@ -10,3 +10,6 @@
   the player (`-capture`, `-capture_tick(s)`: goldens, `render_frame`, `render_sheet`) hold the tier's scale unless
   `-r.dynres.inject` is set. Off (no component, `enabled` 0, `r.dynres 0`) every frame is unchanged, and with the
   controller idle at the ceiling too.
+- M-DYNRES 46c review: a frame whose GPU timestamps come from a render-texture view (drawn first, at the tier's fixed
+  scale) is no longer a dynamic resolution sample; a capture run keeps the controller on only for an
+  `r.dynres.inject` schedule that parses, and says so when it overrides `-r.dynres 1`.

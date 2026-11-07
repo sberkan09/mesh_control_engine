@@ -959,6 +959,9 @@ struct DynResDriver : DynResState {
         u64 frame = 0;               // the controller's own frame number (the injection schedule's clock)
         f32 scale = 0.0f;            // the scale its window views drew at
         u32 window_views = 0;        // 3D window views recorded in it (the multi-view cost estimate)
+        bool stamped_window = false; // its stamps came from a window view (the frame's `first` view was not a render
+                                     // texture); otherwise its measured span is not a sample (render textures draw at the
+                                     // tier's static scale, and record_views records them first)
     };
     static constexpr u32 kRing = MCE_FRAMES_IN_FLIGHT + 1;
     Frame ring[kRing];
@@ -1631,9 +1634,10 @@ void Forward3D::update_dynres(const Scene3D& scene) {
         if (ts.frame_index != ~u64(0) && (d.consumed == ~u64(0) || ts.frame_index > d.consumed)) {
             d.consumed = ts.frame_index;  // looked at once, used or not
             const f64 total = gpu_times(ts).total;  // the first 3D view's span (-1 without stamps)
-            if (const DynResDriver::Frame* f = d.find(ts.frame_index); f && total >= 0.0 && std::isfinite(total)) {
+            const DynResDriver::Frame* f = d.find(ts.frame_index);
+            if (f && f->stamped_window && total >= 0.0 && std::isfinite(total)) {
                 // N window views cost about N times the first (a split-screen cell costs its share of the area): an
-                // estimate, M-DYNRES risks. A frame whose first view was a render texture is estimated from that view.
+                // estimate, M-DYNRES risks. A frame whose stamps came from a render-texture view gives no sample.
                 at_scale = f->scale;
                 ms = f32(total * f64(max(f->window_views, 1u)));
                 has = true;
@@ -1746,6 +1750,8 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
             if (DynResDriver::Frame* cur = d.current()) ++cur->window_views;
             keep_history = history_size_ == view;
         }
+        if (DynResDriver::Frame* cur = d.current(); cur && out.first)
+            cur->stamped_window = !out.linear_output;  // timestamp() writes the stamps on `first` views (the last one wins)
     }
     const rhi::Extent2D size = scale >= 1.0f ? view
                                               : rhi::Extent2D{max(1u, static_cast<u32>(std::lround(f32(view.width) * scale))),
