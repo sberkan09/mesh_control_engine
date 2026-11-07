@@ -47,6 +47,13 @@ MCE_CVAR(cv_underwater, "r.underwater", true,
          "Camera under water look (PostFx::underwater; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_sun_shafts, "r.sun_shafts", true,
          "Sun light shafts (PostFx::shafts; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_dynres, "r.dynres", true,
+         "Dynamic resolution scaling (PostFx::dynres; off = the fixed render scale)", CVarFlags::Saved);
+MCE_CVAR(cv_dynres_target_ms, "r.dynres.target_ms", 0.0f,
+         "Dynamic resolution GPU budget in ms, 4..100 (0 = the setting's own)", CVarFlags::Saved);
+MCE_CVAR(cv_dynres_inject, "r.dynres.inject", "",
+         "Test hook: a fake frame cost schedule 'ms@frame,...' (e.g. 24@0,8@240) replaces the measured GPU time; empty = measured",
+         CVarFlags::None);
 MCE_CVAR(cv_edge_outline, "r.edge_outline", true,
          "Edge outlines (PostFx::outline; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_light_cookies, "r.light_cookies", true,
@@ -94,6 +101,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.underwater_detail = 0;
             q.sun_shafts = false;
             q.sun_shafts_samples = 0;
+            q.dynres_floor = 0.5f;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
             q.light_cookie_layers = 4;
@@ -115,6 +123,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.heat_haze_volumes = 4;
             q.underwater_detail = 1;
             q.sun_shafts_samples = 16;
+            q.dynres_floor = 0.5f;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
             q.light_cookie_lights = 8;
@@ -155,6 +164,7 @@ void apply_quality(const QualitySettings& q, Forward3DDesc& desc) {
     desc.msaa = q.msaa;
     desc.shadow_size = q.shadow_size;
     desc.render_scale = q.render_scale;
+    desc.dynres_floor = q.dynres_floor;
 }
 
 void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& post) {
@@ -230,6 +240,13 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     ss.cap = detail::ranged(ss.cap, 0.0f, 8.0f, 1.5f);
     ss.visibility = detail::ranged(ss.visibility, 0.0f, 1.0f, 1.0f);
     ss.scatter_m = detail::ranged(ss.scatter_m, 5.0f, 500.0f, 60.0f);
+    // M-DYNRES 46b: dynamic resolution. Off for the tier or r.dynres 0; the ranges clamp, NaN -> the default.
+    DynamicResolution& dr = post.dynres;
+    dr.enabled = dr.enabled && q.dynres && cv_dynres.get_bool();
+    dr.target_ms = detail::ranged(dr.target_ms, 4.0f, 100.0f, 14.0f);
+    dr.min_scale = detail::ranged(dr.min_scale, 0.5f, 1.0f, 0.6f);
+    dr.max_scale = detail::ranged(dr.max_scale, dr.min_scale, 1.0f, 1.0f);
+    dr.headroom = detail::ranged(dr.headroom, 0.05f, 0.5f, 0.15f);
     // M-OUTLINE 39b: the edge outline. Off for the tier or r.edge_outline 0; the ranges clamp, NaN -> the default.
     EdgeOutline& eo = post.outline;
     eo.enabled = eo.enabled && q.edge_outline && cv_edge_outline.get_bool();
