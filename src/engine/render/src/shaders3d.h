@@ -4364,4 +4364,107 @@ void main() {
 }
 )";
 
+// ---- M-SUNSHAFTS 45c: sun light shafts (Forward3D::record_sun_shafts), after the exposure histogram and before the flare.
+// Two fullscreen passes. kShaftsFS accumulates the rays at half resolution into shafts_buf_ (R11G11B10F): it reads the HDR
+// frame (u_src, bank kAlbedo, linear clamp) and the half-resolution opaque prepass (u_gbuf, bank kNormal, point: a = the
+// view depth, exactly 0 for sky). kShaftsCompFS adds them at full resolution into the post-fx ping-pong target: it reads
+// post_source_ (u_src, bank kAlbedo, texelFetch), the prepass (u_gbuf, bank kNormal, point: the pixel's own veil) and the
+// ray buffer (u_rays, bank kOrm, linear clamp: the bilinear upsample). ShaftsU rides bank kPass in both; its C++ mirror is
+// ShaftsU in forward3d.cpp (static_asserts on kShaftsUBytes and every offset). Everything in it comes from
+// sun_shafts_frame (mce/render/sun_shafts.h).
+//
+// Per half-resolution pixel (uv its centre, uv_sun the sun's uv, possibly off screen): the walk goes from uv toward the sun,
+// N samples (16 or 32: a constant loop bound of 32 with a uniform break at s_shape.w, so Medium runs the first 16
+// iterations of the same code as High) of step (uv_sun - uv) * length / N, started at a fixed per-pixel jitter (the hash
+// of the half-resolution pixel and a constant seed, never the frame: the pass keeps no history, so a moving pattern would
+// only flicker). Sample i at uv + step * (i + jitter) weighs w_i, a running product of s_shape.x (the CPU passes
+// decay^(32 / N), so the weight is a function of the position along the walk and 16 and 32 samples give the same
+// brightness, only a different smoothness); it counts only inside 0..1 (outside it adds 0 and does not clamp to the border,
+// which would smear the border pixel along the ray), only where the prepass says sky (a == 0: opaque geometry occludes; a
+// transparent surface writes no depth and never does) and only by the bright-sun mask smoothstep(t, 2t, lum) times
+// min(lum / t, 16) (t = the threshold: the sky gradient, a lit wall and a white cloud stay under it, the disk does not).
+// rays = sum / sum of the weights of the iterations run; the result is the soft clamp cap * (1 - exp(-x / cap)) of
+// rays * colour per channel (sun_shafts_soft_clamp, ported literally: never above cap; exp of a non-positive number only).
+// The composite adds rays * veil, veil = 1 on sky and 1 - exp(-depth / scatter_m) on geometry (the air in front of a near
+// wall scatters little). Portable on purpose: one block, combined samplers at the post banks, explicit textureLod and
+// texelFetch only (no implicit derivatives, no dFdx), a constant loop bound with a uniform break, no pow, max(x, 1e-3)
+// before every division, u32 math that wraps as the C++ does (GLSL, SPIR-V, MSL and WGSL alike).
+inline constexpr int kShaftsUBytes = 64;      // 4 vec4: sun, shape, color, comp
+inline constexpr int kShaftsMaxSamples = 32;  // the shader's loop bound (sun_shafts_samples' largest count)
+inline constexpr unsigned kShaftsSeed = 0x5AFE5u;  // the jitter's constant seed (under 2^24: exact as a float)
+// sun_shafts_hash (src/engine/render/src/sun_shafts.cpp), step for step. A macro so test_render3d_sun_shafts_gl can run the
+// port alone and compare it with the C++ hash bit for bit.
+#define MCE_GLSL_SUN_SHAFTS_HASH R"(
+uint ss_mix(uint x) {
+    x ^= x >> 16u;
+    x *= 0x7feb352du;
+    x ^= x >> 15u;
+    x *= 0x846ca68bu;
+    x ^= x >> 16u;
+    return x;
+}
+uint ss_hash(uint x, uint y, uint seed) {
+    uint h = ss_mix(x);
+    h = ss_mix(h ^ (y * 0x85ebca6bu));
+    h = ss_mix(h ^ (seed * 0xc2b2ae35u));
+    return h;
+}
+)"
+#define MCE_GLSL_SHAFTS_U R"(
+layout(std140, binding = 1) uniform ShaftsU {
+    vec4 s_sun;    // xy the sun's uv (fullscreen convention, may lie outside 0..1), z aspect, w length (0.1..1)
+    vec4 s_shape;  // x per-sample weight factor (decay^(32 / N)), y threshold, z cap, w samples N (16 or 32)
+    vec4 s_color;  // rgb tint * intensity * strength, w the jitter seed (an exact float)
+    vec4 s_comp;   // x the veil distance scatter_m (m), yzw 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+constexpr const char* kShaftsFS = "#version 450 core\n" MCE_GLSL_SUN_SHAFTS_HASH MCE_GLSL_SHAFTS_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // the HDR frame, linear clamp
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// sun_shafts_soft_clamp (sun_shafts.cpp), literally (cap is 0..8 from sun_shafts_frame).
+float ss_soft_clamp(float x, float cap) {
+    if (!(cap > 0.0)) return 0.0;
+    return cap * (1.0 - exp(-max(x, 0.0) / cap));
+}
+void main() {
+    uvec2 px = uvec2(gl_FragCoord.xy);
+    float jitter = float(ss_hash(px.x, px.y, uint(s_color.w))) * (1.0 / 4294967296.0);
+    float n = s_shape.w;
+    vec2 stepv = (s_sun.xy - v_uv) * (s_sun.w / max(n, 1.0));
+    float thr = max(s_shape.y, 1e-3);
+    float w = 1.0;
+    float acc = 0.0;
+    float norm = 0.0;
+    for (int i = 0; i < 32; ++i) {
+        if (float(i) >= n) break;  // uniform: the tier's sample count
+        vec2 p = v_uv + stepv * (float(i) + jitter);
+        float inside = (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) ? 1.0 : 0.0;
+        float sky = textureLod(u_gbuf, p, 0.0).a == 0.0 ? 1.0 : 0.0;
+        float lum = dot(textureLod(u_src, p, 0.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+        lum = (lum == lum) ? lum : 0.0;  // a NaN texel must not become a streak
+        float mask = smoothstep(thr, 2.0 * thr, lum);
+        acc += w * inside * sky * mask * min(lum / thr, 16.0);
+        norm += w;
+        w *= s_shape.x;
+    }
+    vec3 rays = s_color.rgb * (acc / max(norm, 1e-3));
+    float cap = s_shape.z;
+    o_color = vec4(ss_soft_clamp(rays.r, cap), ss_soft_clamp(rays.g, cap), ss_soft_clamp(rays.b, cap), 1.0);
+}
+)";
+constexpr const char* kShaftsCompFS = "#version 450 core\n" MCE_GLSL_SHAFTS_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+layout(binding = 8) uniform sampler2D u_rays;  // shafts_buf_, linear clamp (the bilinear upsample)
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    vec3 rays = textureLod(u_rays, v_uv, 0.0).rgb;
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    float veil = z == 0.0 ? 1.0 : 1.0 - exp(-max(z, 0.0) / max(s_comp.x, 1e-3));
+    o_color = vec4(src.rgb + rays * veil, src.a);
+}
+)";
+
 }  // namespace mce::render::shaders3d

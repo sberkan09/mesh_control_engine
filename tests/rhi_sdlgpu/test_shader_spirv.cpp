@@ -410,3 +410,36 @@ TEST_CASE("shader_spirv: the underwater stage") {
     CHECK(res.storage_count == 0);
     CHECK(res.uniform_count == 2);
 }
+
+// M-SUNSHAFTS 45c: the sun shafts' two fragment stages (render's shaders3d.h, the real sources) compile for SDL GPU with
+// their resources where Forward3D::record_sun_shafts binds them: ShaftsU at bank kPass (1); the accumulation reads the HDR
+// frame at sampler 6 and the opaque prepass at 7, the composite adds the ray buffer at 8; no storage buffers (a constant
+// loop bound with a uniform break, explicit textureLod / texelFetch, exp of non-positive numbers only).
+TEST_CASE("shader_spirv: the sun shafts' accumulation and composite stages") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsFS, "sun_shafts.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+    Array<u32> spv2;
+    StageResources res2;
+    auto comp = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsCompFS, "sun_shafts_comp.frag", spv2, res2, log);
+    if (!comp) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(comp.has_value());
+    if (!comp) return;
+    REQUIRE(res2.sampler_count == 3);
+    CHECK(res2.sampler_slot[0] == 6);
+    CHECK(res2.sampler_slot[1] == 7);
+    CHECK(res2.sampler_slot[2] == 8);
+    CHECK(res2.storage_count == 0);
+    CHECK(res2.uniform_count == 2);
+}

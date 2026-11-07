@@ -250,3 +250,27 @@ TEST_CASE("shader_cross: the underwater stage") {
     CHECK(contains(msl.value(), "[[sampler(7)]]"));
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
+
+// M-SUNSHAFTS 45c: the sun shafts' two fragment stages (render's shaders3d.h, the real sources) translate, with ShaftsU at
+// [[buffer(1)]] and their samplers at the GL binding numbers Forward3D::record_sun_shafts binds (the HDR frame at 6, the
+// opaque prepass at 7, the ray buffer at 8). Not built on Linux (macOS only): unverified until a Mac run, like the cases
+// above.
+TEST_CASE("shader_cross: the sun shafts' accumulation and composite stages") {
+    FixedString<1024> log;
+    auto acc = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsFS, "sun_shafts.frag", log);
+    REQUIRE_MESSAGE(acc.has_value(), log.c_str());
+    if (!acc) return;
+    CHECK(contains(acc.value(), "[[buffer(1)]]"));
+    CHECK(contains(acc.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(acc.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(acc.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(acc.value(), "mce_flip_y"));
+    auto comp = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kShaftsCompFS, "sun_shafts_comp.frag", log);
+    REQUIRE_MESSAGE(comp.has_value(), log.c_str());
+    if (!comp) return;
+    CHECK(contains(comp.value(), "[[buffer(1)]]"));
+    CHECK(contains(comp.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(comp.value(), "u_rays [[texture(8)]]"));
+    CHECK(contains(comp.value(), "[[sampler(8)]]"));
+    CHECK_FALSE(contains(comp.value(), "mce_flip_y"));
+}
