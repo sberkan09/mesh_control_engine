@@ -1,0 +1,1 @@
+- Test-only: save slot names that overflow the 512-byte path are refused (HARDEN4-13).
