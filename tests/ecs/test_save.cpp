@@ -233,3 +233,30 @@ TEST_CASE("save: default_root puts the game's saves under the per-user MCE folde
     const FixedString<512> other = save::default_root("Chess");
     CHECK(StringView(other.view()) != StringView(r.view()));
 }
+
+TEST_CASE("save: a slot name that does not fit the 512-byte path is refused, not cut to another slot") {
+    // A deep root, so the name at the limit stays under the file system's 255-byte component limit.
+    std::string root = fresh_root("saves_long");
+    while (root.size() < 320) root += "/" + std::string(100, 'r');
+    save::set_root(root);
+    World w;
+    w.register_components<Runner, SaveKey>();
+    w.spawn_with(SaveKey{1}, Runner{});
+
+    // The longest name that still fits: root + "/" + name + ".mcesave" == 511 bytes.
+    const usize fixed = save::root().size() + 1 + std::string(".mcesave").size();
+    REQUIRE(fixed < 500);
+    const std::string fits(511 - fixed, 'a');
+    REQUIRE(save::save_game(w, fits, {}));
+    CHECK_FALSE(save::path_of(fits).truncated());
+
+    // One byte more is refused with InvalidArgument and writes nothing.
+    const std::string over(512 - fixed, 'a');
+    CHECK(save::path_of(over).truncated());
+    CHECK(save::save_game(w, over, {}).error().code == Errc::InvalidArgument);
+    World fresh;
+    fresh.register_components<Runner, SaveKey>();
+    CHECK(save::load_game(fresh, over).error().code == Errc::InvalidArgument);
+    // The slot that fits is untouched and still loads.
+    CHECK(save::load_game(fresh, fits));
+}
