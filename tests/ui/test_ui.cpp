@@ -1099,3 +1099,21 @@ TEST_CASE("ui: set_scroll before the first layout is kept, and re-opening an ope
     d.close_modal(m.id());
     CHECK(d.top_modal().is_null());
 }
+
+TEST_CASE("ui: a widget name keeps 31 bytes; a longer one is cut and found only by the cut name") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    const std::string fits(31, 'n');
+    const std::string longer(40, 'n');
+    const WidgetId a = d.add(d.root(), WidgetKind::Panel, fits);
+    CHECK(d.name(a) == StringView(fits));
+    CHECK(d.find_child(d.root(), fits) == a);
+
+    const WidgetId b = d.add(d.root(), WidgetKind::Panel, longer);
+    CHECK(d.name(b).size() == 31);
+    CHECK(d.name(b) == StringView(fits));
+    // The full name no longer matches anything; the first widget with the cut name wins.
+    CHECK(d.find_child(d.root(), longer).is_null());
+    CHECK(d.find_child(d.root(), fits) == a);
+}

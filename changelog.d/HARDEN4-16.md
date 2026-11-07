@@ -1,0 +1,1 @@
+- Test-only: widget names keep 31 bytes, longer ones are cut (HARDEN4-16).
