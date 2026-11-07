@@ -1,0 +1,1 @@
+- The audio bridge blends exactly `kMaxSnapshots` mixer snapshots (-15, -16 and -16 dB for 15, 16 and 17 snapshots of -1 dB) (`tests/audio/test_duck_snapshots.cpp`).
