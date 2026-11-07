@@ -57,6 +57,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_haze_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_haze.mcscene
                      -DTICKS=300 -DENTITIES=30 -DTOUR=kit3d_tour_haze -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The underwater scene (M-UNDERWATER 44e): scenes/tour_underwater.mcscene, a calm Water (level 0, amplitude 0.2) over the tour's terrain
+    # moved 6 m down, a pillar that rises through the surface, three white spheres at about 3, 8 and 20 m and the camera 2 m below the
+    # surface; made by gen_underwater.py. Named tour_underwater so it sorts after scenes/tour.mcscene, so the default scene stays the
+    # tour. 8 entities. 300 ticks (5 s) like the haze (the look is render-side and hashes nothing; the two plays must still agree).
+    add_test(NAME sample_kit3d_tour_underwater_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_underwater.mcscene
+                     -DTICKS=300 -DENTITIES=8 -DTOUR=kit3d_tour_underwater -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -117,4 +124,15 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_haze_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_haze_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The underwater capture: the scene at tick 300, written for a look (build/.../kit3d_tour_underwater.ppm; samples keep no goldens).
+    # The spheres fade red first into the blue-green fog, the surface is a lid overhead; `-r.underwater 0` draws it without the look.
+    add_test(NAME sample_kit3d_tour_underwater_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_underwater.mcscene -capture_tick 300
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_underwater.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_underwater_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_underwater_gpu)
 endif()
