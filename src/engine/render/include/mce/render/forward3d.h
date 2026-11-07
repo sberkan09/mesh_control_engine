@@ -371,7 +371,7 @@ private:
     void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
     void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
     void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
-    void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c (declared only until then)
+    void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -537,9 +537,10 @@ private:
     // M-UNDERWATER: the underwater composite pipeline (writes post_fx_target; no target of its own).
     rhi::PipelineHandle underwater_pipe_;
     // M-SUNSHAFTS: the half-resolution accumulation and the full-resolution composite pipelines, and the half-resolution
-    // ray buffer (shared by the views like outline_dst_, recreated on a size change on the frame's first view).
+    // ray buffer (shared by the views like outline_dst_, recreated on a size change by the first view that draws shafts).
     rhi::PipelineHandle shafts_pipe_, shafts_comp_pipe_;
     rhi::TextureHandle shafts_buf_;
+    bool shafts_buf_used_ = false;  // a view of this frame recorded into shafts_buf_ (cleared on the frame's first view)
     // M-OUTLINE: the edge outline's composite pipeline and its own render-size target (not per-view state: written and read within one record).
     rhi::PipelineHandle outline_pipe_;
     rhi::TextureHandle outline_dst_;
