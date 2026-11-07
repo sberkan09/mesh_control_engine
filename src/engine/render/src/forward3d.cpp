@@ -14,6 +14,7 @@
 #include "mce/render/lens_rain.h"
 #include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
+#include "mce/render/sun_shafts.h"
 #include "mce/render/translucency.h"
 #include "mce/render/underwater.h"
 #include "shaders3d.h"
@@ -404,6 +405,21 @@ static_assert(offsetof(UnderwaterU, frame) == 0 && offsetof(UnderwaterU, right) 
                   offsetof(UnderwaterU, scatter) == 80 && offsetof(UnderwaterU, lid) == 96 &&
                   offsetof(UnderwaterU, phase) == 112,
               "UnderwaterU: u_frame / u_right / u_up / u_fwd / u_sigma / u_scatter / u_lid / u_phase as in kUnderwaterFS");
+
+// M-SUNSHAFTS 45c: kShaftsFS / kShaftsCompFS's ShaftsU (shaders3d.h MCE_GLSL_SHAFTS_U), bank kPass, one block for both
+// passes. Filled from sun_shafts_frame only (record_sun_shafts).
+struct ShaftsU {
+    vec4 sun;    // xy sun uv (may lie outside 0..1), z aspect, w length
+    vec4 shape;  // x per-sample weight factor decay^(32 / N), y threshold, z cap, w samples N
+    vec4 color;  // rgb tint * intensity * strength, w the jitter seed (shaders3d::kShaftsSeed as an exact float)
+    vec4 comp;   // x the veil distance scatter_m, yzw 0
+};
+static_assert(sizeof(ShaftsU) == shaders3d::kShaftsUBytes, "ShaftsU: 4 vec4, as MCE_GLSL_SHAFTS_U");
+static_assert(offsetof(ShaftsU, sun) == 0 && offsetof(ShaftsU, shape) == 16 && offsetof(ShaftsU, color) == 32 &&
+                  offsetof(ShaftsU, comp) == 48,
+              "ShaftsU: s_sun / s_shape / s_color / s_comp as in MCE_GLSL_SHAFTS_U");
+static_assert(shaders3d::kShaftsMaxSamples == 32 && shaders3d::kShaftsSeed < (1u << 24),
+              "kShaftsFS: the loop bound is 32 (sun_shafts_samples' largest count); the seed rides a float exactly");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1187,6 +1203,28 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) haze_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the heat haze shader failed, drawing frames without the haze");
     }
+    if (!ao_prepass_.is_null()) {
+        // M-SUNSHAFTS 45c: the sun shafts' half-resolution accumulation and full-resolution composite. Both read the
+        // half-resolution opaque prepass (sky and occlusion, the veil), so like the flare and the haze they are made only
+        // where that prepass exists (SSAO, SSR, contact shadows or the edge outline on); without it the pass is never
+        // recorded (record_sun_shafts says so once). Made here at startup, not on first use: a refusal is per renderer (a
+        // null handle) and there is no compile hitch the first time the sun comes out. A driver that refuses either keeps
+        // the frame without the shafts rather than failing init.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kShaftsFS, "sun_shafts.frag"};
+        fs.debug_name = "sun_shafts";
+        if (auto p = device_->create_pipeline(fs)) shafts_pipe_ = p.value();
+        fs.fragment_shader = {shaders3d::kShaftsCompFS, "sun_shafts_comp.frag"};
+        fs.debug_name = "sun_shafts.composite";
+        if (auto p = device_->create_pipeline(fs)) shafts_comp_pipe_ = p.value();
+        if (shafts_pipe_.is_null() || shafts_comp_pipe_.is_null()) {
+            MCE_LOG_WARN("render3d: the sun shafts shaders failed, drawing frames without the shafts");
+            for (rhi::PipelineHandle* p : {&shafts_pipe_, &shafts_comp_pipe_}) {
+                if (!p->is_null()) device_->destroy_pipeline(*p);
+                *p = {};
+            }
+        }
+    }
     // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
     // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
     // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
@@ -1632,6 +1670,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsTaa);
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
+    record_sun_shafts(cmd, scene);  // M-SUNSHAFTS 45c: after the exposure histogram, before the flare; the bloom bucket
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
     record_underwater(cmd, scene);  // M-UNDERWATER 44c: after the flare (attenuated too), before the lens rain; same bucket
     record_lens_rain(cmd, scene);  // M-LENSRAIN 42c: after the flare (refracted too), before bloom; same bucket
@@ -3596,6 +3635,139 @@ void Forward3D::record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     post_source_ = dst;
     stats_.lens_flare = true;
     stats_.lens_flare_strength = fr.strength;
+}
+
+// ---- M-SUNSHAFTS 45c: sun light shafts, right after record_post_fx (depth of field, motion blur, the exposure histogram)
+// and before the flare: after TAA (the rays never enter the history the next frame reprojects, and TAA does not smear
+// them), after the histogram (the rays do not pump the exposure), before the flare (its halo and ghosts are bright and
+// radial about the same point: in the source mask they would be smeared a second time along every ray), and before the
+// underwater look, the lens rain, the haze, bloom, lens dirt, the tonemapper and the grade, which then act on the rays
+// like on any bright light.
+// Two passes. kShaftsFS walks from every half-resolution pixel toward the sun over the HDR frame (post_source_) and the
+// half-resolution opaque prepass (ao_gbuf_: sky counts, opaque geometry occludes) into shafts_buf_; kShaftsCompFS adds
+// the bilinear upsample times the pixel's veil to post_source_ into the post-fx ping-pong target, then post_source_ =
+// that target. Never in place (with TAA post_source_ is the history slot; post_fx_target alternates its two textures, so
+// the target is never the texture an earlier post pass of this frame left in post_source_).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.sun_shafts false) when
+// the setting is off (checked first), the view renders to a texture (out_.linear_output: a monitor in the scene does not
+// get the player's rays, as the lens rain), the tier has no shafts (Low) or r.sun_shafts is 0 (read again here although
+// apply_quality already cleared `enabled`, so a caller that skips apply_quality still gets them), or sun_shafts_frame
+// says no: intensity or visibility 0, the sun behind the camera or below the horizon, a zero strength (the elevation,
+// the view fade, the medium, the visibility and the submersion multiplied), non-finite input.
+// The submersion is the M-UNDERWATER crossing blend of the camera's depth below the mean water level (render-relative, as
+// underwater_frame takes it: (level_y - origin_[1]) - view.position.y) through the same band, whether or not the
+// underwater look is on, so the shafts fade out over the band the look fades in over. The medium backs off to
+// kSunShaftsVolumeShare where this view drew the volumetric fog (stats_.volumetrics, set by record_volumetrics earlier).
+// The sun uv comes from the unjittered view.view_proj (the pass runs on the resolved frame); the prepass is drawn with
+// the jittered one, under one half-resolution texel off, not corrected (the rays are soft).
+// The pipelines are made at startup (create_pipelines) only where the prepass exists; when they do not (no prepass
+// pipeline, a refused shader) a frame that would draw says so once per process and records nothing.
+// shafts_buf_ is shared by the views (not per-view state), half of post_size_, R11G11B10F. A size change never frees a
+// handle that commands recorded earlier in the same frame still reference: shafts_buf_ is recreated only on the frame's
+// first view (or when it does not exist yet); a later view of another size the same frame accumulates into its own
+// per-view render-size target of the same format instead, trans_src_ (free from the resolve on, as record_outline uses
+// it), unless trans_src_ is this view's post_source_ (the outline wrote it and nothing after it moved post_source_), in
+// which case that view draws no shafts. Nothing is written back to the scene.
+void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const SunShafts& setting = scene.post().shafts;
+    if (!setting.enabled || out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.sun_shafts"));
+    if (!q.sun_shafts || (cv && !cv->get_bool())) return;
+    const u32 tier_detail = q.sun_shafts_samples == 0 ? 0u : (q.sun_shafts_samples <= 16 ? 1u : 2u);
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const View3D& view = scene.view();
+    f32 submersion = 0.0f;
+    const WaterSurface& water = scene.water();
+    if (water.enabled && std::isfinite(water.level_y)) {
+        const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+        const f32 cam_depth = f32(f64(level) - origin_[1]) - view.position.y;
+        submersion = underwater_submersion(cam_depth, underwater_band(water.amplitude, scene.post().underwater.band));
+    }
+    SunShaftsFrame fr;
+    if (!sun_shafts_frame(setting, scene.light(), scene.fog(), scene.volumetrics(), stats_.volumetrics, view.view_proj,
+                          f32(out.width) / f32(out.height), tier_detail, submersion, fr))
+        return;
+    if (shafts_pipe_.is_null() || shafts_comp_pipe_.is_null()) {
+        // The shafts would draw but the pipelines do not exist (no prepass pipeline: ssao, ssr, contact shadows and the edge
+        // outline all off at startup; or a refused shader): said once per process, not per frame.
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: sun shafts are on but the sun shafts pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without the shafts");
+        return;
+    }
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::Extent2D half{max(out.width / 2u, 1u), max(out.height / 2u, 1u)};
+    rhi::TextureHandle buf = shafts_buf_;
+    if (buf.is_null() || !(device_->texture_size(buf) == half)) {
+        if (out_.first || shafts_buf_.is_null()) {
+            destroy(*device_, shafts_buf_);
+            rhi::TextureDesc d;
+            d.size = half;
+            d.format = rhi::TextureFormat::R11G11B10F;
+            d.usage = rhi::TextureUsage::SampledColorTarget;
+            d.debug_name = "mce.3d.sun_shafts";
+            shafts_buf_ = device_->create_texture(d);
+            buf = shafts_buf_;
+        } else {
+            if (trans_src_.is_null()) {
+                rhi::TextureDesc d = device_->texture_desc(hdr_);
+                d.debug_name = "mce.3d.transmission_src";  // as record_main names it: it may reuse this one
+                trans_src_ = device_->create_texture(d);
+            }
+            if (trans_src_ == post_source_) return;
+            buf = trans_src_;
+        }
+        if (buf.is_null()) return;
+    }
+
+    // The per-sample weight factor: decay per 1/32 of the walk, so 16 samples (decay^2 per step) weigh the walk as 32 do.
+    f32 per = fr.decay;
+    for (u32 n = fr.samples; n < u32(shaders3d::kShaftsMaxSamples); n *= 2u) per *= per;
+    ShaftsU su;
+    su.sun = {fr.sun_uv.x, fr.sun_uv.y, fr.aspect, fr.length};
+    su.shape = {per, fr.threshold, fr.cap, f32(fr.samples)};
+    su.color = vec4(fr.color, f32(shaders3d::kShaftsSeed));
+    su.comp = {fr.scatter_m, 0.0f, 0.0f, 0.0f};
+    auto fullscreen = [&](rhi::TextureHandle dst, const char* name) {
+        rhi::PassAttachment o;
+        o.texture = dst;
+        o.load = rhi::LoadOp::DontCare;  // every pixel is written
+        rhi::RenderPassDesc p;
+        p.colors = Span<const rhi::PassAttachment>(&o, 1);
+        p.debug_name = name;
+        cmd.begin_pass(p);
+    };
+    cmd.push_debug_scope("sun_shafts");
+    fullscreen(buf, "sun_shafts.accumulate");
+    cmd.bind_pipeline(shafts_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(su));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, linear_clamp_);  // the bright-sun mask, bilinear, clamped
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);    // nearest: sky is exactly 0
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) {
+        cmd.pop_debug_scope();
+        return;
+    }
+    fullscreen(dst, "sun_shafts.composite");
+    cmd.bind_pipeline(shafts_comp_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(su));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // the pixel's own prepass texel (the veil)
+    cmd.bind_texture(rhi::bank::kOrm, buf, linear_clamp_);              // the bilinear upsample of the rays
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.sun_shafts = true;
+    stats_.sun_shafts_strength = fr.strength;
 }
 
 // ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves

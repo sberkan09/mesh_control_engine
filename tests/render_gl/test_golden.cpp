@@ -1154,6 +1154,43 @@ TEST_CASE("golden: underwater_off: the same frame without the underwater look") 
     check_golden("underwater_off", f);
 }
 
+// ---- M-SUNSHAFTS 45c: sun light shafts ----------------------------------------------------------------------------------
+
+// The shafts camera (raised, looking 15 degrees up) toward a low sun just right of the middle, a tall column over the left
+// half of the disk and a second, thinner one further left (two trunks): the rays fan out from the open half of the disk
+// and the column leaves its side dark, then bloom and FXAA as by default. sun_shafts_off is the same frame with
+// PostFx::shafts.enabled false (the pass not recorded), kept under its own name so the pair documents the off path next to
+// the look.
+namespace {
+
+void golden_sun_shafts(Fixture3D& f, bool enabled) {
+    sun_shafts_camera(f);
+    SunShafts sh = sun_shafts_setting();
+    sh.enabled = enabled;
+    f.render(0.0f, false, [&](Scene3D& s) {
+        const vec3 toward = lens_flare_toward(s.view(), kShaftsSunU, kShaftsSunV);
+        sun_shafts_scene(s, toward, &sh, true);
+        sun_shafts_column(s, toward);
+        sun_shafts_column(s, toward, -4.0f, 8.0f, 0.2f);
+    });
+}
+
+}  // namespace
+
+TEST_CASE("golden: sun_shafts_tree: rays from a low sun past a column over half of its disk") {
+    Fixture3D f;
+    golden_sun_shafts(f, true);
+    CHECK(f.renderer.forward_3d().last_stats().sun_shafts);
+    check_golden("sun_shafts_tree", f);
+}
+
+TEST_CASE("golden: sun_shafts_off: the same frame without the shafts") {
+    Fixture3D f;
+    golden_sun_shafts(f, false);
+    CHECK_FALSE(f.renderer.forward_3d().last_stats().sun_shafts);
+    check_golden("sun_shafts_off", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {

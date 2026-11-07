@@ -43,6 +43,7 @@
 #include "mce/kit/world_clock.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
+#include "mce/kit/sun_shafts.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/water_ice.h"
@@ -1525,6 +1526,33 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings flare_shadows;
             render::apply_quality(quality_, flare_shadows, flare_post);
             post.flare = flare_post.flare;
+        }
+    }
+    {  // sun light shafts (M-SUNSHAFTS 45d): the first enabled SunShafts3D by entity index (not table order, so the pick never
+       // depends on archetype layout); without one post.shafts keeps the disabled default, written every frame so a stale one
+       // never survives. No sun or fog data: the renderer reads Scene3D::light() and fog() (Environment3D and the DayCycle,
+       // set above). visibility = 1 - cloud_follow * the post-apply_quality cloud cover (rain raises the cover itself).
+        const SunShafts3D* shafts = nullptr;
+        u32 shafts_index = ~0u;
+        world.query<const SunShafts3D&>().each([&](Entity e, const SunShafts3D& c) {
+            if (c.enabled == 0u || e.index >= shafts_index) return;
+            shafts = &c;
+            shafts_index = e.index;
+        });
+        if (shafts) {
+            render::PostFx shafts_post;  // the 45b quality step on a throwaway PostFx (tier, r.sun_shafts, the Range clamps)
+            render::SunShafts& sh = shafts_post.shafts;
+            sh.enabled = true;
+            sh.intensity = shafts->intensity;
+            sh.length = shafts->length;
+            sh.decay = shafts->decay;
+            sh.threshold = shafts->threshold;
+            sh.cap = shafts->cap;
+            sh.visibility = sun_shafts_visibility(*shafts, cloud_cover);
+            sh.scatter_m = shafts->scatter_m;
+            render::ShadowSettings shafts_shadows;
+            render::apply_quality(quality_, shafts_shadows, shafts_post);
+            post.shafts = shafts_post.shafts;
         }
     }
     {  // rain on the lens (M-LENSRAIN 42d): the first LensRain3D; without one or when disabled post.rain keeps the disabled

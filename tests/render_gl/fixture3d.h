@@ -1222,4 +1222,60 @@ inline void underwater_scene(Scene3D& s, const WaterSurface* w, const Underwater
     }
 }
 
+// ---- M-SUNSHAFTS 45c: sun light shafts ----------------------------------------------------------------------------------
+
+// The shafts camera: the cloud sky's (raised, looking 15 degrees up, two thirds sky), the sun placed where the view ray
+// through the frame's uv (kShaftsSunU, kShaftsSunV) points (lens_flare_toward; v = 0 is the bottom row): about 17 degrees
+// above the horizon, a low sun (the elevation fade is 1), just right of the middle (asymmetric on purpose, a flipped u in
+// the pass would put the rays on the other side). The disk's angular radius is the default Sky's (acos 0.9994, about 2
+// degrees: 5 pixels of the 120-pixel frame).
+inline constexpr f32 kShaftsSunU = 0.55f, kShaftsSunV = 0.55f;
+
+inline void sun_shafts_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -15.0f;
+}
+
+inline SunShafts sun_shafts_setting() {
+    SunShafts sh;
+    sh.enabled = true;
+    return sh;
+}
+
+// The sun toward `toward_sun` (shadows off: the column would cast one onto the ground and the cases compare pixels),
+// `shafts` (null: the default, disabled); bloom and FXAA off unless `post_default` (each carries a changed pixel to its
+// neighbours, and the cases compare pixels).
+inline void sun_shafts_scene(Scene3D& s, vec3 toward_sun, const SunShafts* shafts, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.shafts = shafts ? *shafts : SunShafts{};
+    s.set_post(post);
+}
+
+// A tall column (the fixture's box, mesh 1, scaled to `width` m square and 12 m tall, standing from 3 m under the ground)
+// `distance` m out along the sun's ray, upright, turned to face the camera across the ray. `shift` moves it sideways in
+// widths: -0.5 puts its right edge through the ray, so it covers the left half of the sun's disk.
+inline void sun_shafts_column(Scene3D& s, vec3 toward_sun, f32 shift = -0.5f, f32 distance = 6.0f, f32 width = 0.3f) {
+    const vec3 back = math::normalize(vec3{-toward_sun.x, 0.0f, -toward_sun.z});  // horizontal, back toward the camera
+    const vec3 x = math::normalize(math::cross(vec3{0.0f, 1.0f, 0.0f}, back));  // the camera's right across the ray
+    const vec3 p = s.view().position + toward_sun * distance;
+    const vec3 t = vec3{p.x, -3.0f, p.z} + x * (shift * width);
+    MeshInstance box;
+    box.mesh = 1;
+    const vec3 cols[4] = {x * width, vec3{0.0f, 12.0f, 0.0f}, back * width, t};
+    for (u32 c = 0; c < 4; ++c) {
+        box.world.c[c][0] = cols[c].x;
+        box.world.c[c][1] = cols[c].y;
+        box.world.c[c][2] = cols[c].z;
+    }
+    s.add(box);
+}
+
 }  // namespace mce::render_test
