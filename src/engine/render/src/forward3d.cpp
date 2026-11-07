@@ -1167,6 +1167,16 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) rain_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the lens rain shader failed, drawing frames without the drops");
     }
+    {
+        // M-UNDERWATER 44c: the underwater composite. Like the lens rain it reads only post_source_ (detail 1 and 2 add the
+        // prepass when it exists, detail 0 binds ao_off_), so it is made on every renderer at startup: per-renderer
+        // behaviour (a null handle means this renderer's driver refused it) and no compile hitch on the first dive. A
+        // driver that refuses it keeps the frame without the look rather than failing init; record_underwater says so.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kUnderwaterFS, "underwater.frag"};
+        fs.debug_name = "underwater";
+        if (auto p = device_->create_pipeline(fs)) underwater_pipe_ = p.value();
+    }
     if (!ao_prepass_.is_null()) {
         // M-HEATHAZE 43c: the heat haze composite. Its depth mask reads the half-resolution opaque prepass, so like the
         // flare it is made only where that prepass exists (SSAO, SSR, contact shadows or the edge outline on); without
@@ -3824,8 +3834,9 @@ void Forward3D::record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene) 
 // monitor in the scene does not wear the player's diving mask), or underwater_frame says no: the water is not on, the
 // setting is off or its strength 0, an orthographic view, non-finite input, or the camera above the crossing band (the
 // wave-free test against the mean level, render-relative: (level_y - origin_[1]) - view.position.y).
-// The pipeline is made on the first frame that needs it (so a renderer whose camera never dives compiles nothing); a
-// driver that refuses the shader keeps the frame without the look, said once per process and not tried again.
+// The pipeline is made at startup in create_pipelines (as the lens rain: per renderer, no first-dive compile hitch); a
+// driver that refuses the shader keeps the frame without the look, said once per process (the null handle is the
+// per-renderer state) and nothing is created at draw time.
 // Detail 1 and 2 read the half-resolution opaque prepass (ao_gbuf_) through record_prepass: a no-op when SSAO, SSR,
 // contact shadows, the water, the outline or the flare drew it already this frame. Without the prepass pipeline (SSAO,
 // SSR, contact shadows and the edge outline all off at startup) the pass takes the detail-0 path, the flat tint, with
@@ -3851,22 +3862,13 @@ void Forward3D::record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene)
                          "shadows and the edge outline all off at startup); drawing the flat underwater tint");
     }
     if (underwater_pipe_.is_null()) {
-        static std::atomic<bool> refused{false};
-        if (refused.load()) return;
-        rhi::GraphicsPipelineDesc fs;
-        fs.vertex_shader = {shaders3d::kFullscreenVS, "fullscreen.vert"};
-        fs.fragment_shader = {shaders3d::kUnderwaterFS, "underwater.frag"};
-        fs.state.depth = {};
-        fs.state.blend.mode = rhi::BlendMode::Opaque;
-        fs.debug_name = "underwater";
-        if (auto p = device_->create_pipeline(fs)) {
-            underwater_pipe_ = p.value();
-        } else {
-            if (!refused.exchange(true))
-                MCE_LOG_WARN("render3d: the camera is under water but the underwater shader failed; drawing frames without "
-                             "the underwater look");
-            return;
-        }
+        // This renderer's driver refused the shader at startup (create_pipelines): no look, nothing recorded. The retry
+        // decision is the null handle, per renderer; only the log line is process-wide, once.
+        static std::atomic<bool> warned_refused{false};
+        if (!warned_refused.exchange(true))
+            MCE_LOG_WARN("render3d: the camera is under water but the underwater shader is missing or failed; drawing "
+                         "frames without the underwater look");
+        return;
     }
     if (fr.detail > 0) {
         record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already

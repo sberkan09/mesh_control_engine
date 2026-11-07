@@ -368,7 +368,7 @@ private:
     void record_flare(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSFLARE 38c
     void record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LENSRAIN 42c (declared only until then)
     void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
-    void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c (declared only until then)
+    void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
