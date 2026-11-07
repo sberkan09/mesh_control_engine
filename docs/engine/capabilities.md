@@ -189,7 +189,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `SnowSparkle` | `mce/kit/snow_sparkle.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `StaticMerge3D` | `mce/kit/static_merge3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/06_showcase/main.cpp |
 | `StatusEffects` | `mce/kit/status.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | samples/12_loot/assets/scenes/loot.mcscene |
-| `SunShafts3D` | `mce/kit/sun_shafts.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-SUNSHAFTS 45d: tested in tests/kit/test_sun_shafts_extract.cpp; a sample gets one in 45e (remove this line then) |
+| `SunShafts3D` | `mce/kit/sun_shafts.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_shafts.mcscene |
 | `ThunderDelay` | `mce/kit/thunder_delay.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
