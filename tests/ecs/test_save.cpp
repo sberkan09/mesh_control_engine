@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "mce/ecs/save.h"
@@ -259,4 +260,10 @@ TEST_CASE("save: a slot name that does not fit the 512-byte path is refused, not
     CHECK(save::load_game(fresh, over).error().code == Errc::InvalidArgument);
     // The slot that fits is untouched and still loads.
     CHECK(save::load_game(fresh, fits));
+    // exists() does not answer for the cut path: a file sits exactly at the cut, and the long name must not find it.
+    const std::string cut = save::path_of(over).c_str();
+    std::ofstream(cut).put('x');
+    REQUIRE(std::filesystem::exists(cut));
+    CHECK(save::exists(fits));
+    CHECK_FALSE(save::exists(over));
 }

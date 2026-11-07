@@ -332,8 +332,10 @@ FixedString<512> path_of(StringView name) {
 }
 
 bool exists(StringView name) {
+    const FixedString<512> p = path_of(name);
+    if (p.truncated()) return false;  // a cut path would name a different slot
     std::error_code ec;
-    return stdfs::exists(to_path(path_of(name).view()), ec);
+    return stdfs::exists(to_path(p.view()), ec);
 }
 
 Result<void> write(StringView name, Span<const byte> payload) {
