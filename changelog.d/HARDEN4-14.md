@@ -1,0 +1,1 @@
+- Fix: `save::exists` returns false for a slot name whose path does not fit 512 bytes instead of testing a cut path (HARDEN4-14).
