@@ -17,6 +17,7 @@ threads fix what a round finds and write down here what the next round must chec
 | r4 (2026-10-17) | 70113c9 | `parallax_cobble` still 1.81% (GL) / 1.80% (sdlgpu); sdlgpu BC vs RGBA difference larger than GL's; no 2D `gpu_ms` on sdlgpu | #487, #498 (below) |
 | r5 (2026-10-17) | 70113c9 | BC vs RGBA re-measured on 04_diorama / 06_showcase (same numbers as r4) | analysis below, no code change |
 | parallel (2026-10-17) | d221a48, 0ad5735 | r4 checks pass (`parallax_cobble` 0 blocks, BC equal on both backends, sdlgpu `gpu_ms` 539/540); `ibl_roughness` NVIDIA-specific; sdlgpu 2D `gpu_ms` p50 about 0.001 ms; `editor_play_smoke` 0 ticks on the 4090; `player_capture_no_display`; BC `auto` misses most real normal maps | #506, #512, #521 (below) |
+| r7 (2026-11-07) | 97de547 (master a1943396, plus job files only) | the 2026-11 visual milestones (lens flare, translucency, lens rain, heat haze, underwater, sun shafts): their capture tests, goldens x3 on both backends, real GPU against llvmpipe at pinned ticks, and each pass's GPU cost at 1080p per tier. Nothing engine-side failed; the only failures are r6's six harness ones | no code change (below) |
 | r6 (2026-11-01) | e57210d (master) | `ctest -L gpu` on both backends, goldens x3 on both backends, visual milestones (14_seasons, fireflies/pollen/dust/flock/butterfly in 12_weather, 13_water, 11_daynight, 09_openworld dusk and sky IBL) against llvmpipe: nothing engine-side failed. `06_showcase` 1080p budget measured. Two harness findings: GL needs `SDL_VIDEODRIVER=offscreen` for NVIDIA (Xvfb's GLX is Mesa), Vulkan needs a display (the NVIDIA ICD has no `VK_EXT_headless_surface`) | no code change; `scripts/ci/gpu_compare.py`, `scripts/ci/runpod_agent.sh` (below) |
 
 ## r4 findings
@@ -119,6 +120,59 @@ One community-cloud RTX 3070 (8 GB, driver 595.99.02, $0.13/h), about 55 minutes
 - Not done: Lantern Keep (364 MB zip, not on the pod), Metal, phones (cannot run on a Linux pod), 2D budgets FR-R2D-090/100 and the split-screen cost numbers (`kit3d_tour_split_views` passes, its `gpu_ms` was not measured).
 
 **Tools added.** `scripts/ci/gpu_compare.py <build> <ctest name>[@tick]...` runs a windowed capture test on the real GPU and on llvmpipe and prints mean colour, deviation and the differing-pixel share. `scripts/ci/runpod_agent.sh` is the pod entry used here: it installs the deps, prints a driver report and then runs `.runpod-jobs/<n>.sh` files it finds on its git branch in order (output in the pod log), and deletes the pod itself after `MCE_POD_MAX_HOURS` (4) if a thread forgot.
+
+## r7 (2026-11-07)
+
+One community-cloud **RTX 3080 Ti** (12 GB, driver **580.95.05**, CUDA 13.0, 12 vCPUs, **$0.18/h**; no RTX 3070 or RTX 4000 Ada had community stock), pod `78nv0vfo0c7v23`, created 17:02:49 UTC and terminated 17:35:30 UTC: **about 33 minutes, about $0.10**. `list-pods` was empty afterwards. Started by a thread at the coordinator's request (Sami allowed RunPod use on 2026-11-01 if every pod is terminated). Code: master a1943396 (branch commit 97de547, which adds only `.runpod-jobs/*.sh`). RelWithDebInfo (`linux-gcc-release`) with `MCE_GPU_TESTS=ON`: 2256 steps in 11 minutes at `-j16`.
+
+**How it ran.** Image `ubuntu:24.04` with `NVIDIA_DRIVER_CAPABILITIES=all` and `MCE_POD_MAX_HOURS=3`. The start command runs `apt-get update`, installs `git`, clones the branch to `/work/repo` and starts `scripts/ci/runpod_agent.sh`, which ran `.runpod-jobs/1.sh` to `7.sh` (build, ctest, goldens, compare, perf, failure details, resolution check). Output came back through `stream-pod-logs`. Backends as r6 describes: GL with `SDL_VIDEODRIVER=offscreen`, sdlgpu under `xvfb-run` with `VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json`, `XDG_RUNTIME_DIR` set. `LD_DEBUG=files` on a golden run confirms the driver: GL offscreen loads `libEGL_nvidia` and `libnvidia-eglcore`, sdlgpu loads `libGLX_nvidia`, `libnvidia-glcore` and `libnvidia-glvkspirv`. The `.mcperf` header says `OpenGL 4.5.0 NVIDIA 580.95.05`. Harness note: the first container start printed nothing for 10 minutes (probably a stalled `apt-get update`). A `restart` of the same pod fixed it; it then reached the first job in 80 s.
+
+### Results
+
+**(a) `ctest -L gpu`.** The milestone filter matches 9 tests: `kit3d_tour_split_views` and `sample_kit3d_tour_{ink,cookie,translucent,lensrain,haze,underwater,shafts}_gpu`, and `sample_daynight_sunrise_gpu`. The `test_render3d_*_gl` cases (flare, translucency, lens rain, haze, underwater, sun shafts) are inside `test_render_gl` / `test_render_sdlgpu`, so they run with the full label.
+
+| Run | Passed | Failed |
+|---|---|---|
+| GL offscreen, filter | 9 / 9 | none |
+| sdlgpu Xvfb, filter | 9 / 9 | none |
+| GL offscreen, full label | 92 / 95 | `test_rhi_sdlgpu`, `test_render_sdlgpu`, `terrain_player_sdlgpu` |
+| sdlgpu Xvfb, full label | 92 / 95 | `test_mcp_agent_gpu`, `player_capture_no_display`, `test_rhi_gl` |
+
+These are r6's six harness failures, and nothing engine-side. In the GL run, the three sdlgpu tests run under `SDL_VIDEODRIVER=offscreen`. The NVIDIA ICD has no `VK_EXT_headless_surface` (`SDL_ClaimWindowForGPUDevice failed: VK_EXT_headless_surface extension is not enabled in the Vulkan instance`). In the sdlgpu run, Xvfb's GLX is Mesa (`test_rhi_gl`: `OpenGL 4.5 core context creation failed: The specified window isn't an OpenGL window`). `player_capture_no_display` expects no display. `test_mcp_agent_gpu` is r6's open item. One difference from r6: these now end in a **SIGSEGV** instead of a failed `REQUIRE`. `test_rhi_sdlgpu` crashes at `test_rhi_sdlgpu.cpp:75` (the `Fixture` constructor, called from line 161). `test_render_sdlgpu` crashes in its first case, `test_render3d_aurora_gl.cpp:140`. `terrain_player_sdlgpu`: `signal 11 (SIGSEGV) code 1 addr 0x18` with a stack in `libvulkan.so.1`. `test_mcp_agent_gpu` crashes at `test_mcp_agent.cpp:319` after `REQUIRE( !t.error )` at `mcp_client.h:111`. So the test fixtures use the device after its creation failed. The player itself exits cleanly (`render device creation failed: Unsupported [rhi.sdlgpu.window]`). This is a test-harness robustness issue, not a rendering one.
+
+**(b) `test_golden_gl`** (65 cases, 1016 assertions, including `lens_flare_sun`/`_occluded`, `translucency_leaf_backlit`/`_wrap`/`_lantern`, `lens_rain_drops`/`_off`, `heat_haze_fire`/`_off`, `underwater_deep`/`_off`, `sun_shafts_tree`/`_off`): **3 of 3 runs pass on GL and 3 of 3 on sdlgpu, 0 flakes.** The new goldens are the llvmpipe/lavapipe ones (only `ibl_roughness` has a `-nvidia` directory) and are within threshold on the real driver. No vendor directory is needed.
+
+**(c) Real GPU against llvmpipe** (`scripts/ci/gpu_compare.py`, GL, 1280x720, the tests' pinned ticks; "on/off" = the same capture on the real GPU with the pass's cvar at 1 and at 0):
+
+| Scene (test, tick) | Differing pixels (>12/255) GPU vs llvmpipe | mean abs | Pass on vs off on the GPU |
+|---|---|---|---|
+| `tour_translucent` (tick 30) | 0.00% | 0.04 | 9.10% of pixels (`r.translucency`) |
+| `tour_lensrain` (300) | 0.00% | 0.03 | 19.04% (`r.lens_rain`) |
+| `tour_haze` (300) | 0.00% | 0.03 | 0.88% (`r.heat_haze`) |
+| `tour_underwater` (300) | 0.00% | 0.02 | 100% (`r.underwater`; mean RGB 57/153/159 against 189/196/201) |
+| `tour_shafts` (300) | 0.00% | 0.05 | 21.84% (`r.sun_shafts`) |
+| `11_daynight` `sunrise` (30) | 0.00% | 0.03 | 26.96% (`r.lens_flare`) |
+
+Every run exited 0 and wrote a non-blank frame. On the real driver every pass draws, and draws what the reference rasterizer draws. The haze changes 0.88% of the frame: only the grid behind the fire moves, as intended.
+
+**(d) GPU cost at 1920x1080** (GL, `mce_player -window 1920x1080 -perf_capture -sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0 -perf_warmup 60 -frames 600 -r.quality <tier>`, 537 measured frames). Each cell is pass on, pass off and on again. The table gives `summary.gpu_ms.avg` as the mean of the two "on" runs, then the "off" run, then the difference. Job 7 confirmed the size: `-window 1920x1080` under the offscreen driver gives a 1920x1080 framebuffer and capture, although the `.mcperf` header says `width 0`.
+
+| Pass (scene, cvar) | Low | Medium | High | High, sdlgpu |
+|---|---|---|---|---|
+| Translucency (`tour_translucent`, `r.translucency`) | 0.329 / 0.304, **+0.025** | 0.470 / 0.456, **+0.014** | 0.595 / 0.577, **+0.018** | +0.027 |
+| Lens rain (`tour_lensrain`, `r.lens_rain`) | 0.250 / 0.247, +0.003 (off at Low) | 0.440 / 0.391, **+0.048** | 0.589 / 0.507, **+0.082** | +0.089 |
+| Heat haze (`tour_haze`, `r.heat_haze`) | 0.221 / 0.220, +0.001 (off at Low) | 0.379 / 0.336, **+0.043** | 0.472 / 0.427, **+0.044** | +0.098 (noisy: on runs 0.575 / 0.500) |
+| Underwater (`tour_underwater`, `r.underwater`) | 0.244 / 0.232, **+0.012** | 0.467 / 0.440, **+0.027** | 0.589 / 0.562, **+0.027** | -0.029 (noise) |
+| Sun shafts (`tour_shafts`, `r.sun_shafts`) | 0.202 / 0.201, +0.001 (off at Low) | 0.419 / 0.319, **+0.100** | 0.617 / 0.412, **+0.205** | +0.223 |
+| Lens flare (`11_daynight` sunrise, `r.lens_flare`) | 0.191 / 0.191, 0.000 (off at Low) | 0.356 / 0.300, **+0.056** | 0.465 / 0.404, **+0.060** | +0.045 |
+
+The two "on" runs agree within 0.003 ms on GL (one exception: translucency at Low, 0.345 / 0.313). sdlgpu's fence timestamps are noisier, about 0.03 to 0.08 ms between repeats, so its column only confirms the size. Per-stage columns: the five post passes are recorded between `post_fx` and `record_post`, and their time shows up in the `bloom` stage column. The stage differences say so (sun shafts at High: `bloom` +0.197 of +0.205; lens rain +0.071 of +0.082). Translucency's cost is in `main` (+0.019 at High). SSAO, SSR and contact shadows do not run in these scenes (their GL stage columns are empty). So where a pass needs the half-resolution prepass (flare, haze, underwater, shafts), its difference includes drawing that prepass. Whole 3D frames are 0.2 to 0.62 ms of GPU time at 1080p on this card. Against the targets: translucency +0.018 ms at High, against M-TRANSLUCENT's 0.2 ms. Sun shafts are the most expensive pass, 0.205 ms at High (32 samples) and 0.100 ms at Medium (16 samples), with cost scaling with the sample count. The milestones set no target for the other passes. All are under 0.1 ms at 1080p High.
+
+### Open items
+
+- **Human look at a windowed run (cannot be done from a pod).** These checks say each pass draws on the real driver and draws what llvmpipe draws. They do not say it looks right. Still open from A11 and A14 to A18: flare fade-in and fade-out as the sun crosses edges, and ghost-side consistency; leaf glow under wind sway, and the cascade cut of the `wrap` band on closed meshes; drop size, refraction and re-seed flicker on the lens; haze strength, and the one-pixel ring at the depth mask; the absorption colours, the Snell window and the ±1.5 m surface crossing; shaft length and decay, and smoothness as the sun leaves the screen. Also the windowed shimmer under TAA for all of them.
+- **Test fixtures crash after a failed sdlgpu device creation** (the four SIGSEGVs above). A fixture that `REQUIRE`s the device before using it would turn these into clean failures. Not a renderer bug; for a tests thread.
+- **Not done this round:** Metal and WebGPU translation (Mac); phones; the A14 Low-tier look and the 4-cookie light-cookie numbers (A13, not asked for here); `edge_outline` goldens (A12); `kit3d_tour_split_views` `gpu_ms`. The lens rain scene's weather fades in over 2 s, so the first ~60 of the 537 measured frames have fewer drops; the cost above is a slight underestimate of a fully wet lens.
 
 ## Next round: what to check
 
