@@ -4443,6 +4443,7 @@ void main() {
         float inside = (p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0) ? 1.0 : 0.0;
         float sky = textureLod(u_gbuf, p, 0.0).a == 0.0 ? 1.0 : 0.0;
         float lum = dot(textureLod(u_src, p, 0.0).rgb, vec3(0.2126, 0.7152, 0.0722));
+        lum = (lum == lum) ? lum : 0.0;  // a NaN texel must not become a streak
         float mask = smoothstep(thr, 2.0 * thr, lum);
         acc += w * inside * sky * mask * min(lum / thr, 16.0);
         norm += w;

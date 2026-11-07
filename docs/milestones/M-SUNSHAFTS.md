@@ -81,6 +81,9 @@ Headless (llvmpipe, lavapipe): off equals the plain frame exactly (the setting, 
 
 ## Follow-ups
 
+- **`shafts_buf_` and render-to-texture views (review of 45c, should-fix, needs a `forward3d.h` seam):** the buffer is recreated only when `out_.first`, but `collect_views` records render-texture views first, so a window view is never `first` when such a view exists. After a resize the shafts then take the `trans_src_` fallback at full resolution, and with the outline on and TAA/DoF/motion blur off they vanish (`trans_src_ == post_source_`). Fix: a per-frame "used this frame" flag set when a view records into `shafts_buf_`, so the first view that draws shafts may recreate it.
+- **NaN camera position (review nit):** `underwater_submersion` treats a NaN depth as 0 while `underwater_frame` rejects it; `sun_shafts_frame` rejects such frames anyway.
+
 - Metal and WebGPU: the shaders are plain GLSL 450 through `translate_glsl` / the WGSL cross compile, verified only on GL and SDL GPU (llvmpipe, lavapipe); translate and check on a device.
 - Real-GPU look and cost on row A18; the defaults of `length`, `decay`, `threshold`, `cap` and the volumetric back-off are look choices only a display can judge.
 - Shafts from the moon and from point and spot lights (a second source uv), shafts through the water surface for the underwater look (with caustics, as M-UNDERWATER's follow-up names them), a source test by angular radius instead of brightness, a depth-aware (bilateral) upsample of the half-resolution buffer, and an optional temporal history in a TAA-friendly form.
