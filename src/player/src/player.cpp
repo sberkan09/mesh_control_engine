@@ -2090,6 +2090,7 @@ private:
         render::Forward3DDesc fd;
         render::apply_quality(quality, fd);
         fd.msaa = math::min(fd.msaa, static_cast<u32>(math::clamp<i64>(cv_msaa.get_int(), 1, 8)));
+        hold_dynres_for_capture();
         MCE_TRY(renderer_.init_3d(fd));
         extract3d_.init(renderer_.meshes(), &assets_);
         extract3d_.set_texture_store(&renderer_.textures());
@@ -2101,6 +2102,21 @@ private:
         three_d_ = true;
         MCE_LOG_INFO("{}: 3D path on ({} quality, {}x MSAA)", desc_.app_name, render::quality_tier_name(tier), fd.msaa);
         return {};
+    }
+
+    // M-DYNRES 46d: a capture (-capture, -capture_tick(s): the goldens, render_frame and render_sheet) must not depend on
+    // the machine. The measured GPU time would move the render scale of a scene with a DynamicResolution3D, so the
+    // controller is held at the ceiling (r.dynres 0, which apply_quality and the renderer read every frame) unless
+    // r.dynres.inject gives it a fixed schedule, which is reproducible. A capture run never saves the options
+    // (settings_on_), so the player's own r.dynres is untouched.
+    void hold_dynres_for_capture() {
+        const bool capture = !cv_capture.get_string().empty() || cv_capture_tick.get_int() > 0 ||
+                             !cv_capture_ticks.get_string().empty();
+        if (!capture) return;
+        const ConVar* inject = ConVar::find(MCE_SID("r.dynres.inject"));
+        if (inject && !inject->get_string().empty()) return;
+        ConVar* dynres = ConVar::find(MCE_SID("r.dynres"));
+        if (dynres && dynres->get_bool()) dynres->set_string("0");
     }
 
     // Relative mouse while a mouse-look camera plays; the cursor comes back for the pause overlay,

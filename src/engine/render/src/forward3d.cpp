@@ -7,7 +7,9 @@
 #include <cstring>
 
 #include "mce/convar.h"
+#include "mce/hash.h"
 #include "mce/log.h"
+#include "mce/render/dynres.h"
 #include "mce/render/edge_outline.h"
 #include "mce/render/heat_haze.h"
 #include "mce/render/lens_flare.h"
@@ -944,6 +946,40 @@ void destroy(rhi::RenderDevice& d, rhi::TextureHandle& t) {
     t = {};
 }
 
+// M-DYNRES 46c: what Forward3D::dynres_ points at. forward3d.h only forward-declares DynResState (the pure controller's
+// state, dynres.h), so the driver's own bookkeeping derives from it: the pointer type stays honest, and the object is
+// always created and deleted as a DynResDriver, here. Exists only while the controller is on (created by the first
+// enabled frame, deleted by the first frame that resolves off and by shutdown), so a default renderer holds none.
+struct DynResDriver : DynResState {
+    // One frame the controller chose a scale for: matched with a sample of that frame (a GPU timestamp set or an
+    // injected cost) when it arrives MCE_FRAMES_IN_FLIGHT frames later. One spare entry over the latency, so the frame a
+    // sample names is still here even when it arrives a frame later than the nominal latency (SDL GPU's fence waiter).
+    struct Frame {
+        u64 device_frame = ~u64(0);  // RenderDevice::frame_index() of the frame (~0 = empty)
+        u64 frame = 0;               // the controller's own frame number (the injection schedule's clock)
+        f32 scale = 0.0f;            // the scale its window views drew at
+        u32 window_views = 0;        // 3D window views recorded in it (the multi-view cost estimate)
+    };
+    static constexpr u32 kRing = MCE_FRAMES_IN_FLIGHT + 1;
+    Frame ring[kRing];
+    u64 frames = 0;              // controller frames run; frame `frames - 1` is the current one
+    u64 consumed = ~u64(0);      // device frame of the last sample looked at (~0 = none): a sample is consumed once
+    u64 inject_key = 0;          // fnv1a64 of the r.dynres.inject text last parsed (0 = none)
+    DynResInject inject;
+    bool inject_ok = false;      // that text parsed
+    f32 cost_ms = 0.0f;          // the smoothed cost at the current scale (Forward3DStats::dynres_cost_ms)
+
+    Frame* current() { return frames == 0 ? nullptr : &ring[(frames - 1) % kRing]; }
+    const Frame* find(u64 device_frame) const {
+        if (device_frame == ~u64(0)) return nullptr;
+        for (const Frame& f : ring)
+            if (f.device_frame == device_frame) return &f;
+        return nullptr;
+    }
+};
+
+DynResDriver& dynres_driver(DynResState* s) { return *static_cast<DynResDriver*>(s); }
+
 }  // namespace
 
 Forward3D::~Forward3D() { shutdown(); }
@@ -1388,9 +1424,29 @@ void Forward3D::destroy_targets() {
     size_ = {};
 }
 
-void Forward3D::ensure_targets(rhi::Extent2D size, bool /*keep_history*/) {
+void Forward3D::ensure_targets(rhi::Extent2D size, bool keep_history) {
     if (size == size_ && !hdr_.is_null()) return;
+    // M-DYNRES 46c: a render-size-only change (the output size, and with it the TAA history's, is unchanged) keeps the
+    // history: it is at the output size and the jitter is derived from the render size, so resolving a frame of the new
+    // size into it is exactly the temporal upsample. The handles are moved out before destroy_targets and back after
+    // it; nothing else of the history changes (history_index_ is not touched by destroy_targets).
+    rhi::TextureHandle kept[2] = {};
+    rhi::Extent2D kept_size{};
+    bool kept_valid = false;
+    if (keep_history) {
+        for (u32 i = 0; i < 2; ++i) {
+            kept[i] = history_[i];
+            history_[i] = {};
+        }
+        kept_size = history_size_;
+        kept_valid = history_valid_;
+    }
     destroy_targets();
+    if (keep_history) {
+        for (u32 i = 0; i < 2; ++i) history_[i] = kept[i];
+        history_size_ = kept_size;
+        history_valid_ = kept_valid;
+    }
     size_ = size;
     rhi::TextureDesc d;
     d.size = size;
@@ -1436,6 +1492,8 @@ void Forward3D::ensure_targets(rhi::Extent2D size, bool /*keep_history*/) {
 }
 
 void Forward3D::shutdown() {
+    delete static_cast<DynResDriver*>(dynres_);  // M-DYNRES 46c: always created as a DynResDriver (update_dynres)
+    dynres_ = nullptr;
     if (!device_) return;
     for (u32 slot = 1; slot < kMaxViews; ++slot) release_view(slot);
     destroy_targets();
@@ -1508,6 +1566,95 @@ Forward3DGpuTimes Forward3D::gpu_times(const rhi::GpuTimestamps& ts) const {
     return t;
 }
 
+// M-DYNRES 46c: the dynamic resolution controller, once a frame on the frame's first view, before record_view reads the
+// scale. Off (the setting, r.dynres 0, a non-finite input): the driver state is dropped, so the next enable starts at the
+// ceiling, no timestamp is read and record_view takes today's fixed scale. On: one sample (an injected cost of the frame
+// MCE_FRAMES_IN_FLIGHT back, or the newest completed GPU timestamps, each matched in the ring with the scale its frame
+// drew at; a frame not in the ring gives no sample), one dynres_step, and the scale for this frame's window views.
+void Forward3D::update_dynres(const Scene3D& scene) {
+    const DynamicResolution& setting = scene.post().dynres;
+    auto drop = [this] {
+        delete static_cast<DynResDriver*>(dynres_);
+        dynres_ = nullptr;
+    };
+    if (!setting.enabled) {  // the default: nothing read, nothing kept
+        drop();
+        return;
+    }
+    static const ConVar* cv_on = ConVar::find(MCE_SID("r.dynres"));
+    static const ConVar* cv_target = ConVar::find(MCE_SID("r.dynres.target_ms"));
+    static const ConVar* cv_inject = ConVar::find(MCE_SID("r.dynres.inject"));
+    DynResParams p;
+    if (!dynres_resolve(setting, !cv_on || cv_on->get_bool(), cv_target ? cv_target->get_float() : 0.0f,
+                        desc_.dynres_floor, desc_.render_scale, p)) {
+        drop();
+        return;
+    }
+    if (!dynres_) {
+        auto* fresh = new DynResDriver{};
+        fresh->scale = p.ceiling;  // starts at the ceiling: the tier's render_scale, bit for bit
+        dynres_ = fresh;
+    }
+    DynResDriver& d = dynres_driver(dynres_);
+    const u64 dev = device_->frame_index();
+    // One controller step per device frame: a second `first` view under the same frame index (an editor drawing two
+    // panels, a bake that re-begins the frame) reuses the scale chosen for it.
+    if (const DynResDriver::Frame* cur = d.current(); cur && cur->device_frame == dev) return;
+
+    // The sample, looked up before this frame's entry overwrites the oldest one.
+    bool has = false;
+    f32 ms = 0.0f, at_scale = 1.0f;
+    bool injected = false;
+    if (const StringView text = cv_inject ? cv_inject->get_string() : StringView{}; !text.empty()) {
+        const u64 key = fnv1a64(text) | 1u;
+        if (key != d.inject_key) {
+            d.inject_key = key;
+            d.inject_ok = dynres_parse_inject(text, d.inject);
+            if (!d.inject_ok)
+                MCE_LOG_WARN("dynres: r.dynres.inject '{}' is not a schedule 'ms@frame,...' (frames ascending, at most {} "
+                             "entries); using the measured GPU time",
+                             text, kDynResMaxInject);
+        }
+        injected = d.inject_ok;
+    }
+    if (injected) {
+        // The injected cost of frame k reaches the controller at frame k + MCE_FRAMES_IN_FLIGHT, as a timestamp would.
+        const u64 want = dev >= MCE_FRAMES_IN_FLIGHT ? dev - MCE_FRAMES_IN_FLIGHT : ~u64(0);
+        if (const DynResDriver::Frame* f = d.find(want); f && want != d.consumed) {
+            d.consumed = want;
+            at_scale = f->scale;
+            ms = dynres_ms_at(dynres_inject_ms(d.inject, f->frame), at_scale, p.variable_share);
+            has = true;
+        }
+    } else {
+        const rhi::GpuTimestamps& ts = device_->last_gpu_timestamps();
+        if (ts.frame_index != ~u64(0) && (d.consumed == ~u64(0) || ts.frame_index > d.consumed)) {
+            d.consumed = ts.frame_index;  // looked at once, used or not
+            const f64 total = gpu_times(ts).total;  // the first 3D view's span (-1 without stamps)
+            if (const DynResDriver::Frame* f = d.find(ts.frame_index); f && total >= 0.0 && std::isfinite(total)) {
+                // N window views cost about N times the first (a split-screen cell costs its share of the area): an
+                // estimate, M-DYNRES risks. A frame whose first view was a render texture is estimated from that view.
+                at_scale = f->scale;
+                ms = f32(total * f64(max(f->window_views, 1u)));
+                has = true;
+            }
+        }
+    }
+
+    const f32 before = d.scale;
+    const u64 k = d.frames++;
+    DynResDriver::Frame& entry = d.ring[k % DynResDriver::kRing];
+    entry = DynResDriver::Frame{};
+    entry.device_frame = dev;
+    entry.frame = k;
+    const f32 now = dynres_step(p, d, has, ms, at_scale);
+    entry.scale = now;
+    d.cost_ms = d.cost > 0.0f ? dynres_ms_at(d.cost, now, p.variable_share) : 0.0f;
+    if (now != before)
+        MCE_LOG_INFO("dynres: scale {:.4f} -> {:.4f} (cost {:.1f} ms, target {:.1f} ms)", before, now,
+                     d.cost > 0.0f ? dynres_ms_at(d.cost, before, p.variable_share) : 0.0f, p.target_ms);
+}
+
 void Forward3D::swap_view(ViewState& v) {
 #define MCE_FORWARD3D_VIEW_SWAP(m) std::swap(m, v.m);
     MCE_FORWARD3D_VIEW_STATE(MCE_FORWARD3D_VIEW_SWAP)
@@ -1571,6 +1718,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     stats_ = {};
     out_ = out;
     if (out.first) shafts_buf_used_ = false;  // M-SUNSHAFTS: no view of this frame has recorded into shafts_buf_ yet
+    if (out.first) update_dynres(scene);  // M-DYNRES 46c: the frame's one controller step, before the scale is read
     // M-LIGHTCOOKIE: no records until upload_cookie_records finds this view's cookies (bank 2 is the decals'); whether an
     // earlier view of this frame used the atlas survives into the later views.
     cookie_records_ = out.first ? 0u : (cookie_records_ & kCookieAtlasInUse);
@@ -1583,12 +1731,27 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     if (view.width == 0 || view.height == 0) return;
     reserve_instancing(scene);
     count_draw_causes(scene);
-    // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target.
-    const f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
+    // Render scale (quality.h): the 3D targets shrink; the tonemap/FXAA pass writes the full target. M-DYNRES 46c: with
+    // the controller on, a window view draws at the frame's dynamic scale (its ceiling is render_scale itself, so a
+    // controller idle at the ceiling draws exactly today's size); a render-texture view keeps the tier's static scale.
+    // A dynamic size change with an unchanged output keeps the TAA history (ensure_targets).
+    f32 scale = clamp(desc_.render_scale, 0.5f, 1.0f);
+    bool keep_history = false;
+    if (dynres_) {
+        DynResDriver& d = dynres_driver(dynres_);
+        stats_.dynres = true;
+        stats_.dynres_cost_ms = d.cost_ms;
+        if (!out.linear_output) {
+            scale = clamp(d.scale, 0.5f, 1.0f);
+            if (DynResDriver::Frame* cur = d.current()) ++cur->window_views;
+            keep_history = history_size_ == view;
+        }
+    }
     const rhi::Extent2D size = scale >= 1.0f ? view
                                               : rhi::Extent2D{max(1u, static_cast<u32>(std::lround(f32(view.width) * scale))),
                                                               max(1u, static_cast<u32>(std::lround(f32(view.height) * scale)))};
-    ensure_targets(size);
+    stats_.render_scale = scale >= 1.0f ? 1.0f : scale;
+    ensure_targets(size, keep_history);
     // TAA: a sub-pixel shift of this frame's projection, Halton(2, 3) over 8 frames.
     taa_on_ = scene.post().taa && !taa_pipe_.is_null();
     jitter_ = mat4::identity();

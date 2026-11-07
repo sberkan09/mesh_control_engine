@@ -11,6 +11,7 @@
 #include "mce/ecs/world.h"
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/decal_scatter.h"
+#include "mce/kit/dynamic_resolution.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/heat_haze.h"
 #include "mce/kit/lens_flare.h"
@@ -284,6 +285,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
                               TerrainCollider3D, TerrainFoliage3D, StaticMerge3D, ChunkLod3D>();
     world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
     world.register_components<SunShafts3D>();  // M-SUNSHAFTS 45d: read by Kit3DExtract; no system
+    world.register_components<DynamicResolution3D>();  // M-DYNRES 46d: read by Kit3DExtract; no system
     world.register_components<LensRain3D>();  // M-LENSRAIN 42d: advanced by kit_lens_rain (install_weather), read by Kit3DExtract
     world.register_components<HeatHaze3D>();  // M-HEATHAZE 43d: read by Kit3DExtract; no system
     world.register_components<EdgeOutline3D>();  // M-OUTLINE 39d: read by Kit3DExtract; no system

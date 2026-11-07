@@ -33,6 +33,7 @@
 #include "mce/kit/render_textures.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/day_cycle.h"
+#include "mce/kit/dynamic_resolution.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/heat_haze.h"
 #include "mce/kit/lens_flare.h"
@@ -1553,6 +1554,30 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings shafts_shadows;
             render::apply_quality(quality_, shafts_shadows, shafts_post);
             post.shafts = shafts_post.shafts;
+        }
+    }
+    {  // dynamic resolution (M-DYNRES 46d): the first enabled DynamicResolution3D by entity index (not table order, so the
+       // pick never depends on archetype layout); without one post.dynres keeps the disabled default (the fixed render
+       // scale, bit for bit), written every frame so a stale one never survives. The renderer's controller reads it from
+       // the frame's first 3D view; nothing comes back to the world.
+        const DynamicResolution3D* dynres = nullptr;
+        u32 dynres_index = ~0u;
+        world.query<const DynamicResolution3D&>().each([&](Entity e, const DynamicResolution3D& c) {
+            if (c.enabled == 0u || e.index >= dynres_index) return;
+            dynres = &c;
+            dynres_index = e.index;
+        });
+        if (dynres) {
+            render::PostFx dynres_post;  // the 46b quality step on a throwaway PostFx (tier, r.dynres, the Range clamps)
+            render::DynamicResolution& dr = dynres_post.dynres;
+            dr.enabled = true;
+            dr.target_ms = dynres->target_ms;
+            dr.min_scale = dynres->min_scale;
+            dr.max_scale = dynres->max_scale;
+            dr.headroom = dynres->headroom;
+            render::ShadowSettings dynres_shadows;
+            render::apply_quality(quality_, dynres_shadows, dynres_post);
+            post.dynres = dynres_post.dynres;
         }
     }
     {  // rain on the lens (M-LENSRAIN 42d): the first LensRain3D; without one or when disabled post.rain keeps the disabled
