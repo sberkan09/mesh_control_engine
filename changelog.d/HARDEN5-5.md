@@ -1,0 +1,1 @@
+- Test-only: an input script action name of 31 bytes is kept, 32 is refused (HARDEN5-5).

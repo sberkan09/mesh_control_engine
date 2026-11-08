@@ -181,3 +181,20 @@ TEST_CASE("input script: more than kMaxActions distinct actions on one tick drop
     CHECK(st.held(first));
     CHECK_FALSE(st.held(last));  // the 65th is dropped (and logged), not written past the array
 }
+
+TEST_CASE("input script: an action name of 31 bytes is kept whole, 32 is refused and adds nothing") {
+    const std::string s31(31, 'a'), s32(32, 'a');
+    InputScript s;
+    REQUIRE(s.add(s31, 1, 2));
+    REQUIRE(s.segments().size() == 1);
+    CHECK(s.segments()[0].name.size() == 31);
+    CHECK(StringView(s.segments()[0].name) == StringView(s31));
+
+    CHECK_FALSE(s.add(s32, 1, 2));
+    CHECK(s.segments().size() == 1);  // not cut to the 31-byte action that exists
+
+    // The same through a script line.
+    InputScript line;
+    CHECK_FALSE(line.parse("1 " + s32 + "\n").has_value());
+    CHECK(line.segments().empty());
+}
