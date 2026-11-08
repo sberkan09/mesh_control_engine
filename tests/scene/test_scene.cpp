@@ -211,3 +211,31 @@ TEST_CASE("scene: request_load with a slot name past 63 bytes loads nothing, a 6
     REQUIRE(scene::apply_change(other, assets, nullptr));
     CHECK(other.query<const SaveKey&>().count() == 0);
 }
+
+TEST_CASE("scene: request_change to a target past 255 bytes is NotFound and leaves the world alone") {
+    const std::string root = make_scene_project("scene_target_limit", R"({ "name": "Target" })");
+    cook::CookService svc;
+    REQUIRE(svc.cook(StringView(root.c_str()), cook::CookOptions{}).ok());
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+
+    World w;
+    REQUIRE(scene::load(w, assets, asset::parse_guid(kSceneGuid).value(), nullptr));
+    const usize before = w.entity_count();
+    REQUIRE(before == 1);
+
+    // The scene's own path still resolves; the same path padded to 300 bytes does not, and the
+    // entities that were loaded are still there afterwards.
+    scene::request_change(w, std::string(300, 'x'));
+    const Result<bool> r = scene::apply_change(w, assets, nullptr);
+    REQUIRE_FALSE(r);
+    CHECK(r.error().code == Errc::NotFound);
+    CHECK(w.entity_count() == before);
+    CHECK(w.resource<scene::SceneChange>().next.empty());
+
+    scene::request_change(w, std::string("guid:").append(kSceneGuid));
+    REQUIRE(scene::apply_change(w, assets, nullptr).value());
+    CHECK(w.entity_count() == before);
+}
