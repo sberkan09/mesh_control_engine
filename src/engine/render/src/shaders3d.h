@@ -664,7 +664,7 @@ layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
 layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
 // M-REFLECT2 48c: SSR roughness blur (CPU twin: ssr_blur.h)
-const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0;
+const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0, kSsrBumpGain = 3.0;
 const int kSsrTaps = 8;
 float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the single sharp tap
     if (!(rough > kSsrBlurMinRough)) return 0.0;
@@ -1164,15 +1164,17 @@ void main() {
                 metallic *= orm.b;
             }
         }
-        float fill = 0.0, pud = 0.0, snow = 0.0;
+        float fill = 0.0, pud = 0.0, snow = 0.0, bump = 0.0;  // bump: the map's tilt (48d)
         if (p_decals.x > 0.5) apply_decals(v_world, n, base.rgb, rough, metallic, decal_emit, fill);
         if (p_wet.x > 0.0) pud = apply_wet(v_world, n, ao, base.rgb, rough, metallic, fill);  // n: still the geometric normal
         if (p_snow.x > 0.0) apply_snow(v_world, n, base.rgb, rough, metallic, fill, pud, snow);  // after the water: snow wins
 #ifdef MCE_TERRAIN
+        bump = (1.0 - fill) * (1.0 - dot(t_n, n));
         n = fill > 0.0 ? normalize(mix(t_n, n, fill)) : t_n;
 #else
         if (o_maps.x > 0.5) {  // uniform branch: perturb_normal takes derivatives
             vec3 nb = perturb_normal(n, v_world, v_uv, unpack_normal(MCE_MAP(u_normal_map, uv)));
+            bump = (1.0 - fill) * (1.0 - dot(nb, n));
             n = normalize(mix(nb, n, fill));
         }
 #endif
@@ -1358,7 +1360,7 @@ void main() {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             vec2 suv = c.xy / c.w * 0.5 + 0.5;
             float rfade = clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
-            float br = p_ssr2.x > 0.5 && rfade > 0.0 ? ssr_blur_radius(rough, 0.0) : 0.0;
+            float br = p_ssr2.x > 0.5 && rfade > 0.0 ? ssr_blur_radius(rough, kSsrBumpGain * bump) : 0.0;
             vec4 s = br > 0.0 ? ssr_gather(suv, br) : textureLod(u_ssr, suv, 0.0);
             float w = s.a * rfade;
             amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
@@ -1692,10 +1694,11 @@ layout(std140, binding = 1) uniform SsrU {
     mat4 r_proj;       // this frame's projection, unjittered
     mat4 r_reproject;  // view space -> last frame's clip space
     vec4 r_params;     // x: max distance (m), y: thickness (m), z: steps, w: edge fade (uv)
-    vec4 r_misc;       // x: last frame valid
+    vec4 r_misc;       // x: last frame valid, y: read u_vel at the hit (M-REFLECT2 48e), zw: last frame's jitter (uv)
 };
 layout(binding = 6) uniform sampler2D u_gbuf;  // view normal (xyz), view depth (w; 0 = nothing drawn)
 layout(binding = 7) uniform sampler2D u_prev;  // last frame's HDR color
+layout(binding = 8) uniform sampler2D u_vel;   // this frame's velocity (rg uv motion, b drawn, a view depth)
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_ssr;
 vec3 view_pos(vec2 uv, float z) {
@@ -1761,6 +1764,11 @@ void main() {
     vec4 c = r_reproject * vec4(view_pos(huv, hg.w), 1.0);
     if (c.w <= 1e-4) return;
     vec2 puv = c.xy / c.w * 0.5 + 0.5;
+    if (r_misc.y > 0.5) {  // where the hit surface was, its own motion included; same surface by depth, else the camera's
+        ivec2 vs = textureSize(u_vel, 0);
+        vec4 v = texelFetch(u_vel, min(ivec2(huv * vec2(vs)), vs - 1), 0);
+        if (v.b > 0.5 && v.x < 8.0 && abs(v.a - hg.w) < 0.1 * hg.w) puv = huv - v.xy + r_misc.zw;
+    }
     if (any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) return;
     vec2 edge = min(min(huv, 1.0 - huv), min(puv, 1.0 - puv));
     float fade = r_params.w > 0.0 ? clamp(min(edge.x, edge.y) / r_params.w, 0.0, 1.0) : 1.0;
