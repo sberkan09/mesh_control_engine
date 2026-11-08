@@ -16,6 +16,7 @@
 #include "mce/render/lens_rain.h"
 #include "mce/render/light_cookie.h"
 #include "mce/render/quality.h"
+#include "mce/render/ssr_blur.h"
 #include "mce/render/sun_shafts.h"
 #include "mce/render/translucency.h"
 #include "mce/render/underwater.h"
@@ -39,6 +40,9 @@ MCE_CVAR(cv_ssao, "r.ssao", true,
 MCE_CVAR(cv_ssr, "r.ssr", true,
          "Screen-space reflections for scenes that ask for them (ScreenSpaceReflections::enabled; off = the probes only)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_ssr_blur, "r.ssr.blur", true,
+         "SSR roughness blur: a rough reflecting pixel gathers 8 taps of the trace (M-REFLECT2; 0 = one sharp tap)",
+         CVarFlags::None);
 MCE_CVAR(cv_contact_shadows, "r.contact_shadows", true,
          "Contact shadows for scenes that ask for them (ContactShadows::enabled; off = the sun's cascades only)",
          CVarFlags::RequiresRestart);
@@ -129,7 +133,8 @@ struct Forward3DPassU {
     vec4 sun_cookie;  // M-LIGHTCOOKIE 40e: x atlas layer, y strength, z size (m), w 1 = the sun has a cookie
     vec4 sun_cookie2; // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
     vec4 translucency;  // M-TRANSLUCENT 41d: x 1 = the back side's ambient, y 1 = the forward-scatter lobe (translucency_frame)
-    vec4 free_[5];    // the rest of the 1536-byte block, unused (always 0)
+    vec4 ssr2;          // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur), yzw 0
+    vec4 free_[4];      // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -161,11 +166,13 @@ static_assert(
         offsetof(Forward3DPassU, sun_cookie) == offsetof(Forward3DPassU, meteor2) + 16 &&
         offsetof(Forward3DPassU, sun_cookie2) == offsetof(Forward3DPassU, sun_cookie) + 16 &&
         offsetof(Forward3DPassU, translucency) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, translucency) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 5 * 16,
+        offsetof(Forward3DPassU, ssr2) == offsetof(Forward3DPassU, translucency) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, ssr2) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 4 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
     "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
-    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_free[5] follow p_sky_rot as in MCE_GLSL_PASS_U");
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_free[4] follow p_sky_rot as in "
+    "MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
@@ -2606,6 +2613,10 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     if (stats_.ssr) {
         const ScreenSpaceReflections& ssr = scene.reflections();
         pu.ssr = {1.0f, clamp(ssr.max_roughness, 0.0f, 1.0f), max(ssr.roughness_fade, 1e-3f), max(ssr.intensity, 0.0f)};
+        // M-REFLECT2 48c: the roughness blur (kMeshFS ssr_gather); only pixels above kSsrBlurMinRough with a non-zero
+        // weight pay for it, the rest keep the single tap bit for bit.
+        stats_.ssr_blur = cv_ssr_blur.get_bool() && pu.ssr.y > kSsrBlurMinRough;
+        pu.ssr2 = {stats_.ssr_blur ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
     }
     cmd.bind_texture(rhi::bank::kSsr, stats_.ssr ? ssr_ : ao_off_, linear_clamp_);
     bind_local_shadows(cmd, scene, pu);

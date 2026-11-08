@@ -28,6 +28,7 @@ mce_add_library(mce_render
         src/terrain.cpp
         src/translucency.cpp
         src/sun_shafts.cpp
+        src/ssr_blur.cpp
         src/dynres.cpp
         src/text.cpp
         src/texture_store.cpp
