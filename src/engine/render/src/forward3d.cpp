@@ -43,6 +43,10 @@ MCE_CVAR(cv_ssr, "r.ssr", true,
 MCE_CVAR(cv_ssr_blur, "r.ssr.blur", true,
          "SSR roughness blur: a rough reflecting pixel gathers 8 taps of the trace (M-REFLECT2; 0 = one sharp tap)",
          CVarFlags::None);
+MCE_CVAR(cv_ssr_motion, "r.ssr.motion", true,
+         "SSR reads the velocity buffer at hits when TAA, motion blur or depth of field has it (M-REFLECT2; 0 = camera "
+         "reprojection only)",
+         CVarFlags::None);
 MCE_CVAR(cv_contact_shadows, "r.contact_shadows", true,
          "Contact shadows for scenes that ask for them (ContactShadows::enabled; off = the sun's cascades only)",
          CVarFlags::RequiresRestart);
@@ -216,7 +220,7 @@ struct SsrU {  // kSsrFS
     mat4 proj;
     mat4 reproject;  // this frame's view space -> last frame's (jittered) clip space
     vec4 params;     // x: max distance, y: thickness, z: steps, w: edge fade
-    vec4 misc;       // x: last frame's color is valid
+    vec4 misc;       // x: last frame's color is valid, y: read the velocity at the hit, zw: last frame's jitter (uv)
 };
 
 struct ContactU {  // kContactFS
@@ -1823,6 +1827,17 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsScale);
     record_ssao(cmd, scene);
     timestamp(cmd, kTsSsao);
+    // M-REFLECT2 48e: with SSR and a velocity pass both on, the velocity pass records before the trace (it reads only
+    // the opaque draws and the matrices, so its pixels do not change; its time falls in the SSR bucket) and the trace
+    // reads where each hit surface was. stats_.ssr_motion carries the decision to record_ssr: only with last frame's
+    // matrices (the previous view-proj the velocity used is then last frame's, which gives its jitter).
+    velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
+    const bool velocity_early =
+        velocity_on_ && cv_ssr_motion.get_bool() && scene.reflections().enabled && !ssr_pipe_.is_null();
+    if (velocity_early) {
+        stats_.ssr_motion = velocity_prev_valid_ && ssr_prev_valid_;
+        record_velocity(cmd, scene);
+    }
     record_ssr(cmd, scene);
     timestamp(cmd, kTsSsr);
     record_contact(cmd, scene);
@@ -1839,9 +1854,8 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsMain);
     if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
     timestamp(cmd, kTsResolve);
-    velocity_on_ = scene.post().needs_velocity() && !velocity_pipe_.is_null();
-    if (velocity_on_) record_velocity(cmd, scene);
-    else velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
+    if (!velocity_on_) velocity_prev_valid_ = false;  // a frame without the prepass breaks the previous transforms
+    if (velocity_on_ && !velocity_early) record_velocity(cmd, scene);
     record_outline(cmd, scene);  // M-OUTLINE 39c: post_source_ = the frame with lines; its time falls in the taa bucket
     if (taa_on_) record_taa(cmd, scene);
     timestamp(cmd, kTsTaa);
@@ -2364,10 +2378,18 @@ void Forward3D::record_ssr(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     u.params = {max(ssr.max_distance, 0.01f), max(ssr.thickness, 1e-3f), f32(clamp(ssr.steps, 4u, 128u)),
                 clamp(ssr.edge_fade, 0.0f, 0.5f)};
     u.misc = {ssr_prev_valid_ ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+    if (stats_.ssr_motion) {  // M-REFLECT2 48e: record_view ran record_velocity first, with last frame's matrices
+        // ssr_prev_vp_ = last frame's jitter * its view-proj, which the velocity pass used as `previous`.
+        const mat4 j = ssr_prev_vp_ * inverse(velocity_prev_vp_used_);
+        u.misc.y = 1.0f;
+        u.misc.z = j.c[3][0] * 0.5f;
+        u.misc.w = j.c[3][1] * 0.5f;
+    }
     cmd.bind_pipeline(ssr_pipe_);
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
     cmd.bind_texture(rhi::bank::kFirstSampler, ao_gbuf_, point_sampler_);
     cmd.bind_texture(rhi::bank::kFirstSampler + 1, hdr_, linear_clamp_);
+    cmd.bind_texture(rhi::bank::kFirstSampler + 2, stats_.ssr_motion ? velocity_ : ao_off_, point_sampler_);
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     cmd.pop_debug_scope();
