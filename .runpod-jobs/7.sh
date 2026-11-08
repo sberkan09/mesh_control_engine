@@ -13,7 +13,7 @@ I=/work/img; for q in high medium; do for v in on blur0 ssr0; do a=""; [[ $v == 
 python3 - <<'PY'
 import sys; sys.path.insert(0, '/work/repo/.runpod-jobs'); import r8, numpy as np
 for q in ("high", "medium"):
-    _, Lo = r8.lum(f"/work/img/tg_{q}_ssr0.ppm"); Ho = r8.hf(Lo); m = np.zeros_like(Lo, bool); m[760:1000, 200:1700] = True  # near ground, below the strips
+    _, Lo = r8.lum(f"/work/img/tg_{q}_ssr0.ppm"); Ho = r8.hf(Lo); m = np.zeros_like(Lo, bool); m[900:1075, :] = True  # the ground below the near row
     for v in ("on", "blur0"):
         _, L = r8.lum(f"/work/img/tg_{q}_{v}.ppm"); H = r8.hf(L)
         print(f"ground 0.45 {q} {v}: refl {np.abs(L-Lo)[m].mean():.2f} hf {(H-Ho)[m].mean():+.2f} (ssr0 hf {Ho[m].mean():.2f})")
