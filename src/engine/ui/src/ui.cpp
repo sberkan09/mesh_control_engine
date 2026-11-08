@@ -736,7 +736,15 @@ StringView Document::binding_format(WidgetId w) const {
     return n ? n->binding_format.view() : StringView();
 }
 void Document::set_action(WidgetId w, StringView action) {
-    if (Node* n = node(w)) n->action.assign(action);
+    Node* n = node(w);
+    if (!n) return;
+    FixedString<32> a;
+    a.assign(action);
+    if (a.truncated()) {  // a cut action name would fire a different action
+        MCE_LOG_ERROR("ui: action '{}' on '{}' is over 31 bytes and is refused", action, n->name.c_str());
+        return;
+    }
+    n->action = a;
 }
 void Document::set_binding(WidgetId w, StringView path, StringView format) {
     if (Node* n = node(w)) {
