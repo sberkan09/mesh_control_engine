@@ -79,6 +79,15 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_dynres_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_dynres.mcscene
                      -DTICKS=300 -DENTITIES=35 -DTOUR=kit3d_tour_dynres -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The reflections scene (M-REFLECT2 48f): scenes/tour_reflect.mcscene, a ladder of five floor strips (roughness 0.0 .. 0.7) with a
+    # coloured pillar behind each, a normal-mapped strip, a mirror strip with a sphere that a looping TimelinePlayer slides over it,
+    # and an Environment3D with ssr on and ssr_max_roughness 0.8; made by gen_reflect.py (box.glb, a 64 x 64 normal map, the
+    # reflect_* materials and timelines/reflect_slide.mctimeline too). Named tour_reflect so it sorts after scenes/tour.mcscene, so the
+    # default scene stays the tour. 17 entities. 300 ticks (5 s): the sphere has slid across the strip (its transform is hashed), the
+    # SSR itself is render-side and hashes nothing; the two plays must agree.
+    add_test(NAME sample_kit3d_tour_reflect_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_reflect.mcscene
+                     -DTICKS=300 -DENTITIES=17 -DTOUR=kit3d_tour_reflect -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -177,4 +186,20 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     set_tests_properties(sample_kit3d_tour_dynres_gpu PROPERTIES LABELS gpu TIMEOUT 300
         PASS_REGULAR_EXPRESSION "dynres: scale 1\\.0000 -> 0\\.[0-9]+.*dynres: scale 0\\.[0-9]+ -> 1\\.0000")
     mce_mark_slow(sample_kit3d_tour_dynres_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The reflections capture: the scene's frame 120 on the High tier (TAA on, so r.ssr.motion matters), written for a look
+    # (build/.../kit3d_tour_reflect.ppm; samples keep no goldens). Pass: the 3D path starts at the High tier, the scene loads with its
+    # 17 entities and the capture is written (the log lines; the frame itself is looked at, the render3d_gl tests pin the pixels).
+    # The strips left to right go from a sharp mirror to a soft smear, the bumpy strip shows a wavy reflection and the sphere's
+    # reflection stays under it; `-r.ssr.blur 0`, `-r.ssr.motion 0` or `-r.ssr 0` on the same command draw the frame without each.
+    # About 30 s on llvmpipe, under the 60 s smoke limit, so there is no separate smoke variant.
+    add_test(NAME sample_kit3d_tour_reflect_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_reflect.mcscene -frames 120 -r.quality high
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_reflect.ppm" -platform.error_box 0 -r.vsync 0
+                     -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_reflect_gpu PROPERTIES LABELS gpu TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "3D path on \\(high quality.*with 17 entities.*wrote [^\n]*kit3d_tour_reflect\\.ppm")
+    mce_mark_slow(sample_kit3d_tour_reflect_gpu)
 endif()

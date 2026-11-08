@@ -591,6 +591,7 @@ const Golden kGolden[] = {
     {"samples/cinema_demo/models/pillar.glb", 0x26fd6ac1db48ef4cull},
     {"samples/cinema_demo/models/wall.glb", 0x20233f5c5972163bull},
     {"samples/import_demo/models/lamp.gltf", 0x2c1c7e56b23e617full},  // M-IMPORT3D 4b: the demo's glTF triangle
+    {"samples/kit3d_tour/models/box.glb", 0xd7d3d6c8e14ee38bull},
     {"samples/kit3d_tour/models/cart.glb", 0xc13f4d832988eb19ull},
     {"samples/kit3d_tour/models/grunt.glb", 0x3ddbd5cb30dea27eull},
     {"samples/kit3d_tour/models/leaf.glb", 0xe8837fc5b8349502ull},

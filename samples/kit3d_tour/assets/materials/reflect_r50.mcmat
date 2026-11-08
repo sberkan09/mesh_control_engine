@@ -1,0 +1,15 @@
+{
+  "format": "mce-material",
+  "version": 1,
+  "guid": "b0a30000-0000-4000-8000-000000000055",
+  "name": "reflect_r50",
+  "base_color": [
+    0.55,
+    0.57,
+    0.6,
+    1
+  ],
+  "metallic": 0.9,
+  "roughness": 0.5,
+  "double_sided": false
+}
