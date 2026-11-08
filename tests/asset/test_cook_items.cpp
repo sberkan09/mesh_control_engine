@@ -474,3 +474,29 @@ TEST_CASE("items: an id or name of 63 bytes cooks, one byte more is a cook error
     CHECK_FALSE(cooks(item_with(R"("id": "a", "name": ")" + s64 + R"(")"), &diags));
     CHECK(diags.find("items.mcitems") != std::string::npos);
 }
+
+TEST_CASE("items: a stat name and a recipe station of 31 bytes cook, one byte more is a cook error") {
+    const std::string s31(31, 's'), s32(32, 's');
+    int n = 0;
+    const auto cooks = [&](const std::string& text, std::string* diags) {
+        return cook_text("items_limit2_" + std::to_string(n++), text, diags);
+    };
+    const auto stat = [](const std::string& key) {
+        return catalog_json("{ \"id\": \"a\", \"stats\": { \"" + key + "\": 1 } }", "");
+    };
+    const std::string in = R"("in": [ { "item": "cloth" } ])", out = R"("out": [ { "item": "bandage" } ])";
+    const auto station = [&](const std::string& name) {
+        return recipes_json(kCraftItems, R"({ "id": "r", "station": ")" + name + R"(", )" + in + ", " + out + " }");
+    };
+
+    std::string diags;
+    CHECK(cooks(stat(s31), &diags));
+    CHECK(cooks(station(s31), &diags));
+
+    diags.clear();
+    CHECK_FALSE(cooks(stat(s32), &diags));
+    CHECK(diags.find("a stat name is up to 31 bytes") != std::string::npos);
+    diags.clear();
+    CHECK_FALSE(cooks(station(s32), &diags));
+    CHECK(diags.find("station") != std::string::npos);
+}

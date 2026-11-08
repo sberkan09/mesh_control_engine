@@ -184,6 +184,11 @@ public:
                             const JsonValue v = st.at(k);
                             asset::ItemStat s;
                             s.key = st.key_at(k);
+                            if (s.key.truncated()) {
+                                error(diags, file, v, "a stat name is up to 31 bytes");
+                                good = false;
+                                continue;
+                            }
                             if (!v.is_number() || !std::isfinite(v.as_number()) || std::fabs(v.as_number()) > 1.0e9) {
                                 error(diags, file, v, "a stat must be a number");
                                 good = false;
