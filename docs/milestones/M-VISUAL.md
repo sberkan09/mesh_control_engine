@@ -16,7 +16,7 @@ reference backend (SDL GPU and Metal follow per the M-MAC parity rule) and leave
 | 5 | Temporal pipeline (velocity, TAA, upscaling) | SBA-10 | done: GL and SDL GPU (gated + goldens), High tier on TAA; Metal untested; real-GPU budget on the Mac/device session |
 | 6 | Global illumination (irradiance-probe volume) | SBA-11 | done: GL and SDL GPU (gated + goldens), editor bake, Low tier on the bake; Metal untested; real-GPU budget on the Mac/device session |
 | 7 | Atmosphere and volumetrics | SBA-12 | done: GL and SDL GPU (gated + goldens), Low tier without the volumetric fog; Metal untested; real-GPU budget on the Mac/device session |
-| 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR not taken (optional); Metal untested; real-GPU budget on the Mac/device session |
+| 8 | Post completion | SBA-13 | done: GL and SDL GPU (gated + goldens), Low tier without depth of field and motion blur; SSR shipped later in M-VISUAL2 step 1 ([M-VISUAL2.md](M-VISUAL2.md)); Metal untested; real-GPU budget on the Mac/device session |
 | 9 | Scale (GPU culling, foliage, decals, GPU particles) | SBA-14 | done: GL and SDL GPU (gated + goldens), CPU culling fallback without compute; Metal untested; real-GPU budget on the Mac/device session |
 | demo | High-profile sample side by side | SBA-15 | done: `samples/06_showcase`, sheet and llvmpipe budget below; mid-range GPU 1080p and mobile tier numbers on the Mac/device session |
 
