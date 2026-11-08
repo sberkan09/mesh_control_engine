@@ -71,6 +71,14 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_shafts_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_shafts.mcscene
                      -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_shafts -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The dynamic resolution scene (M-DYNRES 46e): scenes/tour_dynres.mcscene, a heavy-looking set (two rings of 12 shadow-casting spheres,
+    # 8 coloured point lights, a shadowed sun, volumetric fog, bloom) and a DynamicResolution3D with target_ms 12 on the world entity;
+    # made by gen_dynres.py. Named tour_dynres so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 35 entities.
+    # 300 ticks (5 s) like the haze: the controller is render-side and hashes nothing, so the two plays must agree (and in a headless
+    # play there is no renderer at all).
+    add_test(NAME sample_kit3d_tour_dynres_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_dynres.mcscene
+                     -DTICKS=300 -DENTITIES=35 -DTOUR=kit3d_tour_dynres -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -153,4 +161,20 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_shafts_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_shafts_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The dynamic resolution capture: the scene's frame 660 with a fixed injected cost (24 ms at scale 1 from frame 0, 8 ms from frame
+    # 240; the recovery steps are 60 frames apart, so the scale is back at 1.0 near frame 600), written for a look
+    # (build/.../kit3d_tour_dynres.ppm; samples keep no goldens). The log must show the scale stepping down in 1/16 steps after
+    # frame 0 and returning to 1.0000 after frame 240 (PASS_REGULAR_EXPRESSION on the `dynres: scale` lines). A capture
+    # run holds dynres off unless a valid inject schedule is given (the player's rule), so the inject cvar is what turns it on here;
+    # `-r.dynres 0` or the same command without the cvar draws the frame at the tier's fixed scale.
+    add_test(NAME sample_kit3d_tour_dynres_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_dynres.mcscene -frames 660
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_dynres.ppm" -platform.error_box 0 -r.vsync 0
+                     -pause_on_focus_loss 0 "-r.dynres.inject" "24@0,8@240")
+    set_tests_properties(sample_kit3d_tour_dynres_gpu PROPERTIES LABELS gpu TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "dynres: scale 1\\.0000 -> 0\\.[0-9]+.*dynres: scale 0\\.[0-9]+ -> 1\\.0000")
+    mce_mark_slow(sample_kit3d_tour_dynres_gpu)
 endif()

@@ -1,0 +1,985 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-000000000018",
+ "name": "tour_dynres",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      -0.4,
+      -0.6,
+      -0.5
+     ],
+     "sun_intensity": 1.6,
+     "sun_shadows": 1,
+     "sun_color": [
+      1.0,
+      0.92,
+      0.8
+     ],
+     "ambient_sky": [
+      0.25,
+      0.28,
+      0.36
+     ],
+     "ambient_ground": [
+      0.1,
+      0.09,
+      0.08
+     ],
+     "fog_density": 0.006,
+     "fog_color": [
+      0.6,
+      0.66,
+      0.78
+     ],
+     "volumetric_fog": 1,
+     "volumetric_density": 0.04,
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.25
+    },
+    "DynamicResolution3D": {
+     "enabled": 1,
+     "target_ms": 12,
+     "min_scale": 0.6,
+     "max_scale": 1.0,
+     "headroom": 0.15
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 70
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      1.8,
+      0.0
+     ],
+     "rotation": [
+      0,
+      0,
+      0,
+      1
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Sphere 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.35,
+      0.35,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      0.6,
+      -6.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Sphere 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.7667,
+      0.725,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.0,
+      0.6,
+      -5.1962
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Sphere 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6,
+      0.475,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      5.1962,
+      0.6,
+      -3.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Sphere 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.4333,
+      0.85,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      6.0,
+      0.6,
+      0.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Sphere 5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.85,
+      0.6,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      5.1962,
+      0.6,
+      3.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Sphere 6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6833,
+      0.35,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.0,
+      0.6,
+      5.1962
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Sphere 7",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.5167,
+      0.725,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      0.6,
+      6.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Sphere 8",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.35,
+      0.475,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.0,
+      0.6,
+      5.1962
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Sphere 9",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.7667,
+      0.85,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5.1962,
+      0.6,
+      3.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Sphere 10",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6,
+      0.6,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -6.0,
+      0.6,
+      0.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Sphere 11",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.4333,
+      0.35,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5.1962,
+      0.6,
+      -3.0
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Sphere 12",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.85,
+      0.725,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.0,
+      0.6,
+      -5.1962
+     ],
+     "scale": [
+      1.2,
+      1.2,
+      1.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 16,
+   "name": "Sphere 13",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.35,
+      0.35,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.847,
+      1.0,
+      -10.6252
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "name": "Sphere 14",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.7667,
+      0.725,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      7.7782,
+      1.0,
+      -7.7782
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 18,
+   "name": "Sphere 15",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6,
+      0.475,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.6252,
+      1.0,
+      -2.847
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 19,
+   "name": "Sphere 16",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.4333,
+      0.85,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.6252,
+      1.0,
+      2.847
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 20,
+   "name": "Sphere 17",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.85,
+      0.6,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      7.7782,
+      1.0,
+      7.7782
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 21,
+   "name": "Sphere 18",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6833,
+      0.35,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.847,
+      1.0,
+      10.6252
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 22,
+   "name": "Sphere 19",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.5167,
+      0.725,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.847,
+      1.0,
+      10.6252
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 23,
+   "name": "Sphere 20",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.35,
+      0.475,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -7.7782,
+      1.0,
+      7.7782
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 24,
+   "name": "Sphere 21",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.7667,
+      0.85,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -10.6252,
+      1.0,
+      2.847
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 25,
+   "name": "Sphere 22",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.6,
+      0.6,
+      0.35,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -10.6252,
+      1.0,
+      -2.847
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 26,
+   "name": "Sphere 23",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.4333,
+      0.35,
+      0.85,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -7.7782,
+      1.0,
+      -7.7782
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 27,
+   "name": "Sphere 24",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 1,
+     "tint": [
+      0.85,
+      0.725,
+      0.6,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.847,
+      1.0,
+      -10.6252
+     ],
+     "scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 28,
+   "name": "Light 1",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.45,
+      0.2,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      3.2528,
+      2.2,
+      -7.853
+     ]
+    }
+   }
+  },
+  {
+   "id": 29,
+   "name": "Light 2",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      0.25,
+      0.5,
+      1.0,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      7.853,
+      2.2,
+      -3.2528
+     ]
+    }
+   }
+  },
+  {
+   "id": 30,
+   "name": "Light 3",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      0.3,
+      1.0,
+      0.45,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      7.853,
+      2.2,
+      3.2528
+     ]
+    }
+   }
+  },
+  {
+   "id": 31,
+   "name": "Light 4",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.85,
+      0.3,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      3.2528,
+      2.2,
+      7.853
+     ]
+    }
+   }
+  },
+  {
+   "id": 32,
+   "name": "Light 5",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.25,
+      0.6,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      -3.2528,
+      2.2,
+      7.853
+     ]
+    }
+   }
+  },
+  {
+   "id": 33,
+   "name": "Light 6",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      0.35,
+      0.9,
+      1.0,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      -7.853,
+      2.2,
+      3.2528
+     ]
+    }
+   }
+  },
+  {
+   "id": 34,
+   "name": "Light 7",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      0.7,
+      0.4,
+      1.0,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      -7.853,
+      2.2,
+      -3.2528
+     ]
+    }
+   }
+  },
+  {
+   "id": 35,
+   "name": "Light 8",
+   "components": {
+    "PointLight3D": {
+     "color": [
+      1.0,
+      0.65,
+      0.35,
+      1
+     ],
+     "intensity": 8.0,
+     "radius": 9
+    },
+    "LocalTransform": {
+     "position": [
+      -3.2528,
+      2.2,
+      -7.853
+     ]
+    }
+   }
+  }
+ ]
+}
