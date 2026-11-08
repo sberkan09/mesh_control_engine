@@ -1117,3 +1117,19 @@ TEST_CASE("ui: a widget name keeps 31 bytes; a longer one is cut and found only 
     CHECK(d.find_child(d.root(), longer).is_null());
     CHECK(d.find_child(d.root(), fits) == a);
 }
+
+TEST_CASE("ui: an action name of 31 bytes is kept whole, 32 is refused and keeps the old one") {
+    Fixture f;
+    Document d;
+    d.set_skin(f.skin);
+    const WidgetId w = d.add(d.root(), WidgetKind::Button, "go");
+    const std::string s31(31, 'a');
+    const std::string s32(32, 'a');
+    d.set_action(w, s31);
+    CHECK(d.action(w) == StringView(s31));
+    d.set_action(w, s32);
+    CHECK(d.action(w) == StringView(s31));  // not cut to a different action
+    d.set_action(w, "play");
+    d.set_action(w, s32);
+    CHECK(d.action(w) == StringView("play"));
+}
