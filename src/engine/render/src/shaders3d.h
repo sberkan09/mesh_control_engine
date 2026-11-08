@@ -88,7 +88,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sun_cookie;     // M-LIGHTCOOKIE 40e: x atlas layer, y strength (0..1), z size (m per repeat), w 1 = the sun has a cookie
     vec4 p_sun_cookie2;    // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
     vec4 p_translucency;   // M-TRANSLUCENT: x back ambient, y scatter lobe
-    vec4 p_free[5];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_ssr2;           // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur; 0 = one sharp tap), yzw 0
+    vec4 p_free[4];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -662,6 +663,32 @@ layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
 layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
+// M-REFLECT2 48c: SSR roughness blur (CPU twin: ssr_blur.h)
+const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0;
+const int kSsrTaps = 8;
+float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the single sharp tap
+    if (!(rough > kSsrBlurMinRough)) return 0.0;
+    float r = min(rough, 1.0);
+    return min(kSsrBlurScale * (r * r - kSsrBlurMinRough * kSsrBlurMinRough + max(bump, 0.0)), kSsrBlurMax);
+}
+vec4 ssr_gather(vec2 uv, float radius) {
+    vec2 size = vec2(textureSize(u_ssr, 0));
+    vec2 texel = 1.0 / size;
+    float rot = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    vec3 rgb = vec3(0.0);
+    float aw = 0.0, kw = 0.0;
+    for (int i = 0; i < kSsrTaps; ++i) {
+        float t = (float(i) + 0.5) / float(kSsrTaps);  // radius^2 of the tap, 0..1: an even disc
+        float th = float(i) * 2.39996323 + rot;
+        vec2 o = vec2(cos(th), sin(th)) * (sqrt(t) * radius);
+        float k = 1.0 - 0.75 * t * t;  // smooth radial falloff
+        vec4 s = textureLod(u_ssr, clamp(uv + o * texel, 0.5 * texel, 1.0 - 0.5 * texel), 0.0);
+        rgb += s.rgb * (s.a * k);
+        aw += s.a * k;
+        kw += k;
+    }
+    return vec4(rgb / max(aw, 1e-4), aw / kw);
+}
 layout(location = 0) in vec3 v_world;
 layout(location = 1) in vec3 v_normal;
 layout(location = 2) in vec2 v_uv;
@@ -1329,8 +1356,11 @@ void main() {
         }
         if (p_ssr.x > 0.5) {  // what the screen saw along r, over the probes, by confidence and roughness
             vec4 c = u_view_proj * vec4(v_world, 1.0);
-            vec4 s = textureLod(u_ssr, c.xy / c.w * 0.5 + 0.5, 0.0);
-            float w = s.a * clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            vec2 suv = c.xy / c.w * 0.5 + 0.5;
+            float rfade = clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
+            float br = p_ssr2.x > 0.5 && rfade > 0.0 ? ssr_blur_radius(rough, 0.0) : 0.0;
+            vec4 s = br > 0.0 ? ssr_gather(suv, br) : textureLod(u_ssr, suv, 0.0);
+            float w = s.a * rfade;
             amb_spec = mix(amb_spec, s.rgb * spec_brdf * p_ssr.w, w);
         }
         if (p_ao.x > 0.5 && o_ext.w < 0.5) {  // SSAO darkens the ambient only; the screen position as the full-screen passes see it
