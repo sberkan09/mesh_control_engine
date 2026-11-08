@@ -663,7 +663,7 @@ layout(binding = 8) uniform sampler2DArray u_orm;
 layout(binding = 13) uniform sampler2DArray u_emissive;
 layout(binding = 11) uniform sampler2D u_ao;  // half-resolution SSAO, r = ambient visibility, g = the sun's contact visibility
 layout(binding = 3) uniform sampler2D u_ssr;  // half-resolution SSR: rgb reflected light, a confidence
-// M-REFLECT2 48c: the roughness blur of the SSR lookup; the CPU twin is mce/render/ssr_blur.h (keep the two equal).
+// M-REFLECT2 48c: SSR roughness blur (CPU twin: ssr_blur.h)
 const float kSsrBlurMinRough = 0.1, kSsrBlurScale = 24.0, kSsrBlurMax = 8.0;
 const int kSsrTaps = 8;
 float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the single sharp tap
@@ -671,9 +671,6 @@ float ssr_blur_radius(float rough, float bump) {  // half-size texels; 0 = the s
     float r = min(rough, 1.0);
     return min(kSsrBlurScale * (r * r - kSsrBlurMinRough * kSsrBlurMinRough + max(bump, 0.0)), kSsrBlurMax);
 }
-// kSsrTaps taps on a Vogel disc (golden-angle spiral) of `radius` half-size texels around uv, rotated per pixel by
-// interleaved gradient noise of gl_FragCoord (deterministic; TAA resolves it). Alpha-weighted, so a missed tap lowers
-// the confidence instead of darkening the colour: a blurred edge fades into the probes, not into black.
 vec4 ssr_gather(vec2 uv, float radius) {
     vec2 size = vec2(textureSize(u_ssr, 0));
     vec2 texel = 1.0 / size;
@@ -1361,8 +1358,6 @@ void main() {
             vec4 c = u_view_proj * vec4(v_world, 1.0);
             vec2 suv = c.xy / c.w * 0.5 + 0.5;
             float rfade = clamp((p_ssr.y - rough) / p_ssr.z, 0.0, 1.0);
-            // M-REFLECT2 48c: a rough pixel gathers a disc of the trace (ssr_gather); at or below
-            // kSsrBlurMinRough, with r.ssr.blur 0 or a zero weight it keeps the single tap.
             float br = p_ssr2.x > 0.5 && rfade > 0.0 ? ssr_blur_radius(rough, 0.0) : 0.0;
             vec4 s = br > 0.0 ? ssr_gather(suv, br) : textureLod(u_ssr, suv, 0.0);
             float w = s.a * rfade;
