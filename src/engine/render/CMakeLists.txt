@@ -34,6 +34,7 @@ mce_add_library(mce_render
         src/texture_store.cpp
         src/types.cpp
         src/underwater.cpp
+        src/water_optics.cpp
         src/video.cpp
         src/plmpeg_impl.c
     PUBLIC_DEPS

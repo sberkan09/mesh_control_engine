@@ -220,6 +220,7 @@ TEST_CASE("render3d_gl: calm water reflects more toward the horizon (fresnel), a
 }
 
 TEST_CASE("render3d_gl: the drawn normals are kit::water_normal's (the reflected ray's direction at every probe)") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the slab under the water would show through the black body
     Fixture3D f;
     // Straight down onto the sea from 7 m, the level above everything (no shore, no depth); black body, no sun, no
     // fog, no foam: a pixel is the sign sky along the reflection, times the fresnel term.
@@ -293,6 +294,7 @@ TEST_CASE("render3d_gl: the Low tier draws a flat water plane without foam") {
 }
 
 TEST_CASE("render3d_gl: shore foam lies only within foam_width_m of the opaque surface behind the water") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: foam turns the depth read on, and with it the refraction
     Fixture3D f;  // the fixture's camera: 4.5 m up, 35 degrees down onto the box
     WaterSurface w = water_carrier(0.0f);
     w.level_y = 0.5f;  // half the box out of the water, the slab's top 0.5 m under it (about 0.8 m along these rays)

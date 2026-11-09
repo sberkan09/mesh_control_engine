@@ -20,6 +20,7 @@
 #include "mce/render/sun_shafts.h"
 #include "mce/render/translucency.h"
 #include "mce/render/underwater.h"
+#include "mce/render/water_optics.h"
 #include "shaders3d.h"
 #include "unit_clamp.h"
 
@@ -47,6 +48,10 @@ MCE_CVAR(cv_ssr_motion, "r.ssr.motion", true,
          "SSR reads the velocity buffer at hits when TAA, motion blur or depth of field has it (M-REFLECT2; 0 = camera "
          "reprojection only)",
          CVarFlags::None);
+MCE_CVAR(cv_water_reflect, "r.water.reflect", true, "Water reflects on-screen geometry (M-WATER2; 0 = the sky only)",
+         CVarFlags::None);
+MCE_CVAR(cv_water_refract, "r.water.refract", true,
+         "Water shows what lies under it (M-WATER2; 0 = the depth tint only)", CVarFlags::None);
 MCE_CVAR(cv_contact_shadows, "r.contact_shadows", true,
          "Contact shadows for scenes that ask for them (ContactShadows::enabled; off = the sun's cascades only)",
          CVarFlags::RequiresRestart);
@@ -138,7 +143,8 @@ struct Forward3DPassU {
     vec4 sun_cookie2; // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
     vec4 translucency;  // M-TRANSLUCENT 41d: x 1 = the back side's ambient, y 1 = the forward-scatter lobe (translucency_frame)
     vec4 ssr2;          // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur), yzw 0
-    vec4 free_[4];      // the rest of the 1536-byte block, unused (always 0)
+    vec4 water6;        // M-WATER2 49c/49d: x 1 = the trace, y 1 = the refraction, z 1 = the copy at bank 7
+    vec4 free_[3];      // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -171,12 +177,13 @@ static_assert(
         offsetof(Forward3DPassU, sun_cookie2) == offsetof(Forward3DPassU, sun_cookie) + 16 &&
         offsetof(Forward3DPassU, translucency) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
         offsetof(Forward3DPassU, ssr2) == offsetof(Forward3DPassU, translucency) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, ssr2) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 4 * 16,
+        offsetof(Forward3DPassU, water6) == offsetof(Forward3DPassU, ssr2) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, water6) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 3 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
     "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
-    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_free[4] follow p_sky_rot as in "
-    "MCE_GLSL_PASS_U");
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_water6 / p_free[3] follow p_sky_rot as "
+    "in MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
@@ -184,8 +191,9 @@ static_assert(
 // is far under every backend's limit (GL 16 KiB minimum, SDL GPU's 32 KiB push, WebGPU's 16 KiB binding). M-RAINBOW
 // 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
 // (p_meteor, p_meteor2): 8 free, the size unchanged. M-LIGHTCOOKIE 40e took two more (p_sun_cookie, p_sun_cookie2): 6
-// free, the size unchanged. M-TRANSLUCENT 41d took one (p_translucency): 5 free, the size unchanged.
-static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 5 vec4 free)");
+// free, the size unchanged. M-TRANSLUCENT 41d took one (p_translucency): 5 free, the size unchanged. M-REFLECT2 48c
+// took one (p_ssr2): 4 free. M-WATER2 49c took one (p_water6): 3 free, the size unchanged.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 3 vec4 free)");
 
 namespace {
 
@@ -813,6 +821,20 @@ f32 wrap_tau(f64 x) { return f32(x - kTau64 * std::floor(x / kTau64)); }
 bool water_on(const WaterSurface& w) { return w.enabled && std::isfinite(w.level_y); }
 constexpr u32 kWaterGrid = 16;  // kWaterVS's cells per side: the draw is 6 * kWaterGrid^2 vertices
 
+// M-WATER2 49c/49d: kWaterFS repeats mce/render/water_optics.h's constants as text; a change there goes there too.
+static_assert(kWaterTraceSteps == 24 && kWaterTraceRefine == 4 && kWaterTraceMaxDist == 80.0f &&
+                  kWaterEdgeFade == 0.1f && kWaterTraceFadeStart == 0.7f && kWaterFacingFade == 0.6f &&
+                  kWaterRefractScale == 0.5f && kWaterRefractMaxPath == 4.0f && kWaterRefractMaxUv == 0.05f &&
+                  kWaterOpticsPeriod == kWaterPeriod,
+              "water_optics.h and kWaterFS (shaders3d.h) carry the same constants");
+
+// Whether the camera is above the water's mean level (floating-origin local, as water_params uploads it): below it the
+// underwater look covers the view, and the reflection and the refraction of M-WATER2 stay off.
+bool water_camera_above(const WaterSurface& w, const f64 origin[3], vec3 camera) {
+    const f32 level = detail::ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
+    return camera.y > f32(f64(level) - origin[1]);
+}
+
 // The main pass's water members. Clamped again (apply_quality's clamps: a caller may skip it). The wave set is
 // kit::water_wave_set's, evaluated here in the same f32 steps: wave i travels along the main direction (the
 // carrier's unit wind_dir, as an angle) turned by kWaterDirDeg[i], k = 2 pi / (wavelength * kWaterLenRatio[i]),
@@ -822,8 +844,9 @@ constexpr u32 kWaterGrid = 16;  // kWaterVS's cells per side: the draw is 6 * kW
 // a rebase leaves the pattern where it is; the shader works in the pass's local coordinates. The steepness goes as
 // authored: the shader derives Q = min(1, steepness / (count k A)) per wave as the kit does. An amplitude of 0 (the
 // Low tier, or calm water) uploads no waves (count 0): a flat mirror. `depth_read`: the opaque depth is bound at
-// bank 6 (p_water4.w).
-void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, PassU& pu) {
+// bank 6 (p_water4.w). `reflect` / `refract` (M-WATER2 49d / 49c): the trace and the refraction run, reading the copy
+// of the opaque frame at bank 7 (p_water6; record_main decides, and only with the depth read).
+void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, bool reflect, bool refract, PassU& pu) {
     using detail::ranged;
     const f32 level = ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
     const u32 count = static_cast<u32>(ranged(static_cast<f32>(w.wave_count), 1.0f, 8.0f, 4.0f));
@@ -842,6 +865,9 @@ void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, P
                      ranged(w.reflectivity, 0.0f, 1.0f, 1.0f));
     pu.water4 = vec4(ranged(w.roughness, 0.0f, 1.0f, 0.08f), unit01(w.foam_amount),
                      ranged(w.foam_width_m, 0.05f, 20.0f, 1.5f), depth_read ? 1.0f : 0.0f);
+    reflect = reflect && depth_read;
+    refract = refract && depth_read;
+    pu.water6 = vec4(reflect ? 1.0f : 0.0f, refract ? 1.0f : 0.0f, reflect || refract ? 1.0f : 0.0f, 0.0f);
     if (!waves) return;
     const f64 base = kTau64 / kWaterPeriod;
     const f32 main_deg = math::degrees(std::atan2(wind.y, wind.x));
@@ -2661,8 +2687,9 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     aurora_params(scene.aurora(), pu);               // the aurora curtains (M-AURORA 16c): main pass only too
     rainbow_params(scene.rainbow(), pu);             // the rainbow (M-RAINBOW 17c): main pass only too
     meteor_params(scene.meteor(), pu);               // the meteors (M-METEOR 18c): main pass only too
+    // The water plane (M-WATER 15c): the main pass only (M-WATER2: record_main set the two stats it reads).
     if (apply_fog && water_on(scene.water()) && !water_.is_null())
-        water_params(scene.water(), origin_, water_depth_, pu);  // the water plane (M-WATER 15c): the main pass only
+        water_params(scene.water(), origin_, water_depth_, stats_.water_reflect, stats_.water_refract, pu);
     translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: the tier's switches (read only by a translucent draw)
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(pu));
     cmd.bind_texture(rhi::bank::kShadowMap, shadow_map_, shadow_sampler_);
@@ -2734,34 +2761,18 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         record_prepass(cmd, scene);  // once a frame: a no-op when SSAO, SSR or contact shadows drew it already
         water_depth_ = true;
     }
-    rhi::RenderPassDesc mp;
-    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
-    mp.depth = depth;
-    mp.debug_name = "forward";
-    cmd.begin_pass(mp);
-
-    bind_main_state(cmd, scene, true);
-
-    DrawCache cache;
-    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
-    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
-    draw_batches(cmd, scene, cache, false);
-    if (water_drawn) {  // after the opaques (it reads their depth and they occlude it), before the sky and the blends
-        cmd.bind_pipeline(water_);
-        ++stats_.pipeline_binds;
-        cmd.bind_texture(rhi::bank::kAlbedo, water_depth_ ? ao_gbuf_ : ao_off_, point_sampler_);
-        cmd.draw_non_indexed(6 * kWaterGrid * kWaterGrid);
-        cache = DrawCache{};  // bank 6 holds the depth now: the blended draws bind their maps again
-        cache.pipe = water_;
-    }
-    if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
-        cmd.bind_pipeline(sky_);
-        cache.pipe = sky_;
-        ++stats_.pipeline_binds;
-        cmd.draw_non_indexed(3);
-    }
-    if (transmissive) {
-        cmd.end_pass();
+    // M-WATER2 49c/49d: the refraction and the reflection trace read a copy of this frame's opaque picture, taken by
+    // breaking the pass before the water (the transmission copy's code, into the same trans_src_). Only with the depth
+    // read and the camera above the level (below it the underwater look covers the view); r.water.reflect and
+    // r.water.refract 0, the Low look and a renderer without the prepass pipelines keep the single pass and today's
+    // water. stats_ carries the decision to water_params (bind_main_state): forward3d.h gets no member.
+    const bool water_fx = water_depth_ && water_camera_above(water, origin_, scene.view().position);
+    stats_.water_refract = water_fx && cv_water_refract.get_bool();
+    stats_.water_reflect = water_fx && cv_water_reflect.get_bool();
+    const bool water_copy = stats_.water_refract || stats_.water_reflect;
+    if (water_copy) depth.store = rhi::StoreOp::Store;  // the water's pass reloads it
+    // The opaque frame drawn so far into trans_src_ (outside a pass): the multisampled colour resolved, else copied.
+    const auto copy_frame = [&] {
         if (trans_src_.is_null()) {
             rhi::TextureDesc d = device_->texture_desc(hdr_);
             d.debug_name = "mce.3d.transmission_src";
@@ -2782,6 +2793,48 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.draw_non_indexed(3);
             cmd.end_pass();
         }
+    };
+    rhi::RenderPassDesc mp;
+    mp.colors = Span<const rhi::PassAttachment>(&color, 1);
+    mp.depth = depth;
+    mp.debug_name = "forward";
+    cmd.begin_pass(mp);
+
+    bind_main_state(cmd, scene, true);
+
+    DrawCache cache;
+    const bool instanced = !mesh_cull_inst_.is_null() && upload_runs(cmd, scene, kInstMain);
+    draw_meshes(cmd, scene, draws, 0, scene.opaque_count(), scene.opaque_count(), cache, true, false, false, instanced);
+    draw_batches(cmd, scene, cache, false);
+    if (water_drawn) {  // after the opaques (it reads their depth and they occlude it), before the sky and the blends
+        if (water_copy) {  // M-WATER2: break the pass, copy the opaque frame, reopen with colour and depth loaded
+            cmd.end_pass();
+            copy_frame();
+            color.load = rhi::LoadOp::Load;
+            depth.load = rhi::LoadOp::Load;
+            depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
+            mp.depth = depth;
+            mp.debug_name = "forward.water";
+            cmd.begin_pass(mp);
+            bind_main_state(cmd, scene, true);
+        }
+        cmd.bind_pipeline(water_);
+        ++stats_.pipeline_binds;
+        cmd.bind_texture(rhi::bank::kAlbedo, water_depth_ ? ao_gbuf_ : ao_off_, point_sampler_);
+        cmd.bind_texture(rhi::bank::kNormal, water_copy ? trans_src_ : ao_off_, linear_clamp_);
+        cmd.draw_non_indexed(6 * kWaterGrid * kWaterGrid);
+        cache = DrawCache{};  // banks 6 and 7 hold the depth and the copy now: the blended draws bind their maps again
+        cache.pipe = water_;
+    }
+    if (sky.enabled) {  // behind the opaques, before the blended draws composite over it
+        cmd.bind_pipeline(sky_);
+        cache.pipe = sky_;
+        ++stats_.pipeline_binds;
+        cmd.draw_non_indexed(3);
+    }
+    if (transmissive) {  // with the water's copy too, this one rewrites trans_src_ with the water and the sky in it
+        cmd.end_pass();
+        copy_frame();
         color.load = rhi::LoadOp::Load;
         depth.load = rhi::LoadOp::Load;
         depth.store = rhi::StoreOp::DontCare;

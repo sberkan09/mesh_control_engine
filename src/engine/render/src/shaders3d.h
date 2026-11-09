@@ -89,7 +89,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_sun_cookie2;    // xy the offset (m, the floating origin folded in, wrapped by the size), z cos, w sin of the roll
     vec4 p_translucency;   // M-TRANSLUCENT: x back ambient, y scatter lobe
     vec4 p_ssr2;           // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur; 0 = one sharp tap), yzw 0
-    vec4 p_free[4];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_water6;         // M-WATER2: x 1 = trace, y 1 = refract, z 1 = copy at bank 7
+    vec4 p_free[3];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -2382,6 +2383,7 @@ constexpr const char* kWaterFS = "#version 450 core\n" MCE_GLSL_FRAME_U MCE_GLSL
 layout(location = 0) in vec3 v_world;
 layout(location = 0) out vec4 o_color;
 layout(binding = 6) uniform sampler2D u_water_depth;  // half size; a: the opaques' view depth (0 = nothing drawn)
+layout(binding = 7) uniform sampler2D u_water_scene;  // M-WATER2: this frame's opaque picture (p_water6.z 1), else a stand-in
 )" MCE_GLSL_SKY_LAYERS R"(
 // The detail ripples' wave vectors (rad/m on xz): forward3d.cpp kWaterDetail (directions and wavelengths) folds the
 // origin into their phases with these exact values, so a change here goes there too.
@@ -2413,6 +2415,93 @@ float water_floor_depth(vec2 uv, float zw) {
         if (z > zw && (best == 0.0 || z < best)) best = z;
     }
     return best;
+}
+// M-WATER2 49c/49d: the constants and formulas of mce/render/water_optics.h (a change there goes here too).
+const float kWaterRefractScale = 0.5, kWaterRefractMaxPath = 4.0, kWaterRefractMaxUv = 0.05;
+const int kWaterTraceSteps = 24, kWaterTraceRefine = 4;
+const float kWaterTraceMaxDist = 80.0, kWaterEdgeFade = 0.1, kWaterTraceFadeStart = 0.7, kWaterFacingFade = 0.6;
+vec2 water_refract_offset(vec3 n, float path, float zw) {
+    vec2 o = (mat3(u_view) * vec3(n.x, 0.0, n.z)).xy * (kWaterRefractScale * min(max(path, 0.0), kWaterRefractMaxPath) /
+                                                         max(zw, 0.05));
+    float l = length(o);
+    return l > kWaterRefractMaxUv ? o * (kWaterRefractMaxUv / l) : o;
+}
+float water_reflect_fade(vec2 uv, float travel, float toward) {
+    vec2 e = min(uv, 1.0 - uv);
+    return smoothstep(0.0, kWaterEdgeFade, min(e.x, e.y)) *
+           (1.0 - smoothstep(kWaterTraceFadeStart * kWaterTraceMaxDist, kWaterTraceMaxDist, travel)) *
+           (1.0 - smoothstep(0.0, kWaterFacingFade, toward));
+}
+float water_depth_at(vec2 uv) {  // the half-size texel under uv
+    ivec2 size = textureSize(u_water_depth, 0);
+    return texelFetch(u_water_depth, clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1), 0).a;
+}
+// The refracted lookup's depth (49c, water_refract_accept): the nearest of the 2 x 2 half-size texels around uv when
+// every one holds a surface behind view depth zw and under the level (world y from the texel's ray), else 0. So a post
+// standing in the water, nearer or behind but above the surface, never smears its colour into the water around it.
+float water_under_depth(vec2 uv, float zw) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float m = 1e30;
+    for (int k = 0; k < 4; ++k) {
+        ivec2 t = clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1);
+        float z = texelFetch(u_water_depth, t, 0).a;
+        vec4 w = u_inv_view_proj * vec4((vec2(t) + 0.5) / vec2(size) * 2.0 - 1.0, 0.5, 1.0);
+        vec3 d = w.xyz / w.w - u_camera_pos.xyz;
+        if (!(z > zw) || u_camera_pos.y + d.y * (z / max(-(mat3(u_view) * d).z, 1e-6)) >= p_water.x) return 0.0;
+        m = min(m, z);
+    }
+    return m;
+}
+vec2 water_uv(vec3 q, out float w) {
+    vec4 c = u_view_proj * vec4(q, 1.0);
+    w = c.w;
+    return c.xy / max(c.w, 1e-6) * 0.5 + 0.5;
+}
+// The share of the 2 x 2 half-size texels around uv that hold a drawn surface (0, 0.25 .. 1): the reflection's weight at
+// a silhouette's half-size edge, where the full-size copy may hold the clear colour (the sky is not in it).
+float water_drawn_share(vec2 uv) {
+    ivec2 size = textureSize(u_water_depth, 0);
+    ivec2 base = ivec2(floor(uv * vec2(size) - 0.5));
+    float n = 0.0;
+    for (int k = 0; k < 4; ++k) n += texelFetch(u_water_depth, clamp(base + ivec2(k & 1, k >> 1), ivec2(0), size - 1), 0).a > 0.0 ? 0.25 : 0.0;
+    return n;
+}
+// The reflection march (49d) from p along r against the prepass depth: the confidence of the hit (0 = a miss) and its
+// uv. A sample behind the depth there, or one past a depth step after a sample in front of a surface (the ray went
+// through a thin object between two samples), starts kWaterTraceRefine bisection steps; the refined point counts when
+// it lies behind the surface by less than the step's length.
+float water_trace(vec3 p, vec3 r, out vec2 huv) {
+    huv = vec2(0.0);
+    float prev = 0.0, zs_prev = 0.0, w;
+    bool front = false;
+    for (int i = 1; i <= kWaterTraceSteps; ++i) {
+        float f = float(i) / float(kWaterTraceSteps);
+        float s = kWaterTraceMaxDist * f * f;
+        vec3 q = p + r * s;
+        vec2 uv = water_uv(q, w);
+        if (w <= 1e-4 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 0.0;  // off screen: a miss
+        float zq = -(u_view * vec4(q, 1.0)).z, zs = water_depth_at(uv);
+        if ((zs > 0.0 && zq > zs) || (front && (zs <= 0.0 || zs > zs_prev + (s - prev)))) {
+            float lo = prev, hi = s;
+            for (int b = 0; b < kWaterTraceRefine; ++b) {
+                float m = 0.5 * (lo + hi);
+                vec2 um = water_uv(p + r * m, w);
+                float zm = -(u_view * vec4(p + r * m, 1.0)).z, zsm = water_depth_at(um);
+                if (zsm > 0.0 && zm > zsm) hi = m;
+                else lo = m;
+            }
+            vec3 qh = p + r * hi;
+            huv = water_uv(qh, w);
+            float zh = -(u_view * vec4(qh, 1.0)).z, zsh = water_depth_at(huv);
+            if (zsh > 0.0 && zh > zsh && zh - zsh < (s - prev) + 0.25)
+                return water_reflect_fade(huv, hi, (mat3(u_view) * r).z) * water_drawn_share(huv);
+        }
+        front = zs > 0.0 && zq < zs;
+        zs_prev = zs;
+        prev = s;
+    }
+    return 0.0;
 }
 void main() {
     vec3 p = v_world;
@@ -2479,14 +2568,33 @@ void main() {
     // the body: the tint by the optical depth to the opaque surface behind
     float zw = -(u_view * vec4(p, 1.0)).z;
     float path = -1.0;  // meters along the view ray to the opaque surface behind; -1 = none (or not read)
+    vec2 suv = vec2(0.0);  // the pixel's screen uv (with the depth read)
     if (p_water4.w > 0.5) {
         vec4 cp = u_view_proj * vec4(p, 1.0);
+        suv = cp.xy / cp.w * 0.5 + 0.5;
         float zo = water_floor_depth(cp.xy / cp.w * 0.5 + 0.5, zw);
         if (zo > 0.0) path = dist * (zo / zw - 1.0);
     }
     float t = path >= 0.0 ? 1.0 - exp(-3.0 * path / p_water2.w) : 1.0 - 0.3 * exp(-dist / (10.0 * p_water2.w));
     vec3 light = mix(p_amb_ground.rgb, p_amb_sky.rgb, 0.75) + p_light_color.rgb * (max(l.y, 0.0) / PI);
     vec3 body = mix(p_water2.rgb, p_water3.rgb, t) * light;
+    // M-WATER2 49c: what lies under the water, seen through it: the copy bent by the wave tilt where what is there lies
+    // behind the water and under it (else straight through), absorbed per channel along the path (underwater_sigma), ending at
+    // the tint above where the path is long.
+    if (p_water6.y > 0.5 && path >= 0.0 && water_depth_at(suv) > zw) {  // the pixel's own texel is behind: no edge fringe
+        vec2 ruv = suv + water_refract_offset(n, path, zw);
+        float rp = path, zr = (all(greaterThanEqual(ruv, vec2(0.0))) && all(lessThanEqual(ruv, vec2(1.0)))) ? water_under_depth(ruv, zw) : 0.0;
+        if (zr > 0.0) rp = dist * (zr / zw - 1.0);
+        else ruv = suv;
+        vec3 T = exp(-(-log(clamp(p_water2.rgb, 0.02, 1.0)) / max(p_water2.w, 0.5)) * rp);
+        body = textureLod(u_water_scene, ruv, 0.0).rgb * T + body * (1.0 - (T.r + T.g + T.b) / 3.0);
+    }
+    // M-WATER2 49d: the on-screen geometry along the reflected ray, faded into the sky reflection (a miss is the sky).
+    if (p_water6.x > 0.5) {
+        vec2 huv;
+        float conf = water_trace(p, r, huv);
+        if (conf > 0.0) sky = mix(sky, textureLod(u_water_scene, huv, 0.0).rgb, conf);
+    }
     vec3 color = body * (1.0 - F) + sky * F + glint;
     // the shore foam
     if (p_water4.y > 0.0 && path >= 0.0 && path < p_water4.z) {
