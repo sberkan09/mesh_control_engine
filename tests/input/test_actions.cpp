@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "input_test_util.h"
 #include "mce/input/ecs.h"
@@ -365,4 +366,34 @@ TEST_CASE("M-HARDEN4: text input fills kMaxTextBytes exactly, then drops what do
     // The next tick starts empty and accepts text again.
     in.push_event(test::simple_event(platform::EventType::TextInput, in_tick(2, 100), 'z'));
     CHECK(in.sample_for_tick(2).text() == StringView("z"));
+}
+
+TEST_CASE("input events with a non-finite coordinate are dropped, the mouse and pads keep reading sanely") {
+    InputSystem in;
+    test::setup_default(in);
+    const f32 nan = std::numeric_limits<f32>::quiet_NaN();
+    const f32 inf = std::numeric_limits<f32>::infinity();
+
+    in.push_event(test::mouse_move(10.f, 10.f, in_tick(1)));
+    in.push_event(test::mouse_move(nan, 20.f, in_tick(1) + 1));  // a bad driver report
+    in.push_event(test::mouse_move(14.f, 13.f, in_tick(1) + 2));
+    const InputState s1 = in.sample_for_tick(1);
+    CHECK(s1.mouse_pos_px().x == 14.f);
+    CHECK(s1.mouse_pos_px().y == 13.f);
+
+    platform::Event axis = test::simple_event(platform::EventType::GamepadAxis, in_tick(2), 0);
+    axis.x = inf;
+    in.push_event(axis);
+    in.push_event(test::simple_event(platform::EventType::MouseWheel, in_tick(2) + 1));
+    platform::Event wheel = test::simple_event(platform::EventType::MouseWheel, in_tick(2) + 2);
+    wheel.y = nan;
+    in.push_event(wheel);
+    platform::Event rs = test::simple_event(platform::EventType::Resized, in_tick(2) + 3);
+    rs.x = inf;
+    rs.y = 600.f;
+    in.push_event(rs);
+    const InputState s2 = in.sample_for_tick(2);
+    CHECK(std::isfinite(s2.mouse_wheel().y));
+    CHECK(in.gamepad_axis(0, platform::GamepadAxis::LeftX) == 0.f);
+    CHECK(in.stats().events_ignored == 4);
 }
