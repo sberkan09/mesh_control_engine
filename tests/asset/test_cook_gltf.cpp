@@ -739,6 +739,23 @@ TEST_CASE("gltf: skinning is optional per asset; bad skins fail with the JSON po
         const CookReport r = svc.cook(root.c_str(), CookOptions{});
         CHECK(has_error(r, "/skins/0: skin joint is not a node of the imported scene"));
     }
+    SUBCASE("a skin needs 1..256 joints (kMaxSkinJoints): 0 and 257 are refused, 256 passes that check") {
+        auto with_joints = [&](const char* dir, u32 count) {
+            std::string list = "\"joints\":[";
+            for (u32 i = 0; i < count; ++i) list += (i ? ",1" : "1");
+            list += "]";
+            std::string j = skinned_doc();
+            const std::string from = "\"joints\":[1,2]";
+            j.replace(j.find(from), from.size(), list);
+            const std::string root = make_project(dir, j, false);
+            return svc.cook(root.c_str(), CookOptions{});
+        };
+        CHECK(has_error(with_joints("gltf_skin_j0", 0), "a skin needs 1..256 joints, this one has 0"));
+        CHECK(has_error(with_joints("gltf_skin_j257", 257), "a skin needs 1..256 joints, this one has 257"));
+        // 256 joints get past the count check; the file is still refused further on (repeated joint, short bind table).
+        const CookReport r256 = with_joints("gltf_skin_j256", 256);
+        CHECK_FALSE(has_error(r256, "a skin needs 1..256 joints"));
+    }
 }
 
 namespace {
