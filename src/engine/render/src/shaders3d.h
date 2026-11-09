@@ -2581,9 +2581,9 @@ void main() {
     // M-WATER2 49c: what lies under the water, seen through it: the copy bent by the wave tilt where what is there lies
     // behind the water and under it (else straight through), absorbed per channel along the path (underwater_sigma), ending at
     // the tint above where the path is long.
-    if (p_water6.y > 0.5 && path >= 0.0) {
+    if (p_water6.y > 0.5 && path >= 0.0 && water_depth_at(suv) > zw) {  // the pixel's own texel is behind: no edge fringe
         vec2 ruv = suv + water_refract_offset(n, path, zw);
-        float rp = path, zr = water_under_depth(ruv, zw);
+        float rp = path, zr = (all(greaterThanEqual(ruv, vec2(0.0))) && all(lessThanEqual(ruv, vec2(1.0)))) ? water_under_depth(ruv, zw) : 0.0;
         if (zr > 0.0) rp = dist * (zr / zw - 1.0);
         else ruv = suv;
         vec3 T = exp(-(-log(clamp(p_water2.rgb, 0.02, 1.0)) / max(p_water2.w, 0.5)) * rp);
