@@ -1,1 +1,1 @@
-- Tests: the 3D sort key layout, `pack_color_srgb` and the flipbook clip step and frame arithmetic now have cases.
+- tests(liveops): a damaged game services state file (wrong magic, newer version, every cut length, empty) starts empty or keeps what was read.

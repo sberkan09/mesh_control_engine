@@ -548,3 +548,58 @@ TEST_CASE("game services: shutdown stops the provider once, and a second shutdow
     }
     CHECK(provider.stops == 1);  // the destructor does not stop it again
 }
+
+TEST_CASE("game services: a damaged saved state starts empty or keeps what was read, and never exceeds the catalog") {
+    const fs::path root = fresh("gs_damaged_state");
+    const fs::path platform = root / "platform";
+    use_device(root / "device");
+    LocalGameServices local(StringView(platform.string().c_str()));
+    local.set_offline(true);
+    {
+        Device d;
+        d.start(&local);
+        d.step(3);
+        REQUIRE(d.gs().unlock("first_win"));
+        REQUIRE(d.gs().add_progress("win_10", 4));
+        REQUIRE(d.gs().submit_score("best_time", 4200));
+        d.step(2);
+    }
+    const std::string good = read_save("game_services");
+    REQUIRE(good != "<none>");
+    REQUIRE(good.size() > 16);
+
+    auto start_with = [&](const std::string& bytes, auto&& check) {
+        write_save("game_services", bytes);
+        Device d;
+        d.start(&local);
+        check(d);
+    };
+    // The unchanged file loads.
+    start_with(good, [](Device& d) {
+        CHECK(d.gs().unlocked("first_win"));
+        CHECK(d.gs().progress("win_10") == 4);
+        CHECK(d.gs().best_score("best_time", -1) == 4200);
+    });
+    // A wrong magic and a version from a newer build are not read: the service starts empty.
+    std::string bad_magic = good;
+    bad_magic[0] = static_cast<char>(bad_magic[0] ^ 0x55);
+    start_with(bad_magic, [](Device& d) {
+        CHECK_FALSE(d.gs().unlocked("first_win"));
+        CHECK(d.gs().best_score("best_time", -1) == -1);
+    });
+    std::string newer = good;
+    newer[4] = static_cast<char>(0x7F);
+    newer[5] = static_cast<char>(0x7F);
+    start_with(newer, [](Device& d) { CHECK_FALSE(d.gs().unlocked("first_win")); });
+    // Every cut of the file loads without reading past its end, and never invents progress.
+    for (usize n = 0; n < good.size(); ++n) {
+        start_with(good.substr(0, n), [&](Device& d) {
+            CHECK(d.gs().progress("win_10") <= 4);
+            CHECK(d.gs().progress("first_win") <= 1);
+            const i64 best = d.gs().best_score("best_time", -1);
+            CHECK((best == -1 || best == 4200));
+        });
+    }
+    // An empty file is a damaged one, not a crash.
+    start_with("", [](Device& d) { CHECK_FALSE(d.gs().unlocked("first_win")); });
+}
