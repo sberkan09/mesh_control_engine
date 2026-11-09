@@ -67,22 +67,29 @@ jobs:
           set +e  # bash -e would abort on the first failing test; every result is wanted
           B=build/macos-release
           : > out/summary.txt
-          run() {  # run <name> <command...>: log to out/<name>.log, record the exit code, never fail the step
-            local n="$1"; shift
-            echo "=== $n: $*"
-            "$@" > "out/$n.log" 2>&1; local rc=$?
-            tail -n 15 "out/$n.log"
-            echo "$n rc=$rc" >> out/summary.txt
+          run() {  # run <name> <timeout s> <command...>: log to out/<name>.log (also streamed), kill after the timeout
+            local n="$1" t="$2"; shift 2
+            echo "=== $n (limit ${t}s): $*"
+            "$@" > "out/$n.log" 2>&1 &
+            local pid=$! i=0
+            while kill -0 "$pid" 2>/dev/null; do
+              if [ "$i" -ge "$t" ]; then echo "TIMEOUT after ${t}s" >> "out/$n.log"; pkill -9 -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null; break; fi
+              sleep 1; i=$((i + 1))
+            done
+            wait "$pid" 2>/dev/null; local rc=$?
+            [ "$i" -ge "$t" ] && rc=124
+            tail -n 25 "out/$n.log"
+            echo "$n rc=$rc (${i}s)" | tee -a out/summary.txt
           }
           export MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 SDL_VIDEO_DRIVER=cocoa
-          run shader_cross   "$B/tests/rhi_metal/test_shader_cross"
-          run rhi_metal      "$B/tests/rhi_metal/test_rhi_metal"
-          run render_gl      "$B/tests/render_gl/test_render_gl"
-          run render_ssr     "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
-          run golden         "$B/tests/render_gl/test_golden_gl"
-          run tour_reflect_headless ctest --test-dir "$B" -R sample_kit3d_tour_reflect_headless --output-on-failure
-          run tour_reflect_gpu      ctest --test-dir "$B" -R sample_kit3d_tour_reflect_gpu --output-on-failure
-          run gpu_label      ctest --test-dir "$B" -L gpu -E "sample_kit3d_tour_reflect_gpu" --timeout 600 -j 1 --output-on-failure
+          run shader_cross 120 "$B/tests/rhi_metal/test_shader_cross"
+          run rhi_metal 300 "$B/tests/rhi_metal/test_rhi_metal"
+          run render_gl 1200 "$B/tests/render_gl/test_render_gl"
+          run render_ssr 600 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          run golden 600 "$B/tests/render_gl/test_golden_gl"
+          run tour_reflect_headless 300 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_headless --output-on-failure
+          run tour_reflect_gpu 400 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_gpu --output-on-failure
+          run gpu_label 1800 ctest --test-dir "$B" -L gpu -E "sample_kit3d_tour_reflect_gpu" --timeout 600 -j 1 --output-on-failure
           find "$B" -name 'kit3d_tour_reflect.ppm' -exec cp {} out/ \;
           for f in out/*.ppm; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.ppm}.png"; done
           cp -R "$B/tests/render_gl/golden_out" out/golden_out 2>/dev/null || true
