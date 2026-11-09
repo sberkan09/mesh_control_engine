@@ -11,6 +11,7 @@
 #include "mce/log.h"
 #include "mce/render/dynres.h"
 #include "mce/render/edge_outline.h"
+#include "mce/render/gi_probes.h"
 #include "mce/render/heat_haze.h"
 #include "mce/render/lens_flare.h"
 #include "mce/render/lens_rain.h"
@@ -244,8 +245,9 @@ struct ProbeU {  // kProbeReprojectFS
 };
 
 struct GiProjectU {  // kGiProjectFS
-    vec4 size;    // x: texels per row, y: rows in the batch, z: face size
-    vec4 params;  // x: probes per row, y: weight of the new value
+    vec4 size;    // x: texels per row, y: rows in the batch, z: face size, w: texels per probe (M-GI2: 4 or 10)
+    vec4 params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe, w: record mode
+    vec4 vis;     // x: dmax (m), the record's distance range (M-GI2 50d)
 };
 
 struct PrefilterU {  // kProbePrefilterFS
@@ -1422,6 +1424,19 @@ ResultV Forward3D::create_pipelines() {
         fs.fragment_shader = {kProbeDecodeFS, "probe_decode.frag"};
         fs.debug_name = "gi.decode";
         MCE_TRY_ASSIGN(gi_decode_, device_->create_pipeline(fs));
+        // M-GI2 50d: the record's vis pass (gi_capture), the mesh vertex stages, depth-tested, both faces.
+        if (!gi_probes_) gi_probes_ = new GiProbeState{};
+        rhi::GraphicsPipelineDesc vp = pd;
+        vp.fragment_shader = {kGiVisFS, "gi_vis.frag"};
+        vp.state = {};
+        vp.state.depth = {true, true, rhi::CompareOp::LessEqual};
+        vp.state.raster.cull = rhi::CullMode::None;
+        vp.debug_name = "gi.vis";
+        MCE_TRY_ASSIGN(gi_probes_->vis_pipes[0], device_->create_pipeline(vp));
+        vp.vertex_shader = kd.vertex_shader;
+        vp.vertex = skinned_layout;
+        vp.debug_name = "gi.vis.skinned";
+        MCE_TRY_ASSIGN(gi_probes_->vis_pipes[1], device_->create_pipeline(vp));
     }
     if (desc_.volumetrics && cv_volumetrics.get_bool()) {
         fs.fragment_shader = {kVolInjectFS, "vol_inject.frag"};
@@ -1554,6 +1569,15 @@ void Forward3D::shutdown() {
           &shadow_inst_, &velocity_inst_, &water_}) {
         if (!p->is_null()) device_->destroy_pipeline(*p);
         *p = {};
+    }
+    if (gi_probes_) {  // M-GI2 50d
+        for (rhi::PipelineHandle& p : gi_probes_->vis_pipes) {
+            if (!p.is_null()) device_->destroy_pipeline(p);
+            p = {};
+        }
+        destroy(*device_, gi_probes_->vis_faces);
+        delete gi_probes_;
+        gi_probes_ = nullptr;
     }
     for (rhi::TextureHandle* t : {&ibl_env_, &ibl_lut_, &ibl_sh_, &ibl_off_env_, &ibl_off_2d_, &probe_faces_, &probe_depth_, &probe_capture_, &probe_export_, &ao_off_,
                                   &gi_volume_, &gi_faces_, &gi_faces_depth_, &gi_export_, &atmo_tex_, &vol_media_, &vol_light_,
@@ -2876,7 +2900,7 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         const rhi::TextureDesc& d = device_->texture_desc(t);
         if (d.size == vs && d.array_layers == 1)
             baked = t;
-        else if (gi_key_ == 0)
+        else if (gi_key_ == 0 || !(gi_size_ == vs))  // once: a new volume, or one that changed its width (M-GI2 record)
             MCE_LOG_WARN("render3d: the GI volume bake is {}x{}x{}, not {}x{}x1: filled at runtime", d.size.width,
                          d.size.height, d.array_layers, vs.width, vs.height);
     }
@@ -2920,11 +2944,13 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     if (gi_filled_ < total) {
         // The fill: kGiMaxBatchProbes a frame (or what the uniform budget allows); the volume lights
         // the frame once every probe has been captured.
+        gi_probes_->fill = true;  // M-GI2 50d: a fill writes the record (texels 4..9 of a 10-texel volume)
         gi_filled_ += gi_capture(cmd, scene, gi_filled_, min(kGiMaxBatchProbes, total - gi_filled_), 1.0f);
         stats_.gi_filled = gi_filled_ == total;
     } else if (!stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0) {
         const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
         gi_cursor_ %= total;
+        gi_probes_->fill = false;  // a rolling update leaves the record as it is
         gi_cursor_ = (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
     }
     stats_.gi = gi_filled_ == total;
@@ -2955,6 +2981,27 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
         d.debug_name = "mce.3d.gi_faces_depth";
         gi_faces_depth_ = device_->create_texture(d);
         gi_face_layers_ = layers;
+    }
+    // M-GI2 50d: a volume with the 10-texel record writes texels 4..9 on a fill (or refill): from a vis pass per face
+    // when it asks for visibility, else the record of a probe that sees nothing. Rolling updates leave them as they are
+    // (record mode 0: alpha 0) and run no vis pass.
+    const u32 texels = gi_texels_per_probe(gi);
+    const bool record = texels == kGiTexelsRecord && gi_probes_->fill;
+    const bool vis = record && gi.visibility && !gi_probes_->vis_pipes[0].is_null();
+    const vec3 cell = gi_cell(gi.bounds, gi.counts);
+    const f32 vis_min_radius = kGiVisMinRadius * gi_spacing(cell);
+    static_assert(6 * kGiMaxBatchProbes <= 256, "the vis faces' layers: at most 256 (Vulkan's and WebGPU's guarantee)");
+    if (vis && (gi_probes_->vis_faces.is_null() || gi_probes_->vis_layers != layers)) {
+        destroy(*device_, gi_probes_->vis_faces);
+        rhi::TextureDesc d;
+        d.format = rhi::TextureFormat::RGBA16F;
+        d.usage = rhi::TextureUsage::SampledColorTarget;
+        d.size = {kGiFaceSize, kGiFaceSize};
+        d.dimension = rhi::TextureDimension::Tex2DArray;
+        d.array_layers = static_cast<u16>(layers);
+        d.debug_name = "mce.3d.gi_vis_faces";
+        gi_probes_->vis_faces = device_->create_texture(d);
+        gi_probes_->vis_layers = layers;
     }
     const DirectionalLight& light = scene.light();
     vec3 dir = normalize(light.direction);
@@ -3027,6 +3074,8 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     const Span<const Scene3D::Draw> draws = scene.probe_draws();
     Array<Scene3D::Draw> visible(mem::heap());
     visible.reserve(draws.size());
+    Array<Scene3D::Draw> occluders(mem::heap());  // the vis pass's share of `visible` (kGiVisMinRadius, rigid)
+    if (vis) occluders.reserve(draws.size());
 
     // A draw narrower than a face texel (2r / d below 90° / kGiFaceSize) adds nothing a 16² face can hold.
     constexpr f32 kGiMinTexelAngle = 0.5f * 1.5707963f / f32(kGiFaceSize);
@@ -3122,6 +3171,29 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
                     cmd.draw_non_indexed(3);
                 }
                 cmd.end_pass();
+                if (vis) {  // the same face's signed distances, the face's depth layer cleared again
+                    rhi::PassAttachment vc;
+                    vc.texture = gi_probes_->vis_faces;
+                    vc.layer = static_cast<u16>(layer);
+                    vc.clear.color[0] = vc.clear.color[1] = vc.clear.color[2] = kGiVisFar;
+                    vc.clear.color[3] = 1.0f;
+                    rhi::RenderPassDesc vpd;
+                    vpd.colors = Span<const rhi::PassAttachment>(&vc, 1);
+                    vpd.depth = depth;
+                    vpd.debug_name = "gi.vis";
+                    cmd.begin_pass(vpd);
+                    cmd.set_uniforms(rhi::bank::kFrame, rhi::as_bytes(fu));
+                    occluders.clear();
+                    for (const Scene3D::Draw& d : visible)
+                        if (!d.mesh->skinned() && d.radius >= vis_min_radius) occluders.push_back(d);
+                    DrawCache vcache;
+                    const u32 no = static_cast<u32>(occluders.size());
+                    draw_meshes(cmd, scene, occluders.span(), 0, no, no, vcache, false, true, false, false,
+                                gi_probes_->vis_pipes);
+                    stats_.gi_vis_draws += no;
+                    budget -= min(budget, no + 1);
+                    cmd.end_pass();
+                }
             }
         }
         probe_cost = before - budget;
@@ -3136,13 +3208,18 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
         out.load = rhi::LoadOp::Load;
         rhi::RenderPassDesc p;
         p.colors = Span<const rhi::PassAttachment>(&out, 1);
-        p.viewport = rhi::Rect2D{i32(ix * 4), i32(gi_size_.height - vrow - 1), n * 4, 1};
+        p.viewport = rhi::Rect2D{i32(ix * texels), i32(gi_size_.height - vrow - 1), n * texels, 1};
         p.debug_name = "gi.project";
         cmd.begin_pass(p);
         cmd.bind_pipeline(gi_project_);
-        const GiProjectU gu{{f32(n * 4), 1.0f, f32(kGiFaceSize), 0.0f}, {f32(n), weight, f32(j), 0.0f}};
+        const f32 mode = !record ? 0.0f : vis ? 1.0f : 2.0f;  // kGiProjectFS's record mode
+        const GiProjectU gu{{f32(n * texels), 1.0f, f32(kGiFaceSize), f32(texels)},
+                            {f32(n), weight, f32(j), mode},
+                            {gi_dmax(cell), 0.0f, 0.0f, 0.0f}};
         cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
         cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
+        // u_vis: the vis faces, or the lit faces as a stand-in the shader does not read (mode 0 and 2).
+        cmd.bind_texture(rhi::bank::kFirstSampler + 1, vis ? gi_probes_->vis_faces : gi_faces_, point_sampler_);
         cmd.draw_non_indexed(3);
         cmd.end_pass();
         j += n;
@@ -3224,7 +3301,9 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
         pu.gi = {1.0f, gi.intensity, max(gi.normal_bias, 0.0f), max(gi.fade_distance, 1e-3f)};
         pu.gi_min = vec4(gi.bounds.min, 0.0f);
         pu.gi_max = vec4(gi.bounds.max, 0.0f);
-        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), 0.0f};
+        // M-GI2 50d: kGiFlagRecord (gi_probes.h) when the volume stores the 10-texel record; 0 (today's index) otherwise.
+        const f32 flags = gi_texels_per_probe(gi) == kGiTexelsRecord ? f32(kGiFlagRecord) : 0.0f;
+        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), flags};
         cmd.bind_texture(rhi::bank::kGiVolume, gi_volume_, point_sampler_);
     } else {
         cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);
@@ -3260,7 +3339,7 @@ void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene
 
 u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame,
-                           bool instanced, const rhi::PipelineHandle* /*prepass_pipes*/) {
+                           bool instanced, const rhi::PipelineHandle* prepass_pipes) {
     u32 issued = 0;
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
@@ -3292,6 +3371,7 @@ u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<c
         const rhi::PipelineHandle pipe = inst_run                                 ? (prepass     ? ao_prepass_inst_
                                                                                      : two_sided ? mesh_two_sided_inst_
                                                                                                  : mesh_cull_inst_)
+                                         : prepass && prepass_pipes                ? prepass_pipes[skinned ? 1 : 0]
                                          : prepass                                 ? (skinned ? ao_prepass_skinned_ : ao_prepass_)
                                          : terrain                                 ? terrain_pipe_
                                          : i >= opaque_end                         ? (skinned ? skinned_blend_ : mesh_blend_)
