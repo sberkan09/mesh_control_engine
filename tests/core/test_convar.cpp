@@ -67,6 +67,19 @@ TEST_CASE("typed get/set and parsing") {
     CHECK(cv_test_str.get_string() == "hello");
 }
 
+TEST_CASE("float convars refuse nan, inf and an overflowing number and keep their value") {
+    cv_test_float.reset();
+    CHECK(cv_test_float.set_from_string("1e30"));  // large but finite
+    CHECK(cv_test_float.get_float() == 1e30f);
+    CHECK(cv_test_float.set_from_string("-0.5"));
+    for (const char* text : {"nan", "NaN", "inf", "-inf", "infinity", "1e999", "-1e999"}) {
+        INFO(text);
+        CHECK_FALSE(cv_test_float.set_from_string(text));
+        CHECK(cv_test_float.get_float() == -0.5f);
+    }
+    cv_test_float.reset();
+}
+
 TEST_CASE("string convars hold long paths and refuse what does not fit") {
     const std::string path = "/Users/someone/Projects/a/deeply/nested/folder/" + std::string(200, 'x') + "/libgame.so";
     CHECK(cv_test_str.set_string(StringView(path.c_str()), false));
