@@ -1,7 +1,9 @@
-// Extract feed of the frozen water (M-FREEZE 20b): Kit3DExtract applies water_ice_look to the local render::WaterSurface
-// (waves scaled, colours mixed toward the ice colour, depth scale lerped, roughness floored, reflectivity and foam scaled)
-// before render::apply_quality. No WaterIce, enabled 0, strength 0 and an amount of 0 leave the carrier bit-identical;
-// time, wavelength, wave_count, level_y and wind_dir are untouched; Water, Season and WorldClock are never written.
+// Extract feed of the frozen water (M-FREEZE 20b): Kit3DExtract applies water_ice_look to the local
+// render::WaterSurface (waves scaled, colours mixed toward the ice colour, depth scale lerped, roughness floored,
+// reflectivity and foam scaled) before render::apply_quality. No WaterIce, enabled 0, strength 0 and an amount of 0
+// leave the carrier bit-identical; time, wavelength, wave_count, level_y and wind_dir are untouched; Water, Season and
+// WorldClock are never written. M-WATER2 49e: the current (WaterSurface::flow) is scaled by the look's speed_scale, so
+// a frozen river stops.
 
 #include <doctest/doctest.h>
 
@@ -16,6 +18,7 @@
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/season.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_flow.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/world_clock.h"
@@ -35,11 +38,12 @@ bool same_water(const render::WaterSurface& a, const render::WaterSurface& b) {
     return same_bits(a.level_y, b.level_y) && same_bits(a.half_extent, b.half_extent) && a.wave_count == b.wave_count &&
            same_bits(a.amplitude, b.amplitude) && same_bits(a.wavelength, b.wavelength) &&
            same_bits(a.steepness, b.steepness) && same_bits(a.wind_dir.x, b.wind_dir.x) &&
-           same_bits(a.wind_dir.y, b.wind_dir.y) && same_bits(a.time, b.time) && same_bits(a.speed_scale, b.speed_scale) &&
-           same_vec(a.shallow_color, b.shallow_color) && same_vec(a.deep_color, b.deep_color) &&
-           same_bits(a.depth_scale_m, b.depth_scale_m) && same_bits(a.reflectivity, b.reflectivity) &&
-           same_bits(a.roughness, b.roughness) && same_bits(a.foam_amount, b.foam_amount) &&
-           same_bits(a.foam_width_m, b.foam_width_m) && a.enabled == b.enabled;
+           same_bits(a.wind_dir.y, b.wind_dir.y) && same_bits(a.time, b.time) &&
+           same_bits(a.speed_scale, b.speed_scale) && same_vec(a.shallow_color, b.shallow_color) &&
+           same_vec(a.deep_color, b.deep_color) && same_bits(a.depth_scale_m, b.depth_scale_m) &&
+           same_bits(a.reflectivity, b.reflectivity) && same_bits(a.roughness, b.roughness) &&
+           same_bits(a.foam_amount, b.foam_amount) && same_bits(a.foam_width_m, b.foam_width_m) &&
+           same_bits(a.flow.x, b.flow.x) && same_bits(a.flow.y, b.flow.y) && a.enabled == b.enabled;
 }
 
 // The same carrier apart from `time`, which advances with the extract's frame count in one rig.
@@ -297,4 +301,45 @@ TEST_CASE("water ice extract: the Low tier and r.water 0 still win") {
     cv->reset();
     CHECK_FALSE(off);
     CHECK(r.frame().enabled);
+}
+
+TEST_CASE("water ice extract: the current is scaled by the look's speed scale (M-WATER2 49e)") {
+    const auto with_flow = [](Rig& r) {
+        WaterFlow f;
+        f.dir_deg = 40.0f;
+        f.speed = 2.0f;
+        r.world.spawn_with(SaveKey{6}, f);
+        return water_flow_velocity(&f);
+    };
+    Rig base;
+    const math::vec2 v = with_flow(base);
+    const render::WaterSurface a = base.frame();
+    CHECK(same_bits(a.flow.x, v.x));
+    CHECK(same_bits(a.flow.y, v.y));
+
+    Rig none;  // a WaterIce that does nothing leaves the current bit for bit
+    with_flow(none);
+    none.add_ice();
+    CHECK(same_water(a, none.frame()));
+
+    Rig full;  // a full freeze (calm 1) stops it
+    with_flow(full);
+    full.add_ice();
+    full.ice().manual = 1.0f;
+    const render::WaterSurface f = full.frame();
+    CHECK(f.flow.x == 0.0f);
+    CHECK(f.flow.y == 0.0f);
+
+    Rig half;
+    with_flow(half);
+    half.add_ice();
+    half.ice().manual = 0.5f;
+    half.ice().calm = 0.6f;
+    const render::WaterSurface h = half.frame();
+    const f32 scale = water_ice_look(half.ice(), water_ice_amount(half.ice(), nullptr, 0.0f)).speed_scale;
+    REQUIRE(scale > 0.0f);
+    REQUIRE(scale < 1.0f);
+    CHECK(same_bits(h.flow.x, v.x * scale));
+    CHECK(same_bits(h.flow.y, v.y * scale));
+    CHECK(h.speed_scale == doctest::Approx(a.speed_scale * scale));
 }

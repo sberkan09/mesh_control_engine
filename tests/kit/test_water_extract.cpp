@@ -1,6 +1,7 @@
 // Extract feed of the water surface (M-WATER 15b): Kit3DExtract fills render::WaterSurface from the first Water, the
 // WindDirection and the extract's frame time; no Water (or disabled) leaves the Scene3D as before; Environment3D, Fog,
-// Sky and the light are never touched.
+// Sky and the light are never touched. M-WATER2 49e: the first WaterFlow's velocity goes to WaterSurface::flow (zero
+// without one, disabled or still).
 
 #include <doctest/doctest.h>
 
@@ -15,6 +16,7 @@
 #include "mce/kit/kit3d.h"
 #include "mce/kit/kit3d_extract.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_flow.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/render/quality.h"
@@ -32,11 +34,12 @@ bool same_water(const render::WaterSurface& a, const render::WaterSurface& b) {
     return same_bits(a.level_y, b.level_y) && same_bits(a.half_extent, b.half_extent) && a.wave_count == b.wave_count &&
            same_bits(a.amplitude, b.amplitude) && same_bits(a.wavelength, b.wavelength) &&
            same_bits(a.steepness, b.steepness) && same_bits(a.wind_dir.x, b.wind_dir.x) &&
-           same_bits(a.wind_dir.y, b.wind_dir.y) && same_bits(a.time, b.time) && same_bits(a.speed_scale, b.speed_scale) &&
-           same_vec(a.shallow_color, b.shallow_color) && same_vec(a.deep_color, b.deep_color) &&
-           same_bits(a.depth_scale_m, b.depth_scale_m) && same_bits(a.reflectivity, b.reflectivity) &&
-           same_bits(a.roughness, b.roughness) && same_bits(a.foam_amount, b.foam_amount) &&
-           same_bits(a.foam_width_m, b.foam_width_m) && a.enabled == b.enabled;
+           same_bits(a.wind_dir.y, b.wind_dir.y) && same_bits(a.time, b.time) &&
+           same_bits(a.speed_scale, b.speed_scale) && same_vec(a.shallow_color, b.shallow_color) &&
+           same_vec(a.deep_color, b.deep_color) && same_bits(a.depth_scale_m, b.depth_scale_m) &&
+           same_bits(a.reflectivity, b.reflectivity) && same_bits(a.roughness, b.roughness) &&
+           same_bits(a.foam_amount, b.foam_amount) && same_bits(a.foam_width_m, b.foam_width_m) &&
+           same_bits(a.flow.x, b.flow.x) && same_bits(a.flow.y, b.flow.y) && a.enabled == b.enabled;
 }
 bool same_scene(const render::Scene3D& a, const render::Scene3D& b) {
     const render::DirectionalLight &la = a.light(), &lb = b.light();
@@ -230,4 +233,53 @@ TEST_CASE("water extract: the Low tier flattens the plane, r.water 0 removes it"
     cv->reset();
     CHECK_FALSE(off);
     CHECK(r.frame().enabled);
+}
+
+TEST_CASE("water extract: the first WaterFlow sets the carrier's flow, zero without one (M-WATER2 49e)") {
+    Rig base;
+    base.add_water();
+    const render::WaterSurface still = base.frame();
+    CHECK(same_bits(still.flow.x, 0.0f));
+    CHECK(same_bits(still.flow.y, 0.0f));
+
+    for (const f32 deg : {0.0f, 60.0f, 135.0f, 300.0f}) {
+        Rig r;
+        r.add_water();
+        WaterFlow f;
+        f.dir_deg = deg;
+        f.speed = 1.2f;
+        r.world.spawn_with(SaveKey{4}, f);
+        WaterFlow second;  // only the first in ECS order is read
+        second.dir_deg = 10.0f;
+        second.speed = 4.0f;
+        r.world.spawn_with(SaveKey{5}, second);
+        const render::WaterSurface s = r.frame();
+        const math::vec2 v = water_flow_velocity(&f);
+        CHECK(same_bits(s.flow.x, v.x));
+        CHECK(same_bits(s.flow.y, v.y));
+        const f64 rad = f64(deg) * (3.14159265358979323846 / 180.0);
+        CHECK(s.flow.x == doctest::Approx(1.2 * std::cos(rad)).epsilon(1e-5));
+        CHECK(s.flow.y == doctest::Approx(1.2 * std::sin(rad)).epsilon(1e-5));
+        // the rest of the carrier is the one without a current
+        render::WaterSurface a = s;
+        a.flow = still.flow;
+        CHECK(same_water(a, still));
+    }
+
+    Rig off;  // disabled, or still: exactly the carrier without a WaterFlow
+    off.add_water();
+    WaterFlow f;
+    f.speed = 2.0f;
+    f.enabled = 0;
+    off.world.spawn_with(SaveKey{4}, f);
+    CHECK(same_water(off.frame(), still));
+    Rig calm;
+    calm.add_water();
+    calm.world.spawn_with(SaveKey{4}, WaterFlow{});
+    CHECK(same_water(calm.frame(), still));
+
+    Rig no_water;  // a WaterFlow alone draws nothing
+    no_water.world.spawn_with(SaveKey{4}, f);
+    CHECK_FALSE(no_water.frame().enabled);
+    CHECK(same_bits(no_water.scene.water().flow.x, 0.0f));
 }

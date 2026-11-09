@@ -129,6 +129,7 @@ mce_add_test(test_kit UMBRELLA
         test_leaf_fall_extract.cpp
         test_season_extract.cpp
         test_water.cpp
+        test_water_flow.cpp
         test_water_extract.cpp
         test_water_ice_extract.cpp
         test_aurora_extract.cpp
