@@ -282,7 +282,7 @@ struct Environment3D {
     u32 ssr = 0;
     f32 ssr_max_distance = 8.0f;   // world meters a reflection ray travels
     f32 ssr_thickness = 0.25f;     // meters behind a surface a ray may pass and still hit it
-    f32 ssr_max_roughness = 0.5f;  // rougher surfaces keep the probes only
+    f32 ssr_max_roughness = 0.6f;  // rougher surfaces keep the probes only
     f32 ssr_roughness_fade = 0.2f; // roughness range below the maximum over which reflections fade
     f32 ssr_intensity = 1.0f;
     u32 ssr_steps = 32;            // march steps per ray (4..128): more find thinner things, cost more
