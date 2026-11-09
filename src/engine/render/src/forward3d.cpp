@@ -3004,6 +3004,9 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // The captures read the volume as it stands (zeros while it fills): each update adds a bounce.
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, false, true, pu);
     bind_local_shadows(cmd, scene, pu);
+    // No decals in the captures, but the lit shader declares their three textures and records: on a scene's first frame
+    // (record_gi runs before bind_main_state) banks 0 to 2 are otherwise unbound, which Metal's validation rejects.
+    bind_decals(cmd, scene, false);
     pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
     translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: as the main pass
     cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
