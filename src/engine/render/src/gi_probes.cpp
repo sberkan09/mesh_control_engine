@@ -92,9 +92,11 @@ vec3 gi_relocate(vec3 g, vec3 cell, f32 max_offset, Span<const GiSolid> solids) 
     const f32 mo = max_offset == max_offset ? math::clamp(max_offset, 0.0f, kGiMaxOffsetLimit) : 0.0f;
     const vec3 none{0.0f, 0.0f, 0.0f};
     if (solids.empty() || !(mo > 0.0f)) return none;
-    Array<math::mat4> inv(mem::heap());
-    inv.reserve(solids.size());
-    for (const GiSolid& s : solids) inv.push_back(math::inverse(s.model));
+    // A solid is tested only when its bounding sphere holds the point (the sphere encloses the box), so the inverse is
+    // taken for those only (M-GI2 50f: the fill relocates every probe against every large draw).
+    const auto inside_of = [](const GiSolid& s, vec3 p, vec3& q) {
+        return math::length_sq(p - s.center) <= s.radius * s.radius && solid_contains(s, math::inverse(s.model), p, q);
+    };
     vec3 p = g;
     bool moved = false;
     for (u32 round = 0; round < 3; ++round) {
@@ -102,9 +104,8 @@ vec3 gi_relocate(vec3 g, vec3 cell, f32 max_offset, Span<const GiSolid> solids) 
         bool inside = false;
         for (usize k = 0; k < solids.size(); ++k) {
             const GiSolid& s = solids[k];
-            if (math::length_sq(p - s.center) > s.radius * s.radius) continue;
             vec3 q;
-            if (!solid_contains(s, inv[k], p, q)) continue;
+            if (!inside_of(s, p, q)) continue;
             inside = true;
             // The nearest face in world metres (each model axis scaled by its column's length).
             f32 best = 3.0e38f;
@@ -132,9 +133,9 @@ vec3 gi_relocate(vec3 g, vec3 cell, f32 max_offset, Span<const GiSolid> solids) 
         moved = true;
     }
     if (!moved) return none;
-    for (usize k = 0; k < solids.size(); ++k) {
+    for (const GiSolid& s : solids) {
         vec3 q;
-        if (solid_contains(solids[k], inv[k], p, q)) return none;
+        if (inside_of(s, p, q)) return none;
     }
     const vec3 off = p - g;
     for (u32 i = 0; i < 3; ++i)
@@ -143,11 +144,26 @@ vec3 gi_relocate(vec3 g, vec3 cell, f32 max_offset, Span<const GiSolid> solids) 
 }
 
 GiFollowCell gi_follow_origin(f64 camera_x, f64 camera_z, f64 cell_x, f64 cell_z, u32 count_x, u32 count_z) {
+    // An even count's box centre lies half a cell past a probe: the camera's cell (floor) puts the camera within half a
+    // cell of it. An odd count's centre is a probe: the nearest probe (floor of c + 0.5) does.
     const auto snap = [](f64 c, f64 cell, u32 count) {
-        const i64 at = cell > 0.0 ? static_cast<i64>(std::floor(c / cell)) : 0;
-        return at - static_cast<i64>((math::max(count, 2u) - 1) / 2);
+        const u32 n = math::max(count, 2u);
+        const i64 at = cell > 0.0 ? static_cast<i64>(std::floor(c / cell + ((n & 1u) ? 0.5 : 0.0))) : 0;
+        return at - static_cast<i64>((n - 1) / 2);
     };
     return {snap(camera_x, cell_x, count_x), snap(camera_z, cell_z, count_z)};
+}
+
+GiFollowCell gi_follow_step(GiFollowCell at, f64 camera_x, f64 camera_z, f64 cell_x, f64 cell_z, u32 count_x,
+                            u32 count_z) {
+    const GiFollowCell snapped = gi_follow_origin(camera_x, camera_z, cell_x, cell_z, count_x, count_z);
+    // The box centre in cells: the first column plus half the box ((count - 1) / 2 cells).
+    const auto keep = [](i64 first, f64 c, f64 cell, u32 count) {
+        if (!(cell > 0.0)) return true;
+        const f64 centre = f64(first) + 0.5 * f64(math::max(count, 2u) - 1);
+        return std::fabs(c / cell - centre) <= kGiFollowHysteresis;
+    };
+    return {keep(at.x, camera_x, cell_x, count_x) ? at.x : snapped.x, keep(at.z, camera_z, cell_z, count_z) ? at.z : snapped.z};
 }
 
 u32 gi_slot(i64 i, u32 count) {
@@ -164,6 +180,57 @@ void gi_slot_offset_unpack(f32 packed, u32 (&o)[3]) {
     o[0] = v & 31u;
     o[1] = (v >> 5) & 31u;
     o[2] = (v >> 10) & 31u;
+}
+
+f64 gi_follow_spacing(f32 lo, f32 hi, u32 count) {
+    const f64 cell = (f64(hi) - f64(lo)) / f64(math::max(count, 2u) - 1);
+    return math::max(std::round(cell * 1000.0), 1.0) / 1000.0;  // whole millimetres, at least one
+}
+
+void gi_slot_offset_of(GiFollowCell f, const u32 (&counts)[3], u32 (&o)[3]) {
+    o[0] = gi_slot(f.x, counts[0]);
+    o[1] = 0;
+    o[2] = gi_slot(f.z, counts[2]);
+}
+
+math::aabb3 gi_follow_box(GiFollowCell f, const math::aabb3& bounds, const u32 (&counts)[3], f64 ox, f64 oz) {
+    const f64 sx = gi_follow_spacing(bounds.min.x, bounds.max.x, counts[0]);
+    const f64 sz = gi_follow_spacing(bounds.min.z, bounds.max.z, counts[2]);
+    const f64 x0 = f64(f.x) * sx - ox, z0 = f64(f.z) * sz - oz;
+    const f64 x1 = f64(f.x + i64(math::max(counts[0], 2u)) - 1) * sx - ox;
+    const f64 z1 = f64(f.z + i64(math::max(counts[2], 2u)) - 1) * sz - oz;
+    return {{f32(x0), bounds.min.y, f32(z0)}, {f32(x1), bounds.max.y, f32(z1)}};
+}
+
+GiScroll gi_scroll(GiFollowCell from, GiFollowCell to, const u32 (&counts)[3]) {
+    GiScroll s;
+    const i64 dx = to.x - from.x, dz = to.z - from.z;
+    const i64 cx = i64(counts[0]), cz = i64(counts[2]);
+    if (dx >= cx || -dx >= cx || dz >= cz || -dz >= cz) {
+        s.refill = true;
+        s.probes = counts[0] * counts[1] * counts[2];
+        return s;
+    }
+    // Moving by +k, the columns from.x .. from.x + k - 1 leave and from.x + c .. from.x + c + k - 1 arrive: the same
+    // slots. Moving by -k, to.x .. to.x + k - 1 arrive (and to.x + c .. leave): the same slots again.
+    s.x_count = u32(dx < 0 ? -dx : dx);
+    s.x_first = s.x_count ? gi_slot(dx > 0 ? from.x : to.x, counts[0]) : 0;
+    s.z_count = u32(dz < 0 ? -dz : dz);
+    s.z_first = s.z_count ? gi_slot(dz > 0 ? from.z : to.z, counts[2]) : 0;
+    s.probes = (s.x_count * counts[2] + s.z_count * counts[0] - s.x_count * s.z_count) * counts[1];
+    return s;
+}
+
+vec3 gi_offset_encode(vec3 offset, vec3 cell) {
+    const auto e = [](f32 o, f32 c) {
+        return c > 0.0f ? math::clamp(0.5f + 0.5f * o / (kGiMaxOffsetLimit * c), 0.0f, 1.0f) : 0.5f;
+    };
+    return {e(offset.x, cell.x), e(offset.y, cell.y), e(offset.z, cell.z)};
+}
+
+vec3 gi_offset_decode(vec3 texel, vec3 cell) {
+    return {(texel.x * 2.0f - 1.0f) * kGiMaxOffsetLimit * cell.x, (texel.y * 2.0f - 1.0f) * kGiMaxOffsetLimit * cell.y,
+            (texel.z * 2.0f - 1.0f) * kGiMaxOffsetLimit * cell.z};
 }
 
 }  // namespace mce::render

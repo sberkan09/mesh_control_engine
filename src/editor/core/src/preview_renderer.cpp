@@ -265,6 +265,13 @@ Result<void> PreviewRenderer::bake_gi(World& world, GiBake& out) {
         extract3d_.set_bake_mode(true);
         extract3d_.extract(world, scene, 1.0f);
         extract3d_.set_bake_mode(false);
+        // M-GI2 50g: a bake is of the authored box, in its local probe order: a following volume's toroidal slots would
+        // scramble it, so the bake never follows (the Low tier, which loads it, does not follow either).
+        if (scene.gi_volume().follow) {
+            render::GiVolume fixed = scene.gi_volume();
+            fixed.follow = false;
+            scene.set_gi_volume(fixed);
+        }
         scene.build();
         gi = scene.gi_volume();
         if (!gi.enabled) break;

@@ -275,8 +275,9 @@ TEST_CASE("gi_follow_origin: rebase-invariant, steps by exactly one cell at a ce
     CHECK(gi_follow_origin(1236.001, -77.25, cell, cell, 32, 32).x == a.x + 1);
     CHECK(gi_follow_origin(1229.999, -77.25, cell, cell, 32, 32).x == a.x - 1);
     for (f64 x = 1230.0; x < 1236.0; x += 0.25) CHECK(gi_follow_origin(x, -77.25, cell, cell, 32, 32).x == a.x);
-    // Odd counts centre too.
-    CHECK(gi_follow_origin(0.5, 0.5, 1.0, 1.0, 5, 5).x == -2);
+    // Odd counts centre on the nearest probe (a tie at half a cell goes up).
+    CHECK(gi_follow_origin(0.5, 0.5, 1.0, 1.0, 5, 5).x == -1);
+    CHECK(gi_follow_origin(0.49, 0.5, 1.0, 1.0, 5, 5).x == -2);
 }
 
 TEST_CASE("gi_slot is a bijection for every count and offset; gi_slot_offset_pack round-trips") {
@@ -306,4 +307,235 @@ TEST_CASE("gi_slot is a bijection for every count and offset; gi_slot_offset_pac
                 REQUIRE(o[2] == oz);
             }
     CHECK(gi_slot_offset_pack(31, 31, 31) == 32767.0f);
+}
+
+// ---- M-GI2 50f / 50g
+
+TEST_CASE("gi_offset_encode / gi_offset_decode: 0.5 is no offset, the limit maps to 0 and 1, and back") {
+    const vec3 cell{2.0f, 1.0f, 4.0f};
+    CHECK(same_bits(gi_offset_encode({0, 0, 0}, cell), {0.5f, 0.5f, 0.5f}));
+    const vec3 lim{kGiMaxOffsetLimit * 2.0f, -kGiMaxOffsetLimit * 1.0f, 0.0f};
+    const vec3 e = gi_offset_encode(lim, cell);
+    CHECK(e.x == doctest::Approx(1.0f));
+    CHECK(e.y == doctest::Approx(0.0f));
+    CHECK(e.z == 0.5f);
+    const vec3 off{0.4f, -0.3f, 1.1f};
+    const vec3 d = gi_offset_decode(gi_offset_encode(off, cell), cell);
+    CHECK(d.x == doctest::Approx(off.x).epsilon(1e-5));
+    CHECK(d.y == doctest::Approx(off.y).epsilon(1e-5));
+    CHECK(d.z == doctest::Approx(off.z).epsilon(1e-5));
+    CHECK(same_bits(gi_offset_encode({1, 1, 1}, {0, 0, 0}), {0.5f, 0.5f, 0.5f}));  // a flat cell: no offset
+}
+
+TEST_CASE("gi_relocate: a relocated probe never moves more than max_offset of a cell nor into a solid") {
+    // A field of solids (some overlapping, one rotated) and a lattice of probe positions through and around them: every
+    // offset is 0 or keeps each component within max_offset * cell and lands outside every solid.
+    const vec3 cell{2.0f, 1.5f, 2.5f};
+    GiSolid solids[4] = {box_solid({0.0f, 0.0f, 0.0f}, {1.0f, 1.0f, 1.0f}), box_solid({1.6f, 0.2f, 0.0f}, {0.5f, 0.6f, 0.9f}),
+                         box_solid({-3.0f, 0.0f, 2.0f}, {0.3f, 2.0f, 0.3f}), {}};
+    solids[3].model = math::translation({2.0f, 0.0f, -3.0f}) * math::rotation(math::quat_from_axis_angle({0, 1, 0}, 0.6f));
+    solids[3].local = {{-0.8f, -0.8f, -0.8f}, {0.8f, 0.8f, 0.8f}};
+    solids[3].center = {2.0f, 0.0f, -3.0f};
+    solids[3].radius = 0.8f * std::sqrt(3.0f);
+    u32 moved = 0, refused = 0, can_move = 0;
+    for (const f32 mo : {0.1f, 0.25f, 0.4f, 0.45f}) {
+        for (f32 x = -4.0f; x <= 4.0f; x += 0.37f)
+            for (f32 y = -1.5f; y <= 1.5f; y += 0.41f)
+                for (f32 z = -4.0f; z <= 3.0f; z += 0.43f) {
+                    const vec3 g{x, y, z};
+                    const vec3 o = gi_relocate(g, cell, mo, solids);
+                    CHECK(same_bits(o, gi_relocate(g, cell, mo, solids)));  // deterministic
+                    // A probe inside exactly one of the three axis-aligned solids whose nearest-face push (to the margin past
+                    // it) stays within max_offset and lands outside every solid CAN move: it must move by exactly that.
+                    u32 holders = 0, holder = 0;
+                    for (u32 k = 0; k < 4; ++k)
+                        if (solids[k].local.contains(math::transform_point(math::inverse(solids[k].model), g))) {
+                            ++holders;
+                            holder = k;
+                        }
+                    if (holders == 1 && holder < 3) {
+                        const GiSolid& s = solids[holder];
+                        const vec3 lo = s.center + s.local.min, hi = s.center + s.local.max;
+                        const f32 d[6] = {hi.x - g.x, g.x - lo.x, hi.y - g.y, g.y - lo.y, hi.z - g.z, g.z - lo.z};
+                        u32 best = 0;  // gi_relocate's order: +x, -x, +y, -y, +z, -z; the first strictly nearest wins
+                        for (u32 k = 1; k < 6; ++k)
+                            if (d[k] < d[best]) best = k;
+                        vec3 push{0, 0, 0};
+                        const f32 len = (best & 1u ? -1.0f : 1.0f) * (d[best] + kGiRelocateMargin);
+                        (best < 2 ? push.x : best < 4 ? push.y : push.z) = len;
+                        bool free = std::fabs(push.x) <= mo * cell.x && std::fabs(push.y) <= mo * cell.y &&
+                                    std::fabs(push.z) <= mo * cell.z;
+                        for (const GiSolid& t : solids)
+                            free = free && !t.local.contains(math::transform_point(math::inverse(t.model), g + push));
+                        if (free) {
+                            ++can_move;
+                            CHECK(std::fabs(o.x - push.x) < 1e-5f);
+                            CHECK(std::fabs(o.y - push.y) < 1e-5f);
+                            CHECK(std::fabs(o.z - push.z) < 1e-5f);
+                        }
+                    }
+                    if (o.x == 0.0f && o.y == 0.0f && o.z == 0.0f) {
+                        bool inside = false;
+                        for (const GiSolid& s : solids)
+                            inside = inside || s.local.contains(math::transform_point(math::inverse(s.model), g));
+                        refused += inside;
+                        continue;
+                    }
+                    ++moved;
+                    CHECK(std::fabs(o.x) <= mo * cell.x);
+                    CHECK(std::fabs(o.y) <= mo * cell.y);
+                    CHECK(std::fabs(o.z) <= mo * cell.z);
+                    for (const GiSolid& s : solids)
+                        CHECK_FALSE(s.local.contains(math::transform_point(math::inverse(s.model), g + o)));
+                }
+    }
+    MESSAGE("lattice: " << moved << " probes moved (" << can_move << " checked against the expected push), " << refused
+                        << " inside a solid and refused");
+    CHECK(can_move > 0);
+    CHECK(moved > 0);
+    CHECK(refused > 0);
+}
+
+TEST_CASE("gi_follow_spacing and gi_follow_box: whole millimetres, the box follows the cell, a rebase moves it in render space only") {
+    CHECK(gi_follow_spacing(-96.0f, 96.0f, 32) == doctest::Approx(6.194).epsilon(1e-12));  // 192 / 31 = 6.19354..
+    CHECK(gi_follow_spacing(0.0f, 0.0f, 4) == 0.001);                                     // at least 1 mm
+    // The same authored size placed anywhere (f32 extents differ by an ulp): the same spacing.
+    CHECK(gi_follow_spacing(1000.3f - 96.0f, 1000.3f + 96.0f, 32) == gi_follow_spacing(-96.0f, 96.0f, 32));
+    const u32 counts[3] = {8, 3, 6};
+    const math::aabb3 authored{{-7.0f, 0.5f, -5.0f}, {7.0f, 4.5f, 5.0f}};  // 2 m cells on x and z
+    const GiFollowCell f{-3, 11};
+    const math::aabb3 b = gi_follow_box(f, authored, counts, 0.0, 0.0);
+    CHECK(b.min.x == -6.0f);
+    CHECK(b.max.x == 8.0f);
+    CHECK(b.min.z == 22.0f);
+    CHECK(b.max.z == 32.0f);
+    CHECK(b.min.y == 0.5f);
+    CHECK(b.max.y == 4.5f);
+    // A floating origin of (1000, 0, -1000): the box in render space is the same world box.
+    const math::aabb3 r = gi_follow_box(f, authored, counts, 1000.0, -1000.0);
+    CHECK(r.min.x == -1006.0f);
+    CHECK(r.min.z == 1022.0f);
+    CHECK(r.max.x - r.min.x == 14.0f);
+}
+
+TEST_CASE("gi_scroll: the slots that leave are the slots that arrive, for any step, sign and offset") {
+    // A CPU model of the toroidal volume: slot -> the world cell index (x, z) it holds. After a scroll, every slot gi_scroll
+    // did not name still holds the world probe the box now wants there (bit for bit: kept), and every slot it named holds
+    // one that left: the named slots are exactly the changed ones, and `probes` counts them over the y layers.
+    for (const u32 cx : {2u, 3u, 5u, 8u, 32u}) {
+        for (const u32 cz : {2u, 4u, 7u}) {
+            const u32 counts[3] = {cx, 3, cz};
+            const auto wanted = [&](GiFollowCell f, u32 sx, u32 sz, i64& wx, i64& wz) {  // the probe slot (sx, sz) holds
+                u32 o[3];
+                gi_slot_offset_of(f, counts, o);
+                wx = f.x + i64(gi_local_of(sx, o[0], cx));
+                wz = f.z + i64(gi_local_of(sz, o[2], cz));
+                CHECK(gi_slot(wx, cx) == sx);  // world index mod count: the slot (gi_slot_of and gi_local_of agree)
+                CHECK(gi_slot_of(gi_local_of(sx, o[0], cx), o[0], cx) == sx);
+            };
+            GiFollowCell at{-37, 12};
+            Array<i64> hx, hz;  // what each slot holds
+            hx.resize(usize(cx) * cz);
+            hz.resize(usize(cx) * cz);
+            for (u32 sz = 0; sz < cz; ++sz)
+                for (u32 sx = 0; sx < cx; ++sx) wanted(at, sx, sz, hx[sz * cx + sx], hz[sz * cx + sx]);
+            // Steps: one cell each way, several, mixed, a non-step, up to the box (refill).
+            const i64 steps[][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {2, -1}, {-3, 2}, {0, 0}, {1, 1}, {-1, -1},
+                                    {i64(cx) - 1, 0}, {0, i64(cz) - 1}, {-(i64(cx) - 1), -(i64(cz) - 1)},
+                                    {i64(cx), 0}, {0, -i64(cz)}, {5 * i64(cx) + 1, 0}};
+            for (const auto& st : steps) {
+                const GiFollowCell to{at.x + st[0], at.z + st[1]};
+                const GiScroll sc = gi_scroll(at, to, counts);
+                const bool beyond = st[0] >= i64(cx) || -st[0] >= i64(cx) || st[1] >= i64(cz) || -st[1] >= i64(cz);
+                CHECK(sc.refill == beyond);
+                u32 changed = 0;
+                for (u32 sz = 0; sz < cz; ++sz)
+                    for (u32 sx = 0; sx < cx; ++sx) {
+                        i64 wx, wz;
+                        wanted(to, sx, sz, wx, wz);
+                        const usize i = sz * cx + sx;
+                        const bool differs = hx[i] != wx || hz[i] != wz;
+                        changed += differs;
+                        if (!sc.refill) {
+                            const bool named = ((sx + cx - sc.x_first) % cx < sc.x_count) || ((sz + cz - sc.z_first) % cz < sc.z_count);
+                            CHECK(named == differs);
+                        }
+                        hx[i] = wx;
+                        hz[i] = wz;
+                    }
+                if (!sc.refill) CHECK(sc.probes == changed * counts[1]);
+                else CHECK(sc.probes == cx * counts[1] * cz);
+                at = to;
+            }
+        }
+    }
+}
+
+TEST_CASE("gi_follow_origin with gi_scroll: a camera moving every frame, by fractions of a cell, both ways, and far away") {
+    // The camera walks in steps that are not multiples of the cell, back and forth, crossing zero and far from it; the
+    // snapped origin moves only at cell edges, by the cells crossed; a jump of a whole box asks for a refill.
+    const u32 counts[3] = {16, 4, 16};
+    const f64 cell = 2.5;
+    GiFollowCell at = gi_follow_origin(-3.7, 1.2, cell, cell, 16, 16);
+    f64 x = -3.7, z = 1.2;
+    u32 scrolls = 0, scrolled = 0;
+    for (int frame = 0; frame < 400; ++frame) {
+        const f64 dx = frame < 200 ? 0.37 : -0.61, dz = frame % 3 == 0 ? -0.9 : 0.4;
+        x += dx;
+        z += dz;
+        const GiFollowCell to = gi_follow_origin(x, z, cell, cell, 16, 16);
+        CHECK(to.x == i64(std::floor(x / cell)) - 7);
+        CHECK(to.z == i64(std::floor(z / cell)) - 7);
+        const GiScroll sc = gi_scroll(at, to, counts);
+        CHECK_FALSE(sc.refill);
+        CHECK(sc.x_count <= 1);  // less than a cell per frame
+        if (sc.probes) {
+            ++scrolls;
+            scrolled += sc.probes;
+        }
+        at = to;
+    }
+    MESSAGE(scrolls << " scrolls, " << scrolled << " probes invalidated over 400 frames");
+    CHECK(scrolls > 50);
+    // 1e6 m away: still exact cells; a jump of a box refills.
+    const GiFollowCell far = gi_follow_origin(1.0e6 + 1.0, -1.0e6 + 1.0, cell, cell, 16, 16);
+    CHECK(far.x == 400000 - 7);
+    CHECK(far.z == -400000 - 7);
+    CHECK(gi_scroll(at, far, counts).refill);
+}
+
+TEST_CASE("gi_follow_origin and gi_follow_step: the camera stays near the box centre for odd and even counts; sway does not flap") {
+    for (u32 n = 2; n <= 9; ++n) {
+        INFO("count " << n);
+        const f64 cell = 2.0;
+        f64 worst = 0.0;  // the largest |camera - box centre|, in cells
+        for (f64 x = -13.0; x <= 13.0; x += 0.0625) {
+            const GiFollowCell f = gi_follow_origin(x, -x, cell, cell, n, n);
+            const f64 centre = (f64(f.x) + 0.5 * f64(n - 1)) * cell;
+            worst = math::max(worst, std::fabs(x - centre) / cell);
+            // The camera's distance to each edge of the box (n - 1 cells long) on both sides.
+            const f64 lo = x - f64(f.x) * cell, hi = f64(f.x + i64(n) - 1) * cell - x;
+            CHECK(lo >= (0.5 * f64(n - 1) - 0.5) * cell - 1e-9);
+            CHECK(hi >= (0.5 * f64(n - 1) - 0.5) * cell - 1e-9);
+        }
+        CHECK(worst <= 0.5 + 1e-9);
+        // gi_follow_step: a walk keeps the camera within kGiFollowHysteresis cells of the centre (rebase-free).
+        GiFollowCell at = gi_follow_origin(0.3, 0.3, cell, cell, n, n);
+        for (f64 x = 0.3; x < 40.0; x += 0.37) {
+            at = gi_follow_step(at, x, 0.3, cell, cell, n, n);
+            CHECK(std::fabs(x / cell - (f64(at.x) + 0.5 * f64(n - 1))) <= kGiFollowHysteresis + 1e-9);
+        }
+        // Sway across a snap point by up to 0.2 cell each way (under the half cell of dead band), 600 frames: the box moves
+        // at most once.
+        const f64 edge = (n & 1u) ? 5.0 * cell + 0.5 * cell : 5.0 * cell;  // where gi_follow_origin steps
+        at = gi_follow_origin(edge - 0.3 * cell, 0.0, cell, cell, n, n);
+        u32 moves = 0;
+        for (int i = 0; i < 600; ++i) {
+            const f64 x = edge + (i % 2 ? 0.2 : -0.2) * cell * (0.5 + 0.5 * f64(i % 7) / 6.0);
+            const GiFollowCell next = gi_follow_step(at, x, 0.0, cell, cell, n, n);
+            moves += !(next == at);
+            at = next;
+        }
+        CHECK(moves <= 1);
+    }
 }
