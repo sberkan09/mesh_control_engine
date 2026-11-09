@@ -134,9 +134,52 @@ Rendering is outside the state hash and the replay; the new shader math uses pos
 
 Headless (llvmpipe, lavapipe): the CPU helpers (49b, 49e) are exact; on the GL and SDL GPU fixture every off equality holds byte for byte (both cvars at 0, the Low look, no prepass, the camera below, no `WaterFlow`); the seabed shows through and absorbs by channel; the pillar mirrors at the analytic position and widens with the waves; no foreground leak; glass still refracts the water; the flowing normals match the kit; two runs agree. Real-GPU behaviour and look are proposed rows on the GPU list (`/mnt/project-files/assessments/gpu-gereken-isler.md`, next free numbers after A24; the coordinator adds them):
 
-- **A25 (proposed), cost.** `tour_river` and a full-screen calm sea at 1920 x 1080, High and Medium: the frame and the `main` stage with both effects on, with `r.water.refract 0`, with `r.water.reflect 0` and with both off (the pass break and copy alone), as M-REFLECT2's r8 table; plus a tiled GPU if one is available.
-- **A26 (proposed), look.** Reflection shimmer and edge fade under camera motion with and without TAA, the clear-colour leak at silhouettes, the refraction strength and the absorption against real seabeds, a 1.2 m/s current's read at a real display, the slow-current swell standing still (Design 3), and whether a high-roughness sea needs the gather of Design 2.
-- **A27 (proposed), Metal and WebGPU.** Translation of `p_water6`, the bank 7 sampler in `kWaterFS`, the trace loop and the pass break on the Metal and WebGPU backends.
+- **A25, cost (done in r9, below).** `tour_river` and a full-screen calm sea at 1920 x 1080, High and Medium: the frame and the `main` stage with both effects on, with `r.water.refract 0`, with `r.water.reflect 0` and with both off (the pass break and copy alone), as M-REFLECT2's r8 table; plus a tiled GPU if one is available.
+- **A26, look (r9 did the automated part, below; the windowed look by a person stays open).** Reflection shimmer and edge fade under camera motion with and without TAA, the clear-colour leak at silhouettes, the refraction strength and the absorption against real seabeds, a 1.2 m/s current's read at a real display, the slow-current swell standing still (Design 3), and whether a high-roughness sea needs the gather of Design 2.
+- **A27, Metal and WebGPU (open: no Mac in r9).** Translation of `p_water6`, the bank 7 sampler in `kWaterFS`, the trace loop and the pass break on the Metal and WebGPU backends.
+
+### GPU verification r9 (2026-11-09)
+
+Round r9 of `M-GPU-VERIFY.md` (pod, driver and procedure there): one community-cloud **RTX A2000** (6 GB, Ampere GA106, driver 550.127.05, r8's card), master 2d17e046 with nothing changed but the job files, RelWithDebInfo with `MCE_GPU_TESTS=ON`. GL ran through `SDL_VIDEODRIVER=offscreen` (`OpenGL 4.5.0 NVIDIA 550.127.05 on NVIDIA RTX A2000`), SDL GPU under Xvfb with the NVIDIA Vulkan ICD (`SDL GPU (vulkan) on NVIDIA RTX A2000`), and llvmpipe and lavapipe on the same pod as the reference. No engine code was touched. The `13_water` copy with SSAO below was made and cooked on the pod only.
+
+**(1) Correctness (A26, what a pod can check): everything in the water passes, and the numbers match llvmpipe.**
+
+- The 32 cases of `test_render_gl -tc='*water*'` (the water, underwater and water-optics files and the outline case's water frame, 2286 assertions) pass on NVIDIA GL, NVIDIA Vulkan, llvmpipe and lavapipe. The two GPU backends give the same numbers. The pillar's mirror image is 30 green rows ending at row 103 (analytic 105.9; 0 rows with the sky only). Its 10-90 % side widths are 3 / 4.17 / 6.58 / 10.25 px at amplitude 0 / 0.03 / 0.06 / 0.12, and 3 / 4 / 6.5 / 10.17 with MSAA 1. Turned out of the frame, the reflected green falls from 23 722 to 203 with no step above 2 221 (llvmpipe 23 630 to 203, the same step). The striped seabed's luma spread is 70.4 / 71.0 / 69.5 with the refraction and 2.3 / 3.2 / 2.3 without (llvmpipe 70.4 / 70.9 / 69.5), with 99 of 101, 80 of 80 and 100 of 101 rows in the dry seabed's class, and 32 of 282 rows change class with the waves. Seabed through 0.5 m 204,210,211 and through 3 m 141,191,195, deep basin 6,42,72 against the tint, 0 post pixels in the water around the post, the glass case 156,167,168: the same on all four. The flowing normals agree at every probe (1425, 1548, 1495).
+- All of `test_render_gl`: 317 of 317 on GL (102 s) and on SDL GPU (371 s). `test_golden_gl` (65 cases): 3 of 3 runs pass on GL. On SDL GPU 11 of 15 runs pass, and 4 lose the device on a case without water (`M-GPU-VERIFY.md` r9, "intermittent `VK_ERROR_DEVICE_LOST`"; not reproduced in the last 8 runs, r8's build included). `sample_kit3d_tour_river_headless`, `sample_kit3d_tour_river_gpu`, `sample_water_headless_600` and `sample_water_gpu` pass on both backends.
+- **Real GPU against the reference** (1280 x 720, High, pinned tick: `-capture_tick <t> -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0`; share of pixels differing by more than 12/255, mean abs):
+
+| Frame | GL vs llvmpipe | SDL GPU vs llvmpipe | SDL GPU vs lavapipe | on vs off on the GPU (GL and SDL GPU alike) |
+|---|---|---|---|---|
+| `tour_river`, tick 120 | 0.01 %, 0.06 | 0.01 %, 0.06 | 0.01 %, 0.05 | `refract 0` 38.85 %, `reflect 0` 13.33 %, both 0 42.92 % |
+| `tour_river`, tick 300 | 0.00 %, 0.05 | 0.00 %, 0.05 | 0.00 %, 0.05 | `refract 0` 39.37 %, `reflect 0` 10.24 %, both 0 43.28 % |
+| `13_water`, tick 300 | 0.00 %, 0.03 | 0.00 %, 0.03 | 0.00 %, 0.03 | both 0: 45.10 % (mean abs 14.5) |
+
+  Two GL captures of one frame are byte-identical, and so are two llvmpipe captures. On the river frame (top to bottom fifths), the effects change 0.00 / 1.4 / 32.6 / 82.9 / 97.8 % of pixels: the water, not the sky or banks. The frame with both effects off, with `-r.water 0` and the Low tier also match llvmpipe (0.00 %). The Medium tier differs by 0.25 to 0.55 % with or without water (FXAA instead of TAA; at most 156 levels). That comes from the anti-aliasing, not the water. `scripts/ci/gpu_compare.py` reports about 20 % on `sample_kit3d_tour_river_gpu` because it pins the tick without the catch-up flags (harness note in `M-GPU-VERIFY.md` r9).
+
+**(2) GPU cost at 1920 x 1080 (A25)** (GL, r8's command: `mce_player -window 1920x1080 -perf_capture <file> -sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0 -perf_warmup 60 -frames 600 -r.quality <tier>`, 537 measured frames, mean of 2 runs; ms of GPU time from `summary.gpu_ms.avg` and the `.mcperf` `main` stage column). `tour_river` is the sample. The sea is `13_water`, whose camera looks over open sea with the default four Gerstner waves (0.4 m), not a calm one. The stock scene already runs both effects (on and both off differ by 45 % of pixels). A copy with `ssao: 1` gives the same frame (the same mean colour, and the same 45.10 % against its both-off frame) and costs the same apart from SSAO's own 0.18 ms, so the four-way split below is from that copy.
+
+| Scene, tier | frame, both on | `refract 0` | `reflect 0` | both 0 | main: on / `refract 0` / `reflect 0` / both 0 |
+|---|---|---|---|---|---|
+| `tour_river`, High | 2.599 | 2.518 | 2.087 | 1.980 | 1.572 / 1.494 / 1.081 / 0.987 |
+| `tour_river`, Medium | 1.917 | 1.851 | 1.517 | 1.444 | 1.153 / 1.096 / 0.776 / 0.706 |
+| `13_water` (+SSAO), High | 3.468 | 3.373 | 2.595 | 2.473 | 2.389 / 2.298 / 1.562 / 1.449 |
+| `13_water` (+SSAO), Medium | 2.447 | 2.365 | 1.809 | 1.714 | 1.683 / 1.613 / 1.080 / 1.002 |
+| `13_water` stock, High | 3.309 | not run | not run | 2.307 | 2.412 / - / - / 1.454 |
+| `13_water` stock, Medium | 2.314 | not run | not run | 1.591 | 1.705 / - / - / 1.010 |
+
+| What it costs (`main` stage, GL) | river High | river Medium | sea High | sea Medium | plan |
+|---|---|---|---|---|---|
+| both effects (on − both 0) | **+0.585** | +0.447 | **+0.940** | +0.681 | |
+| the reflection march (on − `reflect 0`) | **+0.491** | +0.377 | **+0.827** | +0.603 | 0.3 to 0.6 ms (sea) |
+| the pass break, copy and refraction lookup (`reflect 0` − both 0) | +0.094 | +0.070 | +0.113 | +0.078 | 0.05 to 0.15 ms (copy) |
+| the refraction's shading with the copy already there (on − `refract 0`) | +0.078 | +0.057 | +0.091 | +0.070 | |
+
+- Frame totals move with the `main` stage to within 0.01 to 0.05 ms. The other stages do not change (SSAO, TAA, bloom, tonemap within 0.01 ms), so the cost is the copy and the water's fragment work. Run-to-run spread of the frame total is 0.03 to 0.13 ms; the stage columns are steadier.
+- **The pass break and copy** stay inside the plan's estimate on a low-end desktop card: at most 0.11 ms, and that includes the refraction's bent lookup and absorption, since the refraction alone cannot run without the copy.
+- **The reflection march** is the expensive part, and it scales with the water's share of the screen: 0.49 / 0.38 ms on the river (water in about the lower half of the frame) and 0.83 / 0.60 ms on the sea (most of the frame). On the sea at High it is above the plan's 0.3 to 0.6 ms. This is the A2000, a low-end Ampere part, so these are upper bounds for a mid-range card (not measured on one in r9). If a target device needs it cheaper, the levers are follow-up material: fewer than 24 steps at Medium, or a half-size trace.
+- **SDL GPU** (the same runs under `MCE_RHI=sdlgpu`, mean of 2): `main` on / both 0 is 1.181 / 0.919 (river High), 1.110 / 0.780 (river Medium), 2.073 / 1.442 (sea High) and 1.738 / 1.213 (sea Medium). The `13_water` SSAO copy gives 1.917 / 1.858 / 1.214 / 1.213 at High for on / `refract 0` / `reflect 0` / both 0. That is the same order as GL (the march about 0.2 to 0.7 ms, the copy 0 to 0.08 ms). The frame totals are too noisy to subtract: run-to-run spread is up to 0.36 ms, and time moves between the `ssao`, `taa` and `bloom` columns from run to run, as r7 saw with the fence timestamps.
+
+**Not checked here:** the windowed look by a person (A26: reflection shimmer and the edge fade under camera motion with and without TAA, the clear-colour leak at silhouettes at a real display's resolution, the refraction strength, the 1.2 m/s current's read, the slow-current swell, whether a rough sea wants the M-REFLECT2 gather). The capture comparisons say the real driver draws what llvmpipe draws, not that it looks right. A tiled GPU for the pass break's cost (none on RunPod), and Metal and WebGPU (A27, Mac).
 
 ## Follow-ups
 
