@@ -43,7 +43,7 @@ struct ShotDesc {
     f32 rough = 0.4f;          // the floor's roughness (mesh 9)
     bool blur = true;          // r.ssr.blur
     bool ssr = true;           // ScreenSpaceReflections::enabled
-    f32 max_roughness = 1.0f;  // ScreenSpaceReflections::max_roughness (the default 0.5 in the golden-like cases)
+    f32 max_roughness = 1.0f;  // ScreenSpaceReflections::max_roughness (the default 0.6 in the golden-like cases)
     u32 msaa = 4;
     int map = -1;          // M-REFLECT2 48d: -1 the mesh's own material, 0 an override without a normal map, 1 a flat
                            // (128, 128, 255) normal map, 2 a noisy one
@@ -183,7 +183,7 @@ TEST_CASE("render3d_gl ssr blur: a mirror at or below the threshold keeps the si
     for (f32 rough : {0.05f, kSsrBlurMinRough}) {  // 0.1 is the ssr_room golden's floor
         ShotDesc d;
         d.rough = rough;
-        d.max_roughness = 0.5f;  // the default, as the golden
+        d.max_roughness = 0.6f;  // the default, as the golden
         const Shot on = shoot(d);
         d.blur = false;
         const Shot off = shoot(d);
@@ -328,7 +328,7 @@ TEST_CASE("render3d_gl ssr bump: a flat normal map reflects as no map; a noisy o
 TEST_CASE("render3d_gl ssr bump: a noisy-mapped mirror below the threshold keeps the single tap") {
     ShotDesc d;
     d.rough = 0.05f;
-    d.max_roughness = 0.5f;  // the default: the wall and the box (rougher) take no SSR, so only the floor could change
+    d.max_roughness = 0.6f;  // the default: the wall and the box (0.8) take no SSR, so only the floor could change
     d.map = 2;
     const Shot on = shoot(d);
     d.blur = false;
@@ -349,7 +349,7 @@ TEST_CASE("render3d_gl ssr bump: a terrain whose splat normal is the geometric o
     CHECK(terrain.st.ssr_blur);
     CHECK(std::abs(pt.width - pm.width) <= 1);
     d.rough = 0.05f;
-    d.max_roughness = 0.5f;
+    d.max_roughness = 0.6f;  // the default
     const Shot t_on = shoot(d);
     d.blur = false;
     CHECK(same(t_on.px, shoot(d).px));

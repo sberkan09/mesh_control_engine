@@ -340,7 +340,7 @@ struct ScreenSpaceReflections {
     f32 max_distance = 8.0f;     // world meters a ray travels
     f32 thickness = 0.25f;       // how far behind the depth buffer a ray may pass and still hit (meters)
     u32 steps = 32;              // march steps before the 4-step binary refinement (4..128)
-    f32 max_roughness = 0.5f;    // rougher surfaces keep the probes only
+    f32 max_roughness = 0.6f;    // rougher surfaces keep the probes only
     f32 roughness_fade = 0.2f;   // the reflection fades out over this roughness range below max_roughness
     f32 edge_fade = 0.1f;        // fraction of the screen at its borders over which hits fade out
     f32 intensity = 1.0f;        // scales the reflected light
