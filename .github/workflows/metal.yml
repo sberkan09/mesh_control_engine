@@ -93,10 +93,10 @@ jobs:
           export MTL_DEBUG_LAYER=1
           run rhi_metal_debuglayer 300 "$B/tests/rhi_metal/test_rhi_metal"
           run render_ssr_debuglayer 600 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          run golden_debuglayer 600 "$B/tests/render_gl/test_golden_gl"
           unset MTL_DEBUG_LAYER
           export MTL_SHADER_VALIDATION=1
           run rhi_metal_shadervalidation 300 "$B/tests/rhi_metal/test_rhi_metal"
-          run render_ssr_shadervalidation 240 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
           unset MTL_SHADER_VALIDATION
           find "$B" -name 'kit3d_tour_reflect.ppm' -exec cp {} out/ \;
           for f in out/*.ppm; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.ppm}.png"; done
