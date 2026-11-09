@@ -88,11 +88,16 @@ jobs:
           run golden 600 "$B/tests/render_gl/test_golden_gl"
           run tour_reflect_headless 300 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_headless --output-on-failure
           run tour_reflect_gpu 400 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_gpu --output-on-failure
-          # Pass 2, Metal API + shader validation on (run 4 showed these abort or time out on this runner).
-          export MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1
-          run rhi_metal_validation 300 "$B/tests/rhi_metal/test_rhi_metal"
-          run render_ssr_validation 300 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
-          unset MTL_DEBUG_LAYER MTL_SHADER_VALIDATION
+          # Pass 2, one validation layer at a time. Run 5: with both on, compute pipelines fail to compile and SSR times out;
+          # without them every SSR case passes. This pass separates the API layer from the shader instrumentation.
+          export MTL_DEBUG_LAYER=1
+          run rhi_metal_debuglayer 300 "$B/tests/rhi_metal/test_rhi_metal"
+          run render_ssr_debuglayer 600 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          unset MTL_DEBUG_LAYER
+          export MTL_SHADER_VALIDATION=1
+          run rhi_metal_shadervalidation 300 "$B/tests/rhi_metal/test_rhi_metal"
+          run render_ssr_shadervalidation 240 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          unset MTL_SHADER_VALIDATION
           find "$B" -name 'kit3d_tour_reflect.ppm' -exec cp {} out/ \;
           for f in out/*.ppm; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.ppm}.png"; done
           cp -R "$B/tests/render_gl/golden_out" out/golden_out 2>/dev/null || true
