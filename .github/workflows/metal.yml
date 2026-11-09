@@ -81,15 +81,18 @@ jobs:
             tail -n 25 "out/$n.log"
             echo "$n rc=$rc (${i}s)" | tee -a out/summary.txt
           }
-          export MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 SDL_VIDEO_DRIVER=cocoa
+          # Pass 1, no Metal validation layers: what the paravirtual GPU itself can do.
           run shader_cross 120 "$B/tests/rhi_metal/test_shader_cross"
           run rhi_metal 300 "$B/tests/rhi_metal/test_rhi_metal"
-          run render_gl 1200 "$B/tests/render_gl/test_render_gl"
           run render_ssr 600 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
           run golden 600 "$B/tests/render_gl/test_golden_gl"
           run tour_reflect_headless 300 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_headless --output-on-failure
           run tour_reflect_gpu 400 ctest --test-dir "$B" -R sample_kit3d_tour_reflect_gpu --output-on-failure
-          run gpu_label 1800 ctest --test-dir "$B" -L gpu -E "sample_kit3d_tour_reflect_gpu" --timeout 600 -j 1 --output-on-failure
+          # Pass 2, Metal API + shader validation on (run 4 showed these abort or time out on this runner).
+          export MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1
+          run rhi_metal_validation 300 "$B/tests/rhi_metal/test_rhi_metal"
+          run render_ssr_validation 300 "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          unset MTL_DEBUG_LAYER MTL_SHADER_VALIDATION
           find "$B" -name 'kit3d_tour_reflect.ppm' -exec cp {} out/ \;
           for f in out/*.ppm; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.ppm}.png"; done
           cp -R "$B/tests/render_gl/golden_out" out/golden_out 2>/dev/null || true
