@@ -22,12 +22,16 @@ namespace mce::render {
 // ---- the volume texture's layout
 inline constexpr u32 kGiTexelsL1 = 4;       // texels per probe of a volume without the record
 inline constexpr u32 kGiTexelsRecord = 10;  // ... with it
-inline constexpr u32 kGiTexelMeanPos = 4;     // rgb: the mean hit distance in the lobes around +x, +y, +z
+// The record's distances are axial (M-GI2 50e): a hit at distance r in direction d counts as r * dot(d, axis) in the
+// lobe around `axis` (a plane across the axis reads its own distance, with no spread).
+inline constexpr u32 kGiTexelMeanPos = 4;     // rgb: the mean axial hit distance in the lobes around +x, +y, +z
 inline constexpr u32 kGiTexelMeanNeg = 5;     // rgb: ... around -x, -y, -z
-inline constexpr u32 kGiTexelSquarePos = 6;   // rgb: the mean squared distance in the lobes around +x, +y, +z
+inline constexpr u32 kGiTexelSquarePos = 6;   // rgb: the mean squared axial distance in the lobes around +x, +y, +z
 inline constexpr u32 kGiTexelSquareNeg = 7;   // rgb: ... around -x, -y, -z
 inline constexpr u32 kGiTexelOffset = 8;      // rgb: the relocation offset, 0.5 + 0.5 * offset / (max_offset * cell)
-inline constexpr u32 kGiTexelState = 9;       // r: the back-face share (1 = a probe not captured yet); g, b: 0
+// r: the back-face share; 50g writes 1 for a probe that scrolled in and is not captured yet. A cleared volume's probes
+// (the fill) read 0 here and an all-zero record, which the lookup also weighs 0 (gi_visibility_weight).
+inline constexpr u32 kGiTexelState = 9;
 // Bits of PassU::gi_counts.w: the 10-texel layout, the visibility weight (M-GI2 50e), the relocation offsets (50f).
 inline constexpr u32 kGiFlagRecord = 1;
 inline constexpr u32 kGiFlagVisibility = 2;
@@ -49,6 +53,12 @@ inline constexpr f32 kGiBackfaceOff = 0.25f;
 inline constexpr f32 kGiMinVariance = 1.0e-3f;
 // Weights below this are crushed as DDGI does (w^3 / kGiCrush^2; 50e).
 inline constexpr f32 kGiCrush = 0.2f;
+// "No probe left" (50e): when no probe with a positive trilinear weight has a visibility factor of at least this, the
+// lookup gives a = 0 (the sky's ambient). A factor of 1e-4 after the crush is a Chebyshev bound of about 0.016 before it
+// (the point some 1.7 standard deviations behind the lobe's mean), far below a probe that sees the point (1) or half
+// sees it, and far above an occluded one behind a wall (1e-20 and less). It is compared with the factors, not with the
+// summed weights, so the decision does not depend on the cell size or on how small the trilinear weights are.
+inline constexpr f32 kGiNoProbe = 1.0e-4f;
 // How far past a solid's face relocation puts a probe (m; 50f).
 inline constexpr f32 kGiRelocateMargin = 0.1f;
 // GiVolume::max_offset's bound (fraction of a cell): a relocated probe never leaves its cell.
@@ -69,13 +79,39 @@ struct GiMoments {
 
 // The record toward direction `d` (normalised here; a zero d reads the +x lobe): the ambient-cube interpolation
 // sum_i d_i^2 * lobe[sign(d_i), i], for the mean and for the square. Along an axis it returns that lobe's own value;
-// between axes it blends by d_i^2 (which sums to 1).
+// between axes it blends by d_i^2 (which sums to 1). (The plan's lookup formula; 50e's lookup reads the lobes per axis
+// instead, gi_visibility_weight.)
 GiMoments gi_record_at(const GiRecord& r, math::vec3 d);
 
 // Chebyshev's one-sided bound, cubed as DDGI does: 1 when r <= mean (the point is in front of the nearest surface),
 // else (var / (var + (r - mean)^2))^3 with var = max(square - mean^2, kGiMinVariance). Falls monotonically past the
 // mean and is finite for a zero variance. Distances in metres (mean = record * dmax, square = record * dmax^2).
 f32 gi_chebyshev(f32 r, f32 mean, f32 square);
+
+// The lookup's visibility factor of one probe (M-GI2 50e; the CPU twin of gi_vis in shaders3d.h, which
+// gi_irradiance2 multiplies into the probe's trilinear and backface weight): 0 when the probe is classified off
+// (back_share >= kGiBackfaceOff) or when the record is all zero (a cleared volume's probe not captured yet; a captured
+// probe's means are positive); otherwise, per axis i, gi_chebyshev of the point's distance along the axis |v_i|
+// against the lobe on v's side (v_i >= 0: the + lobe; mean = record * dmax, square = record * dmax^2), the smallest of
+// the three, crushed below kGiCrush to vis^3 / kGiCrush^2. `v` = the normal-biased lookup point minus the probe's
+// position. Only the visibility factor is crushed (DDGI crushes its backface-times-Chebyshev weight; the engine's
+// backface term already falls to 0.05, and crushing it too would move every open-air probe's weight).
+// Why per axis and not the plan's radial test against gi_record_at(v): the six lobes cannot tell a wall in front of
+// the probe from the open space beside it, so the d_i^2 blend toward a point offset sideways behind a thin wall mixed in
+// the side lobe's long distance and let the light through (the thin-wall test measured no reduction). With the record
+// storing axial distances, a wall across an axis reads its own distance and a point behind it is behind it along that
+// axis wherever it lies sideways.
+// Limits: the test is sound for walls across an axis. A thin wall at 20 to 45 degrees to the axes still leaks (its
+// distance is smeared over two lobes; the plan's radial blend leaks there too); an opening (a doorway, a window) is read
+// as the infinite plane of its wall, so points seen through it from the nearest probes are wrongly occluded; and points
+// in the fade band outside the volume's box get no occlusion beyond what the clamped lookup point implies.
+f32 gi_visibility_weight(const GiRecord& r, f32 back_share, math::vec3 v, f32 dmax);
+
+// The lookup's blend of a point's 8 probes with the visibility weight on (the CPU twin of gi_irradiance2's
+// normalisation): base[k] = the probe's trilinear times backface weight (>= 0), vis[k] its gi_visibility_weight. Returns
+// false ("no probe left": a = 0, the sky's ambient) when no probe with base[k] > 0 has vis[k] >= kGiNoProbe; otherwise
+// writes base[k] * vis[k] / their sum into `out` (no floor under the sum) and returns true.
+bool gi_blend(const f32 (&base)[8], const f32 (&vis)[8], f32 (&out)[8]);
 
 // The cosine-power lobe weight of direction `d` (unit) around `axis` (unit): max(dot(d, axis), 0)^kGiVisLobePower.
 f32 gi_lobe_weight(math::vec3 d, math::vec3 axis);
