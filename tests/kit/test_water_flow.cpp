@@ -343,13 +343,13 @@ TEST_CASE(
         b.run(1);
         const Weather& wa = *a.w.try_get<Weather>(a.wxe);
         const Weather& wb = *b.w.try_get<Weather>(b.wxe);
-        // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): both copies come from the same writer, padding
-        // included
+        // both copies come from the same writer, padding included
+        // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison)
         CHECK(std::memcmp(&wa, &wb, sizeof(Weather)) == 0);
         const Water& ma = *a.w.try_get<Water>(a.we);
         const Water& mb = *b.w.try_get<Water>(b.we);
-        // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison): both copies come from the same writer, padding
-        // included
+        // both copies come from the same writer, padding included
+        // NOLINTNEXTLINE(bugprone-suspicious-memory-comparison)
         CHECK(std::memcmp(&ma, &mb, sizeof(Water)) == 0);
     }
     const WaterFlow& f = *b.w.try_get<WaterFlow>(b.fe);
