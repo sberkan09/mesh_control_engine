@@ -16,7 +16,7 @@ Builds `macos-release` with `MCE_GPU_TESTS=ON`, then (each with its own time lim
 2. `test_render_gl -tc=*ssr*,*SSR*` (the 14 SSR cases of M-REFLECT2 on the Metal backend)
 3. `test_golden_gl`, `sample_kit3d_tour_reflect_headless`, `sample_kit3d_tour_reflect_gpu`
 4. the same Metal tests again with `MTL_DEBUG_LAYER=1`, then with `MTL_SHADER_VALIDATION=1`, one at a time
-   plus `golden` with the debug layer (it finds the `u_volSmplr` bug below)
+   plus `golden` with the debug layer (it found the `u_volSmplr` bug below, fixed in #1199)
 
 ## Results (macos-26, Apple Paravirtual GPU, runs 5 and 6)
 
@@ -40,12 +40,20 @@ Builds `macos-release` with `MCE_GPU_TESTS=ON`, then (each with its own time lim
 
 ## Open items
 
-- **Engine bug, confirmed on the hosted runner (needs a fix thread, Metal backend / render):** with `MTL_DEBUG_LAYER=1` alone
-  (no shader validation) `test_golden_gl` aborts in `golden: a reflection probe mirrors the room in the metal floor` with
-  `-[MTLDebugRenderCommandEncoder validateCommonDrawErrors:]: Fragment Function(main0): missing Sampler binding at index 4 for
-  u_volSmplr[0]` (runs 4, 5 and 7, reproducible; the volumetric-fog sampler of the lit shader is not bound on that draw). The
-  API-level debug layer does not depend on the GPU, so it should reproduce on the M4 as well. Without the debug layer the draw
-  runs, so no test fails today. The SSR subset does not reach this draw. Fix: bind a (dummy) sampler/texture for `u_volSmplr`
-  on the draws that do not have a volumetric texture, then run `golden` with `MTL_DEBUG_LAYER=1` (`golden_debuglayer` step).
+- ~~**Engine bug:** `MTL_DEBUG_LAYER=1` aborted `test_golden_gl` in "a reflection probe mirrors the room in the metal floor"
+  with `missing Sampler binding at index 4 for u_volSmplr[0]`.~~ **Fixed in PR #1199** (2026-11-09). Two capture passes ran on
+  a scene's first frame before `Forward3D::bind_main_state` had bound every bank the lit shader declares: the reflection probe
+  faces left bank 4 (`u_vol`, volumetric fog) unbound, and the irradiance-volume faces left banks 0 to 2 (decal textures) and
+  the decal records unbound. GL reads an unbound unit as zero and the shaders never read them there (`PassU::vol.x`,
+  `decals.x` are 0), so only Metal's validation saw it. Both passes now bind the stand-ins (`ao_off_`, `bind_decals(.., false)`).
+  Verified on the hosted runner with a temporary workflow (runs 1 to 3 on #1199): `test_golden_gl` 65/65 with `MTL_DEBUG_LAYER=1`
+  (assert mode), and with `MTL_DEBUG_LAYER_ERROR_MODE=nslog` the whole `test_golden_gl` and `test_render_gl` (317 cases) log
+  **no** Metal validation message.
+- **Metal-only test failure (not a binding bug, open):** `test_render_gl` on the hosted runner is 316/317, with or without the
+  debug layer: `edge outline: with TAA the lines stay on the edges, flicker bounded` fails `CHECK(plain_jumps == 0)` with 12
+  (`test_render3d_outline_gl.cpp:414`; the plain TAA frame, without outlines, has 12 pixels that step by over 32 between frames
+  4 and 7, max step 41). The case passes on GL. Either the paravirtual GPU's TAA history differs or Metal's TAA path is not
+  stable there; it needs a look on the real Mac before it is called a bug. The whole `test_render_gl` has not run in
+  `metal.yml` (only the SSR subset); adding it is worth doing once this case is understood.
 - A real-Mac pass remains for: `macos-metal` goldens, pixel look of SSR, GPU timestamps and 1080p cost, `MTL_SHADER_VALIDATION`.
 - Linear: no card (Linear did not connect from this thread); this file is the record.

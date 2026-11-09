@@ -1,1 +1,0 @@
-/home/user/mesh_control_engine/projects/Kindle/assets/scenes/main.mcscene

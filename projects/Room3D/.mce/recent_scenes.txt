@@ -1,1 +1,0 @@
-/home/user/mesh_control_engine/projects/Room3D/assets/scenes/main.mcscene
