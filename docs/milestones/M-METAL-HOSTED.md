@@ -16,7 +16,7 @@ Builds `macos-release` with `MCE_GPU_TESTS=ON`, then (each with its own time lim
 2. `test_render_gl -tc=*ssr*,*SSR*` (the 14 SSR cases of M-REFLECT2 on the Metal backend)
 3. `test_golden_gl`, `sample_kit3d_tour_reflect_headless`, `sample_kit3d_tour_reflect_gpu`
 4. the same Metal tests again with `MTL_DEBUG_LAYER=1`, then with `MTL_SHADER_VALIDATION=1`, one at a time
-   (a `golden` run with the debug layer is the open item below)
+   plus `golden` with the debug layer (it finds the `u_volSmplr` bug below)
 
 ## Results (macos-26, Apple Paravirtual GPU, runs 5 and 6)
 
@@ -40,10 +40,12 @@ Builds `macos-release` with `MCE_GPU_TESTS=ON`, then (each with its own time lim
 
 ## Open items
 
-- **Possible engine bug, unconfirmed:** with `MTL_DEBUG_LAYER` and `MTL_SHADER_VALIDATION` both on, the full `test_render_gl`
-  and `test_golden_gl` aborted in a probe/IBL case with `-[MTLDebugRenderCommandEncoder validateCommonDrawErrors]: Fragment
-  Function(main0): missing Sampler binding at index 4 for u_volSmplr[0]` (run 4, the volumetric-fog sampler of the lit shader).
-  The SSR subset does not reach it. The workflow now has a `golden_debuglayer` step to see whether the debug layer alone reproduces
-  it; if it does, the thread that owns the Metal backend fixes the missing sampler binding.
+- **Engine bug, confirmed on the hosted runner (needs a fix thread, Metal backend / render):** with `MTL_DEBUG_LAYER=1` alone
+  (no shader validation) `test_golden_gl` aborts in `golden: a reflection probe mirrors the room in the metal floor` with
+  `-[MTLDebugRenderCommandEncoder validateCommonDrawErrors:]: Fragment Function(main0): missing Sampler binding at index 4 for
+  u_volSmplr[0]` (runs 4, 5 and 7, reproducible; the volumetric-fog sampler of the lit shader is not bound on that draw). The
+  API-level debug layer does not depend on the GPU, so it should reproduce on the M4 as well. Without the debug layer the draw
+  runs, so no test fails today. The SSR subset does not reach this draw. Fix: bind a (dummy) sampler/texture for `u_volSmplr`
+  on the draws that do not have a volumetric texture, then run `golden` with `MTL_DEBUG_LAYER=1` (`golden_debuglayer` step).
 - A real-Mac pass remains for: `macos-metal` goldens, pixel look of SSR, GPU timestamps and 1080p cost, `MTL_SHADER_VALIDATION`.
 - Linear: no card (Linear did not connect from this thread); this file is the record.
