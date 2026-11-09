@@ -63,22 +63,12 @@ jobs:
             tail -n 40 "out/$n.log"
             echo "$n rc=$rc (${i}s)" | tee -a out/summary.txt
           }
+          # Run 3: which test_render_gl case fails on Metal (the same one with and without the debug layer in run 2).
+          run render_gl_plain 3600 "$B/tests/render_gl/test_render_gl"
           export MTL_DEBUG_LAYER=1
-          # Pass 1: the debug layer logs instead of aborting, so one run lists every binding gap.
-          export MTL_DEBUG_LAYER_ERROR_MODE=nslog
-          run golden_nslog 900 "$B/tests/render_gl/test_golden_gl"
-          run render_gl_nslog 3600 "$B/tests/render_gl/test_render_gl"
-          # Pass 2: the default (assert) mode, the check the M-METAL-HOSTED workflow runs.
-          unset MTL_DEBUG_LAYER_ERROR_MODE
-          run golden_debuglayer 900 "$B/tests/render_gl/test_golden_gl"
-          run rhi_metal_debuglayer 300 "$B/tests/rhi_metal/test_rhi_metal"
           run render_gl_debuglayer 3600 "$B/tests/render_gl/test_render_gl"
-          for f in out/*.log; do
-            echo "--- $f"; grep -h "TEST CASE:\|MTLDebug\|missing\|validate\|failed assertion" "$f" | grep -B1 "MTLDebug\|missing\|validate\|failed assertion" | head -80
-          done > out/validation.txt
-          cat out/validation.txt
-          grep -h "MTLDebug\|missing .* binding\|failed assertion" out/*.log | sed 's/^.*\(-\[MTL\)/\1/' | sort | uniq -c | sort -rn | head -40 > out/distinct.txt
-          { echo '### Metal debug layer'; echo '```'; cat out/summary.txt; echo; cat out/distinct.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          for f in out/render_gl_*.log; do echo "--- $f"; grep -B12 -A6 "is NOT correct\|ERROR: \|CRASHED" "$f" | head -80; done | tee out/failures.txt
+          { echo '### Metal render_gl'; echo '```'; cat out/summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
