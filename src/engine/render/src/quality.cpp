@@ -391,6 +391,7 @@ WaterSurface apply_quality(const QualitySettings& q, const WaterSurface& water) 
     out.roughness = unit(water.roughness, 0.08f);
     out.foam_amount = q.water ? unit(water.foam_amount, 0.0f) : 0.0f;
     out.foam_width_m = detail::ranged(water.foam_width_m, 0.05f, 20.0f, 1.5f);
+    out.flow = math::vec2{detail::ranged(water.flow.x, -5.0f, 5.0f, 0.0f), detail::ranged(water.flow.y, -5.0f, 5.0f, 0.0f)};
     return out;
 }
 
