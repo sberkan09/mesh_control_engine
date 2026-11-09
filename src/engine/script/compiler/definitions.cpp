@@ -812,6 +812,17 @@ declare water: {
     -- reflectivity 0..1, roughness 0..1, foam_amount 0..1, foam_width 0.05..20 m; enabled: any non-zero number is 1);
     -- an unknown key, a non-number or a colour that is not three numbers raises and nothing is written
     set: (settings: { level: number?, half_extent: number?, wave_count: number?, amplitude: number?, wavelength: number?, steepness: number?, wind_dir: number?, wind_follow: number?, speed_scale: number?, shallow_color: { number }?, deep_color: { number }?, depth_scale: number?, reflectivity: number?, roughness: number?, foam_amount: number?, foam_width: number?, enabled: number? }) -> (),
+    -- The current (M-WATER2), the first WaterFlow in the scene: flow_enabled, flow_dir (degrees, 0 = +x,
+    -- counter-clockwise) and flow_speed (m/s) raise when there is none (set_flow never adds one). With a WaterFlow,
+    -- height_at, normal_at and submerged follow the flowing waves. flow_at returns the velocity vx, vz in m/s on world
+    -- x and z (uniform today; 0, 0 with a Water and no WaterFlow).
+    flow_enabled: () -> number,
+    flow_dir: () -> number,
+    flow_speed: () -> number,
+    flow_at: (x: number, z: number) -> (number, number),
+    -- every key optional, each value clamped (dir 0..360 degrees, speed 0..5 m/s; enabled: any non-zero number is 1);
+    -- an unknown key or a non-number raises and nothing is written
+    set_flow: (settings: { enabled: number?, dir: number?, speed: number? }) -> (),
 }
 )";
 

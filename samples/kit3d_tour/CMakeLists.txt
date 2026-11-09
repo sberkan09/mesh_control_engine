@@ -88,6 +88,15 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_reflect_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_reflect.mcscene
                      -DTICKS=300 -DENTITIES=17 -DTOUR=kit3d_tour_reflect -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The river scene (M-WATER2 49h): scenes/tour_river.mcscene, a channel between two banks with a Water (amplitude 0.08, wavelength
+    # 3) and a WaterFlow of 1.2 m/s down the channel, coloured pillars and an arch standing in the water (the reflections) and a
+    # striped seabed stepping from 0.5 to 2.5 m deep with stones on it (the refraction and the absorption); made by gen_river.py
+    # (no new assets: box.glb and the reflect_ball material of gen_reflect.py). Named tour_river so it sorts after scenes/tour.mcscene,
+    # so the default scene stays the tour. 43 entities. 300 ticks (5 s) like the haze: the current is a pure function of the scene
+    # time and hashes nothing that moves, so the two plays must agree.
+    add_test(NAME sample_kit3d_tour_river_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_river.mcscene
+                     -DTICKS=300 -DENTITIES=43 -DTOUR=kit3d_tour_river -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
@@ -202,4 +211,20 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     set_tests_properties(sample_kit3d_tour_reflect_gpu PROPERTIES LABELS gpu TIMEOUT 300
         PASS_REGULAR_EXPRESSION "3D path on \\(high quality.*with 17 entities.*wrote [^\n]*kit3d_tour_reflect\\.ppm")
     mce_mark_slow(sample_kit3d_tour_reflect_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The river capture: the scene's frame 120 on the High tier, written for a look (build/.../kit3d_tour_river.ppm; samples keep
+    # no goldens). Pass: the 3D path starts at the High tier, the scene loads with its 43 entities and the capture is written (the
+    # log lines; the frame itself is looked at, the render3d_gl water optics and water tests pin the pixels). The pillars and the
+    # arch are mirrored in the water and broken by the waves, the seabed stripes show through it, bent, and lose their red as it
+    # deepens, the ripples drift down the channel; `-r.water.reflect 0` or `-r.water.refract 0` on the same command draw the frame
+    # without each effect.
+    add_test(NAME sample_kit3d_tour_river_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_river.mcscene -frames 120 -r.quality high
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_river.ppm" -platform.error_box 0 -r.vsync 0
+                     -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_river_gpu PROPERTIES LABELS gpu TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "3D path on \\(high quality.*with 43 entities.*wrote [^\n]*kit3d_tour_river\\.ppm")
+    mce_mark_slow(sample_kit3d_tour_river_gpu)
 endif()
