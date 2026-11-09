@@ -1,0 +1,96 @@
+# Metal verification on a standard GitHub-hosted macOS runner (free for a public repository). Replaces the
+# "needs Sami's Mac" rows of the GPU list that only need a Metal device to compile shaders, run the Metal RHI tests,
+# the SSR cases, the goldens and the tour_reflect capture. The hosted runner's GPU is a paravirtual Apple GPU
+# (a VM), so the pass/fail result is real for shader compilation, validation and pixel probes, while timings
+# and the human look at a window are not (see docs/milestones/M-METAL-HOSTED.md). Not a PR gate: on demand and
+# on a PR that edits this file. Every step records its exit code and the job reports a table at the end, so one
+# failing test does not hide the others.
+name: Metal
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch to test"
+        default: master
+  pull_request:
+    branches: [master]
+    paths: [".github/workflows/metal.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: metal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  METAL_REF: ${{ github.event.inputs.ref || github.ref }}
+
+jobs:
+  metal:
+    name: metal-hosted
+    runs-on: macos-26
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.METAL_REF }}
+      - name: Runner and GPU info
+        run: |
+          mkdir -p out
+          { sw_vers; uname -m; sysctl -n machdep.cpu.brand_string; xcodebuild -version
+            system_profiler SPDisplaysDataType; } 2>&1 | tee out/env.txt
+      - name: Install Ninja and ccache
+        run: brew install ninja ccache
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-mac-${{ github.sha }}
+          restore-keys: ccache-mac-
+      - name: Configure (GPU tests on)
+        run: >
+          cmake --preset macos-release -DMCE_GPU_TESTS=ON
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Build
+        run: cmake --build --preset macos-release -- -k 0
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-mac-${{ github.sha }}
+      - name: Metal checks
+        shell: bash
+        run: |
+          B=build/macos-release
+          : > out/summary.txt
+          run() {  # run <name> <command...>: log to out/<name>.log, record the exit code, never fail the step
+            local n="$1"; shift
+            echo "=== $n: $*"
+            "$@" > "out/$n.log" 2>&1; local rc=$?
+            tail -n 15 "out/$n.log"
+            echo "$n rc=$rc" >> out/summary.txt
+          }
+          export MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 SDL_VIDEO_DRIVER=cocoa
+          run shader_cross   "$B/tests/rhi_metal/test_shader_cross"
+          run rhi_metal      "$B/tests/rhi_metal/test_rhi_metal"
+          run render_gl      "$B/tests/render_gl/test_render_gl"
+          run render_ssr     "$B/tests/render_gl/test_render_gl" -tc="*ssr*,*SSR*"
+          run golden         "$B/tests/render_gl/test_golden_gl"
+          run tour_reflect_headless ctest --test-dir "$B" -R sample_kit3d_tour_reflect_headless --output-on-failure
+          run tour_reflect_gpu      ctest --test-dir "$B" -R sample_kit3d_tour_reflect_gpu --output-on-failure
+          run gpu_label      ctest --test-dir "$B" -L gpu -E "sample_kit3d_tour_reflect_gpu" --timeout 600 -j 1 --output-on-failure
+          find "$B" -name 'kit3d_tour_reflect.ppm' -exec cp {} out/ \;
+          for f in out/*.ppm; do [ -f "$f" ] && sips -s format png "$f" --out "${f%.ppm}.png"; done
+          cp -R "$B/tests/render_gl/golden_out" out/golden_out 2>/dev/null || true
+          cp -R tests/render_gl/golden out/golden_written 2>/dev/null || true
+          { echo '### Metal on hosted macOS'; echo '```'; cat out/summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metal-results
+          path: out
+          retention-days: 14
