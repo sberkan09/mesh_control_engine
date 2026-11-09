@@ -47,6 +47,7 @@
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_flow.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
 #include "mce/kit/wind_direction.h"
@@ -186,6 +187,7 @@ void apply_water_ice(const WaterIce& ice, const WaterIceLook& look, render::Wate
     s.roughness = std::max(s.roughness, look.roughness_floor);
     s.reflectivity *= look.reflectivity_scale;
     s.foam_amount *= look.foam_scale;
+    s.flow = math::vec2{s.flow.x * look.speed_scale, s.flow.y * look.speed_scale};  // M-WATER2 49e: a river stops
 }
 
 // The season tint on a batch, after foliage_look and apply_wind_sway: rgb only, alpha and tint_variation untouched.
@@ -1428,6 +1430,13 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             surf.roughness = water->roughness;
             surf.foam_amount = water->foam_amount;
             surf.foam_width_m = water->foam_width_m;
+            {  // M-WATER2 49e: the current of the first WaterFlow (zero without one, disabled or still)
+                const WaterFlow* flow = nullptr;
+                world.query<const WaterFlow&>().each([&](const WaterFlow& c) {
+                    if (!flow) flow = &c;
+                });
+                surf.flow = water_flow_velocity(flow);
+            }
             surf.enabled = true;
             {  // M-FREEZE 20b: the freeze look on the local carrier, before the quality tier; skipped at an amount of 0
                 const WaterIce* ice = nullptr;

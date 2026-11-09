@@ -42,6 +42,7 @@ mce_add_library(mce_gameplay_kit
         src/progress3d.cpp
         src/vehicle_extras.cpp
         src/weather.cpp
+        src/water_flow.cpp
         src/weather_audio.cpp
         src/world_audio.cpp
         src/wind_gust.cpp

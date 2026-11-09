@@ -31,6 +31,7 @@
 #include "mce/kit/meteor.h"
 #include "mce/kit/season.h"
 #include "mce/kit/water_ice.h"
+#include "mce/kit/water_flow.h"
 #include "mce/kit/leaf_fall.h"
 #include "mce/kit/firefly.h"
 #include "mce/kit/pollen.h"
@@ -125,6 +126,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<Meteor>("Meteor", sizeof(Meteor::pad_));  // meteor.h (M-METEOR 18a)
     expect_pad<Season>("Season", sizeof(Season::pad_));  // season.h (M-SEASONS 19a)
     expect_pad<WaterIce>("WaterIce", sizeof(WaterIce::pad_));  // water_ice.h (M-FREEZE 20a)
+    expect_pad<WaterFlow>("WaterFlow", sizeof(WaterFlow::pad_));  // water_flow.h (M-WATER2 49e)
     expect_pad<LeafFall>("LeafFall", sizeof(LeafFall::pad_));  // leaf_fall.h (M-LEAFFALL 21a)
     expect_pad<Firefly>("Firefly", sizeof(Firefly::pad_));  // firefly.h (M-FIREFLIES 23a)
     expect_pad<Pollen>("Pollen", sizeof(Pollen::pad_));  // pollen.h (M-POLLEN 24a)

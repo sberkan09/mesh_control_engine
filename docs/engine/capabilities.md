@@ -223,6 +223,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ChopShop3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Confiscate3D` | `mce/kit/wanted3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Water` | `mce/kit/water.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/13_water/assets/scenes/water.mcscene |
+| `WaterFlow` | `mce/kit/water_flow.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-WATER2 49e: tested in tests/kit/test_water_flow.cpp; the tour_river scene of 49h shows it (delete this line then) |
 | `WaterIce` | `mce/kit/water_ice.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/13_water/assets/scenes/water.mcscene |
 | `Weather` | `mce/kit/weather.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `WeatherAudio` | `mce/kit/weather_audio.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
