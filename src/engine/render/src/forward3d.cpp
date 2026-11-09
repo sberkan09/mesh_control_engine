@@ -252,7 +252,9 @@ struct GiProjectU {  // kGiProjectFS
     vec4 size;    // x: texels per row, y: rows in the batch, z: face size, w: texels per probe (M-GI2: 4 or 10)
     vec4 params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe, w: record mode
     vec4 vis;     // x: dmax (m), the record's distance range (M-GI2 50d)
+    vec4 offsets[32];  // M-GI2 50f: per probe of the pass's run, the relocation offset as texel 8 stores it, minus 0.5, times 2
 };
+static_assert(sizeof(GiProjectU) == 35 * 16, "GiProjectU: kGiProjectFS's block");
 
 struct PrefilterU {  // kProbePrefilterFS
     vec4 params;  // y: samples, w: roughness
@@ -973,21 +975,66 @@ void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&v
 // vis pass and the lookup's weight, never the texel layout (gi_texels_per_probe reads the carrier), so a 10-texel bake
 // is still accepted and read with the plain lookup. (50f: relocation is meant to follow the same switch.)
 bool gi_visibility_on(const GiVolume& gi) { return gi.visibility && cv_gi_visibility.get_bool(); }
+// M-GI2 50f: relocation follows the same switch (r.gi.visibility 0 treats the volume as if relocate were false).
+bool gi_relocate_on(const GiVolume& gi) { return gi.relocate && cv_gi_visibility.get_bool(); }
+// M-GI2 50g: a volume follows the camera only where it is captured at runtime (apply_quality clears `follow` without
+// `updates`; a carrier that keeps it anyway keeps the 10-texel layout and a fixed box). A following volume is always
+// filled at runtime: its bake (of the authored box) is used only where it does not follow (the Low tier).
+bool gi_follow_on(const GiVolume& gi) { return gi.follow && gi.updates; }
+
+// The box the volume covers this frame: the authored one, or the following volume's snapped box.
+aabb3 gi_box(const GiVolume& gi, const GiProbeState* ps, const f64 (&origin)[3]) {
+    if (!ps || !ps->follow_valid || !gi_follow_on(gi)) return gi.bounds;
+    return gi_follow_box(ps->follow, gi.bounds, gi.counts, origin[0], origin[2]);
+}
+
+// The grid position of the probe at local index (ix, iy, iz) of `box` (the capture, the queue and the relocation agree).
+vec3 gi_probe_position(const aabb3& box, const u32 (&counts)[3], u32 ix, u32 iy, u32 iz) {
+    const vec3 t{counts[0] > 1 ? f32(ix) / f32(counts[0] - 1) : 0.5f, f32(iy) / f32(max(counts[1] - 1, 1u)),
+                 f32(iz) / f32(max(counts[2] - 1, 1u))};
+    return box.min + (box.max - box.min) * t;
+}
+
+// M-GI2 50f: the solids relocation pushes probes out of: the vis pass's occluders (rigid, a bounding radius of at least
+// `min_radius`), each its submesh's box (the draw's model maps the quantized [-1, 1] cube to world). A flat box (an axis
+// under 0.1 mm: a quad, a decal plane) holds nothing and is left out (its model has no inverse).
+void gi_relocation_solids(const Scene3D& scene, f32 min_radius, Array<GiSolid>& out) {
+    for (const Scene3D::Draw& d : scene.probe_draws()) {
+        if (d.mesh->skinned() || d.radius < min_radius) continue;
+        bool flat = false;
+        for (u32 i = 0; i < 3; ++i) flat = flat || length(vec3{d.model.c[i][0], d.model.c[i][1], d.model.c[i][2]}) < 1e-4f;
+        if (!flat) out.push_back({d.model, aabb3{{-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}, d.center, d.radius});
+    }
+}
 
 // The volume's contents depend on its placement, its version, its bake (or the lack of one) and whether its fill
-// captures the record's visibility (M-GI2: r.gi.visibility refills once even when the width stays).
+// captures the record's visibility (M-GI2: r.gi.visibility refills once even when the width stays) and relocates. A
+// following volume (50g) hashes its spacing, its y band (world, whole millimetres) and its counts instead of the box:
+// a step of the camera is a scroll, not a refill, and a rebase changes nothing.
 u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked, const f64 (&origin)[3]) {
     u64 h = 1469598103934665603ull;
     auto mix = [&h](const void* q, usize n) {
         const auto* b = static_cast<const u8*>(q);
         for (usize i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const f64 f[6] = {gi.bounds.min.x + origin[0], gi.bounds.min.y + origin[1], gi.bounds.min.z + origin[2],
-                      gi.bounds.max.x + origin[0], gi.bounds.max.y + origin[1], gi.bounds.max.z + origin[2]};
+    if (gi_follow_on(gi)) {
+        const i64 band[4] = {std::llround(gi_follow_spacing(gi.bounds.min.x, gi.bounds.max.x, gi.counts[0]) * 1000.0),
+                             std::llround(gi_follow_spacing(gi.bounds.min.z, gi.bounds.max.z, gi.counts[2]) * 1000.0),
+                             std::llround((f64(gi.bounds.min.y) + origin[1]) * 1000.0),
+                             std::llround((f64(gi.bounds.max.y) + origin[1]) * 1000.0)};
+        mix(band, sizeof(band));
+    } else {
+        const f64 f[6] = {gi.bounds.min.x + origin[0], gi.bounds.min.y + origin[1], gi.bounds.min.z + origin[2],
+                          gi.bounds.max.x + origin[0], gi.bounds.max.y + origin[1], gi.bounds.max.z + origin[2]};
+        mix(f, sizeof(f));
+    }
     const u32 u[7] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation,
-                      u32(gi_visibility_on(gi)) | u32(gi.relocate) << 1};
-    mix(f, sizeof(f));
+                      u32(gi_visibility_on(gi)) | u32(gi_relocate_on(gi)) << 1 | u32(gi_follow_on(gi)) << 2};
     mix(u, sizeof(u));
+    if (gi_relocate_on(gi)) {  // where the probes may move to (apply_quality's clamp, as gi_relocate takes it)
+        const f32 mo = gi.max_offset == gi.max_offset ? clamp(gi.max_offset, 0.0f, kGiMaxOffsetLimit) : 0.0f;
+        mix(&mo, sizeof(mo));
+    }
     return h | 1u;
 }
 
@@ -2906,8 +2953,13 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const GiVolume& gi = scene.gi_volume();
     if (!gi.enabled || gi_project_.is_null()) return;
     const rhi::Extent2D vs = gi_volume_size(gi);
+    const bool follow = gi_follow_on(gi);
     rhi::TextureHandle baked;
-    if (gi.baked != ~0u && textures_->contains(gi.baked)) {
+    // M-GI2: a following volume is always filled at runtime (its bake is of the authored box), and so is a relocating one
+    // that keeps updating: its rolling captures must stand where the bake's texel 8 says, which the CPU cannot read back,
+    // and offsets recomputed from today's scene may differ from the bake's. The Low tier (no updates) loads both bakes.
+    const bool runtime_only = follow || (gi_relocate_on(gi) && gi.updates);
+    if (!runtime_only && gi.baked != ~0u && textures_->contains(gi.baked)) {
         const rhi::TextureHandle t = textures_->get(gi.baked);
         const rhi::TextureDesc& d = device_->texture_desc(t);
         if (d.size == vs && d.array_layers == 1)
@@ -2930,11 +2982,34 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     }
     const u32 total = gi.counts[0] * gi.counts[1] * gi.counts[2];
     const u64 key = gi_key(gi, baked, origin_);
+    GiProbeState& ps = *gi_probes_;
+    // M-GI2 50g: the following volume's box snapped to whole cells around this view's camera, in f64 world coordinates
+    // (the floating origin added back), so a rebase moves nothing.
+    // A box already in place moves only once the camera strays kGiFollowHysteresis cells from its centre (gi_follow_step:
+    // a camera swaying across an edge does not scroll the same slab back and forth); a new one is centred (fc0).
+    GiFollowCell fc{}, fc0{};
+    if (follow) {
+        const vec3 cam = scene.view().position;
+        const f64 wx = f64(cam.x) + origin_[0], wz = f64(cam.z) + origin_[2];
+        const f64 sx = gi_follow_spacing(gi.bounds.min.x, gi.bounds.max.x, gi.counts[0]);
+        const f64 sz = gi_follow_spacing(gi.bounds.min.z, gi.bounds.max.z, gi.counts[2]);
+        fc0 = gi_follow_origin(wx, wz, sx, sz, gi.counts[0], gi.counts[2]);
+        fc = key == gi_key_ && ps.follow_valid ? gi_follow_step(ps.follow, wx, wz, sx, sz, gi.counts[0], gi.counts[2]) : fc0;
+    }
+    const bool jump = follow && key == gi_key_ && ps.follow_valid && gi_scroll(ps.follow, fc, gi.counts).refill;
     cmd.push_debug_scope("gi");
-    if (key != gi_key_) {
+    if (key != gi_key_ || jump) {
         gi_key_ = key;
         gi_cursor_ = 0;
         gi_filled_ = baked.is_null() ? 0 : total;
+        ps.follow = fc0;
+        ps.follow_valid = follow;
+        ps.offsets.clear();
+        if (gi_relocate_on(gi)) ps.offsets.resize(total, vec3{0.0f, 0.0f, 0.0f});
+        ps.relocated = 0;
+        ps.pending.clear();
+        ps.pending.resize(follow ? total : 0u, u8(0));
+        ps.scroll_queue.clear();
         rhi::PassAttachment out;
         out.texture = gi_volume_;
         out.load = baked.is_null() ? rhi::LoadOp::Clear : rhi::LoadOp::DontCare;  // the fill's captures read zeros
@@ -2952,31 +3027,135 @@ void Forward3D::record_gi(rhi::CommandBuffer& cmd, const Scene3D& scene) {
         }
         cmd.end_pass();
         if (!baked.is_null()) stats_.gi_loaded = true;
+    } else if (follow && !(fc == ps.follow)) {
+        // M-GI2 50g: a scroll by whole cells (less than the box: a larger jump refilled above). The slabs that left are
+        // the slots of the slabs that arrive (gi_scroll): one pass per contiguous run writes texel 9 r = kGiInvalidShare
+        // there (projection mode 3; every other texel alpha 0, bit for bit), so the lookup weighs those probes 0 at once;
+        // they go pending, and the queue serves them nearest the camera first, ahead of the rolling update (below).
+        const GiScroll sc = gi_scroll(ps.follow, fc, gi.counts);
+        ps.follow = fc;
+        const u32 cx = gi.counts[0], cy = gi.counts[1], cz = gi.counts[2], texels = gi_texels_per_probe(gi);
+        const auto invalidate = [&](u32 x, u32 w, u32 row, u32 rows) {  // texels x .. x + w of rows row .. row + rows
+            rhi::PassAttachment out;
+            out.texture = gi_volume_;
+            out.load = rhi::LoadOp::Load;
+            rhi::RenderPassDesc p;
+            p.colors = Span<const rhi::PassAttachment>(&out, 1);
+            p.viewport = rhi::Rect2D{i32(x), i32(gi_size_.height - row - rows), w, rows};  // top-left based
+            p.debug_name = "gi.invalidate";
+            cmd.begin_pass(p);
+            cmd.bind_pipeline(gi_project_);
+            const GiProjectU gu{{f32(w), f32(rows), f32(kGiFaceSize), f32(texels)}, {1.0f, 0.0f, 0.0f, 3.0f}, {}, {}};
+            cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
+            if (!gi_faces_.is_null()) {  // declared by the shader, unread in mode 3
+                cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
+                cmd.bind_texture(rhi::bank::kFirstSampler + 1, gi_faces_, point_sampler_);
+            }
+            cmd.draw_non_indexed(3);
+            cmd.end_pass();
+        };
+        for (u32 i = 0; i < sc.x_count;) {  // columns of slots over every row
+            const u32 s = (sc.x_first + i) % cx, n = min(sc.x_count - i, cx - s);
+            invalidate(s * texels, n * texels, 0, cy * cz);
+            for (u32 slot = 0; slot < total; ++slot)
+                if (slot % cx >= s && slot % cx < s + n) ps.pending[slot] = 1;
+            i += n;
+        }
+        for (u32 i = 0; i < sc.z_count;) {  // z slots: cy contiguous rows each
+            const u32 s = (sc.z_first + i) % cz, n = min(sc.z_count - i, cz - s);
+            invalidate(0, cx * texels, s * cy, n * cy);
+            for (u32 slot = s * cx * cy; slot < (s + n) * cx * cy; ++slot) ps.pending[slot] = 1;
+            i += n;
+        }
+        stats_.gi_scrolled = sc.probes;
+        if (gi_filled_ >= total) ps.relocated = 0;  // a scroll during the fill keeps counting the fill's
+        // The queue: every pending slot, nearest the camera first (ties by slot), where the slot's probe is now.
+        const aabb3 box = gi_box(gi, &ps, origin_);
+        u32 so[3];
+        gi_slot_offset_of(ps.follow, gi.counts, so);
+        const vec3 cam = scene.view().position;
+        struct Near {
+            f32 d2;
+            u32 slot;
+        };
+        Array<Near> order(mem::heap());
+        for (u32 slot = 0; slot < total; ++slot) {
+            if (!ps.pending[slot]) continue;
+            const u32 lx = gi_local_of(slot % cx, so[0], cx), ly = (slot / cx) % cy;
+            const u32 lz = gi_local_of(slot / (cx * cy), so[2], cz);
+            order.push_back({length_sq(gi_probe_position(box, gi.counts, lx, ly, lz) - cam), slot});
+        }
+        std::sort(order.begin(), order.end(),
+                  [](const Near& a, const Near& b) { return a.d2 < b.d2 || (a.d2 == b.d2 && a.slot < b.slot); });
+        ps.scroll_queue.clear();
+        for (const Near& q : order) ps.scroll_queue.push_back(q.slot);
     }
+    ps.list.clear();
     if (gi_filled_ < total) {
         // The fill: kGiMaxBatchProbes a frame (or what the uniform budget allows); the volume lights
         // the frame once every probe has been captured.
-        gi_probes_->fill = true;  // M-GI2 50d: a fill writes the record (texels 4..9 of a 10-texel volume)
+        ps.fill = true;  // M-GI2 50d: a fill writes the record (texels 4..9 of a 10-texel volume)
+        const u32 from = gi_filled_;
         gi_filled_ += gi_capture(cmd, scene, gi_filled_, min(kGiMaxBatchProbes, total - gi_filled_), 1.0f);
+        for (u32 s = from; s < gi_filled_ && !ps.pending.empty(); ++s) ps.pending[s] = 0;  // captured where they are now
         stats_.gi_filled = gi_filled_ == total;
-    } else if (!stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0) {
-        const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
-        gi_cursor_ %= total;
-        gi_probes_->fill = false;  // a rolling update leaves the record as it is
-        gi_cursor_ = (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
+    } else {
+        const bool rolling = !stats_.gi_loaded && gi.updates && gi.probes_per_frame > 0;
+        const bool queued = !ps.scroll_queue.empty();
+        if (queued) {
+            // M-GI2 50g: the probes that scrolled in, nearest the camera first, before the rolling update: the next
+            // kGiMaxBatchProbes still pending, captured in slot order (runs of neighbours project in one pass) as a
+            // fill (full weight, the record, relocation). With rolling updates on, the queue and the rolling update get
+            // half the frame's capture budget each, so a camera that keeps moving does not starve the rolling updates
+            // (a moving sun or lamp keeps reaching the probes); without them the queue gets all of it.
+            ps.budget = rolling ? kGiCaptureBudget / 2 : 0u;
+            usize head = 0;
+            while (ps.list.size() < kGiMaxBatchProbes && head < ps.scroll_queue.size()) {
+                const u32 s = ps.scroll_queue[head++];
+                if (ps.pending[s]) ps.list.push_back(s);
+            }
+            std::sort(ps.list.begin(), ps.list.end());
+            ps.fill = true;
+            const u32 done = ps.list.empty() ? 0u : gi_capture(cmd, scene, 0, static_cast<u32>(ps.list.size()), 1.0f);
+            for (u32 i = 0; i < done; ++i) ps.pending[ps.list[i]] = 0;
+            usize kept = 0;  // drop what is no longer pending, keep the order
+            for (usize i = 0; i < ps.scroll_queue.size(); ++i)
+                if (ps.pending[ps.scroll_queue[i]]) ps.scroll_queue[kept++] = ps.scroll_queue[i];
+            ps.scroll_queue.resize(kept);
+            ps.list.clear();
+        }
+        if (rolling) {
+            ps.budget = queued ? kGiCaptureBudget / 2 : 0u;
+            const u32 n = min(min(gi.probes_per_frame, kGiMaxBatchProbes), total);
+            gi_cursor_ %= total;
+            ps.fill = false;  // a rolling update leaves the record as it is
+            gi_cursor_ =
+                (gi_cursor_ + gi_capture(cmd, scene, gi_cursor_, n, clamp(1.0f - gi.hysteresis, 0.0f, 1.0f))) % total;
+        }
+        ps.budget = 0;
     }
     stats_.gi = gi_filled_ == total;
+    stats_.gi_relocated = ps.relocated;
     cmd.pop_debug_scope();
 }
 
 // Probes first, first + 1, ... (x-major, wrapping past the last) of the volume, up to `count`: six
-// faces each, then their projection, a pass per volume row touched. Stops early at the probe that
-// spends kGiCaptureBudget uniform uploads; returns the probes captured.
+// faces each, then their projection, a pass per run of neighbours along a volume row. Stops early at the
+// probe that spends kGiCaptureBudget uniform uploads; returns the probes captured.
+// M-GI2 50g: the indices are texture slots; GiProbeState::list, when not empty, names them (list[first ..]) in place of
+// first, first + 1, ...; a following volume's slot holds the probe at local index gi_local_of(slot, offset) of the
+// snapped box. 50f: a relocating volume captures each probe at its grid position plus its offset, computed here
+// (gi_relocate against the large rigid draws) when the call fills, and reused by the rolling updates.
 u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 first, u32 count, f32 weight) {
     const GiVolume& gi = scene.gi_volume();
     const u32 cx = gi.counts[0], cy = gi.counts[1], total = cx * cy * gi.counts[2];
+    GiProbeState& ps = *gi_probes_;
+    const auto slot_at = [&](u32 j) { return ps.list.empty() ? (first + j) % total : ps.list[first + j]; };
+    const aabb3 box = gi_box(gi, &ps, origin_);
+    u32 so[3] = {0, 0, 0};
+    if (ps.follow_valid && gi_follow_on(gi)) gi_slot_offset_of(ps.follow, gi.counts, so);
     const u32 layers = 6 * kGiMaxBatchProbes;
-    u32 budget = kGiCaptureBudget;
+    u32 budget = ps.budget ? ps.budget : kGiCaptureBudget;  // M-GI2 50g: a share while the scroll queue drains
     if (gi_faces_.is_null() || gi_face_layers_ != layers) {
         destroy(*device_, gi_faces_);
         destroy(*device_, gi_faces_depth_);
@@ -3000,8 +3179,12 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     const u32 texels = gi_texels_per_probe(gi);
     const bool record = texels == kGiTexelsRecord && gi_probes_->fill;
     const bool vis = record && gi_visibility_on(gi) && !gi_probes_->vis_pipes[0].is_null();
-    const vec3 cell = gi_cell(gi.bounds, gi.counts);
+    const vec3 cell = gi_cell(box, gi.counts);
     const f32 vis_min_radius = kGiVisMinRadius * gi_spacing(cell);
+    // M-GI2 50f: a filled probe is pushed out of the large rigid draws (gi_relocation_solids).
+    const bool relocate = gi_relocate_on(gi) && ps.offsets.size() == total;
+    Array<GiSolid> solids(mem::heap());
+    if (relocate && ps.fill) gi_relocation_solids(scene, vis_min_radius, solids);
     static_assert(6 * kGiMaxBatchProbes <= 256, "the vis faces' layers: at most 256 (Vulkan's and WebGPU's guarantee)");
     if (vis && (gi_probes_->vis_faces.is_null() || gi_probes_->vis_layers != layers)) {
         destroy(*device_, gi_probes_->vis_faces);
@@ -3022,8 +3205,8 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // bounding sphere, stretched toward the light over every caster.
     const Span<const Scene3D::Draw> casters = scene.shadow_draws();
     if (!gi_shadowed_ && light.shadows && !casters.empty() && gi_shadow_layer_ > 0) {
-        const vec3 c = gi.bounds.center();
-        const f32 r = max(length(gi.bounds.extents()), 0.01f);
+        const vec3 c = box.center();
+        const f32 r = max(length(box.extents()), 0.01f);
         const aabb3& sb = scene.scene_bounds();
         const f32 reach = r + length(sb.center() - c) + length(sb.extents());
         const vec3 up = std::fabs(dir.y) > 0.99f ? vec3{1, 0, 0} : vec3{0, 1, 0};
@@ -3100,12 +3283,19 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // A probe goes in when the budget still holds one as costly as the last (the first always does).
     u32 done = 0, probe_cost = 0;
     for (; done < count && (done == 0 || (budget > 0 && budget >= probe_cost)); ++done) {
-        const u32 probe = (first + done) % total, ix = probe % cx, vrow = probe / cx, iy = vrow % cy, iz = vrow / cy;
+        const u32 probe = slot_at(done), vrow = probe / cx, iy = vrow % cy;
+        const u32 ix = gi_local_of(probe % cx, so[0], cx), iz = gi_local_of(vrow / cy, so[2], gi.counts[2]);
         const u32 before = budget;
         {
-            const vec3 t{cx > 1 ? f32(ix) / f32(cx - 1) : 0.5f, f32(iy) / f32(max(cy - 1, 1u)),
-                         f32(iz) / f32(max(gi.counts[2] - 1, 1u))};
-            const vec3 pos = gi.bounds.min + (gi.bounds.max - gi.bounds.min) * t;
+            vec3 pos = gi_probe_position(box, gi.counts, ix, iy, iz);
+            if (relocate) {  // M-GI2 50f
+                if (ps.fill) {
+                    ps.offsets[probe] = gi_relocate(pos, cell, gi.max_offset, solids.span());
+                    const vec3 o = ps.offsets[probe];
+                    ps.relocated += (o.x != 0.0f || o.y != 0.0f || o.z != 0.0f) ? 1u : 0u;
+                }
+                pos = pos + ps.offsets[probe];
+            }
             mat4 face_view[6], face_vp[6];
             probe_face_views(pos, view.near_z, view.far_z, face_view, face_vp);
             ranked.clear();
@@ -3213,8 +3403,9 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // The faces into the volume, a pass per run of probes along one row (the pass's viewport;
     // Rect2D is top-left based, row 0 the volume's v 0).
     for (u32 j = 0; j < done;) {
-        const u32 probe = (first + j) % total, ix = probe % cx, vrow = probe / cx;
-        const u32 n = min(done - j, cx - ix);
+        const u32 probe = slot_at(j), ix = probe % cx, vrow = probe / cx;
+        u32 n = 1;  // the run: neighbouring slots along the row (first, first + 1, ...: to the row's end)
+        while (j + n < done && ix + n < cx && slot_at(j + n) == probe + n) ++n;
         rhi::PassAttachment out;
         out.texture = gi_volume_;
         out.load = rhi::LoadOp::Load;
@@ -3225,9 +3416,13 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
         cmd.begin_pass(p);
         cmd.bind_pipeline(gi_project_);
         const f32 mode = !record ? 0.0f : vis ? 1.0f : 2.0f;  // kGiProjectFS's record mode
-        const GiProjectU gu{{f32(n * texels), 1.0f, f32(kGiFaceSize), f32(texels)},
-                            {f32(n), weight, f32(j), mode},
-                            {gi_dmax(cell), 0.0f, 0.0f, 0.0f}};
+        GiProjectU gu{{f32(n * texels), 1.0f, f32(kGiFaceSize), f32(texels)},
+                      {f32(n), weight, f32(j), mode},
+                      {gi_dmax(cell), 0.0f, 0.0f, 0.0f},
+                      {}};
+        if (relocate)  // M-GI2 50f: texel 8, 0.5 + 0.5 * this (gi_offset_encode)
+            for (u32 i = 0; i < n; ++i)
+                gu.offsets[i] = vec4(gi_offset_encode(ps.offsets[probe + i], cell) * 2.0f - vec3{1.0f, 1.0f, 1.0f}, 0.0f);
         cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(gu));
         cmd.bind_texture(rhi::bank::kFirstSampler, gi_faces_, point_sampler_);
         // u_vis: the vis faces, or the lit faces as a stand-in the shader does not read (mode 0 and 2).
@@ -3311,15 +3506,23 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
     if (gi_on) {
         const GiVolume& gi = scene.gi_volume();
         pu.gi = {1.0f, gi.intensity, max(gi.normal_bias, 0.0f), max(gi.fade_distance, 1e-3f)};
-        pu.gi_min = vec4(gi.bounds.min, 0.0f);
         // M-GI2: kGiFlagRecord (gi_probes.h) when the volume stores the 10-texel record (50d), plus kGiFlagVisibility
-        // and dmax in gi_max.w when it asks for visibility (50e: the Chebyshev weight and the classification). 0 and
-        // 0 otherwise: today's lookup. The captures read the volume through here too, so the next bounce sees the
+        // and dmax in gi_max.w when it asks for visibility (50e: the Chebyshev weight and the classification),
+        // kGiFlagRelocate when it relocates (50f: texel 8 moves each probe), kGiFlagFollow and the slot offset in
+        // gi_min.w when it follows the camera (50g: the snapped box, toroidal slots, scrolled-in probes weigh 0). 0, 0
+        // and 0 otherwise: today's lookup. The captures read the volume through here too, so the next bounce sees the
         // same weights.
         const bool record = gi_texels_per_probe(gi) == kGiTexelsRecord;
         const bool visibility = record && gi_visibility_on(gi);
-        pu.gi_max = vec4(gi.bounds.max, visibility ? gi_dmax(gi_cell(gi.bounds, gi.counts)) : 0.0f);
-        const u32 flags = (record ? kGiFlagRecord : 0u) | (visibility ? kGiFlagVisibility : 0u);
+        const bool relocate = record && gi_relocate_on(gi);
+        const bool follow = record && gi_probes_ && gi_probes_->follow_valid && gi_follow_on(gi);
+        const aabb3 box = gi_box(gi, gi_probes_, origin_);
+        u32 so[3] = {0, 0, 0};
+        if (follow) gi_slot_offset_of(gi_probes_->follow, gi.counts, so);
+        pu.gi_min = vec4(box.min, follow ? gi_slot_offset_pack(so[0], so[1], so[2]) : 0.0f);
+        pu.gi_max = vec4(box.max, visibility ? gi_dmax(gi_cell(box, gi.counts)) : 0.0f);
+        const u32 flags = (record ? kGiFlagRecord : 0u) | (visibility ? kGiFlagVisibility : 0u) |
+                          (relocate ? kGiFlagRelocate : 0u) | (follow ? kGiFlagFollow : 0u);
         pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), f32(flags)};
         cmd.bind_texture(rhi::bank::kGiVolume, gi_volume_, point_sampler_);
     } else {

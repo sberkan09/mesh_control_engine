@@ -809,6 +809,13 @@ float gi_vis(vec3 v, float dm, vec3 mp, vec3 mn, vec3 sp, vec3 sn, float bf) {
 // factors, not the summed weights, so it does not depend on the cell size; otherwise the sums are divided by wsum
 // itself (at least the surviving probe's weight, > 0), so a small surviving weight is not dimmed. Without the flag the
 // statements give today's values: wsum >= 0.05 there, so dividing by it equals today's max(wsum, 1e-6).
+// M-GI2 50f: bit 4 (kGiFlagRelocate) moves each probe by its offset (texel 8, gi_offset_decode: (t * 2 - 1) * 0.45 *
+// cell; kGiMaxOffsetLimit): q is added to the backface term's direction and subtracted from the visibility's v. Without
+// the bit q stays 0 and is never added (to is today's expression; v - 0 is exact).
+// M-GI2 50g: so = the toroidal slot offset (gi_min.w = ox + 32 oy + 1024 oz, gi_slot_offset_pack); probe c of the box
+// lives in slot s = (c + so) % counts (gi_slot_of; 0 for every other volume, so s = c). Bit 8 (kGiFlagFollow): a probe
+// whose texel 9 r is above 0.5 (kGiInvalidShare: scrolled in, not captured yet) weighs 0, and "no probe left" applies to
+// it as to the visibility weight (bits 2 or 8: the same vm rule; bit 8 alone gives each probe 1 or 0).
 // gi_irradiance: rgb = irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
 #define MCE_GLSL_GI_LOOKUP R"(
 layout(binding = 5) uniform sampler2D u_gi;
@@ -836,6 +843,7 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
     if (fade <= 0.0) return vec4(0.0);
     ivec3 counts = ivec3(p_gi_counts.xyz);
     int fl = int(p_gi_counts.w), T = (fl & 1) != 0 ? 10 : 4;
+    ivec3 so = ivec3(int(p_gi_min.w)) >> ivec3(0, 5, 10) & 31;
     vec3 cell = (bmax - bmin) / vec3(counts - 1);
     vec3 pb = clamp(p + n * p_gi.z, bmin, bmax), g = (pb - bmin) / cell;
     ivec3 base = clamp(ivec3(floor(g)), ivec3(0), counts - 2);
@@ -846,16 +854,22 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
         ivec3 o = ivec3(i & 1, (i >> 1) & 1, i >> 2);
         vec3 tw = mix(1.0 - f, f, vec3(o));
         float w = tw.x * tw.y * tw.z;
-        vec3 to = bmin + vec3(base + o) * cell - p;
+        ivec3 c = base + o, s = (c + so) % counts;
+        ivec2 t = ivec2(s.x * T, s.y + counts.y * s.z);
+        vec3 to = bmin + vec3(c) * cell - p, q = vec3(0.0);
+        if ((fl & 4) != 0) {
+            q = (texelFetch(u_gi, t + ivec2(8, 0), 0).rgb * 2.0 - 1.0) * 0.45 * cell;
+            to += q;
+        }
         float d2 = dot(to, to);
         float b = d2 > 1e-8 ? (dot(to * inversesqrt(d2), n) + 1.0) * 0.5 : 1.0;
         w *= b * b + 0.05;
-        ivec3 c = base + o;
-        ivec2 t = ivec2(c.x * T, c.y + int(p_gi_counts.y) * c.z);
-        if ((fl & 2) != 0) {
-            float v = gi_vis(pb - bmin - vec3(c) * cell, p_gi_max.w, texelFetch(u_gi, t + ivec2(4, 0), 0).rgb,
-                             texelFetch(u_gi, t + ivec2(5, 0), 0).rgb, texelFetch(u_gi, t + ivec2(6, 0), 0).rgb,
-                             texelFetch(u_gi, t + ivec2(7, 0), 0).rgb, texelFetch(u_gi, t + ivec2(9, 0), 0).r);
+        if ((fl & 10) != 0) {
+            float bf = texelFetch(u_gi, t + ivec2(9, 0), 0).r;
+            float v = (fl & 8) != 0 && bf > 0.5 ? 0.0 : (fl & 2) == 0 ? 1.0 :
+                gi_vis(pb - bmin - vec3(c) * cell - q, p_gi_max.w, texelFetch(u_gi, t + ivec2(4, 0), 0).rgb,
+                       texelFetch(u_gi, t + ivec2(5, 0), 0).rgb, texelFetch(u_gi, t + ivec2(6, 0), 0).rgb,
+                       texelFetch(u_gi, t + ivec2(7, 0), 0).rgb, bf);
             vm = w > 0.0 ? max(vm, v) : vm;
             w *= v;
         }
@@ -870,7 +884,7 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
         bsum += max(eb, vec3(0.0)) * w;
         wsum += w;
     }
-    if ((fl & 2) != 0 && vm < 1e-4) return vec4(0.0);
+    if ((fl & 10) != 0 && vm < 1e-4) return vec4(0.0);
     back = bsum / wsum;
     return vec4(sum / wsum, fade);
 }
@@ -3202,11 +3216,15 @@ void main() {
 // texel 9 r the back-face share. g_params.w
 // is the record's mode: 0 a rolling update (alpha 0 leaves texels 4..9 bit for bit), 1 a fill from the vis faces,
 // 2 a fill without them (nothing hit, no back face). Texels 0..3 are the same statements as with T = 4.
+// M-GI2 50f: on a fill, texel 8 = 0.5 + 0.5 * g_off[the probe of the run] (the relocation offset over kGiMaxOffsetLimit
+// times the cell; 0 when the volume does not relocate, so 0.5 as before). 50g: mode 3 invalidates the viewport's probes
+// (scrolled in): texel 9 = (kGiInvalidShare, 0, 0) with alpha 1, every other texel alpha 0 (left bit for bit).
 constexpr const char* kGiProjectFS = R"(#version 450 core
 layout(std140, binding = 1) uniform GiProjectU {
     vec4 g_size;    // x: texels per row, y: rows in the pass, z: face size, w: texels per probe
     vec4 g_params;  // x: probes per row, y: weight of the new value, z: the pass's first face probe, w: record mode
     vec4 g_vis;     // x: dmax
+    vec4 g_off[32];
 };
 layout(binding = 6) uniform sampler2DArray u_faces;
 layout(binding = 7) uniform sampler2DArray u_vis;
@@ -3218,10 +3236,10 @@ const vec3 kTetra[4] = vec3[4](vec3(0.57735027, 0.57735027, 0.57735027), vec3(0.
 // look_at(pos, pos + kFwd, kUp), so the face's ndc x runs along cross(kFwd, kUp) and ndc y along kUp.
 const vec3 kFwd[6] = vec3[6](vec3(1, 0, 0), vec3(-1, 0, 0), vec3(0, 1, 0), vec3(0, -1, 0), vec3(0, 0, 1), vec3(0, 0, -1));
 const vec3 kUp[6] = vec3[6](vec3(0, 1, 0), vec3(0, 1, 0), vec3(0, 0, -1), vec3(0, 0, 1), vec3(0, 1, 0), vec3(0, 1, 0));
-vec4 record(int k, int layer, int res) {
+vec4 record(int k, int layer, int res, int p) {
     int mode = int(g_params.w);
     if (mode == 0) return vec4(0.0);
-    if (k == 8) return vec4(0.5, 0.5, 0.5, 1.0);
+    if (k == 8) return vec4(0.5 + 0.5 * g_off[min(p, 31)].xyz, 1.0);
     if (mode != 1) return vec4(k < 8 ? vec3(1.0) : vec3(0.0), 1.0);
     float sgn = (k & 1) == 0 ? 1.0 : -1.0;
     vec3 sum = vec3(0.0), lsum = vec3(0.0);
@@ -3255,10 +3273,14 @@ void main() {
     int row = min(int(v_uv.y * g_size.y), int(g_size.y) - 1);
     int T = int(g_size.w);
     int k = x % T;
+    if (int(g_params.w) == 3) {
+        o_color = vec4(1.0, 0.0, 0.0, k == 9 ? 1.0 : 0.0);
+        return;
+    }
     int layer = (int(g_params.z) + row * int(g_params.x) + x / T) * 6;
     int res = int(g_size.z);
     if (k >= 4) {
-        o_color = record(k, layer, res);
+        o_color = record(k, layer, res, x / T);
         return;
     }
     vec3 d_k = kTetra[k];
