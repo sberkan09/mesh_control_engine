@@ -529,6 +529,20 @@
 //                                         is 1); an unknown key, a non-number or a colour that is not three numbers
 //                                         raises an error that names the call and nothing is written
 //
+// The current (M-WATER2 step 49g) lives in the same table, over the first kit::WaterFlow (mce/kit/water_flow.h). The
+// getters and set_flow raise "water.set_flow: the scene has no WaterFlow entity" without one (the setter never adds the
+// component). When the scene has a WaterFlow, height_at / normal_at / submerged evaluate the flowing wave set
+// (kit::water_height_at / water_normal_at with the first WaterFlow), so a float scripted on height_at stays on the
+// drawn, drifting surface; without one they are the still set's bits.
+//
+//   water.flow_enabled() / flow_dir() / flow_speed() -> number   enabled, dir_deg, speed of the first WaterFlow
+//   water.flow_at(x, z) -> vx, vz              the current's velocity at that world position, m/s on world x and z
+//                                              (kit::water_flow_velocity: uniform today, the position is for flow
+//                                              maps); 0, 0 when the scene has a Water but no WaterFlow
+//   water.set_flow{enabled=, dir=, speed=}     a table, every key optional, each value clamped (dir 0..360 degrees,
+//                                              speed 0..5 m/s; enabled: any non-zero number is 1); an unknown key or a
+//                                              non-number raises an error that names the call and nothing is written
+//
 // Every function may raise (LUA_USE_LONGJMP): nothing with a destructor lives across a luaL_* call.
 
 #include <cmath>
@@ -565,6 +579,7 @@
 #include "mce/kit/season.h"
 #include "mce/kit/rainbow.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_flow.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/world_clock.h"
 #include "mce/render/atmosphere.h"
@@ -2945,13 +2960,26 @@ f64 check_water_coord(lua_State* L, int idx, const char* fn, const char* what) {
     return v;
 }
 
+// The first WaterFlow, or null (none in the scene, or a world whose weather did not register it): the queries then use
+// the still wave set.
+const kit::WaterFlow* find_water_flow(World& w) {
+    const refl::TypeRecord* type = refl::find_type(StringId("WaterFlow"));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent) return nullptr;
+    const kit::WaterFlow* found = nullptr;
+    w.query<kit::WaterFlow>().each([&](Entity, kit::WaterFlow& c) {
+        if (!found) found = &c;
+    });
+    return found;
+}
+
 int l_water_height_at(lua_State* L) {
     const f64 x = check_water_coord(L, 1, "water.height_at", "x");
     const f64 z = check_water_coord(L, 2, "water.height_at", "z");
     World& w = world_of(L);
     const kit::Water& water = check_water(L, "water.height_at");
     const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
-    lua_pushnumber(L, static_cast<double>(kit::water_height_at(water, p, water_scene_time(L), water_main_direction(w, water))));
+    lua_pushnumber(L, static_cast<double>(kit::water_height_at(water, find_water_flow(w), p, water_scene_time(L),
+                                                               water_main_direction(w, water))));
     return 1;
 }
 
@@ -2961,7 +2989,8 @@ int l_water_normal_at(lua_State* L) {
     World& w = world_of(L);
     const kit::Water& water = check_water(L, "water.normal_at");
     const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
-    return push_water_color(L, kit::water_normal_at(water, p, water_scene_time(L), water_main_direction(w, water)));
+    return push_water_color(
+        L, kit::water_normal_at(water, find_water_flow(w), p, water_scene_time(L), water_main_direction(w, water)));
 }
 
 int l_water_submerged(lua_State* L) {
@@ -2971,9 +3000,51 @@ int l_water_submerged(lua_State* L) {
     World& w = world_of(L);
     const kit::Water& water = check_water(L, "water.submerged");
     const math::vec2 p{static_cast<f32>(x), static_cast<f32>(z)};
-    const f32 h = kit::water_height_at(water, p, water_scene_time(L), water_main_direction(w, water));
+    const f32 h =
+        kit::water_height_at(water, find_water_flow(w), p, water_scene_time(L), water_main_direction(w, water));
     lua_pushboolean(L, static_cast<f32>(y) < h ? 1 : 0);
     return 1;
+}
+
+// ---- The current (M-WATER2 step 49g) ----
+
+kit::WaterFlow& check_water_flow(lua_State* L, const char* fn) {
+    return check_first<kit::WaterFlow>(L, fn, "WaterFlow");
+}
+
+#define MCE_WATER_FLOW_GETTER(luaname, field)                                                    \
+    int l_water_##luaname(lua_State* L) {                                                        \
+        lua_pushnumber(L, static_cast<double>(check_water_flow(L, "water." #luaname).field));     \
+        return 1;                                                                                \
+    }
+MCE_WATER_FLOW_GETTER(flow_enabled, enabled)
+MCE_WATER_FLOW_GETTER(flow_dir, dir_deg)
+MCE_WATER_FLOW_GETTER(flow_speed, speed)
+#undef MCE_WATER_FLOW_GETTER
+
+// water.flow_at(x, z): the velocity of the first WaterFlow (uniform today), 0, 0 with a Water and no WaterFlow.
+int l_water_flow_at(lua_State* L) {
+    (void)check_water_coord(L, 1, "water.flow_at", "x");
+    (void)check_water_coord(L, 2, "water.flow_at", "z");
+    World& w = world_of(L);
+    (void)check_water(L, "water.flow_at");
+    const math::vec2 v = kit::water_flow_velocity(find_water_flow(w));
+    lua_pushnumber(L, static_cast<double>(v.x));
+    lua_pushnumber(L, static_cast<double>(v.y));
+    return 2;
+}
+
+// water.set_flow{...}: validated before anything is written.
+int l_water_set_flow(lua_State* L) {
+    static const char* const kKeys[3] = {"enabled", "dir", "speed"};
+    f64 value[3] = {};
+    bool given[3] = {};
+    read_settings(L, "water.set_flow", kKeys, 3, "enabled, dir, speed", value, given);
+    kit::WaterFlow& f = check_water_flow(L, "water.set_flow");
+    if (given[0]) f.enabled = value[0] != 0.0 ? 1 : 0;
+    if (given[1]) f.dir_deg = static_cast<f32>(clamp_range(value[1], 0.0, 360.0));
+    if (given[2]) f.speed = static_cast<f32>(clamp_range(value[2], 0.0, 5.0));
+    return 0;
 }
 
 // water.set{...}: validated before anything is written.
@@ -3042,6 +3113,11 @@ const luaL_Reg kWaterLib[] = {
     {"normal_at", l_water_normal_at},
     {"submerged", l_water_submerged},
     {"set", l_water_set},
+    {"flow_enabled", l_water_flow_enabled},
+    {"flow_dir", l_water_flow_dir},
+    {"flow_speed", l_water_flow_speed},
+    {"flow_at", l_water_flow_at},
+    {"set_flow", l_water_set_flow},
     {nullptr, nullptr},
 };
 

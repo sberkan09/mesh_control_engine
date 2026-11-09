@@ -213,6 +213,26 @@ checklist passed in the parallel round (pod F) and is not repeated, except where
    `--textures bc`): 13 of 14 normal maps cooked as BC5 (all but `forrest_ground_03`), no colour map as BC5. Report
    the cooked pack sizes of `04_diorama`, `05_ashen_court` and `06_showcase` against RGBA8.
 
+**M-WATER2 (proposed 2026-11-09, rows A25 to A27 on the GPU list; the coordinator adds them).** The water now reflects
+on-screen geometry (a 24-step screen-space march in `kWaterFS`), refracts the opaque frame copied before it (one pass
+break and one full-size copy into `trans_src_` per frame with either effect on) and flows (`WaterFlow`). Headless
+(llvmpipe, lavapipe) the off paths are byte-identical and the measured GL cases pass (`docs/milestones/M-WATER2.md`, 49c to
+49f); what a real GPU must answer:
+
+- **A25, cost.** `kit3d_tour` `-scene scenes/tour_river.mcscene` and a full-screen calm sea at 1920 x 1080, High and
+  Medium, under `MCE_RHI=gl` and `MCE_RHI=sdlgpu`: the frame and the `main` stage with both effects on, with
+  `-r.water.refract 0`, with `-r.water.reflect 0` and with both off (the difference between both off and refraction only
+  is the pass break and the copy), as r8's table for M-REFLECT2; a tiled GPU if one is available. Plan estimates: 0.05 to
+  0.15 ms for the copy, 0.3 to 0.6 ms for the march on a full-screen sea.
+- **A26, look.** A windowed `tour_river` run: reflection shimmer and the screen-edge fade under camera motion with and
+  without TAA, the clear-colour leak at silhouettes (half-size depth against the full-size copy), the refraction strength
+  (`kWaterRefractScale` 0.5, cap 5 % of the screen) and the absorption against the striped seabed, the 1.2 m/s current's
+  read on a real display, a slow current leaving the long swell standing (the 64 s rounding), and whether a high-roughness
+  sea needs the M-REFLECT2 gather (49d shipped one tap).
+- **A27, Metal and WebGPU.** The translation of `p_water6`, the bank 7 sampler (`u_water_scene`) in `kWaterFS`, the
+  trace loop with its bisection, and the pass break and copy before the water, on the Metal and WebGPU backends
+  (`test_shader_cross` and the `render3d_gl` water optics cases on the hosted macOS runner).
+
 ## Open items from threads
 
 - **Long windowed captures stall under load (2026-10-18, M-DAYNIGHT 4).** `sample_daynight_gpu` (`mce_player -capture_ticks 150,1050,2100,2700`, about 45 s of real time) finished in 36 to 82 s on its own, but under a full `--task` (`ctest -j 4` on xvfb, llvmpipe) it sat for over an hour with all four frames already written, and under `--premerge` it hit its 240 s timeout. The player simulates in real time, so a long `-capture_ticks` list is 45 s or more of wall clock, and the cause of the stall (a catch-up spiral under load, or a hang at exit) is not known. Workaround: the demo's GPU test is one frame at tick 150 with a 120 s timeout. The next GPU round should (1) run `sample_daynight_gpu` with the old tick list 20 times at `-j 4` and note which of the frames or the exit stalls, (2) check whether `-capture_ticks` could step the simulation deterministically instead of by wall clock.
