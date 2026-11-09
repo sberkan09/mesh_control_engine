@@ -643,6 +643,7 @@ struct WaterSurface {
     f32 roughness = 0.08f;
     f32 foam_amount = 0.5f;
     f32 foam_width_m = 1.5f;
+    math::vec2 flow{0.0f, 0.0f};  // current velocity on world xz, m/s (M-WATER2 49a; nothing reads it before 49f)
     bool enabled = false;
     u8 pad_[3] = {};
 };

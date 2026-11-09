@@ -186,6 +186,7 @@ TEST_CASE("water: apply_quality clamps every field and sanitizes NaN") {
     w.roughness = nan;
     w.foam_amount = nan;
     w.foam_width_m = nan;
+    w.flow = math::vec2{nan, nan};
     out = apply_quality(q, w);
     CHECK(out.level_y == 0.0f);
     CHECK(out.half_extent == 500.0f);
@@ -203,6 +204,18 @@ TEST_CASE("water: apply_quality clamps every field and sanitizes NaN") {
     CHECK(out.roughness == 0.08f);
     CHECK(out.foam_amount == 0.0f);
     CHECK(out.foam_width_m == 1.5f);
+    CHECK(out.flow.x == 0.0f);
+    CHECK(out.flow.y == 0.0f);
+
+    w = sea();
+    w.flow = math::vec2{9.0f, -9.0f};
+    out = apply_quality(q, w);
+    CHECK(out.flow.x == 5.0f);
+    CHECK(out.flow.y == -5.0f);
+    w.flow = math::vec2{1.5f, -0.25f};
+    out = apply_quality(q, w);
+    CHECK(out.flow.x == 1.5f);
+    CHECK(out.flow.y == -0.25f);
 
     w = sea();
     w.time = 42.0f;

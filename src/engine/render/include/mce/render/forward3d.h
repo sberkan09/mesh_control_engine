@@ -124,6 +124,8 @@ struct Forward3DStats {
     bool ssr_history = false;   // ... over a valid previous frame (false: nothing reflected yet)
     bool ssr_blur = false;      // ... and the main pass gathered it blurred by roughness (r.ssr.blur, M-REFLECT2 48c)
     bool ssr_motion = false;    // ... and the trace read the velocity buffer at its hits (r.ssr.motion, M-REFLECT2 48e)
+    bool water_reflect = false;  // this frame's water draw traced the scene for its reflection (r.water.reflect, M-WATER2 49d)
+    bool water_refract = false;  // ... and refracted the opaque copy behind it (r.water.refract, M-WATER2 49c)
     bool contact_shadows = false;  // this frame marched contact shadows toward the sun (M-VISUAL2 3)
     bool taa = false;           // this frame went through the TAA resolve
     bool taa_history = false;   // ... blending a valid history (false on the first frame or after a reset)
