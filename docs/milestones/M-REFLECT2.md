@@ -116,15 +116,66 @@ Rendering is outside the state hash and the replay. The new shader math uses the
 
 Headless (llvmpipe, lavapipe): the CPU helper (48b) is exact; on the GL and SDL GPU fixture the off equalities (`r.ssr 0`, `r.ssr.blur 0`, `r.ssr.motion 0`, roughness at or below 0.08, a flat normal map, no velocity) hold byte for byte; the roughness ladder widens monotonically; the noisy-map floor reflects wider and no darker than the flat one; a moving sphere's reflection is closer to the truth with the velocity path; the static-scene jitter gate; the stamp ordering; two runs agree. Real-GPU behaviour and look (the noise of the gather without TAA, its cost on a full-screen rough floor at 1080p, the best constants, the look of the bump widening on real normal maps, the trailing of a fast object with and without the velocity, Metal and WebGPU shader compilation of the new lane and sampler): proposed rows on the GPU list (`/mnt/project-files/assessments/gpu-gereken-isler.md`, next free numbers after A19; the coordinator adds them, as for A19).
 
+### GPU verification r8 (2026-11-08)
+
+Round r8 of `M-GPU-VERIFY.md` (pod, driver and procedure there): one community-cloud **RTX A2000** (6 GB, Ampere GA106, driver 550.127.05), master 747a0d43 with nothing changed but the job files, RelWithDebInfo with `MCE_GPU_TESTS=ON`. GL ran through `SDL_VIDEODRIVER=offscreen` (`OpenGL 4.5.0 NVIDIA 550.127.05 on NVIDIA RTX A2000`), SDL GPU under Xvfb with the NVIDIA Vulkan ICD (`SDL GPU (vulkan) on NVIDIA RTX A2000`), and llvmpipe and lavapipe on the same pod as the reference. No default was changed and no engine code was touched. The ladder variants below are copies of `samples/kit3d_tour/assets` edited and cooked on the pod only.
+
+**(1) Correctness: everything passes, and the numbers match llvmpipe.**
+
+- The 14 `render3d_gl` SSR cases (`test_render_gl -tc='*ssr*'`) pass on all four renderers: NVIDIA GL (933 assertions), NVIDIA Vulkan (918; the timestamp case has no timer query there), llvmpipe and lavapipe. Every measured width is the same on all four: the ladder gives 3 / 5 / 6 / 10 / 17 px at roughness 0.2 to 0.6 (sharp 3), MSAA 1 gives 10 px at 0.5 and 3 px at 0.2, the noisy map 6 and 7 px (flat map 3 and 5), and the terrain 5 px. The moving cube's reflection centroid is 89.43 px with `r.ssr.motion` and 85.64 px without (truth 92.62; 59 against 21 green pixels), the same to the hundredth on all four. The differences are small. The column mean red is 114.553 on the GPU and 114.617 on llvmpipe at 0.2. For the flat map against no map, the silhouette outliers are at most 12 and 34 levels on the GPU (2 and 11 channel values over 3) and 9 and 32 on llvmpipe (2 and 7). The still-scene jitter gate gives a largest difference of **0** on both GPU backends, against 1 on llvmpipe.
+- The whole `test_render_gl`: 306 of 306 cases on GL and on SDL GPU. `test_golden_gl` (65 cases, `ssr_room` included): 3 of 3 runs pass on each backend, 0 flakes. No `-nvidia` golden is needed. `sample_kit3d_tour_reflect_headless` and `sample_kit3d_tour_reflect_gpu` pass on both backends.
+- `scripts/ci/gpu_compare.py`, `sample_kit3d_tour_reflect_gpu` at 1280x720, High tier (TAA, SSR blur and motion on), real GPU against llvmpipe: 0.03% / 0.00% / 0.03% of pixels differ by more than 12/255 at ticks 120 / 180 / 300 (mean abs 0.11 / 0.05 / 0.09). At 1920x1080 for ladder B with max 0.8 (below): 0.00% (mean abs 0.05). Two captures of one frame on the GPU are byte-identical.
+
+**(2) GPU cost at 1920x1080** (GL, `mce_player -window 1920x1080 -perf_capture <file> -sim.fast_forward 1 -sim.max_catchup 1 -r.vsync 0 -perf_warmup 60 -frames 600 -r.quality <tier>`, 537 measured frames, mean of 2 runs; ms of GPU time, from `summary.gpu_ms.avg` and the `.mcperf` stage columns `ssr` and `main`). `tour_reflect` is the sample (`ssr_max_roughness` 0.8). The heavy scene is `09_openworld` `city.mcscene` (SSR, SSAO, contact shadows, sky IBL, auto exposure; default `ssr_max_roughness` 0.5, materials 0.3 to 0.9).
+
+| Scene, tier | frame, all on | `r.ssr.blur 0` | `r.ssr.motion 0` | `r.ssr 0` | main pass: on / blur 0 | `ssr` stage: on / motion 0 |
+|---|---|---|---|---|---|---|
+| `tour_reflect`, High | 1.718 | 1.668 | 1.689 | 1.377 | 0.513 / 0.480 (**+0.033**) | 0.312 / 0.227 |
+| `tour_reflect`, Medium | 1.239 | 1.211 | 1.249 | 1.016 | 0.361 / 0.340 (**+0.021**) | 0.161 / 0.163 |
+| `city`, High | 8.665 | 8.654 | 8.621 | 8.533 | 3.219 / 3.187 (**+0.032**) | 0.520 / 0.254 |
+| `city`, Medium | 7.549 | 7.423 | (no velocity) | | 2.688 / 2.621 (+0.067, noisy) | 0.200 / 0.198 |
+| worst case: the tour's ground at roughness 0.45, max 0.8, High | 1.790 | 1.683 | | 1.389 | 0.587 / 0.485 (**+0.102**) | 0.313 |
+| same, Medium | 1.311 | 1.227 | | 1.018 | 0.419 / 0.346 (**+0.073**) | 0.164 |
+
+- **Blur (48c/48d):** its cost is all in the main pass. It is +0.02 to 0.03 ms on the sample and the city at both tiers, and +0.10 ms (High) and +0.07 ms (Medium) when most of the frame below the horizon is a rough reflecting floor. That is a fifth of the plan's estimate ("under 0.5 ms at 1080p"), on a low-end card. Run-to-run spread is 0.002 to 0.03 ms on the tour and up to 0.24 ms on the city (whose frame is about 8.6 ms), so the city's whole-frame differences are within noise; the stage columns are steadier.
+- **Motion (48e):** costs nothing measurable. With it on, the velocity pass moves from the `taa` bucket to the `ssr` bucket: +0.085 ms on the tour and +0.266 ms on the city, and `taa` drops by the same (tour 0.341 to 0.271, city 0.635 to 0.385). The frame total is within noise (p50 1.692 against 1.687 on the tour). On Medium there is no velocity, so `r.ssr.motion` changes nothing (1.249 against 1.239, noise), as designed.
+- **SSR as a whole** costs 0.34 ms at High and 0.22 ms at Medium on the sample (trace, main-pass lookup and gather), and about 0.13 ms on the city (noisy).
+
+**(3) The roughness ladder and the default `ssr_max_roughness`.** Two ladders in `tour_reflect` (fade 0.2 in all): A is the sample's (strips 0.0 / 0.15 / 0.3 / 0.5 / 0.7), B is the same strips set to 0.4 / 0.5 / 0.6 / 0.7 / 0.8. Each was rendered with `ssr_max_roughness` 0.5 (today's default), 0.6 and 0.8, at High (TAA) and Medium (no TAA), with `r.ssr.blur` 1 and 0, against `r.ssr 0`, at 1920x1080 and tick 180 (the sphere is clear of the far row). Per strip (a mask from the camera's ray-to-floor, the sphere masked out): **refl** is the mean luminance change against `r.ssr 0` (0 to 255), which says how much reflection the strip shows. **hf** is the high-frequency energy SSR adds (the mean of `|L - box5(L)|` minus the same for `r.ssr 0`), which counts both a sharp reflection's edges and gather noise. Lower hf for the same refl means a smoother reflection.
+
+| Ladder B (0.4 / 0.5 / 0.6 / 0.7 / 0.8), refl per strip | High | Medium |
+|---|---|---|
+| max 0.5 | 9.1 / 0 / 0 / 0 / 0 | 9.2 / 0 / 0 / 0 / 0 |
+| max 0.6 | 13.2 / 15.6 / 0 / 0 / 0 | 13.4 / 16.0 / 0 / 0 / 0 |
+| max 0.8 | 13.3 / 25.5 / 23.2 / 9.7 / 0 | 13.4 / 26.3 / 24.9 / 10.0 / 0 |
+
+| hf added, blur on / blur off | 0.3 (A) | 0.4 (B) | 0.5 (B) | 0.6 (B) | 0.7 (B) |
+|---|---|---|---|---|---|
+| High (TAA), max 0.8 | +0.61 / +1.21 | +0.09 / +0.24 | +0.22 / +0.61 | +0.47 / +0.81 | +0.14 / +0.26 |
+| Medium (no TAA), max 0.8 | +0.56 / +1.09 | +0.16 / +0.28 | +0.59 / +0.62 | **+0.99 / +0.73** | **+0.35 / +0.28** |
+| Medium, max 0.6 | | +0.16 / +0.28 | +0.33 / +0.37 | | |
+
+Ladder A agrees: the 0.5 strip shows nothing at max 0.5, 16.5 (High) / 17.1 (Medium) at 0.6 and 25.8 / 26.8 at 0.8; the 0.7 strip shows only 3.0 / 3.2 at 0.8 (it sits inside the fade). What the numbers say:
+
+- With TAA, the gather is always smoother than the sharp tap: it carries a third to a half of the sharp reflection's high-frequency energy, at every roughness.
+- Without TAA it is smoother or equal up to roughness 0.5. From 0.6, where the radius reaches its cap (8 half-size texels; `ssr_blur_radius(0.6, 0) = 8`), the 8 taps add **more** high-frequency energy than the sharp reflection had: +0.99 against +0.73 at 0.6, +0.35 against +0.28 at 0.7. That is the under-sampling noise the plan's risk names, and it shows up on Medium only.
+- Raising the limit costs almost nothing. Main pass at High: 0.500 / 0.503 / 0.513 ms on ladder A, 0.520 / 0.524 / 0.534 on ladder B and 3.219 / 3.221 / 3.236 on the city, for max 0.5 / 0.6 / 0.8.
+
+**Recommended default: `ssr_max_roughness` 0.6, `ssr_roughness_fade` 0.2 unchanged** (follow-up 4; not changed here). The full weight then reaches roughness 0.4, the fade runs from 0.4 to 0.6, and a 0.5 surface gets about 60% of the reflection it gets at max 0.8 (15.6 to 17.1 against 25.5 to 26.8). That covers the range where the gather is clean without TAA, for +0.003 ms. 0.8 is the better look with TAA and stays a per-scene choice, as `tour_reflect` makes it. As a default it would put 0.6 to 0.7 surfaces on the capped gather, which is noisier than the sharp tap on the Medium tier. Golden impact, from 48b's audit: the `ssr_room` floor (0.1) keeps weight 1 and the `render3d_gl` 0.8 floor keeps weight 0 at 0.6, so the known SSR goldens and tests should not move. `06_showcase` and `09_openworld` surfaces between 0.4 and 0.6 change look. The integration runner confirms this when the default changes.
+
+**Not checked here:** the windowed look by a person (gather noise at a real display's refresh, shimmer under TAA, the bump widening on real normal maps, the trailing of a fast object with and without the velocity). The ladder images were judged by the numbers above, not by eye. Also not done: Metal and WebGPU translation of `p_ssr2`, the gather and `u_vel` (Mac).
+
 ## Follow-ups
 
-1. A pyramid of `ssr_` (half, quarter, eighth) built into a packed atlas through ping-pong targets and read by lod in `kMeshFS` (the smooth version of 48c; needs the main shader's uv remap and a compose pass), if the gather's noise is not acceptable without TAA.
+1. A pyramid of `ssr_` (half, quarter, eighth) built into a packed atlas through ping-pong targets and read by lod in `kMeshFS` (the smooth version of 48c; needs the main shader's uv remap and a compose pass), if the gather's noise is not acceptable without TAA. r8 measured where it starts. Without TAA the gather is smoother than the sharp tap up to roughness 0.5 and noisier from 0.6, where the radius reaches its 8-texel cap. With TAA it is smoother at every roughness. So a pyramid (or more taps at the cap) is needed only if surfaces above 0.5 must reflect on the Medium tier.
 2. The perturbed normal for SSR through a second prepass MRT (twin pipelines, a half-size RG16F target, a third sampler in `kSsrFS`): the correct per-bump reflection for normal maps; costs about a milestone and still cannot cover terrain splats, wet, snow or ripples.
 3. Contact-hardening blur from the hit distance (sharp near the contact, soft far away): needs the distance stored next to the colour (a second target or a repacked `ssr_`).
-4. Raise the default `ssr_max_roughness` / `ssr_roughness_fade` (a `scene3d.h` and `kit3d.h` default change; the goldens are regenerated by the integration runner).
+4. Raise the default `ssr_max_roughness` / `ssr_roughness_fade` (a `scene3d.h` and `kit3d.h` default change; the goldens are regenerated by the integration runner). **r8 recommends `ssr_max_roughness` 0.6 with the fade left at 0.2** (numbers under "GPU verification r8"): a 0.5 surface then reflects (luminance change 15.6 to 17.1 against 0 today), the gather is clean there without TAA, and the main pass grows by 0.002 to 0.004 ms. 0.8 stays a per-scene choice for TAA scenes, because 0.6 to 0.7 surfaces are noisier than the sharp tap on Medium. From 48b's audit, `ssr_room` and the `render3d_gl` SSR cases keep their weights at 0.6.
 5. A coat and sheen that read SSR (M-VISUAL2 limit); reflections of the back faces and of transparent surfaces.
-6. A temporal accumulation of `ssr_` for scenes without TAA.
+6. A temporal accumulation of `ssr_` for scenes without TAA. (r8: the only case that needs it is roughness 0.6 and above on Medium; see follow-up 1.)
 7. 48a to 48f as built: one entry per step below, written when each lands.
+8. A tier-dependent limit (0.8 where TAA runs, 0.6 without) would give High the 0.8 look. Today it would need a `QualitySettings` row (wide header) or a shader-side clamp when TAA is off; not planned, recorded from r8.
+9. Still open after r8: the human look at a windowed run (gather noise on a real display, the bump widening on real normal maps, a fast object's trail with and without `r.ssr.motion`), and Metal/WebGPU translation of the new lane, gather and velocity sampler (Mac).
 
 ## As built
 
