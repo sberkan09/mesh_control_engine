@@ -42,5 +42,11 @@ def cmp(a, b):
     print(f"   {a:<24} vs {b:<24} {x.shape[1]}x{x.shape[0]} mean {x.reshape(-1,3).mean(0).round(1).tolist()} / "
           f"{y.reshape(-1,3).mean(0).round(1).tolist()} std {x.std():.1f} | diff>12: {100*(d>12).mean():.2f}% mean|d| {np.abs(x-y).mean():.2f} max {d.max()}")
 
+def bands(a, b):
+    """Share of pixels differing by more than 12, per fifth of the image height (top to bottom)."""
+    x = np.asarray(Image.open(f"/work/cap/{a}.ppm").convert("RGB"), dtype=np.int16); y = np.asarray(Image.open(f"/work/cap/{b}.ppm").convert("RGB"), dtype=np.int16)
+    d = np.abs(x - y).max(axis=2) > 12; h = d.shape[0]
+    print(f"   {a} vs {b} bands: " + " ".join(f"{100*d[i*h//5:(i+1)*h//5].mean():.2f}%" for i in range(5)))
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](*sys.argv[2:])
