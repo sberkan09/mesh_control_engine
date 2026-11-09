@@ -47,6 +47,7 @@
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
+#include "mce/kit/gi_visibility.h"
 #include "mce/kit/water_flow.h"
 #include "mce/kit/water_ice.h"
 #include "mce/kit/wet_surfaces.h"
@@ -57,6 +58,7 @@
 #include "mce/log.h"
 #include "mce/refl/property_path.h"
 #include "mce/render/accessibility.h"
+#include "mce/render/gi_probes.h"
 #include "mce/scene/streaming.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -1797,11 +1799,21 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         gv.hysteresis = g.hysteresis;
         gv.probes_per_frame = g.probes_per_frame;
         gv.version = g.version;
+        // M-GI2 50h: GiVisibility3D on this entity (and only here) turns on the 10-texel record and what rides on it.
+        const GiVisibility3D* vis = world.try_get<GiVisibility3D>(e);
+        if (vis && vis->enabled) {
+            gv.visibility = true;
+            gv.relocate = vis->relocate != 0;
+            gv.max_offset = gi_visibility_max_offset(*vis);
+            gv.follow = vis->follow_camera != 0;
+        }
         if (bake_mode_) {
             gv.hysteresis = 0.0f;
             gv.probes_per_frame = render::Forward3D::kGiMaxBatchProbes;
+            gv.follow = false;  // a bake is of the authored box
         } else {
-            gv.baked = texture_key(g.baked.guid);
+            // A 10-texel bake of another record format (or an unstamped one) is not handed over: see gi_visibility.h.
+            if (gi_visibility_bake_ok(vis)) gv.baked = texture_key(g.baked.guid);
             render::apply_quality(quality_, gv);
         }
         scene.set_gi_volume(gv);
@@ -1809,7 +1821,21 @@ void Kit3DExtract::extract(World& world, render::Scene3D& scene, f32 alpha) {
         if (gv.updates) {
             const f32 margin = length(h);
             gi_keep = true;
-            gi_reach = {gv.bounds.min - vec3{margin, margin, margin}, gv.bounds.max + vec3{margin, margin, margin}};
+            aabb3 box = gv.bounds;
+            if (gv.follow) {
+                // The volume's box follows the camera: the snapped box (the renderer's helpers, in render space; the
+                // floating origin moves the snap grid by under a cell) plus two cells of slack for the renderer's
+                // hysteresis (up to 0.75 cell) and that shift.
+                const f64 sx = render::gi_follow_spacing(gv.bounds.min.x, gv.bounds.max.x, gv.counts[0]);
+                const f64 sz = render::gi_follow_spacing(gv.bounds.min.z, gv.bounds.max.z, gv.counts[2]);
+                const vec3 cam = view.position;
+                const render::GiFollowCell fc =
+                    render::gi_follow_origin(f64(cam.x), f64(cam.z), sx, sz, gv.counts[0], gv.counts[2]);
+                box = render::gi_follow_box(fc, gv.bounds, gv.counts, 0.0, 0.0);
+                const vec3 slack{f32(2.0 * sx), 0.0f, f32(2.0 * sz)};
+                box = {box.min - slack, box.max + slack};
+            }
+            gi_reach = {box.min - vec3{margin, margin, margin}, box.max + vec3{margin, margin, margin}};
         }
     });
     auto in_view = [&](vec3 c, f32 r) {

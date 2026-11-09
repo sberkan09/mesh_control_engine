@@ -12,6 +12,7 @@
 #include "mce/kit/chunk_lod3d.h"
 #include "mce/kit/decal_scatter.h"
 #include "mce/kit/dynamic_resolution.h"
+#include "mce/kit/gi_visibility.h"
 #include "mce/kit/edge_outline.h"
 #include "mce/kit/heat_haze.h"
 #include "mce/kit/lens_flare.h"
@@ -283,6 +284,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     world.register_components<MeshRef, PointLight3D, SpotLight3D, ReflectionProbe3D, GiVolume3D, Camera3DComponent, Animator,
                               Environment3D, BoxCollider3D, MeshCollider3D, Foliage3D, Decal3D, ParticleEmitter3D, Terrain3D,
                               TerrainCollider3D, TerrainFoliage3D, StaticMerge3D, ChunkLod3D>();
+    world.register_components<GiVisibility3D>();  // M-GI2 50h: read by Kit3DExtract on the GiVolume3D's entity; no system
     world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
     world.register_components<SunShafts3D>();  // M-SUNSHAFTS 45d: read by Kit3DExtract; no system
     world.register_components<DynamicResolution3D>();  // M-DYNRES 46d: read by Kit3DExtract; no system

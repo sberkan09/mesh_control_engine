@@ -131,6 +131,7 @@ mce_add_test(test_kit UMBRELLA
         test_water.cpp
         test_water_flow.cpp
         test_water_extract.cpp
+        test_gi_visibility_extract.cpp
         test_water_ice_extract.cpp
         test_aurora_extract.cpp
         test_rainbow_extract.cpp
