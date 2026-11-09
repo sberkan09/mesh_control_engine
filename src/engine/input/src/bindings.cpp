@@ -1,5 +1,7 @@
 #include "mce/input/bindings.h"
 
+#include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -52,6 +54,7 @@ bool format_field(const refl::FieldRecord& f, const void* obj, char* buf, usize 
 bool parse_field(const refl::FieldRecord& f, void* obj, StringView text) {
     byte* p = static_cast<byte*>(obj) + f.offset;
     FixedString<64> tmp(text);
+    if (tmp.truncated()) return false;  // a cut number would parse as a different one
     const char* s = tmp.c_str();
     char* end = nullptr;
     auto store = [&](auto v) { std::memcpy(p, &v, sizeof(v)); };
@@ -66,8 +69,15 @@ bool parse_field(const refl::FieldRecord& f, void* obj, StringView text) {
         case FieldKind::U16:
         case FieldKind::U32:
         case FieldKind::U64: {
+            if (s[0] == '-') return false;  // strtoull would wrap a negative number to a huge one
+            errno = 0;
             const unsigned long long v = std::strtoull(s, &end, 0);
-            if (end == s || *end) return false;
+            if (end == s || *end || errno == ERANGE) return false;
+            const unsigned long long max = f.kind == FieldKind::U8    ? 0xFFull
+                                           : f.kind == FieldKind::U16 ? 0xFFFFull
+                                           : f.kind == FieldKind::U32 ? 0xFFFFFFFFull
+                                                                      : ~0ull;
+            if (v > max) return false;  // a number that does not fit would wrap to another value
             if (f.kind == FieldKind::U8) store(static_cast<u8>(v));
             else if (f.kind == FieldKind::U16) store(static_cast<u16>(v));
             else if (f.kind == FieldKind::U32) store(static_cast<u32>(v));
@@ -75,8 +85,9 @@ bool parse_field(const refl::FieldRecord& f, void* obj, StringView text) {
             return true;
         }
         case FieldKind::I32: {
-            const long v = std::strtol(s, &end, 0);
-            if (end == s || *end) return false;
+            errno = 0;
+            const long long v = std::strtoll(s, &end, 0);
+            if (end == s || *end || errno == ERANGE || v < INT32_MIN || v > INT32_MAX) return false;
             store(static_cast<i32>(v));
             return true;
         }

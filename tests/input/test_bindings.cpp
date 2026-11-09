@@ -126,3 +126,31 @@ TEST_CASE("binding names: mouse buttons, gamepad buttons and gamepad axes have t
     CHECK(StringView(gamepad_axis_name(GamepadAxis::RightTrigger)) == StringView("Right Trigger"));
     CHECK(StringView(gamepad_axis_name(static_cast<GamepadAxis>(99))) == StringView("Pad Axis"));
 }
+
+TEST_CASE("bindings: a number that does not fit its field is a bad value, not a wrapped one") {
+    Array<BindingOverride> out;
+    BindingDef b;
+    const BindingOverride one = BindingOverride::make(StringId("m"), StringId("a"), 0, b);
+    const std::string good = text_of(Span<const BindingOverride>(&one, 1));
+    const std::string header = good.substr(0, good.find('\n') + 1);
+    auto read = [&](const std::string& field) { return read_bindings(header + "[BindingOverride]\n" + field + "\n", out).has_value(); };
+
+    // u8: 255 fits, 256 would wrap to 0, -1 would wrap to 255.
+    CHECK(read("axis = 255"));
+    CHECK(out.back().axis == 255);
+    CHECK_FALSE(read("axis = 256"));
+    CHECK_FALSE(read("axis = 300"));
+    CHECK_FALSE(read("axis = -1"));
+    CHECK_FALSE(read("flags = 256"));
+    // u32: 4294967295 fits, 4294967296 would wrap to 0.
+    CHECK(read("code = 4294967295"));
+    CHECK(out.back().code == 4294967295u);
+    CHECK_FALSE(read("code = 4294967296"));
+    CHECK_FALSE(read("index = 4294967296"));
+    // u64: past 2^64 - 1 is out of range.
+    CHECK(read("map = 18446744073709551615"));
+    CHECK_FALSE(read("map = 18446744073709551616"));
+    // A value of 64 bytes or more is cut by the parse buffer: the cut text must not read as a shorter number.
+    CHECK_FALSE(read("code = 1" + std::string(62, ' ') + "x"));
+    CHECK_FALSE(read("code = " + std::string(63, '0') + "1x"));
+}
