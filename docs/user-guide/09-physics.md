@@ -1006,8 +1006,7 @@ silhouette stays flat and close to the horizon it shows no parallax). The waves 
 `water_normal` returns; each wave fades to flat where it is under a few pixels long, so the far sea is smooth and the sun
 path widens instead of sparkling. It reflects the sky through the sky's own code: the gradient or sky texture, the
 clouds, the moon and the stars, and the horizon haze, more toward the horizon (fresnel), blurred by `roughness` and
-scaled by `reflectivity`; the sun (or, at night, the moon holding the light) adds a glint. Geometry is not reflected.
-The body runs from `shallow_color` to `deep_color` over `depth_scale_m` metres of water between the surface and the
+scaled by `reflectivity`; the sun (or, at night, the moon holding the light) adds a glint. The body runs from `shallow_color` to `deep_color` over `depth_scale_m` metres of water between the surface and the
 ground seen through it, and `foam_amount` lays foam within `foam_width_m` of that ground along the view (the shore line on
 a steep shore; on a gentle beach the band widens where the water is shallow). Both read the opaque depth of a half-size
 prepass, which the renderer also runs for SSAO; with the SSAO, SSR and contact-shadow resources all off in the renderer's
@@ -1017,6 +1016,34 @@ Low tier draws a flat plane with the same deep tint and no foam (and so does a c
 as they cover the ground. A scene without a plane renders exactly as before. Transparent things under the surface (glass,
 particles) are hidden by it, and with temporal anti-aliasing the moving waves can smear a little, since the plane is not
 in the motion pass.
+
+**Reflection and refraction (M-WATER2).** Whenever the water reads the depth (above) and the camera is above the level,
+the renderer copies the opaque picture drawn so far before the water (one pass break and one full-size copy per frame) and
+the water uses it twice. It **reflects geometry**: a short screen-space march (24 samples over 80 m) along the ray
+reflected by the wave normal finds what stands above or beside the water, a pier, a pillar, a bank, so it is mirrored
+and broken by the waves; where the march finds nothing (off the screen edge, behind the camera, the sky) the sky
+reflection shows instead, with a fade, not a pop. It **refracts what lies under it**: the seabed, the stones, a sunken
+crate are seen through the surface, shifted by the wave normals (at most 5 % of the screen; a calm plane does not bend)
+and dimmed per colour channel with depth (the absorption the underwater camera uses, from `shallow_color` and
+`depth_scale_m`: red fades first, and deep water ends at the old deep tint). A lookup that would land on something in
+front of the water, or above it, falls back to the straight one, so a post standing in the water does not smear into
+it. Only what is on screen and opaque this frame takes part: an object above the top of the screen or behind another
+loses its reflection, glass and particles are neither reflected nor refracted, and with temporal anti-aliasing a moving
+reflection smears a little. `r.water.reflect 0` and `r.water.refract 0` (section 8.3) turn each effect off; both off, the
+Low tier's look, a renderer without the prepass and the camera under the surface draw the plain water above, with no
+pass break. The `kit3d_tour` river scene (`tour_river.mcscene`) shows both.
+
+**Currents (M-WATER2).** An optional `WaterFlow` entity (one per scene, the first in ECS order is read; registered with
+the weather, next to `Water`) makes the water flow: `dir_deg` (the direction the water moves to, 0 is +x,
+counter-clockwise from above, like `wind_dir_deg`), `speed` (0 to 5 m/s) and `enabled`. It carries the whole wave pattern
+along (each wave's frequency is Doppler-shifted by the current), the drawn waves and ripples and the gameplay height
+alike (`water_height_at` and `water_normal_at` in `mce/kit/water_flow.h`, and the Luau queries of 9.19m). The shift is
+rounded so every wave still repeats after 64 s: a short wave drifts within about 0.01 m/s of the current, the long swell
+only in steps of about 0.19 m/s, so a slow current leaves the swell standing while the ripples, which the eye reads as
+flow, follow it. The current is one velocity for the whole plane (no flow maps, no sloped rivers), it moves no body by
+itself (apply `water.flow_at` in a script), a frozen water (9.19r) stops with its waves, and `r.water 0` removes the
+plane and the current with it. Nothing is stored between ticks; a scene without a `WaterFlow` hashes, saves and draws
+exactly as before.
 
 ## 9.19m Water from Luau (M-WATER)
 
@@ -1029,6 +1056,12 @@ is below the surface there. `water.set{...}` and the getters (`water.level()`, `
 like the set keys) act on the first `Water`; every set key is optional and clamped to the component's range, an unknown
 key, a value that is not a number or a scene without the component raises an error that names the call, and nothing is
 written. The setter never adds the component. The queries work with `enabled` 0 too, and they pause with the scene time.
+With a `WaterFlow` (9.19l) in the scene `height_at`, `normal_at` and `submerged` follow the flowing waves, so a float stays
+on the drifting surface; `water.flow_at(x, z)` returns the current's velocity `vx, vz` in m/s on world x and z (the same
+everywhere today; `0, 0` when the scene has a `Water` and no `WaterFlow`), which a script can add to a floating object's
+motion. `water.set_flow{enabled=, dir=, speed=}` and the getters `water.flow_enabled()`, `water.flow_dir()` and
+`water.flow_speed()` act on the first `WaterFlow` with the same rules as `water.set` (clamped, named errors, nothing
+written on error, never adds the component).
 The `13_water` sample (`ctest -R water`) is the worked example: a default `Water` off a sloped sand island, and a crate whose
 script sets its `y` to `water.height_at(x, z)` and tilts it to `water.normal_at(x, z)` every tick, logging `water:` every 150 ticks.
 

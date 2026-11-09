@@ -1,0 +1,1261 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-00000000001a",
+ "name": "tour_river",
+ "entities": [
+  {
+   "id": 1,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      -0.7,
+      -0.28,
+      0.65
+     ],
+     "sun_intensity": 2.4,
+     "sun_shadows": 0,
+     "sun_color": [
+      1.0,
+      0.86,
+      0.68
+     ],
+     "ambient_sky": [
+      0.42,
+      0.52,
+      0.72
+     ],
+     "ambient_ground": [
+      0.2,
+      0.2,
+      0.17
+     ],
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.08,
+     "ssao": 1
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 60
+    },
+    "LocalTransform": {
+     "position": [
+      17.0,
+      2.0,
+      0.0
+     ],
+     "rotation": [
+      -0.08,
+      0.7026,
+      0.08,
+      0.7026
+     ]
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "River",
+   "components": {
+    "Water": {
+     "level_y": 0,
+     "half_extent": 60,
+     "amplitude": 0.08,
+     "wavelength": 3,
+     "wind_dir_deg": 180,
+     "wind_follow": 0,
+     "depth_scale_m": 3,
+     "foam_amount": 0.6,
+     "foam_width_m": 0.5
+    },
+    "WaterFlow": {
+     "enabled": 1,
+     "dir_deg": 180,
+     "speed": 1.2
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "North bank",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.3,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.0,
+      -1.275,
+      -10.0
+     ],
+     "scale": [
+      62.0,
+      3.45,
+      12.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "South bank",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.3,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.0,
+      -1.275,
+      10.0
+     ],
+     "scale": [
+      62.0,
+      3.45,
+      12.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Seabed 01",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      16.5,
+      -0.65,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Seabed 02",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      15.5,
+      -0.737,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Seabed 03",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      14.5,
+      -0.8239,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Seabed 04",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      13.5,
+      -0.9109,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Seabed 05",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      12.5,
+      -0.9978,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Seabed 06",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      11.5,
+      -1.0848,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Seabed 07",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.5,
+      -1.1717,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Seabed 08",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      9.5,
+      -1.2587,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Seabed 09",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      8.5,
+      -1.3457,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Seabed 10",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      7.5,
+      -1.4326,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 16,
+   "name": "Seabed 11",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      6.5,
+      -1.5196,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "name": "Seabed 12",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      5.5,
+      -1.6065,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 18,
+   "name": "Seabed 13",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      4.5,
+      -1.6935,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 19,
+   "name": "Seabed 14",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      3.5,
+      -1.7804,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 20,
+   "name": "Seabed 15",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.5,
+      -1.8674,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 21,
+   "name": "Seabed 16",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      1.5,
+      -1.9543,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 22,
+   "name": "Seabed 17",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.5,
+      -2.0413,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 23,
+   "name": "Seabed 18",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -0.5,
+      -2.1283,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 24,
+   "name": "Seabed 19",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -1.5,
+      -2.2152,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 25,
+   "name": "Seabed 20",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.5,
+      -2.3022,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 26,
+   "name": "Seabed 21",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.5,
+      -2.3891,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 27,
+   "name": "Seabed 22",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -4.5,
+      -2.4761,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 28,
+   "name": "Seabed 23",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.9,
+      0.7,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5.5,
+      -2.563,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 29,
+   "name": "Seabed 24",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -6.5,
+      -2.65,
+      0.0
+     ],
+     "scale": [
+      1.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 30,
+   "name": "Deep floor",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.22,
+      0.2,
+      0.19,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -23.5,
+      -2.65,
+      0.0
+     ],
+     "scale": [
+      33.0,
+      0.3,
+      8.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 31,
+   "name": "Stone 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.55,
+      0.52,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      13.0,
+      -0.6078,
+      1.2
+     ],
+     "scale": [
+      0.6,
+      0.48,
+      0.54
+     ]
+    }
+   }
+  },
+  {
+   "id": 32,
+   "name": "Stone 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.55,
+      0.52,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      7.0,
+      -1.0496,
+      -1.0
+     ],
+     "scale": [
+      0.8,
+      0.64,
+      0.72
+     ]
+    }
+   }
+  },
+  {
+   "id": 33,
+   "name": "Stone 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.55,
+      0.52,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      1.0,
+      -1.6113,
+      0.8
+     ],
+     "scale": [
+      0.7,
+      0.56,
+      0.63
+     ]
+    }
+   }
+  },
+  {
+   "id": 34,
+   "name": "Stone 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.55,
+      0.52,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -5.0,
+      -2.053,
+      -1.6
+     ],
+     "scale": [
+      0.9,
+      0.72,
+      0.81
+     ]
+    }
+   }
+  },
+  {
+   "id": 35,
+   "name": "Pillar 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.3,
+      0.22,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.0,
+      -0.3,
+      -2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 36,
+   "name": "Pillar 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.8,
+      0.2,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.0,
+      -0.3,
+      2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 37,
+   "name": "Pillar 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.3,
+      0.9,
+      0.45,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      4.0,
+      -0.3,
+      -2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 38,
+   "name": "Pillar 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.35,
+      0.55,
+      1.0,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      4.0,
+      -0.3,
+      2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 39,
+   "name": "Pillar 5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      1.0,
+      0.55,
+      0.15,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.0,
+      -0.3,
+      -2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 40,
+   "name": "Pillar 6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.95,
+      0.95,
+      0.95,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -2.0,
+      -0.3,
+      2.6
+     ],
+     "scale": [
+      0.5,
+      5.4,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": 41,
+   "name": "Arch post north",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.85,
+      0.75,
+      0.62,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.0,
+      0.1,
+      -3.0
+     ],
+     "scale": [
+      0.6,
+      6.2,
+      0.6
+     ]
+    }
+   }
+  },
+  {
+   "id": 42,
+   "name": "Arch post south",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.85,
+      0.75,
+      0.62,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.0,
+      0.1,
+      3.0
+     ],
+     "scale": [
+      0.6,
+      6.2,
+      0.6
+     ]
+    }
+   }
+  },
+  {
+   "id": 43,
+   "name": "Arch lintel",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.85,
+      0.75,
+      0.62,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -9.0,
+      3.5,
+      0.0
+     ],
+     "scale": [
+      0.6,
+      0.6,
+      6.6
+     ]
+    }
+   }
+  }
+ ]
+}
