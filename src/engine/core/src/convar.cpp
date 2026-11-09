@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <charconv>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -48,7 +49,7 @@ bool parse_float(StringView s, f32& out) {
     if (tmp.truncated() || tmp.empty()) return false;
     char* end = nullptr;
     out = std::strtof(tmp.c_str(), &end);
-    return end == tmp.c_str() + tmp.size();
+    return end == tmp.c_str() + tmp.size() && std::isfinite(out);  // "nan", "inf" and "1e999" are not a setting
 }
 
 bool is_space(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
