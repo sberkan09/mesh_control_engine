@@ -202,3 +202,48 @@ void main() { o_color = vec4(1.0); }
     CHECK(t3.find("duplicate") != std::string::npos);
     CHECK(t3.find("at most 6") != std::string::npos);
 }
+
+TEST_CASE("shader cook: six defines cook all 64 variants; a 23-byte define name is kept, 24 is refused") {
+    const std::string root = fresh_dir("shader_cook_limits");
+    const cook::CookReport ok = cook_one(root, "six.frag.glsl", R"(#version 450 core
+// @variant A
+// @variant B
+// @variant C
+// @variant D
+// @variant E
+// @variant F
+layout(location = 0) out vec4 o_color;
+void main() { o_color = vec4(1.0); }
+)",
+                                         "5d000000-0000-4000-8000-000000000031");
+    INFO(diag_text(ok));
+    REQUIRE(ok.ok());
+
+    asset::AssetSystem assets;
+    const std::string cooked = root + "/cooked";
+    const StringView roots[] = {StringView(cooked.c_str())};
+    REQUIRE(assets.mount(Span<const StringView>(roots, 1)));
+    const asset::AssetKey key = assets.find(asset::parse_guid("5d000000-0000-4000-8000-000000000031").value());
+    REQUIRE(key != asset::kInvalidAssetKey);
+    auto h = assets.load_sync<asset::Shader>(key);
+    REQUIRE(h);
+    auto v = asset::ShaderView::read(assets.resolve(h.value()));
+    REQUIRE(v);
+    CHECK(v.value().header->define_count == 6);
+    CHECK(v.value().variants.size() == 64);
+
+    auto one_define = [&](const char* dir, const char* guid, const std::string& name) {
+        const std::string r = fresh_dir(dir);
+        const std::string src = "#version 450 core\n// @variant " + name +
+                                "\nlayout(location = 0) out vec4 o_color;\nvoid main() { o_color = vec4(1.0); }\n";
+        return cook_one(r, "name.frag.glsl", src.c_str(), guid);
+    };
+    const cook::CookReport n23 =
+        one_define("shader_cook_n23", "5d000000-0000-4000-8000-000000000032", std::string(23, 'N'));
+    INFO(diag_text(n23));
+    CHECK(n23.ok());
+    const cook::CookReport n24 =
+        one_define("shader_cook_n24", "5d000000-0000-4000-8000-000000000033", std::string(24, 'N'));
+    CHECK_FALSE(n24.ok());
+    CHECK(diag_text(n24).find("at most 23 characters") != std::string::npos);
+}

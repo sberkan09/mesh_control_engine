@@ -1,0 +1,1 @@
+- tests(asset): the shader cook at the `kMaxShaderDefines` limit: six defines cook 64 variants, a 24-byte define name is refused.
