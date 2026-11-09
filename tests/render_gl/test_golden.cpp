@@ -701,6 +701,7 @@ TEST_CASE("golden: night_sky_crescent: a waxing crescent moon and the star field
 // A calm sea (amplitude 0: a flat mirror of the sky) around the box, the ground slab 0.6 m under it (the shallow
 // tint over it, the deep one past its edge), shore foam at the box (water_day_scene, water_camera).
 TEST_CASE("golden: water_calm: a flat sea mirroring the day sky around the box") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.0f)); });
@@ -709,6 +710,7 @@ TEST_CASE("golden: water_calm: a flat sea mirroring the day sky around the box")
 
 // The default waves (four Gerstner waves, 0.4 m, 24 m) at 12.5 s under the day sky, the sun's glint in front.
 TEST_CASE("golden: water_sea: the default waves under the day sky with the sun's glint") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true, [&](Scene3D& s) { water_day_scene(s, water_carrier(0.4f)); });
@@ -718,6 +720,7 @@ TEST_CASE("golden: water_sea: the default waves under the day sky with the sun's
 // The night sky's full moon and stars (night_sky_carrier) over a gentle swell (0.05 m): the moon, its glint and the
 // stars in the water.
 TEST_CASE("golden: water_night: the moon and the stars in a gentle swell") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true,
@@ -738,6 +741,7 @@ TEST_CASE("golden: aurora_sky: aurora curtains over the starry night sky") {
 
 // The same curtains over a calm sea at night (a 0.05 m swell): the sky above the horizon and their reflection.
 TEST_CASE("golden: aurora_water: aurora curtains and their reflection on a night sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true, [&](Scene3D& s) {
@@ -760,6 +764,7 @@ TEST_CASE("golden: rainbow_sky: the primary and secondary bows over a rain-washe
 
 // The same bows over a calm sea (a 0.05 m swell): the sky above the horizon and their reflection.
 TEST_CASE("golden: rainbow_water: the bows and their reflection on a calm sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true, [&](Scene3D& s) { rainbow_water_scene(s, rainbow_carrier(), water_carrier(0.05f)); });
@@ -779,6 +784,7 @@ TEST_CASE("golden: meteor_sky: three meteor streaks over the night sky at a fixe
 
 // One streak falling toward the horizon over a calm night sea (a 0.05 m swell), and its reflection.
 TEST_CASE("golden: meteor_water: a meteor streak and its reflection on a calm night sea") {
+    const WaterOptics sky_only(false, false);  // M-WATER2: the frame from before the water reflected and refracted
     Fixture3D f;
     water_camera(f);
     f.render(0.0f, true, [&](Scene3D& s) {

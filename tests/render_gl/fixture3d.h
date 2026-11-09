@@ -13,6 +13,7 @@
 
 #include "../render/mesh_fixture.h"
 #include "mce/asset/material_translucency.h"
+#include "mce/convar.h"
 #include "mce/core.h"
 #include "mce/platform/platform.h"
 #include "mce/platform/window.h"
@@ -726,6 +727,27 @@ inline void night_sky_scene(Scene3D& s, const NightSky& night) {
 // the box standing 0.4 m out of it: a steep shore for the foam; past the slab's 6 m edge nothing is behind the water,
 // the open sea), seen from a low camera (water_camera: 2.5 m up, looking 8 degrees down, so the sea runs to the
 // horizon in the upper third of the frame).
+// M-WATER2 49c/49d: r.water.reflect and r.water.refract for one scope (both reset on exit). The water goldens and the
+// M-WATER cases whose scene stands in or lies under the water render with both off: their frames stay the ones from
+// before the scene reflected and refracted.
+struct WaterOptics {
+    WaterOptics(bool reflect, bool refract) {
+        set("r.water.reflect", reflect);
+        set("r.water.refract", refract);
+    }
+    ~WaterOptics() {
+        for (const char* n : {"r.water.reflect", "r.water.refract"})
+            if (ConVar* cv = ConVar::find(StringId(n))) cv->reset();
+    }
+    WaterOptics(const WaterOptics&) = delete;
+    WaterOptics& operator=(const WaterOptics&) = delete;
+    static void set(const char* name, bool on) {
+        ConVar* cv = ConVar::find(StringId(name));
+        REQUIRE(cv != nullptr);
+        cv->set_string(on ? "1" : "0");
+    }
+};
+
 inline void water_camera(Fixture3D& f) {
     f.look_at = {0.0f, 1.5f, 0.0f};
     f.pitch_deg = 8.0f;
