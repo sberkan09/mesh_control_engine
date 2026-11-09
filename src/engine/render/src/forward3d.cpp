@@ -67,6 +67,10 @@ MCE_CVAR(cv_taa, "r.taa", true,
 MCE_CVAR(cv_gi, "r.gi", true,
          "Irradiance-volume global illumination for scenes that ask for it (GiVolume::enabled; off = the sky's ambient)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_gi_visibility, "r.gi.visibility", true,
+         "Irradiance-volume visibility and probe classification for volumes that ask for them (GiVisibility3D); "
+         "0 = the plain lookup (the volume keeps its layout and its bake, refills once without the vis pass)",
+         CVarFlags::None);
 MCE_CVAR(cv_volumetrics, "r.volumetrics", true,
          "Volumetric fog for scenes that ask for it (Volumetrics::enabled; off = the exp² fog)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_post_fx, "r.post_fx", true,
@@ -965,7 +969,13 @@ void probe_face_views(vec3 pos, f32 near_z, f32 far_z, mat4 (&view)[6], mat4 (&v
     }
 }
 
-// The volume's contents depend on its placement, its version and its bake (or the lack of one).
+// M-GI2 50e: whether the volume's visibility runs: it asks for it and r.gi.visibility is on. The cvar switches only the
+// vis pass and the lookup's weight, never the texel layout (gi_texels_per_probe reads the carrier), so a 10-texel bake
+// is still accepted and read with the plain lookup. (50f: relocation is meant to follow the same switch.)
+bool gi_visibility_on(const GiVolume& gi) { return gi.visibility && cv_gi_visibility.get_bool(); }
+
+// The volume's contents depend on its placement, its version, its bake (or the lack of one) and whether its fill
+// captures the record's visibility (M-GI2: r.gi.visibility refills once even when the width stays).
 u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked, const f64 (&origin)[3]) {
     u64 h = 1469598103934665603ull;
     auto mix = [&h](const void* q, usize n) {
@@ -974,7 +984,8 @@ u64 gi_key(const GiVolume& gi, rhi::TextureHandle baked, const f64 (&origin)[3])
     };
     const f64 f[6] = {gi.bounds.min.x + origin[0], gi.bounds.min.y + origin[1], gi.bounds.min.z + origin[2],
                       gi.bounds.max.x + origin[0], gi.bounds.max.y + origin[1], gi.bounds.max.z + origin[2]};
-    const u32 u[6] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation};
+    const u32 u[7] = {gi.counts[0], gi.counts[1], gi.counts[2], gi.version, baked.index, baked.generation,
+                      u32(gi_visibility_on(gi)) | u32(gi.relocate) << 1};
     mix(f, sizeof(f));
     mix(u, sizeof(u));
     return h | 1u;
@@ -2681,6 +2692,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
         }
     }
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, true, stats_.gi, pu);
+    stats_.gi_visibility = stats_.gi && (u32(pu.gi_counts.w) & kGiFlagVisibility) != 0;  // M-GI2 50e
     // Volumetric fog: the integrated froxels (record_volumetrics() filled them), or a stand-in.
     if (stats_.volumetrics) {
         vol_params(scene, pu);
@@ -2987,7 +2999,7 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // (record mode 0: alpha 0) and run no vis pass.
     const u32 texels = gi_texels_per_probe(gi);
     const bool record = texels == kGiTexelsRecord && gi_probes_->fill;
-    const bool vis = record && gi.visibility && !gi_probes_->vis_pipes[0].is_null();
+    const bool vis = record && gi_visibility_on(gi) && !gi_probes_->vis_pipes[0].is_null();
     const vec3 cell = gi_cell(gi.bounds, gi.counts);
     const f32 vis_min_radius = kGiVisMinRadius * gi_spacing(cell);
     static_assert(6 * kGiMaxBatchProbes <= 256, "the vis faces' layers: at most 256 (Vulkan's and WebGPU's guarantee)");
@@ -3300,10 +3312,15 @@ rhi::TextureHandle Forward3D::bind_ambient(rhi::CommandBuffer& cmd, const Scene3
         const GiVolume& gi = scene.gi_volume();
         pu.gi = {1.0f, gi.intensity, max(gi.normal_bias, 0.0f), max(gi.fade_distance, 1e-3f)};
         pu.gi_min = vec4(gi.bounds.min, 0.0f);
-        pu.gi_max = vec4(gi.bounds.max, 0.0f);
-        // M-GI2 50d: kGiFlagRecord (gi_probes.h) when the volume stores the 10-texel record; 0 (today's index) otherwise.
-        const f32 flags = gi_texels_per_probe(gi) == kGiTexelsRecord ? f32(kGiFlagRecord) : 0.0f;
-        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), flags};
+        // M-GI2: kGiFlagRecord (gi_probes.h) when the volume stores the 10-texel record (50d), plus kGiFlagVisibility
+        // and dmax in gi_max.w when it asks for visibility (50e: the Chebyshev weight and the classification). 0 and
+        // 0 otherwise: today's lookup. The captures read the volume through here too, so the next bounce sees the
+        // same weights.
+        const bool record = gi_texels_per_probe(gi) == kGiTexelsRecord;
+        const bool visibility = record && gi_visibility_on(gi);
+        pu.gi_max = vec4(gi.bounds.max, visibility ? gi_dmax(gi_cell(gi.bounds, gi.counts)) : 0.0f);
+        const u32 flags = (record ? kGiFlagRecord : 0u) | (visibility ? kGiFlagVisibility : 0u);
+        pu.gi_counts = {f32(gi.counts[0]), f32(gi.counts[1]), f32(gi.counts[2]), f32(flags)};
         cmd.bind_texture(rhi::bank::kGiVolume, gi_volume_, point_sampler_);
     } else {
         cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);

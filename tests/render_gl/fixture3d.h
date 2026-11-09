@@ -243,6 +243,82 @@ inline void gi_wall_scene(Scene3D& s, bool gi) {
     if (gi) s.set_gi_volume(room_gi());
 }
 
+// M-GI2 50e: two rooms either side of a 0.2 m wall (mesh 62, every part a closed single-sided box). The dark room
+// (x -3..3, y 0..5, z -2..5.8, roofed) is lit only by a dim blue emissive back wall (z 5.8..6); the sunlit room on the
+// other side of the shared wall (z -2.2..-2) is open to the sky, its floor and the wall's far face in a bright sun.
+// thin_wall_gi spans both rooms with 2 m between probes (more than the wall): a plane of probes 0.4 m in front of the
+// sunlit face and one 1.4 m inside the dark room, so a floor point 0.5 m inside takes about 45 % of its trilinear weight
+// from the sunlit probes. The fixture's 1 m box is released (no probe inside it). The camera stands inside the dark
+// room looking at the shared wall.
+inline constexpr u32 kThinWallMesh = 62;
+inline constexpr f32 kThinWallZ = -2.0f;  // the shared wall's face toward the dark room
+
+inline void upload_thin_wall_rooms(Fixture3D& f) {
+    f.renderer.meshes().release(1);
+    mesh_fixture::Builder b;
+    b.add_node(-1);
+    const auto wall = [&b](vec3 lo, vec3 hi, f32 grey) {
+        mesh_fixture::Box w;
+        w.center = (lo + hi) * 0.5f;
+        w.half = (hi - lo) * 0.5f;
+        w.color[0] = w.color[1] = w.color[2] = grey;
+        b.add_box(w);
+    };
+    wall({-3.2f, 0.0f, -2.2f}, {3.2f, 5.0f, kThinWallZ}, 0.7f);  // the shared wall
+    wall({-3.2f, 0.0f, kThinWallZ}, {-3.0f, 5.0f, 5.8f}, 0.7f);  // the dark room's side walls
+    wall({3.0f, 0.0f, kThinWallZ}, {3.2f, 5.0f, 5.8f}, 0.7f);
+    wall({-3.2f, 5.0f, -2.2f}, {3.2f, 5.2f, 6.0f}, 0.7f);        // its roof
+    wall({-3.2f, 0.0f, 5.8f}, {3.2f, 5.0f, 6.0f}, 0.0f);         // its back wall, a dim blue light
+    b.submeshes.back().material.emissive[0] = 0.05f;
+    b.submeshes.back().material.emissive[1] = 0.25f;
+    b.submeshes.back().material.emissive[2] = 1.0f;
+    REQUIRE(f.renderer.meshes().upload(kThinWallMesh, 1, b.build().span()).has_value());
+    // The orbit camera at (0, 4, 4.5), 35 degrees down toward -z (as underwater_place_camera places it).
+    const f32 p = math::radians(35.0f);
+    f.pitch_deg = 35.0f;
+    f.look_at = {0.0f, 4.0f - 7.0f * std::sin(p), 4.5f - 7.0f * std::cos(p)};
+}
+
+inline void thin_wall_scene(Scene3D& s) {
+    DirectionalLight sun;
+    sun.direction = {0.0f, -1.0f, 0.6f};  // toward +z: the shared wall's far face and the sunlit floor
+    sun.intensity = 3.0f;
+    sun.ambient_sky = sun.ambient_ground = {0, 0, 0};
+    s.set_light(sun);
+    Sky sky;
+    sky.enabled = false;
+    sky.specular_ambient = 0.0f;
+    s.set_sky(sky);
+    Fog fog;
+    fog.color = {0, 0, 0};
+    s.set_fog(fog);
+    MeshInstance m;
+    m.mesh = kThinWallMesh;
+    s.add(m);
+}
+
+// Probes at x -2, 0, 2; y 0.6, 2.6, 4.6; z -4.6, -2.6 (sunlit room), -0.6, 1.4, 3.4 (dark room).
+inline GiVolume thin_wall_gi(bool visibility) {
+    GiVolume g;
+    g.enabled = true;
+    g.bounds = {{-2.0f, 0.6f, -4.6f}, {2.0f, 4.6f, 3.4f}};
+    g.counts[0] = 3;
+    g.counts[1] = 3;
+    g.counts[2] = 5;
+    g.probes_per_frame = 16;
+    g.visibility = visibility;
+    return g;
+}
+
+// The reference: the same spacing, every probe inside the dark room (z -1.8 .. 4.2).
+inline GiVolume thin_wall_inside_gi() {
+    GiVolume g = thin_wall_gi(false);
+    g.bounds.min.z = -1.8f;
+    g.bounds.max.z = 4.2f;
+    g.counts[2] = 4;
+    return g;
+}
+
 
 // M-VISUAL3 2: a 12 m tiled floor (mesh 20, just above the ground slab) whose [normal, height] array and albedo
 // carry one brick pattern, with the material both ways: `on` (parallax) and `off` (the same maps, flat).

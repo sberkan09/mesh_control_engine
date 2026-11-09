@@ -42,6 +42,36 @@ f32 gi_chebyshev(f32 r, f32 mean, f32 square) {
     return t * t * t;
 }
 
+f32 gi_visibility_weight(const GiRecord& r, f32 back_share, vec3 v, f32 dmax) {
+    if (back_share >= kGiBackfaceOff) return 0.0f;
+    const vec3 means = r.mean_pos + r.mean_neg;
+    if (means.x + means.y + means.z <= 0.0f) return 0.0f;  // a probe not captured yet
+    f32 vis = 1.0f;
+    for (u32 i = 0; i < 3; ++i) {
+        const f32 vi = axis_of(v, i);
+        const bool pos = vi >= 0.0f;
+        const f32 mean = axis_of(pos ? r.mean_pos : r.mean_neg, i) * dmax;
+        const f32 square = axis_of(pos ? r.square_pos : r.square_neg, i) * dmax * dmax;
+        vis = math::min(vis, gi_chebyshev(std::fabs(vi), mean, square));
+    }
+    return vis < kGiCrush ? vis * vis * vis / (kGiCrush * kGiCrush) : vis;
+}
+
+bool gi_blend(const f32 (&base)[8], const f32 (&vis)[8], f32 (&out)[8]) {
+    f32 vm = 0.0f, wsum = 0.0f;
+    for (u32 k = 0; k < 8; ++k) {
+        if (base[k] > 0.0f) vm = math::max(vm, vis[k]);
+        out[k] = base[k] * vis[k];
+        wsum += out[k];
+    }
+    if (vm < kGiNoProbe) {
+        for (f32& w : out) w = 0.0f;
+        return false;
+    }
+    for (f32& w : out) w /= wsum;
+    return true;
+}
+
 f32 gi_lobe_weight(vec3 d, vec3 axis) {
     const f32 c = math::max(math::dot(d, axis), 0.0f);
     const f32 c2 = c * c;

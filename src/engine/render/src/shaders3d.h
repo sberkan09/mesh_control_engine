@@ -776,13 +776,39 @@ vec3 perturb_normal(vec3 n, vec3 p, vec2 uv, vec3 ts) {
 }
 )"
 
+// M-GI2 50e: the visibility factor of one probe, the GPU twin of gi_visibility_weight (gi_probes.h; a GL test runs
+// this text alone against it). v = pb - the probe's position, dm = dmax, mp / mn = the record's mean axial distances in
+// the lobes around +x +y +z / -x -y -z (texels 4, 5; normalised by dmax), sp / sn = the mean squares (texels 6, 7), bf =
+// the back-face share (texel 9 r). Per axis, the point's distance along it (|v_i|) against the lobe on v's side
+// (step(0, v) picks the + lobe for v_i >= 0, as the CPU does): 1 at or in front of the mean, else Chebyshev's bound
+// cubed, the variance at least kGiMinVariance (1e-3 m^2); the smallest of the three; a factor under kGiCrush (0.2)
+// crushed to vis^3 / 0.04; a share at or above kGiBackfaceOff (0.25) gives 0, and so does an all-zero record (a probe
+// of a cleared volume not captured yet: every captured probe has positive means). v = 0 (pb on the probe) gives 1; the
+// denominators are at least 1e-3.
+#define MCE_GLSL_GI_VIS R"(
+float gi_vis(vec3 v, float dm, vec3 mp, vec3 mn, vec3 sp, vec3 sn, float bf) {
+    vec3 a = abs(v), s = step(0.0, v), mu = mix(mn, mp, s) * dm;
+    vec3 va = max(mix(sn, sp, s) * dm * dm - mu * mu, 1e-3), t = va / (va + (a - mu) * (a - mu));
+    t = mix(t * t * t, vec3(1.0), step(a, mu));
+    float vis = min(min(t.x, t.y), t.z);
+    return bf >= 0.25 || dot(mp + mn, vec3(1.0)) <= 0.0 ? 0.0 : vis < 0.2 ? vis * vis * vis / 0.04 : vis;
+}
+)"
+
 // The lit stage's irradiance-volume lookup (spliced into MCE_GLSL_MESH_FS where it stood):
 // ---- the irradiance volume (M-VISUAL 6): 4 texels per probe, the probe's light at the tetrahedron
 // directions kGiTetra (each the sphere integral of L * (1 + w.d) / 4pi). E(n) / pi = sum V_k (1/4 + 3/2 d_k.n)
 // is the L1 irradiance of the probe's view; the 8 probes around a point blend by trilinear weight
 // times a smooth backface term (a probe behind the surface counts little).
 // M-GI2 50d: bit 1 of p_gi_counts.w (kGiFlagRecord, gi_probes.h) is the 10-texel layout (texels 4..9 the probe's
-// record, read from 50e on): the probe's first texel is c.x * T. Without the flag T = 4, today's index.
+// record): the probe's first texel is c.x * T. Without the flag T = 4, today's index.
+// M-GI2 50e: bit 2 (kGiFlagVisibility) multiplies each probe's weight by gi_vis (MCE_GLSL_GI_VIS, above) of the
+// normal-biased lookup point pb (the point the cell is chosen from) seen from the probe, with p_gi_max.w = dmax. "No
+// probe left": when no probe with a positive trilinear weight has a factor of at least kGiNoProbe (1e-4; vm, the
+// largest), the lookup returns a = 0 and the sky's ambient applies there, as outside the box. The rule reads the
+// factors, not the summed weights, so it does not depend on the cell size; otherwise the sums are divided by wsum
+// itself (at least the surviving probe's weight, > 0), so a small surviving weight is not dimmed. Without the flag the
+// statements give today's values: wsum >= 0.05 there, so dividing by it equals today's max(wsum, 1e-6).
 // gi_irradiance: rgb = irradiance / pi at p along n; a: how much of it applies (1 inside the box, 0 past the fade).
 #define MCE_GLSL_GI_LOOKUP R"(
 layout(binding = 5) uniform sampler2D u_gi;
@@ -801,6 +827,7 @@ void sh_irradiance2(vec3 n, out vec3 front, out vec3 back) {
     front = max(even + odd, vec3(0.0));
     back = max(even - odd, vec3(0.0));
 }
+)" MCE_GLSL_GI_VIS R"(
 vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
     back = vec3(0.0);
     vec3 bmin = p_gi_min.xyz, bmax = p_gi_max.xyz;
@@ -808,13 +835,13 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
     float fade = clamp(1.0 + min(min(inside.x, inside.y), inside.z) / max(p_gi.w, 1e-3), 0.0, 1.0);
     if (fade <= 0.0) return vec4(0.0);
     ivec3 counts = ivec3(p_gi_counts.xyz);
-    int T = (int(p_gi_counts.w) & 1) != 0 ? 10 : 4;
+    int fl = int(p_gi_counts.w), T = (fl & 1) != 0 ? 10 : 4;
     vec3 cell = (bmax - bmin) / vec3(counts - 1);
-    vec3 g = (clamp(p + n * p_gi.z, bmin, bmax) - bmin) / cell;
+    vec3 pb = clamp(p + n * p_gi.z, bmin, bmax), g = (pb - bmin) / cell;
     ivec3 base = clamp(ivec3(floor(g)), ivec3(0), counts - 2);
     vec3 f = clamp(g - vec3(base), 0.0, 1.0);
     vec3 sum = vec3(0.0), bsum = vec3(0.0);
-    float wsum = 0.0;
+    float wsum = 0.0, vm = 0.0;
     for (int i = 0; i < 8; ++i) {
         ivec3 o = ivec3(i & 1, (i >> 1) & 1, i >> 2);
         vec3 tw = mix(1.0 - f, f, vec3(o));
@@ -825,6 +852,13 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
         w *= b * b + 0.05;
         ivec3 c = base + o;
         ivec2 t = ivec2(c.x * T, c.y + int(p_gi_counts.y) * c.z);
+        if ((fl & 2) != 0) {
+            float v = gi_vis(pb - bmin - vec3(c) * cell, p_gi_max.w, texelFetch(u_gi, t + ivec2(4, 0), 0).rgb,
+                             texelFetch(u_gi, t + ivec2(5, 0), 0).rgb, texelFetch(u_gi, t + ivec2(6, 0), 0).rgb,
+                             texelFetch(u_gi, t + ivec2(7, 0), 0).rgb, texelFetch(u_gi, t + ivec2(9, 0), 0).r);
+            vm = w > 0.0 ? max(vm, v) : vm;
+            w *= v;
+        }
         vec3 e = vec3(0.0), eb = vec3(0.0);
         for (int k = 0; k < 4; ++k) {
             vec3 q = texelFetch(u_gi, t + ivec2(k, 0), 0).rgb;
@@ -836,8 +870,9 @@ vec4 gi_irradiance2(vec3 p, vec3 n, out vec3 back) {
         bsum += max(eb, vec3(0.0)) * w;
         wsum += w;
     }
-    back = bsum / max(wsum, 1e-6);
-    return vec4(sum / max(wsum, 1e-6), fade);
+    if ((fl & 2) != 0 && vm < 1e-4) return vec4(0.0);
+    back = bsum / wsum;
+    return vec4(sum / wsum, fade);
 }
 vec4 gi_irradiance(vec3 p, vec3 n) {
     vec3 b;
@@ -3160,9 +3195,11 @@ void main() {
 // L * (1 + w.d_k) / 4pi over the faces' texels (solid angle 1 / (1 + u² + v²)^1.5). Drawn over the
 // batch's rows only, alpha = the new value's weight (alpha blending keeps the rest of the old one).
 // M-GI2 50d: g_size.w texels per probe (T, 4 or 10). With T = 10, texels 4..9 are the probe's record (gi_probes.h):
-// the vis faces' signed distances d (u_vis, kGiVisFS; negative on a back face), clamped to dmax (g_vis.x) and
-// normalised, in cosine^4 lobes (kGiVisLobePower, written as two squarings) around +x, +y, +z (texels 4: mean, 6: mean
-// square) and -x, -y, -z (5, 7); texel 8 the relocation offset (0.5: none); texel 9 r the back-face share. g_params.w
+// the vis faces' signed distances d (u_vis, kGiVisFS; negative on a back face) as the hit's distance ALONG each lobe's
+// axis (|d| times the cosine to the axis; M-GI2 50e: a plane across the axis then reads its own distance with no
+// spread), clamped to dmax (g_vis.x) and normalised, in cosine^4 lobes (kGiVisLobePower, written as two squarings)
+// around +x, +y, +z (texels 4: mean, 6: mean square) and -x, -y, -z (5, 7); texel 8 the relocation offset (0.5: none);
+// texel 9 r the back-face share. g_params.w
 // is the record's mode: 0 a rolling update (alpha 0 leaves texels 4..9 bit for bit), 1 a fill from the vis faces,
 // 2 a fill without them (nothing hit, no back face). Texels 0..3 are the same statements as with T = 4.
 constexpr const char* kGiProjectFS = R"(#version 450 core
@@ -3201,8 +3238,8 @@ vec4 record(int k, int layer, int res) {
                 float r = texelFetch(u_vis, ivec3(i, j, layer + f), 0).r;
                 back += r < 0.0 ? w : 0.0;
                 wsum += w;
-                float a = min(abs(r), g_vis.x) / g_vis.x;
                 vec3 c = max(d * sgn, 0.0);
+                vec3 a = min(abs(r) * c, g_vis.x) / g_vis.x;
                 c *= c;
                 c *= c * w;
                 lsum += c;

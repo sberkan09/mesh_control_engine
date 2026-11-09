@@ -86,6 +86,116 @@ TEST_CASE("gi_chebyshev: 1 in front of the mean, monotonic and cubed past it, fi
     CHECK(z < 1e-6f);
 }
 
+TEST_CASE("gi_visibility_weight: Chebyshev per axis, the smallest, crushed below kGiCrush, 0 at the back-face threshold") {
+    GiRecord r;  // every lobe: mean 0.5, square 0.25 + 0.01 (of dmax = 2 m: mean 1 m, variance 0.04 m^2)
+    r.mean_pos = r.mean_neg = {0.5f, 0.5f, 0.5f};
+    r.square_pos = r.square_neg = {0.26f, 0.26f, 0.26f};
+    const f32 dmax = 2.0f;
+    // In front of the nearest surface: 1, in any direction; r = 0 (the point on the probe): 1.
+    CHECK(gi_visibility_weight(r, 0.0f, {0.9f, 0, 0}, dmax) == 1.0f);
+    CHECK(gi_visibility_weight(r, 0.0f, {0, -0.5f, 0.5f}, dmax) == 1.0f);
+    CHECK(gi_visibility_weight(r, 0.0f, {0, 0, 0}, dmax) == 1.0f);
+    // Just past the mean: Chebyshev above the crush, unchanged.
+    const f32 near = gi_chebyshev(1.05f, 1.0f, 0.26f * 4.0f);
+    REQUIRE(near > kGiCrush);
+    CHECK(gi_visibility_weight(r, 0.0f, {0, 0, 1.05f}, dmax) == doctest::Approx(near).epsilon(1e-6));
+    // Well past it: crushed to vis^3 / kGiCrush^2, smaller than the bound, never 0 before it underflows.
+    const f32 far = gi_chebyshev(1.6f, 1.0f, 0.26f * 4.0f);
+    REQUIRE(far < kGiCrush);
+    const f32 crushed = gi_visibility_weight(r, 0.0f, {-1.6f, 0, 0}, dmax);
+    CHECK(crushed == doctest::Approx(far * far * far / (kGiCrush * kGiCrush)).epsilon(1e-5));
+    CHECK(crushed < far);
+    CHECK(crushed > 0.0f);
+    // Continuous at the crush: kGiCrush maps to itself.
+    CHECK(kGiCrush * kGiCrush * kGiCrush / (kGiCrush * kGiCrush) == doctest::Approx(kGiCrush).epsilon(1e-6));
+    // Classification: a share at or above kGiBackfaceOff weighs 0, even in front of the surface; just under, it counts.
+    CHECK(gi_visibility_weight(r, kGiBackfaceOff, {0.1f, 0, 0}, dmax) == 0.0f);
+    CHECK(gi_visibility_weight(r, 1.0f, {0.1f, 0, 0}, dmax) == 0.0f);
+    CHECK(gi_visibility_weight(r, 0.249f, {0.1f, 0, 0}, dmax) == 1.0f);
+    // Direction-dependent: a wall 0.2 m away along +z (mean 0.1 of dmax, no spread), open (1) elsewhere.
+    GiRecord wall;
+    wall.mean_pos.z = 0.1f;
+    wall.square_pos.z = 0.01f;
+    CHECK(gi_visibility_weight(wall, 0.0f, {0, 0, 1.0f}, dmax) < 1e-6f);  // behind the wall
+    CHECK(gi_visibility_weight(wall, 0.0f, {0, 0, -1.0f}, dmax) == 1.0f);  // the open side
+    CHECK(gi_visibility_weight(wall, 0.0f, {1.0f, 0, 0}, dmax) == 1.0f);
+    // Behind the wall but well off to the side (the plan's d_i^2 blend of the side lobes let this one through): the
+    // distance along +z decides.
+    CHECK(gi_visibility_weight(wall, 0.0f, {1.5f, 0.3f, 1.0f}, dmax) < 1e-6f);
+    CHECK(gi_visibility_weight(wall, 0.0f, {1.5f, 0.3f, 0.15f}, dmax) == 1.0f);  // in front of it, off to the side
+    // A degenerate record (all zero: a probe on a surface) stays finite everywhere.
+    const GiRecord zero{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    for (const vec3 v : {vec3{0, 0, 0}, vec3{1e-7f, 0, 0}, vec3{0.3f, -0.2f, 0.1f}, vec3{-5, 5, 5}}) {
+        const f32 w = gi_visibility_weight(zero, 0.0f, v, dmax);
+        CHECK(std::isfinite(w));
+        CHECK(w >= 0.0f);
+        CHECK(w <= 1.0f);
+    }
+}
+
+TEST_CASE("gi_visibility_weight: an all-zero record (a probe not captured yet) weighs 0") {
+    const GiRecord zero{{0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    CHECK(gi_visibility_weight(zero, 0.0f, {0, 0, 0}, 2.0f) == 0.0f);
+    CHECK(gi_visibility_weight(zero, 0.0f, {0.5f, 0, 0}, 2.0f) == 0.0f);
+    GiRecord one_lobe = zero;  // a captured probe has some positive mean
+    one_lobe.mean_neg.y = 0.05f;
+    one_lobe.square_neg.y = 0.0025f;
+    CHECK(gi_visibility_weight(one_lobe, 0.0f, {0, -0.05f, 0}, 2.0f) == 1.0f);
+}
+
+TEST_CASE("gi_blend: no probe left by the factors, whatever the cell size; a small surviving weight is not dimmed") {
+    // A corridor along z, 1.2 m wide (|x| < 0.6) between thin tall walls (|x| 0.6 .. 0.8), narrower than the probe
+    // spacing: both probe planes stand outside its walls, at x = -cell/2 and +cell/2. Each probe's record reads the near
+    // wall's face across x on the corridor's side (axial distance, no spread) and nothing elsewhere. A point on the
+    // corridor's floor is behind a wall from every probe: no probe left for 2 m cells and for 16 m cells alike.
+    for (const f32 cx : {2.0f, 16.0f}) {
+        INFO("cell " << cx);
+        const vec3 cell{cx, 2.0f, cx};
+        const f32 dmax = gi_dmax(cell);
+        const vec3 pb{0.2f, 0.25f, 0.3f};
+        f32 base[8], vis[8], out[8];
+        for (u32 k = 0; k < 8; ++k) {
+            const vec3 o{f32(k & 1), f32((k >> 1) & 1), f32(k >> 2)};
+            const vec3 q{(o.x - 0.5f) * cx, o.y * 2.0f, (o.z - 0.5f) * cx};
+            GiRecord r;
+            const f32 face = (cx * 0.5f - 0.8f) / dmax;  // the wall's outer face, toward the corridor
+            if (o.x > 0.5f) {
+                r.mean_neg.x = face;
+                r.square_neg.x = face * face;
+            } else {
+                r.mean_pos.x = face;
+                r.square_pos.x = face * face;
+            }
+            const vec3 g = (pb - vec3{-0.5f * cx, 0.0f, -0.5f * cx}) / cell;
+            const vec3 tw{o.x > 0.5f ? g.x : 1.0f - g.x, o.y > 0.5f ? g.y : 1.0f - g.y, o.z > 0.5f ? g.z : 1.0f - g.z};
+            base[k] = tw.x * tw.y * tw.z * 0.6f;  // times a backface term
+            vis[k] = gi_visibility_weight(r, 0.0f, pb - q, dmax);
+            CHECK(base[k] > 0.0f);
+            CHECK(vis[k] < kGiNoProbe);
+        }
+        CHECK_FALSE(gi_blend(base, vis, out));
+        for (const f32 w : out) CHECK(w == 0.0f);
+    }
+    // A surviving probe whose weight is far under 1e-6 (a tiny trilinear share) carries the point alone, undimmed.
+    const f32 base[8] = {5e-7f, 0.3f, 0.2f, 0.1f, 0.1f, 0.1f, 0.1f, 0.1f};
+    const f32 vis[8] = {1.0f, 0, 0, 0, 0, 0, 0, 0};
+    f32 out[8];
+    REQUIRE(gi_blend(base, vis, out));
+    CHECK(out[0] == 1.0f);
+    for (u32 k = 1; k < 8; ++k) CHECK(out[k] == 0.0f);
+    // A probe with no trilinear weight does not keep the point lit, however visible.
+    const f32 base0[8] = {0.0f, 0.5f, 0.5f, 0, 0, 0, 0, 0};
+    const f32 vis0[8] = {1.0f, 1e-6f, 0.0f, 0, 0, 0, 0, 0};
+    CHECK_FALSE(gi_blend(base0, vis0, out));
+    // All visible: the plain normalised weights.
+    const f32 ones[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+    REQUIRE(gi_blend(base, ones, out));
+    f32 total = 0.0f;
+    for (u32 k = 0; k < 8; ++k) total += out[k];
+    CHECK(total == doctest::Approx(1.0f).epsilon(1e-6));
+    CHECK(out[1] == doctest::Approx(0.3f / (1.0f + 5e-7f)).epsilon(1e-5));
+}
+
 TEST_CASE("gi_lobe_weight, gi_cell, gi_dmax, gi_spacing") {
     CHECK(gi_lobe_weight({1, 0, 0}, {1, 0, 0}) == 1.0f);
     CHECK(gi_lobe_weight({-1, 0, 0}, {1, 0, 0}) == 0.0f);

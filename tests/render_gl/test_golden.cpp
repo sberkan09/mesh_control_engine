@@ -416,6 +416,22 @@ TEST_CASE("golden: sunlight bounced off the ground lights the box's unlit face")
     check_golden("gi_bounce", f);
 }
 
+// M-GI2 50e: inside the dark room of upload_thin_wall_rooms, looking at the 0.2 m wall it shares with a sunlit room;
+// the volume spans both rooms with 2 m between probes. With its visibility record the sunlit room's probes no longer
+// light the dark room's floor and wall: only the dim blue light of the dark room's back wall reaches them.
+TEST_CASE("golden: a thin wall between a sunlit and a dark room: the volume's visibility stops the light leaking") {
+    Fixture3D f;
+    upload_thin_wall_rooms(f);
+    const auto scene = [](Scene3D& s) {
+        thin_wall_scene(s);
+        s.set_gi_volume(thin_wall_gi(true));
+    };
+    for (int i = 0; i < 8; ++i) f.render(0.0f, true, scene);
+    CHECK(f.renderer.forward_3d().last_stats().gi);
+    CHECK(f.renderer.forward_3d().last_stats().gi_visibility);
+    check_golden("gi_thin_wall", f);
+}
+
 // ---- M-VISUAL 7: atmosphere and volumetric fog -------------------------------------------------
 
 TEST_CASE("golden: the physically based sky at sunset lights the scene through its IBL") {
