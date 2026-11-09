@@ -845,7 +845,11 @@ bool water_camera_above(const WaterSurface& w, const f64 origin[3], vec3 camera)
 // authored: the shader derives Q = min(1, steepness / (count k A)) per wave as the kit does. An amplitude of 0 (the
 // Low tier, or calm water) uploads no waves (count 0): a flat mirror. `depth_read`: the opaque depth is bound at
 // bank 6 (p_water4.w). `reflect` / `refract` (M-WATER2 49d / 49c): the trace and the refraction run, reading the copy
-// of the opaque frame at bank 7 (p_water6; record_main decides, and only with the depth read).
+// of the opaque frame at bank 7 (p_water6; record_main decides, and only with the depth read). The current
+// (M-WATER2 49f, `flow`, m/s on xz, clamped to -5..5 per component, NaN 0) Doppler-shifts every wave and both detail
+// ripples: water_flow_cycles(K, flow) whole cycles per kWaterPeriod are added to the wave's own (kit::
+// water_wave_set_flow, the same rounding), so every frequency stays a whole multiple of 2 pi / kWaterPeriod and the
+// wrapped clock still repeats. A zero flow adds 0 cycles: exactly the phases without a current. No shader change.
 void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, bool reflect, bool refract, PassU& pu) {
     using detail::ranged;
     const f32 level = ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
@@ -869,6 +873,7 @@ void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, b
     refract = refract && depth_read;
     pu.water6 = vec4(reflect ? 1.0f : 0.0f, refract ? 1.0f : 0.0f, reflect || refract ? 1.0f : 0.0f, 0.0f);
     if (!waves) return;
+    const vec2 flow{ranged(w.flow.x, -5.0f, 5.0f, 0.0f), ranged(w.flow.y, -5.0f, 5.0f, 0.0f)};
     const f64 base = kTau64 / kWaterPeriod;
     const f32 main_deg = math::degrees(std::atan2(wind.y, wind.x));
     for (u32 i = 0; i < count; ++i) {
@@ -876,7 +881,8 @@ void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, b
         const f32 dx = std::cos(a), dz = std::sin(a);
         const f32 k = static_cast<f32>(kTau64) / (len * kWaterLenRatio[i]);
         const f64 omega = f64(speed) * f64(std::sqrt(kWaterGravity * k));
-        const f64 mult = omega > 0.0 ? std::max(1.0, std::round(omega / base)) : 0.0;
+        const f64 mult = (omega > 0.0 ? std::max(1.0, std::round(omega / base)) : 0.0) +
+                         water_flow_cycles(vec2{k * dx, k * dz}, flow);
         // omega * t mod 2 pi = 2 pi * frac(mult * t / period): exact for the whole multiple, in f64
         const f64 turns = mult * t / kWaterPeriod;
         const f64 phase = f64(kWaterPhaseSeed[i]) + f64(k) * (f64(dx) * origin[0] + f64(dz) * origin[2]) -
@@ -887,7 +893,8 @@ void water_params(const WaterSurface& w, const f64 origin[3], bool depth_read, b
     for (u32 j = 0; j < 2; ++j) {
         const WaterDetail& d = kWaterDetail[j];
         const f32 k = static_cast<f32>(kTau64) / d.wavelength;
-        const f64 cycles = speed > 0.0f ? std::max(1.0, std::round(f64(speed) * d.cycles)) : 0.0;
+        const f64 cycles = (speed > 0.0f ? std::max(1.0, std::round(f64(speed) * d.cycles)) : 0.0) +
+                           water_flow_cycles(vec2{k * d.x, k * d.z}, flow);
         const f64 turns = cycles * t / kWaterPeriod;
         ph[j] = wrap_tau(f64(k) * (f64(d.x) * origin[0] + f64(d.z) * origin[2]) - kTau64 * (turns - std::floor(turns)));
     }

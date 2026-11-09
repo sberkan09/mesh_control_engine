@@ -5,7 +5,9 @@
 // normals are kit::water_normal's (a sky that encodes the reflected ray's direction in its colour, against the kit
 // helper at every probe pixel); the Low tier is flat and foamless; foam lies only within foam_width_m of the opaque
 // surface behind the water; geometry in front still occludes it; a floating-origin shift and the wrapped clock leave
-// the pattern where it is; a one-degree camera turn keeps the glint's light steady (no crawl). One frame per render.
+// the pattern where it is; a one-degree camera turn keeps the glint's light steady (no crawl). M-WATER2 49f: with a
+// current the drawn normals are kit::water_normal's over kit::water_wave_set_flow, the frame repeats after 64 s, a
+// rebase leaves the flowing pattern where it is, and a zero current is the frame without one. One frame per render.
 
 #include <doctest/doctest.h>
 
@@ -15,6 +17,7 @@
 #include "fixture3d.h"
 #include "mce/convar.h"
 #include "mce/kit/water.h"
+#include "mce/kit/water_flow.h"
 #include "mce/render/quality.h"
 
 using namespace mce;
@@ -442,5 +445,113 @@ TEST_CASE("render3d_gl: the water's sun glint keeps its light under a slow camer
     MESSAGE("glint flux over a one-degree turn: " << lo << " .. " << hi);
     REQUIRE(lo > 0.0);
     CHECK(hi / lo < 1.05);  // measured 1.018
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: with a current the drawn normals are the kit's flowing ones (M-WATER2 49f)") {
+    const WaterOptics sky_only(false, false);  // as the still probe above: the sign sky alone, through the reflection
+    Fixture3D f;
+    f.look_at = {0.0f, 2.0f, 0.0f};
+    f.pitch_deg = 80.0f;
+    const u32 sky_tex = upload_sign_sky(f);
+    const f32 wind_deg = 130.0f;
+    kit::WaterFlow current;
+    current.dir_deg = 40.0f;
+    current.speed = 2.5f;
+    const math::vec2 velocity = kit::water_flow_velocity(&current);
+    const auto sea = [&](f32 time, math::vec2 flow) {
+        WaterSurface w = water_carrier(0.5f, time);
+        w.level_y = 2.0f;
+        w.wavelength = 12.0f;
+        w.foam_amount = 0.0f;
+        w.shallow_color = w.deep_color = {0.0f, 0.0f, 0.0f};
+        const f32 rad = math::radians(wind_deg);
+        w.wind_dir = {std::cos(rad), std::sin(rad)};
+        w.flow = flow;
+        return w;
+    };
+    const auto draw = [&](const WaterSurface& w) {
+        return draw_water(f, &w, [&](Scene3D& s) {
+            no_sun(s);
+            Sky sky = constant_sky(0.0f, false);
+            sky.texture = sky_tex;
+            sky.texture_intensity = 40.0f;
+            s.set_sky(sky);
+            s.set_exposure(1.0f);
+        });
+    };
+    for (const f32 time : {3.0f, 21.5f, 50.25f}) {
+        const WaterSurface w = sea(time, velocity);
+        const Array<u8> frame = draw(w);
+        const Array<vec3> dirs = ray_dirs(f);
+        const kit::Water kw = kit_water(w, wind_deg);
+        const kit::WaterWaveSet set = kit::water_wave_set_flow(kw, wind_deg, velocity);
+        const kit::WaterWaveSet still = kit::water_wave_set(kw, wind_deg);
+        u32 probes = 0, agree = 0, still_agree = 0;
+        for (u32 y = 4; y + 4 < kH; y += 3)
+            for (u32 x = 4; x + 4 < kW; x += 3) {
+                const usize p = usize(y) * kW + x;
+                vec3 at;
+                if (!on_plane(f, dirs[p], w.level_y, at)) continue;
+                const vec3 v = -dirs[p];
+                const vec3 n = kit::water_normal(set, math::vec2{at.x, at.z}, w.time);
+                const vec3 n0 = kit::water_normal(still, math::vec2{at.x, at.z}, w.time);
+                const vec3 r = n * (2.0f * math::dot(n, v)) - v;
+                const vec3 r0 = n0 * (2.0f * math::dot(n0, v)) - v;
+                if (std::fabs(r.x) < 0.12f || std::fabs(r.z) < 0.12f) continue;  // near a colour edge of the sky
+                ++probes;
+                const bool red = frame[p * 4] > 128, green = frame[p * 4 + 1] > 128;
+                agree += (red == (r.x > 0.0f) && green == (r.z > 0.0f)) ? 1u : 0u;
+                still_agree += (red == (r0.x > 0.0f) && green == (r0.z > 0.0f)) ? 1u : 0u;
+            }
+        MESSAGE("t " << time << " s, current (" << velocity.x << ", " << velocity.y << ") m/s: " << agree << " of "
+                     << probes << " probes agree with the kit's flowing normals (" << still_agree
+                     << " with the still ones)");
+        REQUIRE(probes > 300);
+        CHECK(f64(agree) > 0.97 * f64(probes));
+        CHECK(f64(still_agree) < 0.85 * f64(probes));  // the current does move the pattern: the probe is not vacuous
+        // the period: 64 s (and 6400 s) later is the same frame bit for bit with the current
+        CHECK(same(draw(sea(time + 64.0f, velocity)), frame));
+        CHECK(same(draw(sea(time + 6400.0f, velocity)), frame));
+    }
+    // a zero current, a negative zero and one too slow for a whole cycle in 64 s are the frame without a current
+    const Array<u8> none = draw(sea(21.5f, {0.0f, 0.0f}));
+    CHECK(same(draw(sea(21.5f, {-0.0f, -0.0f})), none));
+    CHECK(same(draw(sea(21.5f, {1.0e-5f, -1.0e-5f})), none));
+    CHECK(same(draw(sea(21.5f, {std::nanf(""), std::nanf("")})), none));  // NaN counts as no current
+    CHECK_FALSE(same(draw(sea(21.5f, velocity)), none));
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: a floating-origin rebase leaves the flowing pattern where it is (M-WATER2 49f)") {
+    Fixture3D f;
+    water_camera(f);
+    WaterSurface w = water_carrier(0.4f, 12.5f);
+    w.flow = {1.5f, -0.75f};
+    const auto draw = [&](const std::function<void(Scene3D&)>& more = {}) {
+        f.render(0.0f, false, [&](Scene3D& sc) {
+            water_day_scene(sc, w);
+            if (more) more(sc);
+        });
+        return f.pixels;
+    };
+    const Array<u8> home = draw();
+    const vec3 shift{1000.0f, 0.0f, 1000.0f};
+    f.world_offset = -shift;
+    const Array<u8> unannounced = draw();
+    const Array<u8> shifted = draw([&](Scene3D& s) { s.set_origin_shift(shift); });
+    f.world_offset = {0.0f, 0.0f, 0.0f};
+    const Array<vec3> dirs = ray_dirs(f);
+    const auto moved = [&](const Array<u8>& x) {
+        u32 n = 0;
+        for (usize p = 0; p < dirs.size(); ++p)
+            if (dirs[p].y < 0.0f && std::fabs(luma(home, p * 4) - luma(x, p * 4)) > 8.0) ++n;
+        return n;
+    };
+    const u32 m_shift = moved(shifted), m_control = moved(unannounced);
+    MESSAGE("flowing water pixels moved by more than 8 luma after a 1000 m rebase: " << m_shift << " (unannounced "
+                                                                                     << m_control << ")");
+    CHECK(m_shift < 200);
+    CHECK(m_control > 5 * m_shift + 500);
     CHECK(f.device->validation_error_count() == 0);
 }
