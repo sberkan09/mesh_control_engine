@@ -2217,6 +2217,10 @@ void Forward3D::record_probes(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);  // captures take no SSAO (PassU::ao.x = 0)
             cmd.bind_texture(rhi::bank::kSsr, ao_off_, linear_clamp_);  // nor reflections (PassU::ssr.x = 0)
             cmd.bind_texture(rhi::bank::kGiVolume, ao_off_, point_sampler_);  // nor the volume (PassU::gi.x = 0)
+            // Nor the fog (PassU::vol.x = 0), but kMeshFS and kSkyFS declare u_vol: Metal's validation wants every
+            // declared texture and sampler bound, and on a scene's first frame nothing has bound bank 4 yet (this runs
+            // before bind_main_state). M-METAL-HOSTED found it: "missing Sampler binding at index 4 for u_volSmplr[0]".
+            cmd.bind_texture(rhi::bank::kVolumetrics, ao_off_, linear_clamp_);
             cmd.set_storage_data(rhi::bank::kClusters, rhi::as_bytes(kNoRange));
             cmd.set_storage_data(rhi::bank::kLightIndices, rhi::as_bytes(kNoIndex));
             cmd.set_storage_data(rhi::bank::kLightPool, rhi::as_bytes(kNoLight));
@@ -3000,6 +3004,9 @@ u32 Forward3D::gi_capture(rhi::CommandBuffer& cmd, const Scene3D& scene, u32 fir
     // The captures read the volume as it stands (zeros while it fills): each update adds a bounce.
     const rhi::TextureHandle sky_tex = bind_ambient(cmd, scene, false, true, pu);
     bind_local_shadows(cmd, scene, pu);
+    // No decals in the captures, but the lit shader declares their three textures and records: on a scene's first frame
+    // (record_gi runs before bind_main_state) banks 0 to 2 are otherwise unbound, which Metal's validation rejects.
+    bind_decals(cmd, scene, false);
     pu.local.y = f32(gi_shadow_layer_);  // cascade 0 is the volume's fit
     translucency_params(desc_.translucency, pu);  // M-TRANSLUCENT 41d: as the main pass
     cmd.bind_texture(rhi::bank::kAo, ao_off_, linear_clamp_);
