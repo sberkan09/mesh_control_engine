@@ -1,5 +1,6 @@
 #include "mce/input/script.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -29,7 +30,7 @@ bool parse_f32(StringView s, f32& out) {
     if (tmp.truncated() || tmp.empty()) return false;
     char* end = nullptr;
     out = std::strtof(tmp.c_str(), &end);
-    return end == tmp.c_str() + tmp.size();
+    return end == tmp.c_str() + tmp.size() && std::isfinite(out);  // "nan", "inf" and "1e999" are not input values
 }
 
 // "1", "1,0", "true", "false", "0.5"; `held` is false only for false / off.

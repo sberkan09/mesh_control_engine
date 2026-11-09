@@ -198,3 +198,12 @@ TEST_CASE("input script: an action name of 31 bytes is kept whole, 32 is refused
     CHECK_FALSE(line.parse("1 " + s32 + "\n").has_value());
     CHECK(line.segments().empty());
 }
+
+TEST_CASE("input script: a value that is not a finite number (nan, inf, 1e999) is a parse error") {
+    InputScript s;
+    CHECK(s.parse("5 Move=1e30,-1e30\n").has_value());  // large but finite
+    for (const char* text : {"5 Move=nan\n", "5 Move=inf\n", "5 Move=-inf\n", "5 Move=1e999\n", "5 Move=0.5,nan\n", "5 Move=infinity,0\n"}) {
+        InputScript bad;
+        CHECK_FALSE(bad.parse(text).has_value());
+    }
+}

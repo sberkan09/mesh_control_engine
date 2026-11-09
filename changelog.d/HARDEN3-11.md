@@ -1,1 +1,1 @@
-- Tests: `timed_light_ramp` now has a direct case: fades up and down, wraps midnight and the clock, hard edge with no fade, always on when the hours match.
+- input: `InputScript::parse` and `read_bindings` now refuse a value that is not a finite number (`nan`, `inf`, `1e999`) instead of feeding it to the game as an axis, a scale or a dead zone.

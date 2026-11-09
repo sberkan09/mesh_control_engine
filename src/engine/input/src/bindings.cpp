@@ -1,6 +1,7 @@
 #include "mce/input/bindings.h"
 
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -93,7 +94,8 @@ bool parse_field(const refl::FieldRecord& f, void* obj, StringView text) {
         }
         case FieldKind::F32: {
             const f32 v = std::strtof(s, &end);
-            if (end == s || *end) return false;
+            if (end == s || *end || !std::isfinite(v))
+                return false;  // "nan", "inf" and "1e999" are not a scale or a dead zone
             store(v);
             return true;
         }

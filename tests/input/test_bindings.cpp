@@ -155,4 +155,11 @@ TEST_CASE("bindings: a number that does not fit its field is a bad value, not a 
     // A value of 64 bytes or more is cut by the parse buffer: the cut text must not read as a shorter number.
     CHECK_FALSE(read("code = 1" + std::string(62, ' ') + "x"));
     CHECK_FALSE(read("code = " + std::string(63, '0') + "1x"));
+    // A float field must be finite: nan, inf and an overflowing exponent are bad values.
+    CHECK(read("scale = -2.5"));
+    CHECK(out.back().scale == -2.5f);
+    CHECK_FALSE(read("scale = nan"));
+    CHECK_FALSE(read("scale = inf"));
+    CHECK_FALSE(read("dz_inner = -inf"));
+    CHECK_FALSE(read("dz_outer = 1e999"));
 }
