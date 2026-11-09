@@ -440,11 +440,30 @@ struct GiVolume {
     // False (the Low tier): never captured at runtime. With a bake the volume holds the bake; without
     // one the scene draws without global illumination.
     bool updates = true;
+    // M-GI2 (carrier fields; nothing reads them until the later steps). The first three each add a
+    // record to every probe (6 texels), which fixes what the comment above warns about:
+    // `visibility`: the lookup weights each probe by a Chebyshev test of its stored distances, so light
+    //   no longer leaks through walls thinner than the probe spacing;
+    // `relocate`: a probe found inside geometry is moved out along its free direction (up to
+    //   `max_offset` of a cell), so buried probes stop darkening what is near them;
+    // `follow`: the volume's box follows the camera in whole cells (toroidal storage), so one volume
+    //   covers an open world (needs `updates`).
+    bool visibility = false;
+    bool relocate = false;
+    f32 max_offset = 0.4f;  // cells; apply_quality clamps to 0..0.45
+    bool follow = false;
 };
 
 inline constexpr u32 kMaxGiProbesPerAxis = 32;
-// The volume texture's size: 4 texels per probe along x (probe x-major), one row per (y, z) pair.
-inline rhi::Extent2D gi_volume_size(const GiVolume& gi) { return {gi.counts[0] * 4, gi.counts[1] * gi.counts[2]}; }
+// Texels per probe along x: 4 (the L1 irradiance) or 10 when the volume asks for the M-GI2 record.
+inline constexpr u32 gi_texels_per_probe(const GiVolume& gi) {
+    return (gi.visibility || gi.relocate || gi.follow) ? 10u : 4u;
+}
+// The volume texture's size: gi_texels_per_probe() texels per probe along x (probe x-major), one row
+// per (y, z) pair.
+inline rhi::Extent2D gi_volume_size(const GiVolume& gi) {
+    return {gi.counts[0] * gi_texels_per_probe(gi), gi.counts[1] * gi.counts[2]};
+}
 
 struct Cascade {
     math::mat4 view_proj;   // world -> light clip space

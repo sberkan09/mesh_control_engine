@@ -297,7 +297,11 @@ void apply_quality(const QualitySettings& q, SunCookie& cookie) {
     cookie.roll = wrap_angle(cookie.roll);
 }
 
-void apply_quality(const QualitySettings& q, GiVolume& gi) { gi.updates = gi.updates && q.gi_updates; }
+void apply_quality(const QualitySettings& q, GiVolume& gi) {
+    gi.updates = gi.updates && q.gi_updates;
+    gi.max_offset = detail::ranged(gi.max_offset, 0.0f, 0.45f, 0.4f);
+    gi.follow = gi.follow && gi.updates;
+}
 
 void apply_quality(const QualitySettings& q, ScreenSpaceReflections& ssr) { ssr.enabled = ssr.enabled && q.ssr; }
 void apply_quality(const QualitySettings& q, ContactShadows& c) { c.enabled = c.enabled && q.contact_shadows; }

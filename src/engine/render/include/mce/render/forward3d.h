@@ -36,6 +36,7 @@
 namespace mce::render {
 
 struct Forward3DPassU;  // forward3d.cpp: the lit passes' PassU block
+struct GiProbeState;    // M-GI2: gi_probes.h, relocation and following state (kept out of this header)
 struct DynResState;     // M-DYNRES: dynres.h, the controller's state (kept out of this header)
 
 struct Forward3DDesc {
@@ -136,6 +137,10 @@ struct Forward3DStats {
     u32 gi_probes = 0;          // probes captured this frame (the fill's or the rolling update's)
     u32 gi_draws = 0;           // draws of those captures, over all faces
     u32 gi_lights = 0;          // the most point / spot lights one probe's captures saw
+    bool gi_visibility = false; // this frame's lookup used the visibility weight (M-GI2)
+    u32 gi_relocated = 0;       // probes moved by the latest fill or slab (M-GI2)
+    u32 gi_scrolled = 0;        // probes invalidated by a scroll this frame (M-GI2)
+    u32 gi_vis_draws = 0;       // draws of this frame's visibility capture passes (M-GI2)
     bool atmosphere = false;         // the sky came from the atmosphere (M-VISUAL 7)
     bool atmosphere_baked = false;   // ... re-baked this frame (the sun or the air changed)
     bool volumetrics = false;        // volumetric fog lit this frame (M-VISUAL 7)
@@ -407,7 +412,7 @@ private:
     // Returns the draws issued.
     u32 draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin, u32 end,
                     u32 opaque_end, DrawCache& cache, bool main, bool prepass = false, bool frame = false,
-                    bool instanced = false);
+                    bool instanced = false, const rhi::PipelineHandle* prepass_pipes = nullptr);
     // ---- automatic instancing (M-VISUAL3 5a)
     struct InstSlot {  // per draw: an instanced run starting there (count >= 2) and its first slot
         u32 count = 0;
@@ -678,6 +683,7 @@ private:
     u32 gi_cursor_ = 0;                  // the next probe the rolling update captures
     u32 gi_filled_ = 0;                  // probes the current fill has captured
     u64 gi_key_ = 0;                     // what the volume was filled from; 0 = nothing
+    GiProbeState* gi_probes_ = nullptr;  // M-GI2 relocation / following state (null until used)
     f64 origin_[3] = {0.0, 0.0, 0.0};    // floating origin: the shifts seen so far (probe and GI keys are absolute)
     bool gi_shadowed_ = false;           // this frame's volume sun fit was rendered
     math::mat4 gi_shadow_vp_ = math::mat4::identity();
