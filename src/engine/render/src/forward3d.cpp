@@ -3260,7 +3260,7 @@ void Forward3D::bind_local_shadows(rhi::CommandBuffer& cmd, const Scene3D& scene
 
 u32 Forward3D::draw_meshes(rhi::CommandBuffer& cmd, const Scene3D& scene, Span<const Scene3D::Draw> draws, u32 begin,
                            u32 end, u32 opaque_end, DrawCache& cache, bool main, bool prepass, bool frame,
-                           bool instanced) {
+                           bool instanced, const rhi::PipelineHandle* /*prepass_pipes*/) {
     u32 issued = 0;
     const rhi::TextureHandle white = textures_->white();
     static constexpr u32 kSlots[4] = {rhi::bank::kAlbedo, rhi::bank::kNormal, rhi::bank::kOrm, rhi::bank::kEmissive};
