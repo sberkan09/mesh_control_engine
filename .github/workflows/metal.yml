@@ -64,6 +64,7 @@ jobs:
       - name: Metal checks
         shell: bash
         run: |
+          set +e  # bash -e would abort on the first failing test; every result is wanted
           B=build/macos-release
           : > out/summary.txt
           run() {  # run <name> <command...>: log to out/<name>.log, record the exit code, never fail the step
