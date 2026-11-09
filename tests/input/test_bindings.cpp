@@ -133,7 +133,9 @@ TEST_CASE("bindings: a number that does not fit its field is a bad value, not a 
     const BindingOverride one = BindingOverride::make(StringId("m"), StringId("a"), 0, b);
     const std::string good = text_of(Span<const BindingOverride>(&one, 1));
     const std::string header = good.substr(0, good.find('\n') + 1);
-    auto read = [&](const std::string& field) { return read_bindings(header + "[BindingOverride]\n" + field + "\n", out).has_value(); };
+    auto read = [&](const std::string& field) {
+        return read_bindings(header + "[BindingOverride]\n" + field + "\n", out).has_value();
+    };
 
     // u8: 255 fits, 256 would wrap to 0, -1 would wrap to 255.
     CHECK(read("axis = 255"));
