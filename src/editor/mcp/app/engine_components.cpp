@@ -77,6 +77,7 @@
 #include "mce/kit/moon.h"                 // Moon (M-NIGHTSKY 14a)
 #include "mce/kit/water.h"                // Water (M-WATER 15a)
 #include "mce/kit/water_flow.h"           // WaterFlow (M-WATER2 49e)
+#include "mce/kit/gi_visibility.h"         // GiVisibility3D (M-GI2 50h)
 #include "mce/kit/aurora.h"               // Aurora (M-AURORA 16a)
 #include "mce/kit/rainbow.h"              // Rainbow (M-RAINBOW 17a)
 #include "mce/kit/meteor.h"               // Meteor (M-METEOR 18a)

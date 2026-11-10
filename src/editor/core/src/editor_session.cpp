@@ -11,6 +11,7 @@
 #include "mce/cook/json.h"
 #include "mce/ecs/hierarchy.h"
 #include "mce/ecs/transform.h"
+#include "mce/kit/gi_visibility.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/nav3d.h"
 #include "mce/scene/streaming.h"
@@ -175,6 +176,13 @@ Result<void> EditorSession::bake_gi_volume() {
     kit::GiVolume3D g = *scene_.get<kit::GiVolume3D>(id);
     g.baked.guid = guid;
     scene_.set(id, g);
+    // M-GI2 50h: a bake of a volume with GiVisibility3D holds the 10-texel record; stamp the format it was made with
+    // (kit::kGiRecordFormat) so Kit3DExtract refuses a bake of another one.
+    if (const kit::GiVisibility3D* v = scene_.get<kit::GiVisibility3D>(id); v && v->bake_format != kit::kGiRecordFormat) {
+        kit::GiVisibility3D stamped = *v;
+        stamped.bake_format = kit::kGiRecordFormat;
+        scene_.set(id, stamped);
+    }
     scene_.end_edit();
     MCE_LOG_INFO("editor: baked the GI volume into assets/{}", rel.view());
     return ok();
