@@ -3,10 +3,13 @@
 
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "cook_test_util.h"
+#include "mce/asset/formats.h"
 #include "mce/editor/editor_session.h"
 #include "mce/memory/allocator.h"
 
@@ -40,6 +43,43 @@ TEST_CASE(
     };
 
     round();  // the first round fills the caches that fill once
+    round();
+    const usize baseline = mem::heap_live_allocations();
+    for (int i = 0; i < 200; ++i) round();
+    const usize after = mem::heap_live_allocations();
+    INFO("live allocations: " << baseline << " after the warm-up, " << after << " after 200 more rounds");
+    CHECK(after <= baseline + 8);
+}
+
+TEST_CASE(
+    "editor soak: 200 hot reloads of an edited material leave the live allocation count where round one left it") {
+    const std::string root = cook_test::fresh_dir("editor_soak_reload");
+    std::filesystem::create_directories(root + "/assets/materials");
+    const std::string path = root + "/assets/materials/paint.mcmat";
+    auto put = [&](int i) {
+        std::ofstream f(path, std::ios::binary | std::ios::trunc);
+        f << "{ \"format\": \"mce-material\", \"version\": 1, \"guid\": \"6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b\", "
+             "\"base_color\": [1, 0.5, 0.25, 1], \"roughness\": 0."
+          << (100 + i % 800) << " }\n";
+        f.close();
+        // A new mtime on every write, so the watcher sees the edit even when the size stays the same.
+        std::filesystem::last_write_time(path,
+                                         std::filesystem::file_time_type::clock::now() + std::chrono::seconds(2 * i));
+    };
+    EditorSession session;
+    REQUIRE(session.open_project(sv(root)));
+    session.tick_hot_reload(0.0, 0.0);
+    put(0);
+    REQUIRE(session.tick_hot_reload(1.0, 0.0));  // a new asset: fresh mount
+    f64 now = 1.0;
+    int step = 0;
+    auto round = [&] {
+        put(++step);
+        now += 1.0;
+        REQUIRE(session.tick_hot_reload(now, 0.0));
+    };
+
+    round();  // the first rounds fill the caches that fill once
     round();
     const usize baseline = mem::heap_live_allocations();
     for (int i = 0; i < 200; ++i) round();

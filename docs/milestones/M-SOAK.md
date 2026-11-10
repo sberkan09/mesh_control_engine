@@ -19,4 +19,5 @@
 - Step 1 uses a synthetic scene (a ball on a floor) because the capture flag lives in `mce_player`; the sample executables have their own mains and no `-perf_capture`.
 - The 8-allocation slack covers caches that fill once (the first contact pair, the log's ring). A gate that needs more slack than that points at a real growth and should be looked at, not loosened.
 - Step 3 runs inside `test_editor` instead of over MCP: the live count is a process-wide number and an in-process test reads it directly, where an MCP run would need a new tool to report it.
-- Not covered, open for a later step: the GPU paths (a windowed player), asset hot reload, and play-in-editor start and stop.
+- Asset hot reload is covered by a second test in `test_editor_soak.cpp` (200 edits of a mounted material, each one re-cooked and swapped in); it stayed flat, so it found no leak.
+- Not covered, open for a later step: the GPU paths (a windowed player) and play-in-editor start and stop.
