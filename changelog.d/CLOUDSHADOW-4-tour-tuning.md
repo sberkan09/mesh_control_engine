@@ -1,0 +1,1 @@
+- `tour_cloudshadow` tuning (M-CLOUDSHADOW): a wide `field_wide` terrain in light sand (the 80 m plate was smaller than a cloud patch), 60 m cloud cells, a stronger sun over a dimmer ambient and a steeper camera, so the drifting patches of shade are unmistakable in the capture; the entity set is unchanged (14).

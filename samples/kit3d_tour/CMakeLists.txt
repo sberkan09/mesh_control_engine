@@ -71,8 +71,8 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_shafts_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_shafts.mcscene
                      -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_shafts -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
-    # The cloud shadow scene (M-CLOUDSHADOW 51e): scenes/tour_cloudshadow.mcscene, a high sun over the flat terrain, a Weather + CloudLayer
-    # (half the sky covered, a fast drift), a CloudShadow3D on the world entity and a row of buildings and trees the patches cross; made
+    # The cloud shadow scene (M-CLOUDSHADOW 51e): scenes/tour_cloudshadow.mcscene, a mid-high sun over a wide flat terrain (field_wide, 600 m), a Weather + CloudLayer
+    # (half the sky covered, 60 m cells, a fast drift), a CloudShadow3D on the world entity and a row of buildings and trees the patches cross; made
     # by gen_cloudshadow.py. Named tour_cloudshadow so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 14 entities.
     # 300 ticks (5 s) like the shafts (the look is render-side and hashes nothing; the two plays must still agree).
     add_test(NAME sample_kit3d_tour_cloudshadow_headless

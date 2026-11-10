@@ -16,7 +16,7 @@
 - **Pure helpers** in `mce/render/cloud_shadow.h`: `cloud_shadow_point(world, sun_dir, cam, height)`, `cloud_density(p, coverage, ...)` (the CPU twin of the sky's noise, shared with the sky test), `cloud_shadow_factor(...)`. The pass shader is tested against them.
 - **Kit.** Opt-in `CloudShadow3D` (`mce/kit/cloud_shadow.h`: `strength` 0.6, `softness` 0.3; no state, the clouds come from `CloudLayer` and the weather, `kit3d.h` untouched). A scene without a `CloudLayer` gets no shadow. `Kit3DExtract` feeds `PostFx::cloud_shadow` and nothing is hashed.
 - **Luau.** `weather.set_cloud_shadow{strength=, softness=}` and getters.
-- **Sample.** The `tour_cloudshadow` scene in `kit3d_tour` and `samples/12_weather`.
+- **Sample.** The `tour_cloudshadow` scene in `kit3d_tour` (tuned in CLOUDSHADOW-4: a 600 m `field_wide` ground in light sand, 60 m cells, a strong sun over a dim ambient, so the patches read at a glance) and `samples/12_weather`.
 
 ## Steps
 

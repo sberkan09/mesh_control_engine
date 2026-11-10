@@ -9,16 +9,22 @@
    "name": "Field",
    "components": {
     "Terrain3D": {
-     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000022",
+     "tint": [
+      0.8,
+      0.78,
+      0.66,
+      1.0
+     ]
     },
     "TerrainCollider3D": {
      "friction": 0.9
     },
     "LocalTransform": {
      "position": [
+      0.0,
       0,
-      0,
-      0
+      0.0
      ]
     }
    }
@@ -40,18 +46,18 @@
       -0.82,
       -0.48
      ],
-     "sun_intensity": 1.6,
+     "sun_intensity": 2.4,
      "sun_shadows": 0,
      "sky_enabled": 1,
      "ambient_sky": [
-      0.3,
-      0.34,
-      0.42
+      0.14,
+      0.17,
+      0.24
      ],
      "ambient_ground": [
-      0.16,
-      0.15,
-      0.13
+      0.08,
+      0.08,
+      0.07
      ],
      "exposure": 1.0,
      "bloom": 1,
@@ -62,14 +68,14 @@
     },
     "CloudLayer": {
      "fair_coverage": 0.5,
-     "scale_m": 100,
+     "scale_m": 60,
      "speed_scale": 8,
      "height_m": 1500
     },
     "CloudShadow3D": {
      "enabled": 1,
      "strength": 0.8,
-     "softness": 0.3
+     "softness": 0.15
     }
    }
   },
@@ -88,10 +94,10 @@
       45.0
      ],
      "rotation": [
-      -0.0998,
+      -0.1494,
       0,
       0,
-      0.995
+      0.9888
      ]
     }
    }
