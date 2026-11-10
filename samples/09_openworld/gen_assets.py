@@ -314,6 +314,7 @@ G_FOOTSTEPS = guid("audio/footsteps.mcsound")
 G_SHOTS = guid("audio/shots.mcsound")
 G_HITS = guid("audio/hits.mcsound")
 G_LAMP = guid("materials/lamp.mcmat")
+G_TRACER = guid("materials/tracer.mcmat")
 G_GRADE = guid("textures/city_grade.png")
 G_BULLET_HOLE = guid("textures/bullet_hole.png")
 G_CRASHES = guid("audio/crashes.mcsound")
@@ -1059,6 +1060,13 @@ def lamp_material():
                                    "double_sided": False, "unlit": False, "textures": {}})
 
 
+def tracer_material():
+    """materials/tracer.mcmat (M-TRACERS): a hot, bright line; the emissive above 1 feeds bloom."""
+    write("materials/tracer.mcmat", {"format": "mce-material", "version": 1, "guid": G_TRACER, "name": "tracer", "base_color": [1.0, 0.85, 0.5, 1],
+                                     "metallic": 0.0, "roughness": 0.5, "emissive": [6.0, 4.2, 1.6], "alpha_mode": "opaque", "alpha_cutoff": 0.5,
+                                     "double_sided": False, "unlit": False, "textures": {}})
+
+
 def atmosphere(s, net, node_half):
     """A world clock with a day cycle, a physical sky with a moon and stars, a street lamp at two corners of every junction that
     lights at dusk, and a seeded weather schedule (rain, storm, fog, lightning) with its rain and wind beds and a night bed."""
@@ -1241,6 +1249,13 @@ def scene():
                                                    "reload_time": 1.8, "spread_deg": 2.5, "impulse": 20, "pellets": 1}})
     shotgun = s.add("Weapon: shotgun", {"WeaponPreset3D": {"damage": 10, "range": 40, "rate": 1.1, "automatic": 0, "magazine": 6, "reserve": 24,
                                                            "reload_time": 2.4, "spread_deg": 6, "impulse": 30, "pellets": 8}})
+    # A ring of 16 tracer boxes, hidden until a shot is fired; the system scales each to the shot's length (M-TRACERS).
+    for i in range(16):
+        s.add("Tracer%d" % i, {
+            "LocalTransform": tf((0, -100.0, 0)),
+            "MeshRef": {"mesh": "guid:" + G_BOX, "material": "guid:" + G_TRACER, "cast_shadows": 0, "visible": 0},
+            "Tracer3D": {"width": 0.04, "life": 0.06, "min_length": 1.5},
+        })
     # A ring of 24 bullet-hole decals, hidden until a shot lands on a wall, a car or the ground (M-SHOTMARKS).
     for i in range(24):
         s.add("BulletHole%d" % i, {
@@ -1588,6 +1603,7 @@ surface_assets()
 color_grade_lut()
 bullet_hole_texture()
 lamp_material()
+tracer_material()
 audio_assets()
 hud()
 menus()
