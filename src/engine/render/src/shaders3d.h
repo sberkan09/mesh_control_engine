@@ -4883,7 +4883,7 @@ void main() {
 // records the pass only with the sun at or above kCausticsMinSunY (the division by c_sun.y is safe) and, with the camera
 // above the water, only when the water shows what lies under it (M-WATER2 refraction). Portable: one block, combined
 // samplers at the post banks, textureLod and texelFetch only, constant-bound loops, u32 math that wraps as the C++ does.
-inline constexpr int kCausticsUBytes = 144;  // 9 vec4: proj, right, up, back, sun, color, plane, misc, water
+inline constexpr int kCausticsUBytes = 176;  // 11 vec4: proj, right, up, back, sun, color, plane, misc, water, vol, vol_grid
 #define MCE_GLSL_CAUSTICS_NOISE \
     R"(
 uvec2 ca_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), both lanes
@@ -4959,13 +4959,31 @@ layout(std140, binding = 1) uniform CausticsU {
     vec4 c_plane;  // xy the camera's world xz / cell wrapped to 64 (caustics_offset), zw the water square's centre - camera
     vec4 c_misc;   // x the clock's phase 0..1 (caustics_phase), y octaves (1..3), z the exp² fog density (0: none), w 0
     vec4 c_water;  // rgb the water's view-path extinction per metre (caustics_water_sigma), w its reflectivity
+    vec4 c_vol;    // the volumetric fog as the main pass's p_vol: x 1 = on (0: u_vol is not read), y slices, z far, w log2 term
+    vec4 c_vol_grid;  // as p_vol_grid: xy the froxel grid, z atlas columns, w atlas rows
 };
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
 )"
 constexpr const char* kCausticsFS = "#version 450 core\n" MCE_GLSL_CAUSTICS_NOISE MCE_GLSL_CAUSTICS_U R"(
+layout(binding = 4) uniform sampler2D u_vol;   // the volumetric fog's integrated light (vol_light_), as the main pass
 layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
 layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// MCE_GLSL_VOLUME's vol_fog(uv, depth).a (the transmittance the main pass multiplied the surface at view depth `depth` by),
+// on c_vol / c_vol_grid in place of p_vol / p_vol_grid.
+vec2 ca_vol_uv(vec2 uv, int slice) {
+    int cols = int(c_vol_grid.z);
+    vec2 g = c_vol_grid.xy;
+    vec2 p = clamp(uv * g, vec2(0.5), g - 0.5);
+    return (vec2(slice % cols, slice / cols) * g + p) / (g * c_vol_grid.zw);
+}
+float ca_vol(vec2 uv, float depth) {
+    float s = min(log2(1.0 + max(depth, 0.0)) / c_vol.w * c_vol.y, c_vol.y);
+    int k = int(floor(s));
+    float a = k > 0 ? textureLod(u_vol, ca_vol_uv(uv, k - 1), 0.0).a : 1.0;
+    float b = k < int(c_vol.y) ? textureLod(u_vol, ca_vol_uv(uv, k), 0.0).a : a;
+    return mix(a, b, s - float(k));
+}
 void main() {
     vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
     float z = textureLod(u_gbuf, v_uv, 0.0).a;
@@ -4987,9 +5005,12 @@ void main() {
             float pat = ca_pattern(vec2(xz.x * c_right.w + c_plane.x, xz.y * c_right.w + c_plane.y), c_misc.x, c_misc.y);
             float k = pat * exp(-c_sun.w * t) * (smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth)));
             // caustics_transmission: seen from above through the water square, the water pixel shows the point as
-            // kWaterFS composites it, (1 - F) exp(-sigma d_view), and is fogged at the surface's distance.
+            // kWaterFS composites it, (1 - F) exp(-sigma d_view): the floor fogged once by kMeshFS at its own distance
+            // (the copy kWaterFS samples) and again by kWaterFS at the surface's.
             float len = sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
             float fdist = len;
+            float through = 0.0;  // 1: the view ray crosses the water square (the camera above it)
+            float zs = z;         // the view depth the last fog is applied at (the surface's when through)
             vec3 tr = vec3(1.0);
             if (c_up.w < 0.0) {
                 float s = c_up.w / p.y;  // the share of the view ray from the camera to the plane
@@ -5000,12 +5021,22 @@ void main() {
                     float fr = (0.02 + 0.98 * (q2 * q2 * q)) * c_water.w;
                     float kt = 1.0 - fr;
                     fdist = len - dv;
+                    through = 1.0;
+                    zs = z * s;
                     tr = vec3(kt * exp(-c_water.x * dv), kt * exp(-c_water.y * dv), kt * exp(-c_water.z * dv));
                 }
             }
             if (c_misc.z != 0.0) {
                 float fd = c_misc.z * fdist;
                 k *= exp(-fd * fd);  // only the surface part of the pixel receives the light
+                if (through > 0.5) {
+                    float fl = c_misc.z * len;
+                    k *= exp(-fl * fl);  // and the floor's own fog in the copy the water shows
+                }
+            }
+            if (c_vol.x > 0.5) {  // the volumetric fog in place of the exp² one: its transmittance, the same way
+                k *= ca_vol(v_uv, z);
+                if (through > 0.5) k *= ca_vol(v_uv, zs);
             }
             term = vec3(k * tr.x, k * tr.y, k * tr.z);
             term = mix(vec3(0.0), clamp(term, 0.0, 1.0), equal(term, term));  // a NaN never reaches the frame

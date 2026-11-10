@@ -485,13 +485,16 @@ struct CausticsU {
     vec4 plane;  // xy caustics_offset, zw caustics_water_centre
     vec4 misc;   // x caustics_phase, y octaves (1..3), z the exp² fog density (0 with volumetrics), w 0
     vec4 water;  // rgb caustics_water_sigma, w the water's reflectivity
+    vec4 vol;       // the volumetric fog as PassU::vol (x 1 = on this view, else 0 and the volume is not read)
+    vec4 vol_grid;  // as PassU::vol_grid
 };
-static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 9 vec4, as MCE_GLSL_CAUSTICS_U");
+static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 11 vec4, as MCE_GLSL_CAUSTICS_U");
 static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16 && offsetof(CausticsU, up) == 32 &&
                   offsetof(CausticsU, back) == 48 && offsetof(CausticsU, sun) == 64 && offsetof(CausticsU, color) == 80 &&
-                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, water) == 128,
-              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_water as in "
-              "MCE_GLSL_CAUSTICS_U");
+                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, water) == 128 &&
+                  offsetof(CausticsU, vol) == 144 && offsetof(CausticsU, vol_grid) == 160,
+              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_water / c_vol / "
+              "c_vol_grid as in MCE_GLSL_CAUSTICS_U");
 static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.1f && kCausticsLoopRadius == 0.18f &&
                   kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
               "caustics.h and kCausticsFS (shaders3d.h) carry the same constants");
@@ -4543,6 +4546,9 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
 // r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
 // kCausticsMinSunY with a finite non-zero direction, and some light to add (strength, sun share, intensity). The pipeline
 // is made at startup only where the prepass exists; a frame that would draw without it says so once and records nothing.
+// The fog: the exp² fog's share at the distance the pixel was fogged at, twice when seen through the water (kMeshFS fogged
+// the floor in the copy kWaterFS shows, kWaterFS fogs again at the surface); with the volumetric fog on in its place, the
+// volume's transmittance read from vol_light_ the same way (bank kVolumetrics).
 void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Caustics& setting = scene.post().caustics;
     if (!setting.enabled || out_.linear_output) return;
@@ -4608,6 +4614,18 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u), fog_density, 0.0f};
     cu.water = vec4(caustics_water_sigma(water.shallow_color, water.depth_scale_m),
                     detail::ranged(water.reflectivity, 0.0f, 1.0f, 1.0f));
+    // The volumetric fog this view drew in place of the exp² one (record_main composited color * f.a + f.rgb): the pass
+    // reads its transmittance at the pixel from the same integrated volume, so the web dims in the mist as the floor did.
+    const bool vol = stats_.volumetrics && !vol_light_.is_null();
+    if (vol) {
+        PassU vp{};
+        vol_params(scene, vp);
+        cu.vol = vp.vol;
+        cu.vol_grid = vp.vol_grid;
+    } else {
+        cu.vol = {0.0f, 1.0f, 1.0f, 1.0f};
+        cu.vol_grid = {1.0f, 1.0f, 1.0f, 1.0f};
+    }
     rhi::PassAttachment o;
     o.texture = dst;
     o.load = rhi::LoadOp::DontCare;  // every pixel is written
@@ -4620,6 +4638,7 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(cu));
     cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
     cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: sky is exactly 0
+    cmd.bind_texture(rhi::bank::kVolumetrics, vol ? vol_light_ : ao_off_, linear_clamp_);  // as the main pass binds it
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     cmd.pop_debug_scope();

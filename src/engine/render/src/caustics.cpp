@@ -198,7 +198,17 @@ math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog
     return finite3(t) ? t : math::vec3{0.0f, 0.0f, 0.0f};
 }
 
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c) {
+bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_share) {
+    surface_share = 1.0f;
+    if (!finite3(p) || !std::isfinite(c.plane_h) || !(c.plane_h < 0.0f) || !(p.y < c.plane_h)) return false;
+    const f32 s = c.plane_h / p.y;
+    if (!(std::fabs(p.x * s - c.centre.x) <= c.half_extent) || !(std::fabs(p.z * s - c.centre.y) <= c.half_extent))
+        return false;
+    surface_share = s;
+    return true;
+}
+
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f32 vol_surface) {
     const math::vec3 zero{0.0f, 0.0f, 0.0f};
     math::vec2 xz;
     f32 depth = 0.0f;
@@ -210,10 +220,18 @@ math::vec3 caustics_term(math::vec3 p, const CausticsParams& c) {
     f32 k = pat * std::exp(-c.absorption * t) * caustics_depth_fade(depth, c.max_depth);
     f32 fog_distance = 0.0f;
     const math::vec3 tr = caustics_transmission(p, c, fog_distance);
+    f32 share = 1.0f;
+    const bool through = caustics_through_water(p, c, share);
     if (c.fog_density != 0.0f && std::isfinite(c.fog_density)) {
         const f32 fd = c.fog_density * fog_distance;
         k *= std::exp(-fd * fd);
+        if (through) {
+            const f32 fl = c.fog_density * std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+            k *= std::exp(-fl * fl);  // the floor's own fog in the copy the water shows
+        }
     }
+    k *= vol_point;
+    if (through) k *= vol_surface;
     const auto clean = [](f32 v) { return std::isfinite(v) ? saturate(v) : 0.0f; };
     return math::vec3{clean(k * tr.x), clean(k * tr.y), clean(k * tr.z)};
 }

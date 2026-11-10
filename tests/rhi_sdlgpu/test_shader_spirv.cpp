@@ -466,7 +466,7 @@ TEST_CASE("shader_spirv: the cloud shadow stage") {
 
 // M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source: MCE_GLSL_CAUSTICS_NOISE and
 // CausticsU) compiles for SDL GPU with its resources where Forward3D::record_caustics binds them: CausticsU at bank kPass
-// (1), post_source_ at sampler 6 and the opaque prepass at 7; no storage buffers.
+// (1), the volumetric fog at sampler 4, post_source_ at 6 and the opaque prepass at 7; no storage buffers.
 TEST_CASE("shader_spirv: the caustics stage") {
     FixedString<1024> log;
     Array<u32> spv;
@@ -475,11 +475,11 @@ TEST_CASE("shader_spirv: the caustics stage") {
     if (!r) std::fprintf(stderr, "%s\n", log.c_str());
     REQUIRE(r.has_value());
     if (!r) return;
-    REQUIRE(res.sampler_count == 2);
-    CHECK(res.sampler_slot[0] == 6);
-    CHECK(res.sampler_slot[1] == 7);
-    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
-    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    REQUIRE(res.sampler_count == 3);
+    CHECK(res.sampler_slot[0] == 4);
+    CHECK(res.sampler_slot[1] == 6);
+    CHECK(res.sampler_slot[2] == 7);
+    for (u32 i = 0; i < 3; ++i) CHECK(res.sampler_kind[i] == SamplerKind::Tex2D);
     CHECK(res.storage_count == 0);
     CHECK(res.uniform_count == 2);
 }

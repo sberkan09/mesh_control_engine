@@ -9,7 +9,9 @@
   moving on closed loops driven by a clock that is wrapped as whole ticks before it becomes a float, so the web repeats
   exactly every 4 s / `speed` and never drifts with a long session. The light added is sun colour * intensity *
   strength * the sun's share of the light * pattern * exp(-absorption * the sun's path in water) * a depth falloff (in
-  over the first 0.25 m, out toward `max_depth`) * the sun-elevation fade, scaled by the exp² fog's surface share. Seen
+  over the first 0.25 m, out toward `max_depth`) * the sun-elevation fade, dimmed by the fog the pixel went through (the
+  exp² fog, counted twice when seen through the water as the frame does, or the volumetric fog's transmittance read from
+  its volume). Seen
   from above, the light also passes the water as the water shader lets the floor through (1 - Fresnel and the water's
   own per-channel extinction from `shallow_color` / `depth_scale_m` along the view path), and it is added only where the
   water shows what lies under it (the M-WATER2 refraction: waves or foam, and the prepass); calm, foamless water seen from
@@ -23,6 +25,7 @@
   sun light, an orthographic view and render-to-texture views record nothing, and the pass only adds light, so a frame
   without it is unchanged bit for bit (every existing golden is unchanged). Limits: the pattern is procedural (it does
   not follow the waves), the plane ignores the swell, the web is added where the floor lies rather than where the
-  refraction shows it (the refraction's offset is small), it is not darkened by cloud shadows or the volumetric fog, the
+  refraction shows it (the refraction's offset is small), it is not darkened by cloud shadows, a change of `speed` jumps
+  the web's phase, the
   pass needs the prepass pipeline (SSAO, SSR, contact shadows or the edge outline on at startup), and a silhouette pixel
   takes its half-resolution block's sample.

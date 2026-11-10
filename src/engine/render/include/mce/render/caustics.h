@@ -104,16 +104,26 @@ struct CausticsParams {
 // or under the plane, or the view ray crossing outside the square) 1 and |p|. (1, |p|) for non-finite input.
 math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog_distance);
 
+// M-CAUSTICS 52b review 2. True when the camera is above the plane and the view ray to the camera-relative point `p`
+// (below the plane) crosses it inside the water square, the case caustics_transmission applies; `surface_share` is then
+// the share of the ray from the camera to the crossing (plane_h / p.y, 0..1: the water surface's view depth is the
+// point's times it), else 1.
+bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_share);
+
 // Where the sun ray from the camera-relative point `p` meets the plane: `plane_xz` (camera-relative) and the point's
 // `depth` below the plane. False when p is not below the plane, the sun is under kCausticsMinSunY, the crossing lies
 // outside the water square (|plane_xz - centre| > half_extent on x or z) or any value is not finite.
 bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& plane_xz, f32& depth);
 
 // The per-pixel term the pass multiplies its colour by (0..1 per channel) for the camera-relative point `p`: pattern *
-// exp(-absorption * sun path) * depth falloff * caustics_transmission * the exp² fog's surface share exp(-(fog * fog
-// distance)²). 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds
-// colour * term to the pixel, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c);
+// exp(-absorption * sun path) * depth falloff * caustics_transmission * the fog the pixel went through: the exp² fog's
+// exp(-(fog * fog distance)²) and, seen through the water (caustics_through_water), also exp(-(fog * |p|)²) (kMeshFS fogged
+// the floor in the copy kWaterFS shows, and kWaterFS fogs again at the surface); with the volumetric fog in place of the
+// exp² one (fog_density 0), its transmittance at the point, `vol_point`, and through the water also at the surface,
+// `vol_surface` (the volume's vol_fog(uv, view depth).a, read by the shader from the volume texture; 1 without it).
+// 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds colour * term to
+// the pixel, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f, f32 vol_surface = 1.0f);
 
 // The pass's validity gate: the renderer records the pass only when this is true. All plain values (no scene3d.h).
 struct CausticsGate {

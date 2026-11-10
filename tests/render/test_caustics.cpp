@@ -29,7 +29,9 @@ CausticsParams params() {
 }
 
 // The term's red channel (the cases below set no water extinction, so the three channels agree but for the Fresnel).
-f32 term_r(math::vec3 p, const CausticsParams& c) { return caustics_term(p, c).x; }
+f32 term_r(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f, f32 vol_surface = 1.0f) {
+    return caustics_term(p, c, vol_point, vol_surface).x;
+}
 
 CausticsGate open_gate() {
     CausticsGate g;
@@ -354,4 +356,48 @@ TEST_CASE("caustics: seen from above, the light passes the water as kWaterFS let
     CausticsParams matte = c;
     matte.reflectivity = 0.0f;
     CHECK(caustics_transmission(math::vec3{0.0f, -7.0f, 0.0f}, matte, fog_d).z == doctest::Approx(std::exp(-0.2f)));
+}
+
+TEST_CASE("caustics: through the water the fog is counted twice, the volume's transmittance too") {
+    // kMeshFS fogs the floor at its own distance into the copy kWaterFS shows; kWaterFS fogs again at the surface's.
+    CausticsParams c = params();  // the camera 3 m above the water
+    c.water_sigma = math::vec3{0.1f, 0.1f, 0.1f};
+    CausticsParams fog = c;
+    fog.fog_density = 0.01f;
+    f32 share = 0.0f;
+    u32 compared = 0;
+    for (int i = 0; i < 300; ++i) {
+        // Floors 100 m out, about 2 m under the water: the surface crossing about 60 m out.
+        const math::vec3 p{f32(i) * 0.05f - 7.5f, -5.0f, -100.0f - f32(i) * 0.01f};
+        REQUIRE(caustics_through_water(p, c, share));
+        CHECK(share == doctest::Approx(0.6f));
+        const f32 bare = term_r(p, c);
+        if (bare <= 0.0f) continue;
+        const f32 len = math::length(p);
+        f32 surface = 0.0f;
+        caustics_transmission(p, c, surface);
+        CHECK(surface == doctest::Approx(len * share).epsilon(1e-4));
+        const f32 fs = 0.01f * surface, fl = 0.01f * len;
+        const f32 want = bare * std::exp(-fs * fs) * std::exp(-fl * fl);
+        CHECK(term_r(p, fog) == doctest::Approx(want).epsilon(1e-4));
+        CHECK(term_r(p, fog) < 0.5f * bare * std::exp(-fs * fs));  // the surface's fog alone would leave twice as much
+        // The volumetric fog: the point's transmittance, and through the water the surface's too.
+        CHECK(term_r(p, c, 0.5f, 0.4f) == doctest::Approx(bare * 0.2f).epsilon(1e-4));
+        ++compared;
+    }
+    CHECK(compared > 20);
+    // The camera under the water: one fog (the main pass's at the point), one volume read.
+    CausticsParams under = fog;
+    under.plane_h = 2.0f;
+    CausticsParams under_clear = under;
+    under_clear.fog_density = 0.0f;
+    math::vec3 p{0.0f, -1.5f, -40.0f};
+    for (int i = 0; i < 400 && !(term_r(p, under_clear) > 0.05f); ++i) p.x = f32(i) * 0.037f;  // a point on the web
+    REQUIRE_FALSE(caustics_through_water(p, under, share));
+    CHECK(share == 1.0f);
+    const f32 bare = term_r(p, under_clear);
+    REQUIRE(bare > 0.05f);
+    const f32 fl = 0.01f * math::length(p);
+    CHECK(term_r(p, under) == doctest::Approx(bare * std::exp(-fl * fl)).epsilon(1e-4));
+    CHECK(term_r(p, under_clear, 0.5f, 0.1f) == doctest::Approx(bare * 0.5f).epsilon(1e-4));
 }

@@ -564,7 +564,7 @@ rhi::PipelineHandle fullscreen_pipe(Fixture3D& f, const char* fs, const char* na
 
 // CausticsU as the shader declares it (forward3d.cpp's mirror is private to the renderer).
 struct CausticsBlock {
-    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4], water[4];
+    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4], water[4], vol[4], vol_grid[4];
 };
 static_assert(sizeof(CausticsBlock) == shaders3d::kCausticsUBytes, "CausticsBlock mirrors CausticsU");
 
@@ -603,6 +603,7 @@ Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CausticsBlock& 
     cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(u));
     cmd.bind_texture(rhi::bank::kAlbedo, src, point);
     cmd.bind_texture(rhi::bank::kNormal, gbuf, point);
+    cmd.bind_texture(rhi::bank::kVolumetrics, src, point);  // bound, not read (c_vol.x 0)
     cmd.draw_non_indexed(3);
     cmd.end_pass();
     pass(bytes, "test.caustics.encode");
@@ -685,7 +686,7 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         const f32 p20 = 0.0125f, p21 = -0.02f;                                     // an off-centre (jittered) projection
         const vec3 sun = math::normalize(c.toward);
         CausticsBlock u{};
-        const f32 blk[9][4] = {{p00, p11, p20, p21},
+        const f32 blk[11][4] = {{p00, p11, p20, p21},
                                {right.x, right.y, right.z, 1.0f / c.scale},
                                {up.x, up.y, up.z, c.plane_h},
                                {back.x, back.y, back.z, c.half_extent},
@@ -693,7 +694,9 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                                {1.0f, 0.0f, 0.0f, c.max_depth},
                                {c.offset.x, c.offset.y, c.centre.x, c.centre.y},
                                {c.phase, f32(c.octaves), c.fog, 0.0f},
-                               {c.sigma.x, c.sigma.y, c.sigma.z, c.reflectivity}};
+                               {c.sigma.x, c.sigma.y, c.sigma.z, c.reflectivity},
+                               {0.0f, 1.0f, 1.0f, 1.0f},  // no volumetric fog: the volume is not read
+                               {1.0f, 1.0f, 1.0f, 1.0f}};
         std::memcpy(&u, blk, sizeof u);
         const Array<f32> gpu = run_pass(f, depth, u);
         CausticsParams cp2;
@@ -739,6 +742,95 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
     CHECK(nonzero > compared / 4);
     CHECK(lit > 20);
     CHECK(close > compared * 9 / 10);
+}
+
+// ---- M-CAUSTICS 52b review 2: the fog through the water counted twice, the volumetric fog ------------------------------
+
+TEST_CASE("caustics: seen through the water the shader fogs the light twice, at the floor and at the surface") {
+    // kMeshFS fogs the floor at its distance len into the copy kWaterFS shows, kWaterFS fogs again at the surface's: the
+    // light reaches the screen times exp(-(f len)²) exp(-(f surface)²). The expectation is built from the fog-free CPU
+    // term and the two factors written out, so a shader that fogs once (at the surface) is 2.7 times too bright here.
+    Fixture3D f;
+    constexpr u32 kN = 64;
+    Array<f32> depth;
+    depth.resize(kN);
+    for (u32 x = 0; x < kN; ++x) depth[x] = f32(380 + x) * 0.25f;  // 95..110.75 m
+    const f32 pitch = 0.05f, fog = 0.01f;
+    const vec3 fwd{0.0f, -std::sin(pitch), -std::cos(pitch)};
+    const vec3 right{1.0f, 0.0f, 0.0f};
+    const vec3 up = math::cross(right, fwd);
+    const vec3 back = -fwd;
+    const vec3 sun = math::normalize(vec3{0.2f, 0.9f, 0.3f});
+    const f32 p11 = 1.0f / std::tan(math::radians(22.5f)), p00 = p11 / f32(kN) * 40.0f;
+    CausticsParams cp;
+    cp.toward_sun = sun;
+    cp.plane_h = -1.0f;  // the floor points 95+ m out lie about 5 m below the camera: 4 m under the water
+    cp.half_extent = 500.0f;
+    cp.inv_scale = 1.0f / 1.5f;
+    cp.offset = {3.0f, 17.0f};
+    cp.phase = 0.4f;
+    cp.octaves = 3;
+    cp.absorption = 0.05f;
+    cp.max_depth = 30.0f;
+    cp.water_sigma = {0.02f, 0.02f, 0.02f};
+    cp.reflectivity = 1.0f;
+    CausticsBlock u{};
+    const f32 blk[11][4] = {{p00, p11, 0.0f, 0.0f},
+                            {right.x, right.y, right.z, cp.inv_scale},
+                            {up.x, up.y, up.z, cp.plane_h},
+                            {back.x, back.y, back.z, cp.half_extent},
+                            {sun.x, sun.y, sun.z, cp.absorption},
+                            {1.0f, 0.0f, 0.0f, cp.max_depth},
+                            {cp.offset.x, cp.offset.y, 0.0f, 0.0f},
+                            {cp.phase, 3.0f, fog, 0.0f},
+                            {cp.water_sigma.x, cp.water_sigma.y, cp.water_sigma.z, cp.reflectivity},
+                            {0.0f, 1.0f, 1.0f, 1.0f},
+                            {1.0f, 1.0f, 1.0f, 1.0f}};
+    std::memcpy(&u, blk, sizeof u);
+    const Array<f32> gpu = run_pass(f, depth, u);
+    usize lit = 0;
+    for (u32 x = 0; x < kN; ++x) {
+        const f32 z = depth[x];
+        const f32 ndc_x = (f32(x) + 0.5f) / f32(kN) * 2.0f - 1.0f;
+        const vec3 v{ndc_x * z / p00, 0.0f, -z};
+        const vec3 p = right * v.x + up * v.y + back * v.z;
+        f32 share = 0.0f;
+        REQUIRE(caustics_through_water(p, cp, share));
+        const f32 bare = caustics_term(p, cp).x;  // fog 0
+        const f32 len = math::length(p), surface = len * share;
+        const f32 fl = fog * len, fs = fog * surface;
+        const f32 want = bare * std::exp(-fl * fl) * std::exp(-fs * fs);
+        CHECK_MESSAGE(std::fabs(gpu[x] - want) <= 1e-5f, "texel " << x << ": gpu " << gpu[x] << " want " << want);
+        if (bare > 0.002f) {
+            ++lit;
+            CHECK(gpu[x] < 0.5f * bare * std::exp(-fs * fs));  // the surface's fog alone would leave 2.7 times this
+        }
+    }
+    MESSAGE("fog through the water: " << lit << " lit texels of " << kN);
+    CHECK(lit > 8);
+}
+
+TEST_CASE("caustics: the volumetric fog dims the web as it dims the floor") {
+    CausticsFixture h;
+    const WaterSurface w = caustics_water();
+    const Caustics on = caustics_setting();
+    const auto mist = [](Scene3D& s) {
+        Volumetrics v;
+        v.enabled = true;
+        v.density = 0.25f;  // the floor 6..12 m away keeps exp(-1.5..-3) of its light
+        v.height_falloff = 0.0f;
+        s.set_volumetrics(v);
+    };
+    const Light clear = light(h.draw(&w, &on).px, h.draw(&w, nullptr).px);
+    const Shot vol_off = h.draw(&w, nullptr, 0.0f, kCausticsToward, mist);
+    const Shot vol_on = h.draw(&w, &on, 0.0f, kCausticsToward, mist);
+    REQUIRE(vol_on.stats.volumetrics);
+    CHECK(vol_on.stats.caustics);
+    const Light misty = light(vol_on.px, vol_off.px);
+    MESSAGE("luma added without the mist " << clear.sum << ", in the volumetric mist " << misty.sum);
+    CHECK(misty.darkest == 0);
+    CHECK(misty.sum > 0);
+    CHECK(f64(misty.sum) < 0.5 * f64(clear.sum));
 }
 
 // The pass's GPU cost per tier, opt in (MCE_CAUSTICS_COST=1; not part of the regular run): the bloom bucket of the GPU
