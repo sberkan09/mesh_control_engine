@@ -32,7 +32,7 @@ def variant(src, dst, scene, *kv):
     walk(doc); json.dump(doc, open(sp, "w"), indent=1); print("variant: GiVisibility3D sets", n)
 def shift_input(src, dst, off, hold_from, hold_to):
     """drive.input shifted by `off` frames (idle first, the volume fills), then the car held forward hold_from..hold_to."""
-    out = []
+    off, hold_from, hold_to = int(off), int(hold_from), int(hold_to); out = []
     for ln in open(src):
         m = re.match(r"^(\d+)(?:-(\d+))?\s+(.*)$", ln.strip())
         if not m: continue
