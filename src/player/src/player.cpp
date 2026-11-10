@@ -300,6 +300,10 @@ MCE_CVAR(cv_console_open, "console_open", false, "Start with the developer conso
 MCE_CVAR(cv_uniform_ring, "r.uniform_ring_mb", 4,
          "Per-frame uniform memory in MiB (a 3D frame with thousands of draws and shadow cascades needs more than 1)",
          CVarFlags::RequiresRestart);
+MCE_CVAR(cv_frame_arena, "mem.frame_arena_mb", 16,
+         "Windowed: per-frame scratch memory in MiB, one arena per frame in flight (raise it if the log reports a "
+         "LinearArena 'frame' overflow)",
+         CVarFlags::RequiresRestart);
 MCE_CVAR(cv_msaa, "r.msaa", 4, "3D games: MSAA samples of the 3D frame (1 = off)", CVarFlags::RequiresRestart);
 MCE_CVAR(cv_lod, "r.lod", true, "3D games: draw coarser mesh levels with distance (meshes cooked with LODs)", CVarFlags::None);
 MCE_CVAR(cv_lod_pixels, "r.lod_pixels", 1.0f, "3D games: the largest LOD error allowed on screen, in pixels", CVarFlags::None);
@@ -788,7 +792,11 @@ public:
         bool draw_3d = three_d_ && !ui_preview_ && extract3d_.camera(world_, alpha, cam3, &cam3_info);
         if (three_d_ && !ui_preview_) draw_3d = view_override_3d(alpha, cam3) || draw_3d;
         update_mouse_look(draw_3d && cam3_info.mouse_look != 0);
-        rhi::CommandBuffer cmd(mem::frame());
+        // The frame's stream lives on the heap and keeps its capacity. Grown in the frame arena, every doubling left
+        // the old block behind: the city's 2 MB stream with the GI probe captures took about 7 MB of the 16 MiB
+        // arena, and the frame overflowed it (null allocations in SpriteBatch and CommandBuffer, GPU round r10).
+        rhi::CommandBuffer& cmd = frame_cmd_;
+        cmd.reset();
         // The frame's GPU span for -perf_capture: what a 2D or split-screen frame has (the 3D stages time
         // the first 3D view only).
         const bool frame_timestamps = !cv_perf_capture.get_string().empty() &&
@@ -2949,6 +2957,7 @@ private:
     Array<f32> audio_record_;
     asset::AssetSystem assets_;
     render::Renderer renderer_;
+    rhi::CommandBuffer frame_cmd_{mem::heap()};  // render_frame's stream, reset every frame
     render::AssetUploadSink sink_;
     audio::ClipBank clips_;
     kit::SpriteExtract extract_;
@@ -3241,6 +3250,7 @@ int run_windowed(const player::PlayerDesc& pd) {
     desc.name = pd.app_name;
     desc.platform = &app;
     desc.fences = device.value().get();
+    desc.frame_arena_size = static_cast<usize>(math::clamp<i64>(cv_frame_arena.get_int(), 1, 1024)) * MiB;
     PlayerApp::ScriptBySimTick by_sim(app, script.value());
     desc.input_source = script.value() ? static_cast<app::IInputSource*>(&by_sim) : &app.input();
     if (cv_run_ticks.get_int() > 0) desc.max_ticks = static_cast<u64>(cv_run_ticks.get_int());
