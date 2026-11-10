@@ -315,6 +315,7 @@ G_SHOTS = guid("audio/shots.mcsound")
 G_HITS = guid("audio/hits.mcsound")
 G_LAMP = guid("materials/lamp.mcmat")
 G_GRADE = guid("textures/city_grade.png")
+G_BULLET_HOLE = guid("textures/bullet_hole.png")
 G_CRASHES = guid("audio/crashes.mcsound")
 
 
@@ -535,6 +536,31 @@ G_MAT = {name: guid("materials/%s.mcmat" % name) for name in list(SURFACES) + li
 PAINT_H = 0.03       # paint is a 3 cm slab on the road, so it never fights the road for the depth buffer
 ROAD_TOP = 0.14
 SIDEWALK_TOP = 0.2
+
+
+def bullet_hole_texture():
+    """textures/bullet_hole.png (M-SHOTMARKS): a 64 x 64 RGBA decal, a dark core, a soft scorched ring, alpha as coverage."""
+    size = 64
+    rows = []
+    for y in range(size):
+        row = bytearray([0])
+        for x in range(size):
+            r = math.hypot((x + 0.5) / size * 2 - 1, (y + 0.5) / size * 2 - 1)
+            core = 1.0 if r < 0.22 else 0.0
+            ring = max(0.0, 1.0 - abs(r - 0.4) / 0.35) * 0.55
+            a = min(1.0, core + ring) if r < 0.85 else 0.0
+            shade = 0.02 if core else 0.08 + 0.1 * r
+            row.extend([int(shade * 255), int(shade * 255), int(shade * 255), int(a * 255)])
+        rows.append(bytes(row))
+
+    def chunk(tag, data):
+        body = tag + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+    write_bytes("textures/bullet_hole.png", png)
+    write("textures/bullet_hole.png.mceasset", {"guid": G_BULLET_HOLE, "importer": "texture", "importer_version": 1,
+                                                "settings": {"srgb": True}})
 
 
 def color_grade_lut():
@@ -1215,6 +1241,13 @@ def scene():
                                                    "reload_time": 1.8, "spread_deg": 2.5, "impulse": 20, "pellets": 1}})
     shotgun = s.add("Weapon: shotgun", {"WeaponPreset3D": {"damage": 10, "range": 40, "rate": 1.1, "automatic": 0, "magazine": 6, "reserve": 24,
                                                            "reload_time": 2.4, "spread_deg": 6, "impulse": 30, "pellets": 8}})
+    # A ring of 24 bullet-hole decals, hidden until a shot lands on a wall, a car or the ground (M-SHOTMARKS).
+    for i in range(24):
+        s.add("BulletHole%d" % i, {
+            "LocalTransform": tf((0, -100.0, 0)),
+            "Decal3D": {"texture": "guid:" + G_BULLET_HOLE, "size": [0.25, 0.3, 0.25], "roughness": 0.9, "enabled": 0},
+            "BulletHole3D": {"size": 0.25, "depth": 0.3, "life": 25, "fade": 5},
+        })
     # The player, on the sidewalk of the middle avenue, with the car to take two steps away.
     player_start = (-60.0, 0.95, -10.0)
     player = s.add("Player", {
@@ -1553,6 +1586,7 @@ def hud():
 models()
 surface_assets()
 color_grade_lut()
+bullet_hole_texture()
 lamp_material()
 audio_assets()
 hud()
