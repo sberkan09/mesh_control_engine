@@ -1,0 +1,1 @@
+- M-SHOTMARKS plan: pooled bullet-hole decals for the open-world sample (docs/milestones/M-SHOTMARKS.md).
