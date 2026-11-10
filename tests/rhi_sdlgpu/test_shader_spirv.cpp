@@ -443,3 +443,23 @@ TEST_CASE("shader_spirv: the sun shafts' accumulation and composite stages") {
     CHECK(res2.storage_count == 0);
     CHECK(res2.uniform_count == 2);
 }
+
+// M-CLOUDSHADOW 51c: the cloud shadow fragment stage (render's shaders3d.h, the real source: the sky's cloud noise through
+// MCE_GLSL_CLOUD_NOISE and CloudShadowU) compiles for SDL GPU with its resources where Forward3D::record_cloud_shadow binds
+// them: CloudShadowU at bank kPass (1), post_source_ at sampler 6 and the opaque prepass at 7; no storage buffers.
+TEST_CASE("shader_spirv: the cloud shadow stage") {
+    FixedString<1024> log;
+    Array<u32> spv;
+    StageResources res;
+    auto r = compile_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCloudShadowFS, "cloud_shadow.frag", spv, res, log);
+    if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+    REQUIRE(r.has_value());
+    if (!r) return;
+    REQUIRE(res.sampler_count == 2);
+    CHECK(res.sampler_slot[0] == 6);
+    CHECK(res.sampler_slot[1] == 7);
+    CHECK(res.sampler_kind[0] == SamplerKind::Tex2D);
+    CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
+    CHECK(res.storage_count == 0);
+    CHECK(res.uniform_count == 2);
+}

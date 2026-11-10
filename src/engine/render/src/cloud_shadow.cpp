@@ -117,4 +117,15 @@ f32 cloud_shadow_factor(f32 density, f32 strength, f32 sun_share, f32 sun_elevat
     return 1.0f - detail::unit01(strength) * detail::unit01(density) * detail::unit01(sun_share) * fade;
 }
 
+f32 cloud_shadow_sun_share(math::vec3 sun_color, f32 intensity, math::vec3 ambient_sky) {
+    if (!finite3(sun_color) || !finite3(ambient_sky) || !std::isfinite(intensity)) return 0.0f;
+    const auto pos = [](f32 x) { return x > 0.0f ? x : 0.0f; };
+    const auto luma = [&](math::vec3 c) { return 0.2126f * pos(c.x) + 0.7152f * pos(c.y) + 0.0722f * pos(c.z); };
+    const f32 sun = luma(sun_color) * pos(intensity);
+    if (!(sun > 0.0f) || !std::isfinite(sun)) return 0.0f;
+    const f32 total = sun + luma(ambient_sky);
+    if (!std::isfinite(total)) return 0.0f;
+    return detail::unit01(sun / total);
+}
+
 }  // namespace mce::render

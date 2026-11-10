@@ -102,6 +102,7 @@ struct Fixture3D {
     // `setup` runs after the defaults (sun, fog, ground, box) and before build().
     void render(f32 fog_density = 0.0f, bool shadows = true, const std::function<void(Scene3D&)>& setup = {}) {
         camera = orbit_camera(look_at + world_offset, math::radians(yaw_deg), math::radians(pitch_deg), 7.0f);
+        if (far_z > 0.0f) camera.far_z = far_z;
         device->begin_frame(frame++);
         Scene3D scene(renderer.meshes(), mem::heap());
         scene.begin(camera, {kW, kH});
@@ -164,6 +165,7 @@ struct Fixture3D {
     f32 yaw_deg = 0.0f;                   // the orbit camera's yaw (M-NIGHTSKY 14d: the star field under a slow turn)
     vec3 look_at{0.0f, 0.5f, 0.0f};       // the orbit camera's target (M-CLOUDS 9b: raised for a camera that looks up)
     vec3 world_offset{0.0f, 0.0f, 0.0f};  // moves the camera, the ground and the box (M-WETSURFACE 5b: a rebased world)
+    f32 far_z = 0.0f;                     // > 0 replaces the orbit camera's far plane (M-CLOUDSHADOW 51c: a wide ground)
     Camera3D camera;
     View3D view;
     rhi::FrameStats gpu;
@@ -1374,6 +1376,68 @@ inline void sun_shafts_column(Scene3D& s, vec3 toward_sun, f32 shift = -0.5f, f3
         box.world.c[c][2] = cols[c].z;
     }
     s.add(box);
+}
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground --------------------------------------------------------------------
+
+// The cloud shadow camera: raised 80 m (the orbit target; the camera sits 7 m behind and above it), looking 10 degrees
+// down toward -z over a 6 km ground (cloud_shadow_scene), so the frame is ground from the bottom to about 5 degrees under
+// the horizon (the far plane, 1000 m, clips the ground there) and sky above it: about a third of the rows. The fixture's
+// own box and 12 m ground sit under the camera, out of the frame.
+inline void cloud_shadow_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 80.0f, 0.0f};
+    f.pitch_deg = 10.0f;
+    f.far_z = 1000.0f;  // the orbit camera's own far plane is 20 times its 7 m distance
+}
+
+// The direction toward the sun (unnormalized): about 50 degrees up, ahead and to the right of the camera, out of the frame.
+inline constexpr vec3 kCloudShadowToward{0.35f, 0.8f, -0.45f};
+
+// A small, low cloud layer so a frame shows many patches: 60 m cells 150 m above the camera, wind +x at speed 1 (10 m/s).
+inline Clouds cloud_shadow_clouds(f32 coverage) {
+    Clouds c;
+    c.coverage = coverage;
+    c.scale_m = 60.0f;
+    c.height_m = 150.0f;
+    c.speed = 1.0f;
+    c.wind_dir = {1.0f, 0.0f};
+    return c;
+}
+
+inline CloudShadow cloud_shadow_setting() {
+    CloudShadow cs;
+    cs.enabled = true;
+    cs.strength = 0.8f;
+    return cs;
+}
+
+// The sun toward `toward_sun` (shadows off: the cases compare pixels), `clouds` at scene time `time`, `shadow` (null: the
+// default, disabled), exposure 0.6; `ground` adds the 6 km ground (mesh 2 scaled 500 times in x and z, its top at y 0;
+// false: the sky alone, the reference for which pixels are sky); bloom and FXAA off unless `post_default`.
+inline void cloud_shadow_scene(Scene3D& s, const Clouds& clouds, const CloudShadow* shadow, f32 time,
+                               vec3 toward_sun = kCloudShadowToward, bool ground = true, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.cloud_shadow = shadow ? *shadow : CloudShadow{};
+    s.set_post(post);
+    if (ground) {
+        MeshInstance g;
+        g.mesh = 2;
+        g.world = math::mat4::identity();
+        g.world.c[0][0] = 500.0f;
+        g.world.c[2][2] = 500.0f;
+        s.add(g);
+    }
 }
 
 }  // namespace mce::render_test

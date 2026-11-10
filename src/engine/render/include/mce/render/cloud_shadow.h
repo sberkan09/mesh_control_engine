@@ -59,4 +59,12 @@ f32 cloud_density(math::vec2 plane_xz, const CloudDensityParams& p);
 // the projected point leaves the layer). density, strength, sun_share clamp to 0..1. 1.0 for any non-finite input.
 f32 cloud_shadow_factor(f32 density, f32 strength, f32 sun_share, f32 sun_elevation);
 
+// M-CLOUDSHADOW 51c: the sun's share (0..1) of the light an upward-facing surface receives, the `sun_share` the pass passes
+// to cloud_shadow_factor: S / (S + A) with S = luma(sun_color) * intensity (the sun's light) and A = luma(ambient_sky)
+// (the hemisphere ambient's value straight up), luma = 0.2126 r + 0.7152 g + 0.0722 b. Negative channels and a negative
+// intensity count as 0. 0 when S is 0 (no sun: nothing to shade), 1 when A is 0 and S > 0; 0 for any non-finite input
+// and when S or S + A overflows.
+// A dim overcast or dusk sun against the same sky ambient gives a smaller share, so its cloud shadows are shallower.
+f32 cloud_shadow_sun_share(math::vec3 sun_color, f32 intensity, math::vec3 ambient_sky);
+
 }  // namespace mce::render

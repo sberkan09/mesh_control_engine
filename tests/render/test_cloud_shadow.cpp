@@ -369,3 +369,39 @@ TEST_CASE("cloud shadow: in-range values and the default pass through apply_qual
     CHECK(c.strength == 0.6f);
     CHECK(c.softness == 0.3f);
 }
+
+// ---- M-CLOUDSHADOW 51c: the sun's share of the light (cloud_shadow_sun_share)
+
+TEST_CASE("cloud shadow: sun share is S / (S + A) of the sun's and the sky ambient's luma") {
+    const auto luma = [](math::vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+    const DirectionalLight d;  // the default sun and sky ambient
+    const f32 s = luma(d.color) * d.intensity, a = luma(d.ambient_sky);
+    CHECK(cloud_shadow_sun_share(d.color, d.intensity, d.ambient_sky) == doctest::Approx(s / (s + a)).epsilon(1e-6));
+    CHECK(cloud_shadow_sun_share(d.color, d.intensity, d.ambient_sky) > 0.75f);  // a bright noon: most of the light
+    // White sun of intensity 1 against a white ambient of 1: half.
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 1.0f, {1, 1, 1}) == doctest::Approx(0.5f).epsilon(1e-6));
+    // A dimmer sun against the same sky: a smaller share; a brighter one: a larger share, never above 1.
+    const f32 noon = cloud_shadow_sun_share({1, 1, 1}, 3.0f, {0.4f, 0.4f, 0.4f});
+    const f32 dusk = cloud_shadow_sun_share({1, 0.6f, 0.4f}, 0.5f, {0.4f, 0.4f, 0.4f});
+    CHECK(dusk < noon);
+    CHECK(noon <= 1.0f);
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 1000.0f, {0.4f, 0.4f, 0.4f}) <= 1.0f);
+    // No ambient: all of the light is the sun's.
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 2.0f, {0, 0, 0}) == 1.0f);
+}
+
+TEST_CASE("cloud shadow: sun share is 0 without a sun and for non-finite input") {
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 0.0f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, -2.0f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({0, 0, 0}, 2.0f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({-1, -1, -1}, 2.0f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({0, 0, 0}, 0.0f, {0, 0, 0}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({kNaN, 1, 1}, 2.0f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, kNaN, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, kInf, {0.4f, 0.4f, 0.4f}) == 0.0f);
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 2.0f, {0.4f, kInf, 0.4f}) == 0.0f);
+    // A negative ambient channel counts as 0 (the share stays in 0..1).
+    CHECK(cloud_shadow_sun_share({1, 1, 1}, 2.0f, {-5, -5, -5}) == 1.0f);
+    // Huge but finite: S overflows to inf -> 0 rather than NaN.
+    CHECK(cloud_shadow_sun_share({3e38f, 3e38f, 3e38f}, 3e38f, {0.4f, 0.4f, 0.4f}) == 0.0f);
+}

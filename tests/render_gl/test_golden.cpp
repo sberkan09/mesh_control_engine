@@ -1213,6 +1213,36 @@ TEST_CASE("golden: sun_shafts_off: the same frame without the shafts") {
     check_golden("sun_shafts_off", f);
 }
 
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground ---------------------------------------------------------------------
+
+// The cloud shadow camera (raised 80 m, looking 10 degrees down over a 6 km ground) under a small, low cloud layer
+// (cloud_shadow_clouds(0.55): 60 m cells 150 m up) at scene time 3 s, the sun about 50 degrees up ahead and to the right,
+// three 20 m towers standing in the patches; bloom and FXAA as by default. Only the ground and the towers darken where a
+// cloud sits between them and the sun; the sky (with its own clouds) is the frame without the pass.
+TEST_CASE("golden: cloud_shadow: drifting cloud patches on the ground and the towers") {
+    Fixture3D f;
+    cloud_shadow_camera(f);
+    const CloudShadow cs = cloud_shadow_setting();
+    f.render(0.0f, false, [&](Scene3D& s) {
+        cloud_shadow_scene(s, cloud_shadow_clouds(0.55f), &cs, 3.0f, kCloudShadowToward, true, true);
+        const vec3 towers[3] = {{-60.0f, 0.0f, -180.0f}, {25.0f, 0.0f, -240.0f}, {90.0f, 0.0f, -330.0f}};
+        for (const vec3& t : towers) {
+            MeshInstance box;
+            box.mesh = 1;  // the fixture's 1 m box standing on the origin, scaled to 12 x 20 x 12 m
+            box.world = math::mat4::identity();
+            box.world.c[0][0] = 12.0f;
+            box.world.c[1][1] = 20.0f;
+            box.world.c[2][2] = 12.0f;
+            box.world.c[3][0] = t.x;
+            box.world.c[3][1] = t.y;
+            box.world.c[3][2] = t.z;
+            s.add(box);
+        }
+    });
+    CHECK(f.renderer.forward_3d().last_stats().cloud_shadow);
+    check_golden("cloud_shadow", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
