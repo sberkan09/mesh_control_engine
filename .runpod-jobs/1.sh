@@ -2,7 +2,7 @@
 cd /work/repo
 apt-get install -y -qq python3-numpy > /dev/null 2>&1; python3 -c 'import numpy, PIL; print("numpy", numpy.__version__)'
 git log -1 --format='%H %s'
-J=6; echo "jobs $J (nproc $(nproc))"
+J=16; echo "jobs $J (nproc $(nproc))"
 T0=$(date +%s)
 cmake --preset linux-gcc-release -DMCE_GPU_TESTS=ON > /work/cfg.log 2>&1; echo "configure rc=$? in $(( $(date +%s) - T0 )) s"; tail -3 /work/cfg.log
 T0=$(date +%s)
