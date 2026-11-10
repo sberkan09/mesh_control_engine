@@ -7,4 +7,4 @@ run() { local be=$1 tag=$2 pk=$3 wh=$4 q=$5; shift 5
 run gl m1 $CITY 1920x1080 medium; run gl m2 $CITY 1920x1080 medium; run gl m3 $CITY 1920x1080 medium
 run gl m_novis $NOVIS 1920x1080 medium; run gl m_vis0 $CITY 1920x1080 medium -r.gi.visibility 0
 run gl m_720 $CITY 1280x720 medium; run gl h_1 $CITY 1920x1080 high
-run vk m1 $CITY 1920x1080 medium; run sw m_small $CITY 640x360 medium
+run vk m1 $CITY 1920x1080 medium
