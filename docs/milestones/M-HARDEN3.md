@@ -1,6 +1,6 @@
 # M-HARDEN3 — Error paths and encode/decode pairs the tests never exercise (milestone record)
 
-**Status:** steps 1 and 2 done, step 3 (gcov survey per module) and step 4 in progress. **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-11-04 on the coordinator's instruction to start a new hardening milestone when the name-based survey of M-HARDEN2 step 4 runs dry. No Linear issues (the Backlog holds only the device-bound SBA-112 and SBA-58); this record is the tracker.
+**Status:** steps 1 to 4 done; the sweep ran dry on 2026-11-10 (see the closing note at the end). **Owner: the "Geliştirme rutini 3" thread.** Defined 2026-11-04 on the coordinator's instruction to start a new hardening milestone when the name-based survey of M-HARDEN2 step 4 runs dry. No Linear issues (the Backlog holds only the device-bound SBA-112 and SBA-58); this record is the tracker.
 
 **Why.** M-HARDEN2 step 4 closed every public function whose name no test mentions, outside the modules that other threads own (weather, GTA gameplay, openworld, render, rhi). A name in a test only proves the function runs once on a happy path. Two kinds of code can still hide bugs behind it: the failing branch of a `Result`-returning function that no test provokes, and the half of an `encode_*` / `decode_*` pair that a test calls only in one direction.
 
@@ -26,3 +26,5 @@
 - 2026-11-10, step 4 (net relay): `RelayClient::handle` checks every size, member number, channel and mode byte, and takes a room list whole or not at all. A test with a fake relay sending forged messages now pins that (coverage only, no code change).
 
 - 2026-11-10, step 4 (monetize): `load_entitlements` refuses a wrong magic, a newer version and a cut file, keeps the ids read before the cut, and ignores unknown ids and consumables. A test over every cut length pins it (coverage only, no code change).
+
+- 2026-11-10, closing note. The last sweep looked for the pattern that produced every real bug of step 4 (a parser of untrusted text or bytes that never checks `truncated()`, `ERANGE`, a range or `isfinite`). Every remaining `strto*` / `from_chars` / `assign` call outside the modules other threads own already checks, the cook importers and the editor documents are fuzzed (`tests/fuzz`), and `MeshView::read` refuses a skin outside 1..`kMaxSkinJoints` (`formats.cpp`). Open for anyone with a new idea: a forged cooked header with 257 joints against `MeshView::read` (the fuzz walker reaches it by mutation only). The routine now waits for new Backlog issues instead of opening M-HARDEN7.
