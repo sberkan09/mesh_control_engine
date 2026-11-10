@@ -1,0 +1,1 @@
+- Tests: an editor soak opens, edits, undoes and switches scenes 200 times and fails when the live heap allocation count grows (M-SOAK step 3; the milestone is done).
