@@ -1,6 +1,6 @@
 # M-CLOUDSHADOW — Cloud shadows on the ground (milestone record)
 
-**Status:** planned 2026-11-10 (plan only, nothing built). **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-CLOUDS ("cloud shadows on the ground" was not in scope), M-SUNSHAFTS and the open-world look. No Linear issues (free issue limit); this record is the tracker.
+**Status:** 51a and 51b done (2026-11-10; data seam, pure helpers and quality tiers, nothing draws yet), 51c to 51f planned. **Owner: routine 2 thread (the M-VISUAL line).** Follow-up of M-CLOUDS ("cloud shadows on the ground" was not in scope), M-SUNSHAFTS and the open-world look. No Linear issues (free issue limit); this record is the tracker.
 
 **Naming:** no type, file or cvar called `CloudShadow`, `cloud_shadow` or `M-CLOUDSHADOW` exists (`src/`, `docs/`, `tests/`, `samples/` checked 2026-11-10; the only hits are the M-CLOUDS "not in scope" line).
 
@@ -39,4 +39,6 @@
 
 | Step | Status | PR | Notes |
 |---|---|---|---|
-| 51a to 51f | not started | | plan PR |
+| 51a. Seam | done | TBD | `render::CloudShadow` and `PostFx::cloud_shadow`, `Forward3DStats::cloud_shadow` / `cloud_shadow_strength`, `cloud_shadow_pipe_`, `record_cloud_shadow` (declared only); defaults test |
+| 51b. Helpers | done | TBD | `cloud_shadow.h` (point, drift, noise, density, factor), `QualitySettings::cloud_shadows` / `cloud_shadow_octaves`, `r.cloud_shadows`, `apply_quality` clamps; `test_cloud_shadow.cpp` |
+| 51c to 51f | not started | | plan PR |

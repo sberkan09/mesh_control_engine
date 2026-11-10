@@ -231,6 +231,17 @@ struct DynamicResolution {
     u8 pad_[3] = {};
 };
 
+// M-CLOUDSHADOW 51a. Cloud shadows: an opt-in post pass that darkens the non-sky pixels where the sky's cloud layer (Clouds)
+// sits between the point and the sun. The clouds themselves (coverage, scale, wind, height) come from Clouds; the noise
+// octave count is a quality-tier property, not a field. Off by default (the frame is then bit-identical to one without the
+// pass). The ranges are the clamps apply_quality applies (M-CLOUDSHADOW 51b); NaN falls back to the default.
+struct CloudShadow {
+    bool enabled = false;       // false draws the frame without the pass
+    f32 strength = 0.6f;        // how much of the sun a thick cloud removes (0..1)
+    f32 softness = 0.3f;        // widens the shadow's edge beyond the cloud's own edge (0..1)
+    u8 pad_[3] = {};
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -265,6 +276,7 @@ struct PostFx {
     HeatHaze haze;  // M-HEATHAZE 43a
     Underwater underwater;  // M-UNDERWATER 44a
     SunShafts shafts;  // M-SUNSHAFTS 45a
+    CloudShadow cloud_shadow;  // M-CLOUDSHADOW 51a
     DynamicResolution dynres;  // M-DYNRES 46a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
