@@ -60,6 +60,7 @@ mce_add_test(test_kit UMBRELLA
         test_ammopickup3d.cpp
         test_event_sfx3d.cpp
         test_weapon_events3d.cpp
+        test_bullet_hole3d.cpp
         test_progress3d.cpp
         test_vehicle_extras.cpp
         test_weather.cpp

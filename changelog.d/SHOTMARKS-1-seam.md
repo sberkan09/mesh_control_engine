@@ -1,0 +1,1 @@
+- kit: `BulletHole3D` and system `kit_bullet_holes`: a ring of decals shows where shots land (not placed in a scene yet).
