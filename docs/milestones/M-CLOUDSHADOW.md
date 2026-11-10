@@ -45,3 +45,34 @@
 | 51d. Kit | done | TBD | `CloudShadow3D` (`mce/kit/cloud_shadow.h`: `enabled`, `strength` 0.6, `softness` 0.3, Range 0..1, explicit pad, no state), registered next to `SunShafts3D` in `install_kit3d` and in the three `engine_components.cpp` files, padding audit entry, `Kit3DExtract` feed (first enabled by entity index through `apply_quality`, so the clamps, Low and `r.cloud_shadows 0` apply; a scene without the component keeps the disabled default every frame); `kit3d.h` untouched; `test_cloud_shadow_extract.cpp` (9 cases: defaults, no component, enabled 0, values, clamps and NaN, first by index, tier and cvar, the sky layer and `Clouds` identical with and without the component and no `CloudLayer` = coverage 0, state hash unmoved) |
 | 51e. Luau, sample | done | TBD | `weather.set_cloud_shadow{strength=, softness=}`, `weather.cloud_shadow_strength()` / `cloud_shadow_softness()` in `api_weather.cpp` (named errors, clamped to 0..1, nothing written on an error, `enabled` not settable) and typed in `definitions.cpp`; 2 cases in `test_script_weather.cpp`; `tour_cloudshadow` scene in `kit3d_tour` (`gen_cloudshadow.py`, 14 entities, headless test and GPU capture). `samples/12_weather` skipped: its `Environment3D` has `sky_enabled 0`, so the component would do nothing there (the pass needs the sky), and it would add a column to the sample's state hash for no visible result |
 | 51f. Docs, close | done | TBD | user guide: the cloud shadows item in 8.6, the `PostFx` row, the scripting table (27.3), the `kit3d_tour` row in 18; `docs/engine/capabilities.md` row for `CloudShadow3D` (see the PR); this record |
+
+## GPU verification r11 (2026-11-10)
+
+Row A31 of the GPU list. One **RTX 3070** (8 GB, driver **580.65.06**; `OpenGL 4.5.0 NVIDIA 580.65.06 on NVIDIA GeForce RTX 3070/PCIe/SSE2`, `SDL GPU (vulkan) on NVIDIA GeForce RTX 3070`) on RunPod, master 2d116c4b, with llvmpipe and lavapipe on the same pod as the reference. How it ran, the pod and the cost: `M-GPU-VERIFY.md`, "GPU verification r11".
+
+**Cases.** The 15 `cloud shadow*` cases of `test_render_gl` (1084 assertions) pass on NVIDIA GL, NVIDIA Vulkan, llvmpipe and lavapipe. The measured values agree across the four:
+
+| Case | NVIDIA GL | NVIDIA Vulkan | llvmpipe | lavapipe |
+|---|---|---|---|---|
+| Sky pixels changed (of 7360) | 0 | 0 | 0 | 0 |
+| Shaded pixels at coverage 0.25 / 0.5 / 0.8 | 1063 / 5962 / 10859 | 1061 / 5965 / 10859 | 1062 / 5964 / 10858 | 1049 / 5971 / 10841 |
+| 1 s of wind +x / -x | +7 / -7 px | +7 / -7 px | +7 / -7 px | +7 / -7 px |
+| Luma taken, sun sin 0.019 / 0.08 / 0.25 | 0 / 25931 / 265692 | 0 / 25925 / 265740 | 0 / 25702 / 266749 | 0 / 26163 / 266849 |
+| Shader against the CPU twin, 384 points, worst | 2.9e-5 | 2.9e-5 | 1.9e-6 | 2.0e-6 |
+| Uniform fill, two poses: clear pixels changed, thick pixels not darker | 0, 0 | 0, 0 | 0, 0 | 0, 0 |
+
+**Goldens.** `cloud_shadow` passes 3 of 3 runs on NVIDIA GL and fails 3 of 3 on NVIDIA SDL GPU (3 of 300 blocks over 0.5%, worst 0.955%, the same image every run); every other golden passes on both backends (GL 67 of 67, SDL GPU 66 of 67). The cause is the committed `linux-sdlgpu/cloud_shadow.png`, taken on lavapipe: lavapipe draws two far-ground blocks just under the horizon (rows y 48 to 55, columns x 8 to 15 and 24 to 31) about 1% darker than llvmpipe, NVIDIA GL and NVIDIA Vulkan, which agree with each other (NVIDIA Vulkan against the llvmpipe `linux-gl` golden: worst block 0.418%, none over). It is not a fault in the pass. The fix, left to a thread: a `linux-sdlgpu-nvidia/cloud_shadow.png` vendor golden (as for `ibl_roughness`), for example a copy of the `linux-gl` image.
+
+**Cost.** The pass in the GL `bloom` stage of `tour_cloudshadow` (pass on against `-r.cloud_shadows 0`, 537 frames, RTX 3070):
+
+| Tier | 1920 x 1080 | 1280 x 720 |
+|---|---|---|
+| Low | off (0) | off (0) |
+| Medium, 2 octaves, half-size noise | **0.054 ms** | **0.037 ms** |
+| High, 3 octaves | **0.076 ms** | **0.041 ms** |
+
+The opt-in case (`MCE_CLOUD_SHADOW_COST=1`, 1280 x 720) reads 0.0396 ms (Medium) and 0.0448 ms (High) over three runs; SDL GPU at High 1080p reads +0.068 ms (fence timestamps, noisier). The whole 3D frame of the scene is 0.67 ms (High 1080p, pass off), so the pass is about 11% of it at High; next to r7's post passes it sits between lens flare (+0.060 ms) and sun shafts (+0.205 ms) at High 1080p on the faster 3080 Ti.
+
+**The capture** (`sample_kit3d_tour_cloudshadow_gpu`'s frame: `tour_cloudshadow`, tick 300, 1280 x 720, High). The NVIDIA GL and NVIDIA Vulkan frames match llvmpipe's and lavapipe's to 0.00% of pixels over 2/255 (max 5/255), with the pass on and off; the PNGs in the project files (`gpu-runs/2026-11-10-rtx3070-r11/tour_cloudshadow_t300_cloud_shadows_{1,0}.png`) are the llvmpipe frames, since images leave the pod only as log text. What they show: a high sun over the flat pale-sand terrain running to the horizon, a pale blue sky with fine cloud texture across its top, and in the middle the row of five cream boxes (drawn as flattened ellipsoids) and six green trees. With `-r.cloud_shadows 1` soft-edged grey patches lie on the ground: a large one across the lower right that takes in two of the buildings and three of the trees (they turn tan and dark green), irregular patches through the middle distance and long thin streaks toward the horizon where the patches are foreshortened; the near left stays in sun. The edges are soft over tens of pixels, with no banding or blockiness from the half-resolution depth. The objects darken with the ground under them. The sky is unchanged (at most 1/255 in its top 15% of rows). With `-r.cloud_shadows 0` the ground is evenly lit and only the objects' own contact shadows remain. In numbers, the pass changes 38.7% of the frame by more than 12/255: 44.9% of pixels are darker by more than 2 luminance levels, none brighter, by 42 levels on average (median 0.76 of the unshaded value, deepest 0.20). The frame's mean drops from RGB 195/198/195 to 177/179/174. Whether the patch size and darkness read well in motion is a windowed look for a person (the drift at the scene's wind, TAA under the moving edges).
+
+**Open.** The windowed look in motion (desktop). Metal and WebGPU translation of `kCloudShadowFS` (Mac). The NVIDIA SDL GPU vendor golden (above).
