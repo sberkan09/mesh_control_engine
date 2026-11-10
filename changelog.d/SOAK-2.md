@@ -1,0 +1,1 @@
+- Tests: `scene_demo_soak`, `extras_2d_soak` and `stream_demo_soak` play a shipped pack for 1500 ticks under a capture and fail when the live heap allocation count grows (M-SOAK step 2).

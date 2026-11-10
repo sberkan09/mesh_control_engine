@@ -17,6 +17,11 @@ add_custom_target(stream_demo_content ALL DEPENDS "${pack}")
 add_dependencies(stream_demo_content mce_player)
 
 if(MCE_BUILD_TESTS)
+    # M-SOAK step 2: 1500 ticks under a capture; the live heap allocation count must not grow.
+    add_test(NAME stream_demo_soak
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/world.mcscene
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/soak -DSLACK=8
+                     -P ${PROJECT_SOURCE_DIR}/tests/perf/player_soak_test.cmake)
     # Tick 300: the traveler is at x = 27, inside area 1 and 3 m from area 2 (both in); area 0,
     # 17 m behind, went out past its 8 m unload distance. Headless streaming is synchronous, so
     # the counts and the hash are a function of the tick.
