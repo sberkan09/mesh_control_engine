@@ -196,7 +196,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `ThunderDelay` | `mce/kit/thunder_delay.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `TimedLight3D` | `mce/kit/timed_light.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TimelinePlayer` | `mce/kit/timeline.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/audio_rooms/assets/scenes/rooms.mcscene |
-| `Tracer3D` | `mce/kit/tracer3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: shown in samples/09_openworld by M-TRACERS step 2 (remove this line then) |
+| `Tracer3D` | `mce/kit/tracer3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `TrafficDriver3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `TrafficSpawner3D` | `mce/kit/traffic.h` | yes | yes | yes | docs/user-guide/29-roads-and-traffic.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `UiFlowRules` | `mce/kit/ui_flow.h` | yes | yes | yes | docs/user-guide/12-ui-and-console.md | samples/09_openworld/assets/scenes/city.mcscene |

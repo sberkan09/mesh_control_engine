@@ -162,6 +162,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"EventSfx3D","show":["EventSfx3D"]}})")) == 1);
     // Bullet holes (M-SHOTMARKS): a ring of 24 hidden decals waits for the shots.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"BulletHole3D","show":["BulletHole3D"]}})")) == 24);
+    // Tracer lines (M-TRACERS): a ring of 16 hidden boxes waits for the shots.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"Tracer3D","show":["Tracer3D"]}})")) == 16);
     // A safety net under the world (M-FALLDEATH).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).
