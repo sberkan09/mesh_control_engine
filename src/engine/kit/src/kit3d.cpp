@@ -21,6 +21,7 @@
 #include "mce/kit/light_flicker.h"
 #include "mce/kit/static_merge3d.h"
 #include "mce/kit/sun_shafts.h"
+#include "mce/kit/cloud_shadow.h"
 #include "mce/log.h"
 #include "mce/string_id.h"
 #include "kit3d_internal.h"
@@ -287,6 +288,7 @@ void install_kit3d(World& world, asset::AssetSystem* assets) {
     world.register_components<GiVisibility3D>();  // M-GI2 50h: read by Kit3DExtract on the GiVolume3D's entity; no system
     world.register_components<LensFlare3D>();  // M-LENSFLARE 38d: read by Kit3DExtract; no system
     world.register_components<SunShafts3D>();  // M-SUNSHAFTS 45d: read by Kit3DExtract; no system
+    world.register_components<CloudShadow3D>();  // M-CLOUDSHADOW 51d: read by Kit3DExtract; no system
     world.register_components<DynamicResolution3D>();  // M-DYNRES 46d: read by Kit3DExtract; no system
     world.register_components<LensRain3D>();  // M-LENSRAIN 42d: advanced by kit_lens_rain (install_weather), read by Kit3DExtract
     world.register_components<HeatHaze3D>();  // M-HEATHAZE 43d: read by Kit3DExtract; no system

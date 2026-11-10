@@ -10,6 +10,7 @@
 
 #include "mce/ecs/transform.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/cloud_shadow.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -1348,4 +1349,87 @@ TEST_CASE("weather api: set_moon bad arguments raise an error that names the cal
         CHECK(r.moon().cycle_days == 29.53f);
         CHECK(r.moon().light_color.x == 0.55f);
     }
+}
+
+// M-CLOUDSHADOW 51e: the cloud shadow binding over the first CloudShadow3D (a kit3d component, registered here by hand).
+namespace {
+
+// A script run against a world that has CloudShadow3D registered (and, with `spawn`, one entity); without `register_type` the
+// world is not even weather-installed, so the type is unknown to it.
+struct CsRig : WRig {
+    Entity cs_e;
+    explicit CsRig(const char* source, bool spawn = true, bool register_type = true) : WRig(source, true, register_type) {
+        if (register_type) w.register_components<kit::CloudShadow3D>();
+        if (register_type && spawn) cs_e = w.spawn_with(kit::CloudShadow3D{});
+    }
+    kit::CloudShadow3D& cs() { return *w.try_get_mut<kit::CloudShadow3D>(cs_e); }
+};
+
+void expect_cs_error(const char* body, const char* needle, bool spawn = true, bool register_type = true) {
+    const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
+    CsRig r(src.c_str(), spawn, register_type);
+    r.step(2);
+    INFO(body);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    INFO(err(r.h()));
+    CHECK(err(r.h()).find(needle) != std::string::npos);
+}
+
+}  // namespace
+
+TEST_CASE("weather api: the cloud shadow getters read the first CloudShadow3D, the setter writes and clamps to the Range") {
+    CsRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(math.abs(weather.cloud_shadow_strength() - 0.6) < 1e-6)
+        assert(math.abs(weather.cloud_shadow_softness() - 0.3) < 1e-6)
+        weather.set_cloud_shadow{strength = 0.25}
+    end
+    if t == 2 then
+        assert(weather.cloud_shadow_strength() == 0.25)
+        assert(math.abs(weather.cloud_shadow_softness() - 0.3) < 1e-6)  -- only the given key changed
+        weather.set_cloud_shadow{strength = 9, softness = 9}
+    end
+    if t == 3 then
+        assert(weather.cloud_shadow_strength() == 1 and weather.cloud_shadow_softness() == 1)
+        weather.set_cloud_shadow{strength = -5, softness = -5}
+        weather.set_cloud_shadow{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.cloud_shadow_strength() == 0 and weather.cloud_shadow_softness() == 0)
+        weather.set_cloud_shadow{softness = 0.7}
+    end
+end
+)");
+    r.step(1);
+    CHECK(r.cs().strength == 0.25f);
+    r.step(4);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.cs().strength == 0.0f);
+    CHECK(r.cs().softness == 0.7f);
+    CHECK(r.cs().enabled == 1u);  // not settable
+}
+
+TEST_CASE("weather api: set_cloud_shadow names its errors and writes nothing on one") {
+    expect_cs_error("weather.set_cloud_shadow{enabled = 0}", "weather.set_cloud_shadow: unknown key 'enabled' (strength, softness)");
+    expect_cs_error("weather.set_cloud_shadow{strength = 'x'}", "weather.set_cloud_shadow: 'strength' is not a number");
+    expect_cs_error("weather.set_cloud_shadow{}", "weather.set_cloud_shadow: the scene has no CloudShadow3D entity", false);
+    for (const char* name : {"cloud_shadow_strength", "cloud_shadow_softness"})
+        expect_cs_error((std::string("weather.") + name + "()").c_str(),
+                        (std::string("weather.") + name + ": the scene has no CloudShadow3D entity").c_str(), false);
+    expect_cs_error("weather.cloud_shadow_strength()", "weather.cloud_shadow_strength: this world has no kit3d components",
+                    false, false);
+    // Nothing is written when a later key is bad: the valid strength must not land.
+    CsRig r(R"(
+function update()
+    if mce.tick() == 1 then weather.set_cloud_shadow{strength = 0.1, softness = 'x'} end
+end
+)");
+    r.step(2);
+    CHECK(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(r.cs().strength == 0.6f);
+    CHECK(r.cs().softness == 0.3f);
+    CHECK(r.cs().enabled == 1u);
 }
