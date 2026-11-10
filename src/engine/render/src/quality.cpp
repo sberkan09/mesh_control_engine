@@ -47,6 +47,8 @@ MCE_CVAR(cv_underwater, "r.underwater", true,
          "Camera under water look (PostFx::underwater; off = the frame without it)", CVarFlags::Saved);
 MCE_CVAR(cv_sun_shafts, "r.sun_shafts", true,
          "Sun light shafts (PostFx::shafts; off = the frame without it)", CVarFlags::Saved);
+MCE_CVAR(cv_cloud_shadows, "r.cloud_shadows", true,
+         "Cloud shadows on the ground (PostFx::cloud_shadow; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_dynres, "r.dynres", true,
          "Dynamic resolution scaling (PostFx::dynres; off = the fixed render scale)", CVarFlags::Saved);
 MCE_CVAR(cv_dynres_target_ms, "r.dynres.target_ms", 0.0f,
@@ -101,6 +103,8 @@ QualitySettings quality_settings(QualityTier tier) {
             q.underwater_detail = 0;
             q.sun_shafts = false;
             q.sun_shafts_samples = 0;
+            q.cloud_shadows = false;
+            q.cloud_shadow_octaves = 0;
             q.dynres_floor = 0.5f;
             q.edge_outline_wide = false;
             q.light_cookie_size = 128;
@@ -123,6 +127,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.heat_haze_volumes = 4;
             q.underwater_detail = 1;
             q.sun_shafts_samples = 16;
+            q.cloud_shadow_octaves = 2;
             q.dynres_floor = 0.5f;
             q.light_cookie_size = 256;
             q.light_cookie_layers = 8;
@@ -240,6 +245,11 @@ void apply_quality(const QualitySettings& q, ShadowSettings& shadows, PostFx& po
     ss.cap = detail::ranged(ss.cap, 0.0f, 8.0f, 1.5f);
     ss.visibility = detail::ranged(ss.visibility, 0.0f, 1.0f, 1.0f);
     ss.scatter_m = detail::ranged(ss.scatter_m, 5.0f, 500.0f, 60.0f);
+    // M-CLOUDSHADOW 51b: the cloud shadows. Off for the tier or r.cloud_shadows 0; the ranges clamp, NaN -> the default.
+    CloudShadow& cs = post.cloud_shadow;
+    cs.enabled = cs.enabled && q.cloud_shadows && cv_cloud_shadows.get_bool();
+    cs.strength = detail::ranged(cs.strength, 0.0f, 1.0f, 0.6f);
+    cs.softness = detail::ranged(cs.softness, 0.0f, 1.0f, 0.3f);
     // M-DYNRES 46b: dynamic resolution. Off for the tier or r.dynres 0; the ranges clamp, NaN -> the default.
     DynamicResolution& dr = post.dynres;
     dr.enabled = dr.enabled && q.dynres && cv_dynres.get_bool();

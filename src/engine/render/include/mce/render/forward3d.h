@@ -160,6 +160,8 @@ struct Forward3DStats {
     f32 underwater_submersion = 0.0f;  // the submersion it drew with, 0..1 (0 = not drawn)
     bool sun_shafts = false;         // the sun shafts pass drew this frame (M-SUNSHAFTS)
     f32 sun_shafts_strength = 0.0f;  // the combined strength it drew with (0 = not drawn)
+    bool cloud_shadow = false;       // the cloud shadow pass drew this frame (M-CLOUDSHADOW)
+    f32 cloud_shadow_strength = 0.0f;  // the strength it drew with (0 = not drawn)
     f32 render_scale = 1.0f;         // the scale this view drew at (1 = 1:1; M-DYNRES)
     bool dynres = false;             // the dynamic resolution controller ran this frame (M-DYNRES)
     f32 dynres_cost_ms = 0.0f;       // its smoothed measured cost converted to ms at the current scale (0 = none)
@@ -387,6 +389,7 @@ private:
     void record_heat_haze(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-HEATHAZE 43c (declared only until then)
     void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
     void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c
+    void record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-CLOUDSHADOW 51c (declared only until then)
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -555,6 +558,8 @@ private:
     // ray buffer (shared by the views like outline_dst_, recreated on a size change by the first view that draws shafts).
     rhi::PipelineHandle shafts_pipe_, shafts_comp_pipe_;
     rhi::TextureHandle shafts_buf_;
+    // M-CLOUDSHADOW: the cloud shadow composite pipeline (writes post_fx_target; no target of its own; 51c creates it).
+    rhi::PipelineHandle cloud_shadow_pipe_;
     // M-DYNRES: the dynamic resolution controller's state (46c creates it in init and frees it in shutdown; null until then).
     DynResState* dynres_ = nullptr;
     bool shafts_buf_used_ = false;  // a view of this frame recorded into shafts_buf_ (cleared on the frame's first view)
