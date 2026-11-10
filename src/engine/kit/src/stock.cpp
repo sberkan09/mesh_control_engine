@@ -41,6 +41,7 @@
 #include "mce/kit/ammopickup3d.h"
 #include "mce/kit/event_sfx3d.h"
 #include "mce/kit/bullet_hole3d.h"
+#include "mce/kit/tracer3d.h"
 #include "mce/kit/grenade3d.h"
 #include "mce/kit/melee3d.h"
 #include "mce/kit/progress3d.h"
@@ -190,6 +191,7 @@ void install_stock(World& world, asset::AssetSystem* assets) {
     install_ammopickup3d(world);
     install_event_sfx3d(world);
     install_bullet_holes(world);
+    install_tracers(world);
     install_world_audio(world);  // after audio_bridge (the player and the editor install audio first): a voice exists when its pitch is set
     install_sprite_animation(world, assets);
     install_skeleton2d(world, assets);  // after the timelines: a key on Skeleton2D.pose poses the same tick

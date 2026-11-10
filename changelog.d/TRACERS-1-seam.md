@@ -1,0 +1,1 @@
+- kit: `Tracer3D` and system `kit_tracers`: a ring of boxes draws a short line along every shot (not placed in a scene yet).
