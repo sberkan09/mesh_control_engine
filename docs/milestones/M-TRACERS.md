@@ -24,7 +24,7 @@ Padding-free state with `static_assert(sizeof)`.
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | `Tracer3D`, system `kit_tracers`, unit tests (a shot shows the next slot at the middle, turned and scaled along the shot, the ring reuses the oldest, two shots in a tick take two slots, a short shot draws nothing, the line hides after `life`, no slots is harmless). No sample change. | planned |
+| 1 seam | `Tracer3D`, system `kit_tracers`, unit tests (a shot shows the next slot at the middle, turned and scaled along the shot, the ring reuses the oldest, two shots in a tick take two slots, a short shot draws nothing, the line hides after `life`, no slots is harmless). No sample change. | done (2026-11-10) |
 | 2 feature | Sample: a ring of 16 thin boxes with an emissive material written by `gen_assets.py` (the mesh and material are generated, no third-party asset), `test_mcp_openworld` inspect check, regenerated assets, the temporary `sample_coverage` line removed. | planned |
 | 3 polish | User-guide section (with step 1), closing doc, the "no tracer line" notes struck through in M-SHOTFX and M-OPENWORLD-GAPS. | planned |
 

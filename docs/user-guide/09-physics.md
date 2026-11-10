@@ -498,6 +498,14 @@ point, turns its +Y along the surface normal and shows its decal sized `size` by
 seconds and hides. Two hits in one tick take two slots; hits on characters leave nothing. The system is `kit_bullet_holes`
 (`FixedUpdate_Post`); install combat first, as `install_stock` does.
 
+### Tracer lines
+
+`mce/kit/tracer3d.h`: a ring of `Tracer3D` entities (each with a `LocalTransform` and a `MeshRef` of a unit box, usually with an emissive
+material; 16 is a good number) draws a short line along every shot. Each `WeaponFired3D` at least `min_length` metres long takes the oldest
+slot, puts it in the middle of the shot, turns its +Z along it, scales it to `width` by `width` by the shot's length and shows it for `life`
+seconds (0.06 by default). Two shots in one tick take two slots; shorter shots draw nothing. The system is `kit_tracers`
+(`FixedUpdate_Post`); install combat first, as `install_stock` does.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3

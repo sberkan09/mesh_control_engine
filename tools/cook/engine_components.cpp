@@ -60,6 +60,7 @@
 #include "mce/kit/ammopickup3d.h"        // AmmoPickup3D (M-AMMOPICKUP)
 #include "mce/kit/event_sfx3d.h"          // EventSfx3D (M-GAMEFEEL-SFX)
 #include "mce/kit/bullet_hole3d.h"       // BulletHole3D (M-SHOTMARKS)
+#include "mce/kit/tracer3d.h"            // Tracer3D (M-TRACERS)
 #include "mce/kit/grenade3d.h"          // Grenade3D (M-GRENADE)
 #include "mce/kit/melee3d.h"            // Melee3D (M-MELEE)
 #include "mce/kit/progress3d.h"          // Progress3D, Goal3D (M-PROGRESS)
