@@ -4,4 +4,4 @@ Kit: `ImpactFx3D` (`mce/kit/impact_fx.h`), system `kit_impact_fx` (FixedUpdate_P
 
 Sample (`09_openworld`): an "Impact sparks" entity (orange-yellow additive sparks that spray up and fall) with `ImpactFx3D { count: 10 }`. It rests under the map until the first hit.
 
-Tests: `tests/kit/test_impact_fx.cpp` (move and delayed burst, last hit wins). Limits: sparks always spray up (not along the normal), no decal or bullet-hole mark, no per-material look (same sparks on flesh and concrete), no tracer.
+Tests: `tests/kit/test_impact_fx.cpp` (move and delayed burst, last hit wins). Limits: sparks always spray up (not along the normal), ~~no decal or bullet-hole mark~~ (done: [M-SHOTMARKS](M-SHOTMARKS.md)), no per-material look (same sparks on flesh and concrete), no tracer.
