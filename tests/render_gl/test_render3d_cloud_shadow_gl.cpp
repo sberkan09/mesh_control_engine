@@ -504,16 +504,20 @@ rhi::PipelineHandle fullscreen_pipe(Fixture3D& f, const char* fs, const char* na
 
 // CloudShadowU as the shader declares it (forward3d.cpp's mirror is private to the renderer).
 struct CloudShadowBlock {
-    f32 proj[4], right[4], up[4], back[4], sun[4], shade[4], drift[4];
+    f32 proj[4], right[4], up[4], back[4], sun[4], shade[4], drift[4], fog[4];
 };
 static_assert(sizeof(CloudShadowBlock) == shaders3d::kCloudShadowUBytes, "CloudShadowBlock mirrors CloudShadowU");
 
 // kCloudShadowFS alone over a w x 1 prepass row (depth per texel) and a white source into a w x 1 RGBA32F target:
 // returns the factor per texel. One row, so v_uv.y is 0.5 whatever the backend's row order.
-Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CloudShadowBlock& u) {
+Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CloudShadowBlock& u,
+                    const std::function<f32(u32)>& source = {}) {
     const u32 w = u32(depth.size());
     const rhi::TextureHandle gbuf = row_texture(f, w, [&](u32 x) { return math::vec4(0.0f, 0.0f, 1.0f, depth[x]); });
-    const rhi::TextureHandle src = row_texture(f, w, [](u32) { return math::vec4(1.0f, 1.0f, 1.0f, 1.0f); });
+    const rhi::TextureHandle src = row_texture(f, w, [&](u32 x) {
+        const f32 r = source ? source(x) : 1.0f;  // the red channel the case reads back; g and b white
+        return math::vec4(r, 1.0f, 1.0f, 1.0f);
+    });
     const rhi::PipelineHandle pipe = fullscreen_pipe(f, shaders3d::kCloudShadowFS, "cloud_shadow.frag");
     const rhi::PipelineHandle enc = fullscreen_pipe(f, kEncodeFS, "test.cloud_shadow.encode");
     rhi::TextureDesc td;
@@ -573,6 +577,7 @@ Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CloudShadowBloc
 
 TEST_CASE("cloud shadow: the shader agrees with the CPU helpers on a grid of points") {
     Fixture3D f;
+    const vec3 kFogRgb{0.8f, 0.85f, 0.9f};
     constexpr u32 kN = 64;
     Array<f32> depth;
     depth.resize(kN);
@@ -609,13 +614,14 @@ TEST_CASE("cloud shadow: the shader agrees with the CPU helpers on a grid of poi
         const f32 len = std::sqrt(c.toward.x * c.toward.x + c.toward.y * c.toward.y + c.toward.z * c.toward.z);
         const vec3 sun{c.toward.x / len, c.toward.y / len, c.toward.z / len};
         CloudShadowBlock u{};
-        const f32 blk[7][4] = {{p00, p11, p20, p21},
+        const f32 blk[8][4] = {{p00, p11, p20, p21},
                                {right.x, right.y, right.z, 1.0f / c.scale},
                                {up.x, up.y, up.z, c.height},
                                {back.x, back.y, back.z, c.coverage},
                                {sun.x, sun.y, sun.z, c.density},
                                {c.strength, c.share, c.softness, f32(c.octaves)},
-                               {c.drift.x, c.drift.y, c.fog, 0.0f}};
+                               {c.drift.x, c.drift.y, c.fog, 0.0f},
+                               {kFogRgb.x, kFogRgb.y, kFogRgb.z, 0.0f}};
         std::memcpy(&u, blk, sizeof u);
         const Array<f32> gpu = run_pass(f, depth, u);
         CloudDensityParams dp;
@@ -636,10 +642,9 @@ TEST_CASE("cloud shadow: the shader agrees with the CPU helpers on a grid of poi
                 math::vec2 xz;
                 if (cloud_shadow_point(p, sun, vec3{0.0f, 0.0f, 0.0f}, c.height, xz)) {
                     want = cloud_shadow_factor(cloud_density(xz, dp), c.strength, c.share, sun.y);
-                    if (c.fog > 0.0f) {  // only the surface's share of the pixel: 1 - (1 - factor) * exp(-(fog * |v|)²)
-                        const f32 fd = c.fog * std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-                        want = 1.0f - (1.0f - want) * std::exp(-fd * fd);
-                    }
+                    // The white source pixel as the main pass's fog left it: only its surface part is shaded.
+                    const f32 vis = cloud_shadow_fog_visibility(c.fog, std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z));
+                    want = cloud_shadow_shade(vec3{1.0f, 1.0f, 1.0f}, want, vis, kFogRgb).x;
                     ++hits;
                     shaded += want < 0.99f ? 1 : 0;
                 }
@@ -707,4 +712,202 @@ TEST_CASE("cloud shadow: GPU cost per tier at 1280 x 720 (opt in)") {
     }
     h.f.device->destroy_texture(target);
     CHECK(h.f.device->validation_error_count() == 0);
+}
+
+// ---- M-CLOUDSHADOW 51c review: the exact fog composite, the uniform fill against the CPU, the sky and fog gates ------
+
+namespace {
+
+f32 from_half(u16 h) {
+    const u32 sign = u32(h & 0x8000u) << 16, e = (h >> 10) & 0x1fu, m = h & 0x3ffu;
+    u32 b = sign;
+    if (e != 0) b |= ((e - 15 + 127) << 23) | (m << 13);  // the cases upload normal numbers and 0 only
+    f32 v;
+    std::memcpy(&v, &b, 4);
+    return v;
+}
+
+}  // namespace
+
+TEST_CASE("cloud shadow: under a bright exp² fog at T ~ 0.5 the pass shades only the surface part, exactly") {
+    // The main pass wrote src = s T + fog (1 - T); the pass must give s factor T + fog (1 - T) (cloud_shadow_shade), not
+    // src factor-ish. A dark surface s = 0.3 under a bright fog 4.0 (red channel) and T from 0.35 to 0.65.
+    Fixture3D f;
+    constexpr u32 kN = 64;
+    const f32 fog_density = 0.004f, s = 0.3f, fog_r = 4.0f;
+    const f32 p11 = 1.0f / std::tan(math::radians(22.5f)), p00 = p11 / f32(kN) * 40.0f;
+    Array<f32> depth;
+    depth.resize(kN);
+    for (u32 x = 0; x < kN; ++x) depth[x] = f32(150 + 2 * x);  // 150..276 m: T = exp(-(0.004 d)²) about 0.70..0.30
+    // A camera looking 30 degrees down, the sun straight up, a full thick deck: most points are deeply shaded.
+    const f32 pitch = 0.5f;
+    const vec3 fwd{0.0f, -std::sin(pitch), -std::cos(pitch)};
+    const vec3 right{1.0f, 0.0f, 0.0f};
+    const vec3 up = math::cross(right, fwd);
+    const vec3 back = -fwd;
+    const vec3 sun{0.0f, 1.0f, 0.0f};
+    const vec3 fog_rgb{fog_r, 3.0f, 2.0f};
+    CloudShadowBlock u{};
+    const f32 blk[8][4] = {{p00, p11, 0.0f, 0.0f},         {right.x, right.y, right.z, 1.0f / 60.0f},
+                           {up.x, up.y, up.z, 150.0f},     {back.x, back.y, back.z, 1.0f},
+                           {sun.x, sun.y, sun.z, 1.0f},    {1.0f, 1.0f, 0.3f, 3.0f},
+                           {2.0f, 5.0f, fog_density, 0.0f}, {fog_rgb.x, fog_rgb.y, fog_rgb.z, 0.0f}};
+    std::memcpy(&u, blk, sizeof u);
+    CloudDensityParams dp;
+    dp.coverage = 1.0f;
+    dp.density = 1.0f;
+    dp.scale_m = 60.0f;
+    dp.drift_cells = {2.0f, 5.0f};
+    dp.softness = 0.3f;
+    Array<vec3> view_pos;
+    Array<f32> src_h, vis;
+    view_pos.resize(kN);
+    src_h.resize(kN);
+    vis.resize(kN);
+    for (u32 x = 0; x < kN; ++x) {
+        const f32 z = depth[x];
+        const f32 ndc_x = (f32(x) + 0.5f) / f32(kN) * 2.0f - 1.0f;
+        view_pos[x] = vec3{ndc_x * z / p00, 0.0f, -z};
+        vis[x] = cloud_shadow_fog_visibility(fog_density, std::sqrt(view_pos[x].x * view_pos[x].x + z * z));
+        src_h[x] = from_half(to_half(s * vis[x] + fog_r * (1.0f - vis[x])));  // what the half-float source holds
+    }
+    const Array<f32> gpu = run_pass(f, depth, u, [&](u32 x) { return s * vis[x] + fog_r * (1.0f - vis[x]); });
+    usize mid = 0, deep = 0;
+    f32 worst = 0.0f, worst_true = 0.0f;
+    for (u32 x = 0; x < kN; ++x) {
+        const vec3 v = view_pos[x];
+        const vec3 p{right.x * v.x + up.x * v.y + back.x * v.z, right.y * v.x + up.y * v.y + back.y * v.z,
+                     right.z * v.x + up.z * v.y + back.z * v.z};
+        math::vec2 xz;
+        REQUIRE(cloud_shadow_point(p, sun, vec3{0.0f, 0.0f, 0.0f}, 150.0f, xz));
+        const f32 factor = cloud_shadow_factor(cloud_density(xz, dp), 1.0f, 1.0f, sun.y);
+        const f32 want = cloud_shadow_shade(vec3{src_h[x], 0.0f, 0.0f}, factor, vis[x], fog_rgb).x;
+        const f32 exact = s * factor * vis[x] + fog_r * (1.0f - vis[x]);  // the surface shaded, the fog as it was
+        const f32 old_approx = src_h[x] * (1.0f - (1.0f - factor) * vis[x]);
+        worst = std::max(worst, std::fabs(gpu[x] - want));
+        worst_true = std::max(worst_true, std::fabs(gpu[x] - exact));
+        CHECK_MESSAGE(std::fabs(gpu[x] - want) <= 1e-4f * std::max(1.0f, want), "texel " << x << ": " << gpu[x] << " vs " << want);
+        CHECK(std::fabs(gpu[x] - exact) <= 4e-3f);  // the half-float source's rounding only
+        mid += vis[x] > 0.35f && vis[x] < 0.65f ? 1 : 0;
+        if (factor < 0.6f) {
+            ++deep;
+            CHECK(std::fabs(old_approx - exact) > 0.2f);  // the case tells the approximation from the exact composite
+        }
+    }
+    MESSAGE("fog composite: worst |gpu - helper| " << worst << ", |gpu - exact| " << worst_true << "; " << mid
+                                                   << " texels at T 0.35..0.65, " << deep << " deeply shaded");
+    CHECK(mid > kN / 2);
+    CHECK(deep > kN / 4);
+}
+
+TEST_CASE("cloud shadow: the shade lands where the CPU puts it for the ground point of each pixel") {
+    // The fixture's 6 km ground (top at y = 0) seen from two other poses; per pixel the world point is the view ray's hit
+    // on y = 0, and cloud_shadow_point / cloud_density / cloud_shadow_factor give the CPU's factor from the scene's own
+    // values. The tonemapper (ACES, grade, sRGB) keeps the 8-bit output from being compared linearly, so the pixels are
+    // classified with a one-pixel margin (the half-resolution prepass): where the CPU says no cloud for the pixel and its
+    // 8 neighbours the frame must be the one without the pass byte for byte, and where it says a thick cloud (factor under
+    // 0.75 for all 9) the pixel must be darker. A wrong basis, sign, height, cell, drift or sun in the uniform fill moves
+    // the patches and fails both.
+    const Clouds clouds = cloud_shadow_clouds(0.55f);
+    const CloudShadow on = cloud_shadow_setting();
+    const f32 time = 7.0f;
+    struct Pose {
+        f32 yaw, pitch;
+    };
+    for (const Pose pose : {Pose{35.0f, 25.0f}, Pose{-120.0f, 15.0f}}) {
+        ShadowFixture h;
+        h.f.yaw_deg = pose.yaw;
+        h.f.pitch_deg = pose.pitch;
+        const Shot off = h.draw(clouds, nullptr, time);
+        const Shot lit = h.draw(clouds, &on, time);
+        REQUIRE(lit.stats.cloud_shadow);
+        const View3D view = h.f.view;
+        const math::mat4 inv = math::inverse(view.view_proj);
+        const vec3 sun = math::normalize(kCloudShadowToward);
+        const DirectionalLight light;  // cloud_shadow_scene's sun: the default colour, intensity and ambient
+        const f32 share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+        CloudDensityParams dp;
+        dp.coverage = clouds.coverage;
+        dp.density = clouds.density;
+        dp.scale_m = clouds.scale_m;
+        dp.drift_cells = cloud_shadow_drift(time, clouds.speed, clouds.scale_m, clouds.wind_dir);
+        dp.octaves = 3;  // High, the default tier here
+        dp.softness = on.softness;
+        // The CPU factor at a (sub)pixel position, top-row-first pixel coordinates; 2 = no ground there.
+        auto factor_at = [&](f32 px, f32 py) {
+            const f32 nx = px / f32(kW) * 2.0f - 1.0f, ny = 1.0f - py / f32(kH) * 2.0f;
+            const math::vec4 a = inv * math::vec4(nx, ny, -1.0f, 1.0f), b = inv * math::vec4(nx, ny, 1.0f, 1.0f);
+            const vec3 p0{a.x / a.w, a.y / a.w, a.z / a.w}, p1{b.x / b.w, b.y / b.w, b.z / b.w};
+            if (!(p1.y < 0.0f) || !(p0.y > 0.0f)) return 2.0f;
+            const f32 t = p0.y / (p0.y - p1.y);
+            const vec3 g{p0.x + (p1.x - p0.x) * t, 0.0f, p0.z + (p1.z - p0.z) * t};
+            // Near the 1000 m far plane the half-resolution prepass texel may already lie past the clipped ground edge.
+            if (math::length(g - view.position) > 700.0f) return 2.0f;
+            math::vec2 xz;
+            if (!cloud_shadow_point(g, sun, view.position, clouds.height_m, xz)) return 1.0f;
+            return cloud_shadow_factor(cloud_density(xz, dp), on.strength, share, sun.y);
+        };
+        usize clear = 0, thick = 0, clear_bad = 0, thick_bad = 0;
+        for (u32 y = 1; y + 1 < kH; ++y)
+            for (u32 x = 1; x + 1 < kW; ++x) {
+                f32 lo = 2.0f, hi = 0.0f;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const f32 fac = factor_at(f32(x) + 0.5f + f32(dx), f32(y) + 0.5f + f32(dy));
+                        lo = std::min(lo, fac);
+                        hi = std::max(hi, fac);
+                    }
+                if (hi > 1.5f) continue;  // not all ground
+                const usize p = usize(y) * kW + x;
+                if (lo == 1.0f) {
+                    ++clear;
+                    clear_bad += same_px(lit.px, off.px, p) ? 0 : 1;
+                } else if (hi < 0.75f) {
+                    ++thick;
+                    const bool darker = luma8(off.px, p) - luma8(lit.px, p) >= 3;
+                    thick_bad += darker ? 0 : 1;
+                }
+            }
+        MESSAGE("pose yaw " << pose.yaw << " pitch " << pose.pitch << ": " << clear << " clear pixels (" << clear_bad
+                            << " changed), " << thick << " thick (" << thick_bad << " not darker)");
+        CHECK(clear > 300);
+        CHECK(thick > 300);
+        CHECK(clear_bad == 0);
+        CHECK(thick_bad == 0);
+    }
+}
+
+TEST_CASE("cloud shadow: no sky pass, no shade; a negative fog density fogs and shades as the positive one") {
+    ShadowFixture h;
+    const Clouds clouds = cloud_shadow_clouds(0.55f);
+    const CloudShadow on = cloud_shadow_setting();
+    // Sky::enabled false: the main pass clears to the fog colour and draws no clouds, so the ground gets no patches.
+    const auto no_sky = [](Scene3D& s) {
+        Sky sky = s.sky();
+        sky.enabled = false;
+        s.set_sky(sky);
+    };
+    const Shot base = h.draw(clouds, nullptr, 0.0f, kCloudShadowToward, true, no_sky);
+    const Shot s = h.draw(clouds, &on, 0.0f, kCloudShadowToward, true, no_sky);
+    CHECK_FALSE(s.stats.cloud_shadow);
+    CHECK(same(s.px, base.px));
+    // The main pass squares the density: -0.004 fogs as +0.004 does, and so does the pass.
+    auto fogged = [&](f32 density) {
+        return h.draw(clouds, &on, 0.0f, kCloudShadowToward, true, [density](Scene3D& sc) {
+            Fog f = sc.fog();
+            f.density = density;
+            sc.set_fog(f);
+        });
+    };
+    const Shot pos = fogged(0.004f), neg = fogged(-0.004f);
+    CHECK(pos.stats.cloud_shadow);
+    CHECK(neg.stats.cloud_shadow);
+    // The ground rows (the sky's own fog branch only takes a positive density, so the sky differs): byte for byte.
+    const Array<u8> sky = sky_mask(base.px, h.draw(clouds, nullptr, 0.0f, kCloudShadowToward, false, no_sky).px);
+    const int y0 = first_ground_row(sky) + 2;
+    REQUIRE(y0 < int(kH) - 20);
+    bool ground_same = true;
+    for (usize p = usize(y0) * kW; p < usize(kW) * kH; ++p) ground_same = ground_same && same_px(pos.px, neg.px, p);
+    CHECK(ground_same);
+    CHECK_FALSE(same(pos.px, fogged(0.0f).px));  // and the fog does change the shaded ground
 }

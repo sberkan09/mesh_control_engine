@@ -462,12 +462,14 @@ struct CloudShadowU {
     vec4 sun;    // the unit direction toward the sun, w the layer's density (p_cloud.y)
     vec4 shade;  // strength, sun share, softness, octaves (1..3)
     vec4 drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0 with volumetrics), w 0
+    vec4 fog;    // rgb the exp² fog colour, w 0
 };
-static_assert(sizeof(CloudShadowU) == shaders3d::kCloudShadowUBytes, "CloudShadowU: 7 vec4, as MCE_GLSL_CLOUD_SHADOW_U");
+static_assert(sizeof(CloudShadowU) == shaders3d::kCloudShadowUBytes, "CloudShadowU: 8 vec4, as MCE_GLSL_CLOUD_SHADOW_U");
 static_assert(offsetof(CloudShadowU, proj) == 0 && offsetof(CloudShadowU, right) == 16 && offsetof(CloudShadowU, up) == 32 &&
                   offsetof(CloudShadowU, back) == 48 && offsetof(CloudShadowU, sun) == 64 &&
-                  offsetof(CloudShadowU, shade) == 80 && offsetof(CloudShadowU, drift) == 96,
-              "CloudShadowU: c_proj / c_right / c_up / c_back / c_sun / c_shade / c_drift as in MCE_GLSL_CLOUD_SHADOW_U");
+                  offsetof(CloudShadowU, shade) == 80 && offsetof(CloudShadowU, drift) == 96 &&
+                  offsetof(CloudShadowU, fog) == 112,
+              "CloudShadowU: c_proj / c_right / c_up / c_back / c_sun / c_shade / c_drift / c_fog as in MCE_GLSL_CLOUD_SHADOW_U");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -4389,13 +4391,14 @@ void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene)
 // The cloud values are the sky's own: cloud_params fills p_cloud / p_cloud2 exactly as the main pass does (coverage,
 // density, 1 / cell, the plane height, the drift wrapped in f64), so the patches sit under the clouds the sky draws and
 // move with them. The octave count is the tier's (QualitySettings::cloud_shadow_octaves: Medium 2, High 3), the sun's
-// share of the light cloud_shadow_sun_share of the scene's sun and sky ambient, the shade scaled by the surface's share of
-// the pixel against the exp² fog (not the volumetric fog, which is not modelled), the strength the setting's times
+// share of the light cloud_shadow_sun_share of the scene's sun and sky ambient, only the surface part of a pixel the exp²
+// fog mixed into shaded (cloud_shadow_shade; the volumetric fog is not modelled), the strength the setting's times
 // (1 - submersion): the M-UNDERWATER crossing blend as the shafts take it, so the shadows fade out over the band the
 // underwater look fades in over and are gone under water. Camera-relative throughout (the view's rotation and the prepass
 // depth only): neither the camera's position nor the floating origin enters, as in the sky layer.
 // Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.cloud_shadow false)
-// when the setting is off (checked first), the view renders to a texture (out_.linear_output: GI captures, probes and
+// when the setting is off (checked first), the sky pass is off (Sky::enabled false: no clouds are drawn), the view renders
+// to a texture (out_.linear_output: GI captures, probes and
 // monitors stay cloudless, as with the sky layer's reflections), the tier has no cloud shadows (Low, octaves 0) or
 // r.cloud_shadows is 0 (read again here, as the shafts do), the cloud layer is off or has no coverage, the view is
 // orthographic, the sun is below kCloudShadowMinSunY (its fade is 0 there) or its direction is not finite or zero, the
@@ -4404,6 +4407,7 @@ void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene)
 void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const CloudShadow& setting = scene.post().cloud_shadow;
     if (!setting.enabled || out_.linear_output) return;
+    if (!scene.sky().enabled) return;  // no sky pass, no cloud layer drawn (record_main's sky gate): no shade either
     const QualitySettings q = quality_settings(quality_tier());
     static const ConVar* cv = ConVar::find(MCE_SID("r.cloud_shadows"));
     if (!q.cloud_shadows || q.cloud_shadow_octaves == 0 || (cv && !cv->get_bool())) return;
@@ -4414,9 +4418,7 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
     if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
     const View3D& view = scene.view();
     const mat4& pr = view.proj;
-    if (pr.c[3][3] != 0.0f || !(std::fabs(pr.c[0][0]) > 1.0e-6f) || !(std::fabs(pr.c[1][1]) > 1.0e-6f) ||
-        !std::isfinite(pr.c[0][0]) || !std::isfinite(pr.c[1][1]) || !std::isfinite(pr.c[2][0]) || !std::isfinite(pr.c[2][1]))
-        return;  // orthographic or degenerate: the reconstruction assumes a perspective projection
+    if (!cloud_shadow_perspective(pr)) return;  // orthographic or degenerate: the reconstruction assumes a perspective
     const DirectionalLight& light = scene.light();
     const vec3 toward{-light.direction.x, -light.direction.y, -light.direction.z};
     const f32 len2 = toward.x * toward.x + toward.y * toward.y + toward.z * toward.z;
@@ -4461,8 +4463,10 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
     // The exp² fog the main pass mixed in (none where this view drew the volumetric fog in its place): the shade scales
     // with the surface's share of the pixel, so fogged distance does not darken under a cloud.
     const f32 fog = scene.fog().density;
-    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog > 0.0f ? fog : 0.0f;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
     cu.drift = {cloud.cloud2.x, cloud.cloud2.y, fog_density, 0.0f};
+    cu.fog = vec4(scene.fog().color, 0.0f);
     rhi::PassAttachment o;
     o.texture = dst;
     o.load = rhi::LoadOp::DontCare;  // every pixel is written

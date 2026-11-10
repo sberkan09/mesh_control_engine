@@ -405,3 +405,51 @@ TEST_CASE("cloud shadow: sun share is 0 without a sun and for non-finite input")
     // Huge but finite: S overflows to inf -> 0 rather than NaN.
     CHECK(cloud_shadow_sun_share({3e38f, 3e38f, 3e38f}, 3e38f, {0.4f, 0.4f, 0.4f}) == 0.0f);
 }
+
+// ---- M-CLOUDSHADOW 51c review: the view gate, the fog share and the exact fog composite
+
+TEST_CASE("cloud shadow: the pass's view gate takes a perspective projection only") {
+    CHECK(cloud_shadow_perspective(math::perspective_rh_no(math::radians(45.0f), 1.5f, 0.1f, 1000.0f)));
+    CHECK_FALSE(cloud_shadow_perspective(math::ortho_rh_no(-5.0f, 5.0f, -5.0f, 5.0f, 0.1f, 100.0f)));
+    math::mat4 p = math::perspective_rh_no(math::radians(45.0f), 1.5f, 0.1f, 1000.0f);
+    p.c[2][0] = kNaN;
+    CHECK_FALSE(cloud_shadow_perspective(p));
+    p = math::perspective_rh_no(math::radians(45.0f), 1.5f, 0.1f, 1000.0f);
+    p.c[0][0] = 0.0f;
+    CHECK_FALSE(cloud_shadow_perspective(p));
+    p.c[0][0] = kInf;
+    CHECK_FALSE(cloud_shadow_perspective(p));
+    CHECK_FALSE(cloud_shadow_perspective(math::mat4{}));  // all zero: degenerate
+}
+
+TEST_CASE("cloud shadow: fog visibility is the main pass's exp² term; a negative density fogs as the positive") {
+    CHECK(cloud_shadow_fog_visibility(0.0f, 500.0f) == 1.0f);
+    CHECK(cloud_shadow_fog_visibility(kNaN, 500.0f) == 1.0f);
+    CHECK(cloud_shadow_fog_visibility(0.01f, kInf) == 1.0f);
+    CHECK(cloud_shadow_fog_visibility(0.01f, 100.0f) == doctest::Approx(std::exp(-1.0f)).epsilon(1e-6));
+    CHECK(cloud_shadow_fog_visibility(-0.01f, 100.0f) == cloud_shadow_fog_visibility(0.01f, 100.0f));
+    CHECK(cloud_shadow_fog_visibility(0.01f, 0.0f) == 1.0f);
+}
+
+TEST_CASE("cloud shadow: the shade composite shades the surface part of a fogged pixel only") {
+    const math::vec3 fog{4.0f, 3.0f, 2.0f};
+    // No fog: pixel * factor exactly (the unfogged path).
+    const math::vec3 a = cloud_shadow_shade({0.5f, 0.25f, 2.0f}, 0.4f, 1.0f, fog);
+    CHECK(a.x == 0.5f * 0.4f);
+    CHECK(a.y == 0.25f * 0.4f);
+    CHECK(a.z == 2.0f * 0.4f);
+    // A fogged pixel: s T + fog (1 - T) becomes s factor T + fog (1 - T).
+    const f32 s = 0.3f, t = 0.5f, factor = 0.4f;
+    const math::vec3 px{s * t + fog.x * (1 - t), s * t + fog.y * (1 - t), s * t + fog.z * (1 - t)};
+    const math::vec3 b = cloud_shadow_shade(px, factor, t, fog);
+    CHECK(b.x == doctest::Approx(s * factor * t + fog.x * (1 - t)).epsilon(1e-6));
+    CHECK(b.y == doctest::Approx(s * factor * t + fog.y * (1 - t)).epsilon(1e-6));
+    CHECK(b.z == doctest::Approx(s * factor * t + fog.z * (1 - t)).epsilon(1e-6));
+    // Factor 1 (no cloud) leaves any pixel as it is; a NaN factor too; the factor clamps.
+    const math::vec3 c = cloud_shadow_shade(px, 1.0f, t, fog);
+    CHECK(c.x == px.x);
+    CHECK(cloud_shadow_shade(px, kNaN, t, fog).x == px.x);
+    CHECK(cloud_shadow_shade(px, -1.0f, t, fog).x == doctest::Approx(fog.x * (1 - t)).epsilon(1e-6));
+    // All fog (T = 0): nothing to shade.
+    CHECK(cloud_shadow_shade(fog, 0.2f, 0.0f, fog).x == doctest::Approx(fog.x).epsilon(1e-6));
+}

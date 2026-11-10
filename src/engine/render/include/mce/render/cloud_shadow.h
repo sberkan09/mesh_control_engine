@@ -67,4 +67,19 @@ f32 cloud_shadow_factor(f32 density, f32 strength, f32 sun_share, f32 sun_elevat
 // A dim overcast or dusk sun against the same sky ambient gives a smaller share, so its cloud shadows are shallower.
 f32 cloud_shadow_sun_share(math::vec3 sun_color, f32 intensity, math::vec3 ambient_sky);
 
+// M-CLOUDSHADOW 51c review. The pass's view gate: true for a perspective projection the pass can rebuild positions under
+// (proj[3][3] == 0, finite proj[0][0], proj[1][1], proj[2][0], proj[2][1] with |proj[0][0]|, |proj[1][1]| > 1e-6); false
+// for an orthographic or degenerate one (the pass is then not recorded).
+bool cloud_shadow_perspective(const math::mat4& proj);
+
+// The share of a pixel that is surface rather than the main pass's exp² fog at `distance` m: T = exp(-(density *
+// distance)²), the main pass's own term (it squares the density, so a negative density fogs too). Exactly 1 for a density
+// of 0 or a non-finite density or distance (the pass then treats the pixel as unfogged).
+f32 cloud_shadow_fog_visibility(f32 fog_density, f32 distance);
+
+// The shaded pixel. The main pass wrote pixel = s T + fog (1 - T) (s the lit surface, T cloud_shadow_fog_visibility); the
+// cloud shades only s: out = pixel - k (pixel - (1 - T) fog), k = 1 - factor, which is s factor T + fog (1 - T). With
+// T >= 1 (no fog) it is pixel * factor exactly, the pass's unfogged path. factor clamps to 0..1 (non-finite: 1).
+math::vec3 cloud_shadow_shade(math::vec3 pixel, f32 factor, f32 fog_visibility, math::vec3 fog_color);
+
 }  // namespace mce::render

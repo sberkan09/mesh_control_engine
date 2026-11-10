@@ -4780,12 +4780,13 @@ void main() {
 // the camera at 0 (rise = height - p.y; no hit at or above the plane), cloud_noise (q = xz / cell - drift mod 64; 1, 2 or 3
 // of the sky's octaves through MCE_GLSL_CLOUD_NOISE, the reduced sums renormalized), cloud_density (smoothstep(t, t + 0.12 +
 // 0.3 softness, n), t = 0.78 - 0.6 coverage, times 0.55 + 0.45 density) and cloud_shadow_factor (1 - strength * density *
-// sun share * smoothstep(0.02, 0.25, sun.y)), the shade further scaled by the share of the pixel that is surface rather
-// than exp² fog (exp(-(density * distance)²), the main pass's own fog term; exactly 1 without fog, and the volumetric
-// fog, which replaces it, is not modelled); the pixel's rgb is multiplied by the factor, alpha kept. The CPU records the
+// sun share * smoothstep(0.02, 0.25, sun.y)); the pixel's rgb is multiplied by the factor, alpha kept. With the main
+// pass's exp² fog (c_drift.z != 0; the volumetric fog, which replaces it, is not modelled) only the surface part of the
+// pixel is shaded, exactly (cloud_shadow_shade): src - (1 - factor) (src - (1 - T) fog), T = exp(-(density * distance)²).
+// A depth of 6e4 or more (half-float overflow to +inf) counts as sky; a non-finite plane point leaves the pixel unshaded. The CPU records the
 // pass only with the sun at or above kCloudShadowMinSunY, so the division by c_sun.y is safe. Portable: one block,
 // combined samplers at the post banks, textureLod and texelFetch only, no loops, u32 math that wraps as the C++ does.
-inline constexpr int kCloudShadowUBytes = 112;  // 7 vec4: proj, right, up, back, sun, shade, drift
+inline constexpr int kCloudShadowUBytes = 128;  // 8 vec4: proj, right, up, back, sun, shade, drift, fog
 #define MCE_GLSL_CLOUD_SHADOW_U R"(
 layout(std140, binding = 1) uniform CloudShadowU {
     vec4 c_proj;   // x proj[0][0], y proj[1][1], z proj[2][0], w proj[2][1] (the unjittered projection, as kAoFS)
@@ -4795,6 +4796,7 @@ layout(std140, binding = 1) uniform CloudShadowU {
     vec4 c_sun;    // xyz the unit direction toward the sun (y >= 0.02), w the layer's density (p_cloud.y)
     vec4 c_shade;  // x strength, y the sun's share of the light, z softness, w octaves (1, 2 or 3)
     vec4 c_drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0: none or volumetric), w 0
+    vec4 c_fog;    // rgb the exp² fog colour (p_fog.rgb), w 0
 };
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
@@ -4821,8 +4823,8 @@ float cs_noise(vec2 xz) {
 void main() {
     vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
     float z = textureLod(u_gbuf, v_uv, 0.0).a;
-    if (!(z > 0.0)) {
-        o_color = src;  // sky: untouched
+    if (!(z > 0.0 && z < 6.0e4)) {
+        o_color = src;  // sky (0), a half-float depth that overflowed to +inf, or a NaN: untouched
         return;
     }
     vec2 ndc = v_uv * 2.0 - 1.0;
@@ -4833,16 +4835,24 @@ void main() {
     if (rise > 0.0) {
         float t = rise / c_sun.y;
         vec2 xz = vec2(p.x + c_sun.x * t, p.z + c_sun.z * t);
-        float n = cs_noise(xz);
-        float th = 0.78 - 0.6 * c_back.w;
-        float mask = smoothstep(th, th + (0.12 + 0.3 * c_shade.z), n);
-        float dens = mask * (0.55 + 0.45 * c_sun.w);
-        float fade = smoothstep(0.02, 0.25, c_sun.y);
-        float fd = c_drift.z * length(v);  // the main pass's exp² fog: only the surface's share is shaded
-        factor = 1.0 - c_shade.x * dens * c_shade.y * fade * exp(-fd * fd);
-        factor = (factor == factor) ? clamp(factor, 0.0, 1.0) : 1.0;  // a NaN never reaches the frame
+        if (all(lessThan(abs(xz), vec2(1.0e30)))) {  // a NaN or an overflow never reaches the float-to-uint lattice
+            float n = cs_noise(xz);
+            float th = 0.78 - 0.6 * c_back.w;
+            float mask = smoothstep(th, th + (0.12 + 0.3 * c_shade.z), n);
+            float dens = mask * (0.55 + 0.45 * c_sun.w);
+            float fade = smoothstep(0.02, 0.25, c_sun.y);
+            factor = 1.0 - c_shade.x * dens * c_shade.y * fade;
+            factor = (factor == factor) ? clamp(factor, 0.0, 1.0) : 1.0;  // a NaN never reaches the frame
+        }
     }
-    o_color = vec4(src.rgb * factor, src.a);
+    vec3 rgb = src.rgb * factor;
+    if (c_drift.z != 0.0) {
+        // cloud_shadow_shade: the main pass wrote src = s T + fog (1 - T); only the surface s is shaded.
+        float fd = c_drift.z * length(v);
+        float haze = 1.0 - exp(-fd * fd);
+        rgb = src.rgb - (1.0 - factor) * (src.rgb - haze * c_fog.rgb);
+    }
+    o_color = vec4(rgb, src.a);
 }
 )";
 
