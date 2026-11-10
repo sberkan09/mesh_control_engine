@@ -9,6 +9,7 @@
 #include "mce/convar.h"
 #include "mce/hash.h"
 #include "mce/log.h"
+#include "mce/render/caustics.h"
 #include "mce/render/cloud_shadow.h"
 #include "mce/render/dynres.h"
 #include "mce/render/edge_outline.h"
@@ -470,6 +471,28 @@ static_assert(offsetof(CloudShadowU, proj) == 0 && offsetof(CloudShadowU, right)
                   offsetof(CloudShadowU, shade) == 80 && offsetof(CloudShadowU, drift) == 96 &&
                   offsetof(CloudShadowU, fog) == 112,
               "CloudShadowU: c_proj / c_right / c_up / c_back / c_sun / c_shade / c_drift / c_fog as in MCE_GLSL_CLOUD_SHADOW_U");
+
+// M-CAUSTICS 52b: kCausticsFS's CausticsU (shaders3d.h MCE_GLSL_CAUSTICS_U), bank kPass. Filled in record_caustics from
+// the view, the water, the sun (caustics_gate), the setting and the tier's octave count; the same values as the CPU twin's
+// CausticsParams (mce/render/caustics.h).
+struct CausticsU {
+    vec4 proj;   // proj[0][0], proj[1][1], proj[2][0], proj[2][1] (the unjittered projection, as the SSAO pass)
+    vec4 right;  // the camera's right (world), w 1 / the pattern's cell
+    vec4 up;     // the camera's up, w the water level minus the camera's y (< 0: the camera above the water)
+    vec4 back;   // the camera's back (-forward), w the water square's half size
+    vec4 sun;    // the unit direction toward the sun, w the absorption per metre
+    vec4 color;  // rgb the light added per unit of term (caustics_gate), w max_depth
+    vec4 plane;  // xy caustics_offset, zw caustics_water_centre
+    vec4 misc;   // x caustics_phase, y octaves (1..3), z the exp² fog density (0 with volumetrics), w 0
+};
+static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 8 vec4, as MCE_GLSL_CAUSTICS_U");
+static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16 && offsetof(CausticsU, up) == 32 &&
+                  offsetof(CausticsU, back) == 48 && offsetof(CausticsU, sun) == 64 && offsetof(CausticsU, color) == 80 &&
+                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112,
+              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc as in MCE_GLSL_CAUSTICS_U");
+static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.1f && kCausticsLoopRadius == 0.18f &&
+                  kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
+              "caustics.h and kCausticsFS (shaders3d.h) carry the same constants");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1400,6 +1423,16 @@ ResultV Forward3D::create_pipelines() {
         if (auto p = device_->create_pipeline(fs)) cloud_shadow_pipe_ = p.value();
         else MCE_LOG_WARN("render3d: the cloud shadow shader failed, drawing frames without the cloud shadows");
     }
+    if (!ao_prepass_.is_null()) {
+        // M-CAUSTICS 52b: the caustics composite. Like the cloud shadows it rebuilds each pixel's position from the
+        // half-resolution opaque prepass, so it is made only where that prepass exists, at startup. A driver that
+        // refuses it keeps the frame without the caustics.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kCausticsFS, "caustics.frag"};
+        fs.debug_name = "caustics";
+        if (auto p = device_->create_pipeline(fs)) caustics_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the caustics shader failed, drawing frames without the caustics");
+    }
     // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
     // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
     // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
@@ -2009,6 +2042,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
     record_cloud_shadow(cmd, scene);  // M-CLOUDSHADOW 51c: after the exposure histogram, before the shafts; the bloom bucket
+    record_caustics(cmd, scene);  // M-CAUSTICS 52b: after the cloud shadows, before the shafts; the bloom bucket
     record_sun_shafts(cmd, scene);  // M-SUNSHAFTS 45c: after the exposure histogram, before the flare; the bloom bucket
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
     record_underwater(cmd, scene);  // M-UNDERWATER 44c: after the flare (attenuated too), before the lens rain; same bucket
@@ -4487,6 +4521,103 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
     stats_.cloud_shadow_strength = strength;
 }
 
+// ---- M-CAUSTICS 52b: caustics under water, right after the cloud shadows and before the sun shafts: after TAA (the moving
+// web never enters the history, so it leaves no trail), after the exposure histogram (a bright web does not pump the
+// exposure), before the shafts, the flare, the underwater composite (its absorption and fog act on the added light like on
+// everything else when the camera is under water), the lens rain, the haze, bloom, the tonemapper and the grade.
+// One fullscreen pass (kCausticsFS) reads post_source_ and the half-resolution opaque prepass (ao_gbuf_) and writes the
+// frame plus colour * term into the post-fx ping-pong target, then post_source_ = that target; additive, so a term of 0
+// leaves a pixel's bits as they are. The water plane is the drawn one: WaterSurface::level_y (the wave-free plane) and the
+// camera-following square kWaterVS draws (caustics_water_centre, half_extent). The pattern is anchored to the world: the
+// camera's world xz (floating origin + local, f64) is folded into the pattern's period on the CPU (caustics_offset), and
+// the shader works camera-relative, so a rebase is bit for bit. The clock is the scene time times the setting's speed,
+// turned into whole ticks and wrapped to the period on the CPU (caustics_phase). Runs whether the camera is above the water
+// (the view ray's length in water joins the absorption) or under it (the underwater composite follows).
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.caustics false) unless
+// caustics_gate passes: the setting on (checked first), not a render-to-texture view, the tier's caustics and octaves,
+// r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
+// kCausticsMinSunY with a finite non-zero direction, and some light to add (strength, sun share, intensity). The pipeline
+// is made at startup only where the prepass exists; a frame that would draw without it says so once and records nothing.
+void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const Caustics& setting = scene.post().caustics;
+    if (!setting.enabled || out_.linear_output) return;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.caustics"));
+    const WaterSurface& water = scene.water();
+    const View3D& view = scene.view();
+    const DirectionalLight& light = scene.light();
+    CausticsGate g;
+    g.enabled = setting.enabled;
+    g.tier = q.caustics;
+    g.octaves = q.caustics_octaves;
+    g.cvar = !cv || cv->get_bool();
+    g.water = water_on(water) && !water_.is_null();
+    g.render_texture = out_.linear_output;
+    g.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
+    g.perspective = cloud_shadow_perspective(view.proj);
+    g.toward_sun = {-light.direction.x, -light.direction.y, -light.direction.z};
+    g.sun_color = light.color;
+    g.intensity = light.intensity;
+    g.strength = detail::ranged(setting.strength, 0.0f, 4.0f, 1.0f);
+    g.sun_share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    vec3 sun, color;
+    if (!caustics_gate(g, sun, color)) return;
+    if (caustics_pipe_.is_null()) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: caustics are on but the caustics pass is unavailable (it needs the prepass: turn on "
+                         "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without them");
+        return;
+    }
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::TextureHandle dst = post_fx_target(post_size_);
+    if (dst.is_null()) return;
+
+    const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+    const f32 half_extent = detail::ranged(water.half_extent, 1.0f, 20000.0f, 500.0f);
+    const f32 scale = detail::ranged(setting.scale, 0.25f, 16.0f, 2.0f);
+    const mat4& pr = view.proj;
+    const mat4& v = view.view;
+    CausticsU cu;
+    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
+    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], 1.0f / scale};
+    // The plane's height above the camera in f64 (the floating origin's y and the local y summed first), so a rebase
+    // gives the same float.
+    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], f32(f64(level) - (origin_[1] + f64(view.position.y)))};
+    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], half_extent};
+    cu.sun = {sun.x, sun.y, sun.z, detail::ranged(setting.absorption, 0.0f, 4.0f, 0.15f)};
+    cu.color = {color.x, color.y, color.z, detail::ranged(setting.max_depth, 0.5f, 200.0f, 30.0f)};
+    const vec2 offset =
+        caustics_offset(origin_[0] + f64(view.position.x), origin_[2] + f64(view.position.z), scale);
+    const vec2 centre = caustics_water_centre(vec2{view.position.x, view.position.z}, half_extent);
+    cu.plane = {offset.x, offset.y, centre.x, centre.y};
+    const f32 fog = scene.fog().density;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
+    cu.misc = {caustics_phase(scene.time(), setting.speed),
+               f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u), fog_density, 0.0f};
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "caustics";
+    cmd.push_debug_scope("caustics");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(caustics_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(cu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: sky is exactly 0
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.caustics = true;
+    stats_.caustics_strength = g.strength;
+}
+
 // ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves
 // the lines under its jitter, and depth of field, motion blur, the exposure, the flare, bloom, the tonemapper and the
 // grade act on them like on any scene pixel). One fullscreen pass reads the HDR frame and the half-resolution opaque
@@ -4582,13 +4713,6 @@ void Forward3D::record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 namespace {
 constexpr f64 kLensRainPeriod = 600.0;  // seconds; long enough that the rounding to whole cycles barely moves a speed
 }  // namespace
-
-// M-CAUSTICS 52a: the seam's stub. Records nothing and leaves the stats at zero; 52b replaces it with the pass and calls
-// it after record_cloud_shadow and before record_sun_shafts. Not called before then.
-void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
-    (void)cmd;
-    (void)scene;
-}
 
 void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const LensRain& setting = scene.post().rain;

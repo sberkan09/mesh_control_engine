@@ -1440,4 +1440,54 @@ inline void cloud_shadow_scene(Scene3D& s, const Clouds& clouds, const CloudShad
     }
 }
 
+// ---- M-CAUSTICS 52b: caustics under water ------------------------------------------------------------------------------
+
+// A shallow pool: the fixture's 12 m ground (its top at y 0) is the floor, the water plane kCausticsLevel above it and the
+// fixture's 1 m box standing on the floor crosses the surface (its top 0.4 m above the water). The orbit camera's default
+// pose (7 m out, 35 degrees down) sees the floor through the water from above; the far half of the frame is water with
+// nothing behind it, and the sky.
+inline constexpr f32 kCausticsLevel = 0.6f;
+// The direction toward the sun (unnormalized): high (about 64 degrees up), behind the camera and to the right, so neither
+// the disk nor the water's glint is in the frame.
+inline constexpr vec3 kCausticsToward{0.3f, 0.9f, 0.3f};
+
+// Calm, foamless water (no waves to move the floor's look between the frames a case compares).
+inline WaterSurface caustics_water(f32 level = kCausticsLevel) {
+    WaterSurface w;
+    w.enabled = true;
+    w.level_y = level;
+    w.amplitude = 0.0f;
+    w.foam_amount = 0.0f;
+    return w;
+}
+
+inline Caustics caustics_setting() {
+    Caustics c;
+    c.enabled = true;
+    c.strength = 1.0f;
+    c.scale = 1.5f;  // 1.5 m cells: about eight across the floor
+    return c;
+}
+
+// The sun toward `toward_sun` (shadows off: the box would cast one, and the cases compare pixels), the water `w` (null:
+// none), `caustics` (null: the default, disabled) at scene time `time`, exposure 0.8; bloom and FXAA off unless
+// `post_default` (each carries a changed pixel to its neighbours, and the cases compare pixels).
+inline void caustics_scene(Scene3D& s, const WaterSurface* w, const Caustics* caustics, f32 time,
+                           vec3 toward_sun = kCausticsToward, bool post_default = false) {
+    DirectionalLight sun;
+    sun.direction = -toward_sun;
+    sun.shadows = false;
+    s.set_light(sun);
+    s.set_exposure(0.8f);
+    s.set_time(time, 1.0f / 60.0f);
+    PostFx post = s.post();
+    if (!post_default) {
+        post.bloom = false;
+        post.fxaa = false;
+    }
+    post.caustics = caustics ? *caustics : Caustics{};
+    s.set_post(post);
+    if (w) s.set_water(*w);
+}
+
 }  // namespace mce::render_test
