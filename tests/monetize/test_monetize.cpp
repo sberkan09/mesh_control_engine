@@ -446,3 +446,45 @@ TEST_CASE("monetize: the null providers report themselves unavailable") {
     CHECK_FALSE(null_store().available());
     CHECK_FALSE(null_ads().available());
 }
+
+TEST_CASE("store: a damaged entitlements file never grants what it does not name, whatever its cut or its bytes") {
+    fresh_save_root("monetize_damaged");
+    {
+        ScriptedStore store;
+        Game g;
+        g.start(&store, nullptr);
+        const u32 req = g.store().purchase("remove_ads");
+        store.answer(StoreEventKind::Purchased, 0, req, "T-1");
+        g.step();
+        REQUIRE(g.store().owns("remove_ads"));
+    }
+    Array<byte> good;
+    REQUIRE(save::read("entitlements", good));
+    REQUIRE(good.size() > 8);
+
+    auto relaunch_owns = [&](Span<const byte> bytes, const char* what) {
+        INFO(what);
+        REQUIRE(save::write("entitlements", bytes));
+        ScriptedStore store;
+        Game g;
+        g.start(&store, nullptr);
+        const bool ads = g.store().owns("remove_ads");
+        CHECK_FALSE(g.store().owns("gems_100"));  // a consumable is never an entitlement
+        return ads;
+    };
+
+    CHECK(relaunch_owns(good.span(), "intact"));
+    // Every cut shorter than the whole file: no crash, and the answer is a clean yes or no.
+    for (usize cut = 0; cut < good.size(); ++cut) relaunch_owns(Span<const byte>(good.data(), cut), "cut");
+    // The cut that loses the last byte of the id does not grant it.
+    CHECK_FALSE(relaunch_owns(Span<const byte>(good.data(), good.size() - 1), "one byte short"));
+
+    Array<byte> bad = good;
+    bad[0] = static_cast<byte>(static_cast<u8>(bad[0]) ^ 0xFF);  // wrong magic
+    CHECK_FALSE(relaunch_owns(bad.span(), "wrong magic"));
+
+    Array<byte> many = good;  // claims 60000 entries but holds one
+    many[6] = static_cast<byte>(0x60);
+    many[7] = static_cast<byte>(0xEA);
+    CHECK(relaunch_owns(many.span(), "count past the data") == true);
+}
