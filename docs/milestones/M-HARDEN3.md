@@ -24,3 +24,5 @@
 - 2026-11-10, step 4 (loc, remote_config, player): loc already tests malformed UTF-8 and remote_config checks finiteness. The gap was `parse_numbers` in the player: `-view.free nan,0` and `-safe_area inf,0,0,0` were accepted. It now refuses non-finite values; two ctests (`player_view_nonfinite`, `player_safe_area_nonfinite`) cover it.
 
 - 2026-11-10, step 4 (net relay): `RelayClient::handle` checks every size, member number, channel and mode byte, and takes a room list whole or not at all. A test with a fake relay sending forged messages now pins that (coverage only, no code change).
+
+- 2026-11-10, step 4 (monetize): `load_entitlements` refuses a wrong magic, a newer version and a cut file, keeps the ids read before the cut, and ignores unknown ids and consumables. A test over every cut length pins it (coverage only, no code change).

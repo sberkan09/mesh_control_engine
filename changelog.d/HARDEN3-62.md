@@ -1,0 +1,1 @@
+- Tests: a damaged purchase entitlements file (every cut length, a wrong magic, a count past the data) starts the service with what was read and never grants a product it does not name or a consumable; no code change.
