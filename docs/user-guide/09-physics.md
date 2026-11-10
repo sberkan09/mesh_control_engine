@@ -481,9 +481,13 @@ pushed and the crate is destroyed (`respawn` 0) or becomes available again after
 
 ### Event sounds
 
-`mce/kit/event_sfx3d.h`: an `EventSfx3D` on the entity the events belong to (the player) gives each of six game events its own
+`mce/kit/event_sfx3d.h`: an `EventSfx3D` on the entity the events belong to (the player) gives each of ten game events its own
 clip and gain: `throw_clip` (`GrenadeThrown3D` of this entity), `blast_clip` (`GrenadeBlast3D` whose `owner` it is), `melee_clip`
 (`MeleeSwung3D`), `cash_clip` (`CashPickedUp3D`), `ammo_clip` (`AmmoPickedUp3D`) and `goal_clip` (`GoalDone3D` whose `owner` it is).
+Four more cover the weapon: `reload_start_clip` (`WeaponReloadStarted3D`), `reloaded_clip` (`WeaponReloaded3D`), `dry_clip`
+(`WeaponDry3D`, a trigger pull on an empty gun with no spare rounds, at most once per fire interval) and `switch_clip`
+(`WeaponSwitched3D`). The three weapon events come from `Weapon3D` itself (`mce/kit/weapon_events3d.h`; `owner` is the weapon's
+`owner`, or the weapon entity when that is null). Install combat before it, as `install_stock` does.
 Each matching event pushes one 2D `audio::PlaySfx`; a null clip is silent. The sound reaches the mixer one tick after the event.
 
 ## 9.10 Configuration
@@ -529,7 +533,8 @@ a crate. `Weapon3D` fires from its entity, or from another entity's pose when `a
   it explode where it lands, hurting everything in the radius with damage falling off to the edge. `impulse`
   pushes dynamic bodies the shot hits.
 - **Events.** `WeaponFired3D` (every pellet, for tracers and muzzle flashes), `WeaponHit3D` (a shot landed,
-  hurt or not: impact marks and sounds), `Damage3D` and `Died3D`.
+  hurt or not: impact marks and sounds), `Damage3D` and `Died3D`; `WeaponReloadStarted3D`, `WeaponReloaded3D`
+  (`rounds` loaded) and `WeaponDry3D` (an empty gun with no spare rounds) are in `weapon_events3d.h`.
 - **Other damage.** `apply_damage(world, target, DamageInfo{...})` hurts a `Health3D` from any source (a fall,
   a crash, an explosion, a script); call it from a `FixedUpdate_Pre` system or between ticks.
 

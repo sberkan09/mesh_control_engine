@@ -13,6 +13,7 @@
 #include "mce/kit/nav3d.h"
 #include "mce/kit/ragdolls3d.h"
 #include "mce/kit/seats3d.h"
+#include "mce/kit/weapon_events3d.h"
 #include "mce/string_id.h"
 
 namespace mce::kit {
@@ -97,8 +98,8 @@ void push_impulse(World& w, Physics3D& phys, Entity e, math::vec3 impulse) {
 }
 
 // A shot landed on `hit`: the event, the damage, the push.
-void land(Frame& f, Physics3D& phys, Entity weapon, Entity owner, u8 team, bool friendly_fire, Entity hit, math::vec3 point,
-          math::vec3 normal, math::vec3 dir, f32 damage, f32 impulse) {
+void land(Frame& f, Physics3D& phys, Entity weapon, Entity owner, u8 team, bool friendly_fire, Entity hit,
+          math::vec3 point, math::vec3 normal, math::vec3 dir, f32 damage, f32 impulse) {
     World& w = f.world();
     f.events().push(WeaponHit3D{weapon, owner, hit, point, normal});
     push_impulse(w, phys, hit, dir * impulse);
@@ -162,17 +163,19 @@ void shoot(Frame& f, Physics3D& phys, Entity e, Weapon3D& wp, math::vec3 pos, ma
         if (!h) continue;
         wp.last_hit = h->entity;
         wp.last_point = h->point;
-        land(f, phys, e, owner, team, wp.friendly_fire != 0, h->entity, h->point, h->normal, dir, wp.damage, wp.impulse);
+        land(f, phys, e, owner, team, wp.friendly_fire != 0, h->entity, h->point, h->normal, dir, wp.damage,
+             wp.impulse);
     }
 }
 
-void finish_reload(Weapon3D& wp) {
+void finish_reload(Frame& f, Entity e, Weapon3D& wp) {
     const u32 room = wp.magazine > wp.ammo ? wp.magazine - wp.ammo : 0u;
     const u32 take = wp.infinite_ammo ? room : math::min(room, wp.reserve);
     wp.ammo = static_cast<u16>(wp.ammo + take);
     if (!wp.infinite_ammo) wp.reserve -= take;
     wp.reloading = 0;
     wp.reload_left = 0.0f;
+    f.events().push(WeaponReloaded3D{e, wp.owner.is_null() ? e : wp.owner, take});
 }
 
 // FixedUpdate_Pre, after the bodies: weapons take their input and shoot.
@@ -185,10 +188,11 @@ void kit3d_weapons(Frame& f) {
             wp.primed = 1;
             if (wp.ammo == 0) wp.ammo = wp.magazine;
         }
-        wp.cooldown = math::max(wp.cooldown - f.dt, -f.dt);  // a little credit carries the fractional tick, none banks shots
+        wp.cooldown =
+            math::max(wp.cooldown - f.dt, -f.dt);  // a little credit carries the fractional tick, none banks shots
         if (wp.reloading) {
             wp.reload_left -= f.dt;
-            if (wp.reload_left <= 0.0f) finish_reload(wp);
+            if (wp.reload_left <= 0.0f) finish_reload(f, e, wp);
         }
         bool want_fire = wp.fire != 0, want_reload = wp.reload != 0;
         if (wp.use_input && in) {
@@ -200,19 +204,26 @@ void kit3d_weapons(Frame& f) {
         if (!wp.reloading && can_refill && (want_reload || wp.ammo == 0)) {
             wp.reloading = 1;
             wp.reload_left = wp.reload_time;
-            if (wp.reload_time <= 0.0f) finish_reload(wp);
+            f.events().push(WeaponReloadStarted3D{e, wp.owner.is_null() ? e : wp.owner});
+            if (wp.reload_time <= 0.0f) finish_reload(f, e, wp);
         }
         if (!want_fire || wp.reloading || wp.cooldown > 0.0f) return;
         if (wp.magazine > 0) {
-            if (wp.ammo == 0) return;
+            if (wp.ammo == 0) {
+                f.events().push(WeaponDry3D{e, wp.owner.is_null() ? e : wp.owner});
+                wp.cooldown += 1.0f / wp.rate;
+                return;
+            }
             --wp.ammo;
         }
         wp.cooldown += 1.0f / wp.rate;
         ++wp.shots;
         math::vec3 pos, scale;
         math::quat rot;
-        // A weapon carried by a character can take its aim from another entity (the camera); if that is gone it uses its own pose.
-        const LocalTransform* from = !wp.aim_from.is_null() && w.alive(wp.aim_from) ? w.try_get<LocalTransform>(wp.aim_from) : nullptr;
+        // A weapon carried by a character can take its aim from another entity (the camera); if that is gone it uses
+        // its own pose.
+        const LocalTransform* from =
+            !wp.aim_from.is_null() && w.alive(wp.aim_from) ? w.try_get<LocalTransform>(wp.aim_from) : nullptr;
         if (from)
             world_pose(w, wp.aim_from, *from, pos, rot, scale);
         else
@@ -248,10 +259,12 @@ void kit3d_projectiles(Frame& f) {
             if (p.life <= 0.0f) f.commands().destroy(e);
             return;
         }
-        land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, h->entity, h->point, h->normal, dir, p.damage, p.impulse);
+        land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, h->entity, h->point, h->normal, dir, p.damage,
+             p.impulse);
         if (p.splash_radius > 0.0f) {
             Entity near[32];
-            const u32 n = math::min(phys.world.overlap_sphere(h->point, p.splash_radius, Span<Entity>(near, 32), filter), 32u);
+            const u32 n =
+                math::min(phys.world.overlap_sphere(h->point, p.splash_radius, Span<Entity>(near, 32), filter), 32u);
             Entity done[33];  // each Health3D is hurt once per explosion
             usize n_done = 0;
             done[n_done++] = health_holder(w, h->entity);
@@ -264,13 +277,14 @@ void kit3d_projectiles(Frame& f) {
                 if (!holder.is_null()) done[n_done++] = holder;
                 math::vec3 at = h->point, scale;
                 math::quat rot;
-                if (const LocalTransform* nt = w.try_get<LocalTransform>(near[i])) world_pose(w, near[i], *nt, at, rot, scale);
+                if (const LocalTransform* nt = w.try_get<LocalTransform>(near[i]))
+                    world_pose(w, near[i], *nt, at, rot, scale);
                 const f32 d = math::length(at - h->point);
                 const f32 falloff = 1.0f - math::clamp(d / p.splash_radius, 0.0f, 1.0f);
                 if (falloff <= 0.0f) continue;
                 const math::vec3 away = d > 1e-4f ? (at - h->point) * (1.0f / d) : dir;
-                land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, near[i], h->point, h->normal, away, p.damage * falloff,
-                     p.impulse * falloff);
+                land(f, phys, e, p.owner, p.team, p.friendly_fire != 0, near[i], h->point, h->normal, away,
+                     p.damage * falloff, p.impulse * falloff);
             }
         }
         f.commands().destroy(e);
@@ -346,6 +360,9 @@ void install_combat3d(World& world, asset::AssetSystem* assets) {
     world.register_components<Health3D, Weapon3D, Projectile3D>();
     world.register_event<WeaponFired3D>(Phase::FixedUpdate_Pre);
     world.register_event<WeaponHit3D>(Phase::FixedUpdate_Pre);
+    world.register_event<WeaponReloadStarted3D>(Phase::FixedUpdate_Pre);
+    world.register_event<WeaponReloaded3D>(Phase::FixedUpdate_Pre);
+    world.register_event<WeaponDry3D>(Phase::FixedUpdate_Pre);
     world.register_event<Damage3D>(Phase::FixedUpdate_Pre);
     world.register_event<Died3D>(Phase::FixedUpdate_Pre);
     world.add_system(Phase::FixedUpdate_Pre, "kit3d_weapons", &kit3d_weapons, "kit3d_ragdolls");
