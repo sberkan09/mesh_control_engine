@@ -30,7 +30,7 @@ def variant(src, dst, scene, *kv):
         elif isinstance(o, list):
             for x in o: walk(x)
     walk(doc); json.dump(doc, open(sp, "w"), indent=1); print("variant: GiVisibility3D sets", n)
-def spots(src, dst, nui="0"):
+def spots(src, dst, nui="0", which="p"):
     """One assets copy with 12 scenes: s_<k> (as committed) and s_<k>_nv (GiVisibility3D enabled 0) for six street spots. The player stands at
     the spot and the follow camera is first person (eye 1.7 m) looking along yaw (0 = -Z, pi/2 = -X)."""
     import uuid, math
@@ -39,6 +39,8 @@ def spots(src, dst, nui="0"):
     base = json.load(open(os.path.join(dst, "assets", "scenes", "city.mcscene")))
     P = {"p1": (-125, -8.3, -math.pi/2), "p2": (-125, -8.3, -0.675), "a1": (-88, -12, 0.0), "a2": (-88, -45, math.pi),
          "f1": (-50, -6, math.pi), "f2": (-20, 10, 1.92)}
+    if which == "q":  # all inside the cell of the default start (-60, -10): the probe set of the fills that did not crash
+        P = {"q1": (-62, -8.3, -math.pi/2), "q2": (-62, -8.3, math.pi/2), "q3": (-62, -8.3, 0.0), "q4": (-56, -3.0, math.pi)}
     for k, (x, z, yaw) in P.items():
         for nv in (0, 1):
             doc = json.loads(json.dumps(base)); name = f"s_{k}" + ("_nv" if nv else "")
