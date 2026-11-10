@@ -1,6 +1,6 @@
 # M-TRACERS: tracer lines for shots
 
-**Status:** planned (2026-11-10). Closes the last open limit of [M-SHOTFX](M-SHOTFX.md) ("no tracer line") after
+**Status:** done (2026-11-10; PRs #1231 plan, #1232 seam, #1233 sample). Closes the last open limit of [M-SHOTFX](M-SHOTFX.md) ("no tracer line") after
 [M-SHOTMARKS](M-SHOTMARKS.md) added the bullet holes. Game layer only: one kit module and the `samples/09_openworld` scene; no ECS,
 render, physics or audio core. Needs no device or account. It only places existing `MeshRef` entities, so it does not touch the
 M-VISUAL lighting and reflection work.
@@ -24,9 +24,9 @@ Padding-free state with `static_assert(sizeof)`.
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | `Tracer3D`, system `kit_tracers`, unit tests (a shot shows the next slot at the middle, turned and scaled along the shot, the ring reuses the oldest, two shots in a tick take two slots, a short shot draws nothing, the line hides after `life`, no slots is harmless). No sample change. | done (2026-11-10) |
-| 2 feature | Sample: a ring of 16 thin boxes with an emissive material written by `gen_assets.py` (the mesh and material are generated, no third-party asset), `test_mcp_openworld` inspect check, regenerated assets, the temporary `sample_coverage` line removed. | planned |
-| 3 polish | User-guide section (with step 1), closing doc, the "no tracer line" notes struck through in M-SHOTFX and M-OPENWORLD-GAPS. | planned |
+| 1 seam | `Tracer3D`, system `kit_tracers`, unit tests (a shot shows the next slot at the middle, turned and scaled along the shot, the ring reuses the oldest, two shots in a tick take two slots, a short shot draws nothing, the line hides after `life`, no slots is harmless). No sample change. | done (2026-11-10, #1232) |
+| 2 feature | Sample: a ring of 16 thin boxes with an emissive material written by `gen_assets.py` (the mesh and material are generated, no third-party asset), `test_mcp_openworld` inspect check, regenerated assets, the temporary `sample_coverage` line removed. | done (2026-11-10, #1233) |
+| 3 polish | User-guide section (with step 1), closing doc, the "no tracer line" notes struck through in M-SHOTFX and M-OPENWORLD-GAPS. | done (2026-11-10) |
 
 ## Decisions taken (change them in the plan PR if wrong)
 
