@@ -45,6 +45,7 @@
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/sun_shafts.h"
+#include "mce/kit/cloud_shadow.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/gi_visibility.h"
@@ -1565,6 +1566,27 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings shafts_shadows;
             render::apply_quality(quality_, shafts_shadows, shafts_post);
             post.shafts = shafts_post.shafts;
+        }
+    }
+    {  // cloud shadows (M-CLOUDSHADOW 51d): the first enabled CloudShadow3D by entity index (not table order); without one
+       // post.cloud_shadow keeps the disabled default, written every frame so a stale one never survives. The pass itself
+       // needs the sky's cloud layer (coverage above 0), so a scene without a CloudLayer is unchanged either way.
+        const CloudShadow3D* cshadow = nullptr;
+        u32 cshadow_index = ~0u;
+        world.query<const CloudShadow3D&>().each([&](Entity e, const CloudShadow3D& c) {
+            if (c.enabled == 0u || e.index >= cshadow_index) return;
+            cshadow = &c;
+            cshadow_index = e.index;
+        });
+        if (cshadow) {
+            render::PostFx cshadow_post;  // the 51b quality step on a throwaway PostFx (tier, r.cloud_shadows, the clamps)
+            render::CloudShadow& cs = cshadow_post.cloud_shadow;
+            cs.enabled = true;
+            cs.strength = cshadow->strength;
+            cs.softness = cshadow->softness;
+            render::ShadowSettings cshadow_shadows;
+            render::apply_quality(quality_, cshadow_shadows, cshadow_post);
+            post.cloud_shadow = cshadow_post.cloud_shadow;
         }
     }
     {  // dynamic resolution (M-DYNRES 46d): the first enabled DynamicResolution3D by entity index (not table order, so the

@@ -93,6 +93,16 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Cloud shadows on the ground (M-CLOUDSHADOW step 51e) are the same kind of binding over the first kit::CloudShadow3D
+// (mce/kit/cloud_shadow.h, a kit3d component: install_kit3d registers it). The clouds themselves are the CloudLayer's.
+//
+//   weather.cloud_shadow_strength() -> number   CloudShadow3D.strength (0..1)
+//   weather.cloud_shadow_softness() -> number   CloudShadow3D.softness (0..1)
+//   weather.set_cloud_shadow{strength=, softness=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call, and
+//                                         nothing is written on an error (`enabled` is not settable)
+//
 // Rain and wind ambience (M-WEATHERAUDIO step 10c) is the same kind of binding over the first kit::WeatherAudio
 // (mce/kit/weather_audio.h). Named errors as above. The two sources and the fade levels belong to the scene and the
 // engine, so they are not settable; the levels are read-only.
@@ -551,6 +561,7 @@
 #include "api.h"
 #include "mce/kit/aurora.h"
 #include "mce/kit/cloud_layer.h"
+#include "mce/kit/cloud_shadow.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -1068,6 +1079,42 @@ int l_weather_set_clouds(lua_State* L) {
     if (given[3]) c.scale_m = static_cast<f32>(clamp_range(value[3], 50.0, 20000.0));
     if (given[4]) c.speed_scale = static_cast<f32>(clamp_range(value[4], 0.0, 10.0));
     if (given[5]) c.height_m = static_cast<f32>(clamp_range(value[5], 100.0, 20000.0));
+    return 0;
+}
+
+// The first CloudShadow3D (a kit3d component, so a world without install_kit3d is a different error from a scene without
+// the entity), or a Luau error that names the call.
+kit::CloudShadow3D& check_cloud_shadow(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const refl::TypeRecord* type = refl::find_type(StringId("CloudShadow3D"));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent)
+        luaL_error(L, "%s: this world has no kit3d components (install_kit3d)", fn);
+    kit::CloudShadow3D* found = nullptr;
+    w.query<kit::CloudShadow3D>().each([&](Entity, kit::CloudShadow3D& c) {
+        if (!found) found = &c;
+    });
+    if (!found) luaL_error(L, "%s: the scene has no CloudShadow3D entity", fn);
+    return *found;
+}
+
+#define MCE_WEATHER_GETTER_CS(luaname, field)                                                           \
+    int l_weather_##luaname(lua_State* L) {                                                             \
+        lua_pushnumber(L, static_cast<double>(check_cloud_shadow(L, "weather." #luaname).field));       \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_CS(cloud_shadow_strength, strength)
+MCE_WEATHER_GETTER_CS(cloud_shadow_softness, softness)
+#undef MCE_WEATHER_GETTER_CS
+
+// weather.set_cloud_shadow{strength=, softness=}: validated before anything is written. (`enabled` is not settable.)
+int l_weather_set_cloud_shadow(lua_State* L) {
+    static const char* const kKeys[2] = {"strength", "softness"};
+    f64 value[2] = {0, 0};
+    bool given[2] = {false, false};
+    read_settings(L, "weather.set_cloud_shadow", kKeys, 2, "strength, softness", value, given);
+    kit::CloudShadow3D& c = check_cloud_shadow(L, "weather.set_cloud_shadow");
+    if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) c.softness = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
     return 0;
 }
 
@@ -3171,6 +3218,9 @@ const luaL_Reg kWeatherLib[] = {
     {"cloud_speed_scale", l_weather_cloud_speed_scale},
     {"cloud_height", l_weather_cloud_height},
     {"set_clouds", l_weather_set_clouds},
+    {"cloud_shadow_strength", l_weather_cloud_shadow_strength},
+    {"cloud_shadow_softness", l_weather_cloud_shadow_softness},
+    {"set_cloud_shadow", l_weather_set_cloud_shadow},
     {"rain_level", l_weather_rain_level},
     {"wind_level", l_weather_wind_level},
     {"audio_rain_db", l_weather_audio_rain_db},

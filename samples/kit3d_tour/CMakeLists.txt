@@ -71,6 +71,13 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_shafts_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_shafts.mcscene
                      -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_shafts -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The cloud shadow scene (M-CLOUDSHADOW 51e): scenes/tour_cloudshadow.mcscene, a high sun over the flat terrain, a Weather + CloudLayer
+    # (half the sky covered, a fast drift), a CloudShadow3D on the world entity and a row of buildings and trees the patches cross; made
+    # by gen_cloudshadow.py. Named tour_cloudshadow so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 14 entities.
+    # 300 ticks (5 s) like the shafts (the look is render-side and hashes nothing; the two plays must still agree).
+    add_test(NAME sample_kit3d_tour_cloudshadow_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_cloudshadow.mcscene
+                     -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_cloudshadow -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
     # The dynamic resolution scene (M-DYNRES 46e): scenes/tour_dynres.mcscene, a heavy-looking set (two rings of 12 shadow-casting spheres,
     # 8 coloured point lights, a shadowed sun, volumetric fog, bloom) and a DynamicResolution3D with target_ms 12 on the world entity;
     # made by gen_dynres.py. Named tour_dynres so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 35 entities.
@@ -179,6 +186,17 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
                      -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
     set_tests_properties(sample_kit3d_tour_shafts_gpu PROPERTIES LABELS gpu TIMEOUT 120)
     mce_mark_slow(sample_kit3d_tour_shafts_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The cloud shadow capture: the scene at tick 300, written for a look (build/.../kit3d_tour_cloudshadow.ppm; samples keep no goldens).
+    # Patches of shade drift over the ground and the buildings, the sky stays as it is; `-r.cloud_shadows 0` draws it without them.
+    add_test(NAME sample_kit3d_tour_cloudshadow_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_cloudshadow.mcscene -capture_tick 300
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_cloudshadow.ppm" -platform.error_box 0 -r.vsync 0
+                     -sim.fast_forward 1 -sim.max_catchup 32 -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_cloudshadow_gpu PROPERTIES LABELS gpu TIMEOUT 120)
+    mce_mark_slow(sample_kit3d_tour_cloudshadow_gpu)
 endif()
 
 if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)

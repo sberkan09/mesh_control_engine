@@ -1,0 +1,419 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-00000000001b",
+ "name": "tour_cloudshadow",
+ "entities": [
+  {
+   "id": 1,
+   "name": "Field",
+   "components": {
+    "Terrain3D": {
+     "terrain": "guid:b0a30000-0000-4000-8000-000000000021"
+    },
+    "TerrainCollider3D": {
+     "friction": 0.9
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      -0.3,
+      -0.82,
+      -0.48
+     ],
+     "sun_intensity": 1.6,
+     "sun_shadows": 0,
+     "sky_enabled": 1,
+     "ambient_sky": [
+      0.3,
+      0.34,
+      0.42
+     ],
+     "ambient_ground": [
+      0.16,
+      0.15,
+      0.13
+     ],
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.08
+    },
+    "Weather": {
+     "transition_seconds": 10
+    },
+    "CloudLayer": {
+     "fair_coverage": 0.5,
+     "scale_m": 100,
+     "speed_scale": 8,
+     "height_m": 1500
+    },
+    "CloudShadow3D": {
+     "enabled": 1,
+     "strength": 0.8,
+     "softness": 0.3
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 60
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      30.0,
+      45.0
+     ],
+     "rotation": [
+      -0.0998,
+      0,
+      0,
+      0.995
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Building 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.62,
+      0.58,
+      0.52,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -24.0,
+      3.0,
+      -10.0
+     ],
+     "scale": [
+      9.0,
+      6.0,
+      9.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Building 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.62,
+      0.58,
+      0.52,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -8.0,
+      4.5,
+      -26.0
+     ],
+     "scale": [
+      12.0,
+      9.0,
+      12.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Building 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.62,
+      0.58,
+      0.52,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      10.0,
+      2.5,
+      -14.0
+     ],
+     "scale": [
+      8.0,
+      5.0,
+      8.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Building 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.62,
+      0.58,
+      0.52,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      26.0,
+      5.5,
+      -30.0
+     ],
+     "scale": [
+      14.0,
+      11.0,
+      14.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Building 5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.62,
+      0.58,
+      0.52,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      4.0,
+      4.0,
+      -52.0
+     ],
+     "scale": [
+      18.0,
+      8.0,
+      18.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Tree 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -14.0,
+      2.4,
+      6.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Tree 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -4.0,
+      2.4,
+      -2.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Tree 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      15.0,
+      2.4,
+      4.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Tree 4",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      22.0,
+      2.4,
+      -6.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Tree 5",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -30.0,
+      2.4,
+      -34.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Tree 6",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.14,
+      0.3,
+      0.12,
+      1.0
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      36.0,
+      2.4,
+      -18.0
+     ],
+     "scale": [
+      3.0,
+      4.8,
+      3.0
+     ]
+    }
+   }
+  }
+ ]
+}

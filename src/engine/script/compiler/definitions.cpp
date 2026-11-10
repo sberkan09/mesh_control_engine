@@ -268,6 +268,13 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength, fair_coverage and overcast_coverage
     -- 0..1, scale 50..20000 m, speed_scale 0..10, height 100..20000 m); an unknown key or a non-number raises
     set_clouds: (settings: { strength: number?, fair_coverage: number?, overcast_coverage: number?, scale: number?, speed_scale: number?, height: number? }) -> (),
+    -- CloudShadow3D (M-CLOUDSHADOW), the first one in the scene; the getters raise when there is none (or when the world
+    -- has no kit3d components)
+    cloud_shadow_strength: () -> number,
+    cloud_shadow_softness: () -> number,
+    -- every key optional, each value clamped to the field's range (strength and softness 0..1); an unknown key or a
+    -- non-number raises and nothing is written; `enabled` is not settable
+    set_cloud_shadow: (settings: { strength: number?, softness: number? }) -> (),
     -- WeatherAudio (M-WEATHERAUDIO), the first one in the scene; the getters raise when there is none.
     -- rain_level and wind_level are the engine-written bed levels (0..1), read-only
     rain_level: () -> number,
