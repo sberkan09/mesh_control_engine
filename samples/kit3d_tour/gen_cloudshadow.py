@@ -4,11 +4,12 @@
     python3 samples/kit3d_tour/gen_cloudshadow.py
 
 Stdlib only and deterministic (no clock, no random numbers; every position is a fixed number), so every run writes the same bytes.
-No new textures or models: it reuses the tour's terrain (guid ...21), sphere mesh (...41) and plain material (...47).
+No new textures or models: it reuses the tour's sphere mesh (...41) and plain material (...47); its ground is field_wide (guid ...22),
+a flat 600 m terrain (the tour's 80 m plate is smaller than one cloud patch), tinted a light sand so the shade reads.
 
-The scene: a high sun (about 55 degrees) over the tour's flat terrain, the sky layer on (a Weather in clear weather and a CloudLayer
-with half the sky covered, 100 m noise cells, a fast drift so the patches visibly slide), and a CloudShadow3D on the world entity. The
-camera stands 30 m up and looks a little down so the horizon and the sky with its clouds show over the ground; a row of squat
+The scene: a mid-high sun (about 55 degrees, strong against a dim sky ambient so the shade is deep) over a wide flat terrain, the sky layer on (a Weather in clear weather and a CloudLayer
+with half the sky covered, 60 m noise cells, a fast drift so the patches visibly slide), and a CloudShadow3D on the world entity. The
+camera stands 30 m up and looks about 17 degrees down so the ground fills most of the view and the horizon and sky stay in it; a row of squat
 "buildings" (stretched spheres) and a few trees stand on the ground so the patches of shade cross them too. The shade is a post pass:
 only ground and objects darken, never the sky. `-r.cloud_shadows 0` draws the same scene without it. 14 entities: Field, World,
 Camera and 11 stand-ins (5 buildings, 6 trees).
@@ -19,10 +20,13 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "assets", "scenes", "tour_cloudshadow.mcscene")
 
-TERRAIN = "guid:b0a30000-0000-4000-8000-000000000021"
+TERRAIN = "guid:b0a30000-0000-4000-8000-000000000022"  # field_wide: a 600 m flat terrain made for this scene
 SPHERE = "guid:b0a30000-0000-4000-8000-000000000041"
 PLAIN = "guid:b0a30000-0000-4000-8000-000000000047"
 
+GROUND = (0.8, 0.78, 0.66, 1.0)
+ORIGIN_X = 0.0
+ORIGIN_Z = 0.0
 CAMERA_Y = 30.0
 CAMERA_Z = 45.0
 # (x, z, width, height): squat buildings in a loose row 20..60 m ahead of the camera.
@@ -43,18 +47,18 @@ def mesh(tint):
 
 def main():
     ents = [
-        ent("Field", {"Terrain3D": {"terrain": TERRAIN}, "TerrainCollider3D": {"friction": 0.9}, "LocalTransform": {"position": [0, 0, 0]}}),
+        ent("Field", {"Terrain3D": {"terrain": TERRAIN, "tint": list(GROUND)}, "TerrainCollider3D": {"friction": 0.9}, "LocalTransform": {"position": [ORIGIN_X, 0, ORIGIN_Z]}}),
         ent("World", {
             "WorldSettings": {"gravity_3d": [0, -9.81, 0]},
             # The light travels down and a little toward -z and +x: the sun stands about 55 degrees up behind the camera's left.
-            "Environment3D": {"sun_direction": [-0.3, -0.82, -0.48], "sun_intensity": 1.6, "sun_shadows": 0, "sky_enabled": 1,
-                              "ambient_sky": [0.3, 0.34, 0.42], "ambient_ground": [0.16, 0.15, 0.13],
+            "Environment3D": {"sun_direction": [-0.3, -0.82, -0.48], "sun_intensity": 2.4, "sun_shadows": 0, "sky_enabled": 1,
+                              "ambient_sky": [0.14, 0.17, 0.24], "ambient_ground": [0.08, 0.08, 0.07],
                               "exposure": 1.0, "bloom": 1, "bloom_intensity": 0.08},
             "Weather": {"transition_seconds": 10},
-            "CloudLayer": {"fair_coverage": 0.5, "scale_m": 100, "speed_scale": 8, "height_m": 1500},
-            "CloudShadow3D": {"enabled": 1, "strength": 0.8, "softness": 0.3}}),
+            "CloudLayer": {"fair_coverage": 0.5, "scale_m": 60, "speed_scale": 8, "height_m": 1500},
+            "CloudShadow3D": {"enabled": 1, "strength": 0.8, "softness": 0.15}}),
         ent("Camera", {"Camera3DComponent": {"primary": 1, "fov_deg": 60},
-                       "LocalTransform": {"position": [0, CAMERA_Y, CAMERA_Z], "rotation": [-0.0998, 0, 0, 0.9950]}}),
+                       "LocalTransform": {"position": [0, CAMERA_Y, CAMERA_Z], "rotation": [-0.1494, 0, 0, 0.9888]}}),
     ]
     for i, (x, z, w, h) in enumerate(BUILDINGS):
         ents.append(ent("Building %d" % (i + 1), {"MeshRef": mesh(WALL), "LocalTransform": {"position": [x, h * 0.5, z], "scale": [w, h, w]}}))
