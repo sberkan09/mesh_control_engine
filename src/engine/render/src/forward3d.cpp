@@ -1651,7 +1651,7 @@ void Forward3D::shutdown() {
     destroy_targets();
     for (rhi::PipelineHandle* p :
          {&shadow_pipe_, &skinned_shadow_pipe_, &mesh_cull_, &mesh_two_sided_, &mesh_blend_, &terrain_pipe_, &skinned_cull_,
-          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &haze_pipe_, &underwater_pipe_, &shafts_pipe_, &shafts_comp_pipe_, &cloud_shadow_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
+          &skinned_two_sided_, &skinned_blend_, &sky_, &bloom_down_, &bloom_up_, &tonemap_, &fxaa_, &upscale_pipe_, &sharpen_pipe_, &flare_occ_pipe_, &flare_pipe_, &rain_pipe_, &haze_pipe_, &underwater_pipe_, &shafts_pipe_, &shafts_comp_pipe_, &cloud_shadow_pipe_, &caustics_pipe_, &outline_pipe_, &cookie_pipe_, &cluster_build_,
           &ibl_prefilter_, &ibl_sh_pipe_, &ibl_brdf_, &probe_reproject_, &probe_prefilter_, &probe_encode_,
           &probe_decode_, &ao_prepass_, &ao_prepass_skinned_, &ao_pipe_, &ao_blur_, &ssr_pipe_, &contact_pipe_, &frame_copy_, &velocity_pipe_, &velocity_skinned_,
           &taa_pipe_, &gi_project_, &gi_encode_, &gi_decode_, &vol_inject_, &vol_integrate_, &exposure_hist_,
@@ -4582,6 +4582,13 @@ void Forward3D::record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene) {
 namespace {
 constexpr f64 kLensRainPeriod = 600.0;  // seconds; long enough that the rounding to whole cycles barely moves a speed
 }  // namespace
+
+// M-CAUSTICS 52a: the seam's stub. Records nothing and leaves the stats at zero; 52b replaces it with the pass and calls
+// it after record_cloud_shadow and before record_sun_shafts. Not called before then.
+void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    (void)cmd;
+    (void)scene;
+}
 
 void Forward3D::record_lens_rain(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const LensRain& setting = scene.post().rain;

@@ -242,6 +242,22 @@ struct CloudShadow {
     u8 pad_[3] = {};
 };
 
+// M-CAUSTICS 52a. Caustics: an opt-in post pass that adds the sun's moving web of refracted light to the opaque pixels
+// that lie below the water plane (WaterSurface::level_y: a sea floor, a pool bottom, the underwater part of a pier),
+// seen from above the water or from under it. The water itself (level, extent, enabled) comes from WaterSurface and the
+// sun from Scene3D::light(); the pattern octave count is a quality-tier property, not a field. Off by default (the
+// frame is then bit-identical to one without the pass). The ranges are the clamps apply_quality applies; NaN falls back
+// to the default.
+struct Caustics {
+    bool enabled = false;       // false draws the frame without the pass
+    u8 pad_[3] = {};
+    f32 strength = 1.0f;        // gain on the sun colour where the pattern is brightest (0..4)
+    f32 scale = 2.0f;           // the pattern's cell size on the water plane in metres (0.25..16)
+    f32 speed = 1.0f;           // how fast the pattern moves and changes, 1 = the reference rate (0..4)
+    f32 absorption = 0.15f;     // fade per metre of water on the sun and view rays: exp(-absorption * m) (0..4)
+    f32 max_depth = 30.0f;      // below this many metres under the plane nothing is added (0.5..200)
+};
+
 struct PostFx {
     bool bloom = true;
     f32 bloom_intensity = 0.05f;   // fraction of the blurred image added back
@@ -277,6 +293,7 @@ struct PostFx {
     Underwater underwater;  // M-UNDERWATER 44a
     SunShafts shafts;  // M-SUNSHAFTS 45a
     CloudShadow cloud_shadow;  // M-CLOUDSHADOW 51a
+    Caustics caustics;  // M-CAUSTICS 52a
     DynamicResolution dynres;  // M-DYNRES 46a
     EdgeOutline outline;  // M-OUTLINE 39a
     Tonemapper tonemapper = Tonemapper::AcesFit;
