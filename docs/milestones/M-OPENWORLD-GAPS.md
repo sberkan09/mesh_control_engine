@@ -70,7 +70,7 @@ No UI document, no audio source, no clock, no weather, no mission, no marker, no
 
 - **Player stuck behaviour.** Sprinting into a building face stops the player with no slide or feedback; ~~the sample has no
   fall-off handling~~ **a fall below -40 m is lethal and wakes the player at the hospital (M-FALLDEATH)**; ~~the world edge has no wall~~ **four invisible edge walls added (M-WORLDEDGE)** on the 1120 m slab's rim.
-- **No cover, melee or grenades.** ~~Weapon switching~~ done (M-WEAPONSWITCH); ~~melee~~ done (M-MELEE); ~~grenades~~ done (M-GRENADE); cover stays open (2d, police thread); reload; ~~no ammo pickups~~ five ammo crates on the avenue (M-AMMOPICKUP).
+- **No cover, melee or grenades.** ~~Weapon switching~~ done (M-WEAPONSWITCH); ~~melee~~ done (M-MELEE); ~~grenades~~ done (M-GRENADE); cover stays open (2d, police thread); ~~reload~~ it reloads, and reload start and end, the empty-gun click and a weapon switch now have sounds ([M-WEAPONFEEL](M-WEAPONFEEL.md)); ~~no ammo pickups~~ five ammo crates on the avenue (M-AMMOPICKUP).
 - **Pedestrians did not visibly react** to gunfire or cars: the kit has M-PEDFLEE (hurt, shot nearby, panic spreads) and
   M-PEDCRASH (crash, car bearing down) and the walkers did switch to `Flee`, but they were frozen in place (B, SBA-213), so
   nobody ran. With the fix they run. Still missing: no reaction to the player walking into them, no phone calls to police,

@@ -1,6 +1,6 @@
 # M-WEAPONFEEL: reload, dry-fire and weapon-switch feedback
 
-**Status:** planned (2026-11-10). Picks up the open "reload" item of [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) at the feedback level:
+**Status:** done (2026-11-10). Picks up the open "reload" item of [M-OPENWORLD-GAPS](M-OPENWORLD-GAPS.md) at the feedback level:
 the gun already reloads (`Weapon3D::reload_time`, the Reload action, automatic reload on an empty magazine) and
 [M-WEAPONSWITCH](M-WEAPONSWITCH.md) already switches, but neither is audible or visible, and pulling the trigger on an empty
 gun with no spare rounds does nothing at all. Game layer only: `samples/09_openworld` plus kit changes that stay inside
@@ -26,9 +26,9 @@ Reload starts and ends in silence, a dry trigger gives no click, and a weapon sw
 
 | Step | What | Status |
 |---|---|---|
-| 1 seam | The three weapon events in `combat3d` (pushed by the existing system), `EventSfx3D` fields for them and for `WeaponSwitched3D`, unit tests (reload start and end each push one event with the right owner, an automatic reload too, a dry pull pushes one event and not a second inside the fire interval, an infinite-ammo gun never reports dry, a dead owner is silent). No sample change. | planned |
-| 2 feature | Sample: clips for reload, dry click and switch, `test_mcp_openworld` inspect check, regenerated assets, any temporary `sample_coverage` line removed. | planned |
-| 3 polish | A reload progress bar or caption on the HUD (only if step 2 finds room), user-guide section, closing doc, the "reload" strike-through in M-OPENWORLD-GAPS. | planned |
+| 1 seam | The three weapon events in `combat3d` (pushed by the existing system), `EventSfx3D` fields for them and for `WeaponSwitched3D`, unit tests (reload start and end each push one event with the right owner, an automatic reload too, a dry pull pushes one event and not a second inside the fire interval, an infinite-ammo gun never reports dry, a dead owner is silent). No sample change. | done (2026-11-10, #1218) |
+| 2 feature | Sample: clips for reload, dry click and switch, `test_mcp_openworld` inspect check, regenerated assets, any temporary `sample_coverage` line removed. | done (2026-11-10, #1220) |
+| 3 polish | Closing doc, the "reload" strike-through in M-OPENWORLD-GAPS (the user-guide section landed with step 1). The HUD reload bar stays open: the sample's HUD has no spare slot and the ammo readout already shows the loaded count. | done (2026-11-10) |
 
 ## Decisions taken (change them in the plan PR if wrong)
 
