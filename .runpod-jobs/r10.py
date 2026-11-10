@@ -54,6 +54,24 @@ def spots(src, dst, nui="0", which="p"):
                 if nv and "GiVisibility3D" in c: c["GiVisibility3D"]["enabled"] = 0
             json.dump(doc, open(os.path.join(dst, "assets", "scenes", name + ".mcscene"), "w"), indent=1)
     print("spots written")
+def montage(name, *arms):
+    """JPEG strip of the captures /work/cap/<spot>_<arm>_gl.ppm that exist (arms in the order given), 480 px wide panels, printed as base64
+    between IMGSTART / IMGEND markers (the pod's only way out is its log)."""
+    import io, base64, time
+    import numpy as np
+    from PIL import Image, ImageDraw
+    ims = []
+    for a in arms:
+        p = f"/work/cap/{name}_{a}_gl.ppm"
+        if os.path.exists(p):
+            im = Image.open(p).convert("RGB").resize((480, 270), Image.LANCZOS); ImageDraw.Draw(im).text((6, 4), f"{name} {a}", fill=(255, 255, 0)); ims.append(im)
+    if len(ims) < 2: print("montage", name, "skipped:", len(ims), "panels"); return
+    strip = Image.new("RGB", (480 * len(ims), 270))
+    for i, im in enumerate(ims): strip.paste(im, (480 * i, 0))
+    buf = io.BytesIO(); strip.save(buf, "JPEG", quality=58); data = base64.b64encode(buf.getvalue()).decode()
+    print(f"IMGSTART {name}_{''.join(arms)}.jpg {len(buf.getvalue())}", flush=True)
+    for i in range(0, len(data), 120): print(data[i:i+120], flush=True)
+    print("IMGEND", flush=True)
 def shift_input(src, dst, off, hold_from, hold_to):
     """drive.input shifted by `off` frames (idle first, the volume fills), then the car held forward hold_from..hold_to."""
     off, hold_from, hold_to = int(off), int(hold_from), int(hold_to); out = []
