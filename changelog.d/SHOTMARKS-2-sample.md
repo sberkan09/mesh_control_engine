@@ -1,0 +1,1 @@
+- 09_openworld: a ring of 24 bullet-hole decals marks where shots land on walls, cars and the ground.

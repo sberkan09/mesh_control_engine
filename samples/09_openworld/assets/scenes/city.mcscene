@@ -38653,6 +38653,702 @@
   },
   {
    "id": 1611,
+   "name": "BulletHole0",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1612,
+   "name": "BulletHole1",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1613,
+   "name": "BulletHole2",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1614,
+   "name": "BulletHole3",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1615,
+   "name": "BulletHole4",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1616,
+   "name": "BulletHole5",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1617,
+   "name": "BulletHole6",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1618,
+   "name": "BulletHole7",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1619,
+   "name": "BulletHole8",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1620,
+   "name": "BulletHole9",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1621,
+   "name": "BulletHole10",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1622,
+   "name": "BulletHole11",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1623,
+   "name": "BulletHole12",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1624,
+   "name": "BulletHole13",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1625,
+   "name": "BulletHole14",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1626,
+   "name": "BulletHole15",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1627,
+   "name": "BulletHole16",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1628,
+   "name": "BulletHole17",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1629,
+   "name": "BulletHole18",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1630,
+   "name": "BulletHole19",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1631,
+   "name": "BulletHole20",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1632,
+   "name": "BulletHole21",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1633,
+   "name": "BulletHole22",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1634,
+   "name": "BulletHole23",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      -100.0,
+      0
+     ]
+    },
+    "Decal3D": {
+     "texture": "guid:c0880d99-d353-5130-bfd8-b6dd3000cf76",
+     "size": [
+      0.25,
+      0.3,
+      0.25
+     ],
+     "roughness": 0.9,
+     "enabled": 0
+    },
+    "BulletHole3D": {
+     "size": 0.25,
+     "depth": 0.3,
+     "life": 25,
+     "fade": 5
+    }
+   }
+  },
+  {
+   "id": 1635,
    "name": "Player",
    "components": {
     "LocalTransform": {
@@ -38675,7 +39371,7 @@
     },
     "Rider3D": {
      "use_input": 1,
-     "camera": "$1618"
+     "camera": "$1642"
     },
     "Health3D": {
      "max": 100,
@@ -38755,7 +39451,7 @@
       -6.0
      ],
      "mask": 65535,
-     "aim_from": "$1618"
+     "aim_from": "$1642"
     },
     "WeaponAudio": {
      "shot": "guid:056f6327-3835-57af-b946-01e375024d5a",
@@ -38795,11 +39491,11 @@
    }
   },
   {
-   "id": 1612,
+   "id": 1636,
    "name": "Player model",
    "components": {
     "ChildOf": {
-     "parent": "$1610"
+     "parent": "$1634"
     },
     "LocalTransform": {
      "position": [
@@ -38823,14 +39519,14 @@
      "mesh": "guid:5385e46b-690b-5f7c-bfe9-71e0a30f33b0"
     },
     "FaceVelocity3D": {
-     "source": "$1610",
+     "source": "$1634",
      "turn_rate_deg": 540,
      "yaw_offset": 3.141592653589793
     }
    }
   },
   {
-   "id": 1613,
+   "id": 1637,
    "name": "Goal: First blood",
    "components": {
     "Goal3D": {
@@ -38838,12 +39534,12 @@
      "stat": "Kills",
      "target": 1,
      "reward": 50,
-     "owner": "$1610"
+     "owner": "$1634"
     }
    }
   },
   {
-   "id": 1614,
+   "id": 1638,
    "name": "Goal: Street fighter",
    "components": {
     "Goal3D": {
@@ -38851,12 +39547,12 @@
      "stat": "Kills",
      "target": 10,
      "reward": 250,
-     "owner": "$1610"
+     "owner": "$1634"
     }
    }
   },
   {
-   "id": 1615,
+   "id": 1639,
    "name": "Goal: Odd job",
    "components": {
     "Goal3D": {
@@ -38864,12 +39560,12 @@
      "stat": "Missions",
      "target": 1,
      "reward": 200,
-     "owner": "$1610"
+     "owner": "$1634"
     }
    }
   },
   {
-   "id": 1616,
+   "id": 1640,
    "name": "Goal: Joyride",
    "components": {
     "Goal3D": {
@@ -38877,12 +39573,12 @@
      "stat": "Rides",
      "target": 1,
      "reward": 100,
-     "owner": "$1610"
+     "owner": "$1634"
     }
    }
   },
   {
-   "id": 1617,
+   "id": 1641,
    "name": "Goal: Knuckle sandwich",
    "components": {
     "Goal3D": {
@@ -38890,12 +39586,12 @@
      "stat": "MeleeHits",
      "target": 5,
      "reward": 150,
-     "owner": "$1610"
+     "owner": "$1634"
     }
    }
   },
   {
-   "id": 1618,
+   "id": 1642,
    "name": "Impact sparks",
    "components": {
     "LocalTransform": {
@@ -38959,7 +39655,7 @@
    }
   },
   {
-   "id": 1619,
+   "id": 1643,
    "name": "Camera",
    "components": {
     "LocalTransform": {},
@@ -39026,7 +39722,7 @@
      "on": "Fired"
     },
     "CameraFollow3D": {
-     "target": "$1610",
+     "target": "$1634",
      "offset": [
       0,
       1.6,
@@ -39048,7 +39744,7 @@
    }
   },
   {
-   "id": 1620,
+   "id": 1644,
    "name": "Parked car 1",
    "components": {
     "LocalTransform": {
@@ -39240,11 +39936,11 @@
    }
   },
   {
-   "id": 1621,
+   "id": 1645,
    "name": "Parked car 1 Model",
    "components": {
     "ChildOf": {
-     "parent": "$1619"
+     "parent": "$1643"
     },
     "LocalTransform": {
      "position": [
@@ -39270,7 +39966,7 @@
    }
   },
   {
-   "id": 1622,
+   "id": 1646,
    "name": "Parked car 2",
    "components": {
     "LocalTransform": {
@@ -39466,11 +40162,11 @@
    }
   },
   {
-   "id": 1623,
+   "id": 1647,
    "name": "Parked car 2 Model",
    "components": {
     "ChildOf": {
-     "parent": "$1621"
+     "parent": "$1645"
     },
     "LocalTransform": {
      "position": [
@@ -39496,7 +40192,7 @@
    }
   },
   {
-   "id": 1624,
+   "id": 1648,
    "name": "Parked car 3",
    "components": {
     "LocalTransform": {
@@ -39692,11 +40388,11 @@
    }
   },
   {
-   "id": 1625,
+   "id": 1649,
    "name": "Parked car 3 Model",
    "components": {
     "ChildOf": {
-     "parent": "$1623"
+     "parent": "$1647"
     },
     "LocalTransform": {
      "position": [
@@ -39722,7 +40418,7 @@
    }
   },
   {
-   "id": 1626,
+   "id": 1650,
    "name": "Police 1",
    "components": {
     "LocalTransform": {
@@ -39789,11 +40485,11 @@
    }
   },
   {
-   "id": 1627,
+   "id": 1651,
    "name": "Police 1 model",
    "components": {
     "ChildOf": {
-     "parent": "$1625"
+     "parent": "$1649"
     },
     "LocalTransform": {
      "position": [
@@ -39819,7 +40515,7 @@
    }
   },
   {
-   "id": 1628,
+   "id": 1652,
    "name": "Police 2",
    "components": {
     "LocalTransform": {
@@ -39886,11 +40582,11 @@
    }
   },
   {
-   "id": 1629,
+   "id": 1653,
    "name": "Police 2 model",
    "components": {
     "ChildOf": {
-     "parent": "$1627"
+     "parent": "$1651"
     },
     "LocalTransform": {
      "position": [
@@ -39916,7 +40612,7 @@
    }
   },
   {
-   "id": 1630,
+   "id": 1654,
    "name": "Police 3",
    "components": {
     "LocalTransform": {
@@ -39983,11 +40679,11 @@
    }
   },
   {
-   "id": 1631,
+   "id": 1655,
    "name": "Police 3 model",
    "components": {
     "ChildOf": {
-     "parent": "$1629"
+     "parent": "$1653"
     },
     "LocalTransform": {
      "position": [
@@ -40013,7 +40709,7 @@
    }
   },
   {
-   "id": 1632,
+   "id": 1656,
    "name": "Police 4",
    "components": {
     "LocalTransform": {
@@ -40080,11 +40776,11 @@
    }
   },
   {
-   "id": 1633,
+   "id": 1657,
    "name": "Police 4 model",
    "components": {
     "ChildOf": {
-     "parent": "$1631"
+     "parent": "$1655"
     },
     "LocalTransform": {
      "position": [
@@ -40110,7 +40806,7 @@
    }
   },
   {
-   "id": 1634,
+   "id": 1658,
    "name": "Navmesh",
    "components": {
     "LocalTransform": {
@@ -40136,13 +40832,13 @@
    }
   },
   {
-   "id": 1635,
+   "id": 1659,
    "name": "Traffic",
    "components": {
     "LocalTransform": {},
     "TrafficSpawner3D": {
      "network": "$1",
-     "focus": "$1610",
+     "focus": "$1634",
      "prefab": "guid:ba637b4f-69f3-5217-a6fc-f75f861caf4c",
      "max_cars": 24,
      "min_radius": 45,
@@ -40154,13 +40850,13 @@
    }
   },
   {
-   "id": 1636,
+   "id": 1660,
    "name": "Crowd",
    "components": {
     "LocalTransform": {},
     "CrowdSpawner3D": {
      "network": "$1",
-     "focus": "$1610",
+     "focus": "$1634",
      "prefab": "guid:4628cb14-cc2b-5c19-8e11-4453eecc5f75",
      "max_count": 70,
      "spawn_min": 25,
@@ -40171,7 +40867,7 @@
    }
   },
   {
-   "id": 1637,
+   "id": 1661,
    "name": "Police car 1",
    "components": {
     "LocalTransform": {
@@ -40333,11 +41029,11 @@
    }
   },
   {
-   "id": 1638,
+   "id": 1662,
    "name": "Police car 1 model",
    "components": {
     "ChildOf": {
-     "parent": "$1636"
+     "parent": "$1660"
     },
     "LocalTransform": {
      "position": [
@@ -40363,7 +41059,7 @@
    }
   },
   {
-   "id": 1639,
+   "id": 1663,
    "name": "Police car 2",
    "components": {
     "LocalTransform": {
@@ -40531,11 +41227,11 @@
    }
   },
   {
-   "id": 1640,
+   "id": 1664,
    "name": "Police car 2 model",
    "components": {
     "ChildOf": {
-     "parent": "$1638"
+     "parent": "$1662"
     },
     "LocalTransform": {
      "position": [
@@ -40561,7 +41257,7 @@
    }
   },
   {
-   "id": 1641,
+   "id": 1665,
    "name": "Police car 3",
    "components": {
     "LocalTransform": {
@@ -40729,11 +41425,11 @@
    }
   },
   {
-   "id": 1642,
+   "id": 1666,
    "name": "Police car 3 model",
    "components": {
     "ChildOf": {
-     "parent": "$1640"
+     "parent": "$1664"
     },
     "LocalTransform": {
      "position": [
@@ -40759,7 +41455,7 @@
    }
   },
   {
-   "id": 1643,
+   "id": 1667,
    "name": "Police car 4",
    "components": {
     "LocalTransform": {
@@ -40927,11 +41623,11 @@
    }
   },
   {
-   "id": 1644,
+   "id": 1668,
    "name": "Police car 4 model",
    "components": {
     "ChildOf": {
-     "parent": "$1642"
+     "parent": "$1666"
     },
     "LocalTransform": {
      "position": [
@@ -40957,7 +41653,7 @@
    }
   },
   {
-   "id": 1645,
+   "id": 1669,
    "name": "Roadblock 1",
    "components": {
     "LocalTransform": {
@@ -40988,7 +41684,7 @@
    }
   },
   {
-   "id": 1646,
+   "id": 1670,
    "name": "Roadblock 2",
    "components": {
     "LocalTransform": {
@@ -41019,7 +41715,7 @@
    }
   },
   {
-   "id": 1647,
+   "id": 1671,
    "name": "Hospital",
    "components": {
     "LocalTransform": {
@@ -41035,7 +41731,7 @@
    }
   },
   {
-   "id": 1648,
+   "id": 1672,
    "name": "Hospital pad",
    "components": {
     "LocalTransform": {
@@ -41063,7 +41759,7 @@
    }
   },
   {
-   "id": 1649,
+   "id": 1673,
    "name": "Police station",
    "components": {
     "LocalTransform": {
@@ -41079,7 +41775,7 @@
    }
   },
   {
-   "id": 1650,
+   "id": 1674,
    "name": "Police station pad",
    "components": {
     "LocalTransform": {
@@ -41107,7 +41803,7 @@
    }
   },
   {
-   "id": 1651,
+   "id": 1675,
    "name": "Ammo shop",
    "components": {
     "LocalTransform": {
@@ -41134,7 +41830,7 @@
    }
   },
   {
-   "id": 1652,
+   "id": 1676,
    "name": "Ammo shop pad",
    "components": {
     "LocalTransform": {
@@ -41162,7 +41858,7 @@
    }
   },
   {
-   "id": 1653,
+   "id": 1677,
    "name": "Mixer",
    "components": {
     "AudioLimiter": {
@@ -41171,7 +41867,7 @@
    }
   },
   {
-   "id": 1654,
+   "id": 1678,
    "name": "Pause mix",
    "components": {
     "AudioSnapshot": {
@@ -41184,7 +41880,7 @@
    }
   },
   {
-   "id": 1655,
+   "id": 1679,
    "name": "City ambience",
    "components": {
     "AudioSource": {
@@ -41206,7 +41902,7 @@
    }
   },
   {
-   "id": 1656,
+   "id": 1680,
    "name": "Clock",
    "components": {
     "LocalTransform": {},
@@ -41255,7 +41951,7 @@
    }
   },
   {
-   "id": 1657,
+   "id": 1681,
    "name": "Weather",
    "components": {
     "LocalTransform": {},
@@ -41283,8 +41979,8 @@
     },
     "CloudLayer": {},
     "WeatherAudio": {
-     "rain_source": "$1660",
-     "wind_source": "$1661",
+     "rain_source": "$1684",
+     "wind_source": "$1685",
      "rain_db": -10,
      "wind_db": -18,
      "fade_seconds": 6
@@ -41292,7 +41988,7 @@
    }
   },
   {
-   "id": 1658,
+   "id": 1682,
    "name": "Rain",
    "components": {
     "LocalTransform": {
@@ -41366,7 +42062,7 @@
    }
   },
   {
-   "id": 1659,
+   "id": 1683,
    "name": "Rain splashes",
    "components": {
     "LocalTransform": {},
@@ -41396,7 +42092,7 @@
    }
   },
   {
-   "id": 1660,
+   "id": 1684,
    "name": "Lightning",
    "components": {
     "LocalTransform": {},
@@ -41411,7 +42107,7 @@
    }
   },
   {
-   "id": 1661,
+   "id": 1685,
    "name": "Rain bed",
    "components": {
     "AudioSource": {
@@ -41425,7 +42121,7 @@
    }
   },
   {
-   "id": 1662,
+   "id": 1686,
    "name": "Wind bed",
    "components": {
     "AudioSource": {
@@ -41439,7 +42135,7 @@
    }
   },
   {
-   "id": 1663,
+   "id": 1687,
    "name": "Night bed",
    "components": {
     "AudioSource": {
@@ -41460,7 +42156,7 @@
    }
   },
   {
-   "id": 1664,
+   "id": 1688,
    "name": "Lamp 0_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41482,7 +42178,7 @@
    }
   },
   {
-   "id": 1665,
+   "id": 1689,
    "name": "Lamp 0_0_0",
    "components": {
     "LocalTransform": {
@@ -41520,7 +42216,7 @@
    }
   },
   {
-   "id": 1666,
+   "id": 1690,
    "name": "Lamp 0_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41542,7 +42238,7 @@
    }
   },
   {
-   "id": 1667,
+   "id": 1691,
    "name": "Lamp 0_0_1",
    "components": {
     "LocalTransform": {
@@ -41580,7 +42276,7 @@
    }
   },
   {
-   "id": 1668,
+   "id": 1692,
    "name": "Lamp 1_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41602,7 +42298,7 @@
    }
   },
   {
-   "id": 1669,
+   "id": 1693,
    "name": "Lamp 1_0_0",
    "components": {
     "LocalTransform": {
@@ -41640,7 +42336,7 @@
    }
   },
   {
-   "id": 1670,
+   "id": 1694,
    "name": "Lamp 1_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41662,7 +42358,7 @@
    }
   },
   {
-   "id": 1671,
+   "id": 1695,
    "name": "Lamp 1_0_1",
    "components": {
     "LocalTransform": {
@@ -41700,7 +42396,7 @@
    }
   },
   {
-   "id": 1672,
+   "id": 1696,
    "name": "Lamp 2_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41722,7 +42418,7 @@
    }
   },
   {
-   "id": 1673,
+   "id": 1697,
    "name": "Lamp 2_0_0",
    "components": {
     "LocalTransform": {
@@ -41760,7 +42456,7 @@
    }
   },
   {
-   "id": 1674,
+   "id": 1698,
    "name": "Lamp 2_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41782,7 +42478,7 @@
    }
   },
   {
-   "id": 1675,
+   "id": 1699,
    "name": "Lamp 2_0_1",
    "components": {
     "LocalTransform": {
@@ -41820,7 +42516,7 @@
    }
   },
   {
-   "id": 1676,
+   "id": 1700,
    "name": "Lamp 3_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41842,7 +42538,7 @@
    }
   },
   {
-   "id": 1677,
+   "id": 1701,
    "name": "Lamp 3_0_0",
    "components": {
     "LocalTransform": {
@@ -41880,7 +42576,7 @@
    }
   },
   {
-   "id": 1678,
+   "id": 1702,
    "name": "Lamp 3_0_1 post",
    "components": {
     "LocalTransform": {
@@ -41902,7 +42598,7 @@
    }
   },
   {
-   "id": 1679,
+   "id": 1703,
    "name": "Lamp 3_0_1",
    "components": {
     "LocalTransform": {
@@ -41940,7 +42636,7 @@
    }
   },
   {
-   "id": 1680,
+   "id": 1704,
    "name": "Lamp 4_0_0 post",
    "components": {
     "LocalTransform": {
@@ -41962,7 +42658,7 @@
    }
   },
   {
-   "id": 1681,
+   "id": 1705,
    "name": "Lamp 4_0_0",
    "components": {
     "LocalTransform": {
@@ -42000,7 +42696,7 @@
    }
   },
   {
-   "id": 1682,
+   "id": 1706,
    "name": "Lamp 4_0_1 post",
    "components": {
     "LocalTransform": {
@@ -42022,7 +42718,7 @@
    }
   },
   {
-   "id": 1683,
+   "id": 1707,
    "name": "Lamp 4_0_1",
    "components": {
     "LocalTransform": {
@@ -42060,7 +42756,7 @@
    }
   },
   {
-   "id": 1684,
+   "id": 1708,
    "name": "Lamp 0_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42082,7 +42778,7 @@
    }
   },
   {
-   "id": 1685,
+   "id": 1709,
    "name": "Lamp 0_1_0",
    "components": {
     "LocalTransform": {
@@ -42120,7 +42816,7 @@
    }
   },
   {
-   "id": 1686,
+   "id": 1710,
    "name": "Lamp 0_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42142,7 +42838,7 @@
    }
   },
   {
-   "id": 1687,
+   "id": 1711,
    "name": "Lamp 0_1_1",
    "components": {
     "LocalTransform": {
@@ -42180,7 +42876,7 @@
    }
   },
   {
-   "id": 1688,
+   "id": 1712,
    "name": "Lamp 1_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42202,7 +42898,7 @@
    }
   },
   {
-   "id": 1689,
+   "id": 1713,
    "name": "Lamp 1_1_0",
    "components": {
     "LocalTransform": {
@@ -42240,7 +42936,7 @@
    }
   },
   {
-   "id": 1690,
+   "id": 1714,
    "name": "Lamp 1_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42262,7 +42958,7 @@
    }
   },
   {
-   "id": 1691,
+   "id": 1715,
    "name": "Lamp 1_1_1",
    "components": {
     "LocalTransform": {
@@ -42300,7 +42996,7 @@
    }
   },
   {
-   "id": 1692,
+   "id": 1716,
    "name": "Lamp 2_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42322,7 +43018,7 @@
    }
   },
   {
-   "id": 1693,
+   "id": 1717,
    "name": "Lamp 2_1_0",
    "components": {
     "LocalTransform": {
@@ -42360,7 +43056,7 @@
    }
   },
   {
-   "id": 1694,
+   "id": 1718,
    "name": "Lamp 2_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42382,7 +43078,7 @@
    }
   },
   {
-   "id": 1695,
+   "id": 1719,
    "name": "Lamp 2_1_1",
    "components": {
     "LocalTransform": {
@@ -42420,7 +43116,7 @@
    }
   },
   {
-   "id": 1696,
+   "id": 1720,
    "name": "Lamp 3_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42442,7 +43138,7 @@
    }
   },
   {
-   "id": 1697,
+   "id": 1721,
    "name": "Lamp 3_1_0",
    "components": {
     "LocalTransform": {
@@ -42480,7 +43176,7 @@
    }
   },
   {
-   "id": 1698,
+   "id": 1722,
    "name": "Lamp 3_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42502,7 +43198,7 @@
    }
   },
   {
-   "id": 1699,
+   "id": 1723,
    "name": "Lamp 3_1_1",
    "components": {
     "LocalTransform": {
@@ -42540,7 +43236,7 @@
    }
   },
   {
-   "id": 1700,
+   "id": 1724,
    "name": "Lamp 4_1_0 post",
    "components": {
     "LocalTransform": {
@@ -42562,7 +43258,7 @@
    }
   },
   {
-   "id": 1701,
+   "id": 1725,
    "name": "Lamp 4_1_0",
    "components": {
     "LocalTransform": {
@@ -42600,7 +43296,7 @@
    }
   },
   {
-   "id": 1702,
+   "id": 1726,
    "name": "Lamp 4_1_1 post",
    "components": {
     "LocalTransform": {
@@ -42622,7 +43318,7 @@
    }
   },
   {
-   "id": 1703,
+   "id": 1727,
    "name": "Lamp 4_1_1",
    "components": {
     "LocalTransform": {
@@ -42660,7 +43356,7 @@
    }
   },
   {
-   "id": 1704,
+   "id": 1728,
    "name": "Lamp 0_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42682,7 +43378,7 @@
    }
   },
   {
-   "id": 1705,
+   "id": 1729,
    "name": "Lamp 0_2_0",
    "components": {
     "LocalTransform": {
@@ -42720,7 +43416,7 @@
    }
   },
   {
-   "id": 1706,
+   "id": 1730,
    "name": "Lamp 0_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42742,7 +43438,7 @@
    }
   },
   {
-   "id": 1707,
+   "id": 1731,
    "name": "Lamp 0_2_1",
    "components": {
     "LocalTransform": {
@@ -42780,7 +43476,7 @@
    }
   },
   {
-   "id": 1708,
+   "id": 1732,
    "name": "Lamp 1_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42802,7 +43498,7 @@
    }
   },
   {
-   "id": 1709,
+   "id": 1733,
    "name": "Lamp 1_2_0",
    "components": {
     "LocalTransform": {
@@ -42840,7 +43536,7 @@
    }
   },
   {
-   "id": 1710,
+   "id": 1734,
    "name": "Lamp 1_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42862,7 +43558,7 @@
    }
   },
   {
-   "id": 1711,
+   "id": 1735,
    "name": "Lamp 1_2_1",
    "components": {
     "LocalTransform": {
@@ -42900,7 +43596,7 @@
    }
   },
   {
-   "id": 1712,
+   "id": 1736,
    "name": "Lamp 2_2_0 post",
    "components": {
     "LocalTransform": {
@@ -42922,7 +43618,7 @@
    }
   },
   {
-   "id": 1713,
+   "id": 1737,
    "name": "Lamp 2_2_0",
    "components": {
     "LocalTransform": {
@@ -42960,7 +43656,7 @@
    }
   },
   {
-   "id": 1714,
+   "id": 1738,
    "name": "Lamp 2_2_1 post",
    "components": {
     "LocalTransform": {
@@ -42982,7 +43678,7 @@
    }
   },
   {
-   "id": 1715,
+   "id": 1739,
    "name": "Lamp 2_2_1",
    "components": {
     "LocalTransform": {
@@ -43020,7 +43716,7 @@
    }
   },
   {
-   "id": 1716,
+   "id": 1740,
    "name": "Lamp 3_2_0 post",
    "components": {
     "LocalTransform": {
@@ -43042,7 +43738,7 @@
    }
   },
   {
-   "id": 1717,
+   "id": 1741,
    "name": "Lamp 3_2_0",
    "components": {
     "LocalTransform": {
@@ -43080,7 +43776,7 @@
    }
   },
   {
-   "id": 1718,
+   "id": 1742,
    "name": "Lamp 3_2_1 post",
    "components": {
     "LocalTransform": {
@@ -43102,7 +43798,7 @@
    }
   },
   {
-   "id": 1719,
+   "id": 1743,
    "name": "Lamp 3_2_1",
    "components": {
     "LocalTransform": {
@@ -43140,7 +43836,7 @@
    }
   },
   {
-   "id": 1720,
+   "id": 1744,
    "name": "Lamp 4_2_0 post",
    "components": {
     "LocalTransform": {
@@ -43162,7 +43858,7 @@
    }
   },
   {
-   "id": 1721,
+   "id": 1745,
    "name": "Lamp 4_2_0",
    "components": {
     "LocalTransform": {
@@ -43200,7 +43896,7 @@
    }
   },
   {
-   "id": 1722,
+   "id": 1746,
    "name": "Lamp 4_2_1 post",
    "components": {
     "LocalTransform": {
@@ -43222,7 +43918,7 @@
    }
   },
   {
-   "id": 1723,
+   "id": 1747,
    "name": "Lamp 4_2_1",
    "components": {
     "LocalTransform": {
@@ -43260,7 +43956,7 @@
    }
   },
   {
-   "id": 1724,
+   "id": 1748,
    "name": "Lamp 0_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43282,7 +43978,7 @@
    }
   },
   {
-   "id": 1725,
+   "id": 1749,
    "name": "Lamp 0_3_0",
    "components": {
     "LocalTransform": {
@@ -43320,7 +44016,7 @@
    }
   },
   {
-   "id": 1726,
+   "id": 1750,
    "name": "Lamp 0_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43342,7 +44038,7 @@
    }
   },
   {
-   "id": 1727,
+   "id": 1751,
    "name": "Lamp 0_3_1",
    "components": {
     "LocalTransform": {
@@ -43380,7 +44076,7 @@
    }
   },
   {
-   "id": 1728,
+   "id": 1752,
    "name": "Lamp 1_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43402,7 +44098,7 @@
    }
   },
   {
-   "id": 1729,
+   "id": 1753,
    "name": "Lamp 1_3_0",
    "components": {
     "LocalTransform": {
@@ -43440,7 +44136,7 @@
    }
   },
   {
-   "id": 1730,
+   "id": 1754,
    "name": "Lamp 1_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43462,7 +44158,7 @@
    }
   },
   {
-   "id": 1731,
+   "id": 1755,
    "name": "Lamp 1_3_1",
    "components": {
     "LocalTransform": {
@@ -43500,7 +44196,7 @@
    }
   },
   {
-   "id": 1732,
+   "id": 1756,
    "name": "Lamp 2_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43522,7 +44218,7 @@
    }
   },
   {
-   "id": 1733,
+   "id": 1757,
    "name": "Lamp 2_3_0",
    "components": {
     "LocalTransform": {
@@ -43560,7 +44256,7 @@
    }
   },
   {
-   "id": 1734,
+   "id": 1758,
    "name": "Lamp 2_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43582,7 +44278,7 @@
    }
   },
   {
-   "id": 1735,
+   "id": 1759,
    "name": "Lamp 2_3_1",
    "components": {
     "LocalTransform": {
@@ -43620,7 +44316,7 @@
    }
   },
   {
-   "id": 1736,
+   "id": 1760,
    "name": "Lamp 3_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43642,7 +44338,7 @@
    }
   },
   {
-   "id": 1737,
+   "id": 1761,
    "name": "Lamp 3_3_0",
    "components": {
     "LocalTransform": {
@@ -43680,7 +44376,7 @@
    }
   },
   {
-   "id": 1738,
+   "id": 1762,
    "name": "Lamp 3_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43702,7 +44398,7 @@
    }
   },
   {
-   "id": 1739,
+   "id": 1763,
    "name": "Lamp 3_3_1",
    "components": {
     "LocalTransform": {
@@ -43740,7 +44436,7 @@
    }
   },
   {
-   "id": 1740,
+   "id": 1764,
    "name": "Lamp 4_3_0 post",
    "components": {
     "LocalTransform": {
@@ -43762,7 +44458,7 @@
    }
   },
   {
-   "id": 1741,
+   "id": 1765,
    "name": "Lamp 4_3_0",
    "components": {
     "LocalTransform": {
@@ -43800,7 +44496,7 @@
    }
   },
   {
-   "id": 1742,
+   "id": 1766,
    "name": "Lamp 4_3_1 post",
    "components": {
     "LocalTransform": {
@@ -43822,7 +44518,7 @@
    }
   },
   {
-   "id": 1743,
+   "id": 1767,
    "name": "Lamp 4_3_1",
    "components": {
     "LocalTransform": {
@@ -43860,7 +44556,7 @@
    }
   },
   {
-   "id": 1744,
+   "id": 1768,
    "name": "Lamp 0_4_0 post",
    "components": {
     "LocalTransform": {
@@ -43882,7 +44578,7 @@
    }
   },
   {
-   "id": 1745,
+   "id": 1769,
    "name": "Lamp 0_4_0",
    "components": {
     "LocalTransform": {
@@ -43920,7 +44616,7 @@
    }
   },
   {
-   "id": 1746,
+   "id": 1770,
    "name": "Lamp 0_4_1 post",
    "components": {
     "LocalTransform": {
@@ -43942,7 +44638,7 @@
    }
   },
   {
-   "id": 1747,
+   "id": 1771,
    "name": "Lamp 0_4_1",
    "components": {
     "LocalTransform": {
@@ -43980,7 +44676,7 @@
    }
   },
   {
-   "id": 1748,
+   "id": 1772,
    "name": "Lamp 1_4_0 post",
    "components": {
     "LocalTransform": {
@@ -44002,7 +44698,7 @@
    }
   },
   {
-   "id": 1749,
+   "id": 1773,
    "name": "Lamp 1_4_0",
    "components": {
     "LocalTransform": {
@@ -44040,7 +44736,7 @@
    }
   },
   {
-   "id": 1750,
+   "id": 1774,
    "name": "Lamp 1_4_1 post",
    "components": {
     "LocalTransform": {
@@ -44062,7 +44758,7 @@
    }
   },
   {
-   "id": 1751,
+   "id": 1775,
    "name": "Lamp 1_4_1",
    "components": {
     "LocalTransform": {
@@ -44100,7 +44796,7 @@
    }
   },
   {
-   "id": 1752,
+   "id": 1776,
    "name": "Lamp 2_4_0 post",
    "components": {
     "LocalTransform": {
@@ -44122,7 +44818,7 @@
    }
   },
   {
-   "id": 1753,
+   "id": 1777,
    "name": "Lamp 2_4_0",
    "components": {
     "LocalTransform": {
@@ -44160,7 +44856,7 @@
    }
   },
   {
-   "id": 1754,
+   "id": 1778,
    "name": "Lamp 2_4_1 post",
    "components": {
     "LocalTransform": {
@@ -44182,7 +44878,7 @@
    }
   },
   {
-   "id": 1755,
+   "id": 1779,
    "name": "Lamp 2_4_1",
    "components": {
     "LocalTransform": {
@@ -44220,7 +44916,7 @@
    }
   },
   {
-   "id": 1756,
+   "id": 1780,
    "name": "Lamp 3_4_0 post",
    "components": {
     "LocalTransform": {
@@ -44242,7 +44938,7 @@
    }
   },
   {
-   "id": 1757,
+   "id": 1781,
    "name": "Lamp 3_4_0",
    "components": {
     "LocalTransform": {
@@ -44280,7 +44976,7 @@
    }
   },
   {
-   "id": 1758,
+   "id": 1782,
    "name": "Lamp 3_4_1 post",
    "components": {
     "LocalTransform": {
@@ -44302,7 +44998,7 @@
    }
   },
   {
-   "id": 1759,
+   "id": 1783,
    "name": "Lamp 3_4_1",
    "components": {
     "LocalTransform": {
@@ -44340,7 +45036,7 @@
    }
   },
   {
-   "id": 1760,
+   "id": 1784,
    "name": "Lamp 4_4_0 post",
    "components": {
     "LocalTransform": {
@@ -44362,7 +45058,7 @@
    }
   },
   {
-   "id": 1761,
+   "id": 1785,
    "name": "Lamp 4_4_0",
    "components": {
     "LocalTransform": {
@@ -44400,7 +45096,7 @@
    }
   },
   {
-   "id": 1762,
+   "id": 1786,
    "name": "Lamp 4_4_1 post",
    "components": {
     "LocalTransform": {
@@ -44422,7 +45118,7 @@
    }
   },
   {
-   "id": 1763,
+   "id": 1787,
    "name": "Lamp 4_4_1",
    "components": {
     "LocalTransform": {
@@ -44460,7 +45156,7 @@
    }
   },
   {
-   "id": 1764,
+   "id": 1788,
    "name": "Errand stop 1",
    "components": {
     "LocalTransform": {
@@ -44498,12 +45194,12 @@
    }
   },
   {
-   "id": 1765,
+   "id": 1789,
    "name": "Errand objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1763",
+     "target": "$1787",
      "radius": 4.0
     },
     "SaveKey": {
@@ -44512,14 +45208,14 @@
    }
   },
   {
-   "id": 1766,
+   "id": 1790,
    "name": "Mission Errand",
    "components": {
     "Mission": {
      "id": "errand",
-     "objective": "$1764",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1788",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 100
     },
     "MissionReward3D": {
@@ -44538,7 +45234,7 @@
    }
   },
   {
-   "id": 1767,
+   "id": 1791,
    "name": "Mission Errand marker",
    "components": {
     "LocalTransform": {
@@ -44564,7 +45260,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1765",
+     "mission": "$1789",
      "radius": 3.0
     },
     "MapMarker": {
@@ -44581,7 +45277,7 @@
    }
   },
   {
-   "id": 1768,
+   "id": 1792,
    "name": "Courier stop 1",
    "components": {
     "LocalTransform": {
@@ -44619,14 +45315,14 @@
    }
   },
   {
-   "id": 1769,
+   "id": 1793,
    "name": "Courier objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1767",
+     "target": "$1791",
      "radius": 4.0,
-     "next": "$1770"
+     "next": "$1794"
     },
     "SaveKey": {
      "key": 1003
@@ -44634,7 +45330,7 @@
    }
   },
   {
-   "id": 1770,
+   "id": 1794,
    "name": "Courier stop 2",
    "components": {
     "LocalTransform": {
@@ -44672,12 +45368,12 @@
    }
   },
   {
-   "id": 1771,
+   "id": 1795,
    "name": "Courier objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1769",
+     "target": "$1793",
      "radius": 4.0
     },
     "SaveKey": {
@@ -44686,14 +45382,14 @@
    }
   },
   {
-   "id": 1772,
+   "id": 1796,
    "name": "Mission Courier",
    "components": {
     "Mission": {
      "id": "courier",
-     "objective": "$1768",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1792",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 170
     },
     "MissionReward3D": {
@@ -44715,7 +45411,7 @@
    }
   },
   {
-   "id": 1773,
+   "id": 1797,
    "name": "Mission Courier marker",
    "components": {
     "LocalTransform": {
@@ -44741,7 +45437,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1771",
+     "mission": "$1795",
      "radius": 3.0
     },
     "MapMarker": {
@@ -44758,7 +45454,7 @@
    }
   },
   {
-   "id": 1774,
+   "id": 1798,
    "name": "Long haul stop 1",
    "components": {
     "LocalTransform": {
@@ -44796,12 +45492,12 @@
    }
   },
   {
-   "id": 1775,
+   "id": 1799,
    "name": "Long haul objective 1",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1773",
+     "target": "$1797",
      "radius": 4.0
     },
     "SaveKey": {
@@ -44810,14 +45506,14 @@
    }
   },
   {
-   "id": 1776,
+   "id": 1800,
    "name": "Mission Long haul",
    "components": {
     "Mission": {
      "id": "long_haul",
-     "objective": "$1774",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1798",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 150
     },
     "MissionReward3D": {
@@ -44839,7 +45535,7 @@
    }
   },
   {
-   "id": 1777,
+   "id": 1801,
    "name": "Mission Long haul marker",
    "components": {
     "LocalTransform": {
@@ -44865,7 +45561,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1775",
+     "mission": "$1799",
      "radius": 3.0
     },
     "MapMarker": {
@@ -44882,7 +45578,7 @@
    }
   },
   {
-   "id": 1778,
+   "id": 1802,
    "name": "Hit target",
    "components": {
     "LocalTransform": {
@@ -44917,11 +45613,11 @@
    }
   },
   {
-   "id": 1779,
+   "id": 1803,
    "name": "Hit target model",
    "components": {
     "ChildOf": {
-     "parent": "$1777"
+     "parent": "$1801"
     },
     "LocalTransform": {
      "position": [
@@ -44947,14 +45643,14 @@
    }
   },
   {
-   "id": 1780,
+   "id": 1804,
    "name": "Hit objective 1",
    "components": {
     "Objective": {
      "kind": "Kill",
-     "target": "$1777",
+     "target": "$1801",
      "count": 1,
-     "next": "$1781"
+     "next": "$1805"
     },
     "SaveKey": {
      "key": 1008
@@ -44962,7 +45658,7 @@
    }
   },
   {
-   "id": 1781,
+   "id": 1805,
    "name": "Hit stop 2",
    "components": {
     "LocalTransform": {
@@ -45000,12 +45696,12 @@
    }
   },
   {
-   "id": 1782,
+   "id": 1806,
    "name": "Hit objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1780",
+     "target": "$1804",
      "radius": 4.0
     },
     "SaveKey": {
@@ -45014,14 +45710,14 @@
    }
   },
   {
-   "id": 1783,
+   "id": 1807,
    "name": "Mission Hit",
    "components": {
     "Mission": {
      "id": "hit",
-     "objective": "$1779",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1803",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 180
     },
     "MissionReward3D": {
@@ -45040,7 +45736,7 @@
    }
   },
   {
-   "id": 1784,
+   "id": 1808,
    "name": "Mission Hit marker",
    "components": {
     "LocalTransform": {
@@ -45066,7 +45762,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1782",
+     "mission": "$1806",
      "radius": 3.0
     },
     "MapMarker": {
@@ -45083,7 +45779,7 @@
    }
   },
   {
-   "id": 1785,
+   "id": 1809,
    "name": "Cop killer objective 1",
    "components": {
     "Objective": {
@@ -45091,7 +45787,7 @@
      "team": 2,
      "by_actor": 1,
      "count": 3,
-     "next": "$1786"
+     "next": "$1810"
     },
     "SaveKey": {
      "key": 1011
@@ -45099,7 +45795,7 @@
    }
   },
   {
-   "id": 1786,
+   "id": 1810,
    "name": "Cop killer stop 2",
    "components": {
     "LocalTransform": {
@@ -45137,12 +45833,12 @@
    }
   },
   {
-   "id": 1787,
+   "id": 1811,
    "name": "Cop killer objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1785",
+     "target": "$1809",
      "radius": 4.0
     },
     "SaveKey": {
@@ -45151,14 +45847,14 @@
    }
   },
   {
-   "id": 1788,
+   "id": 1812,
    "name": "Mission Cop killer",
    "components": {
     "Mission": {
      "id": "cop_killer",
-     "objective": "$1784",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1808",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 240
     },
     "MissionReward3D": {
@@ -45177,7 +45873,7 @@
    }
   },
   {
-   "id": 1789,
+   "id": 1813,
    "name": "Mission Cop killer marker",
    "components": {
     "LocalTransform": {
@@ -45203,7 +45899,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1787",
+     "mission": "$1811",
      "radius": 3.0
     },
     "MapMarker": {
@@ -45220,7 +45916,7 @@
    }
   },
   {
-   "id": 1790,
+   "id": 1814,
    "name": "Pickup stop 1",
    "components": {
     "LocalTransform": {
@@ -45258,14 +45954,14 @@
    }
   },
   {
-   "id": 1791,
+   "id": 1815,
    "name": "Pickup objective 1",
    "components": {
     "Objective": {
      "kind": "Interact",
-     "target": "$1789",
+     "target": "$1813",
      "radius": 2.5,
-     "next": "$1792"
+     "next": "$1816"
     },
     "SaveKey": {
      "key": 1014
@@ -45273,7 +45969,7 @@
    }
   },
   {
-   "id": 1792,
+   "id": 1816,
    "name": "Pickup stop 2",
    "components": {
     "LocalTransform": {
@@ -45311,12 +46007,12 @@
    }
   },
   {
-   "id": 1793,
+   "id": 1817,
    "name": "Pickup objective 2",
    "components": {
     "Objective": {
      "kind": "ReachZone",
-     "target": "$1791",
+     "target": "$1815",
      "radius": 4.0
     },
     "SaveKey": {
@@ -45325,14 +46021,14 @@
    }
   },
   {
-   "id": 1794,
+   "id": 1818,
    "name": "Mission Pickup",
    "components": {
     "Mission": {
      "id": "pickup",
-     "objective": "$1790",
-     "actor": "$1610",
-     "fail_on_death": "$1610",
+     "objective": "$1814",
+     "actor": "$1634",
+     "fail_on_death": "$1634",
      "time_limit": 150
     },
     "MissionReward3D": {
@@ -45354,7 +46050,7 @@
    }
   },
   {
-   "id": 1795,
+   "id": 1819,
    "name": "Mission Pickup marker",
    "components": {
     "LocalTransform": {
@@ -45380,7 +46076,7 @@
      "cast_shadows": 0
     },
     "MissionMarker": {
-     "mission": "$1793",
+     "mission": "$1817",
      "radius": 3.0
     },
     "MapMarker": {
@@ -45397,7 +46093,7 @@
    }
   },
   {
-   "id": 1796,
+   "id": 1820,
    "name": "Cash 1",
    "components": {
     "LocalTransform": {
@@ -45440,7 +46136,7 @@
    }
   },
   {
-   "id": 1797,
+   "id": 1821,
    "name": "Cash 2",
    "components": {
     "LocalTransform": {
@@ -45483,7 +46179,7 @@
    }
   },
   {
-   "id": 1798,
+   "id": 1822,
    "name": "Cash 3",
    "components": {
     "LocalTransform": {
@@ -45526,7 +46222,7 @@
    }
   },
   {
-   "id": 1799,
+   "id": 1823,
    "name": "Cash 4",
    "components": {
     "LocalTransform": {
@@ -45569,7 +46265,7 @@
    }
   },
   {
-   "id": 1800,
+   "id": 1824,
    "name": "Cash 5",
    "components": {
     "LocalTransform": {
@@ -45612,7 +46308,7 @@
    }
   },
   {
-   "id": 1801,
+   "id": 1825,
    "name": "Cash 6",
    "components": {
     "LocalTransform": {
@@ -45655,7 +46351,7 @@
    }
   },
   {
-   "id": 1802,
+   "id": 1826,
    "name": "Cash 7",
    "components": {
     "LocalTransform": {
@@ -45698,7 +46394,7 @@
    }
   },
   {
-   "id": 1803,
+   "id": 1827,
    "name": "Cash 8",
    "components": {
     "LocalTransform": {
@@ -45741,7 +46437,7 @@
    }
   },
   {
-   "id": 1804,
+   "id": 1828,
    "name": "Cash 9",
    "components": {
     "LocalTransform": {
@@ -45784,7 +46480,7 @@
    }
   },
   {
-   "id": 1805,
+   "id": 1829,
    "name": "Cash 10",
    "components": {
     "LocalTransform": {
@@ -45827,7 +46523,7 @@
    }
   },
   {
-   "id": 1806,
+   "id": 1830,
    "name": "Cash 11",
    "components": {
     "LocalTransform": {
@@ -45870,7 +46566,7 @@
    }
   },
   {
-   "id": 1807,
+   "id": 1831,
    "name": "Cash 12",
    "components": {
     "LocalTransform": {
@@ -45913,7 +46609,7 @@
    }
   },
   {
-   "id": 1808,
+   "id": 1832,
    "name": "Ammo crate 1",
    "components": {
     "LocalTransform": {
@@ -45958,7 +46654,7 @@
    }
   },
   {
-   "id": 1809,
+   "id": 1833,
    "name": "Ammo crate 2",
    "components": {
     "LocalTransform": {
@@ -46003,7 +46699,7 @@
    }
   },
   {
-   "id": 1810,
+   "id": 1834,
    "name": "Ammo crate 3",
    "components": {
     "LocalTransform": {
@@ -46048,7 +46744,7 @@
    }
   },
   {
-   "id": 1811,
+   "id": 1835,
    "name": "Ammo crate 4",
    "components": {
     "LocalTransform": {
@@ -46093,7 +46789,7 @@
    }
   },
   {
-   "id": 1812,
+   "id": 1836,
    "name": "Ammo crate 5",
    "components": {
     "LocalTransform": {
@@ -46138,7 +46834,7 @@
    }
   },
   {
-   "id": 1813,
+   "id": 1837,
    "name": "Medic",
    "components": {
     "LocalTransform": {
@@ -46181,7 +46877,7 @@
    }
   },
   {
-   "id": 1814,
+   "id": 1838,
    "name": "Scrapyard",
    "components": {
     "LocalTransform": {
@@ -46224,7 +46920,7 @@
    }
   },
   {
-   "id": 1815,
+   "id": 1839,
    "name": "Repair shop 1",
    "components": {
     "LocalTransform": {
@@ -46269,7 +46965,7 @@
    }
   },
   {
-   "id": 1816,
+   "id": 1840,
    "name": "Repair shop 2",
    "components": {
     "LocalTransform": {
@@ -46314,7 +47010,7 @@
    }
   },
   {
-   "id": 1817,
+   "id": 1841,
    "name": "Pause menu",
    "components": {
     "UiScreen": {
@@ -46356,7 +47052,7 @@
    }
   },
   {
-   "id": 1818,
+   "id": 1842,
    "name": "Options menu",
    "components": {
     "UiScreen": {
@@ -46373,7 +47069,7 @@
    }
   },
   {
-   "id": 1819,
+   "id": 1843,
    "name": "Radio 1",
    "components": {
     "AudioSource": {
@@ -46387,7 +47083,7 @@
    }
   },
   {
-   "id": 1820,
+   "id": 1844,
    "name": "Radio 2",
    "components": {
     "AudioSource": {
@@ -46401,7 +47097,7 @@
    }
   },
   {
-   "id": 1821,
+   "id": 1845,
    "name": "Script: radio",
    "components": {
     "ScriptSystem": {
@@ -46415,7 +47111,7 @@
    }
   },
   {
-   "id": 1822,
+   "id": 1846,
    "name": "GI volume",
    "components": {
     "LocalTransform": {

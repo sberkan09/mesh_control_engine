@@ -160,6 +160,8 @@ TEST_CASE("M-OPENWORLD E1: the 09_openworld city plays, replays, drives and poli
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"AmmoPickup3D","show":["AmmoPickup3D"]}})")) == 5);
     // Event sounds (M-GAMEFEEL-SFX): the player carries the clips for the throw, blast, melee, cash, ammo and goal events.
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"EventSfx3D","show":["EventSfx3D"]}})")) == 1);
+    // Bullet holes (M-SHOTMARKS): a ring of 24 hidden decals waits for the shots.
+    CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"BulletHole3D","show":["BulletHole3D"]}})")) == 24);
     // A safety net under the world (M-FALLDEATH).
     CHECK(count(c.ok("run_headless", R"({"ticks":1,"log_lines":0,"inspect":{"component":"FallDeath3D","show":["FallDeath3D"]}})")) >= 1);
     // Speed and gear on the HUD (M-DRIVEHUD).

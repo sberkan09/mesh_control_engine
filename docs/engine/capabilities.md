@@ -43,7 +43,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `RigidBody3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `CharacterController3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Trigger3D` | `mce/kit/bodies3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/08_movement/assets/scenes/course.mcscene |
-| `BulletHole3D` | `mce/kit/bullet_hole3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: shown in samples/09_openworld by M-SHOTMARKS step 2 (remove this line then) |
+| `BulletHole3D` | `mce/kit/bullet_hole3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Butterfly` | `mce/kit/butterfly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
 | `ChunkLod3D` | `mce/kit/chunk_lod3d.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
@@ -128,7 +128,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Terrain3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/03-editor.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `TerrainCollider3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `TerrainFoliage3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | projects/SolsticeReach/assets/scenes/main.mcscene |
-| `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
+| `Decal3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ParticleEmitter3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `LeafFall` | `mce/kit/leaf_fall.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `LensFlare3D` | `mce/kit/lens_flare.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/11_daynight/assets/scenes/sunrise.mcscene |
