@@ -1,0 +1,1 @@
+- M-TRACERS plan: tracer lines for shots in the open-world sample (docs/milestones/M-TRACERS.md).
