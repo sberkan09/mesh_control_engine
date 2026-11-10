@@ -30,7 +30,7 @@ def variant(src, dst, scene, *kv):
         elif isinstance(o, list):
             for x in o: walk(x)
     walk(doc); json.dump(doc, open(sp, "w"), indent=1); print("variant: GiVisibility3D sets", n)
-def spots(src, dst):
+def spots(src, dst, nui="0"):
     """One assets copy with 12 scenes: s_<k> (as committed) and s_<k>_nv (GiVisibility3D enabled 0) for six street spots. The player stands at
     the spot and the follow camera is first person (eye 1.7 m) looking along yaw (0 = -Z, pi/2 = -X)."""
     import uuid, math
@@ -43,6 +43,7 @@ def spots(src, dst):
         for nv in (0, 1):
             doc = json.loads(json.dumps(base)); name = f"s_{k}" + ("_nv" if nv else "")
             doc["guid"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "mce-r10-" + name)); doc["name"] = name
+            if nui == "1": doc["entities"] = [e for e in doc["entities"] if not ({"UiScreen", "MapMarker"} & set(e["components"]))]
             for e in doc["entities"]:
                 c = e["components"]
                 if e["name"] == "Player": c["LocalTransform"]["position"] = [x, 0.95, z]
