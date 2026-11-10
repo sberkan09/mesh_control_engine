@@ -110,6 +110,18 @@ def cmp(a, b):
     d = np.abs(x - y).max(axis=2)
     print(f"   {a:<26} vs {b:<26} {x.shape[1]}x{x.shape[0]} mean {x.reshape(-1,3).mean(0).round(1).tolist()} / "
           f"{y.reshape(-1,3).mean(0).round(1).tolist()} | diff>12: {100*(d>12).mean():.2f}% mean|d| {np.abs(x-y).mean():.2f} max {d.max()}")
+def ascii(*keys):
+    import numpy as np
+    from PIL import Image
+    ramp = " .:-=+*#%@"
+    for k in keys:
+        p = f"/work/cap/{k}.ppm"
+        if not os.path.exists(p): print(f"## {k} missing"); continue
+        im = Image.open(p).convert("RGB"); a = np.asarray(im.resize((96, 27), Image.BOX), dtype=float)
+        l = a @ [0.2126, 0.7152, 0.0722]; print(f"## {k} {im.size} mean lum {l.mean():.1f}; 6x3 cell means:")
+        g = np.asarray(im.convert("L").resize((6, 3), Image.BOX), dtype=float)
+        for row in g: print("   " + " ".join(f"{v:5.1f}" for v in row))
+        for row in l: print("".join(ramp[min(9, int(v / 25.6))] for v in row))
 def trace(logfile):
     """Summarise GITRACE lines: fill length, probes/frame, scrolls, speed, backlog."""
     rows = []
