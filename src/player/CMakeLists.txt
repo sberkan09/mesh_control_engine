@@ -99,6 +99,14 @@ if(MCE_BUILD_TESTS AND TARGET mce_cook)
                      -P ${PROJECT_SOURCE_DIR}/tests/perf/player_perf_test.cmake)
 endif()
 
+# Soak (M-SOAK step 1): 1500 ticks under a capture; the live heap allocation count must not grow.
+if(MCE_BUILD_TESTS AND TARGET mce_cook)
+    add_test(NAME player_soak
+             COMMAND ${CMAKE_COMMAND} -DMCE_COOK=$<TARGET_FILE:mce_cook> -DMCE_PLAYER=$<TARGET_FILE:mce_player>
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/soak_test -DSLACK=8
+                     -P ${PROJECT_SOURCE_DIR}/tests/perf/player_soak_test.cmake)
+endif()
+
 # Capture without a display and the save folder line (M-WORKFLOW step 4, #380): the save folder is logged once
 # and follows $XDG_DATA_HOME / -save_dir; a capture with no DISPLAY falls back to the offscreen driver by itself.
 if(MCE_BUILD_TESTS AND TARGET mce_cook)
