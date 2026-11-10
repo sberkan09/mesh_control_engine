@@ -34,5 +34,13 @@ if(MCE_BUILD_TESTS)
                  COMMAND mce_player -pack "${pack}" -scene scenes/city.mcscene -input ${CMAKE_CURRENT_SOURCE_DIR}/drive.input
                          -frames 180 -capture "${CMAKE_CURRENT_BINARY_DIR}/openworld.ppm" -platform.error_box 0 -r.vsync 0)
         set_tests_properties(openworld_sample_player_gpu PROPERTIES LABELS gpu)
+        # The city's frame (GI probe captures included) fits in 12 of the default 16 MiB frame arena. Before the fix the
+        # frame's command stream grew in the arena and took about 7 MB of it; the arena overflowed (null allocations in
+        # SpriteBatch and CommandBuffer, GPU round r10).
+        add_test(NAME openworld_frame_arena_gpu
+                 COMMAND mce_player -pack "${pack}" -scene scenes/city.mcscene -frames 3 -r.quality medium
+                         -mem.frame_arena_mb 12 -sim.fast_forward 1 -sim.max_catchup 1 -pause_on_focus_loss 0 -settings 0
+                         -platform.error_box 0 -r.vsync 0)
+        set_tests_properties(openworld_frame_arena_gpu PROPERTIES LABELS gpu FAIL_REGULAR_EXPRESSION "LinearArena 'frame' overflow")
     endif()
 endif()
