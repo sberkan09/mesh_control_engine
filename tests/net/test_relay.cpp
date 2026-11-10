@@ -349,3 +349,88 @@ TEST_CASE("relay: relay_refusal_name says why a request was refused") {
     CHECK(relay_refusal_name(RelayRefusal::TooManyRooms) == StringView("too many rooms"));
     CHECK(relay_refusal_name(static_cast<RelayRefusal>(200)) == StringView("unknown"));
 }
+
+TEST_CASE("net relay: a client ignores forged or damaged messages from the relay and keeps its room") {
+    SimNetwork network{11};
+    SimEndpoint& fake = network.add_endpoint(4, 2);  // stands in for the relay
+    SimEndpoint& link = network.add_endpoint(1, 2);
+    RelayClient room;
+    room.start(link, link.connect(fake));
+    auto pump = [&] {
+        for (int i = 0; i < 10; ++i) {
+            for (Event ev; room.poll(ev);) {
+            }
+            network.advance(10);
+        }
+    };
+    PeerId client = kInvalidPeer;
+    for (int i = 0; i < 10 && client == kInvalidPeer; ++i) {
+        for (Event ev; fake.poll(ev);)
+            if (ev.kind == EventKind::Connected) client = ev.peer;
+        for (Event ev; room.poll(ev);) {
+        }
+        network.advance(10);
+    }
+    REQUIRE(client != kInvalidPeer);
+    auto forge = [&](std::initializer_list<u8> bytes) {
+        const Array<u8> msg = [&] {
+            Array<u8> a;
+            for (const u8 b : bytes) a.push_back(b);
+            return a;
+        }();
+        fake.send(client, 0, Span<const u8>(msg.data(), msg.size()), Delivery::Reliable);
+        pump();
+    };
+    constexpr u8 kCreated = 0x81, kRefused = 0x83, kMemberJoined = 0x84, kMemberLeft = 0x85, kDataFrom = 0x86,
+                 kRoomList = 0x88, kHostChanged = 0x89;
+
+    // Nothing is pending: answers to a request nobody made change nothing.
+    forge({kCreated, 0, 'A', 'B', 'C', 'D', 'E', 'F'});
+    forge({kRefused, 3});
+    CHECK(room.state() == RelayClient::State::Idle);
+
+    REQUIRE(room.create_room(4));
+    pump();
+    for (Event ev; fake.poll(ev);) {
+    }
+    // The request is on its way: a member number past the room limit and a wrong size are refused.
+    forge({kCreated, 200, 'A', 'B', 'C', 'D', 'E', 'F'});
+    forge({kCreated, 0, 'A', 'B', 'C'});
+    CHECK(room.state() == RelayClient::State::Requesting);
+    forge({kCreated, 0, 'A', 'B', 'C', 'D', 'E', 'F'});
+    REQUIRE(room.state() == RelayClient::State::InRoom);
+    CHECK(room.member_id() == 0);
+
+    // In the room: members that do not exist, data from nobody, a channel the game never opened,
+    // a host that is not a member and a refusal are all dropped.
+    forge({kMemberJoined, 250});
+    forge({kMemberJoined, 0});  // our own number
+    forge({kMemberLeft, 250});
+    forge({kMemberLeft, 5});  // never joined
+    forge({kDataFrom, 3, 0, 'x'});
+    forge({kDataFrom, 200, 0, 'x'});
+    forge({kDataFrom, 0, 9, 'x'});
+    forge({kHostChanged, 6});
+    forge({kHostChanged});
+    forge({kRefused, 1});
+    forge({0xEE, 1, 2, 3});
+    CHECK(room.state() == RelayClient::State::InRoom);
+    CHECK(room.host_id() == 0);
+    CHECK(room.member_id() == 0);
+    CHECK_FALSE(room.is_connected(3));
+    CHECK_FALSE(room.is_connected(5));
+
+    // A room list is taken whole or not at all: a count past the data, a mode with a control byte
+    // and trailing bytes all leave the old list alone.
+    CHECK(room.rooms_received() == 0);
+    forge({kRoomList, 2, 'A', 'B', 'C', 'D', 'E', 'F', 1, 4, 0});
+    forge({kRoomList, 1, 'A', 'B', 'C', 'D', 'E', 'F', 1, 4, 1, 0x07});
+    forge({kRoomList, 1, 'A', 'B', 'C', 'D', 'E', 'F', 1, 4, 0, 9});
+    forge({kRoomList});
+    CHECK(room.rooms_received() == 0);
+    CHECK(room.rooms().size() == 0);
+    forge({kRoomList, 1, 'A', 'B', 'C', 'D', 'E', 'F', 1, 4, 2, 'o', 'k'});
+    REQUIRE(room.rooms_received() == 1);
+    REQUIRE(room.rooms().size() == 1);
+    CHECK(room.rooms()[0].mode.view() == "ok");
+}
