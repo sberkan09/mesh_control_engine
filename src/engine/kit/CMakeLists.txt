@@ -39,6 +39,7 @@ mce_add_library(mce_gameplay_kit
         src/grenade3d.cpp
         src/ammopickup3d.cpp
         src/event_sfx3d.cpp
+        src/bullet_hole3d.cpp
         src/progress3d.cpp
         src/vehicle_extras.cpp
         src/weather.cpp

@@ -490,6 +490,14 @@ Four more cover the weapon: `reload_start_clip` (`WeaponReloadStarted3D`), `relo
 `owner`, or the weapon entity when that is null). Install combat before it, as `install_stock` does.
 Each matching event pushes one 2D `audio::PlaySfx`; a null clip is silent. The sound reaches the mixer one tick after the event.
 
+### Bullet holes
+
+`mce/kit/bullet_hole3d.h`: a ring of `BulletHole3D` entities (each with a `LocalTransform` and a `Decal3D`, 24 is a good number) marks
+where shots land. Every `WeaponHit3D` on something without `Health3D` takes the oldest slot (a never-used one first), moves it to the hit
+point, turns its +Y along the surface normal and shows its decal sized `size` by `depth`; after `life` seconds it fades out over `fade`
+seconds and hides. Two hits in one tick take two slots; hits on characters leave nothing. The system is `kit_bullet_holes`
+(`FixedUpdate_Post`); install combat first, as `install_stock` does.
+
 ## 9.10 Configuration
 
 The host installs physics with the default `PhysicsConfig`: gravity −9.81 on Y, 8 velocity and 3
