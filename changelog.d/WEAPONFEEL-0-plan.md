@@ -1,0 +1,1 @@
+- M-WEAPONFEEL plan: reload, dry-fire and weapon-switch feedback for the open-world sample (docs/milestones/M-WEAPONFEEL.md).
