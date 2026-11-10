@@ -33,6 +33,7 @@ mce_add_test(test_editor UMBRELLA
         test_asset_thumb.cpp
         test_asset_form.cpp
         test_scene_tabs.cpp
+        test_editor_soak.cpp
         test_mixer_model.cpp
         test_source_doc.cpp
         test_strings_grid.cpp
