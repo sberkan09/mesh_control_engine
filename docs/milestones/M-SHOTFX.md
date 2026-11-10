@@ -8,5 +8,5 @@ Closes the muzzle-flash part of "no visible feedback on shooting" in `M-OPENWORL
   `ParticleBurst {6, Fired}` and `ShakeTrigger {0.04, Fired}`.
 - Test: `tests/kit/test_effects.cpp` ("FireOn Fired ...").
 
-Limits: no tracer line, ~~impact sparks or decal~~ (sparks: [M-IMPACTFX](M-IMPACTFX.md); bullet holes: [M-SHOTMARKS](M-SHOTMARKS.md)), hit marker or shell casing; officers' and other NPC shots show no flash (they have no
+Limits: ~~no tracer line~~ (tracers: [M-TRACERS](M-TRACERS.md)), ~~impact sparks or decal~~ (sparks: [M-IMPACTFX](M-IMPACTFX.md); bullet holes: [M-SHOTMARKS](M-SHOTMARKS.md)), hit marker or shell casing; officers' and other NPC shots show no flash (they have no
 trigger); the flash is a fixed offset from the camera, not from a gun model.
