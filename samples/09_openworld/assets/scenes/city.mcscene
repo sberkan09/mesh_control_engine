@@ -38699,7 +38699,15 @@
      "ammo_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
      "ammo_db": -10,
      "goal_clip": "guid:fb824104-ebe2-580e-afb3-0b9f149bb034",
-     "goal_db": -4
+     "goal_db": -4,
+     "reload_start_clip": "guid:92674aa4-9cb6-5c04-90da-cd7da3bb9c2b",
+     "reload_start_db": -10,
+     "reloaded_clip": "guid:6558a1c6-cbfb-5520-b9d7-be662ffd4eb1",
+     "reloaded_db": -8,
+     "dry_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
+     "dry_db": -12,
+     "switch_clip": "guid:281338d9-c78a-59a7-8cd4-9b85007be981",
+     "switch_db": -10
     },
     "HitMarker3D": {
      "hit_clip": "guid:0484f082-3122-5c10-a95a-5cc2480152bd",
