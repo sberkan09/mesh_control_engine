@@ -20,3 +20,5 @@
 **Gates:** each step's tests run in the module's own test binary, so `--task` runs them. Any bug a step finds is fixed with a regression test and recorded in this table.
 
 - 2026-11-09, step 4 (input_system): `fold` already bounds every slot and code; the gap was non-finite coordinates. A NaN mouse move poisoned the delta, an infinite pad axis stuck, an infinite `Resized` was accepted as the view size. `push_event` now drops such events (regression test in `test_actions.cpp`).
+
+- 2026-11-10, step 4 (loc, remote_config, player): loc already tests malformed UTF-8 and remote_config checks finiteness. The gap was `parse_numbers` in the player: `-view.free nan,0` and `-safe_area inf,0,0,0` were accepted. It now refuses non-finite values; two ctests (`player_view_nonfinite`, `player_safe_area_nonfinite`) cover it.

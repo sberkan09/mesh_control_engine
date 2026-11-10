@@ -1,0 +1,1 @@
+- player: `-view.free`, `-safe_area` and `-capture_ticks` refuse a number list that holds nan or inf instead of taking it as a camera or inset value.
