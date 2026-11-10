@@ -31,6 +31,11 @@ if(MCE_BUILD_TESTS)
     # -help prints the command-line reference (every convar) and exits 0, before any pack is needed.
     add_test(NAME player_help COMMAND mce_player -help)
     set_tests_properties(player_help PROPERTIES PASS_REGULAR_EXPRESSION "usage: mce_player.*-capture_tick <int>.*-pack <string>")
+    # A number list that holds nan or inf is refused up front (the pack need not exist: the lists are read first).
+    add_test(NAME player_view_nonfinite COMMAND mce_player -headless -pack nothing.mcpack -view.free nan,0)
+    set_tests_properties(player_view_nonfinite PROPERTIES PASS_REGULAR_EXPRESSION "-view.free wants")
+    add_test(NAME player_safe_area_nonfinite COMMAND mce_player -headless -pack nothing.mcpack -safe_area inf,0,0,0)
+    set_tests_properties(player_safe_area_nonfinite PROPERTIES PASS_REGULAR_EXPRESSION "-safe_area wants")
 endif()
 
 # Data mods end to end (ADR-0034): mce_cook builds a game pack and a mod pack over it; mce_player

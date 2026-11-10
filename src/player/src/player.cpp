@@ -2192,7 +2192,7 @@ private:
             std::memcpy(buf, item.data(), item.size());
             char* stop = nullptr;
             const f64 v = std::strtod(buf, &stop);
-            if (stop == buf || *stop != 0) return false;
+            if (stop == buf || *stop != 0 || !std::isfinite(v)) return false;
             out.push_back(v);
             start = end + 1;
         }
