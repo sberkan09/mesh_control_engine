@@ -101,7 +101,10 @@ public:
     void on_render(const app::RenderContext& rc) override {
         device_.begin_frame(rc.frame_index);
         shell_.build_ui(rc.frame_dt);
-        rhi::CommandBuffer cmd(mem::frame());
+        // Heap stream that keeps its capacity: grown in the frame arena, every doubling left the old block behind
+        // (the player's city frame overflowed 16 MiB that way).
+        rhi::CommandBuffer& cmd = frame_cmd_;
+        cmd.reset();
         shell_.record(cmd, rc.alpha);
         const f64 t0 = platform::now_seconds();
         device_.submit(cmd);
@@ -324,6 +327,7 @@ private:
 
     platform::Window& window_;
     rhi::RenderDevice& device_;
+    rhi::CommandBuffer frame_cmd_{mem::heap()};
     editor::EditorShell shell_;
     FixedString<64> focus_;
     int exit_code_ = 0;
