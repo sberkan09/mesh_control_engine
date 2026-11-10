@@ -4873,14 +4873,17 @@ void main() {
 // Otherwise the view-space point is rebuilt as kCloudShadowFS does and turned into the camera-relative world offset p.
 // depth = c_up.w - p.y (the plane's height above the camera minus p.y); nothing is added at or above the plane or at or
 // below max_depth. The point moves along the sun to the plane (t = depth / sun.y, the sun ray's length in water); outside
-// the drawn water square (centre c_plane.zw, half size c_back.w) nothing is added. The view ray's length in water dv (the
-// camera above the plane only: |p| depth / -p.y). term = pattern(xz / scale + offset) * exp(-absorption (t + dv)) * the
-// depth falloff (in over the first 0.25 m, out over the last 20 % of max_depth) * the exp² fog's surface share exp(-(fog
-// |p|)²) (the main pass wrote s T + fog (1 - T); light added to s adds term T). The pixel's rgb gains c_color.rgb * term,
-// alpha kept: a term of 0 leaves the pixel's bits as they are. The CPU records the pass only with the sun at or above
-// kCausticsMinSunY, so the division by c_sun.y is safe. Portable: one block, combined samplers at the post banks,
-// textureLod and texelFetch only, constant-bound loops, u32 math that wraps as the C++ does.
-inline constexpr int kCausticsUBytes = 128;  // 8 vec4: proj, right, up, back, sun, color, plane, misc
+// the drawn water square (centre c_plane.zw, half size c_back.w) nothing is added. term = pattern(xz / scale + offset) *
+// exp(-absorption t) * the depth falloff (in over the first 0.25 m, out over the last 20 % of max_depth) * the water's
+// transmission (caustics_transmission: with the camera above the plane and the view ray crossing it inside the square,
+// what kWaterFS lets through of the point, (1 - F) exp(-sigma d_view) per channel, F Schlick on the flat plane times the
+// reflectivity; else 1) * the exp² fog's surface share exp(-(fog d)²), d the distance the main pass fogged the pixel at
+// (the water surface's when the point is seen through it; the main pass wrote s T + fog (1 - T), light added to s adds
+// term T). The pixel's rgb gains c_color.rgb * term, alpha kept: a term of 0 leaves the pixel's bits as they are. The CPU
+// records the pass only with the sun at or above kCausticsMinSunY (the division by c_sun.y is safe) and, with the camera
+// above the water, only when the water shows what lies under it (M-WATER2 refraction). Portable: one block, combined
+// samplers at the post banks, textureLod and texelFetch only, constant-bound loops, u32 math that wraps as the C++ does.
+inline constexpr int kCausticsUBytes = 144;  // 9 vec4: proj, right, up, back, sun, color, plane, misc, water
 #define MCE_GLSL_CAUSTICS_NOISE \
     R"(
 uvec2 ca_hash(uvec2 v) {  // pcg2d (Jarzynski and Olano 2020), both lanes
@@ -4955,6 +4958,7 @@ layout(std140, binding = 1) uniform CausticsU {
     vec4 c_color;  // rgb sun colour * intensity * strength * sun share * sun fade, w max_depth (m)
     vec4 c_plane;  // xy the camera's world xz / cell wrapped to 64 (caustics_offset), zw the water square's centre - camera
     vec4 c_misc;   // x the clock's phase 0..1 (caustics_phase), y octaves (1..3), z the exp² fog density (0: none), w 0
+    vec4 c_water;  // rgb the water's view-path extinction per metre (caustics_water_sigma), w its reflectivity
 };
 layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 o_color;
@@ -4973,23 +4977,38 @@ void main() {
     vec3 v = vec3((ndc.x + c_proj.z) * z / c_proj.x, (ndc.y + c_proj.w) * z / c_proj.y, -z);
     vec3 p = c_right.xyz * v.x + c_up.xyz * v.y + c_back.xyz * v.z;
     float depth = c_up.w - p.y;  // how far the point is below the plane
-    float term = 0.0;
+    vec3 term = vec3(0.0);
     if (depth > 0.0 && depth < c_color.w) {
         float t = depth / c_sun.y;  // the sun ray's length in water
         vec2 xz = vec2(p.x + c_sun.x * t, p.z + c_sun.z * t);
         // A NaN or an overflow never reaches the float-to-uint lattice; outside the drawn water square: nothing.
         if (abs(xz.x) < 1.0e30 && abs(xz.y) < 1.0e30 && abs(xz.x - c_plane.z) <= c_back.w &&
             abs(xz.y - c_plane.w) <= c_back.w) {
-            float len = sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-            float dv = c_up.w < 0.0 ? len * depth / -p.y : 0.0;  // the view ray in water (camera above the plane)
             float pat = ca_pattern(vec2(xz.x * c_right.w + c_plane.x, xz.y * c_right.w + c_plane.y), c_misc.x, c_misc.y);
-            float fade = smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth));
-            term = pat * exp(-c_sun.w * (t + dv)) * fade;
-            if (c_misc.z != 0.0) {
-                float fd = c_misc.z * len;
-                term *= exp(-fd * fd);  // only the surface part of the pixel receives the light
+            float k = pat * exp(-c_sun.w * t) * (smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth)));
+            // caustics_transmission: seen from above through the water square, the water pixel shows the point as
+            // kWaterFS composites it, (1 - F) exp(-sigma d_view), and is fogged at the surface's distance.
+            float len = sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+            float fdist = len;
+            vec3 tr = vec3(1.0);
+            if (c_up.w < 0.0) {
+                float s = c_up.w / p.y;  // the share of the view ray from the camera to the plane
+                if (abs(p.x * s - c_plane.z) <= c_back.w && abs(p.z * s - c_plane.w) <= c_back.w) {
+                    float dv = len * depth / -p.y;
+                    float q = 1.0 - -p.y / len;
+                    float q2 = q * q;
+                    float fr = (0.02 + 0.98 * (q2 * q2 * q)) * c_water.w;
+                    float kt = 1.0 - fr;
+                    fdist = len - dv;
+                    tr = vec3(kt * exp(-c_water.x * dv), kt * exp(-c_water.y * dv), kt * exp(-c_water.z * dv));
+                }
             }
-            term = (term == term) ? clamp(term, 0.0, 1.0) : 0.0;  // a NaN never reaches the frame
+            if (c_misc.z != 0.0) {
+                float fd = c_misc.z * fdist;
+                k *= exp(-fd * fd);  // only the surface part of the pixel receives the light
+            }
+            term = vec3(k * tr.x, k * tr.y, k * tr.z);
+            term = mix(vec3(0.0), clamp(term, 0.0, 1.0), equal(term, term));  // a NaN never reaches the frame
         }
     }
     o_color = vec4(src.rgb + c_color.rgb * term, src.a);

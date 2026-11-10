@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#include <limits>
 
 #include "fixture3d.h"
 #include "mce/convar.h"
@@ -192,6 +193,23 @@ TEST_CASE("caustics: the off paths draw the frame without the pass bit for bit")
         CHECK_FALSE(s.stats.caustics);
         CHECK(same(s.px, base.px));
     }
+    // Seen from above, water that hides what lies under it (calm and foamless: no refraction; or r.water.refract 0): the
+    // floor is not drawn there, so nothing is added on the water's tint.
+    const WaterSurface calm = caustics_water(kCausticsLevel, 0.0f);
+    {
+        const Shot base = h.draw(&calm, nullptr);
+        const Shot s = h.draw(&calm, &on);
+        CHECK_FALSE(s.stats.water_refract);
+        CHECK_FALSE(s.stats.caustics);
+        CHECK(same(s.px, base.px));
+    }
+    {
+        CvarScope scope("r.water.refract", "0");
+        const Shot base = h.draw(&w, nullptr);
+        const Shot s = h.draw(&w, &on);
+        CHECK_FALSE(s.stats.caustics);
+        CHECK(same(s.px, base.px));
+    }
     // A sun under the fade band, below the horizon, a NaN and a zero direction: the frame with the same sun, no pass.
     const f32 nan = std::nanf("");
     for (const vec3 toward : {vec3{0.0f, 0.015f, 1.0f}, vec3{0.3f, -0.5f, 0.3f}, vec3{nan, 1.0f, 0.0f},
@@ -211,8 +229,9 @@ TEST_CASE("caustics: the off paths draw the frame without the pass bit for bit")
     const Shot dark_on = h.draw(&w, &on, 0.0f, kCausticsToward, dark);
     CHECK_FALSE(dark_on.stats.caustics);
     CHECK(same(dark_on.px, dark_base.px));
-    // On: the pass runs, with the setting's strength.
+    // On: the pass runs, with the setting's strength (the waves turn the refraction on).
     const Shot s = h.draw(&w, &on);
+    CHECK(s.stats.water_refract);
     CHECK(s.stats.caustics);
     CHECK(s.stats.caustics_strength == doctest::Approx(1.0f));
     CHECK_FALSE(same(s.px, plain.px));
@@ -343,9 +362,15 @@ TEST_CASE("caustics: the light fades to nothing as the sun sinks toward the hori
             CHECK(same(s.px, base.px));
         }
         CHECK(l.darkest == 0);
-        // The fade and the shorter sun path in water both grow with the elevation.
-        CHECK(l.sum >= last);
-        last = l.sum;
+        // Through the fade band (0.02..0.2) the light grows with the elevation. Above it the fade is 1 and the tonemapper
+        // decides: the base frame brightens with the sun and the same added light reads as less (only drawn is checked).
+        if (y <= kCausticsFullSunY) {
+            CHECK(l.sum >= last);
+            last = l.sum;
+        } else {
+            CHECK(s.stats.caustics);
+            CHECK(l.sum > 0);
+        }
     }
     CHECK(last > 0);
 }
@@ -465,7 +490,7 @@ TEST_CASE("caustics: the exp² fog takes its share of the light") {
     const Caustics on = caustics_setting();
     const auto fog = [](Scene3D& s) {
         Fog f = s.fog();
-        f.density = 0.12f;  // the floor 6..12 m away keeps exp(-0.5..-2) of its own colour
+        f.density = 0.25f;  // the floor 6..12 m away keeps exp(-2.3..-9) of its own colour
         s.set_fog(f);
     };
     const Light clear = light(h.draw(&w, &on).px, h.draw(&w, nullptr).px);
@@ -482,8 +507,9 @@ TEST_CASE("caustics: the exp² fog takes its share of the light") {
 
 namespace {
 
-// f32 to IEEE half for the depths the case uploads (small integers and 0: exact).
+// f32 to IEEE half for the depths the case uploads (small integers and 0: exact; a NaN stays a NaN, overflow is inf).
 u16 to_half(f32 v) {
+    if (v != v) return u16(0x7e00u);
     u32 b;
     std::memcpy(&b, &v, 4);
     const u32 sign = (b >> 16) & 0x8000u;
@@ -538,12 +564,12 @@ rhi::PipelineHandle fullscreen_pipe(Fixture3D& f, const char* fs, const char* na
 
 // CausticsU as the shader declares it (forward3d.cpp's mirror is private to the renderer).
 struct CausticsBlock {
-    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4];
+    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4], water[4];
 };
 static_assert(sizeof(CausticsBlock) == shaders3d::kCausticsUBytes, "CausticsBlock mirrors CausticsU");
 
-// kCausticsFS alone over a w x 1 prepass row (depth per texel) and a black source into a w x 1 RGBA32F target: returns the
-// red channel per texel (with c_color.r 1: the term). One row, so v_uv.y is 0.5 whatever the backend's row order.
+// kCausticsFS alone over a w x 1 prepass row (depth per texel) and a source black in red into a w x 1 RGBA32F target:
+// returns the red channel per texel (with c_color.r 1: the term's red). One row, so v_uv.y is 0.5 whatever the backend's row order.
 Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CausticsBlock& u) {
     const u32 w = u32(depth.size());
     const rhi::TextureHandle gbuf = row_texture(f, w, [&](u32 x) { return math::vec4(0.0f, 0.0f, 1.0f, depth[x]); });
@@ -616,6 +642,11 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
     // 0 = sky; 1.5..33.25 m in quarter metres (exact in half), and one overflowed depth (6e4 and more: sky).
     for (u32 x = 0; x < kN; ++x)
         depth[x] = x % 32 == 0 ? 0.0f : (x == 77 ? 65000.0f : f32(6 + x) * 0.25f);
+    // The prepass's other non-depths: a NaN, +inf, -inf and a negative depth: all untouched.
+    depth[50] = std::nanf("");
+    depth[51] = std::numeric_limits<f32>::infinity();
+    depth[52] = -std::numeric_limits<f32>::infinity();
+    depth[53] = -3.0f;
     struct Case {
         f32 yaw, pitch;  // the camera's yaw and pitch (radians; pitch > 0 looks down)
         vec3 toward;     // toward the sun (normalized as the renderer does)
@@ -627,6 +658,8 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         u32 octaves;
         f32 absorption, max_depth;
         f32 fog = 0.0f;
+        vec3 sigma{0.29f, 0.12f, 0.11f};  // the water's view-path extinction (camera above)
+        f32 reflectivity = 1.0f;
     };
     const Case cases[] = {
         {0.0f, 0.6f, {0.3f, 0.9f, 0.3f}, -3.0f, {1.5f, -2.0f}, 500.0f, 1.5f, {5.0f, 61.0f}, 0.0f, 3, 0.15f, 30.0f},
@@ -635,6 +668,9 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         {3.0f, 0.8f, {0.0f, 1.0f, 0.0f}, 4.0f, {-3.0f, 2.0f}, 500.0f, 4.0f, {0.5f, 0.25f}, 0.6f, 3, 0.1f, 40.0f},  // under
         {0.7f, -0.4f, {0.6f, 0.05f, 0.8f}, 12.0f, {0.0f, 0.0f}, 500.0f, 1.0f, {50.0f, 1.0f}, 0.1f, 3, 0.0f, 200.0f},  // up
         {0.2f, 0.7f, {0.3f, 0.7f, -0.4f}, -2.0f, {0.0f, 0.0f}, 500.0f, 1.5f, {3.5f, 9.0f}, 0.25f, 3, 0.15f, 30.0f, 0.03f},
+        // From above through a small water square (some view rays cross outside it), a clear, matte water.
+        {-0.6f, 0.5f, {0.2f, 0.8f, 0.5f}, -4.0f, {2.0f, -1.0f}, 9.0f, 1.0f, {7.0f, 40.0f}, 0.7f, 3, 0.1f, 50.0f, 0.0f,
+         {0.05f, 0.02f, 0.01f}, 0.0f},
     };
     const f32 fov = math::radians(45.0f), aspect = f32(kN);
     usize compared = 0, hits = 0, lit = 0, nonzero = 0, close = 0;
@@ -649,14 +685,15 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         const f32 p20 = 0.0125f, p21 = -0.02f;                                     // an off-centre (jittered) projection
         const vec3 sun = math::normalize(c.toward);
         CausticsBlock u{};
-        const f32 blk[8][4] = {{p00, p11, p20, p21},
+        const f32 blk[9][4] = {{p00, p11, p20, p21},
                                {right.x, right.y, right.z, 1.0f / c.scale},
                                {up.x, up.y, up.z, c.plane_h},
                                {back.x, back.y, back.z, c.half_extent},
                                {sun.x, sun.y, sun.z, c.absorption},
                                {1.0f, 0.0f, 0.0f, c.max_depth},
                                {c.offset.x, c.offset.y, c.centre.x, c.centre.y},
-                               {c.phase, f32(c.octaves), c.fog, 0.0f}};
+                               {c.phase, f32(c.octaves), c.fog, 0.0f},
+                               {c.sigma.x, c.sigma.y, c.sigma.z, c.reflectivity}};
         std::memcpy(&u, blk, sizeof u);
         const Array<f32> gpu = run_pass(f, depth, u);
         CausticsParams cp2;
@@ -671,10 +708,12 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         cp2.absorption = c.absorption;
         cp2.max_depth = c.max_depth;
         cp2.fog_density = c.fog;
+        cp2.water_sigma = c.sigma;
+        cp2.reflectivity = c.reflectivity;
         for (u32 x = 0; x < kN; ++x) {
             f32 want = 0.0f;
             const f32 z = depth[x];
-            if (z > 0.0f && z < 6.0e4f) {
+            if (z > 0.0f && z < 6.0e4f) {  // false for a NaN too
                 const f32 ndc_x = (f32(x) + 0.5f) / f32(kN) * 2.0f - 1.0f;
                 const vec3 v{(ndc_x + p20) * z / p00, (0.0f + p21) * z / p11, -z};
                 const vec3 p{right.x * v.x + up.x * v.y + back.x * v.z, right.y * v.x + up.y * v.y + back.y * v.z,
@@ -682,7 +721,7 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                 math::vec2 xz;
                 f32 d = 0.0f;
                 if (caustics_plane_point(p, cp2, xz, d)) ++hits;
-                want = caustics_term(p, cp2);
+                want = caustics_term(p, cp2).x;
                 lit += want > 0.05f ? 1 : 0;
                 nonzero += want > 0.0f ? 1 : 0;
             }

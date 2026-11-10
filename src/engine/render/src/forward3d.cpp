@@ -484,12 +484,14 @@ struct CausticsU {
     vec4 color;  // rgb the light added per unit of term (caustics_gate), w max_depth
     vec4 plane;  // xy caustics_offset, zw caustics_water_centre
     vec4 misc;   // x caustics_phase, y octaves (1..3), z the exp² fog density (0 with volumetrics), w 0
+    vec4 water;  // rgb caustics_water_sigma, w the water's reflectivity
 };
-static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 8 vec4, as MCE_GLSL_CAUSTICS_U");
+static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 9 vec4, as MCE_GLSL_CAUSTICS_U");
 static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16 && offsetof(CausticsU, up) == 32 &&
                   offsetof(CausticsU, back) == 48 && offsetof(CausticsU, sun) == 64 && offsetof(CausticsU, color) == 80 &&
-                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112,
-              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc as in MCE_GLSL_CAUSTICS_U");
+                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, water) == 128,
+              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_water as in "
+              "MCE_GLSL_CAUSTICS_U");
 static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.1f && kCausticsLoopRadius == 0.18f &&
                   kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
               "caustics.h and kCausticsFS (shaders3d.h) carry the same constants");
@@ -4532,7 +4534,10 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
 // camera's world xz (floating origin + local, f64) is folded into the pattern's period on the CPU (caustics_offset), and
 // the shader works camera-relative, so a rebase is bit for bit. The clock is the scene time times the setting's speed,
 // turned into whole ticks and wrapped to the period on the CPU (caustics_phase). Runs whether the camera is above the water
-// (the view ray's length in water joins the absorption) or under it (the underwater composite follows).
+// or under it (the underwater composite follows). From above, the light reaches the camera as the water pixel shows the
+// floor (caustics_transmission: 1 - Fresnel and the water's own per-channel extinction along the view path, kWaterFS's),
+// and only when the water shows what lies under it at all (the M-WATER2 refraction on this frame; calm, foamless water is
+// an opaque tint, so nothing is added on it: caustics_gate's see_through).
 // Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.caustics false) unless
 // caustics_gate passes: the setting on (checked first), not a render-to-texture view, the tier's caustics and octaves,
 // r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
@@ -4560,6 +4565,9 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     g.intensity = light.intensity;
     g.strength = detail::ranged(setting.strength, 0.0f, 4.0f, 1.0f);
     g.sun_share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    // Seen from above, the water shows what lies under it only through the M-WATER2 refraction (record_main decided it
+    // this frame); without it the water is an opaque tint and nothing may be added on it.
+    g.see_through = !water_camera_above(water, origin_, view.position) || stats_.water_refract;
     vec3 sun, color;
     if (!caustics_gate(g, sun, color)) return;
     if (caustics_pipe_.is_null()) {
@@ -4598,6 +4606,8 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
     cu.misc = {caustics_phase(scene.time(), setting.speed),
                f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u), fog_density, 0.0f};
+    cu.water = vec4(caustics_water_sigma(water.shallow_color, water.depth_scale_m),
+                    detail::ranged(water.reflectivity, 0.0f, 1.0f, 1.0f));
     rhi::PassAttachment o;
     o.texture = dst;
     o.load = rhi::LoadOp::DontCare;  // every pixel is written

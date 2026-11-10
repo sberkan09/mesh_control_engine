@@ -71,7 +71,13 @@ f32 caustics_depth_fade(f32 depth, f32 max_depth);
 f32 caustics_view_path(math::vec3 p, f32 plane_h);
 
 // exp(-absorption * (d_sun + d_view)); absorption clamps 0..4 (NaN 0.15). 0 for a non-finite or negative path.
+// (caustics_term passes the sun path only: the view path is the water's own transmission, caustics_transmission.)
 f32 caustics_absorption(f32 absorption, f32 d_sun, f32 d_view);
+
+// M-CAUSTICS 52b review. The water body's extinction per metre along the view path, per channel, as kWaterFS applies it to
+// what it shows under the water (M-WATER2 49c): -log(clamp(shallow_color, 0.02, 1)) / max(depth_scale_m, 0.5), with
+// shallow_color clamped 0..1 per channel (NaN 0) and depth_scale_m 0.1..200 (NaN 8) as water_params clamps them first.
+math::vec3 caustics_water_sigma(math::vec3 shallow_color, f32 depth_scale_m);
 
 // The frame's values, camera-relative (the pass's CausticsU carries the same).
 struct CausticsParams {
@@ -86,18 +92,28 @@ struct CausticsParams {
     f32 absorption = 0.15f;                   // per metre
     f32 max_depth = 30.0f;                    // m
     f32 fog_density = 0.0f;                   // the main pass's exp² fog (0: none, or the volumetric fog in its place)
+    math::vec3 water_sigma{0.0f, 0.0f, 0.0f};  // caustics_water_sigma (the view path's extinction, camera above the water)
+    f32 reflectivity = 1.0f;                   // WaterSurface::reflectivity (scales the surface's Fresnel)
 };
+
+// M-CAUSTICS 52b review. What of the light at the camera-relative point `p` (below the plane) reaches the camera through
+// the water, per channel, and the distance the exp² fog acts over. With the camera above the plane and the view ray
+// crossing it inside the water square, the water pixel shows p as kWaterFS composites it: (1 - F) * exp(-water_sigma *
+// d_view), F = (0.02 + 0.98 (1 - NoV)^5) * reflectivity (Schlick on the flat plane, NoV = -p.y / |p|), d_view =
+// caustics_view_path; the main pass fogs that pixel at the water surface's distance |p| - d_view. Otherwise (the camera at
+// or under the plane, or the view ray crossing outside the square) 1 and |p|. (1, |p|) for non-finite input.
+math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog_distance);
 
 // Where the sun ray from the camera-relative point `p` meets the plane: `plane_xz` (camera-relative) and the point's
 // `depth` below the plane. False when p is not below the plane, the sun is under kCausticsMinSunY, the crossing lies
 // outside the water square (|plane_xz - centre| > half_extent on x or z) or any value is not finite.
 bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& plane_xz, f32& depth);
 
-// The per-pixel term the pass multiplies its colour by (0..1) for the camera-relative point `p`: pattern * absorption *
-// depth falloff * the exp² fog's surface share exp(-(fog * |p|)²). 0 where caustics_plane_point is false, at or below
-// max_depth and for non-finite input. The pass adds colour * term to the pixel, colour = sun colour * intensity *
-// strength * sun share * caustics_sun_fade.
-f32 caustics_term(math::vec3 p, const CausticsParams& c);
+// The per-pixel term the pass multiplies its colour by (0..1 per channel) for the camera-relative point `p`: pattern *
+// exp(-absorption * sun path) * depth falloff * caustics_transmission * the exp² fog's surface share exp(-(fog * fog
+// distance)²). 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds
+// colour * term to the pixel, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c);
 
 // The pass's validity gate: the renderer records the pass only when this is true. All plain values (no scene3d.h).
 struct CausticsGate {
@@ -114,11 +130,16 @@ struct CausticsGate {
     f32 intensity = 0.0f;                     // DirectionalLight::intensity
     f32 strength = 0.0f;                      // the clamped setting
     f32 sun_share = 0.0f;                     // cloud_shadow_sun_share
+    // M-CAUSTICS 52b review: false when the camera is above the water and the water hides what lies under it (no M-WATER2
+    // refraction this frame: calm water without foam, no prepass, r.water.refract 0): the floor is not drawn there, so
+    // nothing may be added on the water's opaque tint.
+    bool see_through = true;
 };
 
 // True when the pass draws; then `sun` is the unit direction toward the sun and `color` the colour the pass adds per unit
 // of term (sun colour * intensity * strength * sun share * sun fade, each channel finite and >= 0, at least one > 0).
-// False for: the setting off, the tier off or 0 octaves, r.caustics 0, no water, a render-texture view, no post source,
+// False for: the setting off, the tier off or 0 octaves, r.caustics 0, no water, water that hides what lies under it seen
+// from above (see_through false), a render-texture view, no post source,
 // an orthographic or degenerate projection, a zero, NaN or below-kCausticsMinSunY sun, or a colour that is all 0 (no
 // strength, share or light) or not finite.
 bool caustics_gate(const CausticsGate& g, math::vec3& sun, math::vec3& color);

@@ -167,26 +167,60 @@ bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& pla
     return true;
 }
 
-f32 caustics_term(math::vec3 p, const CausticsParams& c) {
+math::vec3 caustics_water_sigma(math::vec3 shallow_color, f32 depth_scale_m) {
+    const f32 scale = detail::ranged(depth_scale_m, 0.1f, 200.0f, 8.0f);
+    const f32 d = scale > 0.5f ? scale : 0.5f;
+    const auto sigma = [&](f32 c) {
+        const f32 u = detail::unit01(c);  // NaN -> 0 (unit01 of NaN is 0)
+        return -std::log(u > 0.02f ? (u < 1.0f ? u : 1.0f) : 0.02f) / d;
+    };
+    return math::vec3{sigma(shallow_color.x), sigma(shallow_color.y), sigma(shallow_color.z)};
+}
+
+math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog_distance) {
+    const math::vec3 one{1.0f, 1.0f, 1.0f};
+    const f32 len = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+    fog_distance = len;
+    if (!finite3(p) || !std::isfinite(len) || !std::isfinite(c.plane_h) || !(c.plane_h < 0.0f) || !(p.y < c.plane_h))
+        return one;
+    const f32 s = c.plane_h / p.y;  // 0..1: the share of the view ray from the camera to where it crosses the plane
+    const f32 vx = p.x * s, vz = p.z * s;
+    if (!(std::fabs(vx - c.centre.x) <= c.half_extent) || !(std::fabs(vz - c.centre.y) <= c.half_extent)) return one;
+    const f32 depth = c.plane_h - p.y;
+    const f32 dv = len * depth / -p.y;
+    const f32 q = 1.0f - -p.y / len;
+    const f32 q2 = q * q;
+    const f32 fres = (0.02f + 0.98f * (q2 * q2 * q)) * c.reflectivity;
+    const f32 k = 1.0f - fres;
+    fog_distance = len - dv;
+    const math::vec3 t{k * std::exp(-c.water_sigma.x * dv), k * std::exp(-c.water_sigma.y * dv),
+                       k * std::exp(-c.water_sigma.z * dv)};
+    return finite3(t) ? t : math::vec3{0.0f, 0.0f, 0.0f};
+}
+
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c) {
+    const math::vec3 zero{0.0f, 0.0f, 0.0f};
     math::vec2 xz;
     f32 depth = 0.0f;
-    if (!caustics_plane_point(p, c, xz, depth)) return 0.0f;
-    if (!(depth < c.max_depth)) return 0.0f;
+    if (!caustics_plane_point(p, c, xz, depth)) return zero;
+    if (!(depth < c.max_depth)) return zero;
     const f32 t = depth / c.toward_sun.y;  // the sun ray's length in water
-    const f32 dv = caustics_view_path(p, c.plane_h);
     const f32 pat = caustics_pattern(math::vec2{xz.x * c.inv_scale + c.offset.x, xz.y * c.inv_scale + c.offset.y}, c.phase,
                                      c.octaves < 3u ? c.octaves : 3u);
-    f32 term = pat * std::exp(-c.absorption * (t + dv)) * caustics_depth_fade(depth, c.max_depth);
+    f32 k = pat * std::exp(-c.absorption * t) * caustics_depth_fade(depth, c.max_depth);
+    f32 fog_distance = 0.0f;
+    const math::vec3 tr = caustics_transmission(p, c, fog_distance);
     if (c.fog_density != 0.0f && std::isfinite(c.fog_density)) {
-        const f32 fd = c.fog_density * std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-        term *= std::exp(-fd * fd);
+        const f32 fd = c.fog_density * fog_distance;
+        k *= std::exp(-fd * fd);
     }
-    return std::isfinite(term) ? saturate(term) : 0.0f;
+    const auto clean = [](f32 v) { return std::isfinite(v) ? saturate(v) : 0.0f; };
+    return math::vec3{clean(k * tr.x), clean(k * tr.y), clean(k * tr.z)};
 }
 
 bool caustics_gate(const CausticsGate& g, math::vec3& sun, math::vec3& color) {
-    if (!g.enabled || !g.tier || g.octaves == 0u || !g.cvar || !g.water || g.render_texture || !g.post_source ||
-        !g.perspective)
+    if (!g.enabled || !g.tier || g.octaves == 0u || !g.cvar || !g.water || !g.see_through || g.render_texture ||
+        !g.post_source || !g.perspective)
         return false;
     if (!finite3(g.toward_sun) || !finite3(g.sun_color) || !std::isfinite(g.intensity) || !std::isfinite(g.strength) ||
         !std::isfinite(g.sun_share))

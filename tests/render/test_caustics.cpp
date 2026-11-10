@@ -28,6 +28,9 @@ CausticsParams params() {
     return c;
 }
 
+// The term's red channel (the cases below set no water extinction, so the three channels agree but for the Fresnel).
+f32 term_r(math::vec3 p, const CausticsParams& c) { return caustics_term(p, c).x; }
+
 CausticsGate open_gate() {
     CausticsGate g;
     g.enabled = true;
@@ -218,17 +221,17 @@ TEST_CASE("caustics: the plane point follows the sun to the plane inside the wat
 
 TEST_CASE("caustics: the term is 0 above the plane and below max_depth, and the light falls off with depth") {
     const CausticsParams c = params();
-    CHECK(caustics_term(math::vec3{0.0f, -2.0f, -5.0f}, c) == 0.0f);  // above the plane
-    CHECK(caustics_term(math::vec3{0.0f, -40.0f, -5.0f}, c) == 0.0f);  // 37 m under it: past max_depth
-    CHECK(caustics_term(math::vec3{kNaN, -6.0f, -5.0f}, c) == 0.0f);
-    CHECK(caustics_term(math::vec3{0.0f, -kInf, -5.0f}, c) == 0.0f);
+    CHECK(term_r(math::vec3{0.0f, -2.0f, -5.0f}, c) == 0.0f);  // above the plane
+    CHECK(term_r(math::vec3{0.0f, -40.0f, -5.0f}, c) == 0.0f);  // 37 m under it: past max_depth
+    CHECK(term_r(math::vec3{kNaN, -6.0f, -5.0f}, c) == 0.0f);
+    CHECK(term_r(math::vec3{0.0f, -kInf, -5.0f}, c) == 0.0f);
     // The mean over a patch of floor: deeper floors get less.
     f32 last = 2.0f;
     for (const f32 depth : {1.0f, 4.0f, 10.0f, 20.0f}) {
         f32 sum = 0.0f;
         for (int i = 0; i < 40; ++i)
             for (int j = 0; j < 40; ++j)
-                sum += caustics_term(math::vec3{f32(i) * 0.23f - 4.0f, c.plane_h - depth, f32(j) * 0.21f - 9.0f}, c);
+                sum += term_r(math::vec3{f32(i) * 0.23f - 4.0f, c.plane_h - depth, f32(j) * 0.21f - 9.0f}, c);
         const f32 mean = sum / 1600.0f;
         MESSAGE("depth " << depth << " m: mean term " << mean);
         CHECK(mean < last);
@@ -241,11 +244,11 @@ TEST_CASE("caustics: the term is 0 above the plane and below max_depth, and the 
     murky.absorption = 1.0f;
     for (int i = 0; i < 100; ++i) {
         const math::vec3 p{f32(i) * 0.17f - 8.0f, -6.0f, f32(i) * -0.13f - 2.0f};
-        const f32 t = caustics_term(p, c);
+        const f32 t = term_r(p, c);
         CHECK(t >= 0.0f);
         CHECK(t <= 1.0f);
-        CHECK(caustics_term(p, fog) <= t);
-        CHECK(caustics_term(p, murky) <= t);
+        CHECK(term_r(p, fog) <= t);
+        CHECK(term_r(p, murky) <= t);
     }
     // The camera under water: no view path, so the same floor point gets at least as much.
     CausticsParams under = c;
@@ -254,7 +257,7 @@ TEST_CASE("caustics: the term is 0 above the plane and below max_depth, and the 
     CausticsParams above = c;
     above.plane_h = -3.0f;
     const math::vec3 pa{1.3f, -6.5f, -4.1f};
-    CHECK(caustics_term(p, under) >= caustics_term(pa, above));
+    CHECK(term_r(p, under) >= term_r(pa, above));
 }
 
 TEST_CASE("caustics: the gate opens only with everything in place") {
@@ -276,6 +279,7 @@ TEST_CASE("caustics: the gate opens only with everything in place") {
     CHECK(closed([](CausticsGate& g) { g.octaves = 0; }));
     CHECK(closed([](CausticsGate& g) { g.cvar = false; }));            // r.caustics 0
     CHECK(closed([](CausticsGate& g) { g.water = false; }));           // no WaterSurface
+    CHECK(closed([](CausticsGate& g) { g.see_through = false; }));     // opaque water seen from above
     CHECK(closed([](CausticsGate& g) { g.render_texture = true; }));
     CHECK(closed([](CausticsGate& g) { g.post_source = false; }));
     CHECK(closed([](CausticsGate& g) { g.perspective = false; }));     // ortho
@@ -298,4 +302,56 @@ TEST_CASE("caustics: the gate opens only with everything in place") {
     REQUIRE(caustics_gate(low, s2, c2));
     CHECK(c2.x < color.x);
     CHECK(c2.x > 0.0f);
+}
+
+TEST_CASE("caustics: seen from above, the light passes the water as kWaterFS lets the floor through") {
+    // The water's extinction: -log(clamp(shallow, 0.02, 1)) / max(depth_scale, 0.5).
+    const math::vec3 sg = caustics_water_sigma(math::vec3{0.10f, 0.38f, 1.0f}, 8.0f);
+    CHECK(sg.x == doctest::Approx(-std::log(0.10f) / 8.0f));
+    CHECK(sg.y == doctest::Approx(-std::log(0.38f) / 8.0f));
+    CHECK(sg.z == 0.0f);
+    const math::vec3 sn = caustics_water_sigma(math::vec3{kNaN, 0.0f, 2.0f}, 0.1f);  // NaN, 0 -> 0.02; 2 -> 1; scale 0.5
+    CHECK(sn.x == doctest::Approx(-std::log(0.02f) / 0.5f));
+    CHECK(sn.y == doctest::Approx(-std::log(0.02f) / 0.5f));
+    CHECK(sn.z == 0.0f);
+    CHECK(caustics_water_sigma(math::vec3{0.5f, 0.5f, 0.5f}, kNaN).x == doctest::Approx(-std::log(0.5f) / 8.0f));
+
+    CausticsParams c = params();  // the camera 3 m above the water
+    c.water_sigma = math::vec3{0.3f, 0.1f, 0.05f};
+    c.reflectivity = 1.0f;
+    f32 fog_d = 0.0f;
+    // Straight down onto a floor 4 m under the surface: F = 0.02, 4 m of water, fogged at the surface 3 m away.
+    const math::vec3 down = caustics_transmission(math::vec3{0.0f, -7.0f, 0.0f}, c, fog_d);
+    CHECK(down.x == doctest::Approx(0.98f * std::exp(-1.2f)));
+    CHECK(down.y == doctest::Approx(0.98f * std::exp(-0.4f)));
+    CHECK(down.z == doctest::Approx(0.98f * std::exp(-0.2f)));
+    CHECK(fog_d == doctest::Approx(3.0f));
+    // A grazing view: the Fresnel takes most of it.
+    const math::vec3 graze = caustics_transmission(math::vec3{0.0f, -3.5f, -60.0f}, c, fog_d);
+    CHECK(graze.y < 0.5f * down.y);
+    // The camera under the water, or a view crossing outside the water square: nothing in the way.
+    CausticsParams under = c;
+    under.plane_h = 2.0f;
+    const math::vec3 u = caustics_transmission(math::vec3{0.0f, -7.0f, 0.0f}, under, fog_d);
+    CHECK(u.x == 1.0f);
+    CHECK(fog_d == doctest::Approx(7.0f));
+    CausticsParams small = c;
+    small.half_extent = 1.0f;
+    CHECK(caustics_transmission(math::vec3{30.0f, -7.0f, 0.0f}, small, fog_d).x == 1.0f);  // crosses at x 12.9
+    CHECK(caustics_transmission(math::vec3{2.0f, -7.0f, 0.0f}, small, fog_d).x < 1.0f);   // crosses at x 0.86
+    // The term carries it per channel: the red, most absorbed, least.
+    u32 compared = 0;
+    for (int i = 0; i < 200; ++i) {
+        const math::vec3 p{f32(i) * 0.09f - 9.0f, -6.5f, -2.0f - f32(i) * 0.03f};
+        const math::vec3 t = caustics_term(p, c);
+        if (t.z <= 0.0f) continue;
+        CHECK(t.x < t.y);
+        CHECK(t.y < t.z);
+        ++compared;
+    }
+    CHECK(compared > 20);
+    // A reflectivity of 0: no Fresnel loss.
+    CausticsParams matte = c;
+    matte.reflectivity = 0.0f;
+    CHECK(caustics_transmission(math::vec3{0.0f, -7.0f, 0.0f}, matte, fog_d).z == doctest::Approx(std::exp(-0.2f)));
 }

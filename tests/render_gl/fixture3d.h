@@ -1442,7 +1442,7 @@ inline void cloud_shadow_scene(Scene3D& s, const Clouds& clouds, const CloudShad
 
 // ---- M-CAUSTICS 52b: caustics under water ------------------------------------------------------------------------------
 
-// A shallow pool: the fixture's 12 m ground (its top at y 0) is the floor, the water plane kCausticsLevel above it and the
+// A shallow pool: the fixture's 12 m ground (its top at y 0) is the floor, the water kCausticsLevel above it and the
 // fixture's 1 m box standing on the floor crosses the surface (its top 0.4 m above the water). The orbit camera's default
 // pose (7 m out, 35 degrees down) sees the floor through the water from above; the far half of the frame is water with
 // nothing behind it, and the sky.
@@ -1451,13 +1451,17 @@ inline constexpr f32 kCausticsLevel = 0.6f;
 // the disk nor the water's glint is in the frame.
 inline constexpr vec3 kCausticsToward{0.3f, 0.9f, 0.3f};
 
-// Calm, foamless water (no waves to move the floor's look between the frames a case compares).
-inline WaterSurface caustics_water(f32 level = kCausticsLevel) {
+// Gentle waves at a fixed water time (the floor's look does not move between the frames a case compares) and no foam: the
+// waves turn on the M-WATER2 refraction, through which the water shows the floor seen from above (`amplitude` 0: calm,
+// foamless water is an opaque tint from above, and the pass then records nothing there).
+inline WaterSurface caustics_water(f32 level = kCausticsLevel, f32 amplitude = 0.06f) {
     WaterSurface w;
     w.enabled = true;
     w.level_y = level;
-    w.amplitude = 0.0f;
+    w.amplitude = amplitude;
+    w.wavelength = 6.0f;
     w.foam_amount = 0.0f;
+    w.time = 3.0f;
     return w;
 }
 
@@ -1470,7 +1474,8 @@ inline Caustics caustics_setting() {
 }
 
 // The sun toward `toward_sun` (shadows off: the box would cast one, and the cases compare pixels), the water `w` (null:
-// none), `caustics` (null: the default, disabled) at scene time `time`, exposure 0.8; bloom and FXAA off unless
+// none), `caustics` (null: the default, disabled) at scene time `time`, exposure 0.45 (the floor seen through the
+// water stays off the tonemapper's shoulder); bloom and FXAA off unless
 // `post_default` (each carries a changed pixel to its neighbours, and the cases compare pixels).
 inline void caustics_scene(Scene3D& s, const WaterSurface* w, const Caustics* caustics, f32 time,
                            vec3 toward_sun = kCausticsToward, bool post_default = false) {
@@ -1478,7 +1483,7 @@ inline void caustics_scene(Scene3D& s, const WaterSurface* w, const Caustics* ca
     sun.direction = -toward_sun;
     sun.shadows = false;
     s.set_light(sun);
-    s.set_exposure(0.8f);
+    s.set_exposure(0.45f);
     s.set_time(time, 1.0f / 60.0f);
     PostFx post = s.post();
     if (!post_default) {
