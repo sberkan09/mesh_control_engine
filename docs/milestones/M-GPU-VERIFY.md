@@ -251,6 +251,27 @@ break and one full-size copy into `trans_src_` per frame with either effect on) 
   trace loop with its bisection, and the pass break and copy before the water, on the Metal and WebGPU backends
   (`test_shader_cross` and the `render3d_gl` water optics cases on the hosted macOS runner).
 
+**M-GI2 (proposed 2026-11-10, rows A28 to A30 on the GPU list; the coordinator adds them).** The irradiance volume now sees walls
+(a 10-texel distance record per probe and a Chebyshev weight in `gi_irradiance2`), moves probes out of solids (`relocate`) and
+follows the camera in whole cells (`GiVisibility3D`); `09_openworld` carries one 16 x 3 x 16 following volume. Headless
+(llvmpipe, lavapipe) every off path is byte-identical and the measured GL cases pass (`docs/milestones/M-GI2.md`, 50d to 50h); what a
+real GPU must answer:
+
+- **A28, cost. Open.** `09_openworld` at 1920 x 1080, High and Medium: the `main` stage with the volume as before M-GI2 (no
+  `GiVisibility3D`), with the component and `-r.gi.visibility 0`, and with visibility on (the lookup's cost: 72 to 80 fetches a pixel
+  against 32); the `gi` stage's time and `stats.gi_probes` on the fill (768 probes), on rolling updates and while driving (slab
+  captures of 48 probes), and how far the invalid band reaches at 15 and 30 m/s. 50i measured on llvmpipe about one probe a frame
+  for a fill or a slab and one a frame for rolling updates (the budget of 1024 uniform uploads, about 450 draws a probe, does not depend
+  on the GPU), so the first question is how many frames a GPU needs per second to keep the band closed at 15 m/s (the plan: 42 probes
+  a second); as M-REFLECT2's r8 and M-WATER2's r9 tables. The before/after street captures 50i could not take cheaply are part of this row.
+- **A29, look. Open.** Three street spots of the city (a mid-block pavement, an alley between two lots, a building foot in the sun's
+  shade) with and without `GiVisibility3D`, the `gi_thin_wall` room at a real display, over-darkened corners or doorways from the
+  coarse six-lobe record, the leading edge of the following volume while driving, relocation near facades (the city's lots are hollow
+  single-sided shells with nothing inside, so `relocate` treating them as solid at their boxes is right there).
+- **A30, Metal and WebGPU. Open.** Translation of the flags and the toroidal modulo in `gi_irradiance2`, `kGiVisFS`
+  (`gl_FrontFacing`, the alpha-mask discard), the `CullMode::None` vis pipeline and the 10-texel volume's RGBM round trip on both
+  backends (`test_shader_cross` and the `render3d_gl` GI visibility cases on the hosted macOS runner).
+
 ## Open items from threads
 
 - **Long windowed captures stall under load (2026-10-18, M-DAYNIGHT 4).** `sample_daynight_gpu` (`mce_player -capture_ticks 150,1050,2100,2700`, about 45 s of real time) finished in 36 to 82 s on its own, but under a full `--task` (`ctest -j 4` on xvfb, llvmpipe) it sat for over an hour with all four frames already written, and under `--premerge` it hit its 240 s timeout. The player simulates in real time, so a long `-capture_ticks` list is 45 s or more of wall clock, and the cause of the stall (a catch-up spiral under load, or a hang at exit) is not known. Workaround: the demo's GPU test is one frame at tick 150 with a 120 s timeout. The next GPU round should (1) run `sample_daynight_gpu` with the old tick list 20 times at `-j 4` and note which of the frames or the exit stalls, (2) check whether `-capture_ticks` could step the simulation deterministically instead of by wall clock.

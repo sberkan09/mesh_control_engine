@@ -101,7 +101,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `FallDeath3D` | `mce/kit/fall_death.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Firefly` | `mce/kit/firefly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `Flock` | `mce/kit/flock.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
-| `GiVisibility3D` | `mce/kit/gi_visibility.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-GI2 50h: tested in tests/kit/test_gi_visibility_extract.cpp; the 09_openworld city scene of 50i carries it (delete this line then) |
+| `GiVisibility3D` | `mce/kit/gi_visibility.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `GrenadeLive3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: spawned by the engine at a throw; nothing to author |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
@@ -117,7 +117,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `PointLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `SpotLight3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
 | `ReflectionProbe3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
-| `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/gen_assets.py |
+| `GiVolume3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Camera3DComponent` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/06-game-code.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Animator` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/07_gameplay3d/assets/scenes/arena.mcscene |
 | `Environment3D` | `mce/kit/kit3d.h` | yes | yes | yes | docs/user-guide/05-assets.md | samples/09_openworld/assets/scenes/city.mcscene |

@@ -46405,6 +46405,35 @@
      "key": 998
     }
    }
+  },
+  {
+   "id": 1822,
+   "name": "GI volume",
+   "components": {
+    "LocalTransform": {
+     "position": [
+      0,
+      8.5,
+      0
+     ]
+    },
+    "GiVolume3D": {
+     "half_extents": [
+      128.0,
+      8.0,
+      128.0
+     ],
+     "probes_x": 16,
+     "probes_y": 3,
+     "probes_z": 16,
+     "probes_per_frame": 32,
+     "intensity": 1.0
+    },
+    "GiVisibility3D": {
+     "relocate": 1,
+     "follow_camera": 1
+    }
+   }
   }
  ]
 }

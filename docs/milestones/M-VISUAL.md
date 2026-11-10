@@ -402,7 +402,9 @@ The main pass pays for the eight-probe lookup (32 volume fetches a pixel, every 
 volume). Capture frames stay at about 450 KiB of the 1 MiB uniform ring (the frame alone: 150 KiB).
 
 **Limits.** Light leaks through walls thinner than the probe spacing, and probes buried in walls darken what is near
-them (no probe relocation or visibility term yet): keep the grid's planes off walls. Diffuse only; reflections stay
+them (no probe relocation or visibility term yet): keep the grid's planes off walls, or add the opt-in `GiVisibility3D`
+(M-GI2, [M-GI2.md](M-GI2.md): per-probe distance record with a Chebyshev weight, probe classification and relocation, a
+camera-following box; its limits are in the user guide). Diffuse only; reflections stay
 with the sky and the reflection probes. Lightmaps were not needed for the step's gates. Metal is untested; Metal
 pixels and real-GPU numbers belong to the Mac/device session.
 
