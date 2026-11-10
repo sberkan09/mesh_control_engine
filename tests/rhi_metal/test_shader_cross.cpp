@@ -274,3 +274,18 @@ TEST_CASE("shader_cross: the sun shafts' accumulation and composite stages") {
     CHECK(contains(comp.value(), "[[sampler(8)]]"));
     CHECK_FALSE(contains(comp.value(), "mce_flip_y"));
 }
+
+// M-CLOUDSHADOW 51c: the cloud shadow fragment stage (render's shaders3d.h, the real source) translates, with CloudShadowU
+// at [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_cloud_shadow binds (post_source_ at 6, the
+// opaque prepass at 7). Not built on Linux (macOS only): unverified until a Mac run, like the cases above.
+TEST_CASE("shader_cross: the cloud shadow stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCloudShadowFS, "cloud_shadow.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}

@@ -9,6 +9,7 @@
 #include "mce/convar.h"
 #include "mce/hash.h"
 #include "mce/log.h"
+#include "mce/render/cloud_shadow.h"
 #include "mce/render/dynres.h"
 #include "mce/render/edge_outline.h"
 #include "mce/render/gi_probes.h"
@@ -449,6 +450,26 @@ static_assert(offsetof(ShaftsU, sun) == 0 && offsetof(ShaftsU, shape) == 16 && o
               "ShaftsU: s_sun / s_shape / s_color / s_comp as in MCE_GLSL_SHAFTS_U");
 static_assert(shaders3d::kShaftsMaxSamples == 32 && shaders3d::kShaftsSeed < (1u << 24),
               "kShaftsFS: the loop bound is 32 (sun_shafts_samples' largest count); the seed rides a float exactly");
+
+// M-CLOUDSHADOW 51c: kCloudShadowFS's CloudShadowU (shaders3d.h MCE_GLSL_CLOUD_SHADOW_U), bank kPass. Filled in
+// record_cloud_shadow from the view, the sky's own cloud values (cloud_params: p_cloud, p_cloud2), the setting, the tier's
+// octave count and cloud_shadow_sun_share.
+struct CloudShadowU {
+    vec4 proj;   // proj[0][0], proj[1][1], proj[2][0], proj[2][1] (the unjittered projection, as the SSAO pass)
+    vec4 right;  // the camera's right (world), w 1 / noise cell (p_cloud.z)
+    vec4 up;     // the camera's up, w the plane's height above the camera (p_cloud.w)
+    vec4 back;   // the camera's back (-forward), w coverage (p_cloud.x)
+    vec4 sun;    // the unit direction toward the sun, w the layer's density (p_cloud.y)
+    vec4 shade;  // strength, sun share, softness, octaves (1..3)
+    vec4 drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0 with volumetrics), w 0
+    vec4 fog;    // rgb the exp² fog colour, w 0
+};
+static_assert(sizeof(CloudShadowU) == shaders3d::kCloudShadowUBytes, "CloudShadowU: 8 vec4, as MCE_GLSL_CLOUD_SHADOW_U");
+static_assert(offsetof(CloudShadowU, proj) == 0 && offsetof(CloudShadowU, right) == 16 && offsetof(CloudShadowU, up) == 32 &&
+                  offsetof(CloudShadowU, back) == 48 && offsetof(CloudShadowU, sun) == 64 &&
+                  offsetof(CloudShadowU, shade) == 80 && offsetof(CloudShadowU, drift) == 96 &&
+                  offsetof(CloudShadowU, fog) == 112,
+              "CloudShadowU: c_proj / c_right / c_up / c_back / c_sun / c_shade / c_drift / c_fog as in MCE_GLSL_CLOUD_SHADOW_U");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
 struct OutlineU {
@@ -1368,6 +1389,17 @@ ResultV Forward3D::create_pipelines() {
             }
         }
     }
+    if (!ao_prepass_.is_null()) {
+        // M-CLOUDSHADOW 51c: the cloud shadow composite. It rebuilds each pixel's position from the half-resolution opaque
+        // prepass, so like the sun shafts it is made only where that prepass exists (SSAO, SSR, contact shadows or the
+        // edge outline on), at startup (a refusal is per renderer; no compile hitch when the weather turns cloudy, and a
+        // quality tier switched mid-run finds it made). A driver that refuses it keeps the frame without the shadows.
+        fs.state.blend.mode = rhi::BlendMode::Opaque;
+        fs.fragment_shader = {shaders3d::kCloudShadowFS, "cloud_shadow.frag"};
+        fs.debug_name = "cloud_shadow";
+        if (auto p = device_->create_pipeline(fs)) cloud_shadow_pipe_ = p.value();
+        else MCE_LOG_WARN("render3d: the cloud shadow shader failed, drawing frames without the cloud shadows");
+    }
     // M-LIGHTCOOKIE 40c: the cookie bake pipeline and the atlas are made on the first frame with a cookie
     // (record_cookie_bake). -r.light_cookies 0 at startup makes none of them for the renderer's life (as -r.edge_outline
     // 0); the cvar is also read every frame (cookies_allowed) and by the kit extract (apply_quality).
@@ -1976,6 +2008,7 @@ void Forward3D::record_view(rhi::CommandBuffer& cmd, const Scene3D& scene, rhi::
     timestamp(cmd, kTsTaa);
     record_post_fx(cmd, scene);
     timestamp(cmd, kTsPostFx);
+    record_cloud_shadow(cmd, scene);  // M-CLOUDSHADOW 51c: after the exposure histogram, before the shafts; the bloom bucket
     record_sun_shafts(cmd, scene);  // M-SUNSHAFTS 45c: after the exposure histogram, before the flare; the bloom bucket
     record_flare(cmd, scene);  // its time falls in the bloom bucket (kTsPostFx..kTsBloom)
     record_underwater(cmd, scene);  // M-UNDERWATER 44c: after the flare (attenuated too), before the lens rain; same bucket
@@ -4342,6 +4375,116 @@ void Forward3D::record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene)
     post_source_ = dst;
     stats_.sun_shafts = true;
     stats_.sun_shafts_strength = fr.strength;
+}
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows on the ground, right after record_post_fx (depth of field, motion blur, the exposure
+// histogram) and before the sun shafts: after TAA (the shade never enters the history the next frame reprojects, so a
+// drifting patch leaves no trail), after the histogram (a passing cloud does not pump the exposure: the eye adapts to the
+// frame's light, the shade reads as shade), before the shafts, the flare, the underwater look, the lens rain, the haze,
+// bloom, the tonemapper and the grade (a shaded wall blooms and grades as a darker wall; the shafts' bright-sun mask reads
+// the sky, which the pass leaves alone).
+// One fullscreen pass (kCloudShadowFS) reads post_source_ and the half-resolution opaque prepass (ao_gbuf_: view depth, 0
+// = sky) and writes the frame times the per-pixel factor into the post-fx ping-pong target, then post_source_ = that
+// target. Never in place (post_fx_target alternates its two textures). The prepass is half resolution, so a pixel on a
+// silhouette takes its 2 x 2 block's sample: at most one full-resolution pixel of sky beside shaded geometry is shaded
+// with it (and the other way), the same footprint as the shafts' veil.
+// The cloud values are the sky's own: cloud_params fills p_cloud / p_cloud2 exactly as the main pass does (coverage,
+// density, 1 / cell, the plane height, the drift wrapped in f64), so the patches sit under the clouds the sky draws and
+// move with them. The octave count is the tier's (QualitySettings::cloud_shadow_octaves: Medium 2, High 3), the sun's
+// share of the light cloud_shadow_sun_share of the scene's sun and sky ambient, only the surface part of a pixel the exp²
+// fog mixed into shaded (cloud_shadow_shade; the volumetric fog is not modelled), the strength the setting's times
+// (1 - submersion): the M-UNDERWATER crossing blend as the shafts take it, so the shadows fade out over the band the
+// underwater look fades in over and are gone under water. Camera-relative throughout (the view's rotation and the prepass
+// depth only): neither the camera's position nor the floating origin enters, as in the sky layer.
+// Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.cloud_shadow false)
+// when the setting is off (checked first), the sky pass is off (Sky::enabled false: no clouds are drawn), the view renders
+// to a texture (out_.linear_output: GI captures, probes and
+// monitors stay cloudless, as with the sky layer's reflections), the tier has no cloud shadows (Low, octaves 0) or
+// r.cloud_shadows is 0 (read again here, as the shafts do), the cloud layer is off or has no coverage, the view is
+// orthographic, the sun is below kCloudShadowMinSunY (its fade is 0 there) or its direction is not finite or zero, the
+// sun's share, the strength or the submersion leaves nothing to draw, or there is no post source. The pipeline is made at
+// startup only where the prepass exists; a frame that would draw without it says so once per process and records nothing.
+void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene) {
+    const CloudShadow& setting = scene.post().cloud_shadow;
+    if (!setting.enabled || out_.linear_output) return;
+    if (!scene.sky().enabled) return;  // no sky pass, no cloud layer drawn (record_main's sky gate): no shade either
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.cloud_shadows"));
+    if (!q.cloud_shadows || q.cloud_shadow_octaves == 0 || (cv && !cv->get_bool())) return;
+    PassU cloud{};  // only its cloud members: cloud_params leaves them zero for a layer that is off or has no coverage
+    cloud_params(scene.clouds(), scene.time(), cloud);
+    if (!(cloud.cloud.x > 0.0f)) return;
+    const rhi::Extent2D out = post_size_;
+    if (out.width == 0 || out.height == 0 || post_source_.is_null()) return;
+    const View3D& view = scene.view();
+    const mat4& pr = view.proj;
+    if (!cloud_shadow_perspective(pr)) return;  // orthographic or degenerate: the reconstruction assumes a perspective
+    const DirectionalLight& light = scene.light();
+    const vec3 toward{-light.direction.x, -light.direction.y, -light.direction.z};
+    const f32 len2 = toward.x * toward.x + toward.y * toward.y + toward.z * toward.z;
+    if (!std::isfinite(len2) || !(len2 >= 1.0e-12f)) return;
+    const f32 inv = 1.0f / std::sqrt(len2);
+    const vec3 sun{toward.x * inv, toward.y * inv, toward.z * inv};
+    if (!(sun.y >= kCloudShadowMinSunY)) return;  // the factor's fade is 0 there; the shader divides by sun.y
+    const f32 share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    f32 submersion = 0.0f;
+    const WaterSurface& water = scene.water();
+    if (water.enabled && std::isfinite(water.level_y)) {
+        const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+        const f32 cam_depth = f32(f64(level) - origin_[1]) - view.position.y;
+        submersion = underwater_submersion(cam_depth, underwater_band(water.amplitude, scene.post().underwater.band));
+        if (!std::isfinite(submersion)) submersion = 1.0f;
+    }
+    const f32 strength = detail::ranged(setting.strength, 0.0f, 1.0f, 0.6f) * (1.0f - unit01(submersion));
+    // The darkest a thick cloud can make a pixel: nothing to draw when the factor stays exactly 1.
+    if (cloud_shadow_factor(1.0f, strength, share, sun.y) >= 1.0f) return;
+    if (cloud_shadow_pipe_.is_null()) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true))
+            MCE_LOG_WARN("render3d: cloud shadows are on but the cloud shadow pass is unavailable (it needs the prepass: "
+                         "turn on ssao, ssr, contact shadows or the edge outline at startup); drawing frames without them");
+        return;
+    }
+
+    record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
+    if (ao_gbuf_.is_null()) return;
+    const rhi::TextureHandle dst = post_fx_target(out);
+    if (dst.is_null()) return;
+
+    const mat4& v = view.view;
+    CloudShadowU cu;
+    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
+    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], cloud.cloud.z};
+    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], cloud.cloud.w};
+    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], cloud.cloud.x};
+    cu.sun = {sun.x, sun.y, sun.z, cloud.cloud.y};
+    cu.shade = {strength, share, detail::ranged(setting.softness, 0.0f, 1.0f, 0.3f),
+                f32(q.cloud_shadow_octaves < 3u ? q.cloud_shadow_octaves : 3u)};
+    // The exp² fog the main pass mixed in (none where this view drew the volumetric fog in its place): the shade scales
+    // with the surface's share of the pixel, so fogged distance does not darken under a cloud.
+    const f32 fog = scene.fog().density;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
+    cu.drift = {cloud.cloud2.x, cloud.cloud2.y, fog_density, 0.0f};
+    cu.fog = vec4(scene.fog().color, 0.0f);
+    rhi::PassAttachment o;
+    o.texture = dst;
+    o.load = rhi::LoadOp::DontCare;  // every pixel is written
+    rhi::RenderPassDesc p;
+    p.colors = Span<const rhi::PassAttachment>(&o, 1);
+    p.debug_name = "cloud_shadow";
+    cmd.push_debug_scope("cloud_shadow");
+    cmd.begin_pass(p);
+    cmd.bind_pipeline(cloud_shadow_pipe_);
+    cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(cu));
+    cmd.bind_texture(rhi::bank::kAlbedo, post_source_, point_sampler_);  // texelFetch
+    cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);     // nearest: sky is exactly 0
+    cmd.draw_non_indexed(3);
+    cmd.end_pass();
+    cmd.pop_debug_scope();
+    post_source_ = dst;
+    stats_.cloud_shadow = true;
+    stats_.cloud_shadow_strength = strength;
 }
 
 // ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves

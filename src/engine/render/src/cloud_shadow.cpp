@@ -117,4 +117,37 @@ f32 cloud_shadow_factor(f32 density, f32 strength, f32 sun_share, f32 sun_elevat
     return 1.0f - detail::unit01(strength) * detail::unit01(density) * detail::unit01(sun_share) * fade;
 }
 
+f32 cloud_shadow_sun_share(math::vec3 sun_color, f32 intensity, math::vec3 ambient_sky) {
+    if (!finite3(sun_color) || !finite3(ambient_sky) || !std::isfinite(intensity)) return 0.0f;
+    const auto pos = [](f32 x) { return x > 0.0f ? x : 0.0f; };
+    const auto luma = [&](math::vec3 c) { return 0.2126f * pos(c.x) + 0.7152f * pos(c.y) + 0.0722f * pos(c.z); };
+    const f32 sun = luma(sun_color) * pos(intensity);
+    if (!(sun > 0.0f) || !std::isfinite(sun)) return 0.0f;
+    const f32 total = sun + luma(ambient_sky);
+    if (!std::isfinite(total)) return 0.0f;
+    return detail::unit01(sun / total);
+}
+
+bool cloud_shadow_perspective(const math::mat4& proj) {
+    if (proj.c[3][3] != 0.0f) return false;
+    const f32 p00 = proj.c[0][0], p11 = proj.c[1][1];
+    if (!std::isfinite(p00) || !std::isfinite(p11) || !std::isfinite(proj.c[2][0]) || !std::isfinite(proj.c[2][1]))
+        return false;
+    return std::fabs(p00) > 1.0e-6f && std::fabs(p11) > 1.0e-6f;
+}
+
+f32 cloud_shadow_fog_visibility(f32 fog_density, f32 distance) {
+    if (!std::isfinite(fog_density) || !std::isfinite(distance) || fog_density == 0.0f) return 1.0f;
+    const f32 fd = fog_density * distance;
+    return std::exp(-fd * fd);
+}
+
+math::vec3 cloud_shadow_shade(math::vec3 pixel, f32 factor, f32 fog_visibility, math::vec3 fog_color) {
+    const f32 f = std::isfinite(factor) ? saturate(factor) : 1.0f;
+    if (!(fog_visibility < 1.0f)) return math::vec3{pixel.x * f, pixel.y * f, pixel.z * f};
+    const f32 k = 1.0f - f, haze = 1.0f - (std::isfinite(fog_visibility) ? saturate(fog_visibility) : 1.0f);
+    return math::vec3{pixel.x - k * (pixel.x - haze * fog_color.x), pixel.y - k * (pixel.y - haze * fog_color.y),
+                      pixel.z - k * (pixel.z - haze * fog_color.z)};
+}
+
 }  // namespace mce::render

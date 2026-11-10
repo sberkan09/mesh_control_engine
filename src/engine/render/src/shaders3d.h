@@ -1948,7 +1948,10 @@ void main() {
 // 15c): the cloud layer, the stars and the moon, the aurora (M-AURORA 16c), the rainbow (M-RAINBOW 17c) and the meteors
 // (M-METEOR 18c). Functions of a direction (and, for the night layer, the aurora, the rainbow and the meteors, the
 // angular size of a pixel along it), so the water reflects them through the same code rather than a copy.
-#define MCE_GLSL_SKY_LAYERS \
+// M-CLOUDSHADOW 51c: the cloud noise (cloud_hash, cloud_lattice, cloud_value) is its own macro so the cloud shadow pass
+// (kCloudShadowFS) reads the sky's noise through the same code; MCE_GLSL_SKY_LAYERS starts with it, so the sky and
+// water shaders' text is byte for byte what it was.
+#define MCE_GLSL_CLOUD_NOISE \
     R"(
 // ---- the cloud layer (M-CLOUDS 9b), behind p_cloud.x > 0 (coverage; 0 = the cloudless frame bit for bit). The view
 // ray meets a plane p_cloud.w meters above the camera (up-going rays only), camera-relative: the camera's xz and the
@@ -1977,7 +1980,9 @@ float cloud_value(vec2 g, uint m, uint seed) {
     float c = cloud_lattice(uvec2(c0.x, c1.y), seed), e = cloud_lattice(c1, seed);
     return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
 }
-// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
+)"
+#define MCE_GLSL_SKY_LAYERS \
+    MCE_GLSL_CLOUD_NOISE R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
 // q    = d.xz * height / d.y * (1 / cell) - drift, mod 64 cells
 // n    = 0.55 v(q) + 0.30 v(2q) + 0.15 v(4q)                       (0..1, mean 0.5)
 // t    = 0.78 - 0.6 coverage                                        (coverage 1 covers the whole sky)
@@ -4759,6 +4764,95 @@ void main() {
     float z = textureLod(u_gbuf, v_uv, 0.0).a;
     float veil = z == 0.0 ? 1.0 : 1.0 - exp(-max(z, 0.0) / max(s_comp.x, 1e-3));
     o_color = vec4(src.rgb + rays * veil, src.a);
+}
+)";
+
+// ---- M-CLOUDSHADOW 51c: cloud shadows (Forward3D::record_cloud_shadow), after the exposure histogram and before the sun
+// shafts. One fullscreen pass from post_source_ (u_src, bank kAlbedo, texelFetch) and the half-resolution opaque prepass
+// (u_gbuf, bank kNormal, point: a = the view depth, exactly 0 where nothing was drawn) into the post-fx ping-pong target.
+// CloudShadowU rides bank kPass; its C++ mirror is CloudShadowU in forward3d.cpp (static_asserts on kCloudShadowUBytes and
+// every offset). The cloud values are the sky's own (cloud_params: p_cloud, p_cloud2), the octave count the tier's.
+//
+// Per pixel: z = the prepass depth at v_uv; z <= 0 (sky, or a NaN) writes src unchanged. Otherwise the view-space point is
+// rebuilt as kAoFS does ((ndc + proj[2].xy) * z / (proj[0][0], proj[1][1]), -z) and turned into the camera-relative world
+// offset p (right, up, back: the inverse of the view's rotation; neither the camera's position nor the floating origin
+// enters, as in the sky layer). Then, step for step as the CPU twin (mce/render/cloud_shadow.h): cloud_shadow_point with
+// the camera at 0 (rise = height - p.y; no hit at or above the plane), cloud_noise (q = xz / cell - drift mod 64; 1, 2 or 3
+// of the sky's octaves through MCE_GLSL_CLOUD_NOISE, the reduced sums renormalized), cloud_density (smoothstep(t, t + 0.12 +
+// 0.3 softness, n), t = 0.78 - 0.6 coverage, times 0.55 + 0.45 density) and cloud_shadow_factor (1 - strength * density *
+// sun share * smoothstep(0.02, 0.25, sun.y)); the pixel's rgb is multiplied by the factor, alpha kept. With the main
+// pass's exp² fog (c_drift.z != 0; the volumetric fog, which replaces it, is not modelled) only the surface part of the
+// pixel is shaded, exactly (cloud_shadow_shade): src - (1 - factor) (src - (1 - T) fog), T = exp(-(density * distance)²).
+// A depth of 6e4 or more (half-float overflow to +inf) counts as sky; a non-finite plane point leaves the pixel unshaded. The CPU records the
+// pass only with the sun at or above kCloudShadowMinSunY, so the division by c_sun.y is safe. Portable: one block,
+// combined samplers at the post banks, textureLod and texelFetch only, no loops, u32 math that wraps as the C++ does.
+inline constexpr int kCloudShadowUBytes = 128;  // 8 vec4: proj, right, up, back, sun, shade, drift, fog
+#define MCE_GLSL_CLOUD_SHADOW_U R"(
+layout(std140, binding = 1) uniform CloudShadowU {
+    vec4 c_proj;   // x proj[0][0], y proj[1][1], z proj[2][0], w proj[2][1] (the unjittered projection, as kAoFS)
+    vec4 c_right;  // xyz the camera's right (world), w 1 / noise cell (1/m, p_cloud.z)
+    vec4 c_up;     // xyz the camera's up, w the plane's height above the camera (m, p_cloud.w)
+    vec4 c_back;   // xyz the camera's back (-forward), w coverage (p_cloud.x, > 0)
+    vec4 c_sun;    // xyz the unit direction toward the sun (y >= 0.02), w the layer's density (p_cloud.y)
+    vec4 c_shade;  // x strength, y the sun's share of the light, z softness, w octaves (1, 2 or 3)
+    vec4 c_drift;  // xy the drift in noise cells (p_cloud2.xy), z the exp² fog density (0: none or volumetric), w 0
+    vec4 c_fog;    // rgb the exp² fog colour (p_fog.rgb), w 0
+};
+layout(location = 0) in vec2 v_uv;
+layout(location = 0) out vec4 o_color;
+)"
+constexpr const char* kCloudShadowFS = "#version 450 core\n" MCE_GLSL_CLOUD_NOISE MCE_GLSL_CLOUD_SHADOW_U R"(
+layout(binding = 6) uniform sampler2D u_src;   // post_source_, read texel for texel
+layout(binding = 7) uniform sampler2D u_gbuf;  // the opaque prepass, half size, point sampled
+// cloud_noise (cloud_shadow.cpp) at the camera-relative plane xz (m).
+float cs_noise(vec2 xz) {
+    vec2 q = mod(xz * c_right.w - c_drift.xy, 64.0);
+    float o = c_shade.w;
+    float n = cloud_value(q, 64u, 0x27D4EB2Fu) * 0.55;
+    float w = 0.55;
+    if (o >= 2.0) {
+        n += cloud_value(q * 2.0, 128u, 0x165667B1u) * 0.30;
+        w += 0.30;
+    }
+    if (o >= 3.0) {
+        n += cloud_value(q * 4.0, 256u, 0xD3A2646Cu) * 0.15;
+        w += 0.15;
+    }
+    return o >= 3.0 ? n : n / w;
+}
+void main() {
+    vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
+    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    if (!(z > 0.0 && z < 6.0e4)) {
+        o_color = src;  // sky (0), a half-float depth that overflowed to +inf, or a NaN: untouched
+        return;
+    }
+    vec2 ndc = v_uv * 2.0 - 1.0;
+    vec3 v = vec3((ndc.x + c_proj.z) * z / c_proj.x, (ndc.y + c_proj.w) * z / c_proj.y, -z);
+    vec3 p = c_right.xyz * v.x + c_up.xyz * v.y + c_back.xyz * v.z;
+    float rise = c_up.w - p.y;  // how far the point is below the plane
+    float factor = 1.0;
+    if (rise > 0.0) {
+        float t = rise / c_sun.y;
+        vec2 xz = vec2(p.x + c_sun.x * t, p.z + c_sun.z * t);
+        if (all(lessThan(abs(xz), vec2(1.0e30)))) {  // a NaN or an overflow never reaches the float-to-uint lattice
+            float n = cs_noise(xz);
+            float th = 0.78 - 0.6 * c_back.w;
+            float mask = smoothstep(th, th + (0.12 + 0.3 * c_shade.z), n);
+            float dens = mask * (0.55 + 0.45 * c_sun.w);
+            float fade = smoothstep(0.02, 0.25, c_sun.y);
+            factor = 1.0 - c_shade.x * dens * c_shade.y * fade;
+            factor = (factor == factor) ? clamp(factor, 0.0, 1.0) : 1.0;  // a NaN never reaches the frame
+        }
+    }
+    vec3 rgb = src.rgb * factor;
+    if (c_drift.z != 0.0) {
+        // cloud_shadow_shade: the main pass wrote src = s T + fog (1 - T); only the surface s is shaded.
+        float fd = c_drift.z * length(v);
+        float haze = 1.0 - exp(-fd * fd);
+        rgb = src.rgb - (1.0 - factor) * (src.rgb - haze * c_fog.rgb);
+    }
+    o_color = vec4(rgb, src.a);
 }
 )";
 
