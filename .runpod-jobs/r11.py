@@ -77,5 +77,42 @@ def perf(*files):
     print(f"gpu avg {m(0):.3f} p50 {m(1):.3f} frame_ms {m(3):.3f} (n={rows[0][2]}, runs {len(rows)}, spread {spread:.3f}) | " +
           " ".join(f"{k} {v:.3f}" for k, v in stm.items() if v == v and v > 0.0005))
 
+def golden_blocks(a, b, label):
+    """golden.h's measure (8x8 block mean luma, of full scale) between two PNGs: failing blocks with place and values, a block map."""
+    import numpy as np
+    from PIL import Image
+    if not (os.path.exists(a) and os.path.exists(b)): print(f"## {label}: missing {a} or {b}"); return
+    x = np.asarray(Image.open(a).convert("RGB"), dtype=float); y = np.asarray(Image.open(b).convert("RGB"), dtype=float)
+    lx = x @ [0.2126, 0.7152, 0.0722]; ly = y @ [0.2126, 0.7152, 0.0722]; h, w = lx.shape
+    bx = lx.reshape(h // 8, 8, w // 8, 8).mean((1, 3)); by = ly.reshape(h // 8, 8, w // 8, 8).mean((1, 3))
+    d = (bx - by) / 255.0
+    pd = np.abs(x - y).max(axis=2)
+    print(f"## {label}: {w}x{h}, blocks over 0.5%: {(np.abs(d) >= 0.005).sum()} of {d.size}, worst {100*np.abs(d).max():.3f}%, "
+          f"pixels differing >2: {(pd > 2).sum()}, >12: {(pd > 12).sum()}, max {pd.max():.0f}")
+    for (r, c) in zip(*np.where(np.abs(d) >= 0.004)):
+        blk = pd[r*8:(r+1)*8, c*8:(c+1)*8]
+        print(f"   block col {c} row {r} (x {c*8}..{c*8+7}, y {r*8}..{r*8+7}): mean luma {bx[r,c]:.1f} vs {by[r,c]:.1f} ({100*d[r,c]:+.3f}%), "
+              f"px >2: {(blk > 2).sum()}, max {blk.max():.0f}; rgb mean {x[r*8:(r+1)*8, c*8:(c+1)*8].reshape(-1,3).mean(0).round(1).tolist()} vs "
+              f"{y[r*8:(r+1)*8, c*8:(c+1)*8].reshape(-1,3).mean(0).round(1).tolist()}")
+    print("   block map (|d| in 0.1% units, '.' under 0.05%):")
+    for row in d: print("   " + "".join(("." if abs(v) < 0.0005 else str(min(9, int(abs(v) * 1000)))) for v in row))
+
+def golden_strip(*paths):
+    """Native-size strip of PNGs plus |luma diff| x 8 of the first two, as base64 JPEG."""
+    import io, base64
+    import numpy as np
+    from PIL import Image
+    ims = [np.asarray(Image.open(p).convert("RGB"), dtype=float) for p in paths]
+    l = [im @ [0.2126, 0.7152, 0.0722] for im in ims]
+    d = np.clip(np.abs(l[1] - l[0]) * 8, 0, 255)
+    panels = [im.astype(np.uint8) for im in ims] + [np.stack([d] * 3, -1).astype(np.uint8)]
+    h, w = panels[0].shape[:2]
+    s = Image.new("RGB", (w * len(panels), h))
+    for i, p in enumerate(panels): s.paste(Image.fromarray(p), (w * i, 0))
+    buf = io.BytesIO(); s.save(buf, "JPEG", quality=90); data = base64.b64encode(buf.getvalue()).decode()
+    print(f"IMGSTART golden_strip.jpg {len(buf.getvalue())}", flush=True)
+    for i in range(0, len(data), 100): print(data[i:i+100], flush=True)
+    print("IMGEND", flush=True)
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](*sys.argv[2:])
