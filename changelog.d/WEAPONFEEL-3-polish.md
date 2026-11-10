@@ -1,0 +1,1 @@
+- M-WEAPONFEEL closed: milestone file and the open-world gaps list updated.
