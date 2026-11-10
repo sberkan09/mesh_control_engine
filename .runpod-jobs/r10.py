@@ -30,6 +30,27 @@ def variant(src, dst, scene, *kv):
         elif isinstance(o, list):
             for x in o: walk(x)
     walk(doc); json.dump(doc, open(sp, "w"), indent=1); print("variant: GiVisibility3D sets", n)
+def spots(src, dst):
+    """One assets copy with 12 scenes: s_<k> (as committed) and s_<k>_nv (GiVisibility3D enabled 0) for six street spots. The player stands at
+    the spot and the follow camera is first person (eye 1.7 m) looking along yaw (0 = -Z, pi/2 = -X)."""
+    import uuid, math
+    if os.path.exists(dst): shutil.rmtree(dst)
+    shutil.copytree(src, os.path.join(dst, "assets"))
+    base = json.load(open(os.path.join(dst, "assets", "scenes", "city.mcscene")))
+    P = {"p1": (-125, -8.3, -math.pi/2), "p2": (-125, -8.3, -0.675), "a1": (-88, -12, 0.0), "a2": (-88, -45, math.pi),
+         "f1": (-50, -6, math.pi), "f2": (-20, 10, 1.92)}
+    for k, (x, z, yaw) in P.items():
+        for nv in (0, 1):
+            doc = json.loads(json.dumps(base)); name = f"s_{k}" + ("_nv" if nv else "")
+            doc["guid"] = str(uuid.uuid5(uuid.NAMESPACE_URL, "mce-r10-" + name)); doc["name"] = name
+            for e in doc["entities"]:
+                c = e["components"]
+                if e["name"] == "Player": c["LocalTransform"]["position"] = [x, 0.95, z]
+                if "CameraFollow3D" in c:
+                    f = c["CameraFollow3D"]; f.update({"yaw": yaw, "pitch": 0.0, "first_person": True, "distance": 0.2, "offset": [0, 0.75, 0], "smoothing": 0, "chase": 0, "collide": False})
+                if nv and "GiVisibility3D" in c: c["GiVisibility3D"]["enabled"] = 0
+            json.dump(doc, open(os.path.join(dst, "assets", "scenes", name + ".mcscene"), "w"), indent=1)
+    print("spots written")
 def shift_input(src, dst, off, hold_from, hold_to):
     """drive.input shifted by `off` frames (idle first, the volume fills), then the car held forward hold_from..hold_to."""
     off, hold_from, hold_to = int(off), int(hold_from), int(hold_to); out = []
