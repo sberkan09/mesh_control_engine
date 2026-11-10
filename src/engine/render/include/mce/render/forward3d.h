@@ -162,6 +162,8 @@ struct Forward3DStats {
     f32 sun_shafts_strength = 0.0f;  // the combined strength it drew with (0 = not drawn)
     bool cloud_shadow = false;       // the cloud shadow pass drew this frame (M-CLOUDSHADOW)
     f32 cloud_shadow_strength = 0.0f;  // the strength it drew with (0 = not drawn)
+    bool caustics = false;           // the caustics pass drew this frame (M-CAUSTICS)
+    f32 caustics_strength = 0.0f;    // the strength it drew with (0 = not drawn)
     f32 render_scale = 1.0f;         // the scale this view drew at (1 = 1:1; M-DYNRES)
     bool dynres = false;             // the dynamic resolution controller ran this frame (M-DYNRES)
     f32 dynres_cost_ms = 0.0f;       // its smoothed measured cost converted to ms at the current scale (0 = none)
@@ -390,6 +392,7 @@ private:
     void record_underwater(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-UNDERWATER 44c: the camera-under-water composite
     void record_sun_shafts(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-SUNSHAFTS 45c
     void record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-CLOUDSHADOW 51c (declared only until then)
+    void record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-CAUSTICS 52b (a stub until then)
     void record_outline(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-OUTLINE 39c (declared only until then)
     void record_cookie_bake(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
     u32 upload_cookie_records(rhi::CommandBuffer& cmd, const Scene3D& scene);  // M-LIGHTCOOKIE 40c (declared only until then)
@@ -560,6 +563,8 @@ private:
     rhi::TextureHandle shafts_buf_;
     // M-CLOUDSHADOW: the cloud shadow composite pipeline (writes post_fx_target; no target of its own; 51c creates it).
     rhi::PipelineHandle cloud_shadow_pipe_;
+    // M-CAUSTICS: the caustics composite pipeline (writes post_fx_target; no target of its own; 52b creates it).
+    rhi::PipelineHandle caustics_pipe_;
     // M-DYNRES: the dynamic resolution controller's state (46c creates it in init and frees it in shutdown; null until then).
     DynResState* dynres_ = nullptr;
     bool shafts_buf_used_ = false;  // a view of this frame recorded into shafts_buf_ (cleared on the frame's first view)
