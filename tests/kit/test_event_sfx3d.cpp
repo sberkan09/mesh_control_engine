@@ -1,4 +1,5 @@
-// Event sounds (M-GAMEFEEL-SFX): each game event of the holder pushes one PlaySfx; a null clip and other owners stay silent.
+// Event sounds (M-GAMEFEEL-SFX): each game event of the holder pushes one PlaySfx; a null clip and other owners stay
+// silent.
 
 #include <doctest/doctest.h>
 
@@ -6,11 +7,14 @@
 #include "mce/ecs/transform.h"
 #include "mce/ecs/world.h"
 #include "mce/kit/ammopickup3d.h"
+#include "mce/kit/combat3d.h"
 #include "mce/kit/event_sfx3d.h"
 #include "mce/kit/grenade3d.h"
+#include "mce/kit/loadout3d.h"
 #include "mce/kit/melee3d.h"
 #include "mce/kit/progress3d.h"
 #include "mce/kit/wanted3d.h"
+#include "mce/kit/weapon_events3d.h"
 
 using namespace mce;
 using namespace mce::kit;
@@ -28,6 +32,7 @@ struct Scene {
     f32 last_db = 0.0f;
     Scene() {
         w.register_components<LocalTransform>();
+        install_combat3d(w, nullptr);
         install_event_sfx3d(w);
         w.register_event<audio::PlaySfx>(Phase::FixedUpdate_Pre);
         EventSfx3D s;
@@ -36,6 +41,10 @@ struct Scene {
         s.melee_clip.guid = asset::Guid{3, 3};
         s.cash_clip.guid = asset::Guid{4, 4};
         s.ammo_clip.guid = asset::Guid{5, 5};
+        s.reload_start_clip.guid = asset::Guid{6, 6};
+        s.reloaded_clip.guid = asset::Guid{7, 7};
+        s.dry_clip.guid = asset::Guid{8, 8};
+        s.switch_clip.guid = asset::Guid{9, 9};
         // goal_clip stays null
         player = w.spawn_with(s);
         other = w.spawn_with(EventSfx3D{});
@@ -91,6 +100,40 @@ TEST_CASE("event_sfx3d: every event of the holder plays its own clip") {
     s.run(2);
     CHECK(s.last_clip == asset::Guid{5, 5});
     CHECK(s.sfx == 5);
+}
+
+TEST_CASE("event_sfx3d: reload, dry and switch events of the holder play their clips") {
+    Scene s;
+    WeaponReloadStarted3D rs;
+    rs.owner = s.player;
+    EventAccess(s.w).push(rs);
+    s.run(2);
+    CHECK(s.last_clip == asset::Guid{6, 6});
+
+    WeaponReloaded3D rd;
+    rd.owner = s.player;
+    EventAccess(s.w).push(rd);
+    s.run(2);
+    CHECK(s.last_clip == asset::Guid{7, 7});
+
+    WeaponDry3D dr;
+    dr.owner = s.player;
+    EventAccess(s.w).push(dr);
+    s.run(2);
+    CHECK(s.last_clip == asset::Guid{8, 8});
+
+    WeaponSwitched3D sw;
+    sw.entity = s.player;
+    EventAccess(s.w).push(sw);
+    s.run(2);
+    CHECK(s.last_clip == asset::Guid{9, 9});
+    CHECK(s.sfx == 4);
+
+    WeaponDry3D other;
+    other.owner = s.other;  // holder with no clips
+    EventAccess(s.w).push(other);
+    s.run(2);
+    CHECK(s.sfx == 4);
 }
 
 TEST_CASE("event_sfx3d: a null clip, another owner and a dead entity stay silent") {
