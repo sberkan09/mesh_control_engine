@@ -16,6 +16,11 @@ add_custom_target(scene_demo_content ALL DEPENDS "${pack}")
 add_dependencies(scene_demo_content mce_player)
 
 if(MCE_BUILD_TESTS)
+    # M-SOAK step 2: 1500 ticks under a capture; the live heap allocation count must not grow.
+    add_test(NAME scene_demo_soak
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack}
+                     -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/soak -DSLACK=8
+                     -P ${PROJECT_SOURCE_DIR}/tests/perf/player_soak_test.cmake)
     add_test(NAME scene_demo_player_600 COMMAND mce_player -headless 1 -ticks 600 -pack "${pack}")
     set_tests_properties(scene_demo_player_600 PROPERTIES PASS_REGULAR_EXPRESSION "600 ticks, 6 entities, state_hash [0-9a-f]+")
     # -input: the scripted input stands in for the keyboard (parsed, logged, published every tick).

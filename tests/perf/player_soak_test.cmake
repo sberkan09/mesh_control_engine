@@ -1,4 +1,4 @@
-# A soak gate (M-SOAK step 1), run with cmake -P: a headless run of 1500 ticks must not leak. The live
+# A soak gate (M-SOAK step 1), run with cmake -P: a headless run of TICKS (1500) ticks must not leak. The live
 # heap allocation count the capture records each frame is the same in the last frame as it was
 # after the warm-up (plus a small slack for caches that fill once), so a per-tick allocation that is
 # never freed shows here long before it shows as memory.
@@ -11,17 +11,32 @@ function(run)
     set(LAST_OUTPUT "${out}${err}" PARENT_SCOPE)
 endfunction()
 
-set(SCENE_GUID "6f000000-0000-4000-8000-0000000000e2")
-file(REMOVE_RECURSE "${WORK_DIR}")
-file(WRITE "${WORK_DIR}/game/assets/scenes/main.mcscene" "{ \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"${SCENE_GUID}\", \"name\": \"main\",
-  \"entities\": [ { \"name\": \"Ball\", \"components\": { \"LocalTransform\": { \"position\": [0, 4, 0] },
-    \"RigidBody2D\": { \"type\": \"Dynamic\" }, \"Collider2D\": { \"shape\": { \"type\": \"Circle\", \"radius\": 0.5 } } } },
-    { \"name\": \"Floor\", \"components\": { \"LocalTransform\": { \"position\": [0, 0, 0] },
-    \"RigidBody2D\": {}, \"Collider2D\": { \"shape\": { \"half\": [5, 0.5] }, \"density\": 0 } } } ] }\n")
-run("${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
+if(NOT DEFINED TICKS)
+    set(TICKS 1500)
+endif()
+if(DEFINED PACK)
+    # A shipped pack (M-SOAK step 2): play it as it is, with -SCENE when it names one.
+    set(PLAY_ARGS -pack "${PACK}")
+    if(DEFINED SCENE)
+        list(APPEND PLAY_ARGS -scene "${SCENE}")
+    endif()
+    file(REMOVE_RECURSE "${WORK_DIR}")
+    file(MAKE_DIRECTORY "${WORK_DIR}")
+else()
+    set(SCENE_GUID "6f000000-0000-4000-8000-0000000000e2")
+    file(REMOVE_RECURSE "${WORK_DIR}")
+    file(WRITE "${WORK_DIR}/game/assets/scenes/main.mcscene" "{ \"format\": \"mce-scene\", \"version\": 1, \"guid\": \"${SCENE_GUID}\", \"name\": \"main\",
+      \"entities\": [ { \"name\": \"Ball\", \"components\": { \"LocalTransform\": { \"position\": [0, 4, 0] },
+        \"RigidBody2D\": { \"type\": \"Dynamic\" }, \"Collider2D\": { \"shape\": { \"type\": \"Circle\", \"radius\": 0.5 } } } },
+        { \"name\": \"Floor\", \"components\": { \"LocalTransform\": { \"position\": [0, 0, 0] },
+        \"RigidBody2D\": {}, \"Collider2D\": { \"shape\": { \"half\": [5, 0.5] }, \"density\": 0 } } } ] }\n")
+    run("${MCE_COOK}" "${WORK_DIR}/game" --pack --quiet)
 
-run("${MCE_PLAYER}" -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID} -headless 1 -platform.error_box 0
-    -ticks 1500 -perf_capture "${WORK_DIR}/soak.mcperf" -perf_warmup 100)
+    set(PLAY_ARGS -pack "${WORK_DIR}/game/assets.mce" -scene ${SCENE_GUID})
+endif()
+
+run("${MCE_PLAYER}" ${PLAY_ARGS} -headless 1 -platform.error_box 0
+    -ticks ${TICKS} -perf_capture "${WORK_DIR}/soak.mcperf" -perf_warmup 100)
 file(READ "${WORK_DIR}/soak.mcperf" doc)
 string(JSON frames LENGTH "${doc}" frames)
 math(EXPR last "${frames} - 1")
