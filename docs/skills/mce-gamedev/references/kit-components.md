@@ -8,7 +8,7 @@ Tam liste ve hangi örnekte gösterildiği: `docs/engine/capabilities.md` (CI ü
 
 ## 3D çekirdek (docs 08, 09)
 
-- Çizim: `Camera3DComponent`, `MeshRef` (mesh, `material` override, tint), `Environment3D` (güneş, gökyüzü, sis, pozlama, gölge/SSAO/SSR/bloom), `PointLight3D`/`SpotLight3D`, `ReflectionProbe3D`, `GiVolume3D`, `Decal3D`, `Foliage3D`/`TerrainFoliage3D`, `Terrain3D`, `StaticMerge3D`, `Water`, `ParticleEmitter3D`, `LightningBolt`.
+- Çizim: `Camera3DComponent`, `MeshRef` (mesh, `material` override, tint), `Environment3D` (güneş, gökyüzü, sis, pozlama, gölge/SSAO/SSR/bloom), `PointLight3D`/`SpotLight3D`, `ReflectionProbe3D`, `GiVolume3D` (+ isteğe bağlı `GiVisibility3D`: duvar görünürlüğü, `relocate`, `follow_camera`), `Decal3D`, `Foliage3D`/`TerrainFoliage3D`, `Terrain3D`, `StaticMerge3D`, `Water`, `ParticleEmitter3D`, `LightningBolt`.
 - Fizik (Jolt): `RigidBody3D`, `BoxCollider3D`/`MeshCollider3D`/`TerrainCollider3D`, `CharacterController3D` (9.3), `Trigger3D`, `Joint3D`, `Ragdoll3D` (9.8), `Raycast3D`/`Overlap3D`, `PhysicsEvents`/`ImpactDamage3D`.
 - Gezinme (Recast/Detour): `NavMeshSurface3D` (`navmesh_bake`), `NavArea3D`, `NavLink3D`, `NavObstacle3D`, `NavAgent3D` (9.7).
 - Animasyon: `Animator` (+`.mcanim`), `AttachToBone`, `Locomotion3D`, `IKTarget3D`. gen_mesh `humanoid`: 13 kemik, `Idle`/`Walk` klipleri, −Z'ye bakar.

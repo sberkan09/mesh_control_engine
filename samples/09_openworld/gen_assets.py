@@ -78,6 +78,15 @@ LANE_W = 3.5
 SIDEWALK = 2.5
 
 
+# The city's irradiance volume (M-GI2 50i): 256 x 16 x 256 m around the camera, floor 0.5 m above the street (y = 0 is the street's top), 16 x 3 x 16
+# probes: 17.1 m apart on x and z, 8 m on y (probes at 0.5, 8.5 and 16.5 m). The counts come from the capture budget measured in the city (about one
+# probe a frame on a fill or a scrolled-in slab, one a frame on rolling updates): a slab is 48 probes, a crossing at 15 m/s takes 1.1 s, so it
+# needs about 42 probes a second of the 60 a 60 fps frame rate can capture. The plan's 32 x 8 x 32 would need 620 a second (docs/milestones/M-GI2.md).
+GI_HALF = (128.0, 8.0, 128.0)
+GI_CENTER_Y = 8.5
+GI_PROBES = (16, 3, 16)
+
+
 def write(rel, doc):
     path = os.path.join(HERE, "assets", rel)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1360,10 +1369,14 @@ def scene():
     economy_and_missions(s, player)
     pause_menu(s)
     radio(s)
+    # Last, so the older entities keep their order, and before the write so it reaches the file (M-GI2 50i): one irradiance volume that
+    # follows the camera, bounce light into the shade of the buildings and the grass. GiVisibility3D makes it see walls (a probe on the far
+    # side of a facade stops leaking), pushes probes out of the lots (relocate) and moves the box with the player in whole cells.
+    s.add("GI volume", {"LocalTransform": tf((0, GI_CENTER_Y, 0)),
+                        "GiVolume3D": {"half_extents": [GI_HALF[0], GI_HALF[1], GI_HALF[2]], "probes_x": GI_PROBES[0], "probes_y": GI_PROBES[1],
+                                       "probes_z": GI_PROBES[2], "probes_per_frame": 32, "intensity": 1.0},
+                        "GiVisibility3D": {"relocate": 1, "follow_camera": 1}})
     write("scenes/city.mcscene", s.doc("city", G_SCENE))
-    # Last, so the older entities keep their order: one irradiance volume over the middle of the city: bounce light into the shade of the buildings and the grass.
-    s.add("GI volume", {"LocalTransform": tf((0, 12, 0)), "GiVolume3D": {"half_extents": [120, 14, 120], "probes_x": 16, "probes_y": 4, "probes_z": 16,
-                                                                          "probes_per_frame": 32, "intensity": 1.0}})
     return len(s.ents), n_buildings
 
 
