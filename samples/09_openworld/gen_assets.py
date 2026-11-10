@@ -1229,7 +1229,12 @@ def scene():
         # Sounds for the events that were silent (M-GAMEFEEL-SFX): grenade throw and blast, melee swing, cash, ammo crate, goal.
         "EventSfx3D": {"throw_clip": "guid:" + audio_guid("hit_1"), "throw_db": -8, "blast_clip": "guid:" + audio_guid("crash_2"), "blast_db": 3,
                        "melee_clip": "guid:" + audio_guid("hit_3"), "cash_clip": "guid:" + audio_guid("hit_tick"), "cash_db": -6,
-                       "ammo_clip": "guid:" + audio_guid("hit_tick"), "ammo_db": -10, "goal_clip": "guid:" + audio_guid("kill_ding"), "goal_db": -4},
+                       "ammo_clip": "guid:" + audio_guid("hit_tick"), "ammo_db": -10, "goal_clip": "guid:" + audio_guid("kill_ding"), "goal_db": -4,
+                       # Reload start and end, the empty-gun click and a weapon switch (M-WEAPONFEEL).
+                       "reload_start_clip": "guid:" + audio_guid("hit_4"), "reload_start_db": -10,
+                       "reloaded_clip": "guid:" + audio_guid("hit_5"), "reloaded_db": -8,
+                       "dry_clip": "guid:" + audio_guid("hit_tick"), "dry_db": -12,
+                       "switch_clip": "guid:" + audio_guid("hit_2"), "switch_db": -10},
         "HitMarker3D": {"hit_clip": "guid:" + audio_guid("hit_tick"), "kill_clip": "guid:" + audio_guid("kill_ding")},  # the HUD's hit / kill marker (M-HITMARKER)
         "SaveKey": {"key": 999},  # the pause menu's SAVE / LOAD (mission entities count up from 1001)
         # Busted (arrested) or wasted (dead): wakes up at the station or hospital after 3 s, fined from the wallet, wanted level cleared.
