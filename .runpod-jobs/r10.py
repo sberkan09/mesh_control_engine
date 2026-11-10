@@ -99,5 +99,14 @@ def trace(logfile):
         a, b = rows[i], rows[i+step]; dt = (b[1]-a[1]) / 1e6
         v = math.hypot(b[2]-a[2], b[3]-a[3]) / dt if dt > 0 else 0
         if v > 0.5: print(f"  frame {a[0]}: {v:.1f} m/s (wall), pos ({a[2]:.0f},{a[3]:.0f}), backlog {back[i]}, scrolled in window {sum(x[7] for x in rows[i:i+step])}")
+def perfwin(f, lo, hi):
+    """Mean per-stage ms and frame_ms over frames [lo, hi) of a capture recorded with -perf_warmup 0."""
+    lo, hi = int(lo), int(hi); c = json.load(open(f)); names = c.get("gpu_stages", []); fr = [x for x in c["frames"] if lo <= x["index"] < hi]
+    out = []
+    for i, n in enumerate(names):
+        v = [x["gpu_stage_ms"][i] for x in fr if i < len(x.get("gpu_stage_ms", [])) and x["gpu_stage_ms"][i] >= 0]
+        if v and sum(v) / len(v) > 0.0005: out.append(f"{n} {sum(v)/len(v):.3f}")
+    fm = [x["frame_ms"] for x in fr if x["frame_ms"] >= 0]; gm = [x.get("gpu_ms", -1) for x in fr]
+    print(f"frames {lo}-{hi} (n={len(fr)}): frame_ms {sum(fm)/max(len(fm),1):.3f} | " + " ".join(out))
 if __name__ == "__main__":
     globals()[sys.argv[1]](*sys.argv[2:])
