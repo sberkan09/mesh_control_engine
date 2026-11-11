@@ -46,6 +46,19 @@ def light(on, off):
           + " / ".join(f"{100*br[i*h//3:(i+1)*h//3].mean():.1f}%" for i in range(3))
           + f" | saturated (any ch 255) on {(x.max(axis=2) >= 255).sum()} off {(y.max(axis=2) >= 255).sum()} | max |d| top 15% rows {np.abs(x[:int(h*0.15)]-y[:int(h*0.15)]).max()}")
 
+def darkgain(on, off):
+    """Dark pixels (luma < 90 without the pass: the wall reflected in the water, rock contact shade) that the pass brightens
+    by more than 2 levels: count, gain, where (9 x 16 grid of counts)."""
+    import numpy as np
+    x, y = load(on), load(off)
+    if x is None or y is None: print(f"   darkgain {on}/{off}: missing"); return
+    w = np.array([0.2126, 0.7152, 0.0722]); lx = x @ w; ly = y @ w; m = (ly < 90) & (lx - ly > 2); H, W = lx.shape
+    print(f"   darkgain {on} vs {off}: dark px {(ly < 90).sum()}, brightened {m.sum()} ({100*m.mean():.2f}% of frame), mean gain {(lx-ly)[m].mean() if m.any() else 0:.1f}, "
+          f"rgb {y[m].mean(0).round(1).tolist() if m.any() else []} -> {x[m].mean(0).round(1).tolist() if m.any() else []}")
+    g = np.zeros((9, 16), int); ys, xs = np.where(m)
+    np.add.at(g, (ys * 9 // H, xs * 16 // W), 1)
+    for row in g: print("     " + " ".join(f"{v:4d}" for v in row))
+
 def ascii(*keys):
     import numpy as np
     from PIL import Image
