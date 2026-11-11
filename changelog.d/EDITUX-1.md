@@ -1,0 +1,1 @@
+- M-EDITUX step 1: an undo fuzz over reparenting, copy/paste and deletes on an entity tree (30 seeds); undo and redo are byte-identical, no defect found. New milestone record docs/milestones/M-EDITUX.md.
