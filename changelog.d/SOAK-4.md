@@ -1,0 +1,1 @@
+- M-SOAK step 4: a real-GPU soak on a rented RTX 4090 (GL and sdlgpu, 60000 frames each over two water scenes): no leak in the heap allocation count or the card memory; the sdlgpu frame-time rise is the card clock falling; recorded in the milestone.
