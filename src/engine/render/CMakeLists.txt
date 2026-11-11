@@ -29,6 +29,7 @@ mce_add_library(mce_render
         src/translucency.cpp
         src/sun_shafts.cpp
         src/cloud_shadow.cpp
+        src/cirrus.cpp
         src/caustics.cpp
         src/ssr_blur.cpp
         src/gi_probes.cpp

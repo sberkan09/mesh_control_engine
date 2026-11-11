@@ -693,6 +693,27 @@ TEST_CASE("golden: cloud_sky: a broken cloud layer over the gradient sky, lit fr
     check_golden("cloud_sky", f);
 }
 
+// ---- M-CIRRUS 53b: the high cirrus streaks -----------------------------------------------------------------------------
+
+// The default streaks (coverage 0.55, density 0.35, 3000 m cells stretched 6:1 at 9000 m, speed 2) combed along a
+// wind toward +x and the camera, over the default gradient sky with no low layer, the camera looking up, the sun
+// (33 degrees up) just off the frame's right edge (cirrus_sky_scene).
+TEST_CASE("golden: cirrus_sky: fibrous cirrus streaks over the day sky") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cirrus_sky_scene(s, cirrus_carrier()); });
+    check_golden("cirrus_sky", f);
+}
+
+// The same streaks at dusk, the sun 3 degrees under the horizon ahead and to the right, under a low layer (coverage
+// 0.4): the cirrus still lit and pink, the low deck already dark in front of it (cirrus_dusk_scene).
+TEST_CASE("golden: cirrus_dusk: lit cirrus behind a darkened low layer after sunset") {
+    Fixture3D f;
+    cloud_sky_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { cirrus_dusk_scene(s, cirrus_carrier(), cloud_sky_clouds(0.4f)); });
+    check_golden("cirrus_dusk", f);
+}
+
 // ---- M-NIGHTSKY 14d: the moon and the stars ------------------------------------------------------------------------
 
 // A full moon 25 degrees up on the right and the star field (density 0.6, twinkle 0.3 at 12.25 s) over a dark

@@ -10,6 +10,7 @@
 #include "mce/hash.h"
 #include "mce/log.h"
 #include "mce/render/caustics.h"
+#include "mce/render/cirrus.h"
 #include "mce/render/cloud_shadow.h"
 #include "mce/render/dynres.h"
 #include "mce/render/edge_outline.h"
@@ -151,7 +152,9 @@ struct Forward3DPassU {
     vec4 translucency;  // M-TRANSLUCENT 41d: x 1 = the back side's ambient, y 1 = the forward-scatter lobe (translucency_frame)
     vec4 ssr2;          // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur), yzw 0
     vec4 water6;        // M-WATER2 49c/49d: x 1 = the trace, y 1 = the refraction, z 1 = the copy at bank 7
-    vec4 free_[3];      // the rest of the 1536-byte block, unused (always 0)
+    vec4 cirrus;        // M-CIRRUS 53b: x coverage (0 = off), y density, z 1 / cell across the wind (1/m), w height (m)
+    vec4 cirrus2;       // xy the wind's xz unit vector, z stretch (1..16), w the drift along it in cells mod kCirrusPeriod
+    vec4 free_[1];      // the rest of the 1536-byte block, unused (always 0)
 };
 static_assert(sizeof(Forward3DPassU) % 16 == 0, "std140: PassU is vec4/mat4 members only");
 static_assert(
@@ -185,12 +188,14 @@ static_assert(
         offsetof(Forward3DPassU, translucency) == offsetof(Forward3DPassU, sun_cookie2) + 16 &&
         offsetof(Forward3DPassU, ssr2) == offsetof(Forward3DPassU, translucency) + 16 &&
         offsetof(Forward3DPassU, water6) == offsetof(Forward3DPassU, ssr2) + 16 &&
-        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, water6) + 16 &&
-        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 3 * 16,
+        offsetof(Forward3DPassU, cirrus) == offsetof(Forward3DPassU, water6) + 16 &&
+        offsetof(Forward3DPassU, cirrus2) == offsetof(Forward3DPassU, cirrus) + 16 &&
+        offsetof(Forward3DPassU, free_) == offsetof(Forward3DPassU, cirrus2) + 16 &&
+        sizeof(Forward3DPassU) == offsetof(Forward3DPassU, free_) + 1 * 16,
     "PassU: p_wet / p_wet2 / p_snow / p_ripple / p_snow2 / p_cloud / p_cloud2 / p_night / p_night2 / p_moon / "
     "p_moon2 / p_water .. p_water5 / p_wave[8] / p_aurora .. p_aurora4 / p_rainbow / p_rainbow2 / p_meteor / "
-    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_water6 / p_free[3] follow p_sky_rot as "
-    "in MCE_GLSL_PASS_U");
+    "p_meteor2 / p_sun_cookie / p_sun_cookie2 / p_translucency / p_ssr2 / p_water6 / p_cirrus / p_cirrus2 / p_free[1] "
+    "follow p_sky_rot as in MCE_GLSL_PASS_U");
 // PassU stays a whole number of 256-byte slots (the ring's upload alignment, rhi::kUniformAlignment), so an upload
 // costs exactly its size. M-WATER 15c filled 1280 bytes (80 vec4); M-AURORA 16c grew it by one slot to 1536 bytes (96
 // vec4): the aurora's four, 12 free (p_free). Each PassU upload costs 256 more ring bytes than before (one a frame for
@@ -199,8 +204,9 @@ static_assert(
 // 17c took two of the free vec4 (p_rainbow, p_rainbow2): 10 free, the size unchanged. M-METEOR 18c took two more
 // (p_meteor, p_meteor2): 8 free, the size unchanged. M-LIGHTCOOKIE 40e took two more (p_sun_cookie, p_sun_cookie2): 6
 // free, the size unchanged. M-TRANSLUCENT 41d took one (p_translucency): 5 free, the size unchanged. M-REFLECT2 48c
-// took one (p_ssr2): 4 free. M-WATER2 49c took one (p_water6): 3 free, the size unchanged.
-static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 3 vec4 free)");
+// took one (p_ssr2): 4 free. M-WATER2 49c took one (p_water6): 3 free, the size unchanged. M-CIRRUS 53b took two
+// (p_cirrus, p_cirrus2): 1 free, the size unchanged.
+static_assert(sizeof(Forward3DPassU) == 1536, "PassU: 96 vec4 (M-AURORA 16c added one 256-byte slot; 1 vec4 free)");
 
 namespace {
 
@@ -762,6 +768,20 @@ void cloud_params(const Clouds& c, f32 time, PassU& pu) {
     const auto wrap = [](f64 x) { return f32(x - kCloudPeriod * std::floor(x / kCloudPeriod)); };
     pu.cloud = vec4(coverage, unit01(c.density), 1.0f / scale, detail::cloud_height(c.height_m));
     pu.cloud2 = vec4(wrap(cells * f64(dir.x)), wrap(cells * f64(dir.y)), 0.0f, 0.0f);
+}
+
+// The main pass's cirrus members (M-CIRRUS 53b), from the CPU twin's cirrus_shader_params (mce/render/cirrus.h), so
+// the uniforms the test compares against are these. Coverage 0 (the default; the Low tier and `r.cirrus 0` zero it in
+// apply_quality), a NaN coverage or `enabled` false leave p_cirrus and p_cirrus2 zero: the sky shader skips
+// apply_cirrus and the frame is the one without it bit for bit. The rest is clamped again (a caller may skip
+// apply_quality). Camera-relative as the low layer (the plane is height_m above the camera): only the drift moves the
+// streaks, one scalar along the wind in cells (time * speed * kCirrusDrift / (scale_m * stretch)), wrapped in f64 to the
+// noise's 64-cell period (every octave is a whole lattice per period).
+void cirrus_params(const Cirrus& c, f32 time, PassU& pu) {
+    const CirrusParams p = cirrus_shader_params(c, time);
+    if (!(p.coverage > 0.0f)) return;
+    pu.cirrus = vec4(p.coverage, p.density, p.inv_cell, p.height_m);
+    pu.cirrus2 = vec4(p.wind.x, p.wind.y, p.stretch, p.drift);
 }
 
 // The main pass's night sky members (M-NIGHTSKY 14d). Moon intensity 0 and star density 0 (or `enabled` false, or a
@@ -2913,6 +2933,7 @@ void Forward3D::bind_main_state(rhi::CommandBuffer& cmd, const Scene3D& scene, b
     snow_params(scene.snow_cover(), origin_, pu);
     ripple_params(scene.ripples(), scene.time(), pu);
     cloud_params(scene.clouds(), scene.time(), pu);  // the sky's cloud layer (M-CLOUDS 9b): main pass only too
+    cirrus_params(scene.cirrus(), scene.time(), pu);  // the high cirrus streaks (M-CIRRUS 53b): main pass only too
     night_sky_params(scene.night_sky(), pu);         // the moon and the stars (M-NIGHTSKY 14d): main pass only too
     aurora_params(scene.aurora(), pu);               // the aurora curtains (M-AURORA 16c): main pass only too
     rainbow_params(scene.rainbow(), pu);             // the rainbow (M-RAINBOW 17c): main pass only too

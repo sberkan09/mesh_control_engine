@@ -290,6 +290,23 @@ TEST_CASE("shader_cross: the cloud shadow stage") {
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
 
+// M-CIRRUS 53b: the sky pass and the water, whose fragment stages carry the cirrus layer (apply_cirrus, p_cirrus /
+// p_cirrus2 in PassU), translate, with PassU at [[buffer(1)]]. Not built on Linux (macOS only): unverified until a Mac
+// run, like the cases above.
+TEST_CASE("shader_cross: the sky and water stages with the cirrus layer") {
+    FixedString<1024> log;
+    auto sky = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kSkyFS, "sky.frag", log);
+    REQUIRE_MESSAGE(sky.has_value(), log.c_str());
+    if (!sky) return;
+    CHECK(contains(sky.value(), "[[buffer(1)]]"));
+    CHECK(contains(sky.value(), "p_cirrus2"));
+    auto water = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kWaterFS, "water.frag", log);
+    REQUIRE_MESSAGE(water.has_value(), log.c_str());
+    if (!water) return;
+    CHECK(contains(water.value(), "[[buffer(1)]]"));
+    CHECK(contains(water.value(), "p_cirrus2"));
+}
+
 // M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source) translates, with CausticsU at
 // [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_caustics binds (the volumetric fog at 4,
 // post_source_ at 6, the opaque prepass at 7). Not built on Linux (macOS only): unverified until a Mac run, like the cases above.
