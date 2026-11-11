@@ -289,3 +289,19 @@ TEST_CASE("shader_cross: the cloud shadow stage") {
     CHECK(contains(msl.value(), "[[sampler(7)]]"));
     CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
 }
+
+// M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source) translates, with CausticsU at
+// [[buffer(1)]] and its samplers at the GL binding numbers Forward3D::record_caustics binds (the volumetric fog at 4,
+// post_source_ at 6, the opaque prepass at 7). Not built on Linux (macOS only): unverified until a Mac run, like the cases above.
+TEST_CASE("shader_cross: the caustics stage") {
+    FixedString<1024> log;
+    auto msl = translate_glsl(ShaderStage::Fragment, mce::render::shaders3d::kCausticsFS, "caustics.frag", log);
+    REQUIRE_MESSAGE(msl.has_value(), log.c_str());
+    if (!msl) return;
+    CHECK(contains(msl.value(), "[[buffer(1)]]"));
+    CHECK(contains(msl.value(), "u_src [[texture(6)]]"));
+    CHECK(contains(msl.value(), "u_gbuf [[texture(7)]]"));
+    CHECK(contains(msl.value(), "u_vol [[texture(4)]]"));
+    CHECK(contains(msl.value(), "[[sampler(7)]]"));
+    CHECK_FALSE(contains(msl.value(), "mce_flip_y"));
+}

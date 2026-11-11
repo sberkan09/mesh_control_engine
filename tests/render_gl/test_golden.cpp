@@ -1243,6 +1243,21 @@ TEST_CASE("golden: cloud_shadow: drifting cloud patches on the ground and the to
     check_golden("cloud_shadow", f);
 }
 
+// ---- M-CAUSTICS 52b: caustics under water ----------------------------------------------------------------------------
+
+// The shallow pool (caustics_scene: the fixture's 12 m floor 0.6 m under calm water, its 1 m box crossing the surface)
+// seen from the orbit camera's default pose, a high sun behind the camera, the web at scene time 1.25 s (1.5 m cells, the
+// High tier's 3 octaves); bloom and FXAA as by default. The web lies on the floor and the box's submerged sides; the box's
+// top above the water, the water with nothing behind it and the sky are the frame without the pass.
+TEST_CASE("golden: caustics: the sun's web on a pool floor under calm water") {
+    Fixture3D f;
+    const WaterSurface w = caustics_water();
+    const Caustics c = caustics_setting();
+    f.render(0.0f, false, [&](Scene3D& s) { caustics_scene(s, &w, &c, 1.25f, kCausticsToward, true); });
+    CHECK(f.renderer.forward_3d().last_stats().caustics);
+    check_golden("caustics", f);
+}
+
 // ---- M-RAINFX 7b: rain ripples --------------------------------------------------------------------
 
 TEST_CASE("golden: ripple_plaza: rain rings on the wet plaza's puddles at a fixed scene time") {
