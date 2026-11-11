@@ -46,6 +46,7 @@
 #include "mce/kit/snow_cover.h"
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/cloud_shadow.h"
+#include "mce/kit/caustics.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/gi_visibility.h"
@@ -1399,6 +1400,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         }
         scene.set_meteor(shown);
     }
+    bool water_plane = false;  // M-CAUSTICS 52c: this frame's extract set an enabled plane (Scene3D keeps a stale one)
     {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
         const Water* water = nullptr;
         const WindDirection* water_wd = nullptr;
@@ -1466,6 +1468,7 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
                 }
             }
             scene.set_water(render::apply_quality(quality_, surf));
+            water_plane = scene.water().enabled;
         }
     }
     scene.set_exposure(env.exposure * cv_exposure_scale.get_float());
@@ -1587,6 +1590,32 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             render::ShadowSettings cshadow_shadows;
             render::apply_quality(quality_, cshadow_shadows, cshadow_post);
             post.cloud_shadow = cshadow_post.cloud_shadow;
+        }
+    }
+    {  // caustics (M-CAUSTICS 52c): the first enabled Caustics3D by entity index (not table order), and only where this
+       // frame has a water plane (the WaterSurface the water block above set this frame: an enabled Water with a finite
+       // level, after its quality step and r.water; Scene3D does not clear the plane between frames, so its own flag is
+       // not enough); otherwise post.caustics keeps the disabled default, written every frame so a stale one never survives. The pass
+       // reads the plane, the sun and the clock from the scene itself.
+        const Caustics3D* caustics = nullptr;
+        u32 caustics_index = ~0u;
+        world.query<const Caustics3D&>().each([&](Entity e, const Caustics3D& c) {
+            if (c.enabled == 0u || e.index >= caustics_index) return;
+            caustics = &c;
+            caustics_index = e.index;
+        });
+        if (caustics && water_plane) {
+            render::PostFx caustics_post;  // the 52a quality step on a throwaway PostFx (tier, r.caustics, the clamps)
+            render::Caustics& ca = caustics_post.caustics;
+            ca.enabled = true;
+            ca.strength = caustics->strength;
+            ca.scale = caustics->scale;
+            ca.speed = caustics->speed;
+            ca.absorption = caustics->absorption;
+            ca.max_depth = caustics->max_depth;
+            render::ShadowSettings caustics_shadows;
+            render::apply_quality(quality_, caustics_shadows, caustics_post);
+            post.caustics = caustics_post.caustics;
         }
     }
     {  // dynamic resolution (M-DYNRES 46d): the first enabled DynamicResolution3D by entity index (not table order, so the

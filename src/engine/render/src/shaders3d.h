@@ -4865,21 +4865,27 @@ void main() {
 // The web (MCE_GLSL_CAUSTICS_NOISE): per octave a cellular noise on an integer lattice, m cells per period (64, 128, 256),
 // the 3 x 3 cells around q wrapped; each cell's feature point jittered by pcg2d (the cloud noise's family; no sin()) and
 // moved on a closed loop (ca_loop: a parabola per half turn, no sin()) whose phase is k * c_misc.x + h, k a whole 1..3, so
-// the loop closes when the CPU's integer-wrapped clock does. v = 1 - smoothstep(0, 0.1, F2 - F1), squared: the bright thin
-// lines between neighbouring points. 0.6 v(q) + 0.3 v(2q) + 0.1 v(4q), 1 to 3 octaves (the tier's), the reduced sums
-// renormalized.
+// the loop closes when the CPU's integer-wrapped clock does. v = 1 - smoothstep(0, 0.16, F2 - F1) (M-CAUSTICS 52d: not
+// squared, a softer falloff): the bright lines between neighbouring points. 0.6 v(q) + 0.3 v(2q) + 0.1 v(4q), 1 to 3
+// octaves (the tier's), the reduced sums renormalized.
 //
 // Per pixel: z = the prepass depth at v_uv; z <= 0 (sky, or a NaN) or z >= 6e4 (half-float overflow) writes src unchanged.
 // Otherwise the view-space point is rebuilt as kCloudShadowFS does and turned into the camera-relative world offset p.
 // depth = c_up.w - p.y (the plane's height above the camera minus p.y); nothing is added at or above the plane or at or
 // below max_depth. The point moves along the sun to the plane (t = depth / sun.y, the sun ray's length in water); outside
 // the drawn water square (centre c_plane.zw, half size c_back.w) nothing is added. term = pattern(xz / scale + offset) *
-// exp(-absorption t) * the depth falloff (in over the first 0.25 m, out over the last 20 % of max_depth) * the water's
+// exp(-absorption t) * the depth falloff (in over the first 0.25 m, out over the last 20 % of max_depth) * the facing
+// (caustics_facing, M-CAUSTICS 52d: the prepass's view normal (u_gbuf.rgb, the same point-sampled texel as the depth)
+// turned to world space by the camera basis; smoothstep(0.6, 0.95, dot(n, sun) / sun.y), so a floor gets 1 and a face
+// that would show the web stretched (a steep wall), turned away from the sun or lit edge-on gets 0; a normal shorter than
+// 0.5, or a NaN, gets 0) * the water's
 // transmission (caustics_transmission: with the camera above the plane and the view ray crossing it inside the square,
 // what kWaterFS lets through of the point, (1 - F) exp(-sigma d_view) per channel, F Schlick on the flat plane times the
 // reflectivity; else 1) * the exp² fog's surface share exp(-(fog d)²), d the distance the main pass fogged the pixel at
 // (the water surface's when the point is seen through it; the main pass wrote s T + fog (1 - T), light added to s adds
-// term T). The pixel's rgb gains c_color.rgb * term, alpha kept: a term of 0 leaves the pixel's bits as they are. The CPU
+// term T). The pixel's rgb gains c_color.rgb * luma(term) * chroma(src) (caustics_composite, M-CAUSTICS 52d review: the
+// surface reflects the light in its own colour; chroma = clamp(src / luma(src), 0, 4), 1 for luma(src) outside (1e-4,
+// 1e30) or NaN), alpha kept: a term of 0 leaves the pixel's bits as they are. The CPU
 // records the pass only with the sun at or above kCausticsMinSunY (the division by c_sun.y is safe) and, with the camera
 // above the water, only when the water shows what lies under it (M-WATER2 refraction). Portable: one block, combined
 // samplers at the post banks, textureLod and texelFetch only, constant-bound loops, u32 math that wraps as the C++ does.
@@ -4929,8 +4935,7 @@ float ca_cells(vec2 q, uint m, uint seed, float phase) {
             }
         }
     }
-    float v = 1.0 - smoothstep(0.0, 0.1, sqrt(d2) - sqrt(d1));
-    return v * v;
+    return 1.0 - smoothstep(0.0, 0.16, sqrt(d2) - sqrt(d1));
 }
 // caustics_pattern (caustics.cpp): q in first-octave cells, o octaves (1, 2 or 3).
 float ca_pattern(vec2 q, float phase, float o) {
@@ -4986,7 +4991,8 @@ float ca_vol(vec2 uv, float depth) {
 }
 void main() {
     vec4 src = texelFetch(u_src, ivec2(gl_FragCoord.xy), 0);
-    float z = textureLod(u_gbuf, v_uv, 0.0).a;
+    vec4 gb = textureLod(u_gbuf, v_uv, 0.0);
+    float z = gb.a;
     if (!(z > 0.0 && z < 6.0e4)) {
         o_color = src;  // sky (0), a half-float depth that overflowed to +inf, or a NaN: untouched
         return;
@@ -5003,7 +5009,13 @@ void main() {
         if (abs(xz.x) < 1.0e30 && abs(xz.y) < 1.0e30 && abs(xz.x - c_plane.z) <= c_back.w &&
             abs(xz.y - c_plane.w) <= c_back.w) {
             float pat = ca_pattern(vec2(xz.x * c_right.w + c_plane.x, xz.y * c_right.w + c_plane.y), c_misc.x, c_misc.y);
-            float k = pat * exp(-c_sun.w * t) * (smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth)));
+            // caustics_facing: the surface normal (view space in the prepass) in world space, against the sun.
+            vec3 nw = c_right.xyz * gb.x + c_up.xyz * gb.y + c_back.xyz * gb.z;
+            float n2 = dot(nw, nw);
+            float facing = 0.0;
+            if (n2 >= 0.25 && n2 < 1.0e30) facing = smoothstep(0.6, 0.95, dot(nw, c_sun.xyz) / sqrt(n2) / c_sun.y);
+            float k = pat * exp(-c_sun.w * t) * (smoothstep(0.0, 0.25, depth) * (1.0 - smoothstep(0.8 * c_color.w, c_color.w, depth))) *
+                      facing;
             // caustics_transmission: seen from above through the water square, the water pixel shows the point as
             // kWaterFS composites it, (1 - F) exp(-sigma d_view): the floor fogged once by kMeshFS at its own distance
             // (the copy kWaterFS samples) and again by kWaterFS at the surface's.
@@ -5042,7 +5054,15 @@ void main() {
             term = mix(vec3(0.0), clamp(term, 0.0, 1.0), equal(term, term));  // a NaN never reaches the frame
         }
     }
-    o_color = vec4(src.rgb + c_color.rgb * term, src.a);
+    // caustics_composite: the light as the surface reflects it, in the pixel's own colour.
+    const vec3 kLuma = vec3(0.2126, 0.7152, 0.0722);
+    float ls = dot(src.rgb, kLuma);
+    vec3 ch = vec3(1.0);
+    if (ls > 1.0e-4 && ls < 1.0e30) {
+        ch = src.rgb / ls;
+        ch = mix(vec3(0.0), min(max(ch, vec3(0.0)), vec3(4.0)), greaterThan(ch, vec3(0.0)));  // a NaN gives 0
+    }
+    o_color = vec4(src.rgb + c_color.rgb * dot(term, kLuma) * ch, src.a);
 }
 )";
 

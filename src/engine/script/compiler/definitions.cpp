@@ -275,6 +275,17 @@ declare weather: {
     -- every key optional, each value clamped to the field's range (strength and softness 0..1); an unknown key or a
     -- non-number raises and nothing is written; `enabled` is not settable
     set_cloud_shadow: (settings: { strength: number?, softness: number? }) -> (),
+    -- Caustics3D (M-CAUSTICS), the first one in the scene; the getters raise when there is none (or when the world has
+    -- no kit3d components)
+    caustics_strength: () -> number,
+    caustics_scale: () -> number,
+    caustics_speed: () -> number,
+    caustics_absorption: () -> number,
+    caustics_max_depth: () -> number,
+    -- every key optional, each value clamped to the field's range (strength 0..4, scale 0.25..16 m, speed 0..4,
+    -- absorption 0..4 per m, max_depth 0.5..200 m); an unknown key or a non-number raises and nothing is written;
+    -- `enabled` is not settable
+    set_caustics: (settings: { strength: number?, scale: number?, speed: number?, absorption: number?, max_depth: number? }) -> (),
     -- WeatherAudio (M-WEATHERAUDIO), the first one in the scene; the getters raise when there is none.
     -- rain_level and wind_level are the engine-written bed levels (0..1), read-only
     rain_level: () -> number,

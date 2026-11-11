@@ -46,6 +46,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `BulletHole3D` | `mce/kit/bullet_hole3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `Butterfly` | `mce/kit/butterfly.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/12_weather/assets/scenes/weather.mcscene |
 | `SoundCaption` | `mce/kit/captions.h` | yes | yes | yes | docs/user-guide/10-audio.md | samples/kit2d_tour/assets/scenes/tour2d.mcscene |
+| `Caustics3D` | `mce/kit/caustics.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_caustics.mcscene |
 | `ChunkLod3D` | `mce/kit/chunk_lod3d.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/hlod_city/main.cpp |
 | `CameraRail3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/04-scenes-and-prefabs.md | samples/cinema_demo/assets/cutscenes/gate_intro.mctimeline |
 | `CameraLookAt3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |

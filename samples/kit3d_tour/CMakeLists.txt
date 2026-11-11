@@ -78,6 +78,14 @@ if(MCE_BUILD_TESTS)
     add_test(NAME sample_kit3d_tour_cloudshadow_headless
              COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_cloudshadow.mcscene
                      -DTICKS=300 -DENTITIES=14 -DTOUR=kit3d_tour_cloudshadow -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
+    # The caustics scene (M-CAUSTICS 52d): scenes/tour_caustics.mcscene, a shallow pool cut into a stone deck with a Water (small short
+    # waves, clear water), a light sand floor 1 to 2 m down, three rocks standing half out of the water and a Caustics3D on the world
+    # entity under a high strong sun; made by gen_caustics.py (no new assets: box.glb, the sphere and their plain materials). Named
+    # tour_caustics so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 17 entities. 300 ticks (5 s) like the
+    # cloud shadows (the look is render-side and hashes nothing; the two plays must still agree).
+    add_test(NAME sample_kit3d_tour_caustics_headless
+             COMMAND ${CMAKE_COMMAND} -DMCE_PLAYER=$<TARGET_FILE:mce_player> -DPACK=${pack} -DSCENE=scenes/tour_caustics.mcscene
+                     -DTICKS=300 -DENTITIES=17 -DTOUR=kit3d_tour_caustics -P ${CMAKE_CURRENT_SOURCE_DIR}/../tour_test.cmake)
     # The dynamic resolution scene (M-DYNRES 46e): scenes/tour_dynres.mcscene, a heavy-looking set (two rings of 12 shadow-casting spheres,
     # 8 coloured point lights, a shadowed sun, volumetric fog, bloom) and a DynamicResolution3D with target_ms 12 on the world entity;
     # made by gen_dynres.py. Named tour_dynres so it sorts after scenes/tour.mcscene, so the default scene stays the tour. 35 entities.
@@ -245,4 +253,20 @@ if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
     set_tests_properties(sample_kit3d_tour_river_gpu PROPERTIES LABELS gpu TIMEOUT 300
         PASS_REGULAR_EXPRESSION "3D path on \\(high quality.*with 43 entities.*wrote [^\n]*kit3d_tour_river\\.ppm")
     mce_mark_slow(sample_kit3d_tour_river_gpu)
+endif()
+
+if(MCE_BUILD_TESTS AND MCE_GPU_TESTS)
+    # The caustics capture: the scene's frame 120 on the High tier, written for a look (build/.../kit3d_tour_caustics.ppm; samples
+    # keep no goldens). Pass: the 3D path starts at the High tier, the scene loads with its 17 entities and the capture is written
+    # (the log lines; the frame itself is looked at, the render3d_gl caustics tests pin the pixels). A bright moving web of light
+    # lies on the pool floor, the walls under the surface and the rocks' submerged sides, the deck and the rocks above the water
+    # stay as they are; `-r.caustics 0` on the same command draws the frame without the web. The High tier because the water
+    # shows the floor from above only through the refraction, which needs the prepass (SSAO on, Medium or High).
+    add_test(NAME sample_kit3d_tour_caustics_gpu
+             COMMAND mce_player -pack "${pack}" -scene scenes/tour_caustics.mcscene -frames 120 -r.quality high
+                     -capture "${CMAKE_CURRENT_BINARY_DIR}/kit3d_tour_caustics.ppm" -platform.error_box 0 -r.vsync 0
+                     -pause_on_focus_loss 0)
+    set_tests_properties(sample_kit3d_tour_caustics_gpu PROPERTIES LABELS gpu TIMEOUT 300
+        PASS_REGULAR_EXPRESSION "3D path on \\(high quality.*with 17 entities.*wrote [^\n]*kit3d_tour_caustics\\.ppm")
+    mce_mark_slow(sample_kit3d_tour_caustics_gpu)
 endif()

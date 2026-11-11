@@ -11,6 +11,7 @@
 #include "mce/ecs/transform.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/cloud_shadow.h"
+#include "mce/kit/caustics.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -1432,4 +1433,96 @@ end
     CHECK(r.cs().strength == 0.6f);
     CHECK(r.cs().softness == 0.3f);
     CHECK(r.cs().enabled == 1u);
+}
+
+// M-CAUSTICS 52d: the caustics binding over the first Caustics3D (a kit3d component, registered here by hand).
+namespace {
+
+// A script run against a world that has Caustics3D registered (and, with `spawn`, one entity); without `register_type` the
+// world is not even weather-installed, so the type is unknown to it.
+struct CaRig : WRig {
+    Entity ca_e;
+    explicit CaRig(const char* source, bool spawn = true, bool register_type = true) : WRig(source, true, register_type) {
+        if (register_type) w.register_components<kit::Caustics3D>();
+        if (register_type && spawn) ca_e = w.spawn_with(kit::Caustics3D{});
+    }
+    kit::Caustics3D& ca() { return *w.try_get_mut<kit::Caustics3D>(ca_e); }
+};
+
+void expect_ca_error(const char* body, const char* needle, bool spawn = true, bool register_type = true) {
+    const std::string src = std::string("function update()\n    if mce.tick() == 1 then\n        ") + body + "\n    end\nend\n";
+    CaRig r(src.c_str(), spawn, register_type);
+    r.step(2);
+    INFO(body);
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Failed);
+    INFO(err(r.h()));
+    CHECK(err(r.h()).find(needle) != std::string::npos);
+}
+
+}  // namespace
+
+TEST_CASE("weather api: the caustics getters read the first Caustics3D, the setter writes and clamps to the Range") {
+    CaRig r(R"(
+function update()
+    local t = mce.tick()
+    if t == 1 then
+        assert(weather.caustics_strength() == 1)
+        assert(weather.caustics_scale() == 2)
+        assert(weather.caustics_speed() == 1)
+        assert(math.abs(weather.caustics_absorption() - 0.15) < 1e-6)
+        assert(weather.caustics_max_depth() == 30)
+        weather.set_caustics{strength = 2.5}
+    end
+    if t == 2 then
+        assert(weather.caustics_strength() == 2.5)
+        assert(weather.caustics_scale() == 2)  -- only the given key changed
+        weather.set_caustics{strength = 9, scale = 99, speed = 9, absorption = 9, max_depth = 9999}
+    end
+    if t == 3 then
+        assert(weather.caustics_strength() == 4 and weather.caustics_scale() == 16 and weather.caustics_speed() == 4)
+        assert(weather.caustics_absorption() == 4 and weather.caustics_max_depth() == 200)
+        weather.set_caustics{strength = -5, scale = -5, speed = -5, absorption = -5, max_depth = -5}
+        weather.set_caustics{}  -- nothing given, nothing changes
+    end
+    if t == 4 then
+        assert(weather.caustics_strength() == 0 and weather.caustics_scale() == 0.25 and weather.caustics_speed() == 0)
+        assert(weather.caustics_absorption() == 0 and weather.caustics_max_depth() == 0.5)
+        weather.set_caustics{scale = 3, max_depth = math.huge}
+    end
+end
+)");
+    r.step(1);
+    CHECK(r.ca().strength == 2.5f);
+    r.step(4);
+    INFO(err(r.h()));
+    REQUIRE(r.h().scripts()[0].state == ScriptState::Running);
+    CHECK(r.ca().strength == 0.0f);
+    CHECK(r.ca().scale == 3.0f);
+    CHECK(r.ca().max_depth == 200.0f);  // an infinity clamps to the Range
+    CHECK(r.ca().enabled == 1u);  // not settable
+}
+
+TEST_CASE("weather api: set_caustics names its errors and writes nothing on one") {
+    expect_ca_error("weather.set_caustics{enabled = 0}",
+                    "weather.set_caustics: unknown key 'enabled' (strength, scale, speed, absorption, max_depth)");
+    expect_ca_error("weather.set_caustics{strength = 'x'}", "weather.set_caustics: 'strength' is not a number");
+    expect_ca_error("weather.set_caustics{scale = 0/0}", "weather.set_caustics: 'scale' is not a number");
+    expect_ca_error("weather.set_caustics{}", "weather.set_caustics: the scene has no Caustics3D entity", false);
+    for (const char* name :
+         {"caustics_strength", "caustics_scale", "caustics_speed", "caustics_absorption", "caustics_max_depth"})
+        expect_ca_error((std::string("weather.") + name + "()").c_str(),
+                        (std::string("weather.") + name + ": the scene has no Caustics3D entity").c_str(), false);
+    expect_ca_error("weather.caustics_strength()", "weather.caustics_strength: this world has no kit3d components", false,
+                    false);
+    // Nothing is written when a later key is bad: the valid strength must not land.
+    CaRig r(R"(
+function update()
+    if mce.tick() == 1 then weather.set_caustics{strength = 3, max_depth = 'x'} end
+end
+)");
+    r.step(2);
+    CHECK(r.h().scripts()[0].state == ScriptState::Failed);
+    CHECK(r.ca().strength == 1.0f);
+    CHECK(r.ca().max_depth == 30.0f);
+    CHECK(r.ca().enabled == 1u);
 }

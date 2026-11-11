@@ -495,8 +495,9 @@ static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16
                   offsetof(CausticsU, vol) == 144 && offsetof(CausticsU, vol_grid) == 160,
               "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_water / c_vol / "
               "c_vol_grid as in MCE_GLSL_CAUSTICS_U");
-static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.1f && kCausticsLoopRadius == 0.18f &&
-                  kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
+static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.16f && kCausticsFacingLo == 0.6f &&
+                  kCausticsFacingHi == 0.95f && kCausticsMaxChroma == 4.0f && kCausticsMinLuma == 1.0e-4f &&
+                  kCausticsLoopRadius == 0.18f && kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
               "caustics.h and kCausticsFS (shaders3d.h) carry the same constants");
 
 // M-OUTLINE 39c: kOutlineFS's OutlineU (shaders3d.h), bank kPass. Filled from edge_outline_frame only (record_outline).
