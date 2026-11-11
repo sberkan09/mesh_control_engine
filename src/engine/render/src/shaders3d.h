@@ -90,7 +90,9 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_translucency;   // M-TRANSLUCENT: x back ambient, y scatter lobe
     vec4 p_ssr2;           // M-REFLECT2 48c: x 1 = the SSR roughness blur (r.ssr.blur; 0 = one sharp tap), yzw 0
     vec4 p_water6;         // M-WATER2: x 1 = trace, y 1 = refract, z 1 = copy at bank 7
-    vec4 p_free[3];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_cirrus;         // M-CIRRUS 53b: x coverage (0 = off), y density, z 1 / cell (1/m), w height (m)
+    vec4 p_cirrus2;        // xy the wind (xz unit), z stretch, w drift along it (cells mod 64)
+    vec4 p_free[1];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1981,8 +1983,81 @@ float cloud_value(vec2 g, uint m, uint seed) {
     return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
 }
 )"
+// ---- the cirrus layer (M-CIRRUS 53b), behind p_cirrus.x > 0 (coverage; 0 = the frame without it bit for bit, the
+// same off-check as the low layer). High, thin ice cloud combed out along the wind, composited right before the low
+// layer (apply_clouds draws over it) in the sky pass and in the water's reflection (water_sky). The comments live here,
+// outside the literal, so kSkyFS / kWaterFS grow by the code only. The CPU twin is mce/render/cirrus.h (cirrus.cpp):
+// a change here goes there too, and test_render3d_cirrus_gl runs this text alone against it.
+//   rays   up-going only (d.y > kCirrusMinUp = 0.02); the ray meets a plane p_cirrus.w m above the camera,
+//          camera-relative (the camera's xz and the floating origin never enter).
+//   coords p = d.xz * h / d.y / cell (cells across the wind), w = p_cirrus2.xy the wind's xz unit vector, w' = (-w.y,
+//          w.x): q = (dot(p, w) / stretch - drift, dot(p, w')) mod 64, so a cell is `stretch` times longer along the
+//          wind than across it; the drift (p_cirrus2.w, cells along the wind) is wrapped on the CPU in f64 to 64.
+//   noise  two octaves on cloud_lattice (the pcg2d cloud_hash; no sin()), each a whole lattice per 64-cell period
+//          (cirrus_value: the low layer's cloud_value with a per-axis period), with their own seeds so the streaks do
+//          not repeat the low layer's pattern: a broad one b = v(2 q.x, q.y) (128 x 64 cells: patches half a cell
+//          long, so the streaks break up along the wind), and a fibre one at the cell's full length along the wind and
+//          6x across it, its cross coordinate bent by 3 b (s = v(q.x, 6 q.y + 3 b), 64 x 384 cells), so the fibres
+//          curve with the broad pattern rather than run as straight bands. The fibres fade to their mean 0.5 where a
+//          fibre cell (cell / 6 across the wind) spans few pixels, so they neither alias nor shimmer: `pix` the radians
+//          per pixel along d (the sky pass: the neighbouring pixel's ray, apply_cirrus; the water: the reflected ray's
+//          screen derivative), the fibre cell's angular size cell / 6 * sqrt(1 - dot(d.xz, w')^2) * d.y / h (its
+//          extent across the wind seen along d at the slant distance h / d.y), fine = smoothstep(1.5, 4, that / pix).
+//          n = 0.55 b + 0.45 mix(0.5, s, fine).
+//   cover  t = 0.8 - 0.6 coverage, mask = smoothstep(t, t + 0.2, n) (a wider, softer edge than the low layer's 0.12),
+//          a = mask * density * 0.5 * smoothstep(0.02, 0.2, d.y): never above 0.5, faded into the horizon haze.
+//   light  the frame's light (p_light_color, the sun's or the moon's colour times intensity) and sky ambient
+//          (p_amb_sky). At 9 km the sun sets later: sun_up = smoothstep(-0.16, 0.04, sun.y) (the low layer's is
+//          smoothstep(-0.1, 0.1, sun.y)), so the streaks still catch light when the low deck is dark. A DayCycle's
+//          light is still its warm dusk key there (p_light_color is not dark just under the horizon: checked, the
+//          18:00 key's (1, 0.5, 0.25) x 1 fades toward the 21:00 night key over hours), so the afterglow takes it, not
+//          p_sky_horizon, warmed and lifted as the sun sets (the streaks see the sun the ground no longer does):
+//          warm = sun_up (1 - smoothstep(-0.04, 0.3, sun.y)), tint = mix(1, (1, 0.55, 0.35), warm), gain 1 + warm.
+//          Ice scatters forward: a silver term 1.5 pow(max(cs, 0), 8) (wider than the low layer's lining), on a side
+//          term 0.7 + 0.3 cs; thin, so no self-shadowing:
+//          colour = p_amb_sky + 0.5 p_light_color tint sun_up (1 + warm) (0.7 + 0.3 cs + 1.5 silver),
+//          c' = mix(c, colour, a). A deck in front of the sun dims the disk by a, as the low layer does.
+#define MCE_GLSL_CIRRUS \
+    R"(
+float cirrus_value(vec2 g, uvec2 m, uint seed) {  // cloud_value with a period of m.x by m.y cells
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    f = f * f * (3.0 - 2.0 * f);
+    uvec2 c0 = uvec2(max(i, vec2(0.0))) % m;
+    uvec2 c1 = (c0 + 1u) % m;
+    float a = cloud_lattice(c0, seed), b = cloud_lattice(uvec2(c1.x, c0.y), seed);
+    float c = cloud_lattice(uvec2(c0.x, c1.y), seed), e = cloud_lattice(c1, seed);
+    return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
+}
+float cirrus_alpha(vec3 d, float pix) {
+    if (d.y <= 0.02) return 0.0;
+    vec2 p = d.xz * (p_cirrus.w / d.y) * p_cirrus.z;
+    vec2 w = p_cirrus2.xy;
+    vec2 wc = vec2(-w.y, w.x);
+    vec2 q = mod(vec2(dot(p, w) / p_cirrus2.z - p_cirrus2.w, dot(p, wc)), 64.0);
+    float b = cirrus_value(vec2(q.x * 2.0, q.y), uvec2(128u, 64u), 0x68E31DA4u);
+    float s = cirrus_value(vec2(q.x, q.y * 6.0 + 3.0 * b), uvec2(64u, 384u), 0xB5297A4Du);
+    float k = dot(d.xz, wc);
+    float fibre = sqrt(max(1.0 - k * k, 0.0)) * d.y / (6.0 * p_cirrus.w * p_cirrus.z * pix);
+    float n = 0.55 * b + 0.45 * mix(0.5, s, smoothstep(1.5, 4.0, fibre));
+    float t = 0.8 - 0.6 * p_cirrus.x;
+    return smoothstep(t, t + 0.2, n) * p_cirrus.y * 0.5 * smoothstep(0.02, 0.2, d.y);
+}
+vec3 cirrus_color(vec3 sun, float cs) {
+    float sun_up = smoothstep(-0.16, 0.04, sun.y);
+    float warm = sun_up * (1.0 - smoothstep(-0.04, 0.3, sun.y));
+    vec3 tint = mix(vec3(1.0), vec3(1.0, 0.55, 0.35), warm);
+    float silver = pow(max(cs, 0.0), 8.0);
+    return p_amb_sky.rgb + p_light_color.rgb * tint * (0.5 * sun_up * (1.0 + warm) * (0.7 + 0.3 * cs + 1.5 * silver));
+}
+vec3 cirrus_layer(vec3 c, vec3 d, vec3 sun, float cs, float pix) {
+    float a = cirrus_alpha(d, pix);
+    if (a <= 0.0) return c;
+    return mix(c, cirrus_color(sun, cs), a);
+}
+)"
 #define MCE_GLSL_SKY_LAYERS \
-    MCE_GLSL_CLOUD_NOISE R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
+    MCE_GLSL_CLOUD_NOISE MCE_GLSL_CIRRUS R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
 // q    = d.xz * height / d.y * (1 / cell) - drift, mod 64 cells
 // n    = 0.55 v(q) + 0.30 v(2q) + 0.15 v(4q)                       (0..1, mean 0.5)
 // t    = 0.78 - 0.6 coverage                                        (coverage 1 covers the whole sky)
@@ -2395,6 +2470,12 @@ vec3 apply_rainbow(vec3 c, vec3 d) {  // rainbow_layer with the sky pass's pixel
     float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
     return rainbow_layer(c, d, pix);
 }
+vec3 apply_cirrus(vec3 c, vec3 d, vec3 sun, float cs) {  // cirrus_layer with the sky pass's pixel footprint
+    if (d.y <= 0.02) return c;
+    vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
+    float pix = max(length(normalize(w1.xyz / w1.w - u_camera_pos.xyz) - d), 1e-6);  // radians per pixel
+    return cirrus_layer(c, d, sun, cs, pix);
+}
 vec3 apply_meteor(vec3 c, vec3 d) {  // meteor_layer with the sky pass's pixel footprint, as apply_aurora
     if (d.y <= 0.0) return c;
     vec4 w1 = u_inv_view_proj * vec4(v_ndc + vec2(2.0 * u_viewport.z, 0.0), 1.0, 1.0);
@@ -2413,6 +2494,7 @@ void main() {
     if (p_aurora.x > 0.0) c = apply_aurora(c, d);  // in front of the stars, under the clouds and the fog (M-AURORA 16c)
     if (p_rainbow.x > 0.0) c = apply_rainbow(c, d);  // after the aurora, under the clouds and the fog (M-RAINBOW 17c)
     if (p_meteor.x > 0.0) c = apply_meteor(c, d);  // after the stars, the aurora and the rainbow (M-METEOR 18c)
+    if (p_cirrus.x > 0.0) c = apply_cirrus(c, d, sun, cs);  // behind the low layer, over the disk (M-CIRRUS 53b)
     if (p_cloud.x > 0.0) c = apply_clouds(c, d, sun, cs);  // over the disk: a cloud in front of the sun dims it
     if (p_vol.x > 0.5) {  // the volumetric fog's whole depth in front of the sky
         vec4 f = vol_fog(v_ndc * 0.5 + 0.5, 1e30);
@@ -2480,6 +2562,7 @@ vec3 water_sky(vec3 r, float pix, float lod) {
     if (p_aurora.x > 0.0) c = aurora_layer(c, r, pix);  // the curtains on the reflected ray (M-AURORA 16c)
     if (p_rainbow.x > 0.0) c = rainbow_layer(c, r, pix);  // the bows on the reflected ray (M-RAINBOW 17c)
     if (p_meteor.x > 0.0) c = meteor_layer(c, r, pix);  // the streaks on the reflected ray (M-METEOR 18c)
+    if (p_cirrus.x > 0.0) c = cirrus_layer(c, r, sun, dot(r, sun), pix);  // on the reflected ray (M-CIRRUS 53b)
     if (p_cloud.x > 0.0) c = apply_clouds(c, r, sun, dot(r, sun));
     if (p_vol.x <= 0.5 && p_fog.w > 0.0) c = mix(p_fog.rgb, c, smoothstep(0.0, 0.35, r.y));
     return c;
@@ -2699,7 +2782,11 @@ void main() {
     o_color = vec4(color, 1.0);
 }
 )";
+// M-CIRRUS 53b: the cirrus layer's text alone (with the cloud noise it reads), for test_render3d_cirrus_gl's run against
+// the CPU twin (mce/render/cirrus.h). A shader that uses it declares p_cirrus, p_cirrus2, p_light_color and p_amb_sky.
+constexpr const char* kCirrusLayerGLSL = MCE_GLSL_CLOUD_NOISE MCE_GLSL_CIRRUS;
 #undef MCE_GLSL_SKY_LAYERS
+#undef MCE_GLSL_CIRRUS
 
 // ---- post chain. PostU rides bank 1 for the post passes.
 // Auto exposure (M-VISUAL 8): Forward3D::exposure_buffer(), bank kExposure.

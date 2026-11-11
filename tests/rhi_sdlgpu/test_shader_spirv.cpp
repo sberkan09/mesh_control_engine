@@ -4,6 +4,8 @@
 #include <doctest/doctest.h>
 
 #include <cstdio>
+#include <cstring>
+#include <utility>
 
 #include "mce/core.h"
 #include "shader_spirv.h"
@@ -462,6 +464,29 @@ TEST_CASE("shader_spirv: the cloud shadow stage") {
     CHECK(res.sampler_kind[1] == SamplerKind::Tex2D);
     CHECK(res.storage_count == 0);
     CHECK(res.uniform_count == 2);
+}
+
+// M-CIRRUS 53b: the sky pass and the water, whose fragment stages carry the cirrus layer (apply_cirrus through
+// MCE_GLSL_SKY_LAYERS, p_cirrus / p_cirrus2 in PassU), compile for SDL GPU (render's shaders3d.h, the real sources); the
+// layer's text alone (kCirrusLayerGLSL, the GL twin test's) is in both. PassU stays at bank kPass (1).
+TEST_CASE("shader_spirv: the sky and water stages with the cirrus layer") {
+    CHECK(std::strstr(mce::render::shaders3d::kSkyFS, mce::render::shaders3d::kCirrusLayerGLSL) != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kWaterFS, mce::render::shaders3d::kCirrusLayerGLSL) != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kSkyFS, "c = apply_cirrus(c, d, sun, cs);") != nullptr);
+    CHECK(std::strstr(mce::render::shaders3d::kWaterFS, "c = cirrus_layer(c, r, sun, dot(r, sun), pix);") != nullptr);
+    CHECK(std::strlen(mce::render::shaders3d::kSkyFS) < 65535);
+    for (const auto& [src, name] : {std::pair{mce::render::shaders3d::kSkyFS, "sky.frag"},
+                                    std::pair{mce::render::shaders3d::kWaterFS, "water.frag"}}) {
+        FixedString<1024> log;
+        Array<u32> spv;
+        StageResources res;
+        auto r = compile_glsl(ShaderStage::Fragment, src, name, spv, res, log);
+        if (!r) std::fprintf(stderr, "%s\n", log.c_str());
+        REQUIRE(r.has_value());
+        if (!r) return;
+        CHECK(res.uniform_count >= 2);  // FrameU (0) and PassU (1)
+        CHECK(res.storage_count == 0);
+    }
 }
 
 // M-CAUSTICS 52b: the caustics fragment stage (render's shaders3d.h, the real source: MCE_GLSL_CAUSTICS_NOISE and

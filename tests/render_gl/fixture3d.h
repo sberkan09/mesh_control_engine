@@ -1495,4 +1495,48 @@ inline void caustics_scene(Scene3D& s, const WaterSurface* w, const Caustics* ca
     if (w) s.set_water(*w);
 }
 
+// ---- M-CIRRUS 53b: the high cirrus streaks ---------------------------------------------------------------------------
+
+// The cirrus as the kit extract hands it over: `coverage`, the default streaks (density 0.35, 3000 m cells stretched 6:1,
+// speed 2, 9000 m up) combed along a wind toward +x and slightly toward the camera (+z), so they cross the frame of a
+// camera looking toward -z on a diagonal, at scene time `time` (s; the scene's clock drives the drift).
+inline constexpr math::vec2 kCirrusWind{0.8f, 0.6f};
+inline Cirrus cirrus_carrier(f32 coverage = 0.55f) {
+    Cirrus c;
+    c.coverage = coverage;
+    c.wind_dir = kCirrusWind;
+    return c;
+}
+
+// The cirrus day: cloud_sky_scene's camera, sun (33 degrees up on the camera's right front) and gradient sky with the
+// cirrus `cirrus` and the low layer `clouds` (Clouds{}: none) at scene time `time`.
+inline void cirrus_sky_scene(Scene3D& s, const Cirrus& cirrus, const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    cloud_sky_scene(s, clouds, time);
+    s.set_cirrus(cirrus);
+}
+
+// The cirrus dusk: the sun 3 degrees under the horizon ahead of the camera and to its right (a DayCycle's light half an
+// hour after its 18:00 key: still warm, dimmer), a dusk gradient (a warm horizon under a deep blue zenith) and ambient,
+// the cirrus `cirrus` and the low layer `clouds` at scene time `time`. At this sun the low layer's light term is nearly
+// gone (smoothstep(-0.1, 0.1, sun.y)) while the cirrus's (smoothstep(-0.16, 0.04, sun.y)) still lights the streaks.
+inline constexpr vec3 kCirrusDuskToward{0.33f, -0.05f, -0.94f};  // toward the sun (normalized by the upload)
+inline void cirrus_dusk_scene(Scene3D& s, const Cirrus& cirrus, const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    DirectionalLight sun;
+    sun.direction = -kCirrusDuskToward;
+    sun.color = {1.0f, 0.5f, 0.27f};
+    sun.intensity = 0.85f;
+    sun.ambient_sky = {0.2f, 0.17f, 0.24f};
+    sun.ambient_ground = {0.08f, 0.06f, 0.06f};
+    s.set_light(sun);
+    Sky sky;
+    sky.zenith = {0.05f, 0.07f, 0.17f};
+    sky.horizon = {0.55f, 0.32f, 0.26f};
+    sky.ground = {0.06f, 0.05f, 0.05f};
+    s.set_sky(sky);
+    s.set_exposure(1.0f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    s.set_cirrus(cirrus);
+}
+
 }  // namespace mce::render_test
