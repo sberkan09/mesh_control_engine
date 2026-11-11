@@ -40,7 +40,10 @@ Cirrus lit() {
     return c;
 }
 
-bool same_bytes(const Cirrus& a, const Cirrus& b) { return std::memcmp(&a, &b, sizeof(Cirrus)) == 0; }
+// A bit-exact comparison on purpose: the pads are explicit and zeroed, so the bytes are the value.
+bool same_bytes(const Cirrus& a, const Cirrus& b) {
+    return std::memcmp(&a, &b, sizeof(Cirrus)) == 0;  // NOLINT(bugprone-suspicious-memory-comparison): explicit pads
+}
 
 }  // namespace
 
