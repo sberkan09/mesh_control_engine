@@ -1,0 +1,524 @@
+{
+ "format": "mce-scene",
+ "version": 1,
+ "guid": "b0a30000-0000-4000-8000-00000000001c",
+ "name": "tour_caustics",
+ "entities": [
+  {
+   "id": 1,
+   "name": "World",
+   "components": {
+    "WorldSettings": {
+     "gravity_3d": [
+      0,
+      -9.81,
+      0
+     ]
+    },
+    "Environment3D": {
+     "sun_direction": [
+      0.12,
+      -0.85,
+      -0.51
+     ],
+     "sun_intensity": 1.5,
+     "sun_shadows": 0,
+     "sun_color": [
+      1.0,
+      0.95,
+      0.86
+     ],
+     "ambient_sky": [
+      0.26,
+      0.32,
+      0.42
+     ],
+     "ambient_ground": [
+      0.15,
+      0.14,
+      0.12
+     ],
+     "exposure": 1.0,
+     "bloom": 1,
+     "bloom_intensity": 0.06,
+     "ssao": 1
+    },
+    "Caustics3D": {
+     "enabled": 1,
+     "strength": 1.5,
+     "scale": 1.6,
+     "speed": 1.0,
+     "absorption": 0.15,
+     "max_depth": 6
+    }
+   }
+  },
+  {
+   "id": 2,
+   "name": "Camera",
+   "components": {
+    "Camera3DComponent": {
+     "primary": 1,
+     "fov_deg": 60
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      5.5,
+      7.6
+     ],
+     "rotation": [
+      -0.3827,
+      0.0,
+      0.0,
+      0.9239
+     ]
+    }
+   }
+  },
+  {
+   "id": 3,
+   "name": "Pool",
+   "components": {
+    "Water": {
+     "level_y": 0,
+     "half_extent": 40,
+     "amplitude": 0.04,
+     "wavelength": 2.5,
+     "wave_count": 4,
+     "wind_dir_deg": 30,
+     "wind_follow": 0,
+     "steepness": 0.5,
+     "speed_scale": 0.8,
+     "shallow_color": [
+      0.32,
+      0.72,
+      0.74
+     ],
+     "deep_color": [
+      0.03,
+      0.22,
+      0.3
+     ],
+     "depth_scale_m": 4,
+     "reflectivity": 0.8,
+     "roughness": 0.06,
+     "foam_amount": 0
+    },
+    "LocalTransform": {
+     "position": [
+      0,
+      0,
+      0
+     ]
+    }
+   }
+  },
+  {
+   "id": 4,
+   "name": "Deck north",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.58,
+      0.55,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.2,
+      -23.2
+     ],
+     "scale": [
+      80.0,
+      3.0,
+      33.6
+     ]
+    }
+   }
+  },
+  {
+   "id": 5,
+   "name": "Deck south",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.58,
+      0.55,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.2,
+      23.2
+     ],
+     "scale": [
+      80.0,
+      3.0,
+      33.6
+     ]
+    }
+   }
+  },
+  {
+   "id": 6,
+   "name": "Deck west",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.58,
+      0.55,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -24.2,
+      -1.2,
+      0.0
+     ],
+     "scale": [
+      31.6,
+      3.0,
+      12.8
+     ]
+    }
+   }
+  },
+  {
+   "id": 7,
+   "name": "Deck east",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.58,
+      0.55,
+      0.5,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      24.2,
+      -1.2,
+      0.0
+     ],
+     "scale": [
+      31.6,
+      3.0,
+      12.8
+     ]
+    }
+   }
+  },
+  {
+   "id": 8,
+   "name": "Floor shallow",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.86,
+      0.7,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.15,
+      3.0
+     ],
+     "scale": [
+      16.0,
+      0.3,
+      6.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 9,
+   "name": "Floor deep",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.86,
+      0.7,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -2.15,
+      -3.0
+     ],
+     "scale": [
+      16.0,
+      0.3,
+      6.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 10,
+   "name": "Step riser",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.86,
+      0.7,
+      0.46,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.5,
+      -0.1
+     ],
+     "scale": [
+      16.0,
+      1.0,
+      0.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 11,
+   "name": "Wall north",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.6,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.0,
+      -6.2
+     ],
+     "scale": [
+      16.8,
+      2.6,
+      0.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 12,
+   "name": "Wall south",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.6,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      0.0,
+      -1.0,
+      6.2
+     ],
+     "scale": [
+      16.8,
+      2.6,
+      0.4
+     ]
+    }
+   }
+  },
+  {
+   "id": 13,
+   "name": "Wall west",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.6,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -8.2,
+      -1.0,
+      0.0
+     ],
+     "scale": [
+      0.4,
+      2.6,
+      12.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 14,
+   "name": "Wall east",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000050",
+     "material": "guid:b0a30000-0000-4000-8000-00000000005b",
+     "cast_shadows": 0,
+     "tint": [
+      0.42,
+      0.55,
+      0.6,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      8.2,
+      -1.0,
+      0.0
+     ],
+     "scale": [
+      0.4,
+      2.6,
+      12.0
+     ]
+    }
+   }
+  },
+  {
+   "id": 15,
+   "name": "Rock 1",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.5,
+      0.47,
+      0.43,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      -3.6,
+      -0.35,
+      2.4
+     ],
+     "scale": [
+      2.2,
+      1.9,
+      1.8
+     ]
+    }
+   }
+  },
+  {
+   "id": 16,
+   "name": "Rock 2",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.5,
+      0.47,
+      0.43,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      2.8,
+      -0.8,
+      -2.6
+     ],
+     "scale": [
+      2.6,
+      2.8,
+      2.2
+     ]
+    }
+   }
+  },
+  {
+   "id": 17,
+   "name": "Rock 3",
+   "components": {
+    "MeshRef": {
+     "mesh": "guid:b0a30000-0000-4000-8000-000000000041",
+     "material": "guid:b0a30000-0000-4000-8000-000000000047",
+     "cast_shadows": 0,
+     "tint": [
+      0.5,
+      0.47,
+      0.43,
+      1
+     ]
+    },
+    "LocalTransform": {
+     "position": [
+      5.4,
+      -0.45,
+      3.2
+     ],
+     "scale": [
+      1.4,
+      1.5,
+      1.3
+     ]
+    }
+   }
+  }
+ ]
+}

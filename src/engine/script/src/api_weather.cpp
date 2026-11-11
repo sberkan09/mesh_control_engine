@@ -103,6 +103,19 @@
 //                                         an unknown key or a non-number raises an error that names the call, and
 //                                         nothing is written on an error (`enabled` is not settable)
 //
+// Caustics under water (M-CAUSTICS step 52d) are the same kind of binding over the first kit::Caustics3D
+// (mce/kit/caustics.h, a kit3d component: install_kit3d registers it). The water plane itself is the Water's.
+//
+//   weather.caustics_strength() -> number     Caustics3D.strength (0..4)
+//   weather.caustics_scale() -> number        Caustics3D.scale (0.25..16 m)
+//   weather.caustics_speed() -> number        Caustics3D.speed (0..4)
+//   weather.caustics_absorption() -> number   Caustics3D.absorption (0..4 per m)
+//   weather.caustics_max_depth() -> number    Caustics3D.max_depth (0.5..200 m)
+//   weather.set_caustics{strength=, scale=, speed=, absorption=, max_depth=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call, and
+//                                         nothing is written on an error (`enabled` is not settable)
+//
 // Rain and wind ambience (M-WEATHERAUDIO step 10c) is the same kind of binding over the first kit::WeatherAudio
 // (mce/kit/weather_audio.h). Named errors as above. The two sources and the fade levels belong to the scene and the
 // engine, so they are not settable; the levels are read-only.
@@ -562,6 +575,7 @@
 #include "mce/kit/aurora.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/cloud_shadow.h"
+#include "mce/kit/caustics.h"
 #include "mce/kit/rain_ripples.h"
 #include "mce/kit/rain_splash.h"
 #include "mce/kit/snow_cover.h"
@@ -1115,6 +1129,49 @@ int l_weather_set_cloud_shadow(lua_State* L) {
     kit::CloudShadow3D& c = check_cloud_shadow(L, "weather.set_cloud_shadow");
     if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
     if (given[1]) c.softness = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    return 0;
+}
+
+// The first Caustics3D (a kit3d component, so a world without install_kit3d is a different error from a scene without the
+// entity), or a Luau error that names the call.
+kit::Caustics3D& check_caustics(lua_State* L, const char* fn) {
+    World& w = world_of(L);
+    const refl::TypeRecord* type = refl::find_type(StringId("Caustics3D"));
+    if (!type || w.find_component(type->type_hash) == ecs::kInvalidComponent)
+        luaL_error(L, "%s: this world has no kit3d components (install_kit3d)", fn);
+    kit::Caustics3D* found = nullptr;
+    w.query<kit::Caustics3D>().each([&](Entity, kit::Caustics3D& c) {
+        if (!found) found = &c;
+    });
+    if (!found) luaL_error(L, "%s: the scene has no Caustics3D entity", fn);
+    return *found;
+}
+
+#define MCE_WEATHER_GETTER_CA(luaname, field)                                                           \
+    int l_weather_##luaname(lua_State* L) {                                                             \
+        lua_pushnumber(L, static_cast<double>(check_caustics(L, "weather." #luaname).field));           \
+        return 1;                                                                                       \
+    }
+MCE_WEATHER_GETTER_CA(caustics_strength, strength)
+MCE_WEATHER_GETTER_CA(caustics_scale, scale)
+MCE_WEATHER_GETTER_CA(caustics_speed, speed)
+MCE_WEATHER_GETTER_CA(caustics_absorption, absorption)
+MCE_WEATHER_GETTER_CA(caustics_max_depth, max_depth)
+#undef MCE_WEATHER_GETTER_CA
+
+// weather.set_caustics{strength=, scale=, speed=, absorption=, max_depth=}: validated before anything is written.
+// (`enabled` is not settable.)
+int l_weather_set_caustics(lua_State* L) {
+    static const char* const kKeys[5] = {"strength", "scale", "speed", "absorption", "max_depth"};
+    f64 value[5] = {0, 0, 0, 0, 0};
+    bool given[5] = {false, false, false, false, false};
+    read_settings(L, "weather.set_caustics", kKeys, 5, "strength, scale, speed, absorption, max_depth", value, given);
+    kit::Caustics3D& c = check_caustics(L, "weather.set_caustics");
+    if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 4.0));
+    if (given[1]) c.scale = static_cast<f32>(clamp_range(value[1], 0.25, 16.0));
+    if (given[2]) c.speed = static_cast<f32>(clamp_range(value[2], 0.0, 4.0));
+    if (given[3]) c.absorption = static_cast<f32>(clamp_range(value[3], 0.0, 4.0));
+    if (given[4]) c.max_depth = static_cast<f32>(clamp_range(value[4], 0.5, 200.0));
     return 0;
 }
 
@@ -3221,6 +3278,12 @@ const luaL_Reg kWeatherLib[] = {
     {"cloud_shadow_strength", l_weather_cloud_shadow_strength},
     {"cloud_shadow_softness", l_weather_cloud_shadow_softness},
     {"set_cloud_shadow", l_weather_set_cloud_shadow},
+    {"caustics_strength", l_weather_caustics_strength},
+    {"caustics_scale", l_weather_caustics_scale},
+    {"caustics_speed", l_weather_caustics_speed},
+    {"caustics_absorption", l_weather_caustics_absorption},
+    {"caustics_max_depth", l_weather_caustics_max_depth},
+    {"set_caustics", l_weather_set_caustics},
     {"rain_level", l_weather_rain_level},
     {"wind_level", l_weather_wind_level},
     {"audio_rain_db", l_weather_audio_rain_db},
