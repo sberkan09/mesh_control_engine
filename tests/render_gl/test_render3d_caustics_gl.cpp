@@ -1,17 +1,19 @@
 // M-CAUSTICS 52b against a real driver, GL 4.5 and (as test_render_sdlgpu) the SDL GPU backend: caustics under water, one
 // fullscreen pass that rebuilds each pixel's position from the half-resolution opaque prepass, follows the sun up to the
-// water plane, reads the procedural web there and adds the sun's light times caustics_term to the pixel, after the cloud
-// shadows and before the sun shafts (Forward3D::record_caustics, kCausticsFS).
+// water plane, reads the procedural web there and adds the sun's light times caustics_term to the pixel (kCausticsFS):
+// from above into the copy of the opaque frame the water refracts, so the water shows it as it shows the floor (52f,
+// Forward3D::record_main), under the water after the cloud shadows and before the sun shafts (record_caustics).
 // The off paths (the setting off, a zero strength, the Low tier, r.caustics 0, no water, a sun under the fade band, below
 // the horizon, NaN or zero, a sun without light, a render-to-texture view) draw the frame without the pass bit for bit;
 // with the pass only pixels below the plane change and only brighter (the box's part above the water, the water with
 // nothing behind it and the sky stay as they are); more depth gives less light; the web moves with the scene clock and is
 // bit for bit one period later, and speed 0 holds it; a floating-origin rebase leaves the web on the floor; the light fades
 // as the sun sinks toward the horizon; the camera under water still draws it (before the underwater composite); Medium and
-// High both draw; with TAA the next frame holds no light; a second window view of another size draws; the exp² fog takes
-// its share; the floor and the box's top get the web while a side turned away from the sun or lit edge-on is left exactly
-// as it was (M-CAUSTICS 52d, the facing factor); and the shader alone agrees with the CPU twin (caustics.h) on a grid of
-// points.
+// High both draw; with TAA under water the next frame holds no light (from above the web is in the frame before TAA); a
+// second window view of another size draws; the exp² fog takes its share; the floor and the box's top get the web while a
+// side turned away from the sun or lit edge-on is left exactly as it was (M-CAUSTICS 52d, the facing factor); a water pixel
+// that shows no floor (a dark wall's reflection or its foot) gains no light (52f, r12's fringe); and the shader alone
+// agrees with the CPU twin (caustics.h) on a grid of points.
 // One 160 x 120 frame per render.
 
 #include <doctest/doctest.h>
@@ -295,9 +297,10 @@ TEST_CASE("caustics: more depth gives less light") {
 namespace {
 
 // Which face a pixel's view ray hits first (ray_hit's point classified): 0 nothing, 1 the floor, 2 the box's top, 3 / 4
-// its +x / -x side, 5 / 6 its +z / -z side; 7 mixed (the face differs within the pixel's 3 x 3 neighbourhood: the
-// half-resolution prepass's block, where the stored normal may be a neighbour's).
-Array<u8> faces(const View3D& view) {
+// its +x / -x side, 5 / 6 its +z / -z side; 7 mixed (the face differs within `r` pixels: 1 covers the half-resolution
+// prepass's block, where the stored normal may be a neighbour's; 2 also the water's refraction of the copy, which reads
+// it bilinearly a fraction of a pixel off, M-CAUSTICS 52f).
+Array<u8> faces(const View3D& view, int r = 1) {
     Array<u8> one;
     one.resize(usize(kW) * kH);
     for (u32 y = 0; y < kH; ++y)
@@ -321,14 +324,14 @@ Array<u8> faces(const View3D& view) {
     for (u32 y = 0; y < kH; ++y)
         for (u32 x = 0; x < kW; ++x) {
             const u8 c = one[usize(y) * kW + x];
-            u8 r = c;
-            for (int dy = -1; dy <= 1; ++dy)
-                for (int dx = -1; dx <= 1; ++dx) {
+            u8 k = c;
+            for (int dy = -r; dy <= r; ++dy)
+                for (int dx = -r; dx <= r; ++dx) {
                     const int xx = int(x) + dx, yy = int(y) + dy;
                     if (xx < 0 || yy < 0 || xx >= int(kW) || yy >= int(kH)) continue;
-                    if (one[usize(yy) * kW + usize(xx)] != c) r = 7;
+                    if (one[usize(yy) * kW + usize(xx)] != c) k = 7;
                 }
-            out[usize(y) * kW + x] = r;
+            out[usize(y) * kW + x] = k;
         }
     return out;
 }
@@ -339,7 +342,10 @@ constexpr vec3 kFaceNormals[7] = {{0, 0, 0}, {0, 1, 0}, {0, 1, 0}, {1, 0, 0}, {-
 
 TEST_CASE("caustics: the floor and the box's top get the web; a side turned away from the sun or lit edge-on none") {
     CausticsFixture h;
-    const WaterSurface w = caustics_water(2.0f);  // the whole box 1 m and more under the water
+    // The whole box 1 m and more under the water. Ripples so small that the refraction bends the floor and the box by a
+    // tiny fraction of a pixel (M-CAUSTICS 52f: from above the light is drawn into the copy the water refracts, so a wave
+    // slope may legitimately show lit floor where the straight ray meets a dark side); the refraction stays on.
+    const WaterSurface w = caustics_water(2.0f, 0.002f);
     const Caustics on = caustics_setting();
     // The camera looks down -z and sees the box's top and its +z side. The fixture's high sun (behind the camera: the +z
     // side faces it at a steep slant, a small facing), the mirrored one (in front: the +z side is turned away), a sun along
@@ -352,7 +358,7 @@ TEST_CASE("caustics: the floor and the box's top get the web; a side turned away
         const Shot off = h.draw(&w, nullptr, 0.0f, toward);
         const Shot lit = h.draw(&w, &on, 0.0f, toward);
         REQUIRE(lit.stats.caustics);
-        const Array<u8> fc = faces(lit.view);
+        const Array<u8> fc = faces(lit.view, 2);
         usize count[8] = {}, changed[8] = {};
         for (usize p = 0; p < fc.size(); ++p) {
             ++count[fc[p]];
@@ -498,27 +504,51 @@ TEST_CASE("caustics: Medium (2 octaves) and High (3) both draw, differently") {
     CHECK_FALSE(same(frames[0], frames[1]));
 }
 
-TEST_CASE("caustics: with TAA the light never enters the history") {
-    const WaterSurface w = caustics_water();
+TEST_CASE("caustics: with TAA, under water the light never enters the history; from above it is resolved with the water") {
     const Caustics on = caustics_setting();
     const auto taa = [](Scene3D& s) {
         PostFx post = s.post();
         post.taa = true;
         s.set_post(post);
     };
+    // Under water the pass runs after TAA: two frames with the light, then one without, read as three without.
+    const WaterSurface deep = caustics_water(6.0f);
     auto frames = [&](bool lit_first) {
         CausticsFixture h;
+        underwater_place_camera(h.f, vec3{0.0f, 3.5f, 5.0f}, 40.0f);
         for (int i = 0; i < 2; ++i) {
-            const Shot s = h.draw(&w, lit_first ? &on : nullptr, 0.0f, kCausticsToward, taa);
+            const Shot s = h.draw(&deep, lit_first ? &on : nullptr, 0.0f, kCausticsToward, taa);
             CHECK(s.stats.taa);
+            CHECK(s.stats.underwater);
             CHECK(s.stats.caustics == lit_first);
         }
-        const Shot last = h.draw(&w, nullptr, 0.0f, kCausticsToward, taa);
+        const Shot last = h.draw(&deep, nullptr, 0.0f, kCausticsToward, taa);
         CHECK(last.stats.taa_history);
         CHECK_FALSE(last.stats.caustics);
         return last.px;
     };
     CHECK(same(frames(true), frames(false)));
+    // From above (M-CAUSTICS 52f) the light is in the water's refraction copy, before TAA: TAA resolves it with the
+    // refracted floor, and it is in the frame.
+    const WaterSurface w = caustics_water();
+    auto second = [&](const Caustics* c) {  // the second frame of a fresh renderer: the history holds the first
+        CausticsFixture h;
+        h.draw(&w, c, 0.0f, kCausticsToward, taa);
+        return h.draw(&w, c, 0.0f, kCausticsToward, taa);
+    };
+    const Shot off = second(nullptr);
+    const Shot lit = second(&on);
+    CHECK(lit.stats.taa);
+    CHECK(lit.stats.taa_history);
+    CHECK(lit.stats.caustics);
+    const Light l = light(lit.px, off.px);
+    usize darker = 0;
+    for (usize p = 0; p < usize(kW) * kH; ++p) darker += luma8(lit.px, p) - luma8(off.px, p) <= -2 ? 1 : 0;
+    MESSAGE("from above with TAA: luma added " << l.sum << " over " << l.lit << " pixels; " << darker
+                                                 << " darker by 2 or more, darkest channel -" << l.darkest);
+    // TAA resolves the web with the water: its neighbourhood clamp and the jittered history move a few pixels either way.
+    CHECK(darker * 100 < l.lit);
+    CHECK(l.lit > usize(kW) * 10);
 }
 
 TEST_CASE("caustics: a render-to-texture view records none; a second window view of another size draws") {
@@ -667,7 +697,7 @@ rhi::PipelineHandle fullscreen_pipe(Fixture3D& f, const char* fs, const char* na
 
 // CausticsU as the shader declares it (forward3d.cpp's mirror is private to the renderer).
 struct CausticsBlock {
-    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4], water[4], vol[4], vol_grid[4];
+    f32 proj[4], right[4], up[4], back[4], sun[4], color[4], plane[4], misc[4], vol[4], vol_grid[4];
 };
 static_assert(sizeof(CausticsBlock) == shaders3d::kCausticsUBytes, "CausticsBlock mirrors CausticsU");
 
@@ -769,8 +799,6 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         u32 octaves;
         f32 absorption, max_depth;
         f32 fog = 0.0f;
-        vec3 sigma{0.29f, 0.12f, 0.11f};  // the water's view-path extinction (camera above)
-        f32 reflectivity = 1.0f;
     };
     const Case cases[] = {
         {0.0f, 0.6f, {0.3f, 0.9f, 0.3f}, -3.0f, {1.5f, -2.0f}, 500.0f, 1.5f, {5.0f, 61.0f}, 0.0f, 3, 0.15f, 30.0f},
@@ -779,9 +807,8 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         {3.0f, 0.8f, {0.0f, 1.0f, 0.0f}, 4.0f, {-3.0f, 2.0f}, 500.0f, 4.0f, {0.5f, 0.25f}, 0.6f, 3, 0.1f, 40.0f},  // under
         {0.7f, -0.4f, {0.6f, 0.05f, 0.8f}, 12.0f, {0.0f, 0.0f}, 500.0f, 1.0f, {50.0f, 1.0f}, 0.1f, 3, 0.0f, 200.0f},  // up
         {0.2f, 0.7f, {0.3f, 0.7f, -0.4f}, -2.0f, {0.0f, 0.0f}, 500.0f, 1.5f, {3.5f, 9.0f}, 0.25f, 3, 0.15f, 30.0f, 0.03f},
-        // From above through a small water square (some view rays cross outside it), a clear, matte water.
-        {-0.6f, 0.5f, {0.2f, 0.8f, 0.5f}, -4.0f, {2.0f, -1.0f}, 9.0f, 1.0f, {7.0f, 40.0f}, 0.7f, 3, 0.1f, 50.0f, 0.0f,
-         {0.05f, 0.02f, 0.01f}, 0.0f},
+        // From above over a small water square (some sun rays cross the plane outside it).
+        {-0.6f, 0.5f, {0.2f, 0.8f, 0.5f}, -4.0f, {2.0f, -1.0f}, 9.0f, 1.0f, {7.0f, 40.0f}, 0.7f, 3, 0.1f, 50.0f, 0.0f},
     };
     // M-CAUSTICS 52d: the surface normals, world space, cycled over the texels: a floor, a wall facing +x, a gentle slope,
     // a wall facing +z, a tilted face, the face toward the camera (the pre-52d input), and the unusable ones: a zero normal
@@ -801,7 +828,7 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         const f32 p20 = 0.0125f, p21 = -0.02f;                                     // an off-centre (jittered) projection
         const vec3 sun = math::normalize(c.toward);
         CausticsBlock u{};
-        const f32 blk[11][4] = {{p00, p11, p20, p21},
+        const f32 blk[10][4] = {{p00, p11, p20, p21},
                                {right.x, right.y, right.z, 1.0f / c.scale},
                                {up.x, up.y, up.z, c.plane_h},
                                {back.x, back.y, back.z, c.half_extent},
@@ -809,7 +836,6 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                                {1.0f, 0.0f, 0.0f, c.max_depth},
                                {c.offset.x, c.offset.y, c.centre.x, c.centre.y},
                                {c.phase, f32(c.octaves), c.fog, 0.0f},
-                               {c.sigma.x, c.sigma.y, c.sigma.z, c.reflectivity},
                                {0.0f, 1.0f, 1.0f, 1.0f},  // no volumetric fog: the volume is not read
                                {1.0f, 1.0f, 1.0f, 1.0f}};
         std::memcpy(&u, blk, sizeof u);
@@ -840,8 +866,6 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         cp2.absorption = c.absorption;
         cp2.max_depth = c.max_depth;
         cp2.fog_density = c.fog;
-        cp2.water_sigma = c.sigma;
-        cp2.reflectivity = c.reflectivity;
         for (u32 x = 0; x < kN; ++x) {
             f32 want = 0.0f;
             const f32 z = depth[x];
@@ -854,7 +878,7 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                 f32 d = 0.0f;
                 if (caustics_plane_point(p, cp2, xz, d)) ++hits;
                 want = caustics_composite(vec3{1.0f, 1.0f, 1.0f}, vec3{1.0f, 0.0f, 0.0f},
-                                          caustics_term(p, cp2, 1.0f, 1.0f, nworld[x])).x -
+                                          caustics_term(p, cp2, 1.0f, nworld[x])).x -
                        1.0f;
                 if (x == 40 || x == 41) CHECK(want == 0.0f);  // no usable normal: nothing added
                 faced += caustics_facing(nworld[x], sun) > 0.0f && caustics_facing(nworld[x], sun) < 1.0f ? 1 : 0;
@@ -878,12 +902,13 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
     CHECK(faced > 0);  // some texels sit in the facing factor's soft band
 }
 
-// ---- M-CAUSTICS 52b review 2: the fog through the water counted twice, the volumetric fog ------------------------------
+// ---- M-CAUSTICS 52b review 2 / 52f: the fog, the volumetric fog ----------------------------------------------------------
 
-TEST_CASE("caustics: seen through the water the shader fogs the light twice, at the floor and at the surface") {
-    // kMeshFS fogs the floor at its distance len into the copy kWaterFS shows, kWaterFS fogs again at the surface's: the
-    // light reaches the screen times exp(-(f len)²) exp(-(f surface)²). The expectation is built from the fog-free CPU
-    // term and the two factors written out, so a shader that fogs once (at the surface) is 2.7 times too bright here.
+TEST_CASE("caustics: the shader fogs the light once, at the point's own distance (the water fogs its own pixel)") {
+    // M-CAUSTICS 52f: seen from above the pass draws into the copy kWaterFS refracts: kMeshFS fogged the floor there at its
+    // own distance len, so the light gets exp(-(f len)²), and kWaterFS then fogs the water pixel at the surface's distance
+    // itself (as it fogs the floor in the copy: before 52f the pass applied that second factor too). The expectation is the
+    // fog-free CPU term times the one factor written out.
     Fixture3D f;
     constexpr u32 kN = 64;
     Array<f32> depth;
@@ -906,10 +931,8 @@ TEST_CASE("caustics: seen through the water the shader fogs the light twice, at 
     cp.octaves = 3;
     cp.absorption = 0.05f;
     cp.max_depth = 30.0f;
-    cp.water_sigma = {0.02f, 0.02f, 0.02f};
-    cp.reflectivity = 1.0f;
     CausticsBlock u{};
-    const f32 blk[11][4] = {{p00, p11, 0.0f, 0.0f},
+    const f32 blk[10][4] = {{p00, p11, 0.0f, 0.0f},
                             {right.x, right.y, right.z, cp.inv_scale},
                             {up.x, up.y, up.z, cp.plane_h},
                             {back.x, back.y, back.z, cp.half_extent},
@@ -917,7 +940,6 @@ TEST_CASE("caustics: seen through the water the shader fogs the light twice, at 
                             {1.0f, 0.0f, 0.0f, cp.max_depth},
                             {cp.offset.x, cp.offset.y, 0.0f, 0.0f},
                             {cp.phase, 3.0f, fog, 0.0f},
-                            {cp.water_sigma.x, cp.water_sigma.y, cp.water_sigma.z, cp.reflectivity},
                             {0.0f, 1.0f, 1.0f, 1.0f},
                             {1.0f, 1.0f, 1.0f, 1.0f}};
     std::memcpy(&u, blk, sizeof u);
@@ -933,19 +955,13 @@ TEST_CASE("caustics: seen through the water the shader fogs the light twice, at 
         const f32 ndc_x = (f32(x) + 0.5f) / f32(kN) * 2.0f - 1.0f;
         const vec3 v{ndc_x * z / p00, 0.0f, -z};
         const vec3 p = right * v.x + up * v.y + back * v.z;
-        f32 share = 0.0f;
-        REQUIRE(caustics_through_water(p, cp, share));
         const f32 bare = caustics_term(p, cp).x;  // fog 0
-        const f32 len = math::length(p), surface = len * share;
-        const f32 fl = fog * len, fs = fog * surface;
-        const f32 want = bare * std::exp(-fl * fl) * std::exp(-fs * fs);
+        const f32 fl = fog * math::length(p);
+        const f32 want = bare * std::exp(-fl * fl);
         CHECK_MESSAGE(std::fabs(gpu[x] - want) <= 1e-5f, "texel " << x << ": gpu " << gpu[x] << " want " << want);
-        if (bare > 0.002f) {
-            ++lit;
-            CHECK(gpu[x] < 0.5f * bare * std::exp(-fs * fs));  // the surface's fog alone would leave 2.7 times this
-        }
+        if (bare > 0.002f) ++lit;
     }
-    MESSAGE("fog through the water: " << lit << " lit texels of " << kN);
+    MESSAGE("fogged once: " << lit << " lit texels of " << kN);
     CHECK(lit > 8);
     // The composite (caustics_composite, 52d review): over a coloured source the light takes the source's chroma, so the
     // red added is luma(term) (the white source's) times red / luma(src); a black source takes it uncoloured.
@@ -983,10 +999,102 @@ TEST_CASE("caustics: the volumetric fog dims the web as it dims the floor") {
     CHECK(f64(misty.sum) < 0.5 * f64(clear.sum));
 }
 
-// The pass's GPU cost per tier, opt in (MCE_CAUSTICS_COST=1; not part of the regular run): the bloom bucket of the GPU
-// timestamps (kTsPostFx..kTsBloom: the cloud shadow, the caustics, the shafts, the flare, the underwater look, the lens
-// rain and the haze; only the caustics are on here) at 1280 x 720, the mean of 16 frames after 4 warm-up frames, with and
-// without the pass. Prints, asserts nothing about the numbers.
+// ---- M-CAUSTICS 52f: the light follows what the water shows (the r12 fringe) ------------------------------------------
+
+namespace {
+
+// A pool corner without the fixture's box: the floor (the fixture's 12 m ground, tinted `floor_tint`) under the water and a
+// dark wall (the fixture's box stretched to 10 x 2.5 x 0.3 m, its near face at z -2.5) standing on it through the surface,
+// seen from the orbit camera 7 m out and 14 degrees down: the water in front of the wall reflects it and, near its foot,
+// refracts its submerged part, while the prepass point behind those water pixels is still the floor.
+Shot wall_shot(Fixture3D& f, const WaterSurface& w, const Caustics* c, vec3 floor_tint) {
+    f.device->begin_frame(f.frame++);
+    rhi::CommandBuffer cmd;
+    Scene3D scene(f.renderer.meshes(), mem::heap());
+    const Camera3D cam = orbit_camera(vec3{0.0f, 0.6f, -1.0f}, 0.0f, math::radians(14.0f), 7.0f);
+    scene.begin(cam, {kW, kH});
+    MeshInstance ground;
+    ground.mesh = 2;
+    ground.tint = math::vec4(floor_tint.x, floor_tint.y, floor_tint.z, 1.0f);
+    scene.add(ground);
+    MeshInstance wall;
+    wall.mesh = 1;
+    wall.world = math::translation(vec3{0.0f, 0.0f, -2.65f}) * math::scaling(vec3{10.0f, 2.5f, 0.3f});
+    wall.tint = math::vec4(0.04f, 0.05f, 0.06f, 1.0f);
+    scene.add(wall);
+    caustics_scene(scene, &w, c, 0.0f);
+    scene.build();
+    f.renderer.record_3d(cmd, scene, f.target);
+    f.device->submit(cmd);
+    REQUIRE(f.device->read_pixels(f.target, rhi::Rect2D{0, 0, kW, kH}, f.pixels.span()).has_value());
+    f.device->end_frame();
+    CHECK(f.device->validation_error_count() == 0);
+    return {f.pixels, f.renderer.forward_3d().last_stats(), scene.view()};
+}
+
+}  // namespace
+
+TEST_CASE("caustics: a water pixel that shows no floor (the wall's reflection or its foot) gains no light (52f)") {
+    // r12's fringe: the pass added the web where the floor lies behind a water pixel, weighted by a flat plane's Fresnel,
+    // while the water showed the dark wall there (reflected on a wave slope, or refracted past its foot). What a water
+    // pixel shows of the floor is measured directly: the frame (no caustics) with a light floor against one with a dark
+    // floor. Where the floor does not show (the two agree), the light must not show either; where it shows, the web does.
+    Fixture3D f;
+    WaterSurface w = caustics_water(0.6f, 0.12f);  // steeper waves than the other cases: wide refraction offsets
+    w.wavelength = 3.0f;
+    const Caustics on = caustics_setting();
+    const vec3 sand{1.0f, 0.95f, 0.8f}, mud{0.1f, 0.095f, 0.08f};
+    const Shot light_floor = wall_shot(f, w, nullptr, sand);
+    const Shot dark_floor = wall_shot(f, w, nullptr, mud);
+    const Shot lit = wall_shot(f, w, &on, sand);
+    REQUIRE(lit.stats.water_refract);
+    REQUIRE(lit.stats.caustics);
+    // The pixels whose view ray reaches the floor under the water (the CPU, as the prepass sees it: the floor's plane
+    // y 0 in front of the wall's near face, and not the wall itself in the way).
+    const math::mat4 inv = math::inverse(lit.view.view_proj);
+    usize hidden = 0, hidden_lit = 0, shown = 0, shown_lit = 0;
+    int worst = 0;
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            const f32 nx = (f32(x) + 0.5f) / f32(kW) * 2.0f - 1.0f, ny = 1.0f - (f32(y) + 0.5f) / f32(kH) * 2.0f;
+            const math::vec4 a = inv * math::vec4(nx, ny, -1.0f, 1.0f), b = inv * math::vec4(nx, ny, 1.0f, 1.0f);
+            const vec3 o{a.x / a.w, a.y / a.w, a.z / a.w}, e{b.x / b.w, b.y / b.w, b.z / b.w};
+            const vec3 d = e - o;
+            if (!(d.y < 0.0f)) continue;
+            const vec3 g = o + d * (-o.y / d.y);
+            // The floor in front of the wall, clear of its face by 0.25 m (the half-resolution prepass's blocks).
+            if (!(g.z > -2.25f && std::fabs(g.x) < 4.5f && std::fabs(g.z) < 6.0f)) continue;
+            const usize p = usize(y) * kW + x;
+            const int through = luma8(light_floor.px, p) - luma8(dark_floor.px, p);  // how much floor the water shows
+            const int added = luma8(lit.px, p) - luma8(light_floor.px, p);
+            if (through <= 1) {
+                ++hidden;
+                hidden_lit += added > 1 ? 1 : 0;
+                worst = std::max(worst, added);
+            } else if (through >= 40) {
+                ++shown;
+                shown_lit += added >= 2 ? 1 : 0;
+            }
+        }
+    MESSAGE("floor behind the water but not shown by it: " << hidden << " px (" << hidden_lit << " gained light, worst +"
+                                                             << worst << "); floor shown: " << shown << " px ("
+                                                             << shown_lit << " lit)");
+    CHECK(hidden > 20);         // the case does have water pixels that show the wall, not the floor
+    CHECK(hidden_lit == 0);     // and none of them gains light
+    CHECK(worst <= 1);
+    CHECK(shown > usize(kW) * 10);
+    CHECK(shown_lit > shown / 4);  // the web is still on the floor the water shows
+    // The frame without the component is the frame with it switched off, bit for bit (the floor's own value is untouched
+    // by the change of path).
+    Caustics off = on;
+    off.enabled = false;
+    CHECK(same(wall_shot(f, w, &off, sand).px, light_floor.px));
+}
+
+// The pass's GPU cost per tier, opt in (MCE_CAUSTICS_COST=1; not part of the regular run): the main and bloom buckets of
+// the GPU timestamps summed (seen from above the pass draws inside the main pass, in place of the refraction copy, since
+// M-CAUSTICS 52f; under water it is in the bloom bucket with the other post passes, which are off here) at 1280 x 720,
+// the mean of 16 frames after 4 warm-up frames, with and without the pass. Prints, asserts nothing about the numbers.
 TEST_CASE("caustics: GPU cost per tier at 1280 x 720 (opt in)") {
     if (!std::getenv("MCE_CAUSTICS_COST")) return;
     CausticsFixture h;
@@ -1021,7 +1129,7 @@ TEST_CASE("caustics: GPU cost per tier at 1280 x 720 (opt in)") {
             h.f.device->end_frame();
             const Forward3DGpuTimes t = h.f.renderer.forward_3d().gpu_times(h.f.device->last_gpu_timestamps());
             if (i >= 4) {
-                sum += t.bloom;
+                sum += t.main + t.bloom;
                 ++n;
             }
         }
@@ -1030,8 +1138,8 @@ TEST_CASE("caustics: GPU cost per tier at 1280 x 720 (opt in)") {
     for (u32 k = 0; k < 2; ++k) {
         CvarScope scope("r.quality", k == 0 ? "medium" : "high");
         const f64 without = mean_ms(nullptr), with = mean_ms(&on);
-        MESSAGE("caustics cost, " << (k == 0 ? 2 : 3) << " octaves (Medium 2, High 3), 1280 x 720: bloom bucket " << without
-                                  << " ms without, " << with << " ms with, pass ~" << with - without << " ms");
+        MESSAGE("caustics cost, " << (k == 0 ? 2 : 3) << " octaves (Medium 2, High 3), 1280 x 720: main + bloom " << without
+                                  << " ms without, " << with << " ms with, pass ~" << with - without << " ms (main + bloom)");
     }
     h.f.device->destroy_texture(target);
     CHECK(h.f.device->validation_error_count() == 0);

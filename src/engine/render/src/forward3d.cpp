@@ -484,17 +484,16 @@ struct CausticsU {
     vec4 color;  // rgb the light added per unit of term (caustics_gate), w max_depth
     vec4 plane;  // xy caustics_offset, zw caustics_water_centre
     vec4 misc;   // x caustics_phase, y octaves (1..3), z the exp² fog density (0 with volumetrics), w 0
-    vec4 water;  // rgb caustics_water_sigma, w the water's reflectivity
     vec4 vol;       // the volumetric fog as PassU::vol (x 1 = on this view, else 0 and the volume is not read)
     vec4 vol_grid;  // as PassU::vol_grid
 };
-static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 11 vec4, as MCE_GLSL_CAUSTICS_U");
+static_assert(sizeof(CausticsU) == shaders3d::kCausticsUBytes, "CausticsU: 10 vec4, as MCE_GLSL_CAUSTICS_U");
 static_assert(offsetof(CausticsU, proj) == 0 && offsetof(CausticsU, right) == 16 && offsetof(CausticsU, up) == 32 &&
                   offsetof(CausticsU, back) == 48 && offsetof(CausticsU, sun) == 64 && offsetof(CausticsU, color) == 80 &&
-                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, water) == 128 &&
-                  offsetof(CausticsU, vol) == 144 && offsetof(CausticsU, vol_grid) == 160,
-              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_water / c_vol / "
-              "c_vol_grid as in MCE_GLSL_CAUSTICS_U");
+                  offsetof(CausticsU, plane) == 96 && offsetof(CausticsU, misc) == 112 && offsetof(CausticsU, vol) == 128 &&
+                  offsetof(CausticsU, vol_grid) == 144,
+              "CausticsU: c_proj / c_right / c_up / c_back / c_sun / c_color / c_plane / c_misc / c_vol / c_vol_grid as in "
+              "MCE_GLSL_CAUSTICS_U");
 static_assert(kCausticsCells == 64u && kCausticsLineWidth == 0.16f && kCausticsFacingLo == 0.6f &&
                   kCausticsFacingHi == 0.95f && kCausticsMaxChroma == 4.0f && kCausticsMinLuma == 1.0e-4f &&
                   kCausticsLoopRadius == 0.18f && kCausticsSurfaceFade == 0.25f && kCausticsDeepFade == 0.2f,
@@ -891,6 +890,70 @@ static_assert(kWaterTraceSteps == 24 && kWaterTraceRefine == 4 && kWaterTraceMax
 bool water_camera_above(const WaterSurface& w, const f64 origin[3], vec3 camera) {
     const f32 level = detail::ranged(w.level_y, -1000.0f, 1000.0f, 0.0f);
     return camera.y > f32(f64(level) - origin[1]);
+}
+
+// M-CAUSTICS 52b / 52f: the caustics pass's gate and CausticsU for this view, shared by the two places it draws (record_main
+// into the water's refraction copy with the camera above the water, record_caustics on the frame with the camera under it).
+// The renderer state the gate reads comes in as plain values, so forward3d.h gets no new member. False: nothing to draw.
+struct CausticsFrameIn {
+    bool water_drawn = false;     // water_on and the water pipeline made
+    bool render_texture = false;  // out_.linear_output
+    bool post_source = false;     // the post chain has a source frame of non-zero size
+    bool see_through = true;      // CausticsGate::see_through
+    const f64* origin = nullptr;  // the floating origin
+    bool volumetrics = false;     // this view drew the volumetric fog in place of the exp² one (vol / vol_grid below)
+    vec4 vol{0.0f, 1.0f, 1.0f, 1.0f}, vol_grid{1.0f, 1.0f, 1.0f, 1.0f};
+};
+bool caustics_frame(const Scene3D& scene, const CausticsFrameIn& in, CausticsU& cu, f32& strength) {
+    const Caustics& setting = scene.post().caustics;
+    const QualitySettings q = quality_settings(quality_tier());
+    static const ConVar* cv = ConVar::find(MCE_SID("r.caustics"));
+    const WaterSurface& water = scene.water();
+    const View3D& view = scene.view();
+    const DirectionalLight& light = scene.light();
+    CausticsGate g;
+    g.enabled = setting.enabled;
+    g.tier = q.caustics;
+    g.octaves = q.caustics_octaves;
+    g.cvar = !cv || cv->get_bool();
+    g.water = in.water_drawn;
+    g.render_texture = in.render_texture;
+    g.post_source = in.post_source;
+    g.perspective = cloud_shadow_perspective(view.proj);
+    g.toward_sun = {-light.direction.x, -light.direction.y, -light.direction.z};
+    g.sun_color = light.color;
+    g.intensity = light.intensity;
+    g.strength = detail::ranged(setting.strength, 0.0f, 4.0f, 1.0f);
+    g.sun_share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
+    g.see_through = in.see_through;
+    vec3 sun, color;
+    if (!caustics_gate(g, sun, color)) return false;
+    const f64* origin = in.origin;
+    const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
+    const f32 half_extent = detail::ranged(water.half_extent, 1.0f, 20000.0f, 500.0f);
+    const f32 scale = detail::ranged(setting.scale, 0.25f, 16.0f, 2.0f);
+    const mat4& pr = view.proj;
+    const mat4& v = view.view;
+    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
+    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], 1.0f / scale};
+    // The plane's height above the camera in f64 (the floating origin's y and the local y summed first), so a rebase
+    // gives the same float.
+    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], f32(f64(level) - (origin[1] + f64(view.position.y)))};
+    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], half_extent};
+    cu.sun = {sun.x, sun.y, sun.z, detail::ranged(setting.absorption, 0.0f, 4.0f, 0.15f)};
+    cu.color = {color.x, color.y, color.z, detail::ranged(setting.max_depth, 0.5f, 200.0f, 30.0f)};
+    const vec2 offset = caustics_offset(origin[0] + f64(view.position.x), origin[2] + f64(view.position.z), scale);
+    const vec2 centre = caustics_water_centre(vec2{view.position.x, view.position.z}, half_extent);
+    cu.plane = {offset.x, offset.y, centre.x, centre.y};
+    const f32 fog = scene.fog().density;
+    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
+    const f32 fog_density = !in.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
+    cu.misc = {caustics_phase(scene.time(), setting.speed), f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u),
+               fog_density, 0.0f};
+    cu.vol = in.vol;
+    cu.vol_grid = in.vol_grid;
+    strength = g.strength;
+    return true;
 }
 
 // The main pass's water members. Clamped again (apply_quality's clamps: a caller may skip it). The wave set is
@@ -2938,13 +3001,16 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     stats_.water_reflect = water_fx && cv_water_reflect.get_bool();
     const bool water_copy = stats_.water_refract || stats_.water_reflect;
     if (water_copy) depth.store = rhi::StoreOp::Store;  // the water's pass reloads it
-    // The opaque frame drawn so far into trans_src_ (outside a pass): the multisampled colour resolved, else copied.
-    const auto copy_frame = [&] {
+    const auto make_copy_target = [&] {
         if (trans_src_.is_null()) {
             rhi::TextureDesc d = device_->texture_desc(hdr_);
             d.debug_name = "mce.3d.transmission_src";
             trans_src_ = device_->create_texture(d);
         }
+    };
+    // The opaque frame drawn so far into trans_src_ (outside a pass): the multisampled colour resolved, else copied.
+    const auto copy_frame = [&] {
+        make_copy_target();
         if (desc_.msaa > 1) {
             cmd.resolve(hdr_msaa_, trans_src_);
         } else {
@@ -2961,6 +3027,53 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
             cmd.end_pass();
         }
     };
+    // M-CAUSTICS 52f: with the camera above the water the caustics go into the refraction copy (record_caustics' note):
+    // the caustics pass writes the opaque frame plus the web into trans_src_ in place of the plain copy, so the water
+    // shows the web as it shows the floor. Only with the refraction on (else the water hides the floor: no caustics).
+    CausticsU caustics_u;
+    f32 caustics_strength = 0.0f;
+    bool caustics_copy = false;
+    if (stats_.water_refract && !caustics_pipe_.is_null() && !ao_gbuf_.is_null() && !out_.linear_output) {
+        CausticsFrameIn in;
+        in.water_drawn = water_drawn;
+        in.render_texture = out_.linear_output;
+        in.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
+        in.see_through = true;
+        in.origin = origin_;
+        in.volumetrics = stats_.volumetrics;
+        if (stats_.volumetrics && !vol_light_.is_null()) {
+            PassU vp{};
+            vol_params(scene, vp);
+            in.vol = vp.vol;
+            in.vol_grid = vp.vol_grid;
+        }
+        caustics_copy = caustics_frame(scene, in, caustics_u, caustics_strength);
+    }
+    // The opaque frame plus the web into trans_src_ (outside a pass), read from hdr_ (resolved into it first when
+    // multisampled: hdr_ is free until the end-of-frame resolve, and SSR read it before this pass).
+    const auto caustics_frame_copy = [&] {
+        make_copy_target();
+        if (desc_.msaa > 1) cmd.resolve(hdr_msaa_, hdr_);
+        const bool vol = stats_.volumetrics && !vol_light_.is_null();
+        rhi::PassAttachment out;
+        out.texture = trans_src_;
+        out.load = rhi::LoadOp::DontCare;  // every pixel is written
+        rhi::RenderPassDesc cp;
+        cp.colors = Span<const rhi::PassAttachment>(&out, 1);
+        cp.debug_name = "caustics";
+        cmd.push_debug_scope("caustics");
+        cmd.begin_pass(cp);
+        cmd.bind_pipeline(caustics_pipe_);
+        cmd.set_uniforms(rhi::bank::kPass, rhi::as_bytes(caustics_u));
+        cmd.bind_texture(rhi::bank::kAlbedo, hdr_, point_sampler_);    // texelFetch
+        cmd.bind_texture(rhi::bank::kNormal, ao_gbuf_, point_sampler_);  // nearest: sky is exactly 0
+        cmd.bind_texture(rhi::bank::kVolumetrics, vol ? vol_light_ : ao_off_, linear_clamp_);
+        cmd.draw_non_indexed(3);
+        cmd.end_pass();
+        cmd.pop_debug_scope();
+        stats_.caustics = true;
+        stats_.caustics_strength = caustics_strength;
+    };
     rhi::RenderPassDesc mp;
     mp.colors = Span<const rhi::PassAttachment>(&color, 1);
     mp.depth = depth;
@@ -2976,7 +3089,8 @@ void Forward3D::record_main(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     if (water_drawn) {  // after the opaques (it reads their depth and they occlude it), before the sky and the blends
         if (water_copy) {  // M-WATER2: break the pass, copy the opaque frame, reopen with colour and depth loaded
             cmd.end_pass();
-            copy_frame();
+            if (caustics_copy) caustics_frame_copy();
+            else copy_frame();
             color.load = rhi::LoadOp::Load;
             depth.load = rhi::LoadOp::Load;
             depth.store = transmissive ? rhi::StoreOp::Store : rhi::StoreOp::DontCare;
@@ -4527,56 +4641,60 @@ void Forward3D::record_cloud_shadow(rhi::CommandBuffer& cmd, const Scene3D& scen
     stats_.cloud_shadow_strength = strength;
 }
 
-// ---- M-CAUSTICS 52b: caustics under water, right after the cloud shadows and before the sun shafts: after TAA (the moving
-// web never enters the history, so it leaves no trail), after the exposure histogram (a bright web does not pump the
-// exposure), before the shafts, the flare, the underwater composite (its absorption and fog act on the added light like on
-// everything else when the camera is under water), the lens rain, the haze, bloom, the tonemapper and the grade.
-// One fullscreen pass (kCausticsFS) reads post_source_ and the half-resolution opaque prepass (ao_gbuf_) and writes the
-// frame plus colour * term into the post-fx ping-pong target, then post_source_ = that target; additive, so a term of 0
-// leaves a pixel's bits as they are. The water plane is the drawn one: WaterSurface::level_y (the wave-free plane) and the
-// camera-following square kWaterVS draws (caustics_water_centre, half_extent). The pattern is anchored to the world: the
-// camera's world xz (floating origin + local, f64) is folded into the pattern's period on the CPU (caustics_offset), and
-// the shader works camera-relative, so a rebase is bit for bit. The clock is the scene time times the setting's speed,
-// turned into whole ticks and wrapped to the period on the CPU (caustics_phase). Runs whether the camera is above the water
-// or under it (the underwater composite follows). From above, the light reaches the camera as the water pixel shows the
-// floor (caustics_transmission: 1 - Fresnel and the water's own per-channel extinction along the view path, kWaterFS's),
-// and only when the water shows what lies under it at all (the M-WATER2 refraction on this frame; calm, foamless water is
-// an opaque tint, so nothing is added on it: caustics_gate's see_through).
+// ---- M-CAUSTICS 52b / 52f: caustics under water. One fullscreen pass (kCausticsFS) reads a source frame and the
+// half-resolution opaque prepass (ao_gbuf_) and writes the source plus colour * term into another target; additive, so a
+// term of 0 leaves a pixel's bits as they are. It draws in one of two places, never both in a view:
+// - The camera above the water (52f): inside record_main, in place of the plain copy of the opaque frame the M-WATER2
+//   refraction reads (trans_src_), so kWaterFS shows the web exactly as it shows the floor: through its refraction offset,
+//   weighted by its own (1 - Fresnel) on the wave normal, its per-channel extinction along the path, its foam and its
+//   reflection of the walls. A pixel whose water shows a reflection gets none of it (the r12 fringe and the rock streaks
+//   came from a post pass weighting the light by a flat plane's Fresnel at the pixel's own floor point). Before TAA, so the
+//   web refracted through the moving waves is resolved by TAA with the rest of the water.
+// - The camera under the water: here, after the cloud shadows and before the sun shafts: after TAA (the moving web never
+//   enters the history), after the exposure histogram, before the shafts, the flare, the underwater composite (its
+//   absorption and fog act on the added light like on everything else), the lens rain, the haze, bloom, the tonemapper and
+//   the grade; into the post-fx ping-pong target, then post_source_ = that target.
+// The water plane is the drawn one: WaterSurface::level_y (the wave-free plane) and the camera-following square kWaterVS
+// draws (caustics_water_centre, half_extent). The pattern is anchored to the world: the camera's world xz (floating origin
+// + local, f64) is folded into the pattern's period on the CPU (caustics_offset), and the shader works camera-relative, so
+// a rebase is bit for bit. The clock is the scene time times the setting's speed, turned into whole ticks and wrapped to
+// the period on the CPU (caustics_phase). From above only when the water shows what lies under it at all (the M-WATER2
+// refraction on this frame; calm, foamless water is an opaque tint: caustics_gate's see_through).
 // Records nothing and creates nothing (the frame is the one without the pass bit for bit, stats_.caustics false) unless
-// caustics_gate passes: the setting on (checked first), not a render-to-texture view, the tier's caustics and octaves,
-// r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
+// caustics_gate passes (caustics_frame): the setting on (checked first), not a render-to-texture view, the tier's caustics
+// and octaves, r.caustics (read again here), a drawn water plane, a post source, a perspective view, a sun at or above
 // kCausticsMinSunY with a finite non-zero direction, and some light to add (strength, sun share, intensity). The pipeline
 // is made at startup only where the prepass exists; a frame that would draw without it says so once and records nothing.
-// The fog: the exp² fog's share at the distance the pixel was fogged at, twice when seen through the water (kMeshFS fogged
-// the floor in the copy kWaterFS shows, kWaterFS fogs again at the surface); with the volumetric fog on in its place, the
-// volume's transmittance read from vol_light_ the same way (bank kVolumetrics).
+// The fog: the exp² fog's share at the point's own distance (kMeshFS fogged the surface there; seen from above kWaterFS
+// then fogs the water pixel at the surface's distance itself); with the volumetric fog on in its place, the volume's
+// transmittance at the point read from vol_light_ the same way (bank kVolumetrics).
 void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     const Caustics& setting = scene.post().caustics;
     if (!setting.enabled || out_.linear_output) return;
-    const QualitySettings q = quality_settings(quality_tier());
-    static const ConVar* cv = ConVar::find(MCE_SID("r.caustics"));
     const WaterSurface& water = scene.water();
     const View3D& view = scene.view();
-    const DirectionalLight& light = scene.light();
-    CausticsGate g;
-    g.enabled = setting.enabled;
-    g.tier = q.caustics;
-    g.octaves = q.caustics_octaves;
-    g.cvar = !cv || cv->get_bool();
-    g.water = water_on(water) && !water_.is_null();
-    g.render_texture = out_.linear_output;
-    g.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
-    g.perspective = cloud_shadow_perspective(view.proj);
-    g.toward_sun = {-light.direction.x, -light.direction.y, -light.direction.z};
-    g.sun_color = light.color;
-    g.intensity = light.intensity;
-    g.strength = detail::ranged(setting.strength, 0.0f, 4.0f, 1.0f);
-    g.sun_share = cloud_shadow_sun_share(light.color, light.intensity, light.ambient_sky);
-    // Seen from above, the water shows what lies under it only through the M-WATER2 refraction (record_main decided it
-    // this frame); without it the water is an opaque tint and nothing may be added on it.
-    g.see_through = !water_camera_above(water, origin_, view.position) || stats_.water_refract;
-    vec3 sun, color;
-    if (!caustics_gate(g, sun, color)) return;
+    // Seen from above, record_main drew the light into the water's refraction copy (M-CAUSTICS 52f), and the water showed
+    // it as it shows the floor; nothing is added over the water afterwards.
+    const bool above = water_camera_above(water, origin_, view.position);
+    CausticsFrameIn in;
+    in.water_drawn = water_on(water) && !water_.is_null();
+    in.render_texture = out_.linear_output;
+    in.post_source = post_size_.width > 0 && post_size_.height > 0 && !post_source_.is_null();
+    in.see_through = !above || stats_.water_refract;
+    in.origin = origin_;
+    // The volumetric fog this view drew in place of the exp² one (record_main composited color * f.a + f.rgb): the pass
+    // reads its transmittance at the pixel from the same integrated volume, so the web dims in the mist as the floor did.
+    in.volumetrics = stats_.volumetrics;
+    const bool vol = stats_.volumetrics && !vol_light_.is_null();
+    if (vol) {
+        PassU vp{};
+        vol_params(scene, vp);
+        in.vol = vp.vol;
+        in.vol_grid = vp.vol_grid;
+    }
+    CausticsU cu;
+    f32 strength = 0.0f;
+    if (!caustics_frame(scene, in, cu, strength)) return;
     if (caustics_pipe_.is_null()) {
         static std::atomic<bool> warned{false};
         if (!warned.exchange(true))
@@ -4584,49 +4702,12 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
                          "ssao, ssr, contact shadows or the edge outline at startup); drawing frames without them");
         return;
     }
+    if (above) return;  // record_main drew them into the refraction copy (stats_.caustics says whether it did)
 
     record_prepass(cmd, scene);  // once a frame: a no-op when an earlier screen-space pass drew it already
     if (ao_gbuf_.is_null()) return;
     const rhi::TextureHandle dst = post_fx_target(post_size_);
     if (dst.is_null()) return;
-
-    const f32 level = detail::ranged(water.level_y, -1000.0f, 1000.0f, 0.0f);
-    const f32 half_extent = detail::ranged(water.half_extent, 1.0f, 20000.0f, 500.0f);
-    const f32 scale = detail::ranged(setting.scale, 0.25f, 16.0f, 2.0f);
-    const mat4& pr = view.proj;
-    const mat4& v = view.view;
-    CausticsU cu;
-    cu.proj = {pr.c[0][0], pr.c[1][1], pr.c[2][0], pr.c[2][1]};
-    cu.right = {v.c[0][0], v.c[1][0], v.c[2][0], 1.0f / scale};
-    // The plane's height above the camera in f64 (the floating origin's y and the local y summed first), so a rebase
-    // gives the same float.
-    cu.up = {v.c[0][1], v.c[1][1], v.c[2][1], f32(f64(level) - (origin_[1] + f64(view.position.y)))};
-    cu.back = {v.c[0][2], v.c[1][2], v.c[2][2], half_extent};
-    cu.sun = {sun.x, sun.y, sun.z, detail::ranged(setting.absorption, 0.0f, 4.0f, 0.15f)};
-    cu.color = {color.x, color.y, color.z, detail::ranged(setting.max_depth, 0.5f, 200.0f, 30.0f)};
-    const vec2 offset =
-        caustics_offset(origin_[0] + f64(view.position.x), origin_[2] + f64(view.position.z), scale);
-    const vec2 centre = caustics_water_centre(vec2{view.position.x, view.position.z}, half_extent);
-    cu.plane = {offset.x, offset.y, centre.x, centre.y};
-    const f32 fog = scene.fog().density;
-    // The main pass squares the density, so any finite non-zero density (a negative one too) fogs there.
-    const f32 fog_density = !stats_.volumetrics && std::isfinite(fog) && fog != 0.0f ? fog : 0.0f;
-    cu.misc = {caustics_phase(scene.time(), setting.speed),
-               f32(q.caustics_octaves < 3u ? q.caustics_octaves : 3u), fog_density, 0.0f};
-    cu.water = vec4(caustics_water_sigma(water.shallow_color, water.depth_scale_m),
-                    detail::ranged(water.reflectivity, 0.0f, 1.0f, 1.0f));
-    // The volumetric fog this view drew in place of the exp² one (record_main composited color * f.a + f.rgb): the pass
-    // reads its transmittance at the pixel from the same integrated volume, so the web dims in the mist as the floor did.
-    const bool vol = stats_.volumetrics && !vol_light_.is_null();
-    if (vol) {
-        PassU vp{};
-        vol_params(scene, vp);
-        cu.vol = vp.vol;
-        cu.vol_grid = vp.vol_grid;
-    } else {
-        cu.vol = {0.0f, 1.0f, 1.0f, 1.0f};
-        cu.vol_grid = {1.0f, 1.0f, 1.0f, 1.0f};
-    }
     rhi::PassAttachment o;
     o.texture = dst;
     o.load = rhi::LoadOp::DontCare;  // every pixel is written
@@ -4645,7 +4726,7 @@ void Forward3D::record_caustics(rhi::CommandBuffer& cmd, const Scene3D& scene) {
     cmd.pop_debug_scope();
     post_source_ = dst;
     stats_.caustics = true;
-    stats_.caustics_strength = g.strength;
+    stats_.caustics_strength = strength;
 }
 
 // ---- M-OUTLINE 39c: edge outlines, after the MSAA resolve and the velocity prepass and before TAA (so TAA resolves

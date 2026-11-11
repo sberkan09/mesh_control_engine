@@ -91,13 +91,8 @@ f32 caustics_depth_fade(f32 depth, f32 max_depth);
 f32 caustics_view_path(math::vec3 p, f32 plane_h);
 
 // exp(-absorption * (d_sun + d_view)); absorption clamps 0..4 (NaN 0.15). 0 for a non-finite or negative path.
-// (caustics_term passes the sun path only: the view path is the water's own transmission, caustics_transmission.)
+// (caustics_term passes the sun path only: the view path is the water's own business, kWaterFS's.)
 f32 caustics_absorption(f32 absorption, f32 d_sun, f32 d_view);
-
-// M-CAUSTICS 52b review. The water body's extinction per metre along the view path, per channel, as kWaterFS applies it to
-// what it shows under the water (M-WATER2 49c): -log(clamp(shallow_color, 0.02, 1)) / max(depth_scale_m, 0.5), with
-// shallow_color clamped 0..1 per channel (NaN 0) and depth_scale_m 0.1..200 (NaN 8) as water_params clamps them first.
-math::vec3 caustics_water_sigma(math::vec3 shallow_color, f32 depth_scale_m);
 
 // The frame's values, camera-relative (the pass's CausticsU carries the same).
 struct CausticsParams {
@@ -112,46 +107,30 @@ struct CausticsParams {
     f32 absorption = 0.15f;                   // per metre
     f32 max_depth = 30.0f;                    // m
     f32 fog_density = 0.0f;                   // the main pass's exp² fog (0: none, or the volumetric fog in its place)
-    math::vec3 water_sigma{0.0f, 0.0f, 0.0f};  // caustics_water_sigma (the view path's extinction, camera above the water)
-    f32 reflectivity = 1.0f;                   // WaterSurface::reflectivity (scales the surface's Fresnel)
 };
-
-// M-CAUSTICS 52b review. What of the light at the camera-relative point `p` (below the plane) reaches the camera through
-// the water, per channel, and the distance the exp² fog acts over. With the camera above the plane and the view ray
-// crossing it inside the water square, the water pixel shows p as kWaterFS composites it: (1 - F) * exp(-water_sigma *
-// d_view), F = (0.02 + 0.98 (1 - NoV)^5) * reflectivity (Schlick on the flat plane, NoV = -p.y / |p|), d_view =
-// caustics_view_path; the main pass fogs that pixel at the water surface's distance |p| - d_view. Otherwise (the camera at
-// or under the plane, or the view ray crossing outside the square) 1 and |p|. (1, |p|) for non-finite input.
-math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog_distance);
-
-// M-CAUSTICS 52b review 2. True when the camera is above the plane and the view ray to the camera-relative point `p`
-// (below the plane) crosses it inside the water square, the case caustics_transmission applies; `surface_share` is then
-// the share of the ray from the camera to the crossing (plane_h / p.y, 0..1: the water surface's view depth is the
-// point's times it), else 1.
-bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_share);
 
 // Where the sun ray from the camera-relative point `p` meets the plane: `plane_xz` (camera-relative) and the point's
 // `depth` below the plane. False when p is not below the plane, the sun is under kCausticsMinSunY, the crossing lies
 // outside the water square (|plane_xz - centre| > half_extent on x or z) or any value is not finite.
 bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& plane_xz, f32& depth);
 
-// The per-pixel term the pass multiplies its colour by (0..1 per channel) for the camera-relative point `p` with the
-// world-space surface normal `normal` (the prepass's view normal turned to world space; up by default): pattern *
-// exp(-absorption * sun path) * depth falloff * caustics_facing * caustics_transmission * the fog the pixel went through: the exp² fog's
-// exp(-(fog * fog distance)²) and, seen through the water (caustics_through_water), also exp(-(fog * |p|)²) (kMeshFS fogged
-// the floor in the copy kWaterFS shows, and kWaterFS fogs again at the surface); with the volumetric fog in place of the
-// exp² one (fog_density 0), its transmittance at the point, `vol_point`, and through the water also at the surface,
-// `vol_surface` (the volume's vol_fog(uv, view depth).a, read by the shader from the volume texture; 1 without it).
-// 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds the light as
-// caustics_composite does, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f, f32 vol_surface = 1.0f,
+// The per-pixel term the pass multiplies its colour by (0..1 per channel, all three equal) for the camera-relative point
+// `p` with the world-space surface normal `normal` (the prepass's view normal turned to world space; up by default):
+// pattern * exp(-absorption * sun path) * depth falloff * caustics_facing * the fog the surface went through in the main
+// pass: the exp² fog's exp(-(fog * |p|)²) or, with the volumetric fog in its place (fog_density 0), its transmittance at the
+// point, `vol_point` (the volume's vol_fog(uv, view depth).a, read by the shader from the volume texture; 1 without it).
+// M-CAUSTICS 52f: no water transmission. Seen from above, the pass draws into the copy of the opaque frame that kWaterFS
+// refracts, and the water applies its own Fresnel (wave normal), extinction, foam, reflection and fog to the web as to the
+// floor; seen from under the water the underwater composite follows. 0 where caustics_plane_point is false, at or below
+// max_depth and for non-finite input. The pass adds the light as caustics_composite does, colour = sun colour *
+// intensity * strength * sun share * caustics_sun_fade.
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f,
                          math::vec3 normal = math::vec3{0.0f, 1.0f, 0.0f});
 
 // M-CAUSTICS 52d review. The pass's composite: the pixel's colour `src` (linear HDR) with the light `color` (the gate's)
 // times `term` (caustics_term) added as the surface reflects it: src + color * luma(term) * chroma(src), chroma(src) =
 // clamp(src / luma(src), 0, kCausticsMaxChroma) per channel, or 1 when luma(src) is not in (kCausticsMinLuma, 1e30) (black,
-// negative, infinite or NaN). The water's tint in `term` is in src already, hence only term's luma. A term of 0 returns
-// src exactly.
+// negative, infinite or NaN). Only term's luma is used. A term of 0 returns src exactly.
 math::vec3 caustics_composite(math::vec3 src, math::vec3 color, math::vec3 term);
 
 // The pass's validity gate: the renderer records the pass only when this is true. All plain values (no scene3d.h).

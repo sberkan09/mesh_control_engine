@@ -188,48 +188,7 @@ bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& pla
     return true;
 }
 
-math::vec3 caustics_water_sigma(math::vec3 shallow_color, f32 depth_scale_m) {
-    const f32 scale = detail::ranged(depth_scale_m, 0.1f, 200.0f, 8.0f);
-    const f32 d = scale > 0.5f ? scale : 0.5f;
-    const auto sigma = [&](f32 c) {
-        const f32 u = detail::unit01(c);  // NaN -> 0 (unit01 of NaN is 0)
-        return -std::log(u > 0.02f ? (u < 1.0f ? u : 1.0f) : 0.02f) / d;
-    };
-    return math::vec3{sigma(shallow_color.x), sigma(shallow_color.y), sigma(shallow_color.z)};
-}
-
-math::vec3 caustics_transmission(math::vec3 p, const CausticsParams& c, f32& fog_distance) {
-    const math::vec3 one{1.0f, 1.0f, 1.0f};
-    const f32 len = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-    fog_distance = len;
-    if (!finite3(p) || !std::isfinite(len) || !std::isfinite(c.plane_h) || !(c.plane_h < 0.0f) || !(p.y < c.plane_h))
-        return one;
-    const f32 s = c.plane_h / p.y;  // 0..1: the share of the view ray from the camera to where it crosses the plane
-    const f32 vx = p.x * s, vz = p.z * s;
-    if (!(std::fabs(vx - c.centre.x) <= c.half_extent) || !(std::fabs(vz - c.centre.y) <= c.half_extent)) return one;
-    const f32 depth = c.plane_h - p.y;
-    const f32 dv = len * depth / -p.y;
-    const f32 q = 1.0f - -p.y / len;
-    const f32 q2 = q * q;
-    const f32 fres = (0.02f + 0.98f * (q2 * q2 * q)) * c.reflectivity;
-    const f32 k = 1.0f - fres;
-    fog_distance = len - dv;
-    const math::vec3 t{k * std::exp(-c.water_sigma.x * dv), k * std::exp(-c.water_sigma.y * dv),
-                       k * std::exp(-c.water_sigma.z * dv)};
-    return finite3(t) ? t : math::vec3{0.0f, 0.0f, 0.0f};
-}
-
-bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_share) {
-    surface_share = 1.0f;
-    if (!finite3(p) || !std::isfinite(c.plane_h) || !(c.plane_h < 0.0f) || !(p.y < c.plane_h)) return false;
-    const f32 s = c.plane_h / p.y;
-    if (!(std::fabs(p.x * s - c.centre.x) <= c.half_extent) || !(std::fabs(p.z * s - c.centre.y) <= c.half_extent))
-        return false;
-    surface_share = s;
-    return true;
-}
-
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f32 vol_surface, math::vec3 normal) {
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, math::vec3 normal) {
     const math::vec3 zero{0.0f, 0.0f, 0.0f};
     math::vec2 xz;
     f32 depth = 0.0f;
@@ -240,22 +199,13 @@ math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f
                                      c.octaves < 3u ? c.octaves : 3u);
     f32 k = pat * std::exp(-c.absorption * t) * caustics_depth_fade(depth, c.max_depth) *
             caustics_facing(normal, c.toward_sun);
-    f32 fog_distance = 0.0f;
-    const math::vec3 tr = caustics_transmission(p, c, fog_distance);
-    f32 share = 1.0f;
-    const bool through = caustics_through_water(p, c, share);
     if (c.fog_density != 0.0f && std::isfinite(c.fog_density)) {
-        const f32 fd = c.fog_density * fog_distance;
-        k *= std::exp(-fd * fd);
-        if (through) {
-            const f32 fl = c.fog_density * std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-            k *= std::exp(-fl * fl);  // the floor's own fog in the copy the water shows
-        }
+        const f32 fd = c.fog_density * std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+        k *= std::exp(-fd * fd);  // the surface's own fog in the main pass
     }
     k *= vol_point;
-    if (through) k *= vol_surface;
-    const auto clean = [](f32 v) { return std::isfinite(v) ? saturate(v) : 0.0f; };
-    return math::vec3{clean(k * tr.x), clean(k * tr.y), clean(k * tr.z)};
+    const f32 v = std::isfinite(k) ? saturate(k) : 0.0f;
+    return math::vec3{v, v, v};
 }
 
 bool caustics_gate(const CausticsGate& g, math::vec3& sun, math::vec3& color) {
