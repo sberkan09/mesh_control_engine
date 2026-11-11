@@ -71,6 +71,7 @@
 #include "mce/kit/thunder_delay.h"      // ThunderDelay (M-RAINFX 7e)
 #include "mce/kit/rain_splash.h"        // RainSplash (M-RAINFX 7f)
 #include "mce/kit/rain_ripples.h"        // RainRipples (M-RAINFX 7c)
+#include "mce/kit/cirrus.h"              // Cirrus (M-CIRRUS 53c)
 #include "mce/kit/cloud_layer.h"         // CloudLayer (M-CLOUDS 9c)
 #include "mce/kit/weather_audio.h"       // WeatherAudio (M-WEATHERAUDIO 10a)
 #include "mce/kit/world_audio.h"        // EngineAudio, WeaponAudio, FootstepAudio, SirenAudio (M-OPENWORLD E3)

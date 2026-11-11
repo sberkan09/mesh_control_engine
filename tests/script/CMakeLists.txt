@@ -13,6 +13,7 @@ mce_add_test(test_script UMBRELLA
         test_script_water_flow.cpp
         test_script_aurora.cpp
         test_script_meteor.cpp
+        test_script_cirrus.cpp
         test_script_season.cpp
         test_script_water_ice.cpp
         test_script_leaf_fall.cpp

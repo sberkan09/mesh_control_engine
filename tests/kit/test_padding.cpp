@@ -15,6 +15,7 @@
 
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/lightning_bolt.h"
 #include "mce/kit/rain_splash.h"
@@ -153,6 +154,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LightCookie3D>("LightCookie3D", sizeof(LightCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<SunCookie3D>("SunCookie3D", sizeof(SunCookie3D::pad_));  // light_cookie.h (M-LIGHTCOOKIE 40g)
     expect_pad<DecalScatter3D>("DecalScatter3D", sizeof(DecalScatter3D::pad_));  // decal_scatter.h (M-DECALSCATTER 35a)
+    expect_pad<Cirrus>("Cirrus", 0);  // cirrus.h (M-CIRRUS 53c): eight f32, no padding
     expect_pad<CloudLayer>("CloudLayer", 0);  // cloud_layer.h (M-CLOUDS 9c): six f32, no padding
 }
 
