@@ -87,3 +87,28 @@ TEST_CASE(
     INFO("live allocations: " << baseline << " after the warm-up, " << after << " after 200 more rounds");
     CHECK(after <= baseline + 8);
 }
+
+TEST_CASE("editor soak: 100 play and stop rounds leave the live allocation count where round one left it") {
+    const std::string root = cook_test::fresh_dir("editor_soak_play");
+    std::filesystem::copy(std::string(MCE_SOURCE_DIR) + "/samples/scene_demo/assets", root + "/assets",
+                          std::filesystem::copy_options::recursive);
+    EditorSession session;
+    REQUIRE(session.open_project(sv(root)));
+    REQUIRE(session.open_scene("scenes/demo.mcscene"));
+    PlaySession& play = session.play();
+
+    auto round = [&] {
+        REQUIRE(session.enter_play());
+        while (play.ticks() < 30) play.advance(1.0 / 60.0);
+        session.stop_play();
+        CHECK_FALSE(play.active());
+    };
+
+    round();  // the first rounds fill the caches that fill once
+    round();
+    const usize baseline = mem::heap_live_allocations();
+    for (int i = 0; i < 100; ++i) round();
+    const usize after = mem::heap_live_allocations();
+    INFO("live allocations: " << baseline << " after the warm-up, " << after << " after 100 more rounds");
+    CHECK(after <= baseline + 8);
+}
