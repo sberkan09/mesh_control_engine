@@ -587,6 +587,28 @@ struct Clouds {
     u8 pad_[3] = {};
 };
 
+// A second, high, thin cloud layer of cirrus streaks in the sky pass (M-CIRRUS 53a seam; the kit extract drives it
+// from the Cirrus component in 53c, the quality tiers gate it, the sky shader draws it in 53b, composited behind the
+// Clouds layer). `coverage` 0..1 is the share of the sky the streaks cover (0 = off: the frame is the one without it),
+// `density` 0..1 how opaque they are (the shader caps the opacity at about 0.5: cirrus stays thin), `scale_m` the
+// noise cell across the wind in meters (200..40000), `stretch` 1..16 how many times longer a cell is along `wind_dir`
+// than across it (the fibrous look), `speed` a multiplier on the drift along `wind_dir` (0..10; the default 2 drifts
+// faster than the low layer's nominal 1), `height_m` the height of the plane above the camera (1000..30000).
+// `wind_dir` is the xz direction the wind blows toward, unit length after apply_quality (NaN / zero -> +x). NaN falls
+// back to the defaults (coverage 0). `enabled` is a pass-through switch for the caller; apply_quality does not change
+// it. No implicit padding (the explicit pad_ is zeroed), so a default value compares bit for bit.
+struct Cirrus {
+    f32 coverage = 0.0f;
+    f32 density = 0.35f;
+    f32 scale_m = 3000.0f;
+    f32 stretch = 6.0f;
+    f32 speed = 2.0f;
+    math::vec2 wind_dir{1.0f, 0.0f};
+    f32 height_m = 9000.0f;
+    bool enabled = true;
+    u8 pad_[3] = {};
+};
+
 // Night sky in the sky pass (M-NIGHTSKY 14c; the kit extract drives it from the Moon, the quality tiers gate it):
 // `moon_dir` is the unit direction toward the moon (not the way its light travels), `moon_cos_size` the cosine of
 // the disk's angular radius (0.9..1; default 0.9995, exaggerated so a phase reads), `moon_intensity` the disk
@@ -1011,6 +1033,7 @@ public:
     void set_snow_cover(const SnowCover& s) { snow_ = s; }
     void set_ripples(const Ripples& r) { ripples_ = r; }
     void set_clouds(const Clouds& c) { clouds_ = c; }
+    void set_cirrus(const Cirrus& c) { cirrus_ = c; }
     void set_night_sky(const NightSky& n) { night_sky_ = n; }
     void set_water(const WaterSurface& w) { water_ = w; }
     void set_aurora(const AuroraSky& a) { aurora_ = a; }
@@ -1083,6 +1106,7 @@ public:
     const SnowCover& snow_cover() const { return snow_; }
     const Ripples& ripples() const { return ripples_; }
     const Clouds& clouds() const { return clouds_; }
+    const Cirrus& cirrus() const { return cirrus_; }
     const NightSky& night_sky() const { return night_sky_; }
     const WaterSurface& water() const { return water_; }
     const AuroraSky& aurora() const { return aurora_; }
@@ -1180,6 +1204,7 @@ private:
     SnowCover snow_;
     Ripples ripples_;
     Clouds clouds_;
+    Cirrus cirrus_;
     NightSky night_sky_;
     WaterSurface water_;
     AuroraSky aurora_;

@@ -27,6 +27,8 @@ MCE_CVAR(cv_rain_ripples, "r.rain_ripples", true,
          "Rain ripples on puddles from the weather (Ripples; off = the ripple-less frame)", CVarFlags::Saved);
 MCE_CVAR(cv_clouds, "r.clouds", true,
          "Cloud layer in the sky from the weather (Clouds; off = the cloudless frame)", CVarFlags::Saved);
+MCE_CVAR(cv_cirrus, "r.cirrus", true,
+         "High cirrus streaks above the cloud layer (Cirrus; off = the frame without them)", CVarFlags::Saved);
 MCE_CVAR(cv_nightsky, "r.nightsky", true,
          "Moon and stars in the night sky (NightSky; off = the moonless, starless frame)", CVarFlags::Saved);
 MCE_CVAR(cv_water, "r.water", true,
@@ -91,6 +93,7 @@ QualitySettings quality_settings(QualityTier tier) {
             q.snow_noise = false;
             q.rain_ripples = false;
             q.clouds = false;
+            q.cirrus = false;
             q.night_sky = false;
             q.water = false;
             q.aurora = false;
@@ -375,6 +378,18 @@ Clouds apply_quality(const QualitySettings& q, const Clouds& clouds) {
     out.speed = detail::cloud_speed(clouds.speed);
     out.wind_dir = detail::unit_wind_dir(clouds.wind_dir);
     out.height_m = detail::cloud_height(clouds.height_m);
+    return out;
+}
+
+Cirrus apply_quality(const QualitySettings& q, const Cirrus& cirrus) {
+    Cirrus out = cirrus;
+    out.coverage = q.cirrus && cv_cirrus.get_bool() ? detail::ranged(cirrus.coverage, 0.0f, 1.0f, 0.0f) : 0.0f;
+    out.density = detail::ranged(cirrus.density, 0.0f, 1.0f, 0.35f);
+    out.scale_m = detail::ranged(cirrus.scale_m, 200.0f, 40000.0f, 3000.0f);
+    out.stretch = detail::ranged(cirrus.stretch, 1.0f, 16.0f, 6.0f);
+    out.speed = detail::ranged(cirrus.speed, 0.0f, 10.0f, 2.0f);
+    out.wind_dir = detail::unit_wind_dir(cirrus.wind_dir);
+    out.height_m = detail::ranged(cirrus.height_m, 1000.0f, 30000.0f, 9000.0f);
     return out;
 }
 
