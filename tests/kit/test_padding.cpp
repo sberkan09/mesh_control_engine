@@ -52,6 +52,7 @@
 #include "mce/kit/light_flicker.h"
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/cloud_shadow.h"
+#include "mce/kit/caustics.h"
 #include "mce/kit/dynamic_resolution.h"
 #include "mce/kit/wind_direction.h"
 #include "mce/kit/wind_gust.h"
@@ -144,6 +145,7 @@ TEST_CASE("padding: every unreflected byte of a kit3d.h component is an explicit
     expect_pad<LensFlare3D>("LensFlare3D", sizeof(LensFlare3D::pad_));  // lens_flare.h (M-LENSFLARE 38d)
     expect_pad<SunShafts3D>("SunShafts3D", sizeof(SunShafts3D::pad_));  // sun_shafts.h (M-SUNSHAFTS 45d)
     expect_pad<CloudShadow3D>("CloudShadow3D", sizeof(CloudShadow3D::pad_));  // cloud_shadow.h (M-CLOUDSHADOW 51d)
+    expect_pad<Caustics3D>("Caustics3D", sizeof(Caustics3D::pad_));  // caustics.h (M-CAUSTICS 52c)
     expect_pad<DynamicResolution3D>("DynamicResolution3D", sizeof(DynamicResolution3D::pad_));  // dynamic_resolution.h (M-DYNRES 46d)
     expect_pad<LensRain3D>("LensRain3D", sizeof(LensRain3D::pad_));  // lens_rain.h (M-LENSRAIN 42d)
     expect_pad<HeatHaze3D>("HeatHaze3D", sizeof(HeatHaze3D::pad_));  // heat_haze.h (M-HEATHAZE 43d)
