@@ -1,11 +1,7 @@
-# r12 job 4: GPU cost. The opt-in case (MCE_CAUSTICS_COST=1, Medium and High, 1280x720) x3 on GL, once on sdlgpu; then the pass on
+# r12 job 4: GPU cost (the opt-in case ran in job 2). The pass on
 # tour_caustics at 1920x1080 and 1280x720, Low / Medium / High, GL (sdlgpu at High 1080p): on, off (-r.caustics 0), on again;
 # 1 tick a frame, 600 frames after 60 warm-up.
 cd /work/repo; source .runpod-jobs/common.sh; R=.runpod-jobs/r12.py
-echo "=== cost case [gl] x3"
-for i in 1 2 3; do MCE_CAUSTICS_COST=1 gl $TR -tc='caustics: GPU cost*' 2>&1 | grep -E 'caustics cost|test cases|ERROR' | cut -c1-240; done
-echo "=== cost case [vk] (expected: returns, no timestamp queries)"
-MCE_CAUSTICS_COST=1 vk $TR -tc='caustics: GPU cost*' 2>&1 | grep -E 'caustics cost|test cases|ERROR' | cut -c1-240
 run() { # run <be> <tag> <WxH> <quality> [extra...] -> /work/out/<be>_<tag>_<i>.mcperf
   local be=$1 tag=$2 wh=$3 q=$4; shift 4; local i=1; while [[ -e /work/out/${be}_${tag}_$i.mcperf ]]; do i=$((i+1)); done
   $be $P -pack $PK -scene $SC -window $wh -perf_capture /work/out/${be}_${tag}_$i.mcperf -sim.fast_forward 1 -sim.max_catchup 1 \

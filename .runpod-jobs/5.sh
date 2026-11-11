@@ -20,4 +20,18 @@ python3 $R golden_blocks /work/cap/g_vk.png /work/cap/g_gl.png "nvidia vk vs nvi
 python3 $R golden_blocks /work/cap/g_sw.png $GD/linux-gl/caustics.png "llvmpipe now vs linux-gl golden"
 python3 $R golden_blocks /work/cap/g_lvp.png $GD/linux-sdlgpu/caustics.png "lavapipe now vs linux-sdlgpu golden"
 python3 $R golden_blocks $GD/linux-sdlgpu/caustics.png $GD/linux-gl/caustics.png "sdlgpu golden vs gl golden"
+for be in sw lvp; do echo "=== golden caustics [$be]"; $be $TG -tc='*caustics*' 2>&1 | grep -E '^\[doctest\] (test cases|assertions)|ERROR|blocks' | head -5; done
+for be in sw lvp; do
+  echo "=== caustics cases [$be]"
+  T0=$(date +%s)
+  $be $TR -tc='caustics*' 2>&1 | grep -E 'MESSAGE:|ERROR|FATAL|^\[doctest\] (test cases|assertions)|SIGSEGV|rhi\.(gl|sdlgpu):|luma|worst|changed' \
+    | sed -e 's#.*/tests/#tests/#' | cut -c1-260 | head -60
+  echo "  $(( $(date +%s) - T0 )) s"
+done
+for be in sw lvp; do
+  echo "=== water, underwater, cloud shadow cases [$be]"
+  T0=$(date +%s)
+  $be $TR -tc='water*,underwater*,cloud shadow*' 2>&1 | grep -E 'ERROR|FATAL|^\[doctest\] (test cases|assertions)|SIGSEGV|TEST CASE' | head -20
+  echo "  $(( $(date +%s) - T0 )) s"
+done
 echo "r12 done $(date -u +%H:%M:%S)"
