@@ -1,0 +1,1 @@
+- Test: editor soak for asset hot reload, 200 edits of a mounted material keep the live allocation count flat; no code change.
