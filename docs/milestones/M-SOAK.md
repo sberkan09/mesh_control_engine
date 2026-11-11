@@ -20,4 +20,5 @@
 - The 8-allocation slack covers caches that fill once (the first contact pair, the log's ring). A gate that needs more slack than that points at a real growth and should be looked at, not loosened.
 - Step 3 runs inside `test_editor` instead of over MCP: the live count is a process-wide number and an in-process test reads it directly, where an MCP run would need a new tool to report it.
 - Asset hot reload is covered by a second test in `test_editor_soak.cpp` (200 edits of a mounted material, each one re-cooked and swapped in); it stayed flat, so it found no leak.
-- Not covered, open for a later step: the GPU paths (a windowed player) and play-in-editor start and stop.
+- Play-in-editor start and stop is covered by a third test in `test_editor_soak.cpp` (100 rounds of enter, 30 ticks, stop on the sample scene); flat as well.
+- Not covered, open for a later step: the GPU paths (a windowed player).
