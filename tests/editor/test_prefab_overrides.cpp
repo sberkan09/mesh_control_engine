@@ -8,6 +8,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -279,4 +280,72 @@ TEST_CASE("prefab overrides: a prefab asset opens, edits and saves; instances fo
     CHECK(s.doc().kind() == DocKind::Scene);
     CHECK(ghost_root(s, 3.0f)->order == 7);   // A inherits the edit
     CHECK(ghost_root(s, -3.0f)->order == 0);  // B keeps its override
+}
+
+TEST_CASE("prefab overrides: a fuzz of instance, override, revert and delete commands undoes byte-identically") {
+    const std::string root = project("prefab_undo_fuzz");
+    const asset::Guid stack = asset::parse_guid(kStack).value();
+    for (u32 seed = 1; seed <= 20; ++seed) {
+        CAPTURE(seed);
+        std::mt19937 rng(seed);
+        EditorSession session;
+        REQUIRE(session.open_project(StringView(root.data(), root.size())));
+        REQUIRE(session.open_scene("scenes/two.mcscene"));
+        EditorScene& s = session.scene();
+        s.clear_undo();
+        auto text_of = [&] {
+            cook::String t;
+            s.serialize(t);
+            return std::string(t.view().data(), t.view().size());
+        };
+        const std::string start = text_of();
+        std::vector<std::string> states{start};
+        for (int i = 0; i < 80; ++i) {
+            const usize before = s.undo_count();
+            s.seal_undo();
+            const EntityId e = s.doc().size() ? s.doc().at(rng() % s.doc().size()).id : kNoEntity;
+            switch (rng() % 5) {
+                case 0:
+                    s.create_prefab_instance("I" + std::to_string(rng() % 50), stack);
+                    break;
+                case 1:
+                    if (e) s.revert_override(e, refl::type_of<kit::Sprite>());
+                    break;
+                case 2:
+                    if (const kit::Sprite* sp = e ? s.get<kit::Sprite>(e) : nullptr) {
+                        kit::Sprite v = *sp;
+                        v.order = static_cast<i32>(rng() % 9);
+                        s.set(e, v);
+                    }
+                    break;
+                case 3:
+                    if (e) s.destroy_entity(e);
+                    break;
+                default:
+                    if (e) {
+                        const EntityId ids[] = {e};
+                        s.duplicate_entities(Span<const EntityId>(ids, 1));
+                    }
+                    break;
+            }
+            if (s.undo_count() != before)
+                states.push_back(text_of());
+            else
+                CHECK(text_of() == states.back());
+            REQUIRE(s.verify_world());
+        }
+        const std::string end = text_of();
+        usize k = states.size() - 1;
+        while (s.can_undo()) {
+            REQUIRE(s.undo());
+            --k;
+            CHECK(text_of() == states[k]);
+        }
+        CHECK(k == 0);
+        CHECK(text_of() == start);
+        CHECK(s.verify_world());
+        while (s.can_redo()) REQUIRE(s.redo());
+        CHECK(text_of() == end);
+        CHECK(s.verify_world());
+    }
 }
