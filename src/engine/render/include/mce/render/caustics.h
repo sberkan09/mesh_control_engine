@@ -24,8 +24,22 @@ inline constexpr u32 kCausticsTicksPerSecond = 1000u;
 inline constexpr u32 kCausticsPeriodTicks = 4000u;
 // The first octave's lattice cells per period (the second has 2x, the third 4x): the pattern tiles every 64 cells.
 inline constexpr u32 kCausticsCells = 64u;
-// The web's line width in cells (on the F2 - F1 distance of the cellular noise).
-inline constexpr f32 kCausticsLineWidth = 0.1f;
+// The web's line width in cells (on the F2 - F1 distance of the cellular noise): v = 1 - smoothstep(0, width, F2 - F1),
+// not squared (M-CAUSTICS 52d: the soft falloff reads as light on the floor rather than hard white lines).
+inline constexpr f32 kCausticsLineWidth = 0.16f;
+// M-CAUSTICS 52d: the surface-orientation factor. A face receives sun light in proportion to dot(n, toward_sun); the web
+// is scaled by smoothstep(kCausticsFacingLo, kCausticsFacingHi, dot(n, toward_sun) / toward_sun.y), its irradiance
+// relative to a flat floor's, which is also 1 / the web's stretch on the face (projected along the sun from the plane): a
+// floor (n up) gets exactly 1 at any sun height (Hi below 1 leaves room for a half-float normal), a face that would show the
+// web stretched more than 1 / kCausticsFacingLo (a steep wall under a high sun: long streaks), turned away from the sun or
+// lit edge-on gets nothing.
+inline constexpr f32 kCausticsFacingLo = 0.6f;
+inline constexpr f32 kCausticsFacingHi = 0.95f;
+// M-CAUSTICS 52d review: the light is reflected by the surface, so it takes the surface's colour. The pass adds
+// colour * luma(term) * the pixel's chroma, src / luma(src) clamped to 0..kCausticsMaxChroma (1 for a pixel darker than
+// kCausticsMinLuma, or not finite): warm sun light on sand rather than white lines. luma = 0.2126 r + 0.7152 g + 0.0722 b.
+inline constexpr f32 kCausticsMaxChroma = 4.0f;
+inline constexpr f32 kCausticsMinLuma = 1.0e-4f;
 // The feature points: jitter 0.2..0.8 of the cell, a closed loop of this radius (cells) around it.
 inline constexpr f32 kCausticsLoopRadius = 0.18f;
 // The depth falloff: fade in over the first kCausticsSurfaceFade metres under the plane, fade out over the last
@@ -50,12 +64,18 @@ math::vec2 caustics_water_centre(math::vec2 camera_local_xz, f32 half_extent);
 // One octave of the web at q (cells, 0..m): the distances to the nearest and second-nearest feature point of the 3 x 3
 // lattice cells around q (m cells per period, wrapped), each point jittered by an integer hash (pcg2d) and moved on a
 // closed loop whose phase is k * phase + h (k a whole 1..3 from the hash, so the loop closes after the period);
-// v = 1 - smoothstep(0, kCausticsLineWidth, F2 - F1), returned squared. 0..1.
+// v = 1 - smoothstep(0, kCausticsLineWidth, F2 - F1). 0..1.
 f32 caustics_cells(math::vec2 q, u32 m, u32 seed, f32 phase);
 
 // The web at q (first-octave cells; wrapped to the period here): 0.6 v(q) + 0.3 v(2q) + 0.1 v(4q), `octaves` of them
 // (1..3; the reduced sums renormalized; 0 = none). 0..1; 0 for non-finite input.
 f32 caustics_pattern(math::vec2 q, f32 phase, u32 octaves);
+
+// M-CAUSTICS 52d. The surface-orientation factor 0..1 for the world-space surface normal `normal` (any length >= 0.5:
+// the prepass stores a unit normal; normalized here) and the unit direction toward the sun: smoothstep(kCausticsFacingLo,
+// kCausticsFacingHi, dot(n, toward_sun) / toward_sun.y). 1 for a floor; 0 for a face turned away or edge-on, a normal
+// shorter than 0.5 or not finite (nothing safe to light), and a sun under kCausticsMinSunY.
+f32 caustics_facing(math::vec3 normal, math::vec3 toward_sun);
 
 // smoothstep(kCausticsMinSunY, kCausticsFullSunY, sun_y): 0 toward the horizon, 1 above. 0 for NaN.
 f32 caustics_sun_fade(f32 sun_y);
@@ -115,15 +135,24 @@ bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_
 // outside the water square (|plane_xz - centre| > half_extent on x or z) or any value is not finite.
 bool caustics_plane_point(math::vec3 p, const CausticsParams& c, math::vec2& plane_xz, f32& depth);
 
-// The per-pixel term the pass multiplies its colour by (0..1 per channel) for the camera-relative point `p`: pattern *
-// exp(-absorption * sun path) * depth falloff * caustics_transmission * the fog the pixel went through: the exp² fog's
+// The per-pixel term the pass multiplies its colour by (0..1 per channel) for the camera-relative point `p` with the
+// world-space surface normal `normal` (the prepass's view normal turned to world space; up by default): pattern *
+// exp(-absorption * sun path) * depth falloff * caustics_facing * caustics_transmission * the fog the pixel went through: the exp² fog's
 // exp(-(fog * fog distance)²) and, seen through the water (caustics_through_water), also exp(-(fog * |p|)²) (kMeshFS fogged
 // the floor in the copy kWaterFS shows, and kWaterFS fogs again at the surface); with the volumetric fog in place of the
 // exp² one (fog_density 0), its transmittance at the point, `vol_point`, and through the water also at the surface,
 // `vol_surface` (the volume's vol_fog(uv, view depth).a, read by the shader from the volume texture; 1 without it).
-// 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds colour * term to
-// the pixel, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f, f32 vol_surface = 1.0f);
+// 0 where caustics_plane_point is false, at or below max_depth and for non-finite input. The pass adds the light as
+// caustics_composite does, colour = sun colour * intensity * strength * sun share * caustics_sun_fade.
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point = 1.0f, f32 vol_surface = 1.0f,
+                         math::vec3 normal = math::vec3{0.0f, 1.0f, 0.0f});
+
+// M-CAUSTICS 52d review. The pass's composite: the pixel's colour `src` (linear HDR) with the light `color` (the gate's)
+// times `term` (caustics_term) added as the surface reflects it: src + color * luma(term) * chroma(src), chroma(src) =
+// clamp(src / luma(src), 0, kCausticsMaxChroma) per channel, or 1 when luma(src) is not in (kCausticsMinLuma, 1e30) (black,
+// negative, infinite or NaN). The water's tint in `term` is in src already, hence only term's luma. A term of 0 returns
+// src exactly.
+math::vec3 caustics_composite(math::vec3 src, math::vec3 color, math::vec3 term);
 
 // The pass's validity gate: the renderer records the pass only when this is true. All plain values (no scene3d.h).
 struct CausticsGate {

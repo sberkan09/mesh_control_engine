@@ -105,8 +105,7 @@ f32 caustics_cells(math::vec2 q, u32 m, u32 seed, f32 phase) {
             }
         }
     const f32 e = std::sqrt(d2) - std::sqrt(d1);
-    const f32 v = 1.0f - smooth_between(0.0f, kCausticsLineWidth, e);
-    return v * v;
+    return 1.0f - smooth_between(0.0f, kCausticsLineWidth, e);
 }
 
 f32 caustics_pattern(math::vec2 q, f32 phase, u32 octaves) {
@@ -124,6 +123,28 @@ f32 caustics_pattern(math::vec2 q, f32 phase, u32 octaves) {
         sum += 0.1f;
     }
     return octaves >= 3u ? n : n / sum;
+}
+
+f32 caustics_facing(math::vec3 normal, math::vec3 toward_sun) {
+    if (!finite3(normal) || !finite3(toward_sun) || !(toward_sun.y >= kCausticsMinSunY)) return 0.0f;
+    const f32 n2 = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z;
+    if (!(n2 >= 0.25f) || !std::isfinite(n2)) return 0.0f;
+    const f32 ndl = (normal.x * toward_sun.x + normal.y * toward_sun.y + normal.z * toward_sun.z) / std::sqrt(n2);
+    return smooth_between(kCausticsFacingLo, kCausticsFacingHi, ndl / toward_sun.y);
+}
+
+math::vec3 caustics_composite(math::vec3 src, math::vec3 color, math::vec3 term) {
+    const f32 lt = 0.2126f * term.x + 0.7152f * term.y + 0.0722f * term.z;
+    const f32 ls = 0.2126f * src.x + 0.7152f * src.y + 0.0722f * src.z;
+    math::vec3 ch{1.0f, 1.0f, 1.0f};
+    if (ls > kCausticsMinLuma && ls < 1.0e30f) {
+        const auto chroma = [&](f32 v) {
+            const f32 c = v / ls;
+            return c > 0.0f ? (c < kCausticsMaxChroma ? c : kCausticsMaxChroma) : 0.0f;  // NaN: 0
+        };
+        ch = math::vec3{chroma(src.x), chroma(src.y), chroma(src.z)};
+    }
+    return math::vec3{src.x + color.x * lt * ch.x, src.y + color.y * lt * ch.y, src.z + color.z * lt * ch.z};
 }
 
 f32 caustics_sun_fade(f32 sun_y) {
@@ -208,7 +229,7 @@ bool caustics_through_water(math::vec3 p, const CausticsParams& c, f32& surface_
     return true;
 }
 
-math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f32 vol_surface) {
+math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f32 vol_surface, math::vec3 normal) {
     const math::vec3 zero{0.0f, 0.0f, 0.0f};
     math::vec2 xz;
     f32 depth = 0.0f;
@@ -217,7 +238,8 @@ math::vec3 caustics_term(math::vec3 p, const CausticsParams& c, f32 vol_point, f
     const f32 t = depth / c.toward_sun.y;  // the sun ray's length in water
     const f32 pat = caustics_pattern(math::vec2{xz.x * c.inv_scale + c.offset.x, xz.y * c.inv_scale + c.offset.y}, c.phase,
                                      c.octaves < 3u ? c.octaves : 3u);
-    f32 k = pat * std::exp(-c.absorption * t) * caustics_depth_fade(depth, c.max_depth);
+    f32 k = pat * std::exp(-c.absorption * t) * caustics_depth_fade(depth, c.max_depth) *
+            caustics_facing(normal, c.toward_sun);
     f32 fog_distance = 0.0f;
     const math::vec3 tr = caustics_transmission(p, c, fog_distance);
     f32 share = 1.0f;

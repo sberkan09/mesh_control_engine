@@ -9,7 +9,9 @@
 // bit for bit one period later, and speed 0 holds it; a floating-origin rebase leaves the web on the floor; the light fades
 // as the sun sinks toward the horizon; the camera under water still draws it (before the underwater composite); Medium and
 // High both draw; with TAA the next frame holds no light; a second window view of another size draws; the exp² fog takes
-// its share; and the shader alone agrees with the CPU twin (caustics.h) on a grid of points.
+// its share; the floor and the box's top get the web while a side turned away from the sun or lit edge-on is left exactly
+// as it was (M-CAUSTICS 52d, the facing factor); and the shader alone agrees with the CPU twin (caustics.h) on a grid of
+// points.
 // One 160 x 120 frame per render.
 
 #include <doctest/doctest.h>
@@ -288,6 +290,96 @@ TEST_CASE("caustics: more depth gives less light") {
     CHECK(same(s.px, base.px));
 }
 
+// ---- M-CAUSTICS 52d review: the facing factor in a rendered frame ------------------------------------------------------
+
+namespace {
+
+// Which face a pixel's view ray hits first (ray_hit's point classified): 0 nothing, 1 the floor, 2 the box's top, 3 / 4
+// its +x / -x side, 5 / 6 its +z / -z side; 7 mixed (the face differs within the pixel's 3 x 3 neighbourhood: the
+// half-resolution prepass's block, where the stored normal may be a neighbour's).
+Array<u8> faces(const View3D& view) {
+    Array<u8> one;
+    one.resize(usize(kW) * kH);
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            vec3 h;
+            u8 c = 0;
+            if (ray_hit(view, f32(x) + 0.5f, f32(y) + 0.5f, h)) {
+                const f32 e = 1e-3f;
+                if (std::fabs(h.y) < e && (std::fabs(h.x) > 0.5f + e || std::fabs(h.z) > 0.5f + e)) c = 1;
+                else if (std::fabs(h.y - 1.0f) < e) c = 2;
+                else if (std::fabs(h.x - 0.5f) < e) c = 3;
+                else if (std::fabs(h.x + 0.5f) < e) c = 4;
+                else if (std::fabs(h.z - 0.5f) < e) c = 5;
+                else if (std::fabs(h.z + 0.5f) < e) c = 6;
+                else c = 7;
+            }
+            one[usize(y) * kW + x] = c;
+        }
+    Array<u8> out;
+    out.resize(one.size());
+    for (u32 y = 0; y < kH; ++y)
+        for (u32 x = 0; x < kW; ++x) {
+            const u8 c = one[usize(y) * kW + x];
+            u8 r = c;
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx) {
+                    const int xx = int(x) + dx, yy = int(y) + dy;
+                    if (xx < 0 || yy < 0 || xx >= int(kW) || yy >= int(kH)) continue;
+                    if (one[usize(yy) * kW + usize(xx)] != c) r = 7;
+                }
+            out[usize(y) * kW + x] = r;
+        }
+    return out;
+}
+
+constexpr vec3 kFaceNormals[7] = {{0, 0, 0}, {0, 1, 0}, {0, 1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}};
+
+}  // namespace
+
+TEST_CASE("caustics: the floor and the box's top get the web; a side turned away from the sun or lit edge-on none") {
+    CausticsFixture h;
+    const WaterSurface w = caustics_water(2.0f);  // the whole box 1 m and more under the water
+    const Caustics on = caustics_setting();
+    // The camera looks down -z and sees the box's top and its +z side. The fixture's high sun (behind the camera: the +z
+    // side faces it at a steep slant, a small facing), the mirrored one (in front: the +z side is turned away), a sun along
+    // +x and up (the +z side edge-on) and a lower sun behind the camera (the +z side faces it squarely: lit).
+    const vec3 suns[4] = {kCausticsToward, vec3{-kCausticsToward.x, kCausticsToward.y, -kCausticsToward.z},
+                          vec3{0.9f, 0.45f, 0.0f}, vec3{0.0f, 0.5f, 0.9f}};
+    usize dark_faces = 0, lit_sides = 0;
+    for (const vec3& toward : suns) {
+        const vec3 sun = math::normalize(toward);
+        const Shot off = h.draw(&w, nullptr, 0.0f, toward);
+        const Shot lit = h.draw(&w, &on, 0.0f, toward);
+        REQUIRE(lit.stats.caustics);
+        const Array<u8> fc = faces(lit.view);
+        usize count[8] = {}, changed[8] = {};
+        for (usize p = 0; p < fc.size(); ++p) {
+            ++count[fc[p]];
+            changed[fc[p]] += same_px(off.px, lit.px, p) ? 0 : 1;
+        }
+        CHECK(changed[0] == 0);
+        CHECK(count[1] > usize(kW) * 30);
+        CHECK(changed[1] > count[1] / 3);  // the floor: facing 1
+        CHECK(light(lit.px, off.px).darkest == 0);
+        for (u8 k = 2; k <= 6; ++k) {
+            const f32 fa = caustics_facing(kFaceNormals[k], sun);
+            MESSAGE("sun (" << toward.x << ", " << toward.y << ", " << toward.z << ") face " << int(k) << ": facing " << fa
+                            << ", " << count[k] << " px, " << changed[k] << " changed");
+            if (count[k] < 20) continue;
+            if (fa == 0.0f) {
+                CHECK(changed[k] == 0);  // no streaks: the side is left exactly as it was
+                ++dark_faces;
+            } else if (fa > 0.5f && k >= 3) {
+                CHECK(changed[k] > 0);
+                ++lit_sides;
+            }
+        }
+    }
+    CHECK(dark_faces >= 2);  // the cases above did exercise sides that must stay dark
+    CHECK(lit_sides >= 1);   // and a side the sun faces squarely enough to be lit
+}
+
 TEST_CASE("caustics: the web moves with the clock, is bit for bit one period later, and speed 0 holds it") {
     CausticsFixture h;
     const WaterSurface w = caustics_water();
@@ -523,6 +615,17 @@ u16 to_half(f32 v) {
     return u16(hh);
 }
 
+// The f32 a half (as to_half writes it) reads back as: zero, a normal number, inf or NaN (to_half never writes subnormals).
+f32 from_half(u16 h) {
+    const u32 sign = u32(h & 0x8000u) << 16, e = (h >> 10) & 0x1fu, m = h & 0x3ffu;
+    u32 b = sign;
+    if (e == 31u) b |= 0x7f800000u | (m << 13);
+    else if (e != 0u) b |= ((e - 15u + 127u) << 23) | (m << 13);
+    f32 v;
+    std::memcpy(&v, &b, 4);
+    return v;
+}
+
 rhi::TextureHandle row_texture(Fixture3D& f, u32 w, const std::function<math::vec4(u32)>& texel) {
     Array<u16> data;
     data.resize(usize(w) * 4);
@@ -568,12 +671,18 @@ struct CausticsBlock {
 };
 static_assert(sizeof(CausticsBlock) == shaders3d::kCausticsUBytes, "CausticsBlock mirrors CausticsU");
 
-// kCausticsFS alone over a w x 1 prepass row (depth per texel) and a source black in red into a w x 1 RGBA32F target:
-// returns the red channel per texel (with c_color.r 1: the term's red). One row, so v_uv.y is 0.5 whatever the backend's row order.
-Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CausticsBlock& u) {
+// kCausticsFS alone over a w x 1 prepass row (view normal and depth per texel; without `normals` the normal faces the
+// camera, (0, 0, 1)) and a source of colour `src_rgb` (white by default) into a w x 1 RGBA32F target: returns the red the
+// pass added per texel (with c_color.r 1 and a white source: luma(term), as caustics_composite adds it). One row, so
+// v_uv.y is 0.5 whatever the backend's row order.
+Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CausticsBlock& u, const Array<vec3>* normals = nullptr,
+                    vec3 src_rgb = vec3{1.0f, 1.0f, 1.0f}) {
     const u32 w = u32(depth.size());
-    const rhi::TextureHandle gbuf = row_texture(f, w, [&](u32 x) { return math::vec4(0.0f, 0.0f, 1.0f, depth[x]); });
-    const rhi::TextureHandle src = row_texture(f, w, [](u32) { return math::vec4(0.0f, 0.5f, 0.5f, 1.0f); });
+    const rhi::TextureHandle gbuf = row_texture(f, w, [&](u32 x) {
+        const vec3 n = normals ? (*normals)[x] : vec3{0.0f, 0.0f, 1.0f};
+        return math::vec4(n.x, n.y, n.z, depth[x]);
+    });
+    const rhi::TextureHandle src = row_texture(f, w, [&](u32) { return math::vec4(src_rgb.x, src_rgb.y, src_rgb.z, 1.0f); });
     const rhi::PipelineHandle pipe = fullscreen_pipe(f, shaders3d::kCausticsFS, "caustics.frag");
     const rhi::PipelineHandle enc = fullscreen_pipe(f, kEncodeFS, "test.caustics.encode");
     rhi::TextureDesc td;
@@ -622,6 +731,7 @@ Array<f32> run_pass(Fixture3D& f, const Array<f32>& depth, const CausticsBlock& 
     for (u32 i = 0; i < w; ++i) {
         const u32 b = u32(px[i * 4]) | (u32(px[i * 4 + 1]) << 8) | (u32(px[i * 4 + 2]) << 16) | (u32(px[i * 4 + 3]) << 24);
         std::memcpy(&out[i], &b, 4);
+        out[i] -= from_half(to_half(src_rgb.x));
     }
     for (rhi::TextureHandle t : {gbuf, src, rt, bytes}) f.device->destroy_texture(t);
     f.device->destroy_pipeline(pipe);
@@ -673,8 +783,13 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
         {-0.6f, 0.5f, {0.2f, 0.8f, 0.5f}, -4.0f, {2.0f, -1.0f}, 9.0f, 1.0f, {7.0f, 40.0f}, 0.7f, 3, 0.1f, 50.0f, 0.0f,
          {0.05f, 0.02f, 0.01f}, 0.0f},
     };
+    // M-CAUSTICS 52d: the surface normals, world space, cycled over the texels: a floor, a wall facing +x, a gentle slope,
+    // a wall facing +z, a tilted face, the face toward the camera (the pre-52d input), and the unusable ones: a zero normal
+    // and a NaN.
+    const vec3 kWorldNormals[6] = {{0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {-0.25f, 0.97f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f}, {-0.6f, 0.8f, 0.0f}, {0.3f, 0.5f, -0.81f}};
     const f32 fov = math::radians(45.0f), aspect = f32(kN);
-    usize compared = 0, hits = 0, lit = 0, nonzero = 0, close = 0;
+    usize compared = 0, hits = 0, lit = 0, nonzero = 0, close = 0, faced = 0;
     f32 worst = 0.0f;
     for (const Case& c : cases) {
         const f32 cy = std::cos(c.yaw), sy = std::sin(c.yaw), cp = std::cos(c.pitch), sp = std::sin(c.pitch);
@@ -698,7 +813,21 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                                {0.0f, 1.0f, 1.0f, 1.0f},  // no volumetric fog: the volume is not read
                                {1.0f, 1.0f, 1.0f, 1.0f}};
         std::memcpy(&u, blk, sizeof u);
-        const Array<f32> gpu = run_pass(f, depth, u);
+        // The view normals the prepass would hold (half floats), and the world normals the CPU twin gets back from them.
+        Array<vec3> nview, nworld;
+        nview.resize(kN);
+        nworld.resize(kN);
+        for (u32 x = 0; x < kN; ++x) {
+            const vec3 nw = x % 7 == 6 ? back : kWorldNormals[x % 7 < 6 ? x % 7 : 0];
+            vec3 nv{math::dot(nw, right), math::dot(nw, up), math::dot(nw, back)};
+            if (x == 40) nv = vec3{0.0f, 0.0f, 0.0f};
+            if (x == 41) nv = vec3{std::nanf(""), 0.0f, 1.0f};
+            nv = vec3{from_half(to_half(nv.x)), from_half(to_half(nv.y)), from_half(to_half(nv.z))};
+            nview[x] = nv;
+            nworld[x] = vec3{right.x * nv.x + up.x * nv.y + back.x * nv.z, right.y * nv.x + up.y * nv.y + back.y * nv.z,
+                             right.z * nv.x + up.z * nv.y + back.z * nv.z};
+        }
+        const Array<f32> gpu = run_pass(f, depth, u, &nview);
         CausticsParams cp2;
         cp2.toward_sun = sun;
         cp2.plane_h = c.plane_h;
@@ -724,7 +853,11 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
                 math::vec2 xz;
                 f32 d = 0.0f;
                 if (caustics_plane_point(p, cp2, xz, d)) ++hits;
-                want = caustics_term(p, cp2).x;
+                want = caustics_composite(vec3{1.0f, 1.0f, 1.0f}, vec3{1.0f, 0.0f, 0.0f},
+                                          caustics_term(p, cp2, 1.0f, 1.0f, nworld[x])).x -
+                       1.0f;
+                if (x == 40 || x == 41) CHECK(want == 0.0f);  // no usable normal: nothing added
+                faced += caustics_facing(nworld[x], sun) > 0.0f && caustics_facing(nworld[x], sun) < 1.0f ? 1 : 0;
                 lit += want > 0.05f ? 1 : 0;
                 nonzero += want > 0.0f ? 1 : 0;
             }
@@ -742,6 +875,7 @@ TEST_CASE("caustics: the shader agrees with the CPU twin on a grid of points") {
     CHECK(nonzero > compared / 4);
     CHECK(lit > 20);
     CHECK(close > compared * 9 / 10);
+    CHECK(faced > 0);  // some texels sit in the facing factor's soft band
 }
 
 // ---- M-CAUSTICS 52b review 2: the fog through the water counted twice, the volumetric fog ------------------------------
@@ -787,7 +921,12 @@ TEST_CASE("caustics: seen through the water the shader fogs the light twice, at 
                             {0.0f, 1.0f, 1.0f, 1.0f},
                             {1.0f, 1.0f, 1.0f, 1.0f}};
     std::memcpy(&u, blk, sizeof u);
-    const Array<f32> gpu = run_pass(f, depth, u);
+    // The floor's normal (world up) as the prepass holds it, in view space; its facing factor is exactly 1 after the
+    // half rounding (anything within 0.9 of a floor's is), as for the CPU term's default up normal below.
+    Array<vec3> nview;
+    nview.resize(kN);
+    for (u32 x = 0; x < kN; ++x) nview[x] = vec3{0.0f, up.y, back.y};
+    const Array<f32> gpu = run_pass(f, depth, u, &nview);
     usize lit = 0;
     for (u32 x = 0; x < kN; ++x) {
         const f32 z = depth[x];
@@ -808,6 +947,17 @@ TEST_CASE("caustics: seen through the water the shader fogs the light twice, at 
     }
     MESSAGE("fog through the water: " << lit << " lit texels of " << kN);
     CHECK(lit > 8);
+    // The composite (caustics_composite, 52d review): over a coloured source the light takes the source's chroma, so the
+    // red added is luma(term) (the white source's) times red / luma(src); a black source takes it uncoloured.
+    for (const vec3 col : {vec3{0.8f, 0.7f, 0.5f}, vec3{0.25f, 0.5f, 0.75f}, vec3{0.0f, 0.0f, 0.0f}}) {
+        const vec3 c16{from_half(to_half(col.x)), from_half(to_half(col.y)), from_half(to_half(col.z))};
+        const Array<f32> tinted = run_pass(f, depth, u, &nview, col);
+        for (u32 x = 0; x < kN; ++x) {
+            const f32 want = caustics_composite(c16, vec3{1.0f, 0.0f, 0.0f}, vec3{gpu[x], gpu[x], gpu[x]}).x - c16.x;
+            CHECK_MESSAGE(std::fabs(tinted[x] - want) <= 1e-5f + 1e-4f * want,
+                          "src " << col.x << " texel " << x << ": gpu " << tinted[x] << " want " << want);
+        }
+    }
 }
 
 TEST_CASE("caustics: the volumetric fog dims the web as it dims the floor") {

@@ -73,7 +73,7 @@ def main():
             "Environment3D": {"sun_direction": [0.12, -0.85, -0.51], "sun_intensity": 1.5, "sun_shadows": 0,
                               "sun_color": [1.0, 0.95, 0.86], "ambient_sky": [0.26, 0.32, 0.42], "ambient_ground": [0.15, 0.14, 0.12],
                               "exposure": 1.0, "bloom": 1, "bloom_intensity": 0.06, "ssao": 1},
-            "Caustics3D": {"enabled": 1, "strength": 1.5, "scale": 1.6, "speed": 1.0, "absorption": 0.15, "max_depth": 6}}),
+            "Caustics3D": {"enabled": 1, "strength": 1.2, "scale": 1.6, "speed": 1.0, "absorption": 0.15, "max_depth": 6}}),
         ent("Camera", {"Camera3DComponent": {"primary": 1, "fov_deg": 60},
                        "LocalTransform": {"position": [0.0, 5.5, 7.6], "rotation": [r(c) for c in q]}}),
         ent("Pool", {"Water": {"level_y": 0, "half_extent": 40, "amplitude": 0.04, "wavelength": 2.5, "wave_count": 4,

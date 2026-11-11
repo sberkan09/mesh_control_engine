@@ -401,3 +401,105 @@ TEST_CASE("caustics: through the water the fog is counted twice, the volume's tr
     CHECK(term_r(p, under) == doctest::Approx(bare * std::exp(-fl * fl)).epsilon(1e-4));
     CHECK(term_r(p, under_clear, 0.5f, 0.1f) == doctest::Approx(bare * 0.5f).epsilon(1e-4));
 }
+
+TEST_CASE("caustics: the facing factor lights floors fully and leaves faces turned away or edge-on dark (52d)") {
+    const math::vec3 high = math::normalize(math::vec3{0.12f, 0.85f, 0.51f});  // about 58 degrees up
+    const math::vec3 low = math::normalize(math::vec3{0.0f, 0.2f, 0.98f});     // about 11 degrees up
+    // A floor gets exactly 1 at any sun height (its irradiance is the reference).
+    CHECK(caustics_facing(math::vec3{0.0f, 1.0f, 0.0f}, high) == 1.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, 1.0f, 0.0f}, low) == 1.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, 2.0f, 0.0f}, high) == 1.0f);  // any length >= 0.5: normalized
+    // Faces turned away from the sun, a ceiling, and a wall the high sun only grazes: nothing.
+    CHECK(caustics_facing(math::vec3{0.0f, 0.0f, -1.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, -1.0f, 0.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{-1.0f, 0.0f, 0.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{1.0f, 0.0f, 0.0f}, high) < 0.01f);  // dot 0.12, 0.14 of a floor's: edge-on
+    // A wall the high sun faces: dot 0.51, 0.6 of a floor's, so the web would be stretched 1.7 times down it: nothing. A
+    // slope turned a little away from the sun (0.85 of a floor's): part of it; the low sun lights a wall facing it fully (no
+    // stretch).
+    CHECK(caustics_facing(math::vec3{0.0f, 0.0f, 1.0f}, high) < 1e-3f);
+    const f32 slope = caustics_facing(math::normalize(math::vec3{0.0f, 0.9f, -0.2f}), high);
+    CHECK(slope > 0.3f);
+    CHECK(slope < 1.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, 0.0f, 1.0f}, low) == 1.0f);
+    // A floor's normal as a half float holds it (0.9995 up) still gets exactly 1.
+    CHECK(caustics_facing(math::vec3{0.0f, 0.9995f, 0.0312f}, high) == 1.0f);
+    // Tilting a wall away from the sun (its normal from up, through the -z wall, down) darkens it monotonically.
+    f32 last = 2.0f;
+    for (int i = 0; i <= 40; ++i) {
+        const f32 a = f32(i) * 0.0785f;  // 0 .. pi
+        const f32 w = caustics_facing(math::vec3{0.0f, std::cos(a), -std::sin(a)}, high);
+        CHECK(w >= 0.0f);
+        CHECK(w <= last);
+        last = w;
+    }
+    CHECK(last == 0.0f);
+    // Unusable normals and suns: 0.
+    CHECK(caustics_facing(math::vec3{0.0f, 0.0f, 0.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, 0.4f, 0.0f}, high) == 0.0f);  // shorter than 0.5
+    CHECK(caustics_facing(math::vec3{kNaN, 1.0f, 0.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, kInf, 0.0f}, high) == 0.0f);
+    CHECK(caustics_facing(math::vec3{0.0f, 1.0f, 0.0f}, math::vec3{1.0f, 0.01f, 0.0f}) == 0.0f);
+    // The term carries it: a floor point lit with the default (up) normal equals the explicit up normal; turned away, 0.
+    const CausticsParams c = params();
+    u32 lit = 0;
+    for (int i = 0; i < 60; ++i) {
+        const math::vec3 p{f32(i) * 0.21f - 6.0f, c.plane_h - 2.0f, f32(i) * -0.17f - 3.0f};
+        const math::vec3 up = caustics_term(p, c);
+        const math::vec3 same_up = caustics_term(p, c, 1.0f, 1.0f, math::vec3{0.0f, 1.0f, 0.0f});
+        CHECK(up.x == same_up.x);
+        lit += up.x > 0.0f ? 1 : 0;
+        const math::vec3 away = caustics_term(p, c, 1.0f, 1.0f, -c.toward_sun);
+        CHECK(away.x == 0.0f);
+        CHECK(away.y == 0.0f);
+        CHECK(away.z == 0.0f);
+    }
+    CHECK(lit > 30);
+}
+
+TEST_CASE("caustics: the composite adds the light in the surface's colour (52d review)") {
+    const auto luma = [](math::vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+    const math::vec3 sun{1.0f, 0.95f, 0.86f}, term{0.3f, 0.32f, 0.35f};
+    // A term of 0 returns the pixel exactly, whatever it is.
+    for (const math::vec3 src : {math::vec3{0.8f, 0.7f, 0.5f}, math::vec3{0.0f, 0.0f, 0.0f}, math::vec3{kInf, 1.0f, 0.0f},
+                                 math::vec3{-1.0f, 2.0f, 0.5f}}) {
+        const math::vec3 o = caustics_composite(src, sun, math::vec3{0.0f, 0.0f, 0.0f});
+        CHECK(o.x == src.x);
+        CHECK(o.y == src.y);
+        CHECK(o.z == src.z);
+    }
+    // A grey pixel gains colour * luma(term): the light itself.
+    const math::vec3 g = caustics_composite(math::vec3{0.5f, 0.5f, 0.5f}, sun, term);
+    CHECK(g.x == doctest::Approx(0.5f + sun.x * luma(term)).epsilon(1e-5));
+    CHECK(g.z == doctest::Approx(0.5f + sun.z * luma(term)).epsilon(1e-5));
+    // Sand gains warm light: more red than green than blue, its luma lifted by luma(term) * luma(sun-ish), every channel
+    // in proportion to the sand's own: the light reads as the surface lit brighter, not as white lines on it.
+    const math::vec3 sand{0.8f, 0.7f, 0.5f};
+    const math::vec3 s = caustics_composite(sand, sun, term);
+    const math::vec3 add{s.x - sand.x, s.y - sand.y, s.z - sand.z};
+    CHECK(add.x > add.y);
+    CHECK(add.y > add.z);
+    CHECK(add.z > 0.0f);
+    CHECK(add.x / add.z == doctest::Approx((sun.x * sand.x) / (sun.z * sand.z)).epsilon(1e-4));
+    CHECK(luma(add) == doctest::Approx(luma(term) * luma(math::vec3{sun.x * sand.x, sun.y * sand.y, sun.z * sand.z}) /
+                                       luma(sand)).epsilon(1e-4));
+    // Black, NaN and infinite pixels take the light uncoloured (chroma 1); a negative channel takes none; a saturated
+    // colour's chroma is clamped to 4.
+    const math::vec3 b = caustics_composite(math::vec3{0.0f, 0.0f, 0.0f}, sun, term);
+    CHECK(b.x == doctest::Approx(sun.x * luma(term)).epsilon(1e-5));
+    const math::vec3 n = caustics_composite(math::vec3{kNaN, 0.5f, 0.5f}, sun, term);
+    CHECK(n.y == doctest::Approx(0.5f + sun.y * luma(term)).epsilon(1e-5));
+    const math::vec3 neg = caustics_composite(math::vec3{-0.1f, 0.5f, 0.5f}, sun, term);
+    CHECK(neg.x == -0.1f);
+    const math::vec3 blue = caustics_composite(math::vec3{0.0f, 0.0f, 1.0f}, math::vec3{1.0f, 1.0f, 1.0f}, term);
+    CHECK(blue.z == doctest::Approx(1.0f + 4.0f * luma(term)).epsilon(1e-5));
+    CHECK(blue.x == 0.0f);
+    // Only ever brighter for a non-negative pixel and light.
+    for (int i = 0; i < 50; ++i) {
+        const math::vec3 src{f32(i % 7) * 0.13f, f32(i % 5) * 0.21f, f32(i % 3) * 0.4f};
+        const math::vec3 o = caustics_composite(src, sun, term);
+        CHECK(o.x >= src.x);
+        CHECK(o.y >= src.y);
+        CHECK(o.z >= src.z);
+    }
+}

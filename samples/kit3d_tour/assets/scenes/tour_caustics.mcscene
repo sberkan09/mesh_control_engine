@@ -45,7 +45,7 @@
     },
     "Caustics3D": {
      "enabled": 1,
-     "strength": 1.5,
+     "strength": 1.2,
      "scale": 1.6,
      "speed": 1.0,
      "absorption": 0.15,
