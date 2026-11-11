@@ -67,6 +67,8 @@ struct QualitySettings {
     bool rain_ripples = true;
     // M-CLOUDS 9a: Clouds are honored (off: coverage 0, the cloudless frame). Low turns them off.
     bool clouds = true;
+    // M-CIRRUS 53a: the high cirrus layer is honored (off: coverage 0, the frame without it). Low turns it off.
+    bool cirrus = true;
     // M-NIGHTSKY 14c: the night sky is honored (off: no moon, no stars). Low keeps the moon disk but drops the
     // stars and the twinkle.
     bool night_sky = true;
@@ -205,6 +207,11 @@ Ripples apply_quality(const QualitySettings& q, const Ripples& ripples);
 // height_m to 100..20000 (NaN to 2000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes through.
 // Returns a copy for the same reason as the SnowCover overload.
 Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
+// Cirrus: the high streak layer, coverage zeroed when the tier (Low) or `r.cirrus 0` switches it off. coverage and
+// density are clamped to 0..1 (NaN to 0 and 0.35), scale_m to 200..40000 (NaN 3000), stretch to 1..16 (NaN 6), speed
+// to 0..10 (NaN 2), height_m to 1000..30000 (NaN 9000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes
+// through. In-range values pass bit for bit. Returns a copy for the same reason as the SnowCover overload.
+Cirrus apply_quality(const QualitySettings& q, const Cirrus& cirrus);
 // NightSky: the moon and stars. `r.nightsky 0` zeroes moon_intensity and star_density (the frame without it);
 // the Low tier (night_sky false) keeps the moon disk but zeroes star_density and star_twinkle. moon_dir is
 // normalized (NaN / zero to +y), moon_cos_size is clamped to 0.9..1 (NaN to 0.9995), moon_intensity to 0..8,
