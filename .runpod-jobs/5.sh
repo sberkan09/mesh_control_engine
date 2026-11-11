@@ -1,6 +1,9 @@
 # r12 job 5: follow-ups. Dark pixels the pass brightens (wall reflection / rock contact edges; seen on llvmpipe in the session),
 # on each renderer; the caustics golden block measure for every renderer's actual against both committed goldens.
 cd /work/repo; source .runpod-jobs/common.sh; R=.runpod-jobs/r12.py
+echo "=== ctest tour_caustics pass lines"
+( cd $B && SDL_VIDEODRIVER=offscreen XDG_RUNTIME_DIR=/tmp/xdg ctest -R 'tour_caustics' --timeout 300 2>&1 | grep -E 'Test +#|tests passed' )
+( cd $B && MCE_RHI=sdlgpu VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json XDG_RUNTIME_DIR=/tmp/xdg "${XV[@]}" ctest -R 'tour_caustics' --timeout 300 2>&1 | grep -E 'Test +#|tests passed' )
 for be in gl vk sw lvp; do python3 $R darkgain ${be}_on ${be}_off; done
 python3 $R darkgain gl_med gl_medoff
 GO=$B/tests/render_gl/golden_out; GD=tests/render_gl/golden
