@@ -6,6 +6,7 @@ echo "=== ctest tour_caustics pass lines"
 ( cd $B && MCE_RHI=sdlgpu VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json XDG_RUNTIME_DIR=/tmp/xdg "${XV[@]}" ctest -R 'tour_caustics' --timeout 300 2>&1 | grep -E 'Test +#|tests passed' )
 for be in gl vk sw lvp; do python3 $R darkgain ${be}_on ${be}_off; done
 python3 $R darkgain gl_med gl_medoff
+python3 $R darker gl_med gl_medoff; python3 $R darker sw_med gl_medoff
 GO=$B/tests/render_gl/golden_out; GD=tests/render_gl/golden
 ls -la $GO/*/ 2>/dev/null | grep caustics
 vk $TG -tc='*caustics*' > /dev/null 2>&1; cp $GO/linux-sdlgpu/caustics.actual.png /work/cap/g_vk.png 2>/dev/null

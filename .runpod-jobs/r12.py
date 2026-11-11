@@ -59,6 +59,18 @@ def darkgain(on, off):
     np.add.at(g, (ys * 9 // H, xs * 16 // W), 1)
     for row in g: print("     " + " ".join(f"{v:4d}" for v in row))
 
+def darker(on, off):
+    """Pixels the pass makes darker by more than 2 levels (it should only add): count, depth, where (9 x 16 grid), rgb."""
+    import numpy as np
+    x, y = load(on), load(off)
+    if x is None or y is None: print(f"   darker {on}/{off}: missing"); return
+    w = np.array([0.2126, 0.7152, 0.0722]); lx = x @ w; ly = y @ w; m = (lx - ly) < -2; H, W = lx.shape
+    print(f"   darker {on} vs {off}: {m.sum()} px, mean dl {(lx-ly)[m].mean() if m.any() else 0:.1f}, min dl {(lx-ly)[m].min() if m.any() else 0:.1f}, "
+          f"rgb {y[m].mean(0).round(1).tolist() if m.any() else []} -> {x[m].mean(0).round(1).tolist() if m.any() else []}")
+    g = np.zeros((9, 16), int); ys, xs = np.where(m)
+    np.add.at(g, (ys * 9 // H, xs * 16 // W), 1)
+    for row in g: print("     " + " ".join(f"{v:4d}" for v in row))
+
 def ascii(*keys):
     import numpy as np
     from PIL import Image
