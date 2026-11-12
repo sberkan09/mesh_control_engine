@@ -133,6 +133,7 @@
      "drift_degrees_per_minute": 6
     },
     "CloudLayer": {},
+    "Cirrus": {},
     "WeatherAudio": {
      "rain_source": "$12",
      "wind_source": "$13"

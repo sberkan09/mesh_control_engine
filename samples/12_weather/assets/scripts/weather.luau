@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines, the "snow_sparkle:" lines, the "midge:" lines and the "cold_breath:" lines).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines, the "snow_sparkle:" lines, the "midge:" lines, the "cold_breath:" lines and the "cirrus:" lines).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -34,6 +34,11 @@ function update()
         mce.log(string.format("clouds: strength %.2f fair %.2f overcast %.2f height %.0f at tick %d",
             weather.cloud_strength(), weather.cloud_fair_coverage(), weather.cloud_overcast_coverage(),
             weather.cloud_height(), t))
+        -- M-CIRRUS: the Cirrus on the Weather entity (defaults). cirrus_coverage is the kit helper on the weather and the
+        -- WorldClock day: fair toward front while a change of weather is pending or fading in, lowered under a heavy deck, and
+        -- a slow day variation; read only, the script writes nothing.
+        mce.log(string.format("cirrus: strength %.2f coverage %.3f height %.0f at tick %d",
+            weather.cirrus_strength(), weather.cirrus_coverage(), weather.cirrus_height(), t))
         -- M-WEATHERAUDIO: the rain and wind bed levels follow the weather (the two sources have no clip: silent).
         mce.log(string.format("audio: rain %.3f wind %.3f max %.0f/%.0f dB fade %.0f s at tick %d",
             weather.rain_level(), weather.wind_level(), weather.audio_rain_db(), weather.audio_wind_db(),
