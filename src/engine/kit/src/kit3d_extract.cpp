@@ -1457,8 +1457,10 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         }
         scene.set_meteor(shown);
     }
-    bool water_plane = false;  // M-CAUSTICS 52c: this frame's extract set an enabled plane (Scene3D keeps a stale one)
-    {  // water (M-WATER 15b): the first Water; nothing is set without one, when disabled or with a non-finite level
+    bool water_plane = false;  // M-CAUSTICS 52c: this frame's extract set an enabled plane
+    {  // water (M-WATER 15b): the first Water; without one, when disabled or with a non-finite level the carrier is cleared
+        // (Scene3D::begin does not reset it: a removed or disabled Water must not keep drawing last frame's plane)
+        scene.set_water(render::WaterSurface{});
         const Water* water = nullptr;
         const WindDirection* water_wd = nullptr;
         world.query<const Water&>().each([&](const Water& c) {

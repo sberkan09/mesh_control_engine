@@ -283,3 +283,38 @@ TEST_CASE("water extract: the first WaterFlow sets the carrier's flow, zero with
     CHECK_FALSE(no_water.frame().enabled);
     CHECK(same_bits(no_water.scene.water().flow.x, 0.0f));
 }
+
+TEST_CASE("water extract: a removed, disabled or destroyed Water clears last frame's plane in the same Scene3D") {
+    SUBCASE("destroyed entity") {
+        Rig r;
+        r.add_water();
+        CHECK(r.frame().enabled);
+        r.world.destroy(r.water_e);
+        const render::WaterSurface& w = r.frame();
+        CHECK_FALSE(w.enabled);
+        CHECK(same_water(w, render::WaterSurface{}));
+    }
+    SUBCASE("component removed") {
+        Rig r;
+        r.add_water();
+        CHECK(r.frame().enabled);
+        r.world.remove<Water>(r.water_e);
+        CHECK_FALSE(r.frame().enabled);
+    }
+    SUBCASE("set disabled") {
+        Rig r;
+        r.add_water();
+        CHECK(r.frame().enabled);
+        r.water().enabled = 0;
+        CHECK_FALSE(r.frame().enabled);
+        r.water().enabled = 1;
+        CHECK(r.frame().enabled);  // and back on
+    }
+    SUBCASE("non-finite level") {
+        Rig r;
+        r.add_water();
+        CHECK(r.frame().enabled);
+        r.water().level_y = std::nanf("");
+        CHECK_FALSE(r.frame().enabled);
+    }
+}
