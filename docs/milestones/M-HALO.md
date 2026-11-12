@@ -1,7 +1,7 @@
 # M-HALO — Ice-crystal halo and sun dogs seen through the cirrus layer (milestone record)
 
-**Status:** in progress (started 2026-11-12), steps 54a to 54d. 54a (this plan and the `render::Halo` seam) is done; 54b
-(the sky shader and its CPU twin), 54c (kit, extract, Luau) and 54d (sample, guide, close) are planned. **Owner:
+**Status:** in progress (started 2026-11-12), steps 54a to 54d. 54a (this plan and the `render::Halo` seam) and 54b
+(the sky shader and its CPU twin) are done; 54c (kit, extract, Luau) and 54d (sample, guide, close) are planned. **Owner:
 routine 2 thread (the M-VISUAL line).** Follow-up of M-CIRRUS (whose "not in scope" list names "halos and sun dogs, an
 ice-crystal optics follow-up"), M-RAINBOW (a sky optic that is a pure function of the angle between the view ray and a
 reference direction) and the M-AURORA / M-RAINBOW / M-METEOR / M-CIRRUS split (plan and seam, shader, kit, sample and
@@ -55,9 +55,10 @@ cloud layer where it is thick (the low layer composites over it), several suns, 
   the frame without it bit for bit. Notation: `s` the unit sun direction, `d` the unit view ray, `theta = acos(dot(d,
   s))` (clamped dot; `acos` only near the ring, using `dot` thresholds away from it), `pix` the pixel's angle as
   `cirrus_layer` already takes it, `e` the sun's elevation (`s.y = sin e`).
-  - Veil factor: `veil = p_cirrus.x * (0.5 + 0.5 * a / amax)` where `a` is the streak opacity the layer just computed
-    (`amax` 0.5 is the layer's cap), so the halo is strongest where the cirrus is thick, never shows in a gap wider than
-    the streaks leave, and is exactly 0 with coverage 0. A full-coverage deck gives the ring 0.5 to 1 of its strength.
+  - Veil factor (as built in 54b; the plan's `p_cirrus.x * (0.5 + 0.5 * a / amax)` kept half the ring in the gaps):
+    `veil = clamp(2 a / smoothstep(0.02, 0.2, d.y), 0, 1) * smoothstep(0.02, 0.1, d.y)`, `a` the streak opacity the
+    layer just computed (cap 0.5), so the halo shows only through the streaks (none in a gap, none with coverage 0) and
+    the streaks' own long horizon fade is swapped for a shorter one, so the dogs of a sun a few degrees up still show.
   - Ring: `x = theta - t0`, `t0 = 22 deg = 0.3840 rad`; the profile `ring(x) = smoothstep(-wi, 0, x) * exp(-x / wo)` for
     the radial offset `x` (zero well inside, a sharp inner edge of half-width `wi = max(0.004, 1.5 * pix)` rad, an
     exponential soft outer edge `wo = 0.035` rad, about 2 degrees). Dispersion: the profile is evaluated per colour
@@ -73,20 +74,31 @@ cloud layer where it is thick (the low layer composites over it), several suns, 
     1.6x away from the sun (a short tail on the outside, a sharp inside edge), the same per-channel dispersion shift
     along the sun direction (red toward the sun), gain `sun_dogs * mix(1.0, 0.25, smoothstep(0.0, 0.8, s.y))`: full at
     a low sun, a quarter when it is high. Sun dogs are 3 times the ring's peak at a low sun (they are the brightest
-    part of a real display), before the global cap below.
+    part of a real display), before the global cap below. As built (54b): the blob is `exp(-along^2 / w^2 - across^2 /
+    0.022^2)` in the radial (`along`, away from the sun) and cross directions at the dog, `w = max(0.008, 1.5 pix)`
+    toward the sun and 0.045 away; the right side of the `cos dphi` formula never exceeds 1 (it falls as the sun
+    climbs; it passes -1 only above 79 degrees), so it is clamped to -1..1 and the dogs fade out instead with `1 -
+    smoothstep(0.7, 0.87, s.y)` (none above about 60 degrees, as real parhelia); the dogs' gain is 5 times the ring's
+    (2.0 against 0.4) to read through the tonemap at a low sun.
   - Sun gating and level: `sun_gate = smoothstep(-0.05, 0.02, s.y)` (nothing once the sun is below the horizon),
     the sun's light colour from `p_light_color` times that gate, `strength * veil * sun_gate` as the amplitude. Added
     to `c` (emission, over the sky and the streaks, under the low layer and the fog), the amplitude scaled by
     `smoothstep(0.1, 0.4, theta)` (a ramp away from the sun's own glow), so the Mie glow near the sun
     is not added twice (risk below), and the added colour is capped at `0.25 * sun_light` per channel for the ring and
-    `0.6 * sun_light` for a dog, so the halo never outshines the disk.
+    `0.6 * sun_light` for a dog, so the halo never outshines the disk. As built (54b, tuned on 800 x 450 llvmpipe
+    frames): the ring adds `0.4` of the light at its peak (cap 0.6), a dog `2.0` (cap 2.0); the sun term is 0 while the
+    moon holds the light (`p_night.y > 0` and `dot(s, p_moon.xyz) > 0.9999`, the kit's night hand-off), so the moon
+    gets only its own ring.
   - Moon ring: the same ring profile (no sun dogs) around `p_moon.xyz`, 22 degrees, with `moon * strength * veil *
     p_night.y (the moon intensity) * night_fade` as the amplitude (so no moon, a day sky or `NightSky` off draws none)
     and a cap at 0.08 of the moon's tint `p_moon2.rgb`; dispersion is halved (the moonlight is too faint to show colour).
+    As built (54b): `M = p_moon2.rgb * p_night.y`, the term `0.006 * M * ring` times the amplitude, capped at `0.08 M`.
   - Fades: up-going rays only (`d.y > 0.02`, as the layer), `smoothstep(0.02, 0.2, d.y)` into the horizon haze like the
     streaks, and the ring and the dogs fade out where `pix` would make the sharp edge thinner than a pixel (`wi` is the
     floor, and the amplitude is multiplied by `1 - smoothstep(0.004, 0.012, pix)` below the ring's own width so a very
-    coarse render shows a soft ring, not a crawling one).
+    coarse render shows a soft ring, not a crawling one). As built (54b): `1 - smoothstep(0.01, 0.03, pix)` (the
+    plan's range would have dimmed the 160 x 120 test frames, 0.0063 rad per pixel, which the 1.5-pixel edge floor
+    already keeps from crawling).
   - Order: unchanged from M-CIRRUS: `kSkyFS` applies `apply_cirrus` after the meteors and right before `apply_clouds`,
     so the low layer composites over the halo and the fog over both; the sun disk is under the cirrus and the halo
     adds around it. `water_sky` reaches it through the same `apply_cirrus` line, so the water reflects the halo with no
@@ -193,6 +205,6 @@ and 54c in parallel, then 54d).
 | Step | Status | PR | Notes |
 |---|---|---|---|
 | 54a. Plan and seam | done | TBD | `render::Halo` (20 bytes, explicit `pad_[3]`) after `render::Cirrus` in `scene3d.h`, `Scene3D::set_halo()` / `halo()`, `QualitySettings::halo` (Low off), the saved cvar `r.halo`, `apply_quality(q, halo)` (clamps as in Design; in-range values bit for bit); `tests/render/test_halo_quality.cpp`. `include_fanout.py` 2026-11-12: `scene3d.h` at most 241 of 1075 TUs, `quality.h` 156 (both over the 150 warning: this is the seam PR; 235 / 151 before this step). PassU budget checked: 1 `vec4` free, the halo needs exactly 1 (`p_halo`), so the size stays 1536 and 0 are left. No shader change |
-| 54b. Sky shader | planned | | |
+| 54b. Sky shader | done | TBD | `p_halo` (strength, sun dogs, moon, dispersion) takes PassU's last free `vec4` (`free_[1]` gone; 1536 bytes, 0 free) in `MCE_GLSL_PASS_U`, `Forward3DPassU`, the offset `static_assert` and its message, the size comment and message. `MCE_GLSL_HALO` (`halo_term`, added by `cirrus_layer` behind `p_halo.x > 0` after the streak composite, so `kSkyFS`'s `apply_cirrus` draws it and `water_sky` reflects it; the low layer and the fog cover it; `sky_radiance()` / IBL unchanged; no `sin()`). CPU twin `mce/render/halo.h` / `halo.cpp` (narrow, `render::Halo` forward-declared; `halo_shader_params` feeds the upload). Deviations from the plan, each in Design: the veil multiplies by the streak opacity (no halo in a gap) with a shorter horizon fade, the dogs fade out above 60 degrees instead of a clamp, the gains (ring 0.4, dogs 2.0, moon 0.006) and the pixel fade (0.01..0.03 rad) were tuned on 800 x 450 llvmpipe frames, and the goldens are `halo_sky` (sun 12 degrees up, thick deck) and `halo_night` (the moon's ring) instead of `halo_sun` / `halo_lowsun` / `halo_moon`, on linux-gl and linux-sdlgpu. Every existing golden byte-identical on both backends. Tests: `tests/render/test_halo.cpp` (gate, ring profile and edge floor, dispersion, dog centres 22 degrees on the horizon circle, gain, veil, caps, sun gate, moon hand-off, pixel fade) and `test_render3d_halo_gl` on GL and SDL GPU (strength 0 / disabled / NaN / Low / `r.halo 0` / cirrus coverage 0 / sun under the horizon equal the plain frame; only sky above the horizon changes; ring peak at 22.25 deg, inner slope 1.9x the outer; blue-minus-red centroid 0.45 deg with dispersion 1, -0.02 with 0; dogs on the sun's elevation 22 deg away, 44.4 deg apart at 8 deg and 48.8 at 25 deg, dimmer when higher; no halo in streak gaps; hidden behind an opaque low deck; the moon ring 0.012 against the sun's 0.56 linear, absent by day; the sea reflects it; origin shift unchanged; a quarter-pixel yaw changes it by 4.5 % (160 x 120) and 2.4 % (640 x 360) of its peak at the 99th percentile; GLSL vs twin over 6652 probes, worst 0.004). The cirrus twin test's PassU gains the halo's uniforms (zero). `kSkyFS` 46536 bytes, `kWaterFS` 56063 (under 65536). SPIR-V entry compiles here; the Metal-cross entry is macOS-only and unverified on Linux. `perf_run` not recorded (no GPU here) |
 | 54c. Kit, extract, Luau | planned | | |
 | 54d. Sample, guide, close | planned | | |

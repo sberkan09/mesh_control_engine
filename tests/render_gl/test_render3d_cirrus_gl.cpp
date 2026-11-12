@@ -445,6 +445,10 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_cirrus2;
     vec4 t_sun;
     vec4 t_bg;
+    vec4 p_halo;  // M-HALO 54b: the layer's text carries the halo; 0 here (off), test_render3d_halo_gl runs it
+    vec4 p_night;
+    vec4 p_moon;
+    vec4 p_moon2;
 };
 )";
 // Texel x of the 4 N x 1 target: direction x / 4 (u_dirs: xyz the direction, w the radians per pixel), output x % 4
@@ -471,6 +475,7 @@ void main() {
 
 struct TwinBlock {
     f32 light[4], amb[4], cirrus[4], cirrus2[4], sun[4], bg[4];
+    f32 halo_off[4][4];  // p_halo, p_night, p_moon, p_moon2: zero (TwinBlock u{})
 };
 
 // The layer's text over directions `dirs` with pixel footprints `pix` (each exact in half precision): per direction the
@@ -612,7 +617,7 @@ TEST_CASE("render3d_gl: the cirrus GLSL agrees with the CPU twin on a grid of di
                                {p.wind.x, p.wind.y, p.stretch, p.drift},
                                {sun.x, sun.y, sun.z, 0.0f},
                                {bg.x, bg.y, bg.z, 0.0f}};
-        std::memcpy(&u, blk, sizeof u);
+        std::memcpy(&u, blk, sizeof blk);  // the halo rows stay 0
         const Array<f32> gpu = run_twin(f, dirs, pix, u);
         for (usize i = 0; i < dirs.size(); ++i) {
             const vec3 d = dirs[i];
