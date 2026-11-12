@@ -93,6 +93,25 @@
 //                                         a table, every key optional, each value clamped to the field's Range;
 //                                         an unknown key or a non-number raises an error that names the call
 //
+// Cirrus (M-CIRRUS step 53c) is the same kind of binding over the first kit::Cirrus (mce/kit/cirrus.h; install_weather
+// registers it). Named errors as above. All eight fields are authoring, so all are settable.
+//
+//   weather.cirrus_strength() -> number        Cirrus.strength (0..1)
+//   weather.cirrus_fair_coverage() -> number   Cirrus.fair_coverage (0..1)
+//   weather.cirrus_front_coverage() -> number  Cirrus.front_coverage (0..1)
+//   weather.cirrus_density() -> number         Cirrus.density (0..1)
+//   weather.cirrus_scale() -> number           Cirrus.scale_m (200..40000)
+//   weather.cirrus_stretch() -> number         Cirrus.stretch (1..16)
+//   weather.cirrus_speed_scale() -> number     Cirrus.speed_scale (0..10)
+//   weather.cirrus_height() -> number          Cirrus.height_m (1000..30000)
+//   weather.cirrus_coverage() -> number        read-only: kit::cirrus_coverage of the first Cirrus, the first Weather and
+//                                              the first WorldClock (day 0, hour 0 without one), 0..1, before the
+//                                              quality tier; a scene without a Weather raises
+//   weather.set_cirrus{strength=, fair_coverage=, front_coverage=, density=, scale=, stretch=, speed_scale=, height=}
+//                                         a table, every key optional, each value clamped to the field's Range;
+//                                         an unknown key or a non-number raises an error that names the call, and
+//                                         nothing is written on an error
+//
 // Cloud shadows on the ground (M-CLOUDSHADOW step 51e) are the same kind of binding over the first kit::CloudShadow3D
 // (mce/kit/cloud_shadow.h, a kit3d component: install_kit3d registers it). The clouds themselves are the CloudLayer's.
 //
@@ -573,6 +592,7 @@
 
 #include "api.h"
 #include "mce/kit/aurora.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/cloud_shadow.h"
 #include "mce/kit/caustics.h"
@@ -1561,6 +1581,66 @@ int l_weather_aurora_high_color(lua_State* L) { return push_aurora_color(L, chec
 int l_weather_aurora_gate(lua_State* L) {
     lua_pushnumber(L, static_cast<double>(kit::aurora_latitude_gate(check_aurora(L, "weather.aurora_gate"))));
     return 1;
+}
+
+kit::Cirrus& check_cirrus(lua_State* L, const char* fn) { return check_first<kit::Cirrus>(L, fn, "Cirrus"); }
+
+#define MCE_WEATHER_GETTER_CI(luaname, field)                                                       \
+    int l_weather_##luaname(lua_State* L) {                                                         \
+        lua_pushnumber(L, static_cast<double>(check_cirrus(L, "weather." #luaname).field));         \
+        return 1;                                                                                   \
+    }
+MCE_WEATHER_GETTER_CI(cirrus_strength, strength)
+MCE_WEATHER_GETTER_CI(cirrus_fair_coverage, fair_coverage)
+MCE_WEATHER_GETTER_CI(cirrus_front_coverage, front_coverage)
+MCE_WEATHER_GETTER_CI(cirrus_density, density)
+MCE_WEATHER_GETTER_CI(cirrus_scale, scale_m)
+MCE_WEATHER_GETTER_CI(cirrus_stretch, stretch)
+MCE_WEATHER_GETTER_CI(cirrus_speed_scale, speed_scale)
+MCE_WEATHER_GETTER_CI(cirrus_height, height_m)
+#undef MCE_WEATHER_GETTER_CI
+
+// weather.cirrus_coverage(): kit::cirrus_coverage with the inputs Kit3DExtract's cirrus block uses (the first Weather,
+// the first WorldClock's day and hour, 0 and 0 without one), before the quality tier.
+int l_weather_cirrus_coverage(lua_State* L) {
+    const kit::Cirrus& c = check_cirrus(L, "weather.cirrus_coverage");
+    World& w = world_of(L);
+    const kit::Weather* wx = first_weather(w);
+    if (!wx) luaL_error(L, "weather.cirrus_coverage: the scene has no Weather entity");
+    u32 day = 0;
+    f32 hour = 0.0f;
+    const refl::TypeRecord* type = refl::find_type(StringId("WorldClock"));
+    if (type && w.find_component(type->type_hash) != ecs::kInvalidComponent) {
+        bool found = false;
+        w.query<kit::WorldClock>().each([&](Entity, kit::WorldClock& k) {
+            if (found) return;
+            found = true;
+            day = k.day;
+            hour = k.hour;
+        });
+    }
+    lua_pushnumber(L, static_cast<double>(kit::cirrus_coverage(c, *wx, kit::cirrus_day_fraction(day, hour))));
+    return 1;
+}
+
+// weather.set_cirrus{...}: validated before anything is written.
+int l_weather_set_cirrus(lua_State* L) {
+    static const char* const kKeys[8] = {"strength", "fair_coverage", "front_coverage", "density",
+                                         "scale",    "stretch",       "speed_scale",    "height"};
+    f64 value[8] = {};
+    bool given[8] = {};
+    read_settings(L, "weather.set_cirrus", kKeys, 8,
+                  "strength, fair_coverage, front_coverage, density, scale, stretch, speed_scale, height", value, given);
+    kit::Cirrus& c = check_cirrus(L, "weather.set_cirrus");
+    if (given[0]) c.strength = static_cast<f32>(clamp_range(value[0], 0.0, 1.0));
+    if (given[1]) c.fair_coverage = static_cast<f32>(clamp_range(value[1], 0.0, 1.0));
+    if (given[2]) c.front_coverage = static_cast<f32>(clamp_range(value[2], 0.0, 1.0));
+    if (given[3]) c.density = static_cast<f32>(clamp_range(value[3], 0.0, 1.0));
+    if (given[4]) c.scale_m = static_cast<f32>(clamp_range(value[4], 200.0, 40000.0));
+    if (given[5]) c.stretch = static_cast<f32>(clamp_range(value[5], 1.0, 16.0));
+    if (given[6]) c.speed_scale = static_cast<f32>(clamp_range(value[6], 0.0, 10.0));
+    if (given[7]) c.height_m = static_cast<f32>(clamp_range(value[7], 1000.0, 30000.0));
+    return 0;
 }
 
 // The night fade Kit3DExtract hands aurora_level: 0 with no clock, else 1 - smoothstep of the sun's own elevation over
@@ -3284,6 +3364,16 @@ const luaL_Reg kWeatherLib[] = {
     {"caustics_absorption", l_weather_caustics_absorption},
     {"caustics_max_depth", l_weather_caustics_max_depth},
     {"set_caustics", l_weather_set_caustics},
+    {"cirrus_strength", l_weather_cirrus_strength},
+    {"cirrus_fair_coverage", l_weather_cirrus_fair_coverage},
+    {"cirrus_front_coverage", l_weather_cirrus_front_coverage},
+    {"cirrus_density", l_weather_cirrus_density},
+    {"cirrus_scale", l_weather_cirrus_scale},
+    {"cirrus_stretch", l_weather_cirrus_stretch},
+    {"cirrus_speed_scale", l_weather_cirrus_speed_scale},
+    {"cirrus_height", l_weather_cirrus_height},
+    {"cirrus_coverage", l_weather_cirrus_coverage},
+    {"set_cirrus", l_weather_set_cirrus},
     {"rain_level", l_weather_rain_level},
     {"wind_level", l_weather_wind_level},
     {"audio_rain_db", l_weather_audio_rain_db},

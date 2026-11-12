@@ -47,6 +47,7 @@
 #include "mce/kit/sun_shafts.h"
 #include "mce/kit/cloud_shadow.h"
 #include "mce/kit/caustics.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/gi_visibility.h"
@@ -1257,6 +1258,43 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
         const render::Clouds shown = render::apply_quality(quality_, clouds);
         scene.set_clouds(shown);
         cloud_cover = shown.coverage;
+    }
+    {  // cirrus (M-CIRRUS 53c): the first Cirrus with a Weather and no equirect sky texture; written every frame (the
+       // default, coverage 0, otherwise) so a stale one never survives. The clock is the first WorldClock (day 0, hour 0
+       // without one), the wind direction the first WindDirection (+x without one).
+        const Weather* weather = nullptr;
+        const Cirrus* cirrusc = nullptr;
+        const WindDirection* cirrus_wd = nullptr;
+        u32 clock_day = 0;
+        f32 clock_hour = 0.0f;
+        bool have_clock = false;
+        world.query<const Weather&>().each([&](const Weather& c) {
+            if (!weather) weather = &c;
+        });
+        world.query<const Cirrus&>().each([&](const Cirrus& c) {
+            if (!cirrusc) cirrusc = &c;
+        });
+        world.query<const WindDirection&>().each([&](const WindDirection& c) {
+            if (!cirrus_wd) cirrus_wd = &c;
+        });
+        world.query<const WorldClock&>().each([&](const WorldClock& c) {
+            if (have_clock) return;
+            have_clock = true;
+            clock_day = c.day;
+            clock_hour = c.hour;
+        });
+        render::Cirrus cirrus;  // coverage 0 by default (off)
+        if (weather && cirrusc && env.sky_texture.guid == asset::Guid{}) {
+            cirrus.coverage = cirrus_coverage(*cirrusc, *weather, cirrus_day_fraction(clock_day, clock_hour));
+            cirrus.density = cirrusc->density;
+            cirrus.scale_m = cirrusc->scale_m;
+            cirrus.stretch = cirrusc->stretch;
+            cirrus.speed = weather->wind * cirrusc->speed_scale;
+            if (cirrus_wd) cirrus.wind_dir = wind_direction_vector(*cirrus_wd);  // else the default +x
+            cirrus.height_m = cirrusc->height_m;
+            cirrus.enabled = true;
+        }
+        scene.set_cirrus(render::apply_quality(quality_, cirrus));
     }
     const f32 dark = [&] {  // 0 by day, 1 at night: shared by the night sky and the aurora
         const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);

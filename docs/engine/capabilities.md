@@ -53,6 +53,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `CameraShake3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `CameraBlend3D` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/kit3d_tour/assets/scenes/tour.mcscene |
 | `Cutscene` | `mce/kit/cinematic.h` | yes | yes | yes | docs/user-guide/13-sequences-fsm-saves.md | samples/cinema_demo/assets/scenes/intro.mcscene |
+| `Cirrus` | `mce/kit/cirrus.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-CIRRUS 53c: tested in tests/kit/test_cirrus.cpp; step 53d shows it in samples/12_weather (delete this line then) |
 | `CloudLayer` | `mce/kit/cloud_layer.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `CloudShadow3D` | `mce/kit/cloud_shadow.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_cloudshadow.mcscene |
 | `ColdBreath` | `mce/kit/cold_breath.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/12_weather/assets/scenes/weather.mcscene |

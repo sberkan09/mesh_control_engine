@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "mce/ecs/world.h"
+#include "mce/kit/cirrus.h"
 #include "mce/kit/cloud_layer.h"
 #include "mce/kit/kit3d.h"
 #include "mce/kit/rain_ripples.h"
@@ -347,6 +348,7 @@ void install_weather(World& world, asset::AssetSystem* assets) {
     world.register_components<Season>();      // M-SEASONS 19a: read by Kit3DExtract (19b) and the season helpers; no system
     world.register_components<RainRipples>();  // M-RAINFX 7c: read by Kit3DExtract; no system
     world.register_components<CloudLayer>();  // M-CLOUDS 9c: read by Kit3DExtract; no system
+    world.register_components<Cirrus>();      // M-CIRRUS 53c: read by Kit3DExtract and cirrus_coverage; no system
     world.register_components<WeatherAudio>();  // M-WEATHERAUDIO 10a: kit_weather_audio writes AudioSource::gain_db
     install_weather_audio(world);
     world.register_components<LightningBolt>();  // M-LIGHTNINGBOLT 11a: read by kit_lightning
