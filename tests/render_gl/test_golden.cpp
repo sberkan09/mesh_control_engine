@@ -714,6 +714,27 @@ TEST_CASE("golden: cirrus_dusk: lit cirrus behind a darkened low layer after sun
     check_golden("cirrus_dusk", f);
 }
 
+// ---- M-HALO 54b: the ice halo and sun dogs through the cirrus -----------------------------------------------------------
+
+// The default halo (strength 1, dogs 1, dispersion 1) through a thick cirrus deck (coverage 0.85, density 0.7) around a
+// low sun 12 degrees up straight ahead of the halo camera: the upper half of the 22 degree ring with its red inner edge
+// and both sun dogs on the sun's horizon line (halo_sky_scene).
+TEST_CASE("golden: halo_sky: a 22 degree halo and sun dogs around a low sun through cirrus") {
+    Fixture3D f;
+    halo_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { halo_sky_scene(s, halo_cirrus(), halo_carrier()); });
+    check_golden("halo_sky", f);
+}
+
+// The same deck by night around a full moon 15 degrees up straight ahead (moon ring 0.5, no stars): the faint lunar
+// halo (halo_night_scene).
+TEST_CASE("golden: halo_night: a faint 22 degree lunar halo through cirrus") {
+    Fixture3D f;
+    halo_camera(f);
+    f.render(0.0f, true, [&](Scene3D& s) { halo_night_scene(s, halo_night_carrier(), halo_cirrus(), halo_carrier()); });
+    check_golden("halo_night", f);
+}
+
 // ---- M-NIGHTSKY 14d: the moon and the stars ------------------------------------------------------------------------
 
 // A full moon 25 degrees up on the right and the star field (density 0.6, twinkle 0.3 at 12.25 s) over a dark

@@ -1539,4 +1539,61 @@ inline void cirrus_dusk_scene(Scene3D& s, const Cirrus& cirrus, const Clouds& cl
     s.set_cirrus(cirrus);
 }
 
+// ---- M-HALO 54b: the ice halo and sun dogs through the cirrus ---------------------------------------------------------
+
+// The halo as the kit extract hands it over: `strength`, the default sun dogs (1), moon ring (0.5) and dispersion (1).
+inline Halo halo_carrier(f32 strength = 1.0f) {
+    Halo h;
+    h.strength = strength;
+    return h;
+}
+
+// A thick cirrus deck for the halo (coverage 0.85, density 0.7: a near-continuous veil the ring shows through).
+inline Cirrus halo_cirrus(f32 coverage = 0.85f) {
+    Cirrus c = cirrus_carrier(coverage);
+    c.density = 0.7f;
+    return c;
+}
+
+// The halo camera: raised 3 m and looking 14 degrees up toward -z (the frame spans about -8 to 36 degrees of elevation
+// and +-29 degrees of azimuth), so a sun low in front of it shows the whole upper half of the 22 degree ring and both
+// dogs.
+inline void halo_camera(Fixture3D& f) {
+    f.look_at = {0.0f, 3.0f, 0.0f};
+    f.pitch_deg = -14.0f;
+}
+
+// The halo day: the default gradient sky and light, the sun `elevation_deg` up straight ahead of the halo camera (toward
+// -z), the cirrus `cirrus`, the halo `halo` and the low layer `clouds`, at scene time `time`.
+inline vec3 halo_sun_toward(f32 elevation_deg) {
+    const f32 e = math::radians(elevation_deg);
+    return vec3{0.0f, std::sin(e), -std::cos(e)};
+}
+inline void halo_sky_scene(Scene3D& s, const Cirrus& cirrus, const Halo& halo, f32 elevation_deg = 12.0f,
+                           const Clouds& clouds = Clouds{}, f32 time = 30.0f) {
+    DirectionalLight sun;
+    sun.direction = -halo_sun_toward(elevation_deg);
+    s.set_light(sun);
+    s.set_exposure(0.6f);
+    s.set_time(time, 1.0f / 60.0f);
+    s.set_clouds(clouds);
+    s.set_cirrus(cirrus);
+    s.set_halo(halo);
+}
+
+// The halo night: night_sky_scene's dark sky and dim light from under the horizon behind the camera, a full moon 15
+// degrees up straight ahead of the halo camera (its ring's upper half in the frame), no stars, the cirrus and the halo.
+inline constexpr vec3 kHaloMoonDir{0.0f, 0.25881904f, -0.96592583f};  // toward the moon, 15 degrees up toward -z
+inline NightSky halo_night_carrier(f32 moon_intensity = 6.0f) {
+    NightSky n = night_sky_carrier(0.5f, 0.0f, moon_intensity);
+    n.moon_dir = kHaloMoonDir;
+    return n;
+}
+inline void halo_night_scene(Scene3D& s, const NightSky& night, const Cirrus& cirrus, const Halo& halo) {
+    night_sky_scene(s, night);
+    s.set_time(30.0f, 1.0f / 60.0f);
+    s.set_cirrus(cirrus);
+    s.set_halo(halo);
+}
+
 }  // namespace mce::render_test

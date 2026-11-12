@@ -92,7 +92,8 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_water6;         // M-WATER2: x 1 = trace, y 1 = refract, z 1 = copy at bank 7
     vec4 p_cirrus;         // M-CIRRUS 53b: x coverage (0 = off), y density, z 1 / cell (1/m), w height (m)
     vec4 p_cirrus2;        // xy the wind (xz unit), z stretch, w drift along it (cells mod 64)
-    vec4 p_free[1];        // unused, 0: PassU is 96 vec4 = 1536 bytes, a whole number of 256-byte slots (forward3d.cpp)
+    vec4 p_halo;           // M-HALO 54b: x strength (0 = off), y sun dogs, z moon, w dispersion; the last vec4 of the
+                           // 1536-byte block (96 vec4, a whole number of 256-byte slots, forward3d.cpp): 0 free
 };
 layout(binding = 10) uniform sampler2DArray u_sky;
 const float PI = 3.14159265359;
@@ -1983,6 +1984,102 @@ float cloud_value(vec2 g, uint m, uint seed) {
     return mix(mix(a, b, f.x), mix(c, e, f.x), f.y);
 }
 )"
+// ---- the ice halo (M-HALO 54b), behind p_halo.x > 0 (strength; 0 = the frame without it bit for bit) and inside the
+// cirrus layer (cirrus_layer adds halo_term after the streak composite, so it is behind p_cirrus.x > 0 too, drawn by
+// kSkyFS's apply_cirrus and reflected by water_sky; the low layer and the fog cover it, the IBL does not see it). The
+// comments live here, outside the literal. The CPU twin is mce/render/halo.h (halo.cpp): a change here goes there too,
+// and test_render3d_halo_gl runs this text alone against it. Notation: s the unit direction toward the light
+// (-p_light_dir), d the unit view ray, cs = dot(d, s), a the cirrus opacity at the pixel (0..0.5), pix its radians per
+// pixel (cirrus_layer's).
+//   amp    p_halo.x * veil * (1 - smoothstep(0.01, 0.03, pix)), veil = clamp(2 a / smoothstep(0.02, 0.2, d.y), 0, 1)
+//          * smoothstep(0.02, 0.1, d.y): only through the streaks (a clear sky, a gap or coverage 0 shows none), the
+//          streaks' own horizon fade (which hides their pattern) swapped for a shorter one so the dogs of a low sun
+//          still show; faded on a very coarse render.
+//   ring   x = theta - 22 deg (0.38397244 rad): smoothstep(-wi, 0, x) * exp(-max(x, 0) / 0.035), wi = max(0.004,
+//          1.5 pix): a sharp inner edge never thinner than 1.5 pixels (no crawl), a soft outer glow about 2 degrees
+//          wide. Per channel x is shifted by the dispersion p_halo.w: red 0.004 rad inside, blue 0.006 outside,
+//          weighted (1, 0.9, 0.8): warm white, a red inner and a blue outer fringe.
+//   dogs   on the sun's horizon circle at cos dphi = (cos 22 deg - sin^2 e) / cos^2 e from the sun's azimuth (exactly
+//          22 degrees from the sun): a blob exp(-along^2 / w^2 - across^2 / 0.022^2), w = max(0.008, 1.5 pix) toward
+//          the sun and 0.045 away (a sharp red inner edge, a tail outward), the same channel shifts; gain p_halo.y *
+//          mix(1, 0.25, smoothstep(0, 0.8, s.y)) * (1 - smoothstep(0.7, 0.87, s.y)) (brightest at a low sun, none
+//          above about 60 degrees), 5 x the ring's.
+//   sun    gate smoothstep(0.1, 0.2, s.y), 0 without a sun disk (p_sun.y 0). The kit hands the one directional light
+//          to the moon at night (M-NIGHTSKY 14b) and drops the disk exactly then (14e: the Sky copy's sun_intensity
+//          0), whatever the night sky's uniforms say (r.nightsky 0, a moon without a disk, a night fade of 0, a sky
+//          texture: p_night may be zero while the light is the moon), so the disk is the signal: no sun ring or dogs
+//          around the moon. The hand-off can happen at any sun elevation under 0.10 (the kit's weight
+//          smoothstep(-0.05, 0.10, elevation) is under 1 there), so the sun term is 0 there and fades in above it:
+//          it never pops at the switch, at the cost of no sun halo for a sun under 5.7 degrees. acos only for
+//          cs > 0.6; the ring times
+//          smoothstep(0.1, 0.4, theta) (none in the sun's own glow); added as p_light_color times the profile times
+//          0.4 (dogs 2.0), capped at 0.6 (dogs 2.0) of p_light_color per channel: it never outshines the disk.
+//   moon   the ring alone around p_moon.xyz, half the dispersion, M = p_moon2.rgb * p_night.y (the disk's tint and
+//          intensity) times 0.006 * p_halo.z * p_night.w, capped at 0.08 M; none with no moon or by day (fade 0).
+#define MCE_GLSL_HALO \
+    R"(
+float halo_ring(float x, float pix) {
+    float wi = max(0.004, 1.5 * pix);
+    return smoothstep(-wi, 0.0, x) * exp(-max(x, 0.0) / 0.035);
+}
+vec3 halo_ring_rgb(float theta, float pix, float disp) {
+    float x = theta - 0.38397244;
+    return vec3(halo_ring(x + 0.004 * disp, pix), 0.9 * halo_ring(x, pix), 0.8 * halo_ring(x - 0.006 * disp, pix));
+}
+vec3 halo_dog_center(vec3 s, float side) {
+    float se = clamp(s.y, -1.0, 1.0);
+    float ce2 = max(1.0 - se * se, 1e-6);
+    float cp = clamp((0.92718385 - se * se) / ce2, -1.0, 1.0);
+    float sp = sqrt(max(1.0 - cp * cp, 0.0));
+    float hl = length(s.xz);
+    vec2 h = hl > 1e-6 ? s.xz / hl : vec2(1.0, 0.0);
+    vec2 xz = sqrt(ce2) * (cp * h + side * sp * vec2(-h.y, h.x));
+    return vec3(xz.x, se, xz.y);
+}
+float halo_dog_profile(float along, float across2, float pix) {
+    float w = along < 0.0 ? max(0.008, 1.5 * pix) : 0.045;
+    return exp(-(along * along) / (w * w) - across2 / (0.022 * 0.022));
+}
+vec3 halo_dog_rgb(vec3 d, vec3 dog, vec3 s, float pix, float disp) {
+    vec3 r = dog - s * dot(dog, s);
+    r *= 1.0 / sqrt(max(dot(r, r), 1e-12));
+    vec3 o = d - dog;
+    float al = dot(o, r);
+    float ac2 = max(dot(o, o) - al * al, 0.0);
+    return vec3(halo_dog_profile(al + 0.004 * disp, ac2, pix), 0.9 * halo_dog_profile(al, ac2, pix),
+                0.8 * halo_dog_profile(al - 0.006 * disp, ac2, pix));
+}
+vec3 halo_term(vec3 d, vec3 s, float cs, float a, float pix) {
+    vec3 h = vec3(0.0);
+    float veil = clamp(2.0 * a / max(smoothstep(0.02, 0.2, d.y), 1e-3), 0.0, 1.0) * smoothstep(0.02, 0.1, d.y);
+    float amp = p_halo.x * veil * (1.0 - smoothstep(0.01, 0.03, pix));
+    if (amp <= 0.0) return h;
+    float gate = p_sun.y > 0.0 ? smoothstep(0.1, 0.2, s.y) : 0.0;  // no disk: the moon holds the light
+    if (gate > 0.0 && cs > 0.6) {
+        float th = acos(min(cs, 1.0));
+        vec3 L = p_light_color.rgb;
+        h += min(L * (halo_ring_rgb(th, pix, p_halo.w) * (0.4 * amp * gate * smoothstep(0.1, 0.4, th))), 0.6 * L);
+        float g = p_halo.y * (mix(1.0, 0.25, smoothstep(0.0, 0.8, s.y)) * (1.0 - smoothstep(0.7, 0.87, s.y)));
+        if (g > 0.0) {
+            for (int i = 0; i < 2; ++i) {
+                vec3 dog = halo_dog_center(s, i == 0 ? -1.0 : 1.0);
+                if (dot(d, dog) > 0.98)
+                    h += min(L * (halo_dog_rgb(d, dog, s, pix, p_halo.w) * (2.0 * g * amp * gate)), 2.0 * L);
+            }
+        }
+    }
+    if (p_halo.z > 0.0 && p_night.y > 0.0 && p_night.w > 0.0) {
+        float cm = dot(d, p_moon.xyz);
+        if (cm > 0.6) {
+            float th = acos(min(cm, 1.0));
+            vec3 M = p_moon2.rgb * p_night.y;
+            float k = 0.006 * amp * p_halo.z * p_night.w * smoothstep(0.1, 0.4, th);
+            h += min(M * (halo_ring_rgb(th, pix, 0.5 * p_halo.w) * k), 0.08 * M);
+        }
+    }
+    return h;
+}
+)"
 // ---- the cirrus layer (M-CIRRUS 53b), behind p_cirrus.x > 0 (coverage; 0 = the frame without it bit for bit, the
 // same off-check as the low layer). High, thin ice cloud combed out along the wind, composited right before the low
 // layer (apply_clouds draws over it) in the sky pass and in the water's reflection (water_sky). The comments live here,
@@ -2053,11 +2150,13 @@ vec3 cirrus_color(vec3 sun, float cs) {
 vec3 cirrus_layer(vec3 c, vec3 d, vec3 sun, float cs, float pix) {
     float a = cirrus_alpha(d, pix);
     if (a <= 0.0) return c;
-    return mix(c, cirrus_color(sun, cs), a);
+    c = mix(c, cirrus_color(sun, cs), a);
+    if (p_halo.x > 0.0) c += halo_term(d, sun, cs, a, pix);  // the ice halo through the streaks (M-HALO 54b)
+    return c;
 }
 )"
 #define MCE_GLSL_SKY_LAYERS \
-    MCE_GLSL_CLOUD_NOISE MCE_GLSL_CIRRUS R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
+    MCE_GLSL_CLOUD_NOISE MCE_GLSL_HALO MCE_GLSL_CIRRUS R"(// The cloud over sky color `c` along view direction d (y > 0): returns c with the cloud composited, its opacity a.
 // q    = d.xz * height / d.y * (1 / cell) - drift, mod 64 cells
 // n    = 0.55 v(q) + 0.30 v(2q) + 0.15 v(4q)                       (0..1, mean 0.5)
 // t    = 0.78 - 0.6 coverage                                        (coverage 1 covers the whole sky)
@@ -2782,11 +2881,16 @@ void main() {
     o_color = vec4(color, 1.0);
 }
 )";
-// M-CIRRUS 53b: the cirrus layer's text alone (with the cloud noise it reads), for test_render3d_cirrus_gl's run against
-// the CPU twin (mce/render/cirrus.h). A shader that uses it declares p_cirrus, p_cirrus2, p_light_color and p_amb_sky.
-constexpr const char* kCirrusLayerGLSL = MCE_GLSL_CLOUD_NOISE MCE_GLSL_CIRRUS;
+// M-CIRRUS 53b: the cirrus layer's text alone (with the cloud noise it reads and, since M-HALO 54b, the halo it adds),
+// for test_render3d_cirrus_gl's run against the CPU twin (mce/render/cirrus.h). A shader that uses it declares
+// p_cirrus, p_cirrus2, p_light_color, p_amb_sky and the halo's p_halo, p_night, p_moon and p_moon2.
+constexpr const char* kCirrusLayerGLSL = MCE_GLSL_CLOUD_NOISE MCE_GLSL_HALO MCE_GLSL_CIRRUS;
+// M-HALO 54b: the halo's text alone, for test_render3d_halo_gl's run against the CPU twin (mce/render/halo.h). A shader
+// that uses it declares p_halo, p_light_color, p_night, p_moon and p_moon2.
+constexpr const char* kHaloGLSL = MCE_GLSL_HALO;
 #undef MCE_GLSL_SKY_LAYERS
 #undef MCE_GLSL_CIRRUS
+#undef MCE_GLSL_HALO
 
 // ---- post chain. PostU rides bank 1 for the post passes.
 // Auto exposure (M-VISUAL 8): Forward3D::exposure_buffer(), bank kExposure.

@@ -30,6 +30,7 @@ mce_add_library(mce_render
         src/sun_shafts.cpp
         src/cloud_shadow.cpp
         src/cirrus.cpp
+        src/halo.cpp
         src/caustics.cpp
         src/ssr_blur.cpp
         src/gi_probes.cpp
