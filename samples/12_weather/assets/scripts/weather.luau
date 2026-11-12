@@ -2,7 +2,7 @@
 -- does the rest (sky, fog, light, rain or snow, lightning). Scripts keep nothing between ticks: the weather is the
 -- Weather component. The tick counts from 0. The log lines ("weather: rain intensity 0.900 ... at tick 600") are what
 -- samples/12_weather/weather_test.cmake pins (so are the "sway:" lines, the foliage wind scale per weather kind, and the "snow:" lines,
--- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines, the "snow_sparkle:" lines, the "midge:" lines, the "cold_breath:" lines and the "cirrus:" lines).
+-- the SnowCover's cover: it builds while the weather is snow and melts afterwards, the "mist:" lines, the GroundMist level, the "moon:" lines, the Moon's phase and level, the "aurora:" lines, the Aurora's latitude, gate and level, the "rainbow:" lines, the Rainbow's level, the "meteor:" lines, the Meteor's level, the "season:" lines, the Season's phase and tint, the "leaves:" lines, the "fireflies:" lines, the "pollen:" lines, the "dust:" lines, the "flock:" lines, the "butterfly:" lines, the "dusk_bat:" lines, the "snow_sparkle:" lines, the "midge:" lines, the "cold_breath:" lines and the "cirrus:" lines, and the "halo:" lines, the Halo strength and level).
 function update()
     local t = mce.tick()
     if t == 60 then
@@ -39,6 +39,10 @@ function update()
         -- a slow day variation; read only, the script writes nothing.
         mce.log(string.format("cirrus: strength %.2f coverage %.3f height %.0f at tick %d",
             weather.cirrus_strength(), weather.cirrus_coverage(), weather.cirrus_height(), t))
+        -- M-HALO: the Halo on the Weather entity (defaults). halo_level is the kit helper over that cirrus cover (strength times
+        -- a smoothstep of the cover, 0 up to 0.1 and full from 0.5); the sky shader draws the ring and the sun dogs only with
+        -- the sun disk on and the sun at least 5.7 degrees up (and the moon's ring at night); read only, the script writes nothing.
+        mce.log(string.format("halo: strength %.2f level %.3f at tick %d", weather.halo_strength(), weather.halo_level(), t))
         -- M-WEATHERAUDIO: the rain and wind bed levels follow the weather (the two sources have no clip: silent).
         mce.log(string.format("audio: rain %.3f wind %.3f max %.0f/%.0f dB fade %.0f s at tick %d",
             weather.rain_level(), weather.wind_level(), weather.audio_rain_db(), weather.audio_wind_db(),

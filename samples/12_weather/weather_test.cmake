@@ -107,6 +107,11 @@
 #      change of weather is pending or fading in, drops under a heavy deck and carries the WorldClock day's slow variation:
 #      0.508 at tick 0 (settled clear), 0.178 at 600 under the storm's deck, 0.658 at 1050 as the change to the storm eases,
 #      0.686 at 1800 before the snow and 0.498 at 2550 after the clear. The entity count stays 14.
+#  28. (M-HALO 54d) the "halo:" lines: weather.halo_level() of the default Halo on the Weather entity (read only, the script
+#      writes nothing; the ring and the dogs themselves are in the GPU tests). The level is the strength 1.00 times a smoothstep
+#      of the cirrus cover (0 up to 0.1, full from 0.5): 1.000 at tick 0 (cover 0.508), 0.098 at 600 under the storm's deck
+#      (cover 0.178), 0.640 at 750 as the cover climbs back, 0.744 at 1500 (cover 0.368) and 1.000 at 2550 (cover 0.498 is
+#      0.9998 of the smoothstep). The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -400,6 +405,16 @@ string(REGEX MATCHALL "script: cirrus: strength 1.00 coverage [0-9.]+ height 900
 list(LENGTH cirrus2700 n_cirrus2700)
 if(NOT n_cirrus2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 cirrus lines in 2700 ticks, got ${n_cirrus2700}")
+endif()
+expect("${forecast}" "script: halo: strength 1.00 level 1.000 at tick 0\n" "the halo is not full under the settled clear cirrus")
+expect("${forecast}" "script: halo: strength 1.00 level 0.098 at tick 600\n" "the storm's deck did not take the halo away")
+expect("${forecast}" "script: halo: strength 1.00 level 0.640 at tick 750\n" "the halo did not come back as the deck thinned")
+expect("${forecast}" "script: halo: strength 1.00 level 0.744 at tick 1500\n" "the halo level is wrong in the storm")
+expect("${forecast}" "script: halo: strength 1.00 level 1.000 at tick 2550\n" "the halo is not full at the end of the forecast")
+string(REGEX MATCHALL "script: halo: strength 1.00 level [0-9.]+ at tick [0-9]+" halo2700 "${forecast}")
+list(LENGTH halo2700 n_halo2700)
+if(NOT n_halo2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 halo lines in 2700 ticks, got ${n_halo2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
