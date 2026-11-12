@@ -69,6 +69,8 @@ struct QualitySettings {
     bool clouds = true;
     // M-CIRRUS 53a: the high cirrus layer is honored (off: coverage 0, the frame without it). Low turns it off.
     bool cirrus = true;
+    // M-HALO 54a: the ice halos and sun dogs are honored (off: strength 0). Low turns them off.
+    bool halo = true;
     // M-NIGHTSKY 14c: the night sky is honored (off: no moon, no stars). Low keeps the moon disk but drops the
     // stars and the twinkle.
     bool night_sky = true;
@@ -212,6 +214,9 @@ Clouds apply_quality(const QualitySettings& q, const Clouds& clouds);
 // to 0..10 (NaN 2), height_m to 1000..30000 (NaN 9000) and wind_dir is normalized (NaN / zero to +x); `enabled` passes
 // through. In-range values pass bit for bit. Returns a copy for the same reason as the SnowCover overload.
 Cirrus apply_quality(const QualitySettings& q, const Cirrus& cirrus);
+// Halo: the ice-crystal halo and sun dogs, strength zeroed when the tier (Low) or `r.halo 0` switches it off. All four
+// gains are clamped to 0..1 (NaN to 0, 1, 0.5 and 1); `enabled` passes through. In-range values pass bit for bit.
+Halo apply_quality(const QualitySettings& q, const Halo& halo);
 // NightSky: the moon and stars. `r.nightsky 0` zeroes moon_intensity and star_density (the frame without it);
 // the Low tier (night_sky false) keeps the moon disk but zeroes star_density and star_twinkle. moon_dir is
 // normalized (NaN / zero to +y), moon_cos_size is clamped to 0.9..1 (NaN to 0.9995), moon_intensity to 0..8,
