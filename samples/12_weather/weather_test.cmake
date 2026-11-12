@@ -102,6 +102,11 @@
 #      the clearing, then 0.052 in the storm at 1500 (the floor times the gate, the wind is past wind_calm), 0.300 at 2100
 #      (cover 0.201 is still under the floor), 0.491 at 2250 as the settled cover 0.372 lifts over the floor and 0.300 at 2400
 #      (cover 0.298 under the floor again). The entity count stays 14.
+#  27. (M-CIRRUS 53d) the "cirrus:" lines: weather.cirrus_coverage() of the default Cirrus on the Weather entity (read only, the
+#      script writes nothing; the render side is in the GPU tests). The cover blends the fair 0.45 toward the front 0.7 while a
+#      change of weather is pending or fading in, drops under a heavy deck and carries the WorldClock day's slow variation:
+#      0.508 at tick 0 (settled clear), 0.178 at 600 under the storm's deck, 0.658 at 1050 as the change to the storm eases,
+#      0.686 at 1800 before the snow and 0.498 at 2550 after the clear. The entity count stays 14.
 
 function(play out_var)
     execute_process(COMMAND "${MCE_PLAYER}" -headless 1 -pack "${PACK}" ${ARGN}
@@ -385,6 +390,16 @@ string(REGEX MATCHALL "script: cold_breath: [0-9.]+ at tick [0-9]+" cold_breath2
 list(LENGTH cold_breath2700 n_cold_breath2700)
 if(NOT n_cold_breath2700 EQUAL 18)
     message(FATAL_ERROR "expected 18 cold_breath lines in 2700 ticks, got ${n_cold_breath2700}")
+endif()
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.508 height 9000 at tick 0\n" "the cirrus cover is wrong in the settled clear sky")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.178 height 9000 at tick 600\n" "the storm's deck did not hide the cirrus")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.658 height 9000 at tick 1050\n" "the cirrus did not run ahead of the storm's change")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.686 height 9000 at tick 1800\n" "the cirrus cover is wrong before the snow")
+expect("${forecast}" "script: cirrus: strength 1.00 coverage 0.498 height 9000 at tick 2550\n" "the cirrus cover is wrong at the end of the forecast")
+string(REGEX MATCHALL "script: cirrus: strength 1.00 coverage [0-9.]+ height 9000 at tick [0-9]+" cirrus2700 "${forecast}")
+list(LENGTH cirrus2700 n_cirrus2700)
+if(NOT n_cirrus2700 EQUAL 18)
+    message(FATAL_ERROR "expected 18 cirrus lines in 2700 ticks, got ${n_cirrus2700}")
 endif()
 expect_not("${forecast}" "\\[error\\]|\\[warn\\]" "the forecast run logged a problem")
 
