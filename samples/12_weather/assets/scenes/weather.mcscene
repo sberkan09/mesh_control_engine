@@ -134,6 +134,7 @@
     },
     "CloudLayer": {},
     "Cirrus": {},
+    "Halo": {},
     "WeatherAudio": {
      "rain_source": "$12",
      "wind_source": "$13"
