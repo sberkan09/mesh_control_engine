@@ -48,6 +48,7 @@
 #include "mce/kit/cloud_shadow.h"
 #include "mce/kit/caustics.h"
 #include "mce/kit/cirrus.h"
+#include "mce/kit/halo.h"
 #include "mce/kit/weather.h"
 #include "mce/kit/water.h"
 #include "mce/kit/gi_visibility.h"
@@ -1295,6 +1296,24 @@ void Kit3DExtract::apply_environment(World& world, render::Scene3D& scene) {
             cirrus.enabled = true;
         }
         scene.set_cirrus(render::apply_quality(quality_, cirrus));
+    }
+    {  // ice halo (M-HALO 54c): the first Halo, read through the cirrus cover the frame carries (so no Cirrus, no Weather,
+       // an equirect sky texture, the Low tier and `r.cirrus 0` all leave it 0); written every frame (the default
+       // otherwise) so a stale one never survives.
+        const Halo* haloc = nullptr;
+        world.query<const Halo&>().each([&](const Halo& c) {
+            if (!haloc) haloc = &c;
+        });
+        render::Halo halo;  // strength 0 by default (off)
+        const f32 cover = scene.cirrus().coverage;
+        if (haloc && cover > 0.0f) {
+            halo.strength = halo_level(*haloc, cover);
+            halo.sun_dogs = haloc->sun_dogs;
+            halo.moon = haloc->moon;
+            halo.dispersion = haloc->dispersion;
+            halo.enabled = true;
+        }
+        scene.set_halo(render::apply_quality(quality_, halo));
     }
     const f32 dark = [&] {  // 0 by day, 1 at night: shared by the night sky and the aurora
         const f32 t = clamp((sun_elevation_natural + 0.1f) / 0.2f, 0.0f, 1.0f);

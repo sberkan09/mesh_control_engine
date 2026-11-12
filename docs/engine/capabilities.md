@@ -109,6 +109,7 @@ none of them names is listed in `scripts/ci/sample_coverage.allow` with the reas
 | `Grenade3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `GrenadeLive3D` | `mce/kit/grenade3d.h` | yes | yes | yes | docs/user-guide/09-physics.md | allowed: spawned by the engine at a throw; nothing to author |
 | `GroundMist` | `mce/kit/ground_mist.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/09_openworld/assets/scenes/city.mcscene |
+| `Halo` | `mce/kit/halo.h` | yes | yes | yes | docs/user-guide/08-3d.md | allowed: M-HALO 54c: tested in tests/kit/test_halo.cpp; step 54d shows it in samples/12_weather (delete this line then) |
 | `HeatHaze3D` | `mce/kit/heat_haze.h` | yes | yes | yes | docs/user-guide/08-3d.md | samples/kit3d_tour/assets/scenes/tour_haze.mcscene |
 | `HitMarker3D` | `mce/kit/hit_marker.h` | yes | yes | yes | docs/user-guide/09-physics.md | samples/09_openworld/assets/scenes/city.mcscene |
 | `ImpactDamage3D` | `mce/kit/impact_damage.h` | yes | yes | yes | docs/engine/kit.md | samples/09_openworld/assets/prefabs/traffic_car.mcprefab |
