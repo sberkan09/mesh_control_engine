@@ -110,6 +110,7 @@ mce_add_test(test_kit UMBRELLA
         test_cloud_shadow_extract.cpp
         test_caustics_extract.cpp
         test_cirrus.cpp
+        test_halo.cpp
         test_dynamic_resolution.cpp
         test_dynamic_resolution_extract.cpp
         test_underwater_extract.cpp

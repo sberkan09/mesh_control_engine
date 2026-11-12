@@ -291,6 +291,17 @@ declare weather: {
     -- 0..1, scale 200..40000 m, stretch 1..16, speed_scale 0..10, height 1000..30000 m); an unknown key or a non-number
     -- raises and nothing is written
     set_cirrus: (settings: { strength: number?, fair_coverage: number?, front_coverage: number?, density: number?, scale: number?, stretch: number?, speed_scale: number?, height: number? }) -> (),
+    -- Halo (M-HALO), the first one in the scene, the ice-crystal ring and sun dogs seen through the cirrus; the getters
+    -- raise when there is none (or when the world has no weather). halo_level is read-only, from the same helper the
+    -- extract uses over the cirrus cover (0..1, before the quality tier); it also raises when there is no Cirrus or no
+    -- Weather
+    halo_strength: () -> number,
+    halo_sun_dogs: () -> number,
+    halo_moon: () -> number,
+    halo_dispersion: () -> number,
+    halo_level: () -> number,
+    -- every key optional, each value clamped to 0..1; an unknown key or a non-number raises and nothing is written
+    set_halo: (settings: { strength: number?, sun_dogs: number?, moon: number?, dispersion: number? }) -> (),
     -- Caustics3D (M-CAUSTICS), the first one in the scene; the getters raise when there is none (or when the world has
     -- no kit3d components)
     caustics_strength: () -> number,

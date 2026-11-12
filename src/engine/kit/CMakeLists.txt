@@ -45,6 +45,7 @@ mce_add_library(mce_gameplay_kit
         src/vehicle_extras.cpp
         src/weather.cpp
         src/cirrus.cpp
+        src/halo.cpp
         src/water_flow.cpp
         src/gi_visibility.cpp
         src/weather_audio.cpp
