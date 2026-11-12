@@ -2004,8 +2004,14 @@ float cloud_value(vec2 g, uint m, uint seed) {
 //          the sun and 0.045 away (a sharp red inner edge, a tail outward), the same channel shifts; gain p_halo.y *
 //          mix(1, 0.25, smoothstep(0, 0.8, s.y)) * (1 - smoothstep(0.7, 0.87, s.y)) (brightest at a low sun, none
 //          above about 60 degrees), 5 x the ring's.
-//   sun    gate smoothstep(-0.05, 0.02, s.y) (none once the sun has set), 0 while the moon holds the light (moon on,
-//          dot(s, p_moon.xyz) > 0.9999: the kit's night hand-off); acos only for cs > 0.6; the ring times
+//   sun    gate smoothstep(0.1, 0.2, s.y), 0 without a sun disk (p_sun.y 0). The kit hands the one directional light
+//          to the moon at night (M-NIGHTSKY 14b) and drops the disk exactly then (14e: the Sky copy's sun_intensity
+//          0), whatever the night sky's uniforms say (r.nightsky 0, a moon without a disk, a night fade of 0, a sky
+//          texture: p_night may be zero while the light is the moon), so the disk is the signal: no sun ring or dogs
+//          around the moon. The hand-off can happen at any sun elevation under 0.10 (the kit's weight
+//          smoothstep(-0.05, 0.10, elevation) is under 1 there), so the sun term is 0 there and fades in above it:
+//          it never pops at the switch, at the cost of no sun halo for a sun under 5.7 degrees. acos only for
+//          cs > 0.6; the ring times
 //          smoothstep(0.1, 0.4, theta) (none in the sun's own glow); added as p_light_color times the profile times
 //          0.4 (dogs 2.0), capped at 0.6 (dogs 2.0) of p_light_color per channel: it never outshines the disk.
 //   moon   the ring alone around p_moon.xyz, half the dispersion, M = p_moon2.rgb * p_night.y (the disk's tint and
@@ -2048,8 +2054,7 @@ vec3 halo_term(vec3 d, vec3 s, float cs, float a, float pix) {
     float veil = clamp(2.0 * a / max(smoothstep(0.02, 0.2, d.y), 1e-3), 0.0, 1.0) * smoothstep(0.02, 0.1, d.y);
     float amp = p_halo.x * veil * (1.0 - smoothstep(0.01, 0.03, pix));
     if (amp <= 0.0) return h;
-    bool moon_light = p_night.y > 0.0 && dot(s, p_moon.xyz) > 0.9999;
-    float gate = moon_light ? 0.0 : smoothstep(-0.05, 0.02, s.y);
+    float gate = p_sun.y > 0.0 ? smoothstep(0.1, 0.2, s.y) : 0.0;  // no disk: the moon holds the light
     if (gate > 0.0 && cs > 0.6) {
         float th = acos(min(cs, 1.0));
         vec3 L = p_light_color.rgb;

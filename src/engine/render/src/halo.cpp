@@ -99,8 +99,7 @@ math::vec3 halo_term(math::vec3 d, math::vec3 toward_sun, f32 cs, f32 opacity, f
     math::vec3 h{0.0f, 0.0f, 0.0f};
     const f32 amp = p.strength * halo_veil(opacity, d.y) * (1.0f - smooth_between(kHaloPixFadeLo, kHaloPixFadeHi, pix));
     if (!(amp > 0.0f)) return h;
-    const bool moon_light = l.moon_intensity > 0.0f && dot3(toward_sun, l.moon_dir) > 0.9999f;
-    const f32 gate = moon_light ? 0.0f : smooth_between(-0.05f, 0.02f, toward_sun.y);
+    const f32 gate = l.sun_disk > 0.0f ? smooth_between(kHaloSunGateLo, kHaloSunGateHi, toward_sun.y) : 0.0f;
     if (gate > 0.0f && cs > kHaloMinCos) {
         const f32 th = std::acos(minf(cs, 1.0f));
         const math::vec3 ring = halo_ring_rgb(th, pix, p.dispersion);

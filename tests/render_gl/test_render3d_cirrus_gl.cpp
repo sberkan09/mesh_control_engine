@@ -449,6 +449,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_night;
     vec4 p_moon;
     vec4 p_moon2;
+    vec4 p_sun;
 };
 )";
 // Texel x of the 4 N x 1 target: direction x / 4 (u_dirs: xyz the direction, w the radians per pixel), output x % 4
@@ -475,7 +476,7 @@ void main() {
 
 struct TwinBlock {
     f32 light[4], amb[4], cirrus[4], cirrus2[4], sun[4], bg[4];
-    f32 halo_off[4][4];  // p_halo, p_night, p_moon, p_moon2: zero (TwinBlock u{})
+    f32 halo_off[5][4];  // p_halo, p_night, p_moon, p_moon2, p_sun: zero (TwinBlock u{})
 };
 
 // The layer's text over directions `dirs` with pixel footprints `pix` (each exact in half precision): per direction the

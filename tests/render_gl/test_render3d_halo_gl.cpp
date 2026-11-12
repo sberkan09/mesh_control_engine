@@ -7,7 +7,9 @@
 // halo in a gap between the streaks and the low layer in front hides it; a sun under the horizon draws none; the moon's
 // ring is fainter than the sun's and absent by day; the sea reflects it and the sea without it is unchanged; an origin
 // shift leaves the sky unchanged; a sub-pixel yaw moves the halo by a bounded amount at 160 x 120 and 640 x 360 (the
-// crawl test); and the halo's GLSL alone agrees with the CPU twin (mce/render/halo.h) at probe angles. The scenes are
+// crawl test); a moon holding the light (the kit's hand-off: no disk) gets no sun ring or dogs in any of the four setups
+// that zero the night sky's uniforms, and the sun halo is gone before the kit's dusk hand-off, so it never pops; and
+// the halo's GLSL alone agrees with the CPU twin (mce/render/halo.h) at probe angles. The scenes are
 // the halo day and night (fixture3d.h).
 
 #include <doctest/doctest.h>
@@ -320,10 +322,15 @@ TEST_CASE("render3d_gl: the sun dogs sit on the sun's horizon line 22 degrees aw
         out.sep_deg = (az[1] - az[0]) / kDeg;
         return out;
     };
-    const Found low = find(8.0f), high = find(25.0f);
-    MESSAGE("dogs apart in azimuth at 8 / 25 deg: " << low.sep_deg << " / " << high.sep_deg << "; brightness " << low.bright
+    const Found low = find(14.0f), high = find(25.0f);
+    MESSAGE("dogs apart in azimuth at 14 / 25 deg: " << low.sep_deg << " / " << high.sep_deg << "; brightness " << low.bright
                                                     << " / " << high.bright);
-    CHECK(std::fabs(low.sep_deg) == doctest::Approx(44.5f).epsilon(0.05));
+    const auto predicted = [](f32 el) {  // the azimuth between the twin's two dog centres
+        const vec3 s = halo_sun_toward(el), l = halo_sun_dog_center(s, -1.0f), r = halo_sun_dog_center(s, 1.0f);
+        return (std::atan2(r.x, -r.z) - std::atan2(l.x, -l.z)) / kDeg;
+    };
+    CHECK(std::fabs(low.sep_deg) == doctest::Approx(std::fabs(predicted(14.0f))).epsilon(0.04));
+    CHECK(std::fabs(high.sep_deg) == doctest::Approx(std::fabs(predicted(25.0f))).epsilon(0.04));
     CHECK(std::fabs(high.sep_deg) > std::fabs(low.sep_deg) + 2.0f);
     CHECK(low.bright > 1.2 * high.bright);
     CHECK(f.device->validation_error_count() == 0);
@@ -524,6 +531,131 @@ TEST_CASE("render3d_gl: the halo stays put across an origin shift, and a sub-pix
     CHECK(f.device->validation_error_count() == 0);
 }
 
+// ---- the moon holding the light (M-NIGHTSKY 14b's hand-off) ---------------------------------------------------------
+
+namespace {
+
+// The kit's moon hand-off (kit3d_extract.cpp) for a sun at height sun_y toward -z with intensity sun_i and a moon of
+// light intensity moon_i at level 1 toward `moon_dir`: the scene's light, and the Sky copy's disk dropped while the moon
+// holds it (M-NIGHTSKY 14e). True when the moon holds it.
+bool kit_light(Scene3D& s, f32 sun_y, f32 sun_i, f32 moon_i, vec3 moon_dir) {
+    const f32 t = std::fmin(std::fmax((sun_y + 0.05f) / 0.15f, 0.0f), 1.0f);
+    const f32 sw = t * t * (3.0f - 2.0f * t);
+    const f32 mw = 1.0f - sw;
+    DirectionalLight l;
+    l.direction = -vec3{0.0f, sun_y, -std::sqrt(1.0f - sun_y * sun_y)};
+    l.intensity = sun_i;
+    const bool moon = mw > 0.0f && sw * sun_i < mw * moon_i;
+    if (moon) {
+        l.direction = -moon_dir;
+        l.color = {0.55f, 0.65f, 1.0f};
+        l.intensity = moon_i * mw;
+        Sky sky = s.sky();
+        sky.sun_intensity = 0.0f;
+        s.set_sky(sky);
+    }
+    s.set_light(l);
+    return moon;
+}
+
+// The moon holding the light toward kHaloMoonDir (in the halo camera's frame) over night_sky_scene's dark sky with the
+// night sky `night` (null: none), the disk `disk` (the kit's 0), a sky texture key the store does not hold when
+// `texture`, the full cirrus deck and the halo `h` (null: none).
+Array<u8> draw_moonlit(Fixture3D& f, const Halo* h, const NightSky* night, bool texture = false, f32 disk = 0.0f) {
+    f.render(0.0f, true, [&](Scene3D& s) {
+        night_sky_scene(s, night ? *night : NightSky{});
+        DirectionalLight moon;
+        moon.direction = -kHaloMoonDir;
+        moon.color = {0.55f, 0.65f, 1.0f};
+        moon.intensity = 0.3f;
+        moon.ambient_sky = {0.01f, 0.012f, 0.02f};
+        moon.ambient_ground = {0.005f, 0.005f, 0.005f};
+        s.set_light(moon);
+        Sky sky = s.sky();
+        sky.sun_intensity = disk;
+        if (texture) sky.texture = 0x7777u;  // a texture the store does not hold: the kit then fills no NightSky
+        s.set_sky(sky);
+        s.set_time(30.0f, 1.0f / 60.0f);
+        s.set_cirrus(full_deck());
+        s.set_halo(h ? *h : Halo{});
+        plain_post(s);
+    });
+    return f.pixels;
+}
+
+}  // namespace
+
+TEST_CASE("render3d_gl: no sun ring or dogs round a moon that holds the light, whatever the night sky's uniforms say") {
+    Fixture3D f;
+    halo_camera(f);
+    const Halo h = halo_carrier(1.0f);
+    // r.nightsky 0 (the moon's intensity zeroed by apply_quality), a Moon without a disk (intensity 0), a night fade of
+    // 0 (dense fog or a full cloud cover: night_sky_params uploads nothing), a sky texture (no NightSky at all): the
+    // night sky's uniforms are zero in each, the light is the moon's and the disk is dropped. No halo in any.
+    NightSky culled;
+    {
+        CvarScope cv("r.nightsky", "0");
+        culled = apply_quality(quality_settings(QualityTier::High), halo_night_carrier());
+    }
+    CHECK(culled.moon_intensity == 0.0f);
+    const NightSky no_disk = halo_night_carrier(0.0f);
+    NightSky faded = halo_night_carrier();
+    faded.night_fade = 0.0f;
+    const NightSky* setups[3] = {&culled, &no_disk, &faded};
+    const char* names[4] = {"r.nightsky 0", "a moon without a disk", "night fade 0", "a sky texture"};
+    for (int i = 0; i < 4; ++i) {
+        const NightSky* n = i < 3 ? setups[i] : nullptr;
+        const bool tex = i == 3;
+        const bool equal = same(draw_moonlit(f, &h, n, tex), draw_moonlit(f, nullptr, n, tex));
+        CHECK_MESSAGE(equal, names[i] << ": the halo drew round the moon holding the light");
+    }
+    // The control: the same light with a disk is a sun, and rings.
+    CHECK_FALSE(same(draw_moonlit(f, &h, nullptr, false, 12.0f), draw_moonlit(f, nullptr, nullptr, false, 12.0f)));
+    CHECK(f.device->validation_error_count() == 0);
+}
+
+TEST_CASE("render3d_gl: through the kit's dusk hand-off the sun halo fades out before the switch, without a pop") {
+    Fixture3D f;
+    halo_camera(f);
+    const Halo h = halo_carrier(1.0f);
+    const vec3 moon = math::normalize(vec3{0.35f, 0.45f, -0.82f});
+    const f32 pairs[2][2] = {{3.0f, 0.3f}, {1.0f, 2.0f}};  // sun / moon intensities (the review's cases)
+    for (const auto& pr : pairs) {
+        f64 prev = 0.0, worst = 0.0, peak = 0.0;
+        bool first = true, switched = false;
+        u32 zero_steps = 0;
+        for (f32 y = 0.26f; y > -0.06f; y -= 0.005f) {
+            bool moon_holds = false;
+            const auto draw = [&](const Halo* hp) {
+                f.render(0.0f, true, [&](Scene3D& s) {
+                    halo_sky_scene(s, full_deck(), hp ? *hp : Halo{});
+                    moon_holds = kit_light(s, y, pr[0], pr[1], moon);
+                    plain_post(s);
+                });
+                return f.pixels;
+            };
+            const Array<u8> none = draw(nullptr), with = draw(&h);
+            switched = switched || moon_holds;
+            f64 e = 0.0;
+            for (usize p = 0; p < none.size() / 4; ++p) e += std::fabs(added(none, with, p, 1));
+            if (moon_holds || y <= kHaloSunGateLo) {  // the moon holds the light, or it could: no sun halo at all
+                CHECK(same(none, with));
+                ++zero_steps;
+            }
+            if (!first) worst = std::max(worst, std::fabs(e - prev));
+            first = false;
+            peak = std::max(peak, e);
+            prev = e;
+        }
+        MESSAGE("sun " << pr[0] << " / moon " << pr[1] << ": halo energy peak " << peak << ", largest step " << worst
+                       << ", " << zero_steps << " steps without a sun halo");
+        CHECK(switched);
+        CHECK(peak > 0.0);
+        CHECK(worst < 0.12 * peak);  // a 0.005 step of a fade over 0.1 changes it by about 7.5 % at most
+    }
+    CHECK(f.device->validation_error_count() == 0);
+}
+
 // ---- the halo's GLSL alone against the CPU twin --------------------------------------------------------------------
 
 namespace {
@@ -562,6 +694,7 @@ layout(std140, binding = 1) uniform PassU {
     vec4 p_moon2;
     vec4 p_halo;
     vec4 t_sun;
+    vec4 p_sun;
 };
 )";
 // Texel x of the 4 N x 1 target: direction x / 4 (u_dirs: xyz the direction, w the radians per pixel), output x % 4
@@ -588,7 +721,7 @@ void main() {
 )";
 
 struct TwinBlock {
-    f32 light[4], night[4], moon[4], moon2[4], halo[4], sun[4];
+    f32 light[4], night[4], moon[4], moon2[4], halo[4], sun[4], disk[4];
 };
 
 Array<f32> run_twin(Fixture3D& f, const Array<vec3>& dirs, const Array<f32>& pix, const TwinBlock& u) {
@@ -688,7 +821,7 @@ TEST_CASE("render3d_gl: the halo GLSL agrees with the CPU twin at probe angles a
         return h;
     };
     const Case cases[] = {
-        {12.0f, false, false, 0.5f, halo(1.0f, 1.0f, 0.5f, 1.0f)},  {3.0f, false, false, 0.3f, halo(0.7f, 1.0f, 0.5f, 0.0f)},
+        {12.0f, false, false, 0.5f, halo(1.0f, 1.0f, 0.5f, 1.0f)},  {15.0f, false, false, 0.3f, halo(0.7f, 1.0f, 0.5f, 0.0f)},
         {35.0f, false, false, 0.45f, halo(1.0f, 0.5f, 0.5f, 0.6f)}, {65.0f, false, false, 0.5f, halo(1.0f, 1.0f, 0.5f, 1.0f)},
         {-30.0f, true, false, 0.4f, halo(1.0f, 1.0f, 1.0f, 1.0f)},  {20.0f, true, true, 0.5f, halo(1.0f, 1.0f, 0.5f, 1.0f)},
     };
@@ -702,6 +835,7 @@ TEST_CASE("render3d_gl: the halo GLSL agrees with the CPU twin at probe angles a
         const vec3 moon_dir = k.held ? sun : math::normalize(vec3{0.3f, std::sin(20.0f * kDeg), 0.9f});
         HaloLight l;
         l.light = k.moon && !k.held ? vec3{0.03f, 0.035f, 0.05f} : vec3{2.0f, 1.92f, 1.8f};
+        if (k.held) l.sun_disk = 0.0f;  // the kit drops the disk while the moon holds the light
         if (k.moon) {
             l.moon_intensity = 6.0f;
             l.night_fade = 1.0f;
@@ -734,12 +868,13 @@ TEST_CASE("render3d_gl: the halo GLSL agrees with the CPU twin at probe angles a
         const HaloParams p = halo_shader_params(k.h);
         REQUIRE(p.strength > 0.0f);
         TwinBlock u{};
-        const f32 blk[6][4] = {{l.light.x, l.light.y, l.light.z, 0.0f},
+        const f32 blk[7][4] = {{l.light.x, l.light.y, l.light.z, 0.0f},
                                {k.moon ? 0.998f : 0.0f, l.moon_intensity, 0.5f, l.night_fade},
                                {l.moon_dir.x, l.moon_dir.y, l.moon_dir.z, 0.0f},
                                {l.moon_tint.x, l.moon_tint.y, l.moon_tint.z, 0.0f},
                                {p.strength, p.sun_dogs, p.moon, p.dispersion},
-                               {sun.x, sun.y, sun.z, k.opacity}};
+                               {sun.x, sun.y, sun.z, k.opacity},
+                               {0.9995f, l.sun_disk, 1.0f, 0.0f}};
         std::memcpy(&u, blk, sizeof u);
         const Array<f32> gpu = run_twin(f, dirs, pix, u);
         for (usize i = 0; i < dirs.size(); ++i) {

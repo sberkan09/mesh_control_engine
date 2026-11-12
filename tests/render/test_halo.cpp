@@ -208,15 +208,16 @@ TEST_CASE("halo twin: the term: through the cirrus only, capped, the sun's gate,
         const vec3 dog = halo_sun_dog_center(s, 1.0f);
         return halo_term(dog, s, dot3(dog, s), 0.5f, 0.001f, p, light);
     };
-    CHECK(dog_at(8.0f).y > 1.5f * best);
-    CHECK(dog_at(8.0f).y > dog_at(40.0f).y);
-    CHECK(dog_at(8.0f).y <= (kHaloRingCap + kHaloDogCap) * light.light.y);
+    CHECK(dog_at(14.0f).y > 1.5f * best);
+    CHECK(dog_at(14.0f).y > dog_at(40.0f).y);
+    CHECK(dog_at(14.0f).y <= (kHaloRingCap + kHaloDogCap) * light.light.y);
     // The sun down: none; a coarse pixel: none.
     CHECK(at(kHaloRadius, 0.5f, 0.001f, light, dir(-4.0f, 0.0f)).y == 0.0f);
     CHECK(at(kHaloRadius, 0.5f, kHaloPixFadeHi).y == 0.0f);
     CHECK(at(kHaloRadius, 0.5f, 0.02f).y < at(kHaloRadius, 0.5f, 0.002f).y);
     // The moon: its own ring by night, fainter than the sun's by day; none while the fade is 0 or with no moon.
     HaloLight night;
+    night.sun_disk = 0.0f;  // the kit drops the disk while the moon holds the light
     night.light = vec3{0.0275f, 0.0325f, 0.05f};
     night.moon_intensity = 6.0f;
     night.night_fade = 1.0f;
@@ -238,4 +239,111 @@ TEST_CASE("halo twin: the term: through the cirrus only, capped, the sun's gate,
     HaloParams no_moon = p;
     no_moon.moon = 0.0f;
     CHECK(halo_term(dm, under, dot3(dm, under), 0.5f, 0.001f, no_moon, night).y == 0.0f);
+}
+
+namespace {
+
+// The kit's moon hand-off (kit3d_extract.cpp, M-NIGHTSKY 14b) for a sun at height sun_y with intensity sun_i and a moon
+// of light intensity moon_i at level `level`: the light the renderer gets (toward it, its colour times intensity) and
+// the Sky copy's disk (0 while the moon holds the light, 14e).
+struct KitLight {
+    vec3 toward;
+    HaloLight l;
+    bool moon = false;
+};
+KitLight kit_light(f32 sun_y, f32 sun_i, f32 moon_i, f32 level, vec3 moon_dir) {
+    KitLight k;
+    const f32 t = std::fmin(std::fmax((sun_y + 0.05f) / 0.15f, 0.0f), 1.0f);
+    const f32 sw = t * t * (3.0f - 2.0f * t);
+    const f32 mw = (1.0f - sw) * level;
+    const f32 c = std::sqrt(std::fmax(1.0f - sun_y * sun_y, 0.0f));
+    k.toward = vec3{0.0f, sun_y, -c};
+    k.l.light = vec3{1.0f * sun_i, 0.96f * sun_i, 0.9f * sun_i};
+    if (mw > 0.0f && sw * sun_i < mw * moon_i) {
+        k.toward = moon_dir;
+        k.l.light = vec3{0.55f * moon_i * mw, 0.65f * moon_i * mw, 1.0f * moon_i * mw};
+        k.l.sun_disk = 0.0f;
+        k.moon = true;
+    }
+    return k;
+}
+
+}  // namespace
+
+TEST_CASE("halo twin: no sun ring or dogs round a moon that holds the light, whatever the night sky's uniforms say") {
+    const HaloParams p = halo_shader_params(on(1.0f));
+    const vec3 moon = dir(20.0f, 30.0f);
+    // The four setups where the night sky's uniforms are zero while the kit hands the light to the moon: r.nightsky 0
+    // and a Moon without a disk (moon intensity 0), a night fade of 0 (dense fog, a full cloud cover), a sky texture
+    // (the kit never fills the NightSky: the default moon direction, intensity 0). The disk is 0 in all of them.
+    HaloLight base;
+    base.light = vec3{0.165f, 0.195f, 0.3f};  // the moon's light, intensity 0.3
+    base.sun_disk = 0.0f;
+    HaloLight setups[4] = {base, base, base, base};
+    setups[0].moon_dir = moon;  // r.nightsky 0: the direction kept, the intensity zeroed
+    setups[1].moon_dir = moon;  // a Moon with disk_intensity 0
+    setups[1].moon_tint = vec3{0.9f, 0.93f, 1.0f};
+    setups[2].moon_dir = moon;  // night fade 0: night_sky_params leaves p_night zero
+    setups[2].moon_tint = vec3{0.9f, 0.93f, 1.0f};
+    // setups[3]: the defaults (no NightSky at all)
+    u32 probes = 0;
+    for (const HaloLight& l : setups)
+        for (f32 t = 0.0f; t < 0.8f; t += 0.002f)
+            for (f32 side : {-1.0f, 1.0f}) {
+                const vec3 d = rotate_toward(moon, vec3{side, 0.3f, 0.0f}, t);
+                const vec3 h = halo_term(d, moon, dot3(d, moon), 0.5f, 0.001f, p, l);
+                CHECK((h.x == 0.0f && h.y == 0.0f && h.z == 0.0f));
+                ++probes;
+            }
+    CHECK(probes > 3000);
+    // The control: the same light with a disk is a sun, and rings.
+    HaloLight sun = base;
+    sun.sun_disk = 12.0f;
+    const vec3 d = rotate_toward(moon, vec3{0.0f, 1.0f, 0.0f}, kHaloRadius);
+    CHECK(halo_term(d, moon, dot3(d, moon), 0.5f, 0.001f, p, sun).y > 0.0f);
+}
+
+TEST_CASE("halo twin: the sun term is 0 wherever the kit can hand the light to the moon, so it never pops at the switch") {
+    const HaloParams p = halo_shader_params(on(1.0f));
+    // Anywhere the kit's sun weight is under 1 (sun_y < 0.10) the sun term is exactly 0.
+    for (f32 y = -0.2f; y < kHaloSunGateLo; y += 0.001f) {
+        const f32 c = std::sqrt(1.0f - y * y);
+        const vec3 s{0.0f, y, -c};
+        const vec3 dog = halo_sun_dog_center(s, 1.0f);
+        const vec3 up = rotate_toward(s, vec3{0.0f, 1.0f, 0.0f}, kHaloRadius);
+        CHECK(halo_term(dog, s, dot3(dog, s), 0.5f, 0.001f, p, day_light()).y == 0.0f);
+        CHECK(halo_term(up, s, dot3(up, s), 0.5f, 0.001f, p, day_light()).y == 0.0f);
+    }
+    // A dusk through the hand-off band for the reviewed pairs (sun 3 / moon 0.3, sun 1 / moon 2, the moon's maximum 2
+    // against a faint sun 0.2): the halo at the ring's top and at a dog of the sun's natural position, step by step. It
+    // is 0 on both sides of the switch, and no step changes it by more than a smooth fade allows.
+    const vec3 moon = dir(20.0f, 30.0f);
+    const f32 pairs[3][2] = {{3.0f, 0.3f}, {1.0f, 2.0f}, {0.2f, 2.0f}};
+    for (const auto& pr : pairs) {
+        f32 prev_ring = 0.0f, prev_dog = 0.0f, worst = 0.0f, peak = 0.0f;
+        bool switched = false, first = true;
+        for (f32 y = 0.3f; y > -0.1f; y -= 0.0025f) {
+            const KitLight k = kit_light(y, pr[0], pr[1], 1.0f, moon);
+            const f32 c = std::sqrt(1.0f - y * y);
+            const vec3 s{0.0f, y, -c};  // the sun's natural direction: where its ring would be
+            const vec3 dog = halo_sun_dog_center(s, 1.0f);
+            const vec3 up = rotate_toward(s, vec3{0.0f, 1.0f, 0.0f}, kHaloRadius);
+            const f32 ring = halo_term(up, k.toward, dot3(up, k.toward), 0.5f, 0.001f, p, k.l).y;
+            const f32 dg = halo_term(dog, k.toward, dot3(dog, k.toward), 0.5f, 0.001f, p, k.l).y;
+            if (k.moon) {
+                switched = true;
+                CHECK(prev_ring == 0.0f);  // already 0 the step before the switch
+                CHECK(prev_dog == 0.0f);
+            }
+            if (!first) worst = std::fmax(worst, std::fmax(std::fabs(ring - prev_ring), std::fabs(dg - prev_dog)));
+            first = false;
+            peak = std::fmax(peak, std::fmax(ring, dg));
+            prev_ring = ring;
+            prev_dog = dg;
+        }
+        MESSAGE("sun " << pr[0] << " / moon " << pr[1] << ": peak " << peak << ", largest step " << worst);
+        CHECK(switched);
+        CHECK(peak > 0.0f);
+        CHECK(worst < 0.06f * peak + 1e-6f);  // a 0.0025 step of a fade over 0.1: about 4 % at its steepest
+    }
 }

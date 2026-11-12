@@ -47,6 +47,12 @@ inline constexpr f32 kHaloMoonCap = 0.08f;
 // and the one under which a ray is too far from a dog centre (11.5 degrees).
 inline constexpr f32 kHaloMinCos = 0.6f;
 inline constexpr f32 kHaloDogMinCos = 0.98f;
+// The sun term's elevation gate (sin of the elevation): 0 at or under kHaloSunGateLo, full from kHaloSunGateHi. The kit
+// (kit3d_extract.cpp, M-NIGHTSKY 14b) may hand the directional light to the moon anywhere its sun weight
+// smoothstep(-0.05, 0.10, elevation) is under 1, so the sun term is 0 over that whole band and cannot pop at the switch;
+// a change of the kit's band goes here too.
+inline constexpr f32 kHaloSunGateLo = 0.10f;
+inline constexpr f32 kHaloSunGateHi = 0.20f;
 // The pixel footprint fade: the whole halo fades out between these radians per pixel (a very coarse render shows a
 // soft ring or none, never a crawling one).
 inline constexpr f32 kHaloPixFadeLo = 0.01f;
@@ -101,10 +107,12 @@ f32 halo_dog_gain(f32 sun_y);
 // or a gap between the streaks shows no halo; the dogs of a low sun still show.
 f32 halo_veil(f32 opacity, f32 dy);
 
-// The frame's light and moon as the shader reads them: p_light_color, p_night.y (moon intensity, 0 = no moon),
-// p_night.w (night fade), p_moon.xyz (unit, toward the moon), p_moon2.rgb (the moon's tint).
+// The frame's light and moon as the shader reads them: p_light_color, p_sun.y (the sun disk's intensity; 0 = no disk,
+// which is how the kit marks the moon holding the light), p_night.y (moon intensity, 0 = no moon), p_night.w (night
+// fade), p_moon.xyz (unit, toward the moon), p_moon2.rgb (the moon's tint).
 struct HaloLight {
     math::vec3 light{0.0f, 0.0f, 0.0f};
+    f32 sun_disk = 12.0f;  // Sky::sun_intensity's default
     f32 moon_intensity = 0.0f;
     f32 night_fade = 0.0f;
     math::vec3 moon_dir{0.0f, 1.0f, 0.0f};
@@ -114,7 +122,8 @@ struct HaloLight {
 // The colour the halo adds along view ray d (the shader's halo_term): `toward_sun` the unit direction toward the light
 // (-p_light_dir), cs = dot(d, toward_sun), `opacity` the cirrus opacity at the pixel, `pix` the radians per pixel.
 //   amp  = strength * halo_veil(opacity, d.y) * (1 - smoothstep(kHaloPixFadeLo, kHaloPixFadeHi, pix))
-//   sun  gate = smoothstep(-0.05, 0.02, sun.y), 0 while the moon holds the light (moon on and dot(sun, moon) > 0.9999);
+//   sun  gate = smoothstep(kHaloSunGateLo, kHaloSunGateHi, sun.y), 0 without a sun disk (sun_disk 0: the moon holds the
+//        light);
 //        for cs > kHaloMinCos, theta = acos(cs): min(light ring_rgb(theta) kHaloRingGain amp gate smoothstep(0.1, 0.4,
 //        theta), kHaloRingCap light) plus, per dog with dot(d, dog) > kHaloDogMinCos, min(light dog_rgb kHaloDogGain
 //        sun_dogs halo_dog_gain(sun.y) amp gate, kHaloDogCap light)
