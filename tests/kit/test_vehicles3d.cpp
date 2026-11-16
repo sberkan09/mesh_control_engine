@@ -120,6 +120,39 @@ TEST_CASE("vehicles3d: the player's Move steers and drives it; Jump is the handb
     CHECK(std::fabs(s.veh(car).speed) < 0.5f);
 }
 
+TEST_CASE("vehicles3d: steer_assist eases the player's full lock at speed and leaves a standstill alone") {
+    // Run up to speed in a straight line, then hold the stick hard right; return the largest sideways tyre slip of the
+    // turn.
+    const auto turn = [](u8 assist, u32 run_up_ticks, f32& speed_at_turn) {
+        Scene s;
+        const Entity car = s.car();
+        s.veh(car).use_input = 1;
+        s.veh(car).steer_assist = assist;
+        s.veh(car).skid_slip = 2.0f;  // the slip readout is kept up to date
+        s.move = {0.0f, 1.0f};
+        s.run(run_up_ticks, true);
+        speed_at_turn = s.veh(car).speed;
+        s.move = {1.0f, 1.0f};
+        f32 peak = 0.0f;
+        for (u32 i = 0; i < 45; ++i) {
+            s.run(1, true);
+            peak = std::max(peak, std::fabs(s.veh(car).lateral_slip));
+        }
+        return peak;
+    };
+    f32 fast_off = 0.0f, fast_on = 0.0f, slow_off = 0.0f, slow_on = 0.0f;
+    const f32 wide_open = turn(0, 420, fast_off);
+    const f32 eased = turn(255, 420, fast_on);
+    CHECK(fast_off > 12.0f);
+    CHECK(fast_on > 12.0f);
+    CHECK(wide_open > 0.05f);
+    CHECK(eased < wide_open * 0.8f);  // the same stick slides the car less at speed
+    // Almost standing still the assist changes nothing.
+    const f32 a = turn(0, 20, slow_off);
+    const f32 b = turn(255, 20, slow_on);
+    CHECK(std::fabs(a - b) <= 0.35f * std::max(a, 0.05f));
+}
+
 TEST_CASE("vehicles3d: rebuilt on a settings change; a kinematic body is refused once; removal") {
     Scene s;
     const Entity car = s.car();

@@ -290,6 +290,14 @@ void kit3d_vehicles(Frame& f) {
         if (v.use_input && in) {
             throttle = in->move.y;
             steer = in->move.x;
+            // Speed-sensitive lock: at 30 m/s the full stick turns a quarter of the wheels' lock, so a corner taken at
+            // speed no longer flings the car into the kerb. Only the player's stick; AI drivers and `steer` are
+            // untouched.
+            if (v.steer_assist) {
+                const f32 k = static_cast<f32>(v.steer_assist) / 255.0f;
+                const f32 r = v.speed / 15.0f;
+                steer *= 1.0f - k * (1.0f - math::max(0.25f, 1.0f / (1.0f + r * r)));
+            }
             brake = math::max(brake, in->trigger_l);
             handbrake = in->jump_held ? 1.0f : handbrake;
         }

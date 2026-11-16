@@ -47,7 +47,8 @@ MCE_ENUM(VehicleDrive3D, Rear, Front, All)
 struct Vehicle3D {
     u8 use_input = 0;                       // 1: Move / Jump / TriggerL drive it
     VehicleDrive3D drive = VehicleDrive3D::Rear;
-    u16 pad_ = 0;
+    u8 steer_assist = 0;  // 0..255: how far the player's steering is eased with speed (0 = full lock at any speed)
+    u8 pad_ = 0;
     f32 front_axle = -1.3f;                 // body space z of the front wheels (forward is -Z)
     f32 rear_axle = 1.3f;
     f32 track = 0.8f;                       // body space x of the right wheels (the left ones at -track)
@@ -104,24 +105,33 @@ struct Skid3D {
     math::vec3 position;    // the wheel's centre
 };
 MCE_COMPONENT(Vehicle3D, (use_input, Help{"1: Move (throttle, steer), Jump (handbrake), TriggerL (brake)"}), drive,
-              (front_axle, Help{"body space z of the front wheels; forward is -Z"}), (rear_axle, Help{"body space z of the rear wheels"}),
-              (track, Range{0.05f, 10}, Help{"x of the right wheels; the left at -track"}), (wheel_y, Help{"y of the suspension points"}),
-              (wheel_radius, Range{0.05f, 5}), (wheel_width, Range{0.01f, 2}), (suspension_min, Range{0, 5}), (suspension_max, Range{0.01f, 5}),
-              (suspension_frequency, Range{0.1f, 20}, Help{"Hz"}), (suspension_damping, Range{0, 1}), (max_steer, Range{0, 80}, Help{"degrees"}),
-              (engine_torque, Range{1, 100000}, Help{"N*m"}), (max_rpm, Range{1500, 30000}), (brake_torque, Range{0, 100000}, Help{"N*m per wheel"}),
-              (handbrake_torque, Range{0, 100000}, Help{"N*m, rear wheels"}), (grip, Range{0, 5}), (max_tilt, Range{0, 180}, Help{"degrees; 180 = free"}),
-              (throttle, Range{-1, 1}), (steer, Range{-1, 1}, Help{"positive turns right"}), (brake, Range{0, 1}), (handbrake, Range{0, 1}),
-              (wheel_fl, Help{"an entity placed on the front-left wheel"}), wheel_fr, wheel_rl, wheel_rr, (speed, ReadOnly, Transient),
-              (rpm, ReadOnly, Transient), (gear, ReadOnly, Transient), (wheels_on_ground, ReadOnly, Transient),
+              (front_axle, Help{"body space z of the front wheels; forward is -Z"}),
+              (rear_axle, Help{"body space z of the rear wheels"}),
+              (track, Range{0.05f, 10}, Help{"x of the right wheels; the left at -track"}),
+              (wheel_y, Help{"y of the suspension points"}), (wheel_radius, Range{0.05f, 5}),
+              (wheel_width, Range{0.01f, 2}), (suspension_min, Range{0, 5}), (suspension_max, Range{0.01f, 5}),
+              (suspension_frequency, Range{0.1f, 20}, Help{"Hz"}), (suspension_damping, Range{0, 1}),
+              (max_steer, Range{0, 80}, Help{"degrees"}), (engine_torque, Range{1, 100000}, Help{"N*m"}),
+              (max_rpm, Range{1500, 30000}), (brake_torque, Range{0, 100000}, Help{"N*m per wheel"}),
+              (handbrake_torque, Range{0, 100000}, Help{"N*m, rear wheels"}), (grip, Range{0, 5}),
+              (max_tilt, Range{0, 180}, Help{"degrees; 180 = free"}), (throttle, Range{-1, 1}),
+              (steer, Range{-1, 1}, Help{"positive turns right"}), (brake, Range{0, 1}), (handbrake, Range{0, 1}),
+              (wheel_fl, Help{"an entity placed on the front-left wheel"}), wheel_fr, wheel_rl, wheel_rr,
+              (speed, ReadOnly, Transient), (rpm, ReadOnly, Transient), (gear, ReadOnly, Transient),
+              (wheels_on_ground, ReadOnly, Transient),
               (anti_roll, Range{0, 1000000}, Help{"N/m across each axle against body roll; 0 = none"}),
               (downforce, Range{0, 1000}, Help{"N per (m/s)^2 pressing the car down"}),
               (gears, Range{0, 10}, Help{"forward gears from first_gear to top_gear; 0 = the stock five"}),
               (self_right, Help{"1: set the car back on its wheels after right_after seconds flipped"}),
-              (first_gear, Range{0.1f, 10}), (top_gear, Range{0.1f, 10}), (shift_up_rpm, Range{500, 30000}), (shift_down_rpm, Range{100, 30000}),
-              (skid_slip, Range{0, 2}, Help{"a grounded wheel skids past this slip; Skid3D events, FireOn Skid; 0 = off"}),
+              (first_gear, Range{0.1f, 10}), (top_gear, Range{0.1f, 10}), (shift_up_rpm, Range{500, 30000}),
+              (shift_down_rpm, Range{100, 30000}),
+              (skid_slip, Range{0, 2},
+               Help{"a grounded wheel skids past this slip; Skid3D events, FireOn Skid; 0 = off"}),
               (right_after, Range{0, 10}, Help{"seconds flipped and nearly still before self_right acts"}),
-              (skidding, ReadOnly, Transient), (lateral_slip, ReadOnly, Transient), (flipped_ticks, ReadOnly, Transient),
-              (rightings, ReadOnly, Transient))
+              (skidding, ReadOnly, Transient), (lateral_slip, ReadOnly, Transient),
+              (flipped_ticks, ReadOnly, Transient), (rightings, ReadOnly, Transient),
+              (steer_assist, Help{"0..255: eases the player's steering as the car speeds up (about 25% of full lock at "
+                                  "30 m/s at 255); 0 = off"}))
 
 // One point of a path a VehicleDriver3D follows (M-MOVE3D 4). Waypoints chain by `next`; the last
 // pointing back at the first makes a lap. The entity's position is the point.
